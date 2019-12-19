@@ -1,0 +1,159 @@
+/*
+ * Copyright 2019 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+.root {
+    -fx-color: #F0F0F5;
+    -fx-body-color: -fx-color;
+    -fx-hover-base: #E5E4E8;
+    -fx-pressed-base: derive(-fx-base, 25%);
+
+    -icon-color: #34495E;
+    -cell-hover-color: #DCF0FA;
+    -cell-focus-color: #AFE1F0;
+}
+
+/* ====   BUTTON LIKE THINGS   ============================================== */
+
+.button {
+    -fx-background-color: -fx-body-color;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 0;
+}
+.button:focused {
+    -fx-background-color: -fx-focus-color, -fx-body-color;
+}
+
+/* ====   TEXT FIELD   ====================================================== */
+
+.text-field {
+    -fx-background-color: -fx-text-box-border, -fx-background;
+    -fx-background-insets: 0, 0 0 1 0;
+    -fx-background-radius: 0;
+}
+.text-field:focused {
+    -fx-background-color: -fx-focus-color, -fx-background;
+}
+
+/* ====   TEXT AREA   ======================================================= */
+
+.text-area {
+    -fx-background-insets: 0;
+    -fx-background-color: -fx-control-inner-background;
+    -fx-background-radius: 0;
+    -fx-box-border: none;
+    -fx-border-width: -1;
+}
+.text-area .content {
+    -fx-background-color: -fx-control-inner-background;
+}
+.text-area:focused .content {
+    -fx-background-color: -fx-control-inner-background;
+}
+
+/* ====   SCROLL PANE   ===================================================== */
+
+.scroll-pane {
+    -fx-background-color: transparent;
+}
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+/* ====   SCROLL BAR   ====================================================== */
+
+.scroll-bar {
+    -fx-background-color: transparent;
+    -fx-pref-width: 12;
+    -fx-pref-height: 12;
+    -fx-padding: 2;
+}
+.scroll-bar:hover {
+    -fx-pref-width: 16;
+    -fx-pref-height: 16;
+}
+.scroll-bar:horizontal .decrement-arrow,
+.scroll-bar:horizontal .increment-arrow,
+.scroll-bar:horizontal .decrement-button,
+.scroll-bar:horizontal .increment-button {
+    -fx-background-color: null;
+    -fx-background-radius: 0;
+    -fx-padding: 0;
+    -fx-pref-width: 0;
+    -fx-shape: null;
+}
+.scroll-bar:vertical .decrement-arrow,
+.scroll-bar:vertical .increment-arrow,
+.scroll-bar:vertical .decrement-button,
+.scroll-bar:vertical .increment-button {
+    -fx-background-color: null;
+    -fx-background-radius: 0;
+    -fx-padding: 0;
+    -fx-pref-height: 0;
+    -fx-shape: null;
+}
+.scroll-bar .thumb {
+    -fx-background-color: rgba(0, 0, 0, .2);
+    -fx-background-radius: 1000;
+    -fx-pref-width: 12;
+    -fx-pref-height: 12;
+}
+.scroll-bar:vertical .thumb {
+    -fx-background-insets: 0 2 0 0;
+}
+.scroll-bar:horizontal .thumb {
+    -fx-background-insets: 0 0 2 0;
+}
+
+/* ====   BOX LIKE THINGS   ================================================= */
+
+.scroll-pane:focused,
+.split-pane:focused,
+.list-view:focused,
+.tree-view:focused,
+.table-view:focused,
+.tree-table-view:focused {
+    -fx-background-color: -fx-box-border, -fx-control-inner-background;
+    -fx-background-insets: 0, 1;
+    -fx-padding: 1;
+}
+
+.scroll-pane:focused,
+.split-pane:focused {
+    -fx-background-color: transparent;
+}
+
+.list-cell:empty {
+    visibility: hidden;
+}
+
+/* ====   EXT LIST VIEW   =================================================== */
+
+.ext-list-view > .virtual-flow > .scroll-bar,
+.ext-list-view > .virtual-flow > .scroll-bar .decrement-arrow,
+.ext-list-view > .virtual-flow > .scroll-bar .increment-arrow,
+.ext-list-view > .virtual-flow > .scroll-bar .decrement-button,
+.ext-list-view > .virtual-flow > .scroll-bar .increment-button {
+    -fx-pref-width: 0;
+    -fx-pref-height: 0;
+    -fx-background-color: null;
+    -fx-background-radius: 0;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+.ext-list-view > .virtual-flow > .scroll-bar .decrement-arrow,
+.ext-list-view > .virtual-flow > .scroll-bar .increment-arrow {
+    -fx-shape: null;
+}

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import dev.onvoid.webrtc.demo.javafx.control.SvgIcon?>
+<?import dev.onvoid.webrtc.demo.javafx.view.FxAudioSettingsView?>
+<?import dev.onvoid.webrtc.demo.javafx.view.FxDesktopCaptureSettingsView?>
+<?import dev.onvoid.webrtc.demo.javafx.view.FxGeneralSettingsView?>
+<?import dev.onvoid.webrtc.demo.javafx.view.FxVideoSettingsView?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.Tooltip?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<!--
+  ~ Copyright 2019 Alex Andres
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<fx:root type="VBox" styleClass="settings-view" xmlns:fx="http://javafx.com/fxml/1" xmlns="http://javafx.com/javafx/11.0.1">
+	<HBox styleClass="control-panel">
+		<Button fx:id="closeButton" styleClass="settings-close-button">
+			<graphic>
+				<SvgIcon styleClass="settings-close-icon" />
+			</graphic>
+			<tooltip>
+				<Tooltip text="%settings.back" />
+			</tooltip>
+		</Button>
+	</HBox>
+	<TabPane fx:id="tabPane" tabClosingPolicy="UNAVAILABLE" side="LEFT" rotateGraphic="true" VBox.vgrow="ALWAYS">
+		<Tab id="general" text="%settings.general">
+			<FxGeneralSettingsView />
+			<graphic>
+				<SvgIcon styleClass="general-settings-icon" />
+			</graphic>
+		</Tab>
+		<Tab id="audio" text="%settings.audio">
+			<FxAudioSettingsView />
+			<graphic>
+				<SvgIcon styleClass="audio-settings-icon" />
+			</graphic>
+		</Tab>
+		<Tab id="video" text="%settings.video">
+			<FxVideoSettingsView />
+			<graphic>
+				<SvgIcon styleClass="video-settings-icon" />
+			</graphic>
+		</Tab>
+		<Tab id="desktopCapture" text="%settings.desktop">
+			<FxDesktopCaptureSettingsView />
+			<graphic>
+				<SvgIcon styleClass="desktop-capture-settings-icon" />
+			</graphic>
+		</Tab>
+	</TabPane>
+</fx:root>

@@ -1,0 +1,30 @@
+/*
+ * Copyright 2019 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+.chat-text-message .time {
+
+}
+.chat-text-message .message {
+    -fx-padding: 7 10 7 10;
+}
+.chat-text-message:right .message {
+    -fx-background-color: #eff3f5;
+    -fx-background-radius: 7 7 0 7;
+}
+.chat-text-message:left .message {
+    -fx-background-color: derive(-cell-hover-color, 30%);
+    -fx-background-radius: 7 7 7 0;
+}
