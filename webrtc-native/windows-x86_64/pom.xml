@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>dev.onvoid.webrtc</groupId>
 		<artifactId>webrtc-java-native</artifactId>
-		<version>0.1.0-SNAPSHOT</version>
+		<version>0.1.0</version>
 	</parent>
 
 	<artifactId>webrtc-java-windows-x86_64</artifactId>
