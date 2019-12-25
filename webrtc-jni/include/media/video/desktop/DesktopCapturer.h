@@ -17,7 +17,9 @@
 #ifndef JNI_WEBRTC_MEDIA_DESKTOP_CAPTURER_H_
 #define JNI_WEBRTC_MEDIA_DESKTOP_CAPTURER_H_
 
+#if defined(WEBRTC_WIN)
 #include "windows/ComInitializer.h"
+#endif
 
 #include "modules/desktop_capture/desktop_capturer.h"
 
