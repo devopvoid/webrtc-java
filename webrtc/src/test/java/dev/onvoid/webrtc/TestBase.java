@@ -19,6 +19,8 @@ package dev.onvoid.webrtc;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
  * Test base class maintaining the {@link PeerConnectionFactory}.
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.TestInstance;
  * @author Alex Andres
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.SAME_THREAD)
 public abstract class TestBase {
 
 	protected PeerConnectionFactory factory;

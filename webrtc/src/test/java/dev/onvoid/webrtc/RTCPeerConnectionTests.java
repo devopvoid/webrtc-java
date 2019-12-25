@@ -347,12 +347,14 @@ class RTCPeerConnectionTests extends TestBase {
 		assertEquals(RTCPeerConnectionState.CONNECTED, callerConnection.getConnectionState());
 		assertEquals(RTCSignalingState.STABLE, callerConnection.getSignalingState());
 		assertEquals(RTCIceGatheringState.COMPLETE, callerConnection.getIceGatheringState());
-		assertEquals(RTCIceConnectionState.COMPLETED, callerConnection.getIceConnectionState());
+		assertEquals(RTCIceConnectionState.CONNECTED, callerConnection.getIceConnectionState());
 
 		assertEquals(RTCPeerConnectionState.CONNECTED, calleeConnection.getConnectionState());
 		assertEquals(RTCSignalingState.STABLE, calleeConnection.getSignalingState());
 		assertEquals(RTCIceGatheringState.COMPLETE, calleeConnection.getIceGatheringState());
 		assertEquals(RTCIceConnectionState.CONNECTED, calleeConnection.getIceConnectionState());
+
+		Thread.sleep(1000);
 	}
 
 	@Test
