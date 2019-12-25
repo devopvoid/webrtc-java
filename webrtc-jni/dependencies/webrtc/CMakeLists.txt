@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.6)
+﻿cmake_minimum_required(VERSION 3.13)
 
 if(NOT DEFINED TARGET_CPU)
 	if(CMAKE_SIZEOF_VOID_P EQUAL 4)
