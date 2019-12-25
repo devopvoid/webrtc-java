@@ -5,6 +5,7 @@
  * found in the LICENSE file in the root of the source tree.
  */
 
+#include "Exception.h"
 #include "JavaUtils.h"
 #include "JavaContext.h"
 #include "JavaError.h"
@@ -14,16 +15,7 @@
 #include "JavaThreadEnv.h"
 #include "JavaWrappedException.h"
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
-#ifdef __APPLE__
-#include <Cocoa/Cocoa.h>
-#endif
-
 #include <ios>
-
-#include "Exception.h"
 
 bool ExceptionCheck(JNIEnv * env)
 {
