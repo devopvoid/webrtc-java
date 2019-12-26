@@ -11,7 +11,7 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 ```
 
 ### Supported Platforms
-Maven Central artifacts are going to contain native libraries that can be loaded on the following platforms:
+Maven Central artifacts contain native libraries that can be loaded on the following platforms:
 
 | Operating System | Architecture | Artifact ID                |
 | ---------------- |--------------|----------------------------|
