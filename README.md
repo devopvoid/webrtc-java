@@ -19,6 +19,8 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
 | Mac OS X         | x86_64       | webrtc-java-macos-x86_64   |
 | Windows          | x86_64       | webrtc-java-windows-x86_64 |
 
+The native libraries were build with WebRTC branch M79.
+
 ### Build Notes
 
 In order to build the native code, be sure to install the [prerequisite software](https://webrtc.org/native-code/development/prerequisite-sw).
