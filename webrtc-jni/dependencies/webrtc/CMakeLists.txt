@@ -12,7 +12,7 @@ if(NOT DEFINED WEBRTC_BRANCH)
 	set(WEBRTC_BRANCH "master")
 endif()
 
-set(WEBRTC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/webrtc)
+set(WEBRTC_DIR $ENV{HOME}/webrtc)
 set(WEBRTC_SRC ${WEBRTC_DIR}/src)
 set(WEBRTC_INC ${WEBRTC_SRC} ${WEBRTC_SRC}/third_party/abseil-cpp ${WEBRTC_SRC}/third_party/libyuv/include PARENT_SCOPE)
 set(WEBRTC_BUILD out/${TARGET_CPU})
@@ -60,12 +60,17 @@ execute_process(
 	ERROR_FILE error.txt
 	OUTPUT_FILE output.txt
 )
+execute_process(
+	COMMAND ${SHELLCOMMAND} gclient sync
+	WORKING_DIRECTORY ${WEBRTC_DIR}
+	ERROR_FILE error.txt
+	OUTPUT_FILE output.txt
+)
 
-message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\" and sync")
+message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
 
 execute_process(
 	COMMAND ${SHELLCOMMAND} git checkout ${WEBRTC_BRANCH}
-	COMMAND ${SHELLCOMMAND} gclient sync
 	WORKING_DIRECTORY ${WEBRTC_SRC}
 	ERROR_FILE ../error.txt
 	OUTPUT_FILE ../output.txt
@@ -77,6 +82,11 @@ set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" rtc_include_tests=
 
 execute_process(
 	COMMAND ${SHELLCOMMAND} gn clean ${WEBRTC_BUILD}
+	WORKING_DIRECTORY ${WEBRTC_SRC}
+	ERROR_FILE ../error.txt
+	OUTPUT_FILE ../output.txt
+)
+execute_process(
 	COMMAND ${SHELLCOMMAND} gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
 	WORKING_DIRECTORY ${WEBRTC_SRC}
 	ERROR_FILE ../error.txt

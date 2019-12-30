@@ -32,7 +32,20 @@
 							<sourcePath>.</sourcePath>
 							<targetPath>${project.build.directory}/${platform}-${build.type}</targetPath>
 							<classifier>${cmake.classifier}</classifier>
-							<options>"${cmake.options}" "-DWEBRTC_BRANCH=${webrtc.branch}" "-DCMAKE_INSTALL_PREFIX=${project.parent.basedir}/webrtc-native/${platform}/src/main/resources/lib"</options>
+							<environmentVariables>
+								<HOME>${user.home}</HOME>
+							</environmentVariables>
+							<options>
+								<option>
+									"${cmake.options}"
+								</option>
+								<option>
+									-DWEBRTC_BRANCH=${webrtc.branch}
+								</option>
+								<option>
+									-DCMAKE_INSTALL_PREFIX=${project.parent.basedir}/webrtc-native/${platform}/src/main/resources/lib
+								</option>
+							 </options>
 							<downloadBinaries>${download.cmake}</downloadBinaries>
 						</configuration>
 					</execution>
