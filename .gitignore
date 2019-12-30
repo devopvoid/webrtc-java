@@ -10,4 +10,7 @@
 # Maven Build
 **/target
 
-**/webrtc/webrtc
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
