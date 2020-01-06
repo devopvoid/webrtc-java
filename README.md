@@ -31,4 +31,4 @@ Assuming you have all the prerequisites installed for your OS, run:
 mvn install
 ```
 
-On the first run, the WebRTC source tree will be loaded into the `webrtc-jni/dependencies/webrtc` directory. This will take a while and require about 8 GB of disk space.
+On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 11 GB of disk space.
