@@ -187,6 +187,6 @@ namespace jni
 	{
 		rtc::VideoSinkWants wants = broadcaster.wants();
 
-		videoAdapter.OnResolutionFramerateRequest(wants.target_pixel_count, wants.max_pixel_count, wants.max_framerate_fps);
+		videoAdapter.OnOutputFormatRequest(std::make_pair(0, 0), wants.max_pixel_count, wants.max_framerate_fps);
 	}
 }

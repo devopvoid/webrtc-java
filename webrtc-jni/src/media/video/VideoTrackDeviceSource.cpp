@@ -155,7 +155,7 @@ namespace jni
 	{
 		rtc::VideoSinkWants wants = broadcaster.wants();
 
-		videoAdapter.OnResolutionFramerateRequest(wants.target_pixel_count, wants.max_pixel_count, wants.max_framerate_fps);
+		videoAdapter.OnOutputFormatRequest(std::make_pair(capability.width, capability.height), wants.max_pixel_count, wants.max_framerate_fps);
 	}
 
 	void VideoTrackDeviceSource::OnFrame(const webrtc::VideoFrame & frame)

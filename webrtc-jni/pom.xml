@@ -12,7 +12,7 @@
 
 	<properties>
 		<download.cmake>true</download.cmake>
-		<webrtc.branch>branch-heads/m79</webrtc.branch>
+		<webrtc.branch>branch-heads/3987</webrtc.branch>
 	</properties>
 
 	<build>
