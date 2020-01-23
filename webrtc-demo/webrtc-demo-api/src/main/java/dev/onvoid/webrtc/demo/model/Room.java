@@ -14,28 +14,20 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.demo.event;
+package dev.onvoid.webrtc.demo.model;
 
-import dev.onvoid.webrtc.demo.model.Contact;
-import dev.onvoid.webrtc.demo.model.Room;
+import dev.onvoid.webrtc.demo.beans.StringProperty;
 
-public class LoggedInEvent implements ApplicationEvent {
+public class Room {
 
-	private final Contact contact;
-
-	private final Room room;
+	private StringProperty name;
 
 
-	public LoggedInEvent(Contact contact, Room room) {
-		this.contact = contact;
-		this.room = room;
+	public Room(String name) {
+		this.name = new StringProperty(name);
 	}
 
-	public Contact getContact() {
-		return contact;
-	}
-
-	public Room getRoom() {
-		return room;
+	public String getName() {
+		return name.get();
 	}
 }

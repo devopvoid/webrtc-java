@@ -14,28 +14,29 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.demo.event;
+package dev.onvoid.webrtc.demo.model;
 
-import dev.onvoid.webrtc.demo.model.Contact;
-import dev.onvoid.webrtc.demo.model.Room;
+import dev.onvoid.webrtc.RTCIceServer;
 
-public class LoggedInEvent implements ApplicationEvent {
+import java.util.List;
 
-	private final Contact contact;
+public class RoomParameters {
 
-	private final Room room;
+	private final boolean initiator;
+
+	private final List<RTCIceServer> iceServers;
 
 
-	public LoggedInEvent(Contact contact, Room room) {
-		this.contact = contact;
-		this.room = room;
+	public RoomParameters(boolean initiator, List<RTCIceServer> iceServers) {
+		this.initiator = initiator;
+		this.iceServers = iceServers;
 	}
 
-	public Contact getContact() {
-		return contact;
+	public boolean isInitiator() {
+		return initiator;
 	}
 
-	public Room getRoom() {
-		return room;
+	public List<RTCIceServer> getIceServers() {
+		return iceServers;
 	}
 }

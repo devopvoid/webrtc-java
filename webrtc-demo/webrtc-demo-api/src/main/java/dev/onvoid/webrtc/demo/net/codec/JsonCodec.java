@@ -95,7 +95,7 @@ public class JsonCodec {
 			String sdpMid = jsonObject.getString("sdpMid");
 			int sdpMLineIndex = jsonObject.getInt("sdpMLineIndex");
 
-			result = new RTCIceCandidate(sdpMid, sdpMLineIndex, candidate, null);
+			result = new RTCIceCandidate(sdpMid, sdpMLineIndex, candidate);
 		}
 
 		reader.close();

@@ -79,18 +79,19 @@ public class Contact {
 
 		Contact contact = (Contact) o;
 
-		return Objects.equals(id, contact.id) && Objects.equals(name, contact.name);
+		return Objects.equals(getId(), contact.getId()) &&
+				Objects.equals(getName(), contact.getName());
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(id, name);
+		return Objects.hash(getId(), getName());
 	}
 
 	@Override
 	public String toString() {
 		return String.format("%s@%d [id=%s, name=%s, unreadMessages=%s]",
 				Contact.class.getSimpleName(), hashCode(),
-				id, name, unreadMessages);
+				getId(), getName(), getUnreadMessages());
 	}
 }

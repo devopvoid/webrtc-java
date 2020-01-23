@@ -314,7 +314,7 @@ public class PeerConnectionClient implements PeerConnectionObserver {
 	}
 
 	public void initCall() {
-//		initMedia();
+		initMedia();
 		createOffer();
 	}
 
@@ -426,7 +426,7 @@ public class PeerConnectionClient implements PeerConnectionObserver {
 			}
 		}
 
-		notify(peerConnectionContext.onLocalVideoStream, videoSource.getState() == State.LIVE);
+//		notify(peerConnectionContext.onLocalVideoStream, videoSource.getState() == State.LIVE);
 	}
 
 	private void addDesktop(RTCRtpTransceiverDirection direction) {

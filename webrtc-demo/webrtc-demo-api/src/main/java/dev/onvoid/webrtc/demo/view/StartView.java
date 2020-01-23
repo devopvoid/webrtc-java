@@ -18,9 +18,9 @@ package dev.onvoid.webrtc.demo.view;
 
 public interface StartView extends View {
 
-	String getUsername();
+	String getRoomName();
 
-	void setUsername(String name);
+	void setRoomName(String name);
 
 	void setError(String message);
 

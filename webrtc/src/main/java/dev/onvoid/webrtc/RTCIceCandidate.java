@@ -54,6 +54,18 @@ public class RTCIceCandidate {
 	 * @param sdpMLineIndex The index (starting at zero) of the media
 	 *                      description in the SDP.
 	 * @param sdp           SDP string representation of the candidate.
+	 */
+	public RTCIceCandidate(String sdpMid, int sdpMLineIndex, String sdp) {
+		this(sdpMid, sdpMLineIndex, sdp, null);
+	}
+
+	/**
+	 * Creates an instance of RTCIceCandidate with the specified parameters.
+	 *
+	 * @param sdpMid        The media stream "identification-tag"
+	 * @param sdpMLineIndex The index (starting at zero) of the media
+	 *                      description in the SDP.
+	 * @param sdp           SDP string representation of the candidate.
 	 * @param serverUrl     The URL of the ICE server.
 	 */
 	public RTCIceCandidate(String sdpMid, int sdpMLineIndex, String sdp,

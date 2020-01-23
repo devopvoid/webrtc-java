@@ -14,28 +14,12 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.demo.event;
+package dev.onvoid.webrtc.demo.model;
 
-import dev.onvoid.webrtc.demo.model.Contact;
-import dev.onvoid.webrtc.demo.model.Room;
+public enum ContactEventType {
 
-public class LoggedInEvent implements ApplicationEvent {
+	CONTACT_JOINED,
 
-	private final Contact contact;
+	CONTACT_LEFT
 
-	private final Room room;
-
-
-	public LoggedInEvent(Contact contact, Room room) {
-		this.contact = contact;
-		this.room = room;
-	}
-
-	public Contact getContact() {
-		return contact;
-	}
-
-	public Room getRoom() {
-		return room;
-	}
 }

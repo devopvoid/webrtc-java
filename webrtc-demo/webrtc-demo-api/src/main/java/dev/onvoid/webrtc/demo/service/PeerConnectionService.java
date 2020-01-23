@@ -27,11 +27,15 @@ import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.RTCStatsReport;
 import dev.onvoid.webrtc.demo.config.Configuration;
 import dev.onvoid.webrtc.demo.model.Contact;
+import dev.onvoid.webrtc.demo.model.ContactEventType;
 import dev.onvoid.webrtc.demo.model.Contacts;
+import dev.onvoid.webrtc.demo.model.Room;
+import dev.onvoid.webrtc.demo.model.RoomParameters;
 import dev.onvoid.webrtc.demo.model.message.ChatMessage;
 import dev.onvoid.webrtc.demo.net.PeerConnectionClient;
 import dev.onvoid.webrtc.demo.net.PeerConnectionContext;
 import dev.onvoid.webrtc.demo.net.SignalingClient;
+import dev.onvoid.webrtc.demo.net.SignalingListener;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
 import java.util.HashMap;
@@ -47,7 +51,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 
 @Singleton
-public class PeerConnectionService {
+public class PeerConnectionService implements SignalingListener {
 
 	private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -67,8 +71,7 @@ public class PeerConnectionService {
 		this.config = config;
 
 		signalingClient = client;
-		signalingClient.setSessionDescriptionConsumer(this::onSessionDescription);
-		signalingClient.setIceCandidateConsumer(this::onIceCandidate);
+		signalingClient.setSignalingListener(this);
 
 		connections = new HashMap<>();
 
@@ -77,12 +80,74 @@ public class PeerConnectionService {
 		peerConnectionContext.videoDirection = RTCRtpTransceiverDirection.SEND_RECV;
 	}
 
+	@Override
+	public void onRoomJoined(RoomParameters parameters) {
+		peerConnectionContext.videoDirection = RTCRtpTransceiverDirection.SEND_RECV;
+		activeContact = new Contact();
+
+		config.getRTCConfig().iceServers.clear();
+		config.getRTCConfig().iceServers.addAll(parameters.getIceServers());
+
+		CompletableFuture.runAsync(() -> {
+			var peerConnectionClient = createPeerConnection(activeContact);
+
+			if (parameters.isInitiator()) {
+				peerConnectionClient.initCall();
+			}
+		}).join();
+	}
+
+	@Override
+	public void onRoomLeft() {
+
+	}
+
+	@Override
+	public void onRemoteSessionDescription(Contact contact,
+										   RTCSessionDescription description) {
+		CompletableFuture.runAsync(() -> {
+			if (description.sdpType == RTCSdpType.OFFER) {
+				createPeerConnection(contact);
+			}
+
+			var peerConnectionClient = getPeerConnectionClient(contact);
+
+			peerConnectionClient.setSessionDescription(description);
+		});
+	}
+
+	@Override
+	public void onRemoteIceCandidate(Contact contact,
+									 RTCIceCandidate candidate) {
+		CompletableFuture.runAsync(() -> {
+			var peerConnectionClient = getPeerConnectionClient(contact);
+
+			peerConnectionClient.addIceCandidate(candidate);
+		});
+	}
+
+	@Override
+	public void onRemoteIceCandidatesRemoved(Contact contact,
+											 RTCIceCandidate[] candidates) {
+
+	}
+
+	@Override
+	public void setOnContactEvent(Contact contact, ContactEventType type) {
+
+	}
+
+	@Override
+	public void onError(String message) {
+
+	}
+
 	public void dispose() {
 		executor.shutdown();
 	}
 
 	public void setContactEventConsumer(BiConsumer<Contact, Boolean> consumer) {
-		signalingClient.setContactEventConsumer(consumer);
+
 	}
 
 	public void setOnConnectionState(BiConsumer<Contact, RTCPeerConnectionState> consumer) {
@@ -130,7 +195,7 @@ public class PeerConnectionService {
 			Contacts contacts = new Contacts();
 
 			try {
-				contacts.addAll(signalingClient.getRemotePeers());
+				contacts.addAll(signalingClient.getContacts());
 			}
 			catch (Exception e) {
 				throw new CompletionException(e);
@@ -140,10 +205,10 @@ public class PeerConnectionService {
 		});
 	}
 
-	public CompletableFuture<Void> login(Contact asContact) {
+	public CompletableFuture<Void> login(Contact asContact, Room room) {
 		return CompletableFuture.runAsync(() -> {
 			try {
-				signalingClient.login(asContact);
+				signalingClient.joinRoom(asContact, room);
 			}
 			catch (Exception e) {
 				throw new CompletionException(e);
@@ -156,7 +221,7 @@ public class PeerConnectionService {
 
 		return CompletableFuture.allOf(closing, CompletableFuture.runAsync(() -> {
 			try {
-				signalingClient.logout();
+				signalingClient.leaveRoom();
 			}
 			catch (Exception e) {
 				throw new CompletionException(e);
@@ -170,37 +235,13 @@ public class PeerConnectionService {
 		return peerConnectionClient.sendMessage(message);
 	}
 
-	public CompletableFuture<Void> connect(Contact contact) {
-		return CompletableFuture.runAsync(() -> {
-			try {
-				var peerConnectionClient = getPeerConnectionClient(contact);
-
-				if (isNull(peerConnectionClient)) {
-					peerConnectionClient = createPeerConnection(contact);
-					peerConnectionClient.establishDataLink();
-				}
-			}
-			catch (Exception e) {
-				throw new CompletionException(e);
-			}
-		});
-	}
-
-	public void disconnect(Contact contact) {
-		var peerConnectionClient = removePeerConnectionClient(contact);
-
-		if (nonNull(peerConnectionClient)) {
-			peerConnectionClient.close();
-		}
-	}
-
 	public CompletableFuture<Void> call(Contact contact, boolean enableVideo) {
 		peerConnectionContext.videoDirection = enableVideo ?
 				RTCRtpTransceiverDirection.SEND_RECV :
 				RTCRtpTransceiverDirection.INACTIVE;
 
 		return CompletableFuture.runAsync(() -> {
-			var peerConnectionClient = getPeerConnectionClient(contact);
+			var peerConnectionClient = createPeerConnection(contact);
 			peerConnectionClient.initCall();
 
 			activeContact = contact;
@@ -256,7 +297,7 @@ public class PeerConnectionService {
 		var clients = connections.values();
 		var iter = clients.iterator();
 
-		CompletableFuture[] list = new CompletableFuture[clients.size()];
+		CompletableFuture<?>[] list = new CompletableFuture[clients.size()];
 
 		int index = 0;
 
@@ -291,22 +332,6 @@ public class PeerConnectionService {
 		connections.put(contact, peerConnectionClient);
 
 		return peerConnectionClient;
-	}
-
-	private void onSessionDescription(Contact contact, RTCSessionDescription description) {
-		if (description.sdpType == RTCSdpType.OFFER) {
-			createPeerConnection(contact);
-		}
-
-		var peerConnectionClient = getPeerConnectionClient(contact);
-
-		peerConnectionClient.setSessionDescription(description);
-	}
-
-	private void onIceCandidate(Contact contact, RTCIceCandidate candidate) {
-		var peerConnectionClient = getPeerConnectionClient(contact);
-
-		peerConnectionClient.addIceCandidate(candidate);
 	}
 
 }

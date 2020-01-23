@@ -16,27 +16,21 @@
 
 package dev.onvoid.webrtc.demo.net;
 
-import dev.onvoid.webrtc.RTCIceCandidate;
-import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.demo.model.Contact;
+import dev.onvoid.webrtc.demo.model.Room;
 
 import java.util.Set;
-import java.util.function.BiConsumer;
 
 public interface SignalingClient {
 
-	Set<Contact> getRemotePeers() throws Exception;
+	Set<Contact> getContacts() throws Exception;
 
-	void login(Contact asContact) throws Exception;
+	void joinRoom(Contact asContact, Room room) throws Exception;
 
-	void logout();
-
-	void setContactEventConsumer(BiConsumer<Contact, Boolean> consumer);
-
-	void setIceCandidateConsumer(BiConsumer<Contact, RTCIceCandidate> consumer);
-
-	void setSessionDescriptionConsumer(BiConsumer<Contact, RTCSessionDescription> consumer);
+	void leaveRoom();
 
 	void send(Contact contact, Object obj) throws Exception;
+
+	void setSignalingListener(SignalingListener listener);
 
 }

@@ -14,28 +14,23 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.demo.event;
+package dev.onvoid.webrtc.demo.net;
 
 import dev.onvoid.webrtc.demo.model.Contact;
 import dev.onvoid.webrtc.demo.model.Room;
 
-public class LoggedInEvent implements ApplicationEvent {
+import java.util.Set;
 
-	private final Contact contact;
+public interface PeerConnectionService {
 
-	private final Room room;
+	Set<Contact> getContacts() throws Exception;
 
+	void joinRoom(Contact asContact, Room room) throws Exception;
 
-	public LoggedInEvent(Contact contact, Room room) {
-		this.contact = contact;
-		this.room = room;
-	}
+	void leaveRoom();
 
-	public Contact getContact() {
-		return contact;
-	}
+	void send(Contact contact, Object obj) throws Exception;
 
-	public Room getRoom() {
-		return room;
-	}
+	void setSignalingListener(SignalingListener listener);
+
 }
