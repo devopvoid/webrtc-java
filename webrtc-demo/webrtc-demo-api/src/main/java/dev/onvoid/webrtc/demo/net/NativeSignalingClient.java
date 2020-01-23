@@ -21,6 +21,8 @@ import static java.util.Objects.nonNull;
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.demo.model.Contact;
+import dev.onvoid.webrtc.demo.model.ContactEventType;
+import dev.onvoid.webrtc.demo.model.Room;
 import dev.onvoid.webrtc.demo.net.codec.JsonCodec;
 
 import java.io.IOException;
@@ -33,14 +35,13 @@ import java.net.http.HttpResponse;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 
-public class HttpSignalingClient implements SignalingClient {
+public class NativeSignalingClient implements SignalingClient {
 
-	private static Logger LOGGER = System.getLogger(HttpSignalingClient.class.getName());
+	private static Logger LOGGER = System.getLogger(NativeSignalingClient.class.getName());
 
 	private final String serverUrl;
 
@@ -50,19 +51,14 @@ public class HttpSignalingClient implements SignalingClient {
 
 	private final JsonCodec messageCodec;
 
+	private SignalingListener listener;
+
 	private long myId;
-
-	private BiConsumer<Contact, Boolean> contactEventConsumer;
-
-	private BiConsumer<Contact, RTCIceCandidate> iceCandidateConsumer;
-
-	private BiConsumer<Contact, RTCSessionDescription> sessionDescConsumer;
 
 
 	@Inject
-	public HttpSignalingClient(
-			@Named("Signaling Server") String server,
-			@Named("Signaling Server Port") int port) {
+	public NativeSignalingClient(@Named("Signaling Server") String server,
+								 @Named("Signaling Server Port") int port) {
 		serverUrl = "http://" + server + ":" + port;
 		client = HttpClient.newHttpClient();
 		remotePeers = new HashSet<>();
@@ -70,27 +66,12 @@ public class HttpSignalingClient implements SignalingClient {
 	}
 
 	@Override
-	public Set<Contact> getRemotePeers() {
+	public Set<Contact> getContacts() {
 		return remotePeers;
 	}
 
 	@Override
-	public void setContactEventConsumer(BiConsumer<Contact, Boolean> consumer) {
-		this.contactEventConsumer = consumer;
-	}
-
-	@Override
-	public void setIceCandidateConsumer(BiConsumer<Contact, RTCIceCandidate> consumer) {
-		this.iceCandidateConsumer = consumer;
-	}
-
-	@Override
-	public void setSessionDescriptionConsumer(BiConsumer<Contact, RTCSessionDescription> consumer) {
-		this.sessionDescConsumer = consumer;
-	}
-
-	@Override
-	public void login(Contact asContact) throws Exception {
+	public void joinRoom(Contact asContact, Room room) throws Exception {
 		HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(serverUrl + "/sign_in?" + asContact.getName()))
 				.build();
@@ -107,7 +88,7 @@ public class HttpSignalingClient implements SignalingClient {
 		myId = Integer.parseInt(peers[0].split(",")[1]);
 
 		LOGGER.log(Level.INFO, "Signed in as \"{0}\" with id \"{1}\"",
-				asContact.getName(), myId);
+				   asContact.getName(), myId);
 
 		for (String peer : peers) {
 			updatePeers(peer);
@@ -117,7 +98,7 @@ public class HttpSignalingClient implements SignalingClient {
 	}
 
 	@Override
-	public void logout() {
+	public void leaveRoom() {
 		if (myId < 1) {
 			return;
 		}
@@ -134,6 +115,11 @@ public class HttpSignalingClient implements SignalingClient {
 	@Override
 	public void send(Contact contact, Object obj) throws Exception {
 		send(contact, messageCodec.encode(obj));
+	}
+
+	@Override
+	public void setSignalingListener(SignalingListener listener) {
+		this.listener = listener;
 	}
 
 	private void send(Contact contact, String body) throws Exception {
@@ -201,11 +187,11 @@ public class HttpSignalingClient implements SignalingClient {
 			return;
 		}
 
-		if (decoded instanceof RTCIceCandidate && nonNull(iceCandidateConsumer)) {
-			iceCandidateConsumer.accept(contact, (RTCIceCandidate) decoded);
+		if (decoded instanceof RTCIceCandidate && nonNull(listener)) {
+			listener.onRemoteIceCandidate(contact, (RTCIceCandidate) decoded);
 		}
-		else if (decoded instanceof RTCSessionDescription && nonNull(sessionDescConsumer)) {
-			sessionDescConsumer.accept(contact, (RTCSessionDescription) decoded);
+		else if (decoded instanceof RTCSessionDescription && nonNull(listener)) {
+			listener.onRemoteSessionDescription(contact, (RTCSessionDescription) decoded);
 		}
 	}
 
@@ -222,19 +208,22 @@ public class HttpSignalingClient implements SignalingClient {
 		Contact contact = new Contact(parsed[1], parsed[0]);
 		int id = Integer.parseInt(contact.getId());
 		boolean offline = Integer.parseInt(parsed[2].trim()) == 0;
+		ContactEventType eventType;
 
 		if (id == myId) {
 			return;
 		}
 		if (offline) {
 			remotePeers.remove(contact);
+			eventType = ContactEventType.CONTACT_LEFT;
 		}
 		else {
 			remotePeers.add(contact);
+			eventType = ContactEventType.CONTACT_JOINED;
 		}
 
-		if (nonNull(contactEventConsumer)) {
-			contactEventConsumer.accept(contact, !offline);
+		if (nonNull(listener)) {
+			listener.setOnContactEvent(contact, eventType);
 		}
 	}
 }
