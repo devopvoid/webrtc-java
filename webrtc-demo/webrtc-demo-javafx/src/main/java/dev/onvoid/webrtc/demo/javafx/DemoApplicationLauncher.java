@@ -16,9 +16,18 @@
 
 package dev.onvoid.webrtc.demo.javafx;
 
+import java.util.Objects;
+
 public class DemoApplicationLauncher {
 
 	public static void main(String[] args) {
+		String path = Objects.requireNonNull(
+				DemoApplicationLauncher.class.getClassLoader()
+						.getResource("resources/logging.properties"))
+						.getFile();
+
+		System.setProperty("java.util.logging.config.file", path);
+
 		DemoApplication.main(args);
 	}
 

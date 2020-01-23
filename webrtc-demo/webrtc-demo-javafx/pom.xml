@@ -20,16 +20,6 @@
 				<directory>src/main/resources</directory>
 				<targetPath>resources</targetPath>
 				<filtering>false</filtering>
-				<excludes>
-					<exclude>log4j2.xml</exclude>
-				</excludes>
-			</resource>
-			<resource>
-				<directory>src/main/resources</directory>
-				<includes>
-					<include>log4j2.xml</include>
-				</includes>
-				<filtering>false</filtering>
 			</resource>
 		</resources>
 	</build>
