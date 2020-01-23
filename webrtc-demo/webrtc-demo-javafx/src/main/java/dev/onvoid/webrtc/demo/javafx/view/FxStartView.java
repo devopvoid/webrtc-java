@@ -32,7 +32,7 @@ import javafx.scene.layout.VBox;
 public class FxStartView extends VBox implements StartView {
 
 	@FXML
-	private TextField usernameField;
+	private TextField roomNameField;
 
 	@FXML
 	private Button enterButton;
@@ -42,14 +42,14 @@ public class FxStartView extends VBox implements StartView {
 
 
 	@Override
-	public String getUsername() {
-		return usernameField.getText();
+	public String getRoomName() {
+		return roomNameField.getText();
 	}
 
 	@Override
-	public void setUsername(String name) {
+	public void setRoomName(String name) {
 		FxUtils.invoke(() -> {
-			usernameField.setText(name);
+			roomNameField.setText(name);
 		});
 	}
 
