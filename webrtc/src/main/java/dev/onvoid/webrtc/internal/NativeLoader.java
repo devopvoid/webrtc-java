@@ -58,7 +58,7 @@ public class NativeLoader {
 		Path tempPath = Files.createTempFile(tempName, ext);
 		File tempFile = tempPath.toFile();
 
-		try (InputStream is = NativeLoader.class.getResourceAsStream("/" + libFileName)) {
+		try (InputStream is = NativeLoader.class.getClassLoader().getResourceAsStream(libFileName)) {
 			Files.copy(is, tempPath, StandardCopyOption.REPLACE_EXISTING);
 		}
 		catch (Exception e) {
