@@ -24,8 +24,8 @@ namespace jni
 			}
 		}
 
-		if (env != nullptr) {
-			std::cout << "Attached thread " << std::this_thread::get_id() << std::endl;
+		if (env == nullptr) {
+			std::cout << "Failed to attach thread " << std::this_thread::get_id() << std::endl;
 		}
 	}
 
@@ -33,7 +33,7 @@ namespace jni
 	{
 		vm->DetachCurrentThread();
 
-		std::cout << "Dettached thread " << std::this_thread::get_id() << std::endl;
+		//std::cout << "Dettached thread " << std::this_thread::get_id() << std::endl;
 	}
 
 	JNIEnv * JavaThreadEnv::getEnv() const

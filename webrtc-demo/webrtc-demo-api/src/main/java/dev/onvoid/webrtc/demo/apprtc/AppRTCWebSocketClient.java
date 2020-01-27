@@ -174,8 +174,6 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 
 	@Override
 	public void send(Contact contact, Object obj) {
-		System.out.println("send: " + obj.getClass());
-
 		if (obj instanceof RTCSessionDescription) {
 			RTCSessionDescription desc = (RTCSessionDescription) obj;
 

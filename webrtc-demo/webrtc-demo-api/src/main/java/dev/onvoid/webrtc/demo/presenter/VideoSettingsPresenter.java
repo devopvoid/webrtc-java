@@ -71,8 +71,6 @@ public class VideoSettingsPresenter extends Presenter<VideoSettingsView> {
 	}
 
 	private void onVideoCaptureDevice(VideoDevice device) {
-		System.out.println("onVideoCaptureDevice: " + device);
-
 		var capabilities = videoModule.getCaptureCapabilities(device);
 		capabilities.sort(new VideoCaptureCapabilityComparator());
 		var capability = getCaptureCapability(capabilities);
