@@ -22,6 +22,7 @@ import dev.onvoid.webrtc.demo.view.StartView;
 
 import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
+import javafx.beans.binding.Bindings;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -62,10 +63,6 @@ public class FxStartView extends VBox implements StartView {
 
 	@Override
 	public void setOnConnect(Action action) {
-		FxUtils.invoke(() -> {
-			setError(null);
-		});
-
 		FxUtils.bindAction(enterButton, action);
 	}
 
@@ -80,6 +77,9 @@ public class FxStartView extends VBox implements StartView {
 				enterButton.requestFocus();
 			}
 		});
+
+		enterButton.disableProperty().bind(Bindings.length(
+				roomNameField.textProperty()).greaterThan(4).not());
 	}
 
 }

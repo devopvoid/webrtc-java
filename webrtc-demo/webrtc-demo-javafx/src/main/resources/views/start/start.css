@@ -17,3 +17,6 @@
 .start-view {
 	-fx-background-color: white;
 }
+.start-view > .error {
+	-fx-text-fill: #C53030;
+}

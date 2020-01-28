@@ -46,9 +46,9 @@ public class MainPresenter extends Presenter<MainView> {
 
 	private final PeerConnectionService peerConnectionService;
 
-	private final Stack<Class<? extends Presenter>> presenterStack;
+	private final Stack<Class<Presenter<?>>> presenterStack;
 
-	private Presenter currentPresenter;
+	private Presenter<?> currentPresenter;
 
 
 	@Inject
@@ -107,7 +107,7 @@ public class MainPresenter extends Presenter<MainView> {
 	}
 
 	private void handleEvent(LoggedInEvent event) {
-		showContacts();
+		showCall();
 	}
 
 	private void handleEvent(FullscreenEvent event) {
@@ -129,7 +129,7 @@ public class MainPresenter extends Presenter<MainView> {
 			case CLOSED:
 			case DISCONNECTED:
 			case FAILED:
-				showContacts();
+				showStart();
 				break;
 
 			case CONNECTED:
@@ -148,11 +148,11 @@ public class MainPresenter extends Presenter<MainView> {
 			LOGGER.log(Level.ERROR, "Destroy presenter failed", t);
 		}
 
-		presenterStack.push(currentPresenter.getClass());
+		presenterStack.push((Class<Presenter<?>>) currentPresenter.getClass());
 		currentPresenter = null;
 	}
 
-	private void show(Class<? extends Presenter> cls) {
+	private void show(Class<? extends Presenter<?>> cls) {
 		executor.execute(() -> {
 			if (nonNull(currentPresenter)) {
 				if (currentPresenter.getClass().equals(cls)) {
@@ -163,7 +163,7 @@ public class MainPresenter extends Presenter<MainView> {
 			}
 
 			try {
-				Presenter presenter = createPresenter(cls);
+				Presenter<?> presenter = createPresenter(cls);
 
 				addChild(presenter);
 

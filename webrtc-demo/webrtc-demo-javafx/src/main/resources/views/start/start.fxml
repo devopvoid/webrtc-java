@@ -35,7 +35,7 @@
 					mnemonicParsing="false" text="%start.login"/>
 		</HBox>
 	</VBox>
-	<Label fx:id="errorLabel" wrapText="true" VBox.vgrow="ALWAYS">
+	<Label fx:id="errorLabel" styleClass="error" wrapText="true" VBox.vgrow="ALWAYS">
 		<padding>
 			<Insets top="10.0"/>
 		</padding>

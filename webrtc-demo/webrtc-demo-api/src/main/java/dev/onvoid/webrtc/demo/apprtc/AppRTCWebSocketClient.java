@@ -51,7 +51,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -116,8 +115,11 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 
 	private SignalingListener listener;
 
+	private StringBuilder text;
+
 
 	public AppRTCWebSocketClient() {
+		text = new StringBuilder();
 		wsSendQueue = new ArrayList<>();
 		codec = new AppRTCJsonCodec();
 		client = HttpClient.newBuilder().build();
@@ -131,13 +133,37 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 	}
 
 	@Override
-	public void joinRoom(Contact asContact, Room room) {
-		connect(SERVER_URL, room);
+	public void joinRoom(Contact asContact, Room room) throws Exception {
+		roomState = ConnectionState.NEW;
+
+		connectionParameters = new AppRTCConnectionParameters(SERVER_URL,
+															  room.getName());
+
+		String roomUrl = String.format(JOIN_URL,
+									   connectionParameters.roomUrl,
+									   connectionParameters.roomId);
+
+		LOGGER.log(Level.INFO, "Connecting to room: " + roomUrl);
+
+		HttpRequest.Builder request = HttpRequest.newBuilder()
+				.setHeader("REFERER", connectionParameters.roomUrl)
+				.POST(HttpRequest.BodyPublishers.noBody())
+				.uri(URI.create(roomUrl));
+
+		HttpResponse<String> response = client.send(request.build(),
+													HttpResponse.BodyHandlers
+													.ofString());
+
+		String body = response.body();
+
+		LOGGER.log(Level.INFO, "Room response: " + body);
+
+		setSignalingParameters(parseConnectResponse(body));
 	}
 
 	@Override
 	public void leaveRoom() {
-		LOGGER.log(Level.INFO, "Disconnect. Room state: " + roomState);
+		LOGGER.log(Level.INFO, "Leaving room");
 
 		if (roomState == ConnectionState.CONNECTED) {
 			LOGGER.log(Level.INFO, "Closing room");
@@ -148,7 +174,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		roomState = ConnectionState.CLOSED;
 
 		if (webSocket != null) {
-			LOGGER.log(Level.INFO, "Disconnect WebSocket in state: " + state);
+			LOGGER.log(Level.INFO, "Disconnecting WebSocket");
 
 			if (state == WebSocketConnectionState.REGISTERED) {
 				// Send "bye" to WebSocket server.
@@ -194,8 +220,6 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		this.listener = listener;
 	}
 
-	StringBuilder text = new StringBuilder();
-
 	@Override
 	public void onOpen(WebSocket webSocket) {
 		webSocket.request(1);
@@ -218,7 +242,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		text.append(data);
 
 		if (last) {
-			String message = text.toString();
+			String message = text.toString().trim();
 
 			LOGGER.log(Level.INFO, "WSS->C: " + message);
 
@@ -284,7 +308,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 				HttpRequest.BodyPublishers.ofString(message);
 
 		HttpRequest.Builder request = HttpRequest.newBuilder()
-				.setHeader("REFERER", SERVER_URL)
+				.setHeader("REFERER", connectionParameters.roomUrl)
 				.uri(URI.create(postUrl));
 
 		if (method.equals("POST")) {
@@ -326,7 +350,9 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 				});
 	}
 
-	private void signalingParametersReady(AppRTCSignalingParameters signalingParameters) {
+	private void setSignalingParameters(AppRTCSignalingParameters signalingParameters) {
+		this.signalingParameters = signalingParameters;
+
 		LOGGER.log(Level.INFO, "Room connection completed");
 		LOGGER.log(Level.INFO, "ClientId: " + signalingParameters.clientId);
 		LOGGER.log(Level.INFO, "Initiator: " + signalingParameters.initiator);
@@ -334,8 +360,6 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		for (RTCIceServer iceServer : signalingParameters.iceServers) {
 			LOGGER.log(Level.INFO, "ICEServer: " + iceServer);
 		}
-
-		this.signalingParameters = signalingParameters;
 
 		if (connectionParameters.loopback && (!signalingParameters.initiator
 				|| signalingParameters.offer != null)) {
@@ -349,6 +373,10 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 
 		roomState = ConnectionState.CONNECTED;
 
+		startSignaling();
+	}
+
+	private void startSignaling() {
 		connectWebSocket();
 		register();
 
@@ -446,33 +474,6 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		}
 	}
 
-	private void connect(String serverUrl, Room room) {
-		roomState = ConnectionState.NEW;
-
-		connectionParameters = new AppRTCConnectionParameters(serverUrl,
-															  room.getName());
-
-		String roomUrl = String.format(JOIN_URL,
-									   connectionParameters.roomUrl,
-									   connectionParameters.roomId);
-
-		LOGGER.log(Level.INFO, "Connecting to room: " + roomUrl);
-
-		HttpRequest.Builder request = HttpRequest.newBuilder()
-				.setHeader("REFERER", connectionParameters.roomUrl)
-				.POST(HttpRequest.BodyPublishers.noBody())
-				.uri(URI.create(roomUrl));
-
-		client.sendAsync(request.build(), HttpResponse.BodyHandlers.ofString())
-				.thenApply(HttpResponse::body)
-				.thenApply(this::parseConnectResponse)
-				.thenAccept(this::signalingParametersReady)
-				.exceptionally(throwable -> {
-					reportError("Connect to room failed", throwable);
-					return null;
-				});
-	}
-
 	private void connectWebSocket() {
 		String wssUrl = signalingParameters.wssUrl;
 
@@ -484,7 +485,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		}
 
 		webSocket = client.newWebSocketBuilder()
-				.header("Origin", SERVER_URL)
+				.header("Origin", connectionParameters.roomUrl)
 				.buildAsync(URI.create(wssUrl), this)
 				.join();
 	}
@@ -510,7 +511,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 					}
 
 					wsSendQueue.clear();
-				});
+				}).join();
 	}
 
 	private void reportError(final String message, final Throwable error) {
@@ -531,35 +532,29 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		}
 	}
 
-	private AppRTCSignalingParameters parseConnectResponse(String response) {
-		LOGGER.log(Level.INFO, "Room response: " + response);
+	private AppRTCSignalingParameters parseConnectResponse(String response)
+			throws Exception {
+		AppRTCSignalingParameters params = codec.toSignalingParameters(response);
 
-		try {
-			AppRTCSignalingParameters params = codec.toSignalingParameters(response);
+		// Request TURN servers.
+		boolean isTurnPresent = params.iceServers.stream()
+				.anyMatch(s -> s.urls.stream()
+				.anyMatch(url -> url.startsWith("turn:")));
 
-			// Request TURN servers.
-			boolean isTurnPresent = params.iceServers.stream()
-					.anyMatch(s -> s.urls.stream()
-					.anyMatch(url -> url.startsWith("turn:")));
+		String iceServerUrl = params.iceServerUrl;
 
-			String iceServerUrl = params.iceServerUrl;
-
-			if (!isTurnPresent && nonNull(iceServerUrl) && !iceServerUrl.isEmpty()) {
-				params.iceServers.addAll(requestTurnServers(iceServerUrl));
-			}
-
-			return params;
+		if (!isTurnPresent && nonNull(iceServerUrl) && !iceServerUrl.isEmpty()) {
+			params.iceServers.addAll(requestTurnServers(iceServerUrl));
 		}
-		catch (Exception e) {
-			throw new CompletionException(e);
-		}
+
+		return params;
 	}
 
 	private List<RTCIceServer> requestTurnServers(String url) throws Exception {
 		LOGGER.log(Level.INFO, "Request TURN from: " + url);
 
 		HttpRequest.Builder request = HttpRequest.newBuilder()
-				.setHeader("REFERER", SERVER_URL)
+				.setHeader("REFERER", connectionParameters.roomUrl)
 				.timeout(Duration.ofMillis(5000))
 				.POST(HttpRequest.BodyPublishers.noBody())
 				.uri(URI.create(url));
@@ -648,7 +643,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 
 		HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(url))
-				.setHeader("REFERER", SERVER_URL)
+				.setHeader("REFERER", connectionParameters.roomUrl)
 				.header("Content-Type", "application/json")
 				.POST(publisher)
 				.build();

@@ -26,6 +26,7 @@ import dev.onvoid.webrtc.demo.view.View;
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
 import java.util.HashSet;
+import java.util.ResourceBundle;
 import java.util.Set;
 
 /**
@@ -103,14 +104,12 @@ public abstract class Presenter<T extends View> {
 		}
 	}
 
-	protected void handleException(Throwable throwable, String errorMessage, String title) {
-		handleException(throwable, errorMessage, title, null);
-	}
+	protected String getTranslation(ResourceBundle bundle, String message) {
+		if (bundle.containsKey(message)) {
+			return bundle.getString(message);
+		}
 
-	final protected void handleException(Throwable throwable, String throwMessage, String title, String message) {
-		logException(throwable, throwMessage);
-
-		showError(title, message);
+		return message;
 	}
 
 	final protected void logException(Throwable throwable, String throwMessage) {
@@ -120,16 +119,4 @@ public abstract class Presenter<T extends View> {
 		LOGGER.log(Level.ERROR, throwMessage, throwable);
 	}
 
-	final protected void showError(String title, String message) {
-		requireNonNull(title);
-
-//		if (context.getDictionary().contains(title)) {
-//			title = context.getDictionary().get(title);
-//		}
-//		if (context.getDictionary().contains(message)) {
-//			message = context.getDictionary().get(message);
-//		}
-//
-//		context.getEventBus().post(new NotificationContext(NotificationType.ERROR, title, message));
-	}
 }

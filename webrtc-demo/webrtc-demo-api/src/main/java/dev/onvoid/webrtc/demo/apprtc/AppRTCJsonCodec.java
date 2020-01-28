@@ -48,7 +48,7 @@ public class AppRTCJsonCodec {
 
 		String result = room.getString("result");
 		if (!result.equals("SUCCESS")) {
-			throw new RuntimeException("Room response error: " + result);
+			throw new RuntimeException(result);
 		}
 
 		room = room.getJsonObject("params");

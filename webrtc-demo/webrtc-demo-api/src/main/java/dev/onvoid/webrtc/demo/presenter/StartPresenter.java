@@ -22,6 +22,9 @@ import dev.onvoid.webrtc.demo.model.Room;
 import dev.onvoid.webrtc.demo.service.PeerConnectionService;
 import dev.onvoid.webrtc.demo.view.StartView;
 
+import java.net.ConnectException;
+import java.util.ResourceBundle;
+
 import javax.inject.Inject;
 
 public class StartPresenter extends Presenter<StartView> {
@@ -30,15 +33,20 @@ public class StartPresenter extends Presenter<StartView> {
 
 	private final PeerConnectionService peerConnectionService;
 
+	private ResourceBundle resources;
+
 	private Room room;
 
 
 	@Inject
-	StartPresenter(StartView view, ApplicationContext context, PeerConnectionService peerConnectionService) {
+	StartPresenter(StartView view, ApplicationContext context,
+				   PeerConnectionService peerConnectionService,
+				   ResourceBundle resources) {
 		super(view);
 
 		this.context = context;
 		this.peerConnectionService = peerConnectionService;
+		this.resources = resources;
 	}
 
 	@Override
@@ -60,9 +68,23 @@ public class StartPresenter extends Presenter<StartView> {
 	}
 
 	private Void onConnectError(Throwable error) {
-		error.printStackTrace();
+		logException(error, "Joining room failed");
 
-		view.setError(error.getCause().getMessage());
+		String message;
+
+		if (error.getCause() instanceof ConnectException) {
+			message = "start.connection.error";
+		}
+		else {
+			message = error.getCause().getMessage().toLowerCase();
+
+			if (message.equals("full")) {
+				message = "start.room.full";
+			}
+		}
+
+		view.setError(getTranslation(resources, message));
+
 		return null;
 	}
 
