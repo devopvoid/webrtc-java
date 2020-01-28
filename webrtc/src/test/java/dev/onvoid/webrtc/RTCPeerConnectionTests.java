@@ -351,6 +351,8 @@ class RTCPeerConnectionTests extends TestBase {
 		assertEquals(RTCPeerConnectionState.CONNECTED, calleeConnection.getConnectionState());
 		assertEquals(RTCSignalingState.STABLE, calleeConnection.getSignalingState());
 		assertEquals(RTCIceGatheringState.COMPLETE, calleeConnection.getIceGatheringState());
+
+		Thread.sleep(1000);
 	}
 
 	@Test
