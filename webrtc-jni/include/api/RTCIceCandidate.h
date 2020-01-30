@@ -20,6 +20,7 @@
 #include "JavaClass.h"
 #include "JavaRef.h"
 
+#include "api/candidate.h"
 #include "api/jsep.h"
 
 #include <jni.h>
@@ -43,6 +44,7 @@ namespace jni
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::IceCandidateInterface * candidate);
 		std::unique_ptr<webrtc::IceCandidateInterface> toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		cricket::Candidate toNativeCricket(JNIEnv * env, const JavaRef<jobject> & javaType);
 	};
 }
 

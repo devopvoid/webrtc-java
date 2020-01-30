@@ -213,6 +213,9 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		else if (obj instanceof RTCIceCandidate) {
 			sendIceCandidate((RTCIceCandidate) obj);
 		}
+		else if (obj instanceof RTCIceCandidate[]) {
+			sendIceCandidateRemovals((RTCIceCandidate[]) obj);
+		}
 	}
 
 	@Override
@@ -452,7 +455,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 		}
 	}
 
-	private void sendLocalIceCandidateRemovals(final RTCIceCandidate[] candidates) {
+	private void sendIceCandidateRemovals(final RTCIceCandidate[] candidates) {
 		AppRTCMessage message = new AppRTCMessage(Type.REMOVE_CANDIDATES, candidates);
 
 		if (signalingParameters.initiator) {
@@ -469,7 +472,7 @@ public class AppRTCWebSocketClient implements SignalingClient, WebSocket.Listene
 			}
 		}
 		else {
-			// Call receiver sends ice candidates to websocket server.
+			// Call receiver sends ice candidates to WebSocket server.
 			sendWebSocketMessage(message);
 		}
 	}

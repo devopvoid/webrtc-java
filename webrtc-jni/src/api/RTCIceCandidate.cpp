@@ -63,6 +63,11 @@ namespace jni
 			return std::unique_ptr<webrtc::IceCandidateInterface>(candidate);
 		}
 
+		cricket::Candidate toNativeCricket(JNIEnv * env, const JavaRef<jobject> & javaType)
+		{
+			return toNative(env, javaType)->candidate();
+		}
+
 		JavaRTCIceCandidateClass::JavaRTCIceCandidateClass(JNIEnv * env)
 		{
 			cls = FindClass(env, PKG"RTCIceCandidate");

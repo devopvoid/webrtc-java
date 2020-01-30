@@ -99,7 +99,6 @@ public class RTCPeerConnection extends NativeObject {
 	/**
 	 * Create a new RTCRtpTransceiver and add it to the set of transceivers.
 	 * Adding a transceiver will cause future calls to {@link #createOffer} to
-	 * add a media description for the corresponding transceiver
 	 *
 	 * @param track A MediaStreamTrack representing the media track to
 	 *              transmit.
@@ -244,6 +243,13 @@ public class RTCPeerConnection extends NativeObject {
 	 *                  signaling channel.
 	 */
 	public native void addIceCandidate(RTCIceCandidate candidate);
+
+	/**
+	 * Removes a group of remote ICE candidates from the ICE agent.
+	 *
+	 * @param candidates The ICE candidates to remove.
+	 */
+	public native void removeIceCandidates(RTCIceCandidate[] candidates);
 
 	/**
 	 * Returns the signaling state of the RTCPeerConnection.

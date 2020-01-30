@@ -203,6 +203,21 @@ public class PeerConnectionClient implements PeerConnectionObserver {
 	}
 
 	@Override
+	public void onIceCandidatesRemoved(RTCIceCandidate[] candidates) {
+		if (isNull(peerConnection)) {
+			LOGGER.log(Level.ERROR, "PeerConnection was not initialized");
+			return;
+		}
+
+		try {
+			signalingClient.send(contact, candidates);
+		}
+		catch (Exception e) {
+			LOGGER.log(Level.ERROR, "Send removed RTCIceCandidates failed", e);
+		}
+	}
+
+	@Override
 	public void onTrack(RTCRtpTransceiver transceiver) {
 		MediaStreamTrack track = transceiver.getReceiver().getTrack();
 
@@ -568,6 +583,14 @@ public class PeerConnectionClient implements PeerConnectionObserver {
 			else {
 				peerConnection.addIceCandidate(candidate);
 			}
+		});
+	}
+
+	public void removeIceCandidates(RTCIceCandidate[] candidates) {
+		execute(() -> {
+			drainIceCandidates();
+
+			peerConnection.removeIceCandidates(candidates);
 		});
 	}
 

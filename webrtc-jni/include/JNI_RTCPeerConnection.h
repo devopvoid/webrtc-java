@@ -153,6 +153,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
+	 * Method:    removeIceCandidates
+	 * Signature: ([Ldev/onvoid/webrtc/RTCIceCandidate;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_removeIceCandidates
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
 	 * Method:    getSignalingState
 	 * Signature: ()Ldev/onvoid/webrtc/RTCSignalingState;
 	 */

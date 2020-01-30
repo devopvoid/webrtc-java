@@ -33,13 +33,29 @@ namespace jni
 			for (jsize i = 0; i < vectorSize; i++) {
 				const T & item = vector[i];
 
-				JavaLocalRef<jobject> obj = jni::static_java_ref_cast<jobject>(env, convert(env, item));
+				JavaLocalRef<jobject> obj = static_java_ref_cast<jobject>(env, convert(env, item));
 
 				env->SetObjectArrayElement(objectArray.get(), i, obj.get());
 			}
 
 			return objectArray;
 		}
+
+		template <class T, typename Convert>
+		std::vector<T> toNativeVector(JNIEnv * env, const JavaRef<jobjectArray> & array, Convert convert)
+		{
+			const jsize size = static_cast<jsize>(env->GetArrayLength(array.get()));
+
+			std::vector<T> container;
+			container.reserve(size);
+
+			for (jsize i = 0; i < size; ++i) {
+				container.emplace_back(convert(env, JavaLocalRef<jobject>(env, env->GetObjectArrayElement(array.get(), i))));
+			}
+
+			return container;
+		}
+
 	}
 }
 

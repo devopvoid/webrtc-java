@@ -26,6 +26,7 @@
 #include "api/RTCSessionDescription.h"
 #include "api/RTCStatsCollectorCallback.h"
 #include "api/WebRTCUtils.h"
+#include "JavaArray.h"
 #include "JavaEnums.h"
 #include "JavaError.h"
 #include "JavaFactories.h"
@@ -412,6 +413,30 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addIceCandidate
 		auto candidate = jni::RTCIceCandidate::toNative(env, jni::JavaLocalRef<jobject>(env, jCandidate));
 
 		pc->AddIceCandidate(candidate.get());
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_removeIceCandidates
+(JNIEnv * env, jobject caller, jobject jCandidates)
+{
+	if (jCandidates == nullptr) {
+		return;
+	}
+
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLE(pc);
+
+	try {
+		auto candidates = jni::JavaArray::toNativeVector<cricket::Candidate>(env,
+			jni::static_java_ref_cast<jobjectArray>(env, jni::JavaLocalRef<jobject>(env, jCandidates)),
+			&jni::RTCIceCandidate::toNativeCricket);
+
+		if (!pc->RemoveIceCandidates(candidates)) {
+			env->Throw(jni::JavaRuntimeException(env, "Remove ICE candidates from the peer connection failed"));
+		}
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

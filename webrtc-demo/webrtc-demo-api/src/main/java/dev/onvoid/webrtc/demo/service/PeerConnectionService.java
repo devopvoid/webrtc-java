@@ -129,7 +129,11 @@ public class PeerConnectionService implements SignalingListener {
 	@Override
 	public void onRemoteIceCandidatesRemoved(Contact contact,
 											 RTCIceCandidate[] candidates) {
+		CompletableFuture.runAsync(() -> {
+			var peerConnectionClient = getPeerConnectionClient(contact);
 
+			peerConnectionClient.removeIceCandidates(candidates);
+		});
 	}
 
 	@Override
