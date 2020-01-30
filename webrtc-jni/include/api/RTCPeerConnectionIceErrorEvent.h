@@ -14,38 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_API_RTC_ICE_CANDIDATE_H_
-#define JNI_WEBRTC_API_RTC_ICE_CANDIDATE_H_
+#ifndef JNI_WEBRTC_API_RTC_PEER_CONNECTION_ICE_ERROR_EVENT_H_
+#define JNI_WEBRTC_API_RTC_PEER_CONNECTION_ICE_ERROR_EVENT_H_
 
 #include "JavaClass.h"
 #include "JavaRef.h"
 
-#include "api/candidate.h"
-#include "api/jsep.h"
-
 #include <jni.h>
+#include <string>
 
 namespace jni
 {
-	namespace RTCIceCandidate
+	namespace RTCPeerConnectionIceErrorEvent
 	{
-		class JavaRTCIceCandidateClass : public JavaClass
+		class JavaRTCPeerConnectionIceErrorEventClass : public JavaClass
 		{
 			public:
-				explicit JavaRTCIceCandidateClass(JNIEnv * env);
+				explicit JavaRTCPeerConnectionIceErrorEventClass(JNIEnv * env);
 
 				jclass cls;
 				jmethodID ctor;
-				jfieldID sdpMid;
-				jfieldID sdpMLineIndex;
-				jfieldID sdp;
-				jfieldID serverUrl;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::IceCandidateInterface * candidate);
-		JavaLocalRef<jobject> toJavaCricket(JNIEnv * env, const cricket::Candidate & candidate);
-		std::unique_ptr<webrtc::IceCandidateInterface> toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
-		cricket::Candidate toNativeCricket(JNIEnv * env, const JavaRef<jobject> & javaType);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const std::string & address, const int & port, const std::string & url, const int & error_code, const std::string & error_text);
 	};
 }
 

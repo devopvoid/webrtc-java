@@ -82,6 +82,14 @@ public interface PeerConnectionObserver {
 	void onIceCandidate(RTCIceCandidate candidate);
 
 	/**
+	 * A failure occurred when gathering ICE candidates.
+	 *
+	 * @param event The ICE gathering error event.
+	 */
+	default void onIceCandidateError(RTCPeerConnectionIceErrorEvent event) {
+	}
+
+	/**
 	 * ICE candidates have been removed.
 	 *
 	 * @param candidates The removed ICE candidates.

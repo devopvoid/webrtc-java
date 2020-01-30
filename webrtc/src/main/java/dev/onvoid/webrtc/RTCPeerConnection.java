@@ -99,6 +99,7 @@ public class RTCPeerConnection extends NativeObject {
 	/**
 	 * Create a new RTCRtpTransceiver and add it to the set of transceivers.
 	 * Adding a transceiver will cause future calls to {@link #createOffer} to
+	 * add a media description for the corresponding transceiver.
 	 *
 	 * @param track A MediaStreamTrack representing the media track to
 	 *              transmit.
