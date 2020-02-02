@@ -19,8 +19,8 @@ package dev.onvoid.webrtc.demo.presenter;
 import dev.onvoid.webrtc.demo.config.AudioConfiguration;
 import dev.onvoid.webrtc.demo.config.Configuration;
 import dev.onvoid.webrtc.demo.view.AudioSettingsView;
+import dev.onvoid.webrtc.media.MediaDevices;
 import dev.onvoid.webrtc.media.audio.AudioDevice;
-import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 
 import java.util.List;
 
@@ -40,25 +40,21 @@ public class AudioSettingsPresenter extends Presenter<AudioSettingsView> {
 
 	@Override
 	public void initialize() {
-		AudioDeviceModule audioModule = new AudioDeviceModule();
+		var renderDevices = MediaDevices.getAudioRenderDevices();
+		var captureDevices = MediaDevices.getAudioCaptureDevices();
 
-		var playoutDevices = audioModule.getPlayoutDevices();
-		var recordingDevices = audioModule.getRecordingDevices();
+		var renderDevice = getAudioDevice(renderDevices, config.getPlayoutDevice());
+		var captureDevice = getAudioDevice(captureDevices, config.getRecordingDevice());
 
-		var playoutDevice = getAudioDevice(playoutDevices, config.getPlayoutDevice());
-		var recordingDevice = getAudioDevice(recordingDevices, config.getRecordingDevice());
+		config.setPlayoutDevice(renderDevice);
+		config.setRecordingDevice(captureDevice);
 
-		config.setPlayoutDevice(playoutDevice);
-		config.setRecordingDevice(recordingDevice);
-
-		view.setAudioPlayoutDevices(playoutDevices);
-		view.setAudioRecordingDevices(recordingDevices);
+		view.setAudioPlayoutDevices(renderDevices);
+		view.setAudioRecordingDevices(captureDevices);
 		view.setAudioPlayoutDevice(config.playoutDeviceProperty());
 		view.setAudioRecordingDevice(config.recordingDeviceProperty());
 		view.setReceiveAudio(config.receiveAudioProperty());
 		view.setSendAudio(config.sendAudioProperty());
-
-		audioModule.dispose();
 	}
 
 	private AudioDevice getAudioDevice(List<AudioDevice> devices, AudioDevice device) {

@@ -20,17 +20,25 @@ import java.util.Objects;
 
 public abstract class Device {
 
-	public final int index;
+	private final int index;
 
-	public final String guid;
+	private final String guid;
 
-	public final String name;
+	private final String name;
 
 
 	protected Device(String name, String guid, int index) {
 		this.name = name;
 		this.guid = guid;
 		this.index = index;
+	}
+
+	public String getGuid() {
+		return guid;
+	}
+
+	public String getName() {
+		return name;
 	}
 
 	@Override
@@ -55,7 +63,7 @@ public abstract class Device {
 
 	@Override
 	public String toString() {
-		return String.format("%s@%d [index=%s, guid=%s, name=%s]",
-				Device.class.getSimpleName(), hashCode(), index, guid, name);
+		return String.format("%s [index=%s, guid=%s, name=%s]",
+				Device.class.getSimpleName(), index, guid, name);
 	}
 }

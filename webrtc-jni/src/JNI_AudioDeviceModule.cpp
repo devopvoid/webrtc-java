@@ -53,50 +53,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_init
 	}
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_getPlayoutDevices
-(JNIEnv * env, jobject caller)
-{
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLEV(audioModule, nullptr);
-
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
-
-	int16_t deviceCount = audioModule->PlayoutDevices();
-
-	jni::JavaArrayList deviceList(env, deviceCount);
-
-	for (int i = 0; i < deviceCount; ++i) {
-		if (audioModule->PlayoutDeviceName(i, name, guid) == 0) {
-			deviceList.add(jni::Device::toJavaAudioDevice(env, name, guid));
-		}
-	}
-
-	return deviceList.listObject().release();
-}
-
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_getRecordingDevices
-(JNIEnv * env, jobject caller)
-{
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLEV(audioModule, nullptr);
-
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
-
-	int16_t deviceCount = audioModule->RecordingDevices();
-
-	jni::JavaArrayList deviceList(env, deviceCount);
-
-	for (int i = 0; i < deviceCount; ++i) {
-		if (audioModule->RecordingDeviceName(i, name, guid) == 0) {
-			deviceList.add(jni::Device::toJavaAudioDevice(env, name, guid));
-		}
-	}
-
-	return deviceList.listObject().release();
-}
-
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setPlayoutDevice
 (JNIEnv * env, jobject caller, jobject device)
 {

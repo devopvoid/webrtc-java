@@ -34,7 +34,7 @@ public class DeviceListCell extends ListCell<Device> {
 			setText(null);
 		}
 		else {
-			setText(item.name);
+			setText(item.getName());
 		}
 	}
 

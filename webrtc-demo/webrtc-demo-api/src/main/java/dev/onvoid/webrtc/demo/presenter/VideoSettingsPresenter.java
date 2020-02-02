@@ -19,9 +19,9 @@ package dev.onvoid.webrtc.demo.presenter;
 import dev.onvoid.webrtc.demo.config.Configuration;
 import dev.onvoid.webrtc.demo.config.VideoConfiguration;
 import dev.onvoid.webrtc.demo.view.VideoSettingsView;
+import dev.onvoid.webrtc.media.MediaDevices;
 import dev.onvoid.webrtc.media.video.VideoCaptureCapability;
 import dev.onvoid.webrtc.media.video.VideoDevice;
-import dev.onvoid.webrtc.media.video.VideoDeviceModule;
 
 import java.util.Comparator;
 import java.util.List;
@@ -32,26 +32,23 @@ public class VideoSettingsPresenter extends Presenter<VideoSettingsView> {
 
 	private final VideoConfiguration config;
 
-	private final VideoDeviceModule videoModule;
-
 
 	@Inject
 	VideoSettingsPresenter(VideoSettingsView view, Configuration config) {
 		super(view);
 
 		this.config = config.getVideoConfiguration();
-		this.videoModule = new VideoDeviceModule();
 	}
 
 	@Override
 	public void initialize() {
-		var devices = videoModule.getCaptureDevices();
+		var devices = MediaDevices.getVideoCaptureDevices();
 		var device = config.getCaptureDevice();
 
 		int devIndex = devices.indexOf(device);
 		device = (devIndex < 0) ? devices.get(0) : devices.get(devIndex);
 
-		var capabilities = videoModule.getCaptureCapabilities(device);
+		var capabilities = MediaDevices.getVideoCaptureCapabilities(device);
 		capabilities.sort(new VideoCaptureCapabilityComparator());
 		var capability = getCaptureCapability(capabilities);
 
@@ -71,7 +68,7 @@ public class VideoSettingsPresenter extends Presenter<VideoSettingsView> {
 	}
 
 	private void onVideoCaptureDevice(VideoDevice device) {
-		var capabilities = videoModule.getCaptureCapabilities(device);
+		var capabilities = MediaDevices.getVideoCaptureCapabilities(device);
 		capabilities.sort(new VideoCaptureCapabilityComparator());
 		var capability = getCaptureCapability(capabilities);
 
