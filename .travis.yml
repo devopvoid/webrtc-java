@@ -9,7 +9,7 @@ cache:
   directories:
    - $HOME/.m2
 
-script:
+before_install:
  - git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
  - export PATH=$PATH:$(pwd)/depot_tools
  - wget https://cs.chromium.org/chromium/src/build/install-build-deps.sh
