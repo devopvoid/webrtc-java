@@ -12,6 +12,6 @@ cache:
 before_install:
  - git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
  - export PATH=$PATH:$(pwd)/depot_tools
- - wget https://cs.chromium.org/chromium/src/build/install-build-deps.sh
+ - wget https://cs.chromium.org/codesearch/f/chromium/src/build/install-build-deps.sh
  - chmod +x install-build-deps.sh
  - sudo ./install-build-deps.sh --no-arm --no-chromeos-fonts --no-nacl --no-prompt
