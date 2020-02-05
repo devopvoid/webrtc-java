@@ -1,6 +1,6 @@
 ## webrtc-java
 
-![Build](https://github.com/devopvoid/webrtc-java/workflows/Build/badge.svg)
+[![Build](https://github.com/devopvoid/webrtc-java/workflows/Build/badge.svg)](https://github.com/devopvoid/webrtc-java/actions)
 
 Java native interface implementation based on the free, open [WebRTC](https://webrtc.org) project. The goal of this project is to enable development of RTC applications for desktop platforms running Java. This project wraps the WebRTC Native API and is similar to the [JS API](https://w3c.github.io/webrtc-pc).
 
