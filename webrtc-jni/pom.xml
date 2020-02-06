@@ -13,6 +13,7 @@
 	<properties>
 		<download.cmake>true</download.cmake>
 		<webrtc.branch>branch-heads/3987</webrtc.branch>
+		<webrtc.src>${user.home}/webrtc</webrtc.src>
 	</properties>
 
 	<build>
@@ -32,9 +33,6 @@
 							<sourcePath>.</sourcePath>
 							<targetPath>${project.build.directory}/${platform}-${build.type}</targetPath>
 							<classifier>${cmake.classifier}</classifier>
-							<environmentVariables>
-								<HOME>${user.home}</HOME>
-							</environmentVariables>
 							<options>
 								<option>
 									"${cmake.options}"
@@ -43,9 +41,12 @@
 									-DWEBRTC_BRANCH=${webrtc.branch}
 								</option>
 								<option>
+									-DWEBRTC_SRC_DIR=${webrtc.src}
+								</option>
+								<option>
 									-DCMAKE_INSTALL_PREFIX=${project.parent.basedir}/webrtc-native/${platform}/src/main/resources/lib
 								</option>
-							 </options>
+							</options>
 							<downloadBinaries>${download.cmake}</downloadBinaries>
 						</configuration>
 					</execution>
