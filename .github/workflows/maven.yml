@@ -1,14 +1,24 @@
 name: Maven CI
 
-on: [push]
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "**.cpp"
+      - "**.h"
+      - "**.java"
 
 jobs:
   build:
+    env:
+      DEPOT_TOOLS_WIN_TOOLCHAIN: 0
+
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v2
@@ -19,6 +29,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven-jdk11-
 
+      - if: runner.os == 'Windows'
+        name: Free disk space
+        run: rm -R "C:\Program Files\dotnet"
+        shell: bash
+
       - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
@@ -27,8 +42,7 @@ jobs:
       - name: Set up depot tools
         run: |
           git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          echo "::add-path::$(pwd)/depot_tools"
+          echo "::add-path::${{ github.workspace }}/depot_tools"
 
       - name: Build with Maven
-        run: mvn -B package -DskipTests -Dmaven.test.skip=true --file pom.xml
-        shell: bash
+        run: mvn -B package -DskipTests -D"maven.test.skip=true" --file pom.xml
