@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "api/RTCRtpHeaderExtParameters.h"
+#include "api/RTCRtpHeaderExtension.h"
 #include "JavaClasses.h"
 #include "JavaObject.h"
 #include "JavaString.h"
@@ -23,15 +23,15 @@
 
 namespace jni
 {
-	namespace RTCRtpHeaderExtParameters
+	namespace RTCRtpHeaderExtension
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpHeaderExtensionParameters & parameters)
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpExtension & extension)
 		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtParametersClass>(env);
+			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionClass>(env);
 
-			JavaLocalRef<jstring> uri = JavaString::toJava(env, parameters.uri);
-			jint id = static_cast<jint>(parameters.id);
-			jboolean encrypted = static_cast<jboolean>(parameters.encrypt);
+			JavaLocalRef<jstring> uri = JavaString::toJava(env, extension.uri);
+			jint id = static_cast<jint>(extension.id);
+			jboolean encrypted = static_cast<jboolean>(extension.encrypt);
 
 			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get(), id, encrypted);
 			ExceptionCheck(env);
@@ -39,21 +39,21 @@ namespace jni
 			return JavaLocalRef<jobject>(env, object);
 		}
 
-		webrtc::RtpHeaderExtensionParameters toNative(JNIEnv * env, const JavaRef<jobject> & parameters)
+		webrtc::RtpExtension toNative(JNIEnv * env, const JavaRef<jobject> & jExtension)
 		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtParametersClass>(env);
+			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionClass>(env);
 
-			JavaObject obj(env, parameters);
+			JavaObject obj(env, jExtension);
 
-			webrtc::RtpHeaderExtensionParameters params;
-			params.uri = JavaString::toNative(env, obj.getString(javaClass->uri));
-			params.id = static_cast<int>(obj.getInt(javaClass->id));
-			params.encrypt = static_cast<bool>(obj.getBoolean(javaClass->encrypted));
+			webrtc::RtpExtension extension;
+			extension.uri = JavaString::toNative(env, obj.getString(javaClass->uri));
+			extension.id = static_cast<int>(obj.getInt(javaClass->id));
+			extension.encrypt = static_cast<bool>(obj.getBoolean(javaClass->encrypted));
 
-			return params;
+			return extension;
 		}
 
-		JavaRTCRtpHeaderExtParametersClass::JavaRTCRtpHeaderExtParametersClass(JNIEnv * env)
+		JavaRTCRtpHeaderExtensionClass::JavaRTCRtpHeaderExtensionClass(JNIEnv * env)
 		{
 			cls = FindClass(env, PKG"RTCRtpHeaderExtensionParameters");
 

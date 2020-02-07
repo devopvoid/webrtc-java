@@ -17,7 +17,7 @@
 #include "api/RTCRtpSendParameters.h"
 #include "api/RTCRtpCodecParameters.h"
 #include "api/RTCRtpEncodingParameters.h"
-#include "api/RTCRtpHeaderExtParameters.h"
+#include "api/RTCRtpHeaderExtension.h"
 #include "api/RTCRtpParameters.h"
 #include "api/RTCRtcpParameters.h"
 #include "JavaArrayList.h"
@@ -40,7 +40,7 @@ namespace jni
 			JavaLocalRef<jstring> transactionId = JavaString::toJava(env, parameters.transaction_id);
 			JavaLocalRef<jobject> rtcp = RTCRtcpParameters::toJava(env, parameters.rtcp);
 			JavaLocalRef<jobject> encodings = JavaList::toArrayList(env, parameters.encodings, &RTCRtpEncodingParameters::toJava);
-			JavaLocalRef<jobject> headerExtensions = JavaList::toArrayList(env, parameters.header_extensions, &RTCRtpHeaderExtParameters::toJava);
+			JavaLocalRef<jobject> headerExtensions = JavaList::toArrayList(env, parameters.header_extensions, &RTCRtpHeaderExtension::toJava);
 			JavaLocalRef<jobject> codecs = JavaList::toArrayList(env, parameters.codecs, &RTCRtpCodecParameters::toJava);
 
 			jobject object = env->NewObject(javaClass->cls, javaClass->ctor);
@@ -70,7 +70,7 @@ namespace jni
 			params.transaction_id = JavaString::toNative(env, transactionId);
 			params.rtcp = RTCRtcpParameters::toNative(env, rtcp);
 			params.encodings = JavaList::toVector(env, encodings, &RTCRtpEncodingParameters::toNative);
-			params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtParameters::toNative);
+			params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtension::toNative);
 			params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
 
 			return params;

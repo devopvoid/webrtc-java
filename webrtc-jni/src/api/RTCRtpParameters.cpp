@@ -15,9 +15,9 @@
  */
 
 #include "api/RTCRtpParameters.h"
-#include "api/RTCRtcpParameters.h"
-#include "api/RTCRtpHeaderExtParameters.h"
 #include "api/RTCRtpCodecParameters.h"
+#include "api/RTCRtpHeaderExtension.h"
+#include "api/RTCRtcpParameters.h"
 #include "JavaArrayList.h"
 #include "JavaClasses.h"
 #include "JavaIterable.h"
@@ -37,7 +37,7 @@ namespace jni
 
 			jobject object = env->NewObject(javaClass->cls, javaClass->ctor);
 			env->SetObjectField(object, javaClass->rtcp, rtcp.get());
-			env->SetObjectField(object, javaClass->headerExtensions, JavaList::toArrayList(env, parameters.header_extensions, &RTCRtpHeaderExtParameters::toJava));
+			env->SetObjectField(object, javaClass->headerExtensions, JavaList::toArrayList(env, parameters.header_extensions, &RTCRtpHeaderExtension::toJava));
 			env->SetObjectField(object, javaClass->codecs, JavaList::toArrayList(env, parameters.codecs, &RTCRtpCodecParameters::toJava));
 
 			return JavaLocalRef<jobject>(env, object);
@@ -55,7 +55,7 @@ namespace jni
 
 			webrtc::RtpParameters params;
 			params.rtcp = RTCRtcpParameters::toNative(env, rtcp);
-			params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtParameters::toNative);
+			params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtension::toNative);
 			params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
 
 			return params;

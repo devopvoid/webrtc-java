@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_API_RTC_RTP_HEADER_EXT_PARAMETERS_H_
-#define JNI_WEBRTC_API_RTC_RTP_HEADER_EXT_PARAMETERS_H_
+#ifndef JNI_WEBRTC_API_RTC_RTP_HEADER_EXTENSION_H_
+#define JNI_WEBRTC_API_RTC_RTP_HEADER_EXTENSION_H_
 
 #include "JavaClass.h"
 #include "JavaRef.h"
@@ -26,12 +26,12 @@
 
 namespace jni
 {
-	namespace RTCRtpHeaderExtParameters
+	namespace RTCRtpHeaderExtension
 	{
-		class JavaRTCRtpHeaderExtParametersClass : public JavaClass
+		class JavaRTCRtpHeaderExtensionClass : public JavaClass
 		{
 			public:
-				explicit JavaRTCRtpHeaderExtParametersClass(JNIEnv * env);
+				explicit JavaRTCRtpHeaderExtensionClass(JNIEnv * env);
 
 				jclass cls;
 				jmethodID ctor;
@@ -40,8 +40,8 @@ namespace jni
 				jfieldID encrypted;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpHeaderExtensionParameters & parameters);
-		webrtc::RtpHeaderExtensionParameters toNative(JNIEnv * env, const JavaRef<jobject> & parameters);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpExtension & extension);
+		webrtc::RtpExtension toNative(JNIEnv * env, const JavaRef<jobject> & jExtension);
 	}
 }
 
