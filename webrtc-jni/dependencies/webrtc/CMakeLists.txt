@@ -56,16 +56,16 @@ endif()
 file(MAKE_DIRECTORY ${WEBRTC_DIR})
 
 message(STATUS "WebRTC: fetch")
-
 execute_process(
-	COMMAND ${SHELLCOMMAND} fetch --nohooks webrtc
+	COMMAND ${SHELLCOMMAND} fetch --no-history --nohooks webrtc
 	WORKING_DIRECTORY ${WEBRTC_DIR}
 	OUTPUT_VARIABLE FETCH_OUTPUT
 	ERROR_VARIABLE FETCH_ERROR
 )
-message(STATUS ${FETCH_OUTPUT}")
+message(STATUS "${FETCH_OUTPUT}")
 message(STATUS "${FETCH_ERROR}")
 
+message(STATUS "WebRTC: sync")
 execute_process(
 	COMMAND ${SHELLCOMMAND} gclient sync
 	WORKING_DIRECTORY ${WEBRTC_DIR}
@@ -76,7 +76,6 @@ message(STATUS "${SYNC_OUTPUT}")
 message(STATUS "${SYNC_ERROR}")
 
 message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
-
 execute_process(
 	COMMAND ${SHELLCOMMAND} git checkout ${WEBRTC_BRANCH}
 	WORKING_DIRECTORY ${WEBRTC_SRC}
