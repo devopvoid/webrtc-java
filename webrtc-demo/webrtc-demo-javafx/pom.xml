@@ -11,7 +11,7 @@
 	<artifactId>webrtc-java-demo-javafx</artifactId>
 
 	<properties>
-		<javafx.version>13</javafx.version>
+		<javafx.version>13.0.2</javafx.version>
 	</properties>
 
 	<build>
