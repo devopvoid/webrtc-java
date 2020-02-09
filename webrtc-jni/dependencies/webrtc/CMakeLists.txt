@@ -65,6 +65,15 @@ execute_process(
 message(STATUS "${FETCH_OUTPUT}")
 message(STATUS "${FETCH_ERROR}")
 
+# Patch DEPS to reduce time running gclient
+file(READ "${WEBRTC_SRC}/DEPS" DEPS_CONTENT)
+string(REPLACE
+	"'src/resources'],"
+	"'src/resources'],'condition': 'rtc_include_tests==true',"
+	DEPS_CONTENT
+	"${DEPS_CONTENT}")
+file(WRITE "${WEBRTC_SRC}/DEPS" "${DEPS_CONTENT}")
+
 message(STATUS "WebRTC: sync")
 execute_process(
 	COMMAND ${SHELLCOMMAND} gclient sync
@@ -76,6 +85,10 @@ message(STATUS "${SYNC_OUTPUT}")
 message(STATUS "${SYNC_ERROR}")
 
 message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
+execute_process(
+	COMMAND ${SHELLCOMMAND} git checkout .
+	WORKING_DIRECTORY ${WEBRTC_SRC}
+)
 execute_process(
 	COMMAND ${SHELLCOMMAND} git checkout ${WEBRTC_BRANCH}
 	WORKING_DIRECTORY ${WEBRTC_SRC}
