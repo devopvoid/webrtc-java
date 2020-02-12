@@ -22,7 +22,6 @@ import dev.onvoid.webrtc.demo.inject.Injector;
 import dev.onvoid.webrtc.demo.javafx.inject.FxViewModule;
 import dev.onvoid.webrtc.demo.presenter.MainPresenter;
 import dev.onvoid.webrtc.demo.view.MainView;
-import dev.onvoid.webrtc.internal.NativeLoader;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,15 +33,6 @@ import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
 public class DemoApplication extends Application {
-
-	static {
-		try {
-			NativeLoader.loadLibrary("webrtc-java");
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
 
 	@Override
 	public void start(Stage primaryStage) throws Exception {

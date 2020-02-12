@@ -15,6 +15,21 @@
 	</properties>
 
 	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.openjfx</groupId>
+				<artifactId>javafx-maven-plugin</artifactId>
+				<version>0.0.4</version>
+				<configuration>
+					<options>
+						<option>--add-opens</option>
+						<option>java.base/java.lang=com.google.guice</option>
+					</options>
+					<mainClass>dev.onvoid.webrtc.demo.javafx.DemoApplication</mainClass>
+				</configuration>
+			</plugin>
+		</plugins>
+
 		<resources>
 			<resource>
 				<directory>src/main/resources</directory>
@@ -57,21 +72,6 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>dev.onvoid.webrtc</groupId>
-			<artifactId>webrtc-java-linux-x86_64</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>dev.onvoid.webrtc</groupId>
-			<artifactId>webrtc-java-macos-x86_64</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>dev.onvoid.webrtc</groupId>
-			<artifactId>webrtc-java-windows-x86_64</artifactId>
-			<version>${project.version}</version>
-		</dependency>
-		<dependency>
 			<groupId>dev.onvoid.webrtc.demo</groupId>
 			<artifactId>webrtc-java-demo-api</artifactId>
 			<version>${project.version}</version>
@@ -88,5 +88,4 @@
 			<version>${javafx.version}</version>
 		</dependency>
 	</dependencies>
-
 </project>
