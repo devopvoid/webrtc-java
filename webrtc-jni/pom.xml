@@ -9,9 +9,9 @@
 	</parent>
 
 	<artifactId>webrtc-java-jni</artifactId>
+	<packaging>pom</packaging>
 
 	<properties>
-		<download.cmake>true</download.cmake>
 		<webrtc.branch>branch-heads/3987</webrtc.branch>
 		<webrtc.src>${user.home}/webrtc</webrtc.src>
 	</properties>
@@ -19,18 +19,63 @@
 	<build>
 		<plugins>
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<phase>install</phase>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+						<configuration>
+							<classifier>${platform.classifier}</classifier>
+							<classesDirectory>${project.build.directory}/lib</classesDirectory>
+							<archive>
+								<addMavenDescriptor>false</addMavenDescriptor>
+								<manifestEntries>
+									<Automatic-Module-Name>${platform.module}</Automatic-Module-Name>
+								</manifestEntries>
+							</archive>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<version>2.5.2</version>
+				<executions>
+					<execution>
+						<id>install-classifier</id>
+						<phase>install</phase>
+						<goals>
+							<goal>install-file</goal>
+						</goals>
+						<configuration>
+							<file>${project.build.directory}/${project.artifactId}-${project.version}-${platform.classifier}.jar</file>
+							<classifier>${platform.classifier}</classifier>
+							<groupId>${project.groupId}</groupId>
+							<artifactId>webrtc-java</artifactId>
+							<version>${project.version}</version>
+							<packaging>jar</packaging>
+							<generatePom>false</generatePom>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
 				<groupId>com.googlecode.cmake-maven-project</groupId>
 				<artifactId>cmake-maven-plugin</artifactId>
 				<version>3.14.5-b1</version>
 				<executions>
 					<execution>
 						<id>cmake-generate</id>
-						<phase>process-resources</phase>
+						<phase>generate-resources</phase>
 						<goals>
 							<goal>generate</goal>
 						</goals>
 						<configuration>
-							<sourcePath>.</sourcePath>
+							<sourcePath>src/main/cpp</sourcePath>
 							<targetPath>${project.build.directory}/${platform}-${build.type}</targetPath>
 							<classifier>${cmake.classifier}</classifier>
 							<options>
@@ -44,15 +89,14 @@
 									-DWEBRTC_SRC_DIR=${webrtc.src}
 								</option>
 								<option>
-									-DCMAKE_INSTALL_PREFIX=${project.parent.basedir}/webrtc-native/${platform}/src/main/resources/lib
+									-DCMAKE_INSTALL_PREFIX=${project.build.directory}/lib
 								</option>
 							</options>
-							<downloadBinaries>${download.cmake}</downloadBinaries>
 						</configuration>
 					</execution>
 					<execution>
 						<id>cmake-compile</id>
-						<phase>process-resources</phase>
+						<phase>generate-resources</phase>
 						<goals>
 							<goal>compile</goal>
 						</goals>

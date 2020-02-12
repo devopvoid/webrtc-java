@@ -60,10 +60,9 @@
 	</properties>
 
 	<modules>
-		<module>webrtc</module>
 		<module>webrtc-jni</module>
+		<module>webrtc</module>
 		<module>webrtc-demo</module>
-		<module>webrtc-native</module>
 	</modules>
 
 	<build>
@@ -92,6 +91,12 @@
 							<goals>
 								<goal>sign</goal>
 							</goals>
+							<configuration>
+								<gpgArguments>
+									<arg>--pinentry-mode</arg>
+									<arg>loopback</arg>
+								</gpgArguments>
+							</configuration>
 						</execution>
 					</executions>
 				</plugin>
@@ -172,15 +177,9 @@
 					<version>3.0.0-M4</version>
 				</plugin>
 				<plugin>
-					<groupId>org.sonatype.plugins</groupId>
-					<artifactId>nexus-staging-maven-plugin</artifactId>
-					<version>1.6.8</version>
-					<extensions>true</extensions>
-					<configuration>
-						<serverId>ossrh</serverId>
-						<nexusUrl>https://oss.sonatype.org/</nexusUrl>
-						<autoReleaseAfterClose>false</autoReleaseAfterClose>
-					</configuration>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-deploy-plugin</artifactId>
+					<version>3.0.0-M1</version>
 				</plugin>
 				<plugin>
 					<groupId>org.codehaus.mojo</groupId>
@@ -221,6 +220,45 @@
 				</plugins>
 			</build>
 		</profile>
+		<profile>
+			<id>windows-x86_64</id>
+			<activation>
+				<os>
+					<family>windows</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<properties>
+				<platform.classifier>windows-x86_64</platform.classifier>
+				<platform.module>windows.x86_64</platform.module>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-x86_64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<properties>
+				<platform.classifier>linux-x86_64</platform.classifier>
+				<platform.module>linux.x86_64</platform.module>
+			</properties>
+		</profile>
+		<profile>
+			<id>mac-x86_64</id>
+			<activation>
+				<os>
+					<family>mac</family>
+					<arch>x86_64</arch>
+				</os>
+			</activation>
+			<properties>
+				<platform.classifier>macos-x86_64</platform.classifier>
+				<platform.module>macos.x86_64</platform.module>
+			</properties>
+		</profile>
 	</profiles>
 
 	<reporting>
@@ -250,5 +288,4 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
-
 </project>
