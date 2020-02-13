@@ -1,6 +1,6 @@
 ## webrtc-java
 
-[![Build](https://github.com/devopvoid/webrtc-java/workflows/Build/badge.svg)](https://github.com/devopvoid/webrtc-java/actions)
+[![](https://github.com/devopvoid/webrtc-java/workflows/Maven%20CI/badge.svg)](https://github.com/devopvoid/webrtc-java/actions)
 
 Java native interface implementation based on the free, open [WebRTC](https://webrtc.org) project. The goal of this project is to enable development of RTC applications for desktop platforms running Java. This project wraps the WebRTC Native API and is similar to the [JS API](https://w3c.github.io/webrtc-pc).
 
@@ -15,11 +15,11 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 ### Supported Platforms
 Maven Central artifacts contain native libraries that can be loaded on the following platforms:
 
-| Operating System | Architecture | Artifact ID                |
-| ---------------- |--------------|----------------------------|
-| Linux            | x86_64       | webrtc-java-linux-x86_64   |
-| Mac OS X         | x86_64       | webrtc-java-macos-x86_64   |
-| Windows          | x86_64       | webrtc-java-windows-x86_64 |
+| Operating System | Architecture |
+| ---------------- |--------------|
+| Linux            | x86_64       |
+| Mac OS X         | x86_64       |
+| Windows          | x86_64       |
 
 The native libraries were build with WebRTC branch M79.
 
@@ -37,4 +37,11 @@ Assuming you have all the prerequisites installed for your OS, run:
 mvn install
 ```
 
-On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 11 GB of disk space.
+On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 8 GB of disk space.
+
+#### Build Parameters
+
+| Parameter     | Description                                       | Default Value           |
+| ------------- | ------------------------------------------------- | ----------------------- |
+| webrtc.src    | Absolute checkout path for the WebRTC source tree | /\<user home\>/webrtc   |
+| webrtc.branch | The WebRTC branch to checkout                     | branch-heads/3987 (M80) |
