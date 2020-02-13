@@ -25,30 +25,6 @@
 					</argLine>
 				</configuration>
 			</plugin>
-			<plugin>
-				<groupId>org.codehaus.mojo</groupId>
-				<artifactId>build-helper-maven-plugin</artifactId>
-				<version>3.0.0</version>
-				<executions>
-					<execution>
-						<id>attach-artifacts</id>
-						<phase>validate</phase>
-						<goals>
-							<goal>attach-artifact</goal>
-						</goals>
-						<configuration>
-							<artifacts>
-								<artifact>
-									<file>${project.parent.basedir}/webrtc-jni/target/webrtc-java-${project.version}-${platform.classifier}.jar</file>
-									<type>jar</type>
-									<classifier>${platform.classifier}
-									</classifier>
-								</artifact>
-							</artifacts>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
 		</plugins>
 	</build>
 

@@ -20,13 +20,6 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-deploy-plugin</artifactId>
-				<configuration>
-					<skip>true</skip>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
 				<executions>
 					<execution>
@@ -74,6 +67,66 @@
 				</executions>
 			</plugin>
 			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-deploy-plugin</artifactId>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+				<executions>
+					<execution>
+						<id>deploy-classifier</id>
+						<phase>deploy</phase>
+						<goals>
+							<goal>deploy-file</goal>
+						</goals>
+						<inherited>false</inherited>
+						<configuration>
+							<!--suppress UnresolvedMavenProperty -->
+							<url>${deploy.url}</url>
+							<repositoryId>${project.distributionManagement.repository.id}</repositoryId>
+							<file>${project.build.directory}/webrtc-java-${project.version}-${platform.classifier}.jar</file>
+							<classifier>${platform.classifier}</classifier>
+							<groupId>${project.groupId}</groupId>
+							<artifactId>webrtc-java</artifactId>
+							<version>${project.version}</version>
+							<packaging>jar</packaging>
+							<generatePom>false</generatePom>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>check-version</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<exportAntProperties>true</exportAntProperties>
+							<target>
+								<condition property="snapshot.release">
+									<contains string="${project.version}"
+											  substring="SNAPSHOT"/>
+								</condition>
+								<condition property="deploy.url"
+										   value="${project.distributionManagement.snapshotRepository.url}">
+									<isset property="snapshot.release"/>
+								</condition>
+								<!-- Properties in ant are immutable, so the following assignments
+									will only take place if 'deploy.url' is not yet set. -->
+								<property name="deploy.url"
+										  value="${project.distributionManagement.repository.url}"/>
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
 				<groupId>com.googlecode.cmake-maven-project</groupId>
 				<artifactId>cmake-maven-plugin</artifactId>
 				<version>3.14.5-b1</version>
@@ -86,7 +139,7 @@
 						</goals>
 						<configuration>
 							<sourcePath>src/main/cpp</sourcePath>
-							<targetPath>${project.build.directory}/${platform}-${build.type}</targetPath>
+							<targetPath>${project.build.directory}/${platform.classifier}-${build.type}</targetPath>
 							<classifier>${cmake.classifier}</classifier>
 							<options>
 								<option>
@@ -114,7 +167,7 @@
 							<classifier>${cmake.classifier}</classifier>
 							<config>${cmake.config}</config>
 							<target>install</target>
-							<projectDirectory>${project.build.directory}/${platform}-${build.type}</projectDirectory>
+							<projectDirectory>${project.build.directory}/${platform.classifier}-${build.type}</projectDirectory>
 						</configuration>
 					</execution>
 				</executions>
@@ -132,7 +185,6 @@
 				</os>
 			</activation>
 			<properties>
-				<platform>windows-x86_64</platform>
 				<build.type>release</build.type>
 				<cmake.classifier>windows-x86_64</cmake.classifier>
 				<cmake.options>-Ax64</cmake.options>
@@ -148,7 +200,6 @@
 				</os>
 			</activation>
 			<properties>
-				<platform>linux-x86_64</platform>
 				<build.type>release</build.type>
 				<cmake.classifier>linux-x86_64</cmake.classifier>
 			</properties>
@@ -162,7 +213,6 @@
 				</os>
 			</activation>
 			<properties>
-				<platform>macos-x86_64</platform>
 				<build.type>release</build.type>
 				<cmake.classifier>mac-x86_64</cmake.classifier>
 			</properties>
