@@ -20,16 +20,24 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-deploy-plugin</artifactId>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
 				<executions>
 					<execution>
-						<phase>install</phase>
+						<phase>prepare-package</phase>
 						<goals>
 							<goal>jar</goal>
 						</goals>
 						<configuration>
 							<classifier>${platform.classifier}</classifier>
 							<classesDirectory>${project.build.directory}/lib</classesDirectory>
+							<finalName>webrtc-java-${project.version}</finalName>
 							<archive>
 								<addMavenDescriptor>false</addMavenDescriptor>
 								<manifestEntries>
@@ -43,16 +51,18 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-install-plugin</artifactId>
-				<version>2.5.2</version>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
 				<executions>
 					<execution>
 						<id>install-classifier</id>
-						<phase>install</phase>
+						<phase>package</phase>
 						<goals>
 							<goal>install-file</goal>
 						</goals>
 						<configuration>
-							<file>${project.build.directory}/${project.artifactId}-${project.version}-${platform.classifier}.jar</file>
+							<file>${project.build.directory}/webrtc-java-${project.version}-${platform.classifier}.jar</file>
 							<classifier>${platform.classifier}</classifier>
 							<groupId>${project.groupId}</groupId>
 							<artifactId>webrtc-java</artifactId>
