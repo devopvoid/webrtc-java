@@ -11,9 +11,6 @@ on:
 
 jobs:
   build:
-    env:
-      DEPOT_TOOLS_WIN_TOOLCHAIN: 0
-
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -40,11 +37,6 @@ jobs:
           server-id: ossrh
           server-username: MAVEN_USERNAME
           server-password: MAVEN_PASSWORD
-
-      - name: Set up depot tools
-        run: |
-          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
-          echo "::add-path::${{ github.workspace }}/depot_tools"
 
       - name: Set up GPG
         env:
