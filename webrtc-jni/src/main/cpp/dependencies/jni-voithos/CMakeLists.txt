@@ -78,8 +78,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 	CXX_EXTENSIONS OFF
 )
 
-target_include_directories(${PROJECT_NAME} PUBLIC
-	include
-	include/jni
-	include/jni/${JNI_PLATFORM}
+target_include_directories(${PROJECT_NAME}
+	PUBLIC
+		include
+		include/jni
+		include/jni/${JNI_PLATFORM}
 )

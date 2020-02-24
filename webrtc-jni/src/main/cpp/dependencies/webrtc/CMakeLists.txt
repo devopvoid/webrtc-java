@@ -1,22 +1,12 @@
 ﻿cmake_minimum_required(VERSION 3.13)
+project(webrtc)
 
-find_program(GCLIENT_EXECUTABLE
-	NAMES gclient gclient.bat
-	DOC "Path to gclient executable"
-	HINTS ${DEPOT_TOOLS_PATH} ENV DEPOT_TOOLS_PATH)
+FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.hxx
+"template<class T> class pseudo{}\n")
+FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.cxx
+"static void pseudo(void){}\n")
 
-find_path(DEPOT_TOOLS_PATH
-	NAMES gclient gclient.py gclient.bat
-		ninja ninja.exe ninja-linux32 ninja-linux64 ninja-mac
-		download_from_google_storage download_from_google_storage.bat
-		download_from_google_storage.py
-	DOC "Path to depot tools directory"
-	HINTS ${DEPOT_TOOLS_PATH} ENV DEPOT_TOOLS_PATH)
-
-include(${CMAKE_ROOT}/Modules/FindPackageHandleStandardArgs.cmake)
-find_package_handle_standard_args (DepotTools
-	REQUIRED_VARS GCLIENT_EXECUTABLE DEPOT_TOOLS_PATH
-	FAIL_MESSAGE "Could not find depot tools")
+add_library(${PROJECT_NAME} STATIC pseudo.cxx pseudo.hxx)
 
 if(NOT DEFINED TARGET_CPU)
 	if(CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -30,40 +20,125 @@ if(NOT DEFINED WEBRTC_BRANCH)
 	set(WEBRTC_BRANCH "master")
 endif()
 
+if(NOT DEFINED WEBRTC_SRC_DIR)
+	if(DEFINED ENV{CTEST_REAL_HOME})
+		set(WEBRTC_SRC_DIR "$ENV{CTEST_REAL_HOME}")
+	else()
+		set(WEBRTC_SRC_DIR "$ENV{HOME}")
+	endif()
+
+	if(NOT WEBRTC_SRC_DIR AND WIN32)
+		file(TO_CMAKE_PATH "$ENV{USERPROFILE}" WEBRTC_SRC_DIR)
+	endif()
+endif()
+
+if(NOT DEFINED WEBRTC_INSTALL_DIR)
+	set(WEBRTC_INSTALL_DIR "${WEBRTC_SRC_DIR}/build")
+endif()
+
+if(WIN32)
+	set(ENV{DEPOT_TOOLS_WIN_TOOLCHAIN} 0)
+	set(SHELLCOMMAND cmd /c )
+	set(WEBRTC_LIB webrtc.lib)
+	set(PATH_SEP ";")
+elseif(UNIX)
+	set(WEBRTC_LIB libwebrtc.a)
+	set(PATH_SEP ":")
+endif()
+
+function(print text)
+	string(STRIP "${text}" text)
+	string(REGEX REPLACE "\n$" "" text "${text}")
+	string(LENGTH "${text}" TEXT_LENGTH)
+
+	if(TEXT_LENGTH GREATER 0)
+		message("${text}")
+	endif()
+endfunction()
+
+function(execute_command)
+	cmake_parse_arguments(CMD_ARGS "" "WORKING_DIRECTORY" "COMMAND" ${ARGN})
+
+	execute_process(
+		COMMAND ${SHELLCOMMAND} ${CMD_ARGS_COMMAND}
+		WORKING_DIRECTORY "${CMD_ARGS_WORKING_DIRECTORY}"
+		OUTPUT_VARIABLE COMMAND_OUTPUT
+		ERROR_VARIABLE COMMAND_ERROR
+	)
+
+	print("${COMMAND_OUTPUT}")
+	print("${COMMAND_ERROR}")
+endfunction()
+
+file(TO_CMAKE_PATH "${WEBRTC_SRC_DIR}" WEBRTC_SRC_DIR)
+
 set(WEBRTC_DIR ${WEBRTC_SRC_DIR})
 set(WEBRTC_SRC ${WEBRTC_DIR}/src)
-set(WEBRTC_INC ${WEBRTC_SRC} ${WEBRTC_SRC}/third_party/abseil-cpp ${WEBRTC_SRC}/third_party/libyuv/include PARENT_SCOPE)
 set(WEBRTC_BUILD out/${TARGET_CPU})
+set(WEBRTC_LIB_PATH ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${WEBRTC_LIB})
+set(WEBRTC_LIB_PATH_INSTALLED ${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB})
+
+file(TO_CMAKE_PATH "${WEBRTC_DIR}" WEBRTC_DIR)
+file(TO_CMAKE_PATH "${WEBRTC_INSTALL_DIR}" WEBRTC_INSTALL_DIR)
+file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH}" WEBRTC_LIB_PATH)
+file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH_INSTALLED}" WEBRTC_LIB_PATH_INSTALLED)
 
 message(STATUS "WebRTC checkout path: ${WEBRTC_DIR}")
 message(STATUS "WebRTC checkout branch: ${WEBRTC_BRANCH}")
 message(STATUS "WebRTC target CPU: ${TARGET_CPU}")
+message(STATUS "WebRTC build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
 
-if(WIN32)
-	set(SHELLCOMMAND cmd /c )
-	set(WEBRTC_LIB "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/webrtc.lib")
-elseif(UNIX)
-	set(WEBRTC_LIB "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/libwebrtc.a")
+if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
+	set(TARGET_INC_DIR ${WEBRTC_INSTALL_DIR}/include)
+	set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH_INSTALLED})
+else()
+	set(TARGET_INC_DIR ${WEBRTC_SRC})
+	set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH})
 endif()
 
-set(WEBRTC_LIB ${WEBRTC_LIB} PARENT_SCOPE)
+target_include_directories(${PROJECT_NAME}
+	PUBLIC
+		${TARGET_INC_DIR}
+		${TARGET_INC_DIR}/third_party/abseil-cpp
+		${TARGET_INC_DIR}/third_party/libyuv/include
+)
+target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 
-if(EXISTS "${WEBRTC_LIB}")
-	message(STATUS "WebRTC: Nothing to do")
+if(APPLE)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
+	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
+elseif(LINUX)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
+	target_link_libraries(${PROJECT_NAME} X11)
+elseif(WIN32)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN)
+	target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
+endif()
+
+if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
+	message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
 	return()
 endif()
+
+if(NOT EXISTS "${WEBRTC_SRC_DIR}/depot_tools")
+	message(STATUS "WebRTC: fetch depot tools")
+	file(MAKE_DIRECTORY ${WEBRTC_SRC_DIR})
+	execute_command(
+		COMMAND git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
+	)
+endif()
+
+set(ENV{PATH} "${WEBRTC_SRC_DIR}/depot_tools${PATH_SEP}$ENV{PATH}")
 
 file(MAKE_DIRECTORY ${WEBRTC_DIR})
 
 message(STATUS "WebRTC: fetch")
-execute_process(
-	COMMAND ${SHELLCOMMAND} fetch --no-history --nohooks webrtc
-	WORKING_DIRECTORY ${WEBRTC_DIR}
-	OUTPUT_VARIABLE FETCH_OUTPUT
-	ERROR_VARIABLE FETCH_ERROR
+execute_command(
+	COMMAND fetch --no-history --nohooks webrtc
+	WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
-message(STATUS "${FETCH_OUTPUT}")
-message(STATUS "${FETCH_ERROR}")
 
 # Patch DEPS to reduce time running gclient
 file(READ "${WEBRTC_SRC}/DEPS" DEPS_CONTENT)
@@ -75,49 +150,70 @@ string(REPLACE
 file(WRITE "${WEBRTC_SRC}/DEPS" "${DEPS_CONTENT}")
 
 message(STATUS "WebRTC: sync")
-execute_process(
-	COMMAND ${SHELLCOMMAND} gclient sync
-	WORKING_DIRECTORY ${WEBRTC_DIR}
-    OUTPUT_VARIABLE SYNC_OUTPUT
-	ERROR_VARIABLE SYNC_ERROR
+execute_command(
+	COMMAND gclient sync
+	WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
-message(STATUS "${SYNC_OUTPUT}")
-message(STATUS "${SYNC_ERROR}")
 
 message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
-execute_process(
-	COMMAND ${SHELLCOMMAND} git checkout .
-	WORKING_DIRECTORY ${WEBRTC_SRC}
+execute_command(
+	COMMAND git checkout .
+	WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
-execute_process(
-	COMMAND ${SHELLCOMMAND} git checkout ${WEBRTC_BRANCH}
-	WORKING_DIRECTORY ${WEBRTC_SRC}
-	OUTPUT_VARIABLE CHECKOUT_OUTPUT
-	ERROR_VARIABLE CHECKOUT_ERROR
+execute_command(
+	COMMAND git checkout ${WEBRTC_BRANCH}
+	WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
-message(STATUS "${CHECKOUT_OUTPUT}")
-message(STATUS "${CHECKOUT_ERROR}")
 
 message(STATUS "WebRTC: generate")
-
 set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" rtc_include_tests=false use_rtti=true use_custom_libcxx=false symbol_level=0")
-
-execute_process(
-	COMMAND ${SHELLCOMMAND} gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
-	WORKING_DIRECTORY ${WEBRTC_SRC}
-	OUTPUT_VARIABLE GEN_OUTPUT
-	ERROR_VARIABLE GEN_ERROR
+execute_command(
+	COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
+	WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
-message(STATUS "${GEN_OUTPUT}")
-message(STATUS "${GEN_ERROR}")
 
 message(STATUS "WebRTC: compile")
-
-execute_process(
-	COMMAND ${SHELLCOMMAND} ninja -C ${WEBRTC_BUILD}
-	WORKING_DIRECTORY ${WEBRTC_SRC}
-	OUTPUT_VARIABLE COMPILE_OUTPUT
-	ERROR_VARIABLE COMPILE_ERROR
+execute_command(
+	COMMAND ninja -C "${WEBRTC_BUILD}"
+	WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
-message(STATUS "${COMPILE_OUTPUT}")
-message(STATUS "${COMPILE_ERROR}")
+
+install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")
+install(
+	DIRECTORY "${WEBRTC_SRC}/"
+	DESTINATION "${WEBRTC_INSTALL_DIR}/include"
+	FILES_MATCHING
+		PATTERN "*.h"
+		REGEX /src/base/ EXCLUDE
+		REGEX /src/build/ EXCLUDE
+		REGEX /src/build_overrides/ EXCLUDE
+		REGEX /src/buildtools/ EXCLUDE
+		REGEX /src/data/ EXCLUDE
+		REGEX /src/docs/ EXCLUDE
+		REGEX /src/examples/ EXCLUDE
+		REGEX /src/out/ EXCLUDE
+		REGEX /src/resources/ EXCLUDE
+		REGEX /src/sdk/ EXCLUDE
+		REGEX /src/stats/ EXCLUDE
+		REGEX /src/style-guide/ EXCLUDE
+		REGEX /src/test/ EXCLUDE
+		REGEX /src/testing/ EXCLUDE
+		REGEX "/src/third_party/(a[c-z].*|[b-k]|l[a-h|k-z].*|lib[a-x].*|[m-z])" EXCLUDE
+		REGEX /src/tools/ EXCLUDE
+		REGEX /src/tools_webrtc/ EXCLUDE
+		REGEX /test/ EXCLUDE
+)
+# Delete empty directories
+install(CODE "
+	file(GLOB_RECURSE headers LIST_DIRECTORIES true ${WEBRTC_INSTALL_DIR}/include/!*)
+
+	foreach(path \${headers})
+		file(GLOB result \"\${path}/*\")
+		list(LENGTH result file_count)
+
+		if(file_count EQUAL 0)
+			# DIR is empty
+			file(REMOVE_RECURSE \${path})
+		endif()
+	endforeach()
+")
