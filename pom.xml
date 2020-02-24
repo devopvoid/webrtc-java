@@ -40,6 +40,7 @@
 		<connection>scm:git:git://github.com/devopvoid/webrtc-java.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/devopvoid/webrtc-java.git</developerConnection>
 		<url>https://github.com/devopvoid/webrtc-java/tree/master</url>
+		<tag>HEAD</tag>
 	</scm>
 
 	<distributionManagement>
@@ -127,6 +128,7 @@
 								<Build-Date>${maven.build.timestamp}</Build-Date>
 							</manifestEntries>
 						</archive>
+						<skipIfEmpty>true</skipIfEmpty>
 					</configuration>
 				</plugin>
 				<plugin>
@@ -152,6 +154,18 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-project-info-reports-plugin</artifactId>
 					<version>3.0.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-release-plugin</artifactId>
+					<version>3.0.0-M1</version>
+					<configuration>
+						<autoVersionSubmodules>true</autoVersionSubmodules>
+						<releaseProfiles>release</releaseProfiles>
+						<tagNameFormat>v@{project.version}</tagNameFormat>
+						<scmDevelopmentCommitComment>Prepare for next development iteration</scmDevelopmentCommitComment>
+						<scmReleaseCommitComment>Prepare release @{releaseLabel}</scmReleaseCommitComment>
+					</configuration>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -190,14 +204,6 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-failsafe-plugin</artifactId>
 					<version>3.0.0-M4</version>
-				</plugin>
-				<plugin>
-					<groupId>org.codehaus.mojo</groupId>
-					<artifactId>versions-maven-plugin</artifactId>
-					<version>2.7</version>
-					<configuration>
-						<generateBackupPoms>false</generateBackupPoms>
-					</configuration>
 				</plugin>
 			</plugins>
 		</pluginManagement>
@@ -240,7 +246,7 @@
 			</activation>
 			<properties>
 				<platform.classifier>windows-x86_64</platform.classifier>
-				<platform.module>windows.x86_64</platform.module>
+				<platform.module>webrtc.windows.x86_64</platform.module>
 			</properties>
 		</profile>
 		<profile>
@@ -253,7 +259,7 @@
 			</activation>
 			<properties>
 				<platform.classifier>linux-x86_64</platform.classifier>
-				<platform.module>linux.x86_64</platform.module>
+				<platform.module>webrtc.linux.x86_64</platform.module>
 			</properties>
 		</profile>
 		<profile>
@@ -266,7 +272,7 @@
 			</activation>
 			<properties>
 				<platform.classifier>macos-x86_64</platform.classifier>
-				<platform.module>macos.x86_64</platform.module>
+				<platform.module>webrtc.macos.x86_64</platform.module>
 			</properties>
 		</profile>
 	</profiles>
