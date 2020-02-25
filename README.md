@@ -1,6 +1,6 @@
-## webrtc-java
-
 [![](https://github.com/devopvoid/webrtc-java/workflows/Maven%20CI/badge.svg)](https://github.com/devopvoid/webrtc-java/actions)
+
+## webrtc-java
 
 Java native interface implementation based on the free, open [WebRTC](https://webrtc.org) project. The goal of this project is to enable development of RTC applications for desktop platforms running Java. This project wraps the WebRTC Native API and is similar to the [JS API](https://w3c.github.io/webrtc-pc).
 
@@ -8,20 +8,29 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
 </dependency>
 ```
 
 ### Supported Platforms
 Maven Central artifacts contain native libraries that can be loaded on the following platforms:
 
-| Operating System | Architecture |
-| ---------------- |--------------|
-| Linux            | x86_64       |
-| Mac OS X         | x86_64       |
-| Windows          | x86_64       |
+<table>
+  <tr>
+    <td>Linux</td>
+    <td>x86_64</td>
+  </tr>
+  <tr>
+    <td>macOS</td>
+    <td>x86_64</td>
+  </tr>
+  <tr>
+    <td>Windows</td>
+    <td>x86_64</td>
+  </tr>
+</table>
 
-The native libraries were build with WebRTC branch M79.
+The native libraries were build with WebRTC branch M80.
 
 ### Demo
 
@@ -29,7 +38,22 @@ The client demo implements the [AppRTC](https://github.com/webrtc/apprtc) signal
 
 ### Build Notes
 
-In order to build the native code, be sure to install the [prerequisite software](https://webrtc.googlesource.com/src/+/refs/heads/master/docs/native-code/development/prerequisite-sw/index.md).
+In order to build the native code, be sure to install the prerequisite software (follow the links):
+
+<table>
+  <tr>
+    <td>Linux</td>
+    <td><a href="https://webrtc.googlesource.com/src/+/refs/heads/master/docs/native-code/development/prerequisite-sw/index.md#linux-ubuntu_debian">Debian & Ubuntu</a>, <a href="https://chromium.googlesource.com/chromium/src/+/master/docs/linux/build_instructions.md#notes">other distros</a></td>
+  </tr>
+  <tr>
+    <td>macOS</td>
+    <td>Xcode 9 or higher</td>
+  </tr>
+  <tr>
+    <td>Windows</td>
+    <td><a href="https://chromium.googlesource.com/chromium/src/+/master/docs/windows_build_instructions.md#visual-studio">Visual Studio</a></td>
+  </tr>
+</table>
 
 Assuming you have all the prerequisites installed for your OS, run:
 
@@ -41,7 +65,8 @@ On the first run, the WebRTC source tree will be loaded into the `/<user home>/w
 
 #### Build Parameters
 
-| Parameter     | Description                                       | Default Value           |
-| ------------- | ------------------------------------------------- | ----------------------- |
-| webrtc.src    | Absolute checkout path for the WebRTC source tree | /\<user home\>/webrtc   |
-| webrtc.branch | The WebRTC branch to checkout                     | branch-heads/3987 (M80) |
+| Parameter          | Description                                            | Default Value               |
+| ------------------ | ------------------------------------------------------ | --------------------------- |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/3987 (M80)     |
+| webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user home\>/webrtc       |
+| webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user home\>/webrtc/build |
