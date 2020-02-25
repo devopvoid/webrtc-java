@@ -1,0 +1,103 @@
+name: Maven CI
+
+on:
+  create:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        java: [13]
+
+    env:
+      WEBRTC_CACHE_BRANCH: 3987
+      WEBRTC_CHECKOUT_FOLDER: ${{ github.workspace }}/.work/webrtc
+      WEBRTC_INSTALL_FOLDER: ${{ github.workspace }}/.work/webrtc/build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Linux audio system # Required for testing
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y pulseaudio
+          pulseaudio --start
+
+      - name: Set up WebRTC cache
+        uses: actions/cache@v1
+        with:
+          path: ${{ env.WEBRTC_INSTALL_FOLDER }}
+          key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ runner.os }}-${{ hashFiles('webrtc-jni/pom.xml') }}
+          restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ runner.os }}-
+
+      - name: Set up Maven cache
+        uses: actions/cache@v1
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-${{ runner.os }}-
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java }}
+
+      - name: Set up GPG
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: echo -e "$GPG_PRIVATE_KEY" | gpg --import --batch
+        shell: bash
+
+      - name: Create Release
+        if: runner.os == 'Linux' # Create release only once
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Build
+        run: mvn package -DskipTests -s .github/workflows/settings.xml
+
+      - name: Test
+        run: mvn -B jar:jar surefire:test
+
+      - name: Deploy
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          NEXUS_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        run: mvn deploy -Prelease -DskipTests -s .github/workflows/settings.xml
+
+      - name: Get demo bundle name
+        id: get-bundle
+        run: echo ::set-output name=bundle::$(basename webrtc-demo/webrtc-demo-javafx/target/webrtc-javafx-demo-*.jar)
+        shell: bash
+
+      - name: Get release context
+        id: get-release-context
+        run: |
+          owner=${{ github.event.repository.owner.name }}
+          api_url=https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest
+          upload_url=$(curl -s -u $owner:${{ secrets.GITHUB_TOKEN }} $api_url | jq -r '.upload_url')
+          echo ::set-output name=upload_url::$upload_url
+        shell: bash
+
+      - name: Upload demo release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get-release-context.outputs.upload_url }}
+          asset_path: ./webrtc-demo/webrtc-demo-javafx/target/${{ steps.get-bundle.outputs.bundle }}
+          asset_name: ${{ steps.get-bundle.outputs.bundle }}
+          asset_content_type: application/java-archive
