@@ -60,7 +60,7 @@
 											<mainClass>dev.onvoid.webrtc.demo.javafx.DemoApplicationLauncher</mainClass>
 										</transformer>
 									</transformers>
-									<finalName>${project.artifactId}-${project.version}-${platform.classifier}-bundle</finalName>
+									<finalName>webrtc-javafx-demo-${project.version}-${platform.classifier}</finalName>
 								</configuration>
 							</execution>
 						</executions>

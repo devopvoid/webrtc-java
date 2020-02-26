@@ -19,14 +19,17 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   <tr>
     <td>Linux</td>
     <td>x86_64</td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.2.0/webrtc-javafx-demo-0.2.0-linux-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>macOS</td>
     <td>x86_64</td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.2.0/webrtc-javafx-demo-0.2.0-macos-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>Windows</td>
     <td>x86_64</td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.2.0/webrtc-javafx-demo-0.2.0-windows-x86_64.jar">demo app</a></td>
   </tr>
 </table>
 
@@ -67,6 +70,6 @@ On the first run, the WebRTC source tree will be loaded into the `/<user home>/w
 
 | Parameter          | Description                                            | Default Value               |
 | ------------------ | ------------------------------------------------------ | --------------------------- |
-| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/3987 (M80)     |
-| webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user home\>/webrtc       |
-| webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user home\>/webrtc/build |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/3987           |
+| webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user_home\>/webrtc       |
+| webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user_home\>/webrtc/build |
