@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.demo.presenter;
 
 import dev.onvoid.webrtc.demo.context.ApplicationContext;
 import dev.onvoid.webrtc.demo.event.LoggedInEvent;
+import dev.onvoid.webrtc.demo.event.ShowViewEvent;
 import dev.onvoid.webrtc.demo.model.Room;
 import dev.onvoid.webrtc.demo.service.PeerConnectionService;
 import dev.onvoid.webrtc.demo.view.StartView;
@@ -53,6 +54,7 @@ public class StartPresenter extends Presenter<StartView> {
 	public void initialize() {
 		view.setRoomName("");
 		view.setOnConnect(this::onConnect);
+		view.setOnSettings(this::onSettings);
 	}
 
 	private void onConnect() {
@@ -61,6 +63,10 @@ public class StartPresenter extends Presenter<StartView> {
 		peerConnectionService.login(context.getMyContact(), room)
 				.thenRunAsync(this::onConnectSuccess)
 				.exceptionally(this::onConnectError);
+	}
+
+	private void onSettings() {
+		publishEvent(new ShowViewEvent(SettingsPresenter.class));
 	}
 
 	private void onConnectSuccess() {

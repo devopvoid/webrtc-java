@@ -2,13 +2,15 @@
 
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Hyperlink?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
+<?import dev.onvoid.webrtc.demo.javafx.control.SvgIcon?>
 
 <!--
-  ~ Copyright 2019 Alex Andres
+  ~ Copyright 2020 Alex Andres
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -33,6 +35,13 @@
 			<Button fx:id="enterButton" defaultButton="true"
 					minHeight="-Infinity" minWidth="-Infinity"
 					mnemonicParsing="false" text="%start.login"/>
+		</HBox>
+		<HBox styleClass="control-panel">
+			<Hyperlink fx:id="settingsButton" styleClass="settings-button" text="%start.settings">
+				<graphic>
+					<SvgIcon styleClass="settings-icon"/>
+				</graphic>
+			</Hyperlink>
 		</HBox>
 	</VBox>
 	<Label fx:id="errorLabel" styleClass="error" wrapText="true" VBox.vgrow="ALWAYS">

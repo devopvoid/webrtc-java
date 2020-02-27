@@ -25,6 +25,7 @@ import javafx.beans.Observable;
 import javafx.beans.binding.Bindings;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
@@ -40,6 +41,9 @@ public class FxStartView extends VBox implements StartView {
 
 	@FXML
 	private Label errorLabel;
+
+	@FXML
+	private Hyperlink settingsButton;
 
 
 	@Override
@@ -64,6 +68,11 @@ public class FxStartView extends VBox implements StartView {
 	@Override
 	public void setOnConnect(Action action) {
 		FxUtils.bindAction(enterButton, action);
+	}
+
+	@Override
+	public void setOnSettings(Action action) {
+		FxUtils.bindAction(settingsButton, action);
 	}
 
 	@FXML

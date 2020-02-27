@@ -26,4 +26,6 @@ public interface StartView extends View {
 
 	void setOnConnect(Action action);
 
+	void setOnSettings(Action action);
+
 }
