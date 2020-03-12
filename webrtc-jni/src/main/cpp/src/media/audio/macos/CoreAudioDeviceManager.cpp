@@ -160,7 +160,7 @@ namespace jni
 							insertAudioDevice(device, scope);
 
 							// Update default capture device.
-							PAudioCaptureDevice def = getDefaultCaptureDevice();
+							AudioDevicePtr def = getDefaultCaptureDevice();
 							onDefaultDeviceChanged(scope, captureDevices, def);
 
 							notifyDeviceConnected(device);
@@ -174,7 +174,7 @@ namespace jni
 							insertAudioDevice(device, scope);
 
 							// Update default playback device.
-							PAudioPlaybackDevice def = getDefaultPlaybackDevice();
+							AudioDevicePtr def = getDefaultPlaybackDevice();
 							onDefaultDeviceChanged(scope, playbackDevices, def);
 
 							notifyDeviceConnected(device);
@@ -360,7 +360,7 @@ namespace jni
 		}
 
 		OSStatus CoreAudioDeviceManager::deviceListenerProc(AudioObjectID objectID, UInt32 numberAddresses, const AudioObjectPropertyAddress addresses[], void * clientData) {
-			CoreAudioManager * manager = static_cast<CoreAudioManager *>(clientData);
+			CoreAudioDeviceManager * manager = static_cast<CoreAudioDeviceManager *>(clientData);
 
 			for (int i = 0; i < numberAddresses; i++) {
 				switch (addresses[i].mSelector) {
