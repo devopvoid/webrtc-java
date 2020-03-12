@@ -15,7 +15,7 @@ jobs:
         java: [13]
 
     env:
-      WEBRTC_CACHE_BRANCH: 3987
+      WEBRTC_CACHE_BRANCH: 4044
       WEBRTC_CHECKOUT_FOLDER: ${{ github.workspace }}/.work/webrtc
       WEBRTC_INSTALL_FOLDER: ${{ github.workspace }}/.work/webrtc/build
 
@@ -23,10 +23,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Linux audio system # Required for testing
+      - name: Set up Linux audio system
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get install -y pulseaudio
+          sudo apt-get install -y pulseaudio libpulse-dev libasound2-dev libudev-dev libv4l-dev
+          # Required for testing
           pulseaudio --start
 
       - name: Set up WebRTC cache
