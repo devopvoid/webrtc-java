@@ -15,23 +15,21 @@
 
 namespace jni
 {
-	namespace JavaRectangle
+	class JavaRectangle : public JavaClass
 	{
-		class JavaRectangleClass : public JavaClass
-		{
-			public:
-				explicit JavaRectangleClass(JNIEnv * env);
+		public:
+			explicit JavaRectangle(JNIEnv * env);
 
-				jclass cls;
-				jmethodID ctor;
-				jfieldID x;
-				jfieldID y;
-				jfieldID width;
-				jfieldID height;
-		};
+			static JavaLocalRef<jobject> toJava(JNIEnv * env, const int & x, const int & y, const int & width, const int & height);
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const int & x, const int & y, const int & width, const int & height);
-	}
+		private:
+			jclass cls;
+			jmethodID ctor;
+			jfieldID x;
+			jfieldID y;
+			jfieldID width;
+			jfieldID height;
+	};
 }
 
 #endif

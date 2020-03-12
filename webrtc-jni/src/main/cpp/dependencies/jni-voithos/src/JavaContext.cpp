@@ -26,4 +26,21 @@ namespace jni
 	{
 		return vm;
 	}
+
+	void JavaContext::addNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef, const std::shared_ptr<void> & nativeRef)
+	{
+		auto className = JavaClassUtils::toNativeClassName(env, javaRef);
+		auto globalRef = JavaGlobalRef<jobject>(env, javaRef.get());
+		auto pair = std::make_pair(globalRef, nativeRef);
+		auto it = objectMap.find(className);
+
+		if (it == objectMap.end()) {
+			std::list<std::pair<JavaGlobalRef<jobject>, std::shared_ptr<void>>> list = { pair };
+
+			objectMap[className] = list;
+		}
+		else {
+			it->second.push_back(pair);
+		}
+	}
 }

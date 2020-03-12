@@ -11,25 +11,22 @@
 
 namespace jni
 {
-	namespace JavaRectangle
+	JavaRectangle::JavaRectangle(JNIEnv * env)
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const int & x, const int & y, const int & width, const int & height)
-		{
-			const auto javaClass = JavaClasses::get<JavaRectangleClass>(env);
+		cls = FindClass(env, "java/awt/Rectangle");
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
-				static_cast<jint>(x), static_cast<jint>(y),
-				static_cast<jint>(width), static_cast<jint>(height)
-			);
+		ctor = GetMethod(env, cls, "<init>", "(IIII)V");
+	}
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+	JavaLocalRef<jobject> JavaRectangle::toJava(JNIEnv * env, const int & x, const int & y, const int & width, const int & height)
+	{
+		const auto javaClass = JavaClasses::get<JavaRectangle>(env);
 
-		JavaRectangleClass::JavaRectangleClass(JNIEnv * env)
-		{
-			cls = FindClass(env, "java/awt/Rectangle");
+		jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
+			static_cast<jint>(x), static_cast<jint>(y),
+			static_cast<jint>(width), static_cast<jint>(height)
+		);
 
-			ctor = GetMethod(env, cls, "<init>", "(IIII)V");
-		}
+		return JavaLocalRef<jobject>(env, object);
 	}
 }

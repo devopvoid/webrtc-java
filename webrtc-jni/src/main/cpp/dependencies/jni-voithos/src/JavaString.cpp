@@ -12,47 +12,44 @@
 
 namespace jni
 {
-	namespace JavaString
+	JavaString::JavaString(JNIEnv * env)
 	{
-		std::string toNative(JNIEnv * env, const JavaRef<jstring> & jstr)
-		{
-			if (jstr.get() == nullptr) {
-				return "";
-			}
+		cls = FindClass(env, "java/lang/String");
 
-			const auto strClass = JavaClasses::get<JavaStringClass>(env);
+		getBytes = GetMethod(env, cls, "getBytes", "(Ljava/lang/String;)[B");
+	}
 
-			jbyteArray stringBytes = static_cast<jbyteArray>(env->CallObjectMethod(jstr, strClass->getBytes, env->NewStringUTF("UTF-8")));
-			jsize length = env->GetArrayLength(stringBytes);
-
-			std::string str(length, '\0');
-
-			env->GetByteArrayRegion(stringBytes, 0, length, reinterpret_cast<jbyte *>(&str[0]));
-
-			return str;
+	std::string JavaString::toNative(JNIEnv * env, const JavaRef<jstring> & jstr)
+	{
+		if (jstr.get() == nullptr) {
+			return "";
 		}
 
-		JavaLocalRef<jstring> toJava(JNIEnv * env, const std::string & str)
-		{
-			if (str.empty()) {
-				return nullptr;
-			}
+		const auto strClass = JavaClasses::get<JavaString>(env);
 
-			return JavaLocalRef<jstring>(env, env->NewStringUTF(str.c_str()));
+		jbyteArray stringBytes = static_cast<jbyteArray>(env->CallObjectMethod(jstr, strClass->getBytes, env->NewStringUTF("UTF-8")));
+		jsize length = env->GetArrayLength(stringBytes);
+
+		std::string str(length, '\0');
+
+		env->GetByteArrayRegion(stringBytes, 0, length, reinterpret_cast<jbyte *>(&str[0]));
+
+		return str;
+	}
+
+	JavaLocalRef<jstring> JavaString::toJava(JNIEnv * env, const std::string & str)
+	{
+		if (str.empty()) {
+			return nullptr;
 		}
 
-		JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const std::vector<std::string> & vector)
-		{
-			const auto javaClass = JavaClasses::get<JavaStringClass>(env);
+		return JavaLocalRef<jstring>(env, env->NewStringUTF(str.c_str()));
+	}
 
-			return JavaArray::createObjectArray(env, vector, javaClass->cls, &toJava);
-		}
+	JavaLocalRef<jobjectArray> JavaString::createArray(JNIEnv * env, const std::vector<std::string> & vector)
+	{
+		const auto javaClass = JavaClasses::get<JavaString>(env);
 
-		JavaStringClass::JavaStringClass(JNIEnv * env)
-		{
-			cls = FindClass(env, "java/lang/String");
-
-			getBytes = GetMethod(env, cls, "getBytes", "(Ljava/lang/String;)[B");
-		}
+		return JavaArray::createObjectArray(env, vector, javaClass->cls, &toJava);
 	}
 }

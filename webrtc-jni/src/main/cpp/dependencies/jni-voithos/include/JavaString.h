@@ -16,21 +16,19 @@
 
 namespace jni
 {
-	namespace JavaString
+	class JavaString : public JavaClass
 	{
-		class JavaStringClass : public JavaClass
-		{
-			public:
-				explicit JavaStringClass(JNIEnv * env);
+		public:
+			explicit JavaString(JNIEnv * env);
 
-				jclass cls;
-				jmethodID getBytes;
-		};
+			static std::string toNative(JNIEnv * env, const JavaRef<jstring> & jstr);
+			static JavaLocalRef<jstring> toJava(JNIEnv * env, const std::string & str);
+			static JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const std::vector<std::string> & vector);
 
-		std::string toNative(JNIEnv * env, const JavaRef<jstring> & jstr);
-		JavaLocalRef<jstring> toJava(JNIEnv * env, const std::string & str);
-		JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const std::vector<std::string> & vector);
-	}
+		private:
+			jclass cls;
+			jmethodID getBytes;
+	};
 }
 
 #endif

@@ -12,6 +12,7 @@ target_sources(${PROJECT_NAME}
 		include/JavaBigInteger.h
 		include/JavaClasses.h
 		include/JavaClass.h
+		include/JavaClassUtils.h
 		include/JavaContext.h
 		include/JavaDimension.h
 		include/JavaEnum.h
@@ -39,6 +40,7 @@ target_sources(${PROJECT_NAME}
 		src/Exception.cpp
 		src/JavaArrayList.cpp
 		src/JavaBigInteger.cpp
+		src/JavaClassUtils.cpp
 		src/JavaContext.cpp
 		src/JavaDimension.cpp
 		src/JavaHashMap.cpp
@@ -61,15 +63,6 @@ elseif(LINUX)
 	set(JNI_PLATFORM "linux")
 elseif(WIN32)
 	set(JNI_PLATFORM "windows")
-
-	target_sources(${PROJECT_NAME}
-		INTERFACE
-			include/windows/ComInitializer.h
-			include/windows/ComPtr.h
-			include/windows/WinUtils.h
-		PRIVATE
-			src/windows/ComInitializer.cpp
-	)
 endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES

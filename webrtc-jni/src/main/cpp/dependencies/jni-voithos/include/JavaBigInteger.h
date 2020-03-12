@@ -16,20 +16,18 @@
 
 namespace jni
 {
-	namespace JavaBigInteger
+	class JavaBigInteger : public JavaClass
 	{
-		class JavaBigIntegerClass : public JavaClass
-		{
-			public:
-				explicit JavaBigIntegerClass(JNIEnv * env);
+		public:
+			explicit JavaBigInteger(JNIEnv * env);
 
-				jclass cls;
-				jmethodID ctor;
-		};
+			static JavaLocalRef<jobject> toJava(JNIEnv * env, const std::string & val);
+			static JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const std::vector<std::string> & vector);
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const std::string & val);
-		JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const std::vector<std::string> & vector);
-	}
+		private:
+			jclass cls;
+			jmethodID ctor;
+	};
 }
 
 #endif

@@ -14,29 +14,26 @@
 
 namespace jni
 {
-	namespace JavaBigInteger
+	JavaBigInteger::JavaBigInteger(JNIEnv * env)
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const std::string & val)
-		{
-			const auto javaClass = JavaClasses::get<JavaBigIntegerClass>(env);
+		cls = FindClass(env, "java/math/BigInteger");
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, JavaString::toJava(env, val).get());
-			
-			return JavaLocalRef<jobject>(env, object);
-		}
+		ctor = GetMethod(env, cls, "<init>", "(Ljava/lang/String;)V");
+	}
 
-		JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const std::vector<std::string> & vector)
-		{
-			const auto javaClass = JavaClasses::get<JavaBigIntegerClass>(env);
+	JavaLocalRef<jobject> JavaBigInteger::toJava(JNIEnv * env, const std::string & val)
+	{
+		const auto javaClass = JavaClasses::get<JavaBigInteger>(env);
 
-			return JavaArray::createObjectArray(env, vector, javaClass->cls, &toJava);
-		}
+		jobject object = env->NewObject(javaClass->cls, javaClass->ctor, JavaString::toJava(env, val).get());
 
-		JavaBigIntegerClass::JavaBigIntegerClass(JNIEnv * env)
-		{
-			cls = FindClass(env, "java/math/BigInteger");
+		return JavaLocalRef<jobject>(env, object);
+	}
 
-			ctor = GetMethod(env, cls, "<init>", "(Ljava/lang/String;)V");
-		}
+	JavaLocalRef<jobjectArray> JavaBigInteger::createArray(JNIEnv * env, const std::vector<std::string> & vector)
+	{
+		const auto javaClass = JavaClasses::get<JavaBigInteger>(env);
+
+		return JavaArray::createObjectArray(env, vector, javaClass->cls, &toJava);
 	}
 }

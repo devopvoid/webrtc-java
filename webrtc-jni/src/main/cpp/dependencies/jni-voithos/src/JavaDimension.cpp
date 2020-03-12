@@ -11,24 +11,21 @@
 
 namespace jni
 {
-	namespace JavaDimension
+	JavaDimension::JavaDimension(JNIEnv * env)
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const int & width, const int & height)
-		{
-			const auto javaClass = JavaClasses::get<JavaDimensionClass>(env);
+		cls = FindClass(env, "java/awt/Dimension");
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
-				static_cast<jint>(width), static_cast<jint>(height)
-			);
+		ctor = GetMethod(env, cls, "<init>", "(II)V");
+	}
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+	JavaLocalRef<jobject> JavaDimension::toJava(JNIEnv * env, const int & width, const int & height)
+	{
+		const auto javaClass = JavaClasses::get<JavaDimension>(env);
 
-		JavaDimensionClass::JavaDimensionClass(JNIEnv * env)
-		{
-			cls = FindClass(env, "java/awt/Dimension");
+		jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
+			static_cast<jint>(width), static_cast<jint>(height)
+		);
 
-			ctor = GetMethod(env, cls, "<init>", "(II)V");
-		}
+		return JavaLocalRef<jobject>(env, object);
 	}
 }

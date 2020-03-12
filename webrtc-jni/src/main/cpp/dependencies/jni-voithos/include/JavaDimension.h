@@ -15,21 +15,19 @@
 
 namespace jni
 {
-	namespace JavaDimension
+	class JavaDimension : public JavaClass
 	{
-		class JavaDimensionClass : public JavaClass
-		{
-			public:
-				explicit JavaDimensionClass(JNIEnv * env);
+		public:
+			explicit JavaDimension(JNIEnv * env);
 
-				jclass cls;
-				jmethodID ctor;
-				jfieldID width;
-				jfieldID height;
-		};
+			static JavaLocalRef<jobject> toJava(JNIEnv * env, const int & width, const int & height);
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const int & width, const int & height);
-	}
+		private:
+			jclass cls;
+			jmethodID ctor;
+			jfieldID width;
+			jfieldID height;
+	};
 }
 
 #endif
