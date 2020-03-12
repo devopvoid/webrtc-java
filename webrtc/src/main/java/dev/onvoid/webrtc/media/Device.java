@@ -20,21 +20,18 @@ import java.util.Objects;
 
 public abstract class Device {
 
-	private final int index;
-
-	private final String guid;
+	private final String descriptor;
 
 	private final String name;
 
 
-	protected Device(String name, String guid, int index) {
+	protected Device(String name, String descriptor) {
 		this.name = name;
-		this.guid = guid;
-		this.index = index;
+		this.descriptor = descriptor;
 	}
 
-	public String getGuid() {
-		return guid;
+	public String getDescriptor() {
+		return descriptor;
 	}
 
 	public String getName() {
@@ -52,18 +49,18 @@ public abstract class Device {
 
 		Device device = (Device) o;
 
-		return index == device.index && Objects.equals(guid, device.guid) &&
+		return Objects.equals(descriptor, device.descriptor) &&
 				Objects.equals(name, device.name);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(index, guid, name);
+		return Objects.hash(descriptor, name);
 	}
 
 	@Override
 	public String toString() {
-		return String.format("%s [index=%s, guid=%s, name=%s]",
-				Device.class.getSimpleName(), index, guid, name);
+		return String.format("%s [name=%s, descriptor=%s]",
+				Device.class.getSimpleName(), name, descriptor);
 	}
 }

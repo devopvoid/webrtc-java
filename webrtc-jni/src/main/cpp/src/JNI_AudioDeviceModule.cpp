@@ -22,7 +22,7 @@
 #include "JavaRef.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
-#include "media/Device.h"
+#include "media/audio/AudioDevice.h"
 
 #include "api/scoped_refptr.h"
 #include "api/task_queue/default_task_queue_factory.h"
@@ -66,8 +66,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setP
 
 	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
 
-	const auto javaClass = jni::JavaClasses::get<jni::Device::JavaAudioDeviceClass>(env);
-	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->guid));
+	const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
+	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
 	uint16_t index = 0;
 	int16_t deviceCount = audioModule->PlayoutDevices();
@@ -101,8 +101,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setR
 
 	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
 	
-	const auto javaClass = jni::JavaClasses::get<jni::Device::JavaAudioDeviceClass>(env);
-	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->guid));
+	const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
+	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
 	uint16_t index = 0;
 	int16_t deviceCount = audioModule->RecordingDevices();

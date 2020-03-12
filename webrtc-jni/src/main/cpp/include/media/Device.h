@@ -21,34 +21,51 @@
 #include "JavaRef.h"
 
 #include <jni.h>
+#include <string>
+#include <memory>
 
 namespace jni
 {
+	namespace avdev
+	{
+		class Device
+		{
+			public:
+				virtual ~Device() {};
+
+				virtual bool operator==(const Device & other);
+				virtual bool operator!=(const Device & other);
+				virtual bool operator<(const Device & other);
+
+				std::string getName() const;
+				std::string getDescriptor() const;
+
+			protected:
+				Device(std::string name, std::string descriptor);
+
+			private:
+				const std::string name;
+				const std::string descriptor;
+		};
+
+
+		using DevicePtr = std::shared_ptr<Device>;
+	}
+
 	namespace Device
 	{
-		class JavaAudioDeviceClass : public JavaClass
+		class JavaDeviceClass : public JavaClass
 		{
 			public:
-				explicit JavaAudioDeviceClass(JNIEnv * env);
+				explicit JavaDeviceClass(JNIEnv * env);
 
 				jclass cls;
 				jmethodID ctor;
-				jfieldID guid;
+				jfieldID name;
+				jfieldID descriptor;
 		};
 
-		class JavaVideoDeviceClass : public JavaClass
-		{
-			public:
-				explicit JavaVideoDeviceClass(JNIEnv * env);
-
-				jclass cls;
-				jmethodID ctor;
-				jfieldID guid;
-		};
-
-		JavaLocalRef<jobject> toJavaAudioDevice(JNIEnv * env, std::string name, std::string guid);
-
-		JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv * env, std::string name, std::string guid);
+		JavaLocalRef<jobject> toJavaDevice(JNIEnv * env, avdev::DevicePtr device);
 	}
 }
 

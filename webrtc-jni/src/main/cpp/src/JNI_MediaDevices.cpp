@@ -16,123 +16,117 @@
 
 #include "JNI_MediaDevices.h"
 #include "JavaArrayList.h"
+#include "JavaContext.h"
 #include "JavaError.h"
-#include "JavaObject.h"
-#include "JavaString.h"
-#include "media/Device.h"
+#include "media/DeviceChangeListener.h"
+#include "media/audio/AudioDevice.h"
+#include "media/audio/AudioDeviceManager.h"
+#include "media/video/VideoDevice.h"
+#include "media/video/VideoDeviceManager.h"
 #include "media/video/VideoCaptureCapability.h"
+#include "WebRTCContext.h"
 
-#include "api/scoped_refptr.h"
-#include "api/task_queue/default_task_queue_factory.h"
-#include "modules/audio_device/include/audio_device.h"
-#include "modules/video_capture/video_capture_factory.h"
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_addDeviceChangeListener
+(JNIEnv * env, jclass caller, jobject jListener)
+{
+	jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+
+	try {
+		auto listener = new jni::DeviceChangeListener(env, jni::JavaGlobalRef<jobject>(env, jListener));
+		auto listenerPtr = std::shared_ptr<jni::DeviceChangeListener>(listener);
+
+		context->getAudioDeviceManager()->attachHotplugListener(listenerPtr);
+		context->getVideoDeviceManager()->attachHotplugListener(listenerPtr);
+
+		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), listenerPtr);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_removeDeviceChangeListener
+(JNIEnv * env, jclass caller, jobject jListener)
+{
+	jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+	auto listener = javaContext->removeNativeRef<jni::DeviceChangeListener>(env, jni::JavaLocalRef<jobject>(env, jListener));
+
+	try {
+		context->getAudioDeviceManager()->detachHotplugListener(listener);
+		context->getVideoDeviceManager()->detachHotplugListener(listener);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioRenderDevices
 (JNIEnv * env, jclass caller)
 {
-	std::unique_ptr<webrtc::TaskQueueFactory> taskQueueFactory = webrtc::CreateDefaultTaskQueueFactory();
+	try {
+		jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 
-	if (!taskQueueFactory) {
-		env->Throw(jni::JavaError(env, "Create TaskQueueFactory failed"));
-		return nullptr;
-	}
+		auto devices = context->getAudioDeviceManager()->getAudioPlaybackDevices();
 
-	rtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
-		webrtc::AudioDeviceModule::kPlatformDefaultAudio, taskQueueFactory.get());
+		jni::JavaArrayList deviceList(env, devices.size());
 
-	if (!audioModule) {
-		env->Throw(jni::JavaError(env, "Create AudioDeviceModule failed"));
-		return nullptr;
-	}
-
-	if (audioModule->Init() != 0) {
-		env->Throw(jni::JavaError(env, "Initialize AudioDeviceModule failed"));
-		return nullptr;
-	}
-
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
-
-	int16_t deviceCount = audioModule->PlayoutDevices();
-
-	jni::JavaArrayList deviceList(env, deviceCount);
-
-	for (int i = 0; i < deviceCount; ++i) {
-		if (audioModule->PlayoutDeviceName(i, name, guid) == 0) {
-			deviceList.add(jni::Device::toJavaAudioDevice(env, name, guid));
+		for (const auto & device : devices) {
+			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
 		}
+
+		return deviceList.listObject().release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 
-	return deviceList.listObject().release();
+	return nullptr;
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioCaptureDevices
 (JNIEnv * env, jclass caller)
 {
-	std::unique_ptr<webrtc::TaskQueueFactory> taskQueueFactory = webrtc::CreateDefaultTaskQueueFactory();
+	try {
+		jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 
-	if (!taskQueueFactory) {
-		env->Throw(jni::JavaError(env, "Create TaskQueueFactory failed"));
-		return nullptr;
-	}
+		auto devices = context->getAudioDeviceManager()->getAudioCaptureDevices();
 
-	rtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
-		webrtc::AudioDeviceModule::kPlatformDefaultAudio, taskQueueFactory.get());
+		jni::JavaArrayList deviceList(env, devices.size());
 
-	if (!audioModule) {
-		env->Throw(jni::JavaError(env, "Create AudioDeviceModule failed"));
-		return nullptr;
-	}
-
-	if (audioModule->Init() != 0) {
-		env->Throw(jni::JavaError(env, "Initialize AudioDeviceModule failed"));
-		return nullptr;
-	}
-
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
-
-	int16_t deviceCount = audioModule->RecordingDevices();
-
-	jni::JavaArrayList deviceList(env, deviceCount);
-
-	for (int i = 0; i < deviceCount; ++i) {
-		if (audioModule->RecordingDeviceName(i, name, guid) == 0) {
-			deviceList.add(jni::Device::toJavaAudioDevice(env, name, guid));
+		for (const auto & device : devices) {
+			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
 		}
+
+		return deviceList.listObject().release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 
-	return deviceList.listObject().release();
+	return nullptr;
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCaptureDevices
 (JNIEnv * env, jclass caller)
 {
-	std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
+	try {
+		jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 
-	if (!info) {
-		env->Throw(jni::JavaError(env, "Create video DeviceInfo failed"));
-		return nullptr;
-	}
+		auto devices = context->getVideoDeviceManager()->getVideoCaptureDevices();
 
-	uint32_t deviceCount = info->NumberOfDevices();
+		jni::JavaArrayList deviceList(env, devices.size());
 
-	jni::JavaArrayList deviceList(env, deviceCount);
-
-	if (deviceCount > 0) {
-		const uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
-
-		for (uint32_t i = 0; i < deviceCount; ++i) {
-			char name[size] = { 0 };
-			char guid[size] = { 0 };
-
-			if (info->GetDeviceName(i, name, size, guid, size) == 0) {
-				deviceList.add(jni::Device::toJavaVideoDevice(env, name, guid));
-			}
+		for (const auto & device : devices) {
+			deviceList.add(jni::VideoDevice::toJavaVideoDevice(env, device));
 		}
+
+		return deviceList.listObject().release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 
-	return deviceList.listObject().release();
+	return nullptr;
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCaptureCapabilities
@@ -143,31 +137,23 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCapt
 		return nullptr;
 	}
 
-	std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
+	try {
+		jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 
-	if (!info) {
-		env->Throw(jni::JavaError(env, "Create video DeviceInfo failed"));
-		return nullptr;
-	}
+		auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
+		auto capabilities = context->getVideoDeviceManager()->getVideoCaptureCapabilities(dev);
 
-	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
+		jni::JavaArrayList capabilityList(env, capabilities.size());
 
-	const auto javaClass = jni::JavaClasses::get<jni::Device::JavaAudioDeviceClass>(env);
-	const std::string guid = jni::JavaString::toNative(env, obj.getString(javaClass->guid));
-
-	uint32_t capabilitiesCount = info->NumberOfCapabilities(guid.data());
-
-	jni::JavaArrayList deviceList(env, capabilitiesCount);
-
-	if (capabilitiesCount > 0) {
-		for (uint32_t i = 0; i < capabilitiesCount; ++i) {
-			webrtc::VideoCaptureCapability capability;
-
-			if (info->GetCapability(guid.data(), i, capability) == 0) {
-				deviceList.add(jni::VideoCaptureCapability::toJava(env, capability));
-			}
+		for (const auto & capability : capabilities) {
+			capabilityList.add(jni::VideoCaptureCapability::toJava(env, capability));
 		}
+
+		return capabilityList.listObject().release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 
-	return deviceList.listObject().release();
+	return nullptr;
 }

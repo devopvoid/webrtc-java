@@ -26,6 +26,15 @@
 
 namespace jni
 {
+	namespace avdev
+	{
+		class VideoCaptureCapability : public webrtc::VideoCaptureCapability
+		{
+			public:
+				virtual bool operator<(const VideoCaptureCapability & other) const;
+		};
+	}
+
 	namespace VideoCaptureCapability
 	{
 		class JavaVideoCaptureCapabilityClass : public JavaClass
@@ -37,7 +46,7 @@ namespace jni
 				jmethodID ctor;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::VideoCaptureCapability & capability);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const avdev::VideoCaptureCapability & capability);
 	}
 }
 

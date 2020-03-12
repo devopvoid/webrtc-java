@@ -16,7 +16,7 @@
 
 #include "JNI_VideoDeviceSource.h"
 #include "api/VideoTrackSink.h"
-#include "media/Device.h"
+#include "media/video/VideoDevice.h"
 #include "media/video/VideoTrackDeviceSource.h"
 #include "JavaRef.h"
 #include "JavaObject.h"
@@ -36,8 +36,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setV
 
 	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
 
-	const auto javaClass = jni::JavaClasses::get<jni::Device::JavaAudioDeviceClass>(env);
-	const std::string guid = jni::JavaString::toNative(env, obj.getString(javaClass->guid));
+	const auto javaClass = jni::JavaClasses::get<jni::VideoDevice::JavaVideoDeviceClass>(env);
+	const std::string guid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
 	videoSource->setDeviceUid(guid);
 }

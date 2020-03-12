@@ -35,6 +35,10 @@ public class MediaDevices {
 	}
 
 
+	public static native void addDeviceChangeListener(DeviceChangeListener listener);
+
+	public static native void removeDeviceChangeListener(DeviceChangeListener listener);
+
 	public static native List<AudioDevice> getAudioRenderDevices();
 
 	public static native List<AudioDevice> getAudioCaptureDevices();

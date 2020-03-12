@@ -18,8 +18,11 @@
 #define JNI_WEBRTC_CONTEXT_H_
 
 #include "JavaContext.h"
+#include "media/audio/AudioDeviceManager.h"
+#include "media/video/VideoDeviceManager.h"
 
 #include <jni.h>
+#include <memory>
 
 namespace jni
 {
@@ -31,6 +34,16 @@ namespace jni
 
 			void initialize(JNIEnv * env) override;
 			void destroy(JNIEnv * env) override;
+
+			avdev::AudioDeviceManager * getAudioDeviceManager();
+			avdev::VideoDeviceManager * getVideoDeviceManager();
+
+		private:
+			void initDeviceManagers();
+
+		private:
+			std::unique_ptr<avdev::AudioDeviceManager> audioDevManager;
+			std::unique_ptr<avdev::VideoDeviceManager> videoDevManager;
 	};
 }
 

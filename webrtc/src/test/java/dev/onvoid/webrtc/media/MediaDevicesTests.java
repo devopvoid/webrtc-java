@@ -29,18 +29,15 @@ class MediaDevicesTests {
 
 	@Test
 	void getAudioDevices() {
-		/*
 		List<AudioDevice> captureDevices = MediaDevices.getAudioCaptureDevices();
 		List<AudioDevice> renderDevices = MediaDevices.getAudioRenderDevices();
 
 		assertNotNull(captureDevices);
 		assertNotNull(renderDevices);
-		 */
 	}
 
 	@Test
 	void getVideoDevices() {
-		/*
 		List<VideoDevice> captureDevices = MediaDevices.getVideoCaptureDevices();
 
 		assertNotNull(captureDevices);
@@ -50,7 +47,24 @@ class MediaDevicesTests {
 
 			assertNotNull(capabilities);
 		}
-		*/
 	}
 
+	@Test
+	void deviceChangeListener() {
+		DeviceChangeListener listener = new DeviceChangeListener() {
+
+			@Override
+			public void deviceConnected(Device device) {
+
+			}
+
+			@Override
+			public void deviceDisconnected(Device device) {
+
+			}
+		};
+
+		MediaDevices.addDeviceChangeListener(listener);
+		MediaDevices.removeDeviceChangeListener(listener);
+	}
 }

@@ -55,8 +55,8 @@ public class VideoCaptureCapability {
 
 	@Override
 	public String toString() {
-		return String.format("%s@%d [width=%s, height=%s, frameRate=%s]",
-				VideoCaptureCapability.class.getSimpleName(), hashCode(),
+		return String.format("%s [width=%s, height=%s, frameRate=%s]",
+				VideoCaptureCapability.class.getSimpleName(),
 				width, height, frameRate);
 	}
 }

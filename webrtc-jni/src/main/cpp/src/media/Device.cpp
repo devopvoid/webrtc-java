@@ -21,46 +21,61 @@
 
 namespace jni
 {
+	namespace avdev
+	{
+		Device::Device(std::string name, std::string descriptor) :
+			name(name),
+			descriptor(descriptor)
+		{
+		}
+
+		bool Device::operator==(const Device & other)
+		{
+			return name == other.name && descriptor == other.descriptor;
+		}
+
+		bool Device::operator!=(const Device & other)
+		{
+			return !(*this == other);
+		}
+
+		bool Device::operator<(const Device & other)
+		{
+			return name < other.name;
+		}
+
+		std::string Device::getDescriptor() const
+		{
+			return descriptor;
+		}
+
+		std::string Device::getName() const
+		{
+			return name;
+		}
+	}
+
 	namespace Device
 	{
-		JavaLocalRef<jobject> toJavaAudioDevice(JNIEnv * env, std::string name, std::string guid)
+		JavaLocalRef<jobject> toJavaDevice(JNIEnv * env, avdev::DevicePtr device)
 		{
-			const auto javaClass = JavaClasses::get<JavaAudioDeviceClass>(env);
+			const auto javaClass = JavaClasses::get<JavaDeviceClass>(env);
 
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, name).get(),
-				JavaString::toJava(env, guid).get());
+				JavaString::toJava(env, device->getName()).get(),
+				JavaString::toJava(env, device->getDescriptor()).get());
 
 			return JavaLocalRef<jobject>(env, obj);
 		}
 
-		JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv * env, std::string name, std::string guid)
+		JavaDeviceClass::JavaDeviceClass(JNIEnv * env)
 		{
-			const auto javaClass = JavaClasses::get<JavaVideoDeviceClass>(env);
+			cls = FindClass(env, PKG_AUDIO"Device");
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, name).get(),
-				JavaString::toJava(env, guid).get());
+			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG ")V");
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
-
-		JavaAudioDeviceClass::JavaAudioDeviceClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_AUDIO"AudioDevice");
-
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG "I)V");
-
-			guid = GetFieldID(env, cls, "guid", STRING_SIG);
-		}
-
-		JavaVideoDeviceClass::JavaVideoDeviceClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_VIDEO"VideoDevice");
-
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG "I)V");
-
-			guid = GetFieldID(env, cls, "guid", STRING_SIG);
+			name = GetFieldID(env, cls, "name", STRING_SIG);
+			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
 		}
 	}
 }

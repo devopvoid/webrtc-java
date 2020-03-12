@@ -1,0 +1,82 @@
+/*
+ * Copyright 2019 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "media/audio/AudioDeviceManager.h"
+
+namespace jni
+{
+	namespace avdev
+	{
+		AudioDeviceManager::AudioDeviceManager()
+		{
+		}
+
+		AudioDevicePtr AudioDeviceManager::getDefaultAudioCaptureDevice()
+		{
+			if (getDefaultCaptureDevice() == nullptr && captureDevices.empty()) {
+				getAudioCaptureDevices();
+			}
+
+			if (getDefaultCaptureDevice() == nullptr && !captureDevices.empty()) {
+				setDefaultCaptureDevice(*captureDevices.devices().begin());
+			}
+
+			return getDefaultCaptureDevice();
+		}
+
+		AudioDevicePtr AudioDeviceManager::getDefaultAudioPlaybackDevice()
+		{
+			if (getDefaultPlaybackDevice() == nullptr && playbackDevices.empty()) {
+				getAudioPlaybackDevices();
+			}
+
+			if (getDefaultPlaybackDevice() == nullptr && !playbackDevices.empty()) {
+				setDefaultPlaybackDevice(*playbackDevices.devices().begin());
+			}
+
+			return getDefaultPlaybackDevice();
+		}
+
+		void AudioDeviceManager::setDefaultCaptureDevice(AudioDevicePtr device)
+		{
+			std::unique_lock<std::mutex> mlock(mutex);
+
+			defaultCaptureDevice = device;
+		}
+
+
+		AudioDevicePtr AudioDeviceManager::getDefaultCaptureDevice()
+		{
+			std::unique_lock<std::mutex> mlock(mutex);
+
+			return defaultCaptureDevice;
+		}
+
+		void AudioDeviceManager::setDefaultPlaybackDevice(AudioDevicePtr device)
+		{
+			std::unique_lock<std::mutex> mlock(mutex);
+
+			defaultPlaybackDevice = device;
+		}
+
+		AudioDevicePtr AudioDeviceManager::getDefaultPlaybackDevice()
+		{
+			std::unique_lock<std::mutex> mlock(mutex);
+
+			return defaultPlaybackDevice;
+		}
+	}
+}

@@ -20,9 +20,29 @@
 
 namespace jni
 {
+	namespace avdev
+	{
+		bool VideoCaptureCapability::operator<(const VideoCaptureCapability & other) const
+		{
+			if (width > other.width) {
+				return true;
+			}
+			if (height > other.height) {
+				return true;
+			}
+			if (maxFPS > other.maxFPS) {
+				return true;
+			}
+			if (videoType > other.videoType) {
+                return true;
+            }
+            return false;
+		}
+	}
+
 	namespace VideoCaptureCapability
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::VideoCaptureCapability & capability)
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const avdev::VideoCaptureCapability & capability)
 		{
 			const auto javaClass = JavaClasses::get<JavaVideoCaptureCapabilityClass>(env);
 

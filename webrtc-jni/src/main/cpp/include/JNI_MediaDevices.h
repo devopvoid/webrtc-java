@@ -9,6 +9,22 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_media_MediaDevices
+	 * Method:    addDeviceChangeListener
+	 * Signature: (Ldev/onvoid/webrtc/media/DeviceChangeListener;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_addDeviceChangeListener
+	(JNIEnv *, jclass, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaDevices
+	 * Method:    removeDeviceChangeListener
+	 * Signature: (Ldev/onvoid/webrtc/media/DeviceChangeListener;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_removeDeviceChangeListener
+	(JNIEnv *, jclass, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaDevices
 	 * Method:    getAudioRenderDevices
 	 * Signature: ()Ljava/util/List;
 	 */

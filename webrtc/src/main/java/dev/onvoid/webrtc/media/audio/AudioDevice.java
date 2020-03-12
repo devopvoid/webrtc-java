@@ -20,8 +20,8 @@ import dev.onvoid.webrtc.media.Device;
 
 public class AudioDevice extends Device {
 
-	protected AudioDevice(String name, String guid, int index) {
-		super(name, guid, index);
+	protected AudioDevice(String name, String descriptor) {
+		super(name, descriptor);
 	}
 
 }

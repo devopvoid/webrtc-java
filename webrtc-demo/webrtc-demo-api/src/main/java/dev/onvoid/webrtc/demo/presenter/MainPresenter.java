@@ -27,6 +27,9 @@ import dev.onvoid.webrtc.demo.event.ShowViewEvent;
 import dev.onvoid.webrtc.demo.model.Contact;
 import dev.onvoid.webrtc.demo.service.PeerConnectionService;
 import dev.onvoid.webrtc.demo.view.MainView;
+import dev.onvoid.webrtc.media.Device;
+import dev.onvoid.webrtc.media.DeviceChangeListener;
+import dev.onvoid.webrtc.media.MediaDevices;
 
 import java.lang.System.Logger;
 import java.lang.System.Logger.Level;
@@ -80,6 +83,21 @@ public class MainPresenter extends Presenter<MainView> {
 		peerConnectionService.setOnConnectionState(this::onConnectionState);
 
 		view.setOnClose(this::onClose);
+
+		DeviceChangeListener listener = new DeviceChangeListener() {
+
+			@Override
+			public void deviceConnected(Device device) {
+				LOGGER.log(Level.INFO, "Connected: " + device);
+			}
+
+			@Override
+			public void deviceDisconnected(Device device) {
+				LOGGER.log(Level.INFO, "Disconnected: " + device);
+			}
+		};
+
+		MediaDevices.addDeviceChangeListener(listener);
 
 		showStart();
 	}

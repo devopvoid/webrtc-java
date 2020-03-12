@@ -17,6 +17,7 @@
 #include "WebRTCContext.h"
 #include "api/DataBufferFactory.h"
 #include "api/RTCStats.h"
+#include "Exception.h"
 #include "JavaError.h"
 #include "JavaEnums.h"
 #include "JavaFactories.h"
@@ -27,12 +28,28 @@
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/ssl_adapter.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include "media/audio/windows/MFAudioDeviceManager.h"
+#include "media/video/windows/MFVideoDeviceManager.h"
+#endif
+#ifdef __linux__
+#include "media/audio/linux/PulseAudioDeviceManager.h"
+#include "media/video/linux/V4l2VideoDeviceManager.h"
+#endif
+#ifdef __APPLE__
+#include "media/audio/macos/CoreAudioDeviceManager.h"
+#include "media/video/macos/AVFVideoDeviceManager.h"
+#endif
+
 #include <memory>
 
 namespace jni
 {
 	WebRTCContext::WebRTCContext(JavaVM * vm) :
-		JavaContext(vm)
+		JavaContext(vm),
+		audioDevManager(nullptr),
+		videoDevManager(nullptr)
 	{
 	}
 
@@ -41,8 +58,7 @@ namespace jni
 		JavaContext::initialize(env);
 
 		if (!rtc::InitializeSSL()) {
-			env->Throw(jni::JavaError(env, "Initialize SSL failed"));
-			return;
+			throw Exception("Initialize SSL failed");
 		}
 		
 		JavaEnums::add<rtc::LoggingSeverity>(env, PKG_LOG"Logging$Severity");
@@ -77,6 +93,8 @@ namespace jni
 		JavaFactories::add<webrtc::RtpSenderInterface>(env, PKG"RTCRtpSender");
 		JavaFactories::add<webrtc::RtpTransceiverInterface>(env, PKG"RTCRtpTransceiver");
 		JavaFactories::add<webrtc::DataBuffer>(std::make_unique<DataBufferFactory>(env, PKG"RTCDataChannelBuffer"));
+
+		initDeviceManagers();
 	}
 
 	void WebRTCContext::destroy(JNIEnv * env)
@@ -85,6 +103,35 @@ namespace jni
 			env->Throw(jni::JavaError(env, "Cleanup SSL failed"));
 		}
 
+		audioDevManager = nullptr;
+		videoDevManager = nullptr;
+
 		JavaContext::destroy(env);
+	}
+
+	avdev::AudioDeviceManager * WebRTCContext::getAudioDeviceManager()
+	{
+		return audioDevManager.get();
+	}
+
+	avdev::VideoDeviceManager * WebRTCContext::getVideoDeviceManager()
+	{
+		return videoDevManager.get();
+	}
+
+	void WebRTCContext::initDeviceManagers()
+	{
+#ifdef _WIN32
+		audioDevManager = std::make_unique<avdev::MFAudioDeviceManager>();
+		videoDevManager = std::make_unique<avdev::MFVideoDeviceManager>();
+#endif
+#ifdef __linux__
+		audioDevManager = std::make_unique<avdev::PulseAudioDeviceManager>();
+		videoDevManager = std::make_unique<avdev::V4l2VideoDeviceManager>();
+#endif
+#ifdef __APPLE__
+		audioDevManager = std::make_unique<avdev::CoreAudioDeviceManager>();
+		videoDevManager = std::make_unique<avdev::AVFVideoDeviceManager>();
+#endif
 	}
 }
