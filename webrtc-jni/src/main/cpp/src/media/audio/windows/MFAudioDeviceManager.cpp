@@ -29,7 +29,6 @@ namespace jni
 		MFAudioDeviceManager::MFAudioDeviceManager() :
 			deviceEnumerator()
 		{
-			MFInitializer initializer;
 			HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&deviceEnumerator);
 			THROW_IF_FAILED(hr, "MMF: Create device enumerator failed");
 

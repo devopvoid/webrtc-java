@@ -19,6 +19,7 @@
 
 #include "media/audio/AudioDeviceManager.h"
 #include "platform/windows/ComPtr.h"
+#include "platform/windows/MFInitializer.h"
 #include "mmdeviceapi.h"
 
 namespace jni
@@ -52,6 +53,7 @@ namespace jni
 				STDMETHOD(OnDeviceStateChanged) (LPCWSTR deviceId, DWORD newState);
 				STDMETHOD(OnPropertyValueChanged) (LPCWSTR /*deviceId*/, const PROPERTYKEY /*key*/);
 
+                MFInitializer initializer;
 				ComPtr<IMMDeviceEnumerator> deviceEnumerator;
 		};
 	}
