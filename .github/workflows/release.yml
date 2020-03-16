@@ -75,8 +75,8 @@ jobs:
       - name: Deploy
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-          NEXUS_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: mvn deploy -Prelease -DskipTests -s .github/workflows/settings.xml
 
       - name: Get demo bundle name
