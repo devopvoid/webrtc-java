@@ -94,6 +94,7 @@ namespace jni
 				capability.height = dimension.height;
 				capability.maxFPS = static_cast<int32_t>(bestFrameRateRange.maxFrameRate);
 				capability.videoType = toVideoType(fcc);
+				capabilities.insert(capability);
 			}
 
 			return capabilities;
