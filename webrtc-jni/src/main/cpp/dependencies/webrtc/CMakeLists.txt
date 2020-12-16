@@ -165,6 +165,27 @@ execute_command(
 	WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
 
+file(GLOB PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/${SOURCE_TARGET}/*.patch")
+
+if (PATCHES)
+	message(STATUS "WebRTC: patch")
+
+	foreach(PATCH ${PATCHES})
+		message(STATUS "Applying ${PATCH}")
+
+		execute_process(
+			COMMAND patch -p0 --forward
+			WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
+			INPUT_FILE "${PATCH}"
+			OUTPUT_VARIABLE OUTPUT
+			RESULT_VARIABLE RESULT)
+
+		if (RESULT EQUAL 0)
+			message(STATUS "Patch applied: ${PATCH}")
+		endif()
+	endforeach(PATCH)
+endif()
+
 message(STATUS "WebRTC: generate")
 set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" rtc_include_tests=false use_rtti=true use_custom_libcxx=false symbol_level=0")
 execute_command(
