@@ -32,7 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class NativeLoader {
 
-	private static Set<String> LOADED_LIB_SET = ConcurrentHashMap.newKeySet();
+	private static final Set<String> LOADED_LIB_SET = ConcurrentHashMap.newKeySet();
 
 
 	/**

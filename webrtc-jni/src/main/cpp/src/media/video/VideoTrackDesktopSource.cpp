@@ -126,7 +126,7 @@ namespace jni
 
 			const int conversionResult = libyuv::ConvertToI420(
 				frame->data(),
-				frame->stride() * webrtc::DesktopFrame::kBytesPerPixel,
+				static_cast<size_t>(frame->stride()) * webrtc::DesktopFrame::kBytesPerPixel,
 				buffer->MutableDataY(), buffer->StrideY(),
 				buffer->MutableDataU(), buffer->StrideU(),
 				buffer->MutableDataV(), buffer->StrideV(),
