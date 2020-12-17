@@ -45,6 +45,8 @@ The client demo implements the [AppRTC](https://github.com/webrtc/apprtc) signal
 
 In order to build the native code, be sure to install the prerequisite software (follow the links):
 
+**Note**: You don't have to install the Depot Tools, the build script will do that for you.
+
 <table>
   <tr>
     <td>Linux</td>
@@ -66,12 +68,12 @@ Assuming you have all the prerequisites installed for your OS, run:
 mvn install
 ```
 
-On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 8 GB of disk space.
+On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 12 GB of disk space.
 
 #### Build Parameters
 
 | Parameter          | Description                                            | Default Value               |
 | ------------------ | ------------------------------------------------------ | --------------------------- |
-| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/3987           |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/4324           |
 | webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user_home\>/webrtc       |
 | webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user_home\>/webrtc/build |
