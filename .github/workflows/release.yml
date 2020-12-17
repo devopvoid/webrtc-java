@@ -48,12 +48,11 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java }}
-
-      - name: Set up GPG
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        run: echo -e "$GPG_PRIVATE_KEY" | gpg --import --batch
-        shell: bash
+          server-id: ossrh
+          server-username: NEXUS_USERNAME
+          server-password: NEXUS_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
 
       - name: Create Release
         if: runner.os == 'Linux' # Create release only once

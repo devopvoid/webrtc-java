@@ -1,19 +1,6 @@
 <settings>
 	<interactiveMode>false</interactiveMode>
-	<servers>
-		<server>
-			<id>ossrh</id>
-			<username>${env.NEXUS_USERNAME}</username>
-			<password>${env.NEXUS_PASSWORD}</password>
-		</server>
-	</servers>
 	<profiles>
-		<profile>
-			<id>release</id>
-			<properties>
-				<gpg.passphrase>${env.GPG_PASSPHRASE}</gpg.passphrase>
-			</properties>
-		</profile>
 		<profile>
 			<id>build-properties</id>
 			<activation>

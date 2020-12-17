@@ -56,6 +56,10 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java }}
+          server-id: ossrh
+          server-username: NEXUS_USERNAME
+          server-password: NEXUS_PASSWORD
+          settings-path: ${{ github.workspace }}/.github/workflows
 
       - name: Build
         run: mvn package -DskipTests -s .github/workflows/settings.xml
