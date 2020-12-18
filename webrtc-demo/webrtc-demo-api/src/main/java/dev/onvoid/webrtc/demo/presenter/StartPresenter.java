@@ -34,7 +34,7 @@ public class StartPresenter extends Presenter<StartView> {
 
 	private final PeerConnectionService peerConnectionService;
 
-	private ResourceBundle resources;
+	private final ResourceBundle resources;
 
 	private Room room;
 

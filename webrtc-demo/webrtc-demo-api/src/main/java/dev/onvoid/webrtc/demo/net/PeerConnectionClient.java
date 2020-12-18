@@ -44,7 +44,6 @@ import dev.onvoid.webrtc.demo.config.VideoConfiguration;
 import dev.onvoid.webrtc.demo.model.Contact;
 import dev.onvoid.webrtc.demo.model.message.ChatMessage;
 import dev.onvoid.webrtc.demo.net.codec.JsonBCodec;
-import dev.onvoid.webrtc.media.MediaSource.State;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioSource;
@@ -74,7 +73,7 @@ import java.util.function.Consumer;
 
 public class PeerConnectionClient implements PeerConnectionObserver {
 
-	private static Logger LOGGER = System.getLogger(PeerConnectionClient.class.getName());
+	private static final Logger LOGGER = System.getLogger(PeerConnectionClient.class.getName());
 
 	private final ExecutorService executor;
 

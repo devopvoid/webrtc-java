@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.demo.presenter;
 
+import static java.util.Objects.isNull;
+
 import dev.onvoid.webrtc.demo.config.AudioConfiguration;
 import dev.onvoid.webrtc.demo.config.Configuration;
 import dev.onvoid.webrtc.demo.view.AudioSettingsView;
@@ -58,9 +60,13 @@ public class AudioSettingsPresenter extends Presenter<AudioSettingsView> {
 	}
 
 	private AudioDevice getAudioDevice(List<AudioDevice> devices, AudioDevice device) {
-		return devices.stream()
+		AudioDevice audioDevice = devices.stream()
 				.filter(dev -> dev.equals(device))
 				.findFirst()
-				.orElse(devices.get(0));
+				.orElse(null);
+
+		return isNull(audioDevice) ?
+				!devices.isEmpty() ? devices.get(0) : null :
+				audioDevice;
 	}
 }

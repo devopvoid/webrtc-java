@@ -42,13 +42,13 @@ public class Configuration {
 	/** The locale of the application. */
 	private final ObjectProperty<Locale> locale;
 
-	private AudioConfiguration audioConfig;
+	private final AudioConfiguration audioConfig;
 
-	private VideoConfiguration videoConfig;
+	private final VideoConfiguration videoConfig;
 
-	private DesktopCaptureConfiguration desktopCaptureConfig;
+	private final DesktopCaptureConfiguration desktopCaptureConfig;
 
-	private RTCConfiguration rtcConfig;
+	private final RTCConfiguration rtcConfig;
 
 
 	public Configuration() {

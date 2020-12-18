@@ -45,15 +45,20 @@ public class VideoSettingsPresenter extends Presenter<VideoSettingsView> {
 		var devices = MediaDevices.getVideoCaptureDevices();
 		var device = config.getCaptureDevice();
 
-		int devIndex = devices.indexOf(device);
-		device = (devIndex < 0) ? devices.get(0) : devices.get(devIndex);
+		if (!devices.isEmpty()) {
+			int devIndex = devices.indexOf(device);
+			device = (devIndex < 0) ? devices.get(0) : devices.get(devIndex);
 
-		var capabilities = MediaDevices.getVideoCaptureCapabilities(device);
-		capabilities.sort(new VideoCaptureCapabilityComparator());
-		var capability = getCaptureCapability(capabilities);
+			var capabilities = MediaDevices.getVideoCaptureCapabilities(device);
+			capabilities.sort(new VideoCaptureCapabilityComparator());
+			var capability = getCaptureCapability(capabilities);
 
-		config.setCaptureDevice(device);
-		config.setCaptureCapability(capability);
+			config.setCaptureDevice(device);
+			config.setCaptureCapability(capability);
+
+			view.setVideoCaptureCapabilities(capabilities);
+			view.setVideoCaptureCapability(config.captureCapabilityProperty());
+		}
 
 		config.captureDeviceProperty().addListener((observable, oldDevice, newDevice) -> {
 			onVideoCaptureDevice(newDevice);
@@ -61,8 +66,6 @@ public class VideoSettingsPresenter extends Presenter<VideoSettingsView> {
 
 		view.setVideoDevices(devices);
 		view.setVideoDevice(config.captureDeviceProperty());
-		view.setVideoCaptureCapabilities(capabilities);
-		view.setVideoCaptureCapability(config.captureCapabilityProperty());
 		view.setReceiveVideo(config.receiveVideoProperty());
 		view.setSendVideo(config.sendVideoProperty());
 	}
