@@ -66,7 +66,7 @@ public class AudioConfiguration {
 		return receiveAudio;
 	}
 
-	public boolean getAudioVideo() {
+	public boolean getReceiveAudio() {
 		return receiveAudio.get();
 	}
 

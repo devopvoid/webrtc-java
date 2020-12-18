@@ -25,7 +25,9 @@ import dev.onvoid.webrtc.RTCRtpTransceiverDirection;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.RTCStatsReport;
+import dev.onvoid.webrtc.demo.config.AudioConfiguration;
 import dev.onvoid.webrtc.demo.config.Configuration;
+import dev.onvoid.webrtc.demo.config.VideoConfiguration;
 import dev.onvoid.webrtc.demo.model.Contact;
 import dev.onvoid.webrtc.demo.model.ContactEventType;
 import dev.onvoid.webrtc.demo.model.Contacts;
@@ -75,14 +77,39 @@ public class PeerConnectionService implements SignalingListener {
 
 		connections = new HashMap<>();
 
+		final AudioConfiguration audioConfig = config.getAudioConfiguration();
+		final VideoConfiguration videoConfig = config.getVideoConfiguration();
+
 		peerConnectionContext = new PeerConnectionContext();
-		peerConnectionContext.audioDirection = RTCRtpTransceiverDirection.SEND_RECV;
-		peerConnectionContext.videoDirection = RTCRtpTransceiverDirection.SEND_RECV;
+		peerConnectionContext.audioDirection = getDirection(
+				audioConfig.getReceiveAudio(), audioConfig.getSendAudio());
+		peerConnectionContext.videoDirection = getDirection(
+				videoConfig.getReceiveVideo(), videoConfig.getSendVideo());
+
+		audioConfig.receiveAudioProperty()
+				.addListener((observable, oldValue, newValue) -> {
+					peerConnectionContext.audioDirection = getDirection(
+							newValue, audioConfig.getSendAudio());
+				});
+		audioConfig.sendAudioProperty()
+				.addListener((observable, oldValue, newValue) -> {
+					peerConnectionContext.audioDirection = getDirection(
+							audioConfig.getReceiveAudio(), newValue);
+				});
+		videoConfig.receiveVideoProperty()
+				.addListener((observable, oldValue, newValue) -> {
+					peerConnectionContext.videoDirection = getDirection(
+							newValue, videoConfig.getSendVideo());
+				});
+		videoConfig.sendVideoProperty()
+				.addListener((observable, oldValue, newValue) -> {
+					peerConnectionContext.videoDirection = getDirection(
+							videoConfig.getReceiveVideo(), newValue);
+				});
 	}
 
 	@Override
 	public void onRoomJoined(RoomParameters parameters) {
-		peerConnectionContext.videoDirection = RTCRtpTransceiverDirection.SEND_RECV;
 		activeContact = new Contact();
 
 		config.getRTCConfig().iceServers.clear();
@@ -338,4 +365,17 @@ public class PeerConnectionService implements SignalingListener {
 		return peerConnectionClient;
 	}
 
+	private RTCRtpTransceiverDirection getDirection(boolean receive, boolean send) {
+		if (receive && send) {
+			return RTCRtpTransceiverDirection.SEND_RECV;
+		}
+		else if (receive) {
+			return RTCRtpTransceiverDirection.RECV_ONLY;
+		}
+		else if (send) {
+			return RTCRtpTransceiverDirection.SEND_ONLY;
+		}
+
+		throw new IllegalArgumentException();
+	}
 }
