@@ -49,7 +49,7 @@ namespace jni
 
 		JavaDesktopFrameClass::JavaDesktopFrameClass(JNIEnv * env)
 		{
-			cls = FindClass(env, PKG_MEDIA"DesktopFrame");
+			cls = FindClass(env, PKG_DESKTOP"DesktopFrame");
 
 			ctor = GetMethod(env, cls, "<init>", "(Ljava/awt/Rectangle;Ljava/awt/Dimension;FI" BYTE_BUFFER_SIG ")V");
 		}

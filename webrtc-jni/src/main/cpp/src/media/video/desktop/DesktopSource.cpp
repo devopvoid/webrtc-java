@@ -50,7 +50,7 @@ namespace jni
 
 		JavaDesktopSourceClass::JavaDesktopSourceClass(JNIEnv * env)
 		{
-			cls = FindClass(env, PKG_MEDIA"DesktopSource");
+			cls = FindClass(env, PKG_DESKTOP"DesktopSource");
 
 			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "J)V");
 

@@ -71,8 +71,8 @@ namespace jni
 
 	DesktopCaptureCallback::JavaDesktopCaptureCallbackClass::JavaDesktopCaptureCallbackClass(JNIEnv * env)
 	{
-		jclass cls = FindClass(env, PKG_MEDIA"DesktopCaptureCallback");
+		jclass cls = FindClass(env, PKG_DESKTOP"DesktopCaptureCallback");
 
-		onCaptureResult = GetMethod(env, cls, "onCaptureResult", "(L" PKG_MEDIA "DesktopCapturer$Result;L" PKG_MEDIA "DesktopFrame;)V");
+		onCaptureResult = GetMethod(env, cls, "onCaptureResult", "(L" PKG_DESKTOP "DesktopCapturer$Result;L" PKG_DESKTOP "DesktopFrame;)V");
 	}
 }

@@ -18,6 +18,7 @@
 #include "JavaArrayList.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
+#include "media/video/desktop/DesktopCapturer.h"
 #include "media/video/desktop/DesktopCaptureCallback.h"
 #include "media/video/desktop/DesktopSource.h"
 
@@ -26,7 +27,7 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DesktopCapturer * capturer = GetHandle<webrtc::DesktopCapturer>(env, caller);
+	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
 	CHECK_HANDLE(capturer);
 
 	delete capturer;
@@ -43,7 +44,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_getDesktopSources
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DesktopCapturer * capturer = GetHandle<webrtc::DesktopCapturer>(env, caller);
+	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
 	CHECK_HANDLEV(capturer, nullptr);
 
 	webrtc::DesktopCapturer::SourceList sources;
@@ -65,7 +66,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapt
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_selectSource
 (JNIEnv * env, jobject caller, jobject jsource)
 {
-	webrtc::DesktopCapturer * capturer = GetHandle<webrtc::DesktopCapturer>(env, caller);
+	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
 	CHECK_HANDLE(capturer);
 
 	auto source = jni::DesktopSource::toNative(env, jni::JavaLocalRef<jobject>(env, jsource));
@@ -83,7 +84,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 		return;
 	}
 
-	webrtc::DesktopCapturer * capturer = GetHandle<webrtc::DesktopCapturer>(env, caller);
+	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
 	CHECK_HANDLE(capturer);
 
 	auto callback = new jni::DesktopCaptureCallback(env, jni::JavaGlobalRef<jobject>(env, jcallback));
@@ -101,7 +102,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_captureFrame
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DesktopCapturer * capturer = GetHandle<webrtc::DesktopCapturer>(env, caller);
+	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
 	CHECK_HANDLE(capturer);
 
 	try {
