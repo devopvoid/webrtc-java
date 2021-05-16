@@ -195,10 +195,6 @@ namespace jni
 				case kCMVideoCodecType_JPEG_OpenDML:
 					return webrtc::VideoType::kMJPEG;
 
-				case kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange:
-				case kCVPixelFormatType_420YpCbCr8BiPlanarFullRange:
-					return webrtc::VideoType::kNV12;
-
 				case kCVPixelFormatType_420YpCbCr8Planar:
 				case kCVPixelFormatType_420YpCbCr8PlanarFullRange:
 					return webrtc::VideoType::kI420;

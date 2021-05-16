@@ -316,7 +316,6 @@ namespace jni
 				{V4L2_PIX_FMT_BGR32, webrtc::VideoType::kBGRA},
 				{V4L2_PIX_FMT_RGB32, webrtc::VideoType::kARGB},
 				{V4L2_PIX_FMT_MJPEG, webrtc::VideoType::kMJPEG},
-				{V4L2_PIX_FMT_NV12, webrtc::VideoType::kNV12},
 				{V4L2_PIX_FMT_YVU420, webrtc::VideoType::kYV12}
 			};
 
