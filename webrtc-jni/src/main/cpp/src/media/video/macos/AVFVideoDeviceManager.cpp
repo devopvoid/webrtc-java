@@ -183,9 +183,6 @@ namespace jni
 				case kCMPixelFormat_16LE565:
 					return webrtc::VideoType::kRGB565;
 
-				case kCMPixelFormat_16LE5551:
-					return webrtc::VideoType::kARGB1555;
-
 				case kCMPixelFormat_422YpCbCr8:
 					return webrtc::VideoType::kUYVY;
 
