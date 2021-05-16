@@ -376,6 +376,6 @@ public class PeerConnectionService implements SignalingListener {
 			return RTCRtpTransceiverDirection.SEND_ONLY;
 		}
 
-		throw new IllegalArgumentException();
+		return RTCRtpTransceiverDirection.INACTIVE;
 	}
 }

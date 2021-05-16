@@ -12,7 +12,7 @@
 	<packaging>pom</packaging>
 
 	<properties>
-		<webrtc.branch>branch-heads/4324</webrtc.branch>
+		<webrtc.branch>branch-heads/4472</webrtc.branch>
 		<webrtc.src.dir>${user.home}/webrtc</webrtc.src.dir>
 		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
@@ -78,7 +78,7 @@
 			<plugin>
 				<groupId>com.googlecode.cmake-maven-project</groupId>
 				<artifactId>cmake-maven-plugin</artifactId>
-				<version>3.16.3-b2</version>
+				<version>3.19.2-b1</version>
 				<executions>
 					<execution>
 						<id>cmake-generate</id>

@@ -78,7 +78,6 @@ namespace jni
 				{MFVideoFormat_RGB32, webrtc::VideoType::kBGRA},
 				{MFVideoFormat_ARGB32, webrtc::VideoType::kARGB},
 				{MFVideoFormat_MJPG, webrtc::VideoType::kMJPEG},
-				{MFVideoFormat_NV12, webrtc::VideoType::kNV12},
 				{MFVideoFormat_YV12, webrtc::VideoType::kYV12}
 			};
 
