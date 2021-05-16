@@ -23,7 +23,7 @@ jobs:
         java: [13]
 
     env:
-      WEBRTC_CACHE_BRANCH: 4324
+      WEBRTC_CACHE_BRANCH: 4472
       WEBRTC_CHECKOUT_FOLDER: ${{ github.workspace }}/.work/webrtc
       WEBRTC_INSTALL_FOLDER: ${{ github.workspace }}/.work/webrtc/build
 
