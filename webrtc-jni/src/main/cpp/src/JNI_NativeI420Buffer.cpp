@@ -26,11 +26,11 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_al
 {
 	rtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = webrtc::I420Buffer::Create(width, height);
 
-	jobject jBuffer = jni::I420Buffer::toJava(env, i420Buffer).get();
+	jni::JavaLocalRef<jobject> jBuffer = jni::I420Buffer::toJava(env, i420Buffer);
 
-	i420Buffer->Release();
+	i420Buffer->AddRef();
 
-	return jBuffer;
+	return jBuffer.release();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_cropAndScale
