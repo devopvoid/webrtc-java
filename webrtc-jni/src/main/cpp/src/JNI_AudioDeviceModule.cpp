@@ -17,6 +17,7 @@
 #include "JNI_AudioDeviceModule.h"
 #include "Exception.h"
 #include "JavaArrayList.h"
+#include "JavaEnums.h"
 #include "JavaError.h"
 #include "JavaObject.h"
 #include "JavaRef.h"
@@ -305,7 +306,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_disp
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_initialize
-(JNIEnv * env, jobject caller)
+(JNIEnv * env, jobject caller, jobject jAudioLayer)
 {
 	std::unique_ptr<webrtc::TaskQueueFactory> taskQueueFactory = webrtc::CreateDefaultTaskQueueFactory();
 
@@ -314,8 +315,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_init
 		return;
 	}
 
+	const auto audioLayer = jni::JavaEnums::toNative<webrtc::AudioDeviceModule::AudioLayer>(env, jAudioLayer);
+
 	rtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
-		webrtc::AudioDeviceModule::kPlatformDefaultAudio, taskQueueFactory.release());
+		audioLayer, taskQueueFactory.release());
 
 	if (!audioModule) {
 		env->Throw(jni::JavaError(env, "Create AudioDeviceModule failed"));

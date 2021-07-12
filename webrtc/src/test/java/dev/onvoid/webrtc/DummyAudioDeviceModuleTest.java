@@ -1,0 +1,39 @@
+package dev.onvoid.webrtc;
+
+import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
+import dev.onvoid.webrtc.media.audio.AudioLayer;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.SAME_THREAD)
+public class DummyAudioDeviceModuleTest {
+	private PeerConnectionFactory factory;
+
+	@BeforeAll
+	void initFactory() {
+		factory = new PeerConnectionFactory(new AudioDeviceModule());
+	}
+
+	@AfterAll
+	void disposeFactory() {
+		factory.dispose();
+	}
+
+	@Test
+	void createPeerConnectionWithDummyAudio() {
+		RTCConfiguration config = new RTCConfiguration();
+		RTCPeerConnection peerConnection = factory.createPeerConnection(config,
+				candidate -> { });
+
+		assertNotNull(peerConnection);
+
+		peerConnection.close();
+	}
+}

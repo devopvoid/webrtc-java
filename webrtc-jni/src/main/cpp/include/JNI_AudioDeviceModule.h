@@ -149,7 +149,7 @@ extern "C" {
 	 * Signature: ()V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_initialize
-	(JNIEnv *, jobject);
+	(JNIEnv *, jobject, jobject);
 
 #ifdef __cplusplus
 }

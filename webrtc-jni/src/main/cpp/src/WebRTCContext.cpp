@@ -79,6 +79,7 @@ namespace jni
 		JavaEnums::add<webrtc::PeerConnectionInterface::TlsCertPolicy>(env, PKG"TlsCertPolicy");
 		JavaEnums::add<webrtc::RtpTransceiverDirection>(env, PKG"RTCRtpTransceiverDirection");
 		JavaEnums::add<webrtc::SdpType>(env, PKG"RTCSdpType");
+		JavaEnums::add<webrtc::AudioDeviceModule::AudioLayer>(env, PKG_AUDIO"AudioLayer");
 		JavaEnums::add<jni::RTCStats::RTCStatsType>(env, PKG"RTCStatsType");
 
 		JavaFactories::add<webrtc::AudioSourceInterface>(env, PKG_MEDIA"audio/AudioSource");
