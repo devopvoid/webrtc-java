@@ -18,7 +18,7 @@ public class DummyAudioDeviceModuleTest {
 
 	@BeforeAll
 	void initFactory() {
-		factory = new PeerConnectionFactory(new AudioDeviceModule());
+		factory = new PeerConnectionFactory(new AudioDeviceModule(AudioLayer.kDummyAudio));
 	}
 
 	@AfterAll
