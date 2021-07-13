@@ -21,7 +21,11 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 public class AudioDeviceModule extends DisposableNativeObject {
 
 	public AudioDeviceModule() {
-		initialize();
+		initialize(AudioLayer.kPlatformDefaultAudio);
+	}
+
+	public AudioDeviceModule(AudioLayer audioLayer) {
+		initialize(audioLayer);
 	}
 
 	public native void initPlayout();
@@ -59,6 +63,6 @@ public class AudioDeviceModule extends DisposableNativeObject {
 	@Override
 	public native void dispose();
 
-	private native void initialize();
+	private native void initialize(AudioLayer audioLayer);
 
 }
