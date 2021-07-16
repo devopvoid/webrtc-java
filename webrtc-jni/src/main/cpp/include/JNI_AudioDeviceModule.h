@@ -25,6 +25,22 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    getPlayoutDevices
+	 * Signature: ()Ljava/util/List;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_getPlayoutDevices
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    getRecordingDevices
+	 * Signature: ()Ljava/util/List;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_getRecordingDevices
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
 	 * Method:    setPlayoutDevice
 	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioDevice;)V
 	 */

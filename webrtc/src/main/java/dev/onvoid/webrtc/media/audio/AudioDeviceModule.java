@@ -18,6 +18,8 @@ package dev.onvoid.webrtc.media.audio;
 
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
+import java.util.List;
+
 public class AudioDeviceModule extends DisposableNativeObject {
 
 	public AudioDeviceModule() {
@@ -31,6 +33,10 @@ public class AudioDeviceModule extends DisposableNativeObject {
 	public native void initPlayout();
 
 	public native void initRecording();
+
+	public native List<AudioDevice> getPlayoutDevices();
+
+	public native List<AudioDevice> getRecordingDevices();
 
 	public native void setPlayoutDevice(AudioDevice device);
 
