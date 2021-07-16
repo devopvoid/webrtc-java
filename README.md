@@ -1,5 +1,4 @@
 [![](https://github.com/devopvoid/webrtc-java/workflows/Maven%20CI/badge.svg)](https://github.com/devopvoid/webrtc-java/actions)
-[![Build Status](https://dev.azure.com/devopvoid/webrtc-java/_apis/build/status/webrtc-java%20(build)?branchName=master)](https://dev.azure.com/devopvoid/webrtc-java/_build/latest?definitionId=4&branchName=master)
 [![](https://img.shields.io/maven-central/v/dev.onvoid.webrtc/webrtc-java.svg?label=Maven%20Central&logo=apache-maven)](https://search.maven.org/search?q=g:%22dev.onvoid.webrtc%22%20AND%20a:%22webrtc-java%22)
 
 ## webrtc-java
