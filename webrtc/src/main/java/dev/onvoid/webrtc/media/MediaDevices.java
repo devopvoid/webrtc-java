@@ -18,7 +18,6 @@ package dev.onvoid.webrtc.media;
 
 import dev.onvoid.webrtc.internal.NativeLoader;
 import dev.onvoid.webrtc.media.audio.AudioDevice;
-import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.video.VideoCaptureCapability;
 import dev.onvoid.webrtc.media.video.VideoDevice;
 
@@ -31,7 +30,7 @@ public class MediaDevices {
 			NativeLoader.loadLibrary("webrtc-java");
 		}
 		catch (Exception e) {
-			e.printStackTrace();
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
 		}
 	}
 
@@ -48,19 +47,4 @@ public class MediaDevices {
 
 	public static native List<VideoCaptureCapability> getVideoCaptureCapabilities(VideoDevice device);
 
-	public static List<AudioDevice> getNativeAudioRenderDevices() {
-		AudioDeviceModule deviceModule = new AudioDeviceModule();
-		List<AudioDevice> devices = deviceModule.getPlayoutDevices();
-		deviceModule.dispose();
-
-		return devices;
-	}
-
-	public static List<AudioDevice> getNativeAudioCaptureDevices() {
-		AudioDeviceModule deviceModule = new AudioDeviceModule();
-		List<AudioDevice> devices = deviceModule.getRecordingDevices();
-		deviceModule.dispose();
-
-		return devices;
-	}
 }

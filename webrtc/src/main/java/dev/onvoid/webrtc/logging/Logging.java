@@ -28,7 +28,7 @@ public class Logging {
 			NativeLoader.loadLibrary("webrtc-java");
 		}
 		catch (Exception e) {
-			e.printStackTrace();
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
 		}
 	}
 

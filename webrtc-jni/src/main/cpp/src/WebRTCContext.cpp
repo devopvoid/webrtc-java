@@ -30,8 +30,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include "media/audio/windows/MFAudioDeviceManager.h"
-#include "media/video/windows/MFVideoDeviceManager.h"
+#include "media/audio/windows/WindowsAudioDeviceManager.h"
+#include "media/video/windows/WindowsVideoDeviceManager.h"
 #endif
 #ifdef __linux__
 #include "media/audio/linux/PulseAudioDeviceManager.h"
@@ -123,8 +123,8 @@ namespace jni
 	void WebRTCContext::initDeviceManagers()
 	{
 #ifdef _WIN32
-		audioDevManager = std::make_unique<avdev::MFAudioDeviceManager>();
-		videoDevManager = std::make_unique<avdev::MFVideoDeviceManager>();
+		audioDevManager = std::make_unique<avdev::WindowsAudioDeviceManager>();
+		videoDevManager = std::make_unique<avdev::WindowsVideoDeviceManager>();
 #endif
 #ifdef __linux__
 		audioDevManager = std::make_unique<avdev::PulseAudioDeviceManager>();

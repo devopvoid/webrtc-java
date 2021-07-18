@@ -35,8 +35,14 @@ bool ExceptionCheck(JNIEnv * env)
 
 void ThrowCxxJavaException(JNIEnv * env)
 {
+	std::exception_ptr eptr = std::current_exception();
+
+	if (!eptr) {
+		return;
+	}
+
 	try {
-		std::rethrow_exception(std::current_exception());
+		std::rethrow_exception(eptr);
 	}
 	catch (const jni::JavaWrappedException & e) {
 		env->Throw(e.exception().get());
@@ -48,12 +54,7 @@ void ThrowCxxJavaException(JNIEnv * env)
 		env->Throw(jni::JavaError(env, e.what()));
 	}
 	catch (...) {
-		try {
-			std::rethrow_exception(std::current_exception());
-		}
-		catch (const std::exception & e) {
-			env->Throw(jni::JavaError(env, e.what()));
-		}
+		env->Throw(jni::JavaError(env, "Unhandled Exception"));
 	}
 }
 

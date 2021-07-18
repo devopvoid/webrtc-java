@@ -32,13 +32,13 @@ namespace jni
 
 	namespace VideoDevice
 	{
-		JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv * env, avdev::DevicePtr device)
+		JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv * env, const avdev::VideoDevice & device)
 		{
 			const auto javaClass = JavaClasses::get<JavaVideoDeviceClass>(env);
 
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, device->getName()).get(),
-				JavaString::toJava(env, device->getDescriptor()).get());
+				JavaString::toJava(env, device.getName()).get(),
+				JavaString::toJava(env, device.getDescriptor()).get());
 
 			return JavaLocalRef<jobject>(env, obj);
 		}

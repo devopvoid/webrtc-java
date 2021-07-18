@@ -36,9 +36,9 @@ namespace jni
 		destroy();
 	}
 
-	void VideoTrackDeviceSource::setDeviceUid(const std::string & deviceUid)
+	void VideoTrackDeviceSource::setVideoDevice(const avdev::VideoDevicePtr & device)
 	{
-		this->deviceUid = deviceUid;
+		this->device = device;
 	}
 
 	void VideoTrackDeviceSource::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
@@ -60,17 +60,19 @@ namespace jni
 			throw new Exception("No video capture devices available");
 		}
 
-		if (!deviceUid.empty()) {
-			captureModule = webrtc::VideoCaptureFactory::Create(deviceUid.c_str());
+		if (device) {
+			const auto devGuid = device->getDescriptor();
+
+			captureModule = webrtc::VideoCaptureFactory::Create(devGuid.c_str());
 
 			if (!captureModule) {
-				throw new Exception("Create VideoCaptureModule for UID %s failed", deviceUid.c_str());
+				throw new Exception("Create VideoCaptureModule for UID %s failed", devGuid.c_str());
 			}
 
 			if (!startCapture()) {
 				destroy();
 
-				throw new Exception("Start video capture for UID %s failed", deviceUid.c_str());
+				throw new Exception("Start video capture for UID %s failed", devGuid.c_str());
 			}
 		}
 

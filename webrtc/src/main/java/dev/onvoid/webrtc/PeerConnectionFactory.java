@@ -41,7 +41,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 			NativeLoader.loadLibrary("webrtc-java");
 		}
 		catch (Exception e) {
-			e.printStackTrace();
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
 		}
 	}
 

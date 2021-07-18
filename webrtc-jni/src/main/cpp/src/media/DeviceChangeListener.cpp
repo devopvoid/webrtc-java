@@ -39,7 +39,8 @@ namespace jni
 			jdevice = AudioDevice::toJavaAudioDevice(env, device);
 		}
 		else if (dynamic_cast<jni::avdev::VideoDevice *>(device.get())) {
-			jdevice = VideoDevice::toJavaVideoDevice(env, device);
+			const auto dev = dynamic_cast<jni::avdev::VideoDevice*>(device.get());
+			jdevice = VideoDevice::toJavaVideoDevice(env, *dev);
 		}
 
 		if (jdevice) {
@@ -56,7 +57,8 @@ namespace jni
 			jdevice = AudioDevice::toJavaAudioDevice(env, device);
 		}
 		else if (dynamic_cast<jni::avdev::VideoDevice *>(device.get())) {
-			jdevice = VideoDevice::toJavaVideoDevice(env, device);
+			const auto dev = dynamic_cast<jni::avdev::VideoDevice *>(device.get());
+			jdevice = VideoDevice::toJavaVideoDevice(env, *dev);
 		}
 
 		if (jdevice) {

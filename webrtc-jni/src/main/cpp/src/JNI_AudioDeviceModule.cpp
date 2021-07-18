@@ -151,7 +151,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setR
 	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
 	
 	const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
-	const std::string devName = jni::JavaString::toNative(env, obj.getString(javaClass->name));
 	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
 	uint16_t index = 0;
@@ -162,9 +161,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setR
 
 	for (int i = 0; i < deviceCount; ++i) {
 		if ((audioModule->RecordingDeviceName(i, name, guid) == 0) && devGuid == std::string(guid)) {
-			printf("selected audio device: %s - %s\n", name, guid);
-			fflush(NULL);
-
 			index = i;
 			break;
 		}

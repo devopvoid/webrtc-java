@@ -26,11 +26,11 @@ namespace jni
 {
 	namespace avdev
 	{
-		class MFAudioDeviceManager : public AudioDeviceManager, IMMNotificationClient
+		class WindowsAudioDeviceManager : public AudioDeviceManager, IMMNotificationClient
 		{
 			public:
-				MFAudioDeviceManager();
-				~MFAudioDeviceManager();
+				WindowsAudioDeviceManager();
+				~WindowsAudioDeviceManager();
 
 				std::set<AudioDevicePtr> getAudioCaptureDevices() override;
 				std::set<AudioDevicePtr> getAudioPlaybackDevices() override;

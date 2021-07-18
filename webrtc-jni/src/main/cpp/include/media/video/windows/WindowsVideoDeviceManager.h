@@ -24,11 +24,11 @@ namespace jni
 {
 	namespace avdev
 	{
-		class MFVideoDeviceManager : public VideoDeviceManager, WinHotplugNotifier
+		class WindowsVideoDeviceManager : public VideoDeviceManager, WinHotplugNotifier
 		{
 			public:
-				MFVideoDeviceManager();
-				~MFVideoDeviceManager() = default;
+				WindowsVideoDeviceManager();
+				~WindowsVideoDeviceManager() = default;
 
 				std::set<VideoDevicePtr> getVideoCaptureDevices() override;
 				std::set<VideoCaptureCapability> getVideoCaptureCapabilities(const VideoDevice & device) override;

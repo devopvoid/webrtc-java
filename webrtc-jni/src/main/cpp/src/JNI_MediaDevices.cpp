@@ -117,7 +117,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCapt
 		jni::JavaArrayList deviceList(env, devices.size());
 
 		for (const auto & device : devices) {
-			deviceList.add(jni::VideoDevice::toJavaVideoDevice(env, device));
+			deviceList.add(jni::VideoDevice::toJavaVideoDevice(env, *device.get()));
 		}
 
 		return deviceList.listObject().release();

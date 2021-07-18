@@ -28,11 +28,14 @@ namespace jni
 	namespace avdev
 	{
 		class VideoDevice : public Device
-		{
+		{ 
 			public:
 				VideoDevice(std::string name, std::string descriptor);
 				virtual ~VideoDevice() {};
 		};
+
+
+		using VideoDevicePtr = std::shared_ptr<VideoDevice>;
 	}
 
 	namespace VideoDevice
@@ -48,7 +51,7 @@ namespace jni
 				jfieldID descriptor;
 		};
 
-		JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv * env, avdev::DevicePtr device);
+		JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv * env, const avdev::VideoDevice & device);
 		avdev::VideoDevice toNativeVideoDevice(JNIEnv * env, const JavaRef<jobject> & javaType);
 	}
 }

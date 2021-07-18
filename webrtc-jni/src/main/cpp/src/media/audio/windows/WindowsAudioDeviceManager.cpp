@@ -14,38 +14,41 @@
  * limitations under the License.
  */
 
-#include "media/audio/windows/MFAudioDeviceManager.h"
+#include "Exception.h"
+#include "media/audio/windows/WindowsAudioDeviceManager.h"
 #include "platform/windows/MFInitializer.h"
 #include "platform/windows/WinUtils.h"
 
 #include "Functiondiscoverykeys_devpkey.h"
 
+#include "api/scoped_refptr.h"
+#include "api/task_queue/default_task_queue_factory.h"
+#include "modules/audio_device/include/audio_device.h"
 #include "rtc_base/logging.h"
 
 namespace jni
 {
 	namespace avdev
 	{
-		MFAudioDeviceManager::MFAudioDeviceManager() :
+		WindowsAudioDeviceManager::WindowsAudioDeviceManager() :
 			deviceEnumerator()
 		{
 			HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&deviceEnumerator);
 			THROW_IF_FAILED(hr, "MMF: Create device enumerator failed");
 
-			enumerateDevices(eCapture);
-			enumerateDevices(eRender);
+			enumerateDevices(eAll);
 
 			deviceEnumerator->RegisterEndpointNotificationCallback(this);
 		}
 
-		MFAudioDeviceManager::~MFAudioDeviceManager()
+		WindowsAudioDeviceManager::~WindowsAudioDeviceManager()
 		{
 			if (deviceEnumerator) {
 				deviceEnumerator->UnregisterEndpointNotificationCallback(this);
 			}
 		}
 
-		std::set<AudioDevicePtr> MFAudioDeviceManager::getAudioCaptureDevices()
+		std::set<AudioDevicePtr> WindowsAudioDeviceManager::getAudioCaptureDevices()
 		{
 			if (captureDevices.empty()) {
 				enumerateDevices(eCapture);
@@ -54,7 +57,7 @@ namespace jni
 			return captureDevices.devices();
 		}
 
-		std::set<AudioDevicePtr> MFAudioDeviceManager::getAudioPlaybackDevices()
+		std::set<AudioDevicePtr> WindowsAudioDeviceManager::getAudioPlaybackDevices()
 		{
 			if (playbackDevices.empty()) {
 				enumerateDevices(eRender);
@@ -63,65 +66,62 @@ namespace jni
 			return playbackDevices.devices();
 		}
 
-		void MFAudioDeviceManager::enumerateDevices(EDataFlow dataFlow)
+		void WindowsAudioDeviceManager::enumerateDevices(EDataFlow dataFlow)
 		{
-			MFInitializer initializer;
-			ComPtr<IMMDeviceCollection> deviceCollection;
-			ComPtr<IMMDevice> defaultDevice;
-			LPWSTR defaultDeviceId = nullptr;
-			UINT count;
-			HRESULT hr;
+			std::unique_ptr<webrtc::TaskQueueFactory> taskQueueFactory = webrtc::CreateDefaultTaskQueueFactory();
 
-			hr = deviceEnumerator->EnumAudioEndpoints(dataFlow, DEVICE_STATE_ACTIVE, &deviceCollection);
-			THROW_IF_FAILED(hr, "MMF: Enumerate audio endpoints failed");
-
-			hr = deviceCollection->GetCount(&count);
-			THROW_IF_FAILED(hr, "MMF: Get device count failed");
-
-			hr = deviceEnumerator->GetDefaultAudioEndpoint(dataFlow, eMultimedia, &defaultDevice);
-			if (SUCCEEDED(hr)) {
-				hr = defaultDevice->GetId(&defaultDeviceId);
-				THROW_IF_FAILED(hr, "MMF: Get default device ID failed");
+			if (!taskQueueFactory) {
+				throw jni::Exception("Create TaskQueueFactory failed");
 			}
 
-			for (UINT i = 0; i < count; i++) {
-				LPWSTR deviceId = nullptr;
-				ComPtr<IMMDevice> pDevice;
+			rtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
+				webrtc::AudioDeviceModule::kPlatformDefaultAudio, taskQueueFactory.get());
 
-				hr = deviceCollection->Item(i, &pDevice);
-				if (FAILED(hr)) {
-					RTC_LOG(LS_WARNING) << "MMF: DeviceCollection get device failed";
-					continue;
-				}
-
-				hr = pDevice->GetId(&deviceId);
-				if (FAILED(hr)) {
-					RTC_LOG(LS_WARNING) << "MMF: Device get ID failed";
-					continue;
-				}
-
-				AudioDevicePtr device = createAudioDevice(deviceId, nullptr);
-
-				if (device != nullptr) {
-					insertAudioDevice(device, dataFlow);
-
-					bool isDefault = (defaultDeviceId != nullptr && wcscmp(defaultDeviceId, deviceId) == 0);
-
-					if (dataFlow == eCapture && isDefault) {
-						setDefaultCaptureDevice(device);
-					}
-					else if (dataFlow == eRender && isDefault) {
-						setDefaultPlaybackDevice(device);
-					}
-				}
-
-				CoTaskMemFree(deviceId);
+			if (!audioModule) {
+				throw jni::Exception("Create AudioDeviceModule failed");
+			}
+			if (audioModule->Init() != 0) {
+				throw jni::Exception("Initialize AudioDeviceModule failed");
 			}
 
-			CoTaskMemFree(defaultDeviceId);
+			bool enumCaptureDevices = false;
+			bool enumRenderDevices = false;
+
+			if (dataFlow == EDataFlow::eAll || dataFlow == EDataFlow::eCapture) {
+				enumCaptureDevices = true;
+			}
+			if (dataFlow == EDataFlow::eAll || dataFlow == EDataFlow::eRender) {
+				enumRenderDevices = true;
+			}
+
+			char name[webrtc::kAdmMaxDeviceNameSize];
+			char guid[webrtc::kAdmMaxGuidSize];
+
+			if (enumCaptureDevices) {
+				int16_t deviceCount = audioModule->RecordingDevices();
+
+				for (int i = 0; i < deviceCount; ++i) {
+					if (audioModule->RecordingDeviceName(i, name, guid) == 0) {
+						AudioDevicePtr device = std::make_shared<AudioDevice>(name, guid);
+
+						insertAudioDevice(device, EDataFlow::eCapture);
+					}
+				}
+			}
+			if (enumRenderDevices) {
+				int16_t deviceCount = audioModule->PlayoutDevices();
+
+				for (int i = 0; i < deviceCount; ++i) {
+					if (audioModule->PlayoutDeviceName(i, name, guid) == 0) {
+						AudioDevicePtr device = std::make_shared<AudioDevice>(name, guid);
+
+						insertAudioDevice(device, EDataFlow::eRender);
+					}
+				}
+			}
 		}
 
-		void MFAudioDeviceManager::addDevice(LPCWSTR deviceId)
+		void WindowsAudioDeviceManager::addDevice(LPCWSTR deviceId)
 		{
 			if (deviceId == nullptr) {
 				return;
@@ -136,7 +136,7 @@ namespace jni
 			}
 		}
 
-		void MFAudioDeviceManager::removeDevice(LPCWSTR deviceId)
+		void WindowsAudioDeviceManager::removeDevice(LPCWSTR deviceId)
 		{
 			if (deviceId == nullptr)
 				return;
@@ -147,7 +147,7 @@ namespace jni
 			removeAudioDevice(playbackDevices, id);
 		}
 
-		AudioDevicePtr MFAudioDeviceManager::createAudioDevice(LPCWSTR deviceId, EDataFlow * dataFlow)
+		AudioDevicePtr WindowsAudioDeviceManager::createAudioDevice(LPCWSTR deviceId, EDataFlow * dataFlow)
 		{
 			MFInitializer initializer;
 			ComPtr<IMMDevice> pDevice;
@@ -187,7 +187,7 @@ namespace jni
 			return device;
 		}
 
-		bool MFAudioDeviceManager::insertAudioDevice(AudioDevicePtr device, EDataFlow dataFlow)
+		bool WindowsAudioDeviceManager::insertAudioDevice(AudioDevicePtr device, EDataFlow dataFlow)
 		{
 			if (device == nullptr) {
 				return false;
@@ -205,7 +205,7 @@ namespace jni
 			return false;
 		}
 
-		void MFAudioDeviceManager::removeAudioDevice(DeviceList<AudioDevicePtr> & devices, std::string id)
+		void WindowsAudioDeviceManager::removeAudioDevice(DeviceList<AudioDevicePtr> & devices, std::string id)
 		{
 			auto predicate = [id](const AudioDevicePtr & dev) {
 				return id == dev->getDescriptor();
@@ -218,17 +218,17 @@ namespace jni
 			}
 		}
 
-		ULONG MFAudioDeviceManager::AddRef()
+		ULONG WindowsAudioDeviceManager::AddRef()
 		{
 			return 1;
 		}
 
-		ULONG MFAudioDeviceManager::Release()
+		ULONG WindowsAudioDeviceManager::Release()
 		{
 			return 1;
 		}
 
-		HRESULT MFAudioDeviceManager::QueryInterface(REFIID iid, void ** object)
+		HRESULT WindowsAudioDeviceManager::QueryInterface(REFIID iid, void ** object)
 		{
 			if (object == nullptr) {
 				return E_POINTER;
@@ -247,7 +247,7 @@ namespace jni
 			return S_OK;
 		}
 
-		HRESULT MFAudioDeviceManager::OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR deviceId)
+		HRESULT WindowsAudioDeviceManager::OnDefaultDeviceChanged(EDataFlow flow, ERole role, LPCWSTR deviceId)
 		{
 			RTC_LOG(LS_INFO) << "MMF: Default device changed (" << RoleToStr(role).c_str() << "): " << deviceId;
 
@@ -289,7 +289,7 @@ namespace jni
 			return S_OK;
 		}
 
-		HRESULT MFAudioDeviceManager::OnDeviceAdded(LPCWSTR deviceId)
+		HRESULT WindowsAudioDeviceManager::OnDeviceAdded(LPCWSTR deviceId)
 		{
 			RTC_LOG(LS_INFO) << "MMF: Device added: " << deviceId;
 
@@ -298,7 +298,7 @@ namespace jni
 			return S_OK;
 		}
 
-		HRESULT MFAudioDeviceManager::OnDeviceRemoved(LPCWSTR deviceId)
+		HRESULT WindowsAudioDeviceManager::OnDeviceRemoved(LPCWSTR deviceId)
 		{
 			RTC_LOG(LS_INFO) << "MMF: Device removed: " << deviceId;
 
@@ -307,7 +307,7 @@ namespace jni
 			return S_OK;
 		}
 
-		HRESULT MFAudioDeviceManager::OnDeviceStateChanged(LPCWSTR deviceId, DWORD newState)
+		HRESULT WindowsAudioDeviceManager::OnDeviceStateChanged(LPCWSTR deviceId, DWORD newState)
 		{
 			RTC_LOG(LS_INFO) << "MMF: Device state changed: " << deviceId;
 
@@ -330,7 +330,7 @@ namespace jni
 			return S_OK;
 		}
 
-		HRESULT MFAudioDeviceManager::OnPropertyValueChanged(LPCWSTR /*deviceId*/, const PROPERTYKEY /*key*/)
+		HRESULT WindowsAudioDeviceManager::OnPropertyValueChanged(LPCWSTR /*deviceId*/, const PROPERTYKEY /*key*/)
 		{
 			return S_OK;
 		}

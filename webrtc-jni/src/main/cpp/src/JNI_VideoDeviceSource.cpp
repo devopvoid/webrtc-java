@@ -34,12 +34,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setV
 	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
 	CHECK_HANDLE(videoSource);
 
-	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
+	const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
 
-	const auto javaClass = jni::JavaClasses::get<jni::VideoDevice::JavaVideoDeviceClass>(env);
-	const std::string guid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
-
-	videoSource->setDeviceUid(guid);
+	videoSource->setVideoDevice(std::make_shared<jni::avdev::VideoDevice>(dev.getName(), dev.getDescriptor()));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureCapability
