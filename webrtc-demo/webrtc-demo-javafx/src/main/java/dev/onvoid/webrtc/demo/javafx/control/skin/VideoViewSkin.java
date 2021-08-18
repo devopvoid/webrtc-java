@@ -153,11 +153,11 @@ public class VideoViewSkin extends SkinBase<VideoView> {
 				border.setWidth(newBounds.getWidth());
 				border.setHeight(newBounds.getHeight());
 
-				Rectangle clip = new Rectangle(newBounds.getWidth(), newBounds.getHeight());
-				clip.setArcWidth(border.getArcWidth());
-				clip.setArcHeight(border.getArcHeight());
+				// Rectangle clip = new Rectangle(newBounds.getWidth(), newBounds.getHeight());
+				// clip.setArcWidth(border.getArcWidth());
+				// clip.setArcHeight(border.getArcHeight());
 
-				imageView.setClip(clip);
+				// imageView.setClip(clip);
 			};
 
 			imageView.setFitWidth(0);
