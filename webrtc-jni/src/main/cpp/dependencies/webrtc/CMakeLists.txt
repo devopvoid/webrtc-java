@@ -140,15 +140,6 @@ execute_command(
 	WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
 
-# Patch DEPS to reduce time running gclient
-file(READ "${WEBRTC_SRC}/DEPS" DEPS_CONTENT)
-string(REPLACE
-	"'src/resources'],"
-	"'src/resources'],'condition': 'rtc_include_tests==true',"
-	DEPS_CONTENT
-	"${DEPS_CONTENT}")
-file(WRITE "${WEBRTC_SRC}/DEPS" "${DEPS_CONTENT}")
-
 message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
 execute_command(
 	COMMAND git checkout .
@@ -157,6 +148,12 @@ execute_command(
 execute_command(
 	COMMAND git checkout ${WEBRTC_BRANCH}
 	WORKING_DIRECTORY "${WEBRTC_SRC}"
+)
+
+message(STATUS "WebRTC: sync")
+execute_command(
+	COMMAND gclient sync
+	WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
 
 file(GLOB PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/${SOURCE_TARGET}/*.patch")
@@ -179,12 +176,6 @@ if (PATCHES)
 		endif()
 	endforeach(PATCH)
 endif()
-
-message(STATUS "WebRTC: sync")
-execute_command(
-	COMMAND gclient sync
-	WORKING_DIRECTORY "${WEBRTC_DIR}"
-)
 
 message(STATUS "WebRTC: generate")
 set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" rtc_include_tests=false use_rtti=true use_custom_libcxx=false symbol_level=0 rtc_use_h264=true")
