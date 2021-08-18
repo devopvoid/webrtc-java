@@ -125,7 +125,7 @@ if(NOT EXISTS "${WEBRTC_SRC_DIR}/depot_tools")
 	message(STATUS "WebRTC: fetch depot tools")
 	file(MAKE_DIRECTORY ${WEBRTC_SRC_DIR})
 	execute_command(
-		COMMAND git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+		COMMAND git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
 		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
 	)
 endif()
@@ -136,7 +136,7 @@ file(MAKE_DIRECTORY ${WEBRTC_DIR})
 
 message(STATUS "WebRTC: fetch")
 execute_command(
-	COMMAND fetch --no-history --nohooks webrtc
+	COMMAND fetch --nohooks webrtc
 	WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
 
@@ -148,12 +148,6 @@ string(REPLACE
 	DEPS_CONTENT
 	"${DEPS_CONTENT}")
 file(WRITE "${WEBRTC_SRC}/DEPS" "${DEPS_CONTENT}")
-
-message(STATUS "WebRTC: sync")
-execute_command(
-	COMMAND gclient sync
-	WORKING_DIRECTORY "${WEBRTC_DIR}"
-)
 
 message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
 execute_command(
@@ -185,6 +179,12 @@ if (PATCHES)
 		endif()
 	endforeach(PATCH)
 endif()
+
+message(STATUS "WebRTC: sync")
+execute_command(
+	COMMAND gclient sync
+	WORKING_DIRECTORY "${WEBRTC_DIR}"
+)
 
 message(STATUS "WebRTC: generate")
 set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" rtc_include_tests=false use_rtti=true use_custom_libcxx=false symbol_level=0 rtc_use_h264=true")
