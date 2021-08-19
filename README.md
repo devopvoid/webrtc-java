@@ -9,7 +9,7 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
@@ -34,7 +34,7 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   </tr>
 </table>
 
-The native libraries were build with WebRTC branch M91.
+The native libraries were build with WebRTC branch M92/4515.
 
 ### Demo
 
@@ -73,6 +73,6 @@ On the first run, the WebRTC source tree will be loaded into the `/<user home>/w
 
 | Parameter          | Description                                            | Default Value               |
 | ------------------ | ------------------------------------------------------ | --------------------------- |
-| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/4472           |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/4515           |
 | webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user_home\>/webrtc       |
 | webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user_home\>/webrtc/build |

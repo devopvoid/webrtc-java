@@ -1,4 +1,33 @@
 
+## [0.3.0]() (2021-08-19)
+
+### API changes
+
+- Switch to WebRTC branch M92/4515 ([bb3bbfe](https://github.com/devopvoid/webrtc-java/commit/bb3bbfe))
+
+### Enhancement
+
+- Audio/video device (Windows) handling consistent with the internal API ([702e58c](https://github.com/devopvoid/webrtc-java/commit/702e58c))
+- Add usage of audio layers and with it the possibility to use dummy audio for testing purposes ([daec7d8](https://github.com/devopvoid/webrtc-java/commit/daec7d8)) **Thanks to Rafael Berne (@rmberne)**
+- Add VideoCapture class to capture frames without a running track ([eec4cfd](https://github.com/devopvoid/webrtc-java/commit/eec4cfd))
+- MediaDevice change listener implementation ([1029fe4](https://github.com/devopvoid/webrtc-java/commit/1029fe4))
+
+### Fixed bugs
+
+- Fixed AudioModule NPE in PeerConnectionFactory ([c9fc55e](https://github.com/devopvoid/webrtc-java/commit/c9fc55e))
+- Fixed NativeI420Buffer allocate ([9bf8169](https://github.com/devopvoid/webrtc-java/commit/9bf8169))
+- Fixed desktop capture ([0314dec](https://github.com/devopvoid/webrtc-java/commit/0314dec))
+- Fixed demo audio/video config settings ([86bd776](https://github.com/devopvoid/webrtc-java/commit/86bd776))
+- Fixed possible arithmetic overflow ([b6d4aec](https://github.com/devopvoid/webrtc-java/commit/b6d4aec))
+
+### Project
+
+- Removed Azure Pipelines CI/CD configurations ([824aaf1](https://github.com/devopvoid/webrtc-java/commit/824aaf1))
+
+### Refactoring
+
+- Removed usage of webrtc::VideoType::kNV12 ([32a8ff9](https://github.com/devopvoid/webrtc-java/commit/32a8ff9))
+
 ## [0.2.0]() (2020-02-25)
 
 ### API changes
