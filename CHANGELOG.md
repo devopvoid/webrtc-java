@@ -11,6 +11,7 @@
 - Add usage of audio layers and with it the possibility to use dummy audio for testing purposes ([daec7d8](https://github.com/devopvoid/webrtc-java/commit/daec7d8)) **Thanks to Rafael Berne (@rmberne)**
 - Add VideoCapture class to capture frames without a running track ([eec4cfd](https://github.com/devopvoid/webrtc-java/commit/eec4cfd))
 - MediaDevice change listener implementation ([1029fe4](https://github.com/devopvoid/webrtc-java/commit/1029fe4))
+- Build with H264 codec ([f09aba0](https://github.com/devopvoid/webrtc-java/commit/f09aba0))
 
 ### Fixed bugs
 

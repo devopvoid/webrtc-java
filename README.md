@@ -3,7 +3,7 @@
 
 ## webrtc-java
 
-Java native interface implementation based on the free, open [WebRTC](https://webrtc.org) project. The goal of this project is to enable development of RTC applications for desktop platforms running Java. This project wraps the WebRTC Native API and is similar to the [JS API](https://w3c.github.io/webrtc-pc).
+Java native interface implementation based on the free, open [WebRTC](https://webrtc.org) project. The goal of this project is to enable development of RTC applications for desktop platforms running Java. This project wraps the [WebRTC Native API](https://webrtc.github.io/webrtc-org/native-code/native-apis) and is similar to the [JS API](https://w3c.github.io/webrtc-pc).
 
 ```xml
 <dependency>
@@ -20,17 +20,17 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   <tr>
     <td>Linux</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.2.0/webrtc-javafx-demo-0.2.0-linux-x86_64.jar">demo app</a></td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.3.0/webrtc-javafx-demo-0.3.0-linux-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>macOS</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.2.0/webrtc-javafx-demo-0.2.0-macos-x86_64.jar">demo app</a></td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.3.0/webrtc-javafx-demo-0.3.0-macos-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>Windows</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.2.0/webrtc-javafx-demo-0.2.0-windows-x86_64.jar">demo app</a></td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.3.0/webrtc-javafx-demo-0.3.0-windows-x86_64.jar">demo app</a></td>
   </tr>
 </table>
 
