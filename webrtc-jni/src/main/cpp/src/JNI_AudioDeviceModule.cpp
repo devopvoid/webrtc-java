@@ -42,6 +42,30 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_init
 	}
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_stopPlayout
+(JNIEnv* env, jobject caller)
+{
+	webrtc::AudioDeviceModule* audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	if (audioModule->StopPlayout() != 0) {
+		env->Throw(jni::JavaError(env, "Stop playout failed"));
+		return;
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_startPlayout
+(JNIEnv* env, jobject caller)
+{
+	webrtc::AudioDeviceModule* audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	if (audioModule->StartPlayout() != 0) {
+		env->Throw(jni::JavaError(env, "Start playout failed"));
+		return;
+	}
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_initRecording
 (JNIEnv * env, jobject caller)
 {
@@ -50,6 +74,30 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_init
 
 	if (audioModule->InitRecording() != 0) {
 		env->Throw(jni::JavaError(env, "Init recording failed"));
+		return;
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_stopRecording
+(JNIEnv* env, jobject caller)
+{
+	webrtc::AudioDeviceModule* audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	if (audioModule->StopRecording() != 0) {
+		env->Throw(jni::JavaError(env, "Stop recording failed"));
+		return;
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_startRecording
+(JNIEnv* env, jobject caller)
+{
+	webrtc::AudioDeviceModule* audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	if (audioModule->StartRecording() != 0) {
+		env->Throw(jni::JavaError(env, "Start recording failed"));
 		return;
 	}
 }

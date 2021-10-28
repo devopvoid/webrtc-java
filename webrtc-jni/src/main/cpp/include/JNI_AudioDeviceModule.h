@@ -17,11 +17,43 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    stopPlayout
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_stopPlayout
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    startPlayout
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_startPlayout
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
 	 * Method:    initRecording
 	 * Signature: ()V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_initRecording
 	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    stopRecording
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_stopRecording
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    startRecording
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_startRecording
+	(JNIEnv*, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule

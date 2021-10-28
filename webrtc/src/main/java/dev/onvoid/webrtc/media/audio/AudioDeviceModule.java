@@ -32,7 +32,15 @@ public class AudioDeviceModule extends DisposableNativeObject {
 
 	public native void initPlayout();
 
+	public native void stopPlayout();
+
+	public native void startPlayout();
+
 	public native void initRecording();
+
+	public native void stopRecording();
+
+	public native void startRecording();
 
 	public native List<AudioDevice> getPlayoutDevices();
 
