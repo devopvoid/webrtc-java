@@ -34,6 +34,9 @@ namespace jni
 			options.echo_cancellation = obj.getBoolean(javaClass->echoCancellation);
 			options.auto_gain_control = obj.getBoolean(javaClass->autoGainControl);
 			options.noise_suppression = obj.getBoolean(javaClass->noiseSuppression);
+			options.highpass_filter = obj.getBoolean(javaClass->highpassFilter);
+			options.typing_detection = obj.getBoolean(javaClass->typingDetection);
+			options.residual_echo_detector = obj.getBoolean(javaClass->residualEchoDetector);
 
 			return options;
 		}
@@ -45,6 +48,9 @@ namespace jni
 			echoCancellation = GetFieldID(env, cls, "echoCancellation", "Z");
 			autoGainControl = GetFieldID(env, cls, "autoGainControl", "Z");
 			noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "Z");
+			highpassFilter = GetFieldID(env, cls, "highpassFilter", "Z");
+			typingDetection = GetFieldID(env, cls, "typingDetection", "Z");
+			residualEchoDetector = GetFieldID(env, cls, "residualEchoDetector", "Z");
 		}
 	}
 }

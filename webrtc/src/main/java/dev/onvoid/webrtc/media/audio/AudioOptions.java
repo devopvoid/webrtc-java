@@ -51,4 +51,19 @@ public class AudioOptions {
 	 */
 	public boolean noiseSuppression;
 
+	/**
+	 * Audio processing to remove background noise of lower frequencies.
+	 */
+	public boolean highpassFilter;
+
+	/**
+	 * Audio processing to detect typing.
+	 */
+	public boolean typingDetection;
+
+	/**
+	 * Audio processing to detect residual echoes.
+	 */
+	public boolean residualEchoDetector;
+
 }
