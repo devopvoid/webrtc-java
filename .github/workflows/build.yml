@@ -23,9 +23,9 @@ jobs:
         java: [13]
 
     env:
-      WEBRTC_CACHE_BRANCH: 4472
-      WEBRTC_CHECKOUT_FOLDER: ${{ github.workspace }}/.work/webrtc
-      WEBRTC_INSTALL_FOLDER: ${{ github.workspace }}/.work/webrtc/build
+      WEBRTC_CACHE_BRANCH: 4638
+      WEBRTC_CHECKOUT_FOLDER: webrtc
+      WEBRTC_INSTALL_FOLDER: webrtc/build
 
     steps:
       - name: Checkout code
@@ -42,7 +42,7 @@ jobs:
       - name: Set up WebRTC cache
         uses: actions/cache@v1
         with:
-          path: ${{ env.WEBRTC_INSTALL_FOLDER }}
+          path: ~/${{ env.WEBRTC_INSTALL_FOLDER }}
           key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ runner.os }}-${{ hashFiles('webrtc-jni/pom.xml') }}
           restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ runner.os }}-
 
