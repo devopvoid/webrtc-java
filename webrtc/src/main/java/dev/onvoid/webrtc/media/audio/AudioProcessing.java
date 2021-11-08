@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.media.audio;
 
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
+import dev.onvoid.webrtc.internal.NativeLoader;
 
 /**
  * Audio Processing provides a collection of voice processing components
@@ -30,13 +31,52 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
  */
 public class AudioProcessing extends DisposableNativeObject {
 
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
+
+
+	private final AudioProcessingStats stats = new AudioProcessingStats();
+
+
 	public AudioProcessing() {
 		initialize();
 	}
+
+	public native void applyConfig(AudioProcessingConfig config);
+
+	public AudioProcessingStats getStatistics() {
+		updateStats();
+
+		return stats;
+	}
+
+	public native int ProcessStream(short[] src,
+			AudioProcessingStreamConfig inputConfig,
+			AudioProcessingStreamConfig outputConfig, short[] dest);
+
+	public native int ProcessStream(float[] src,
+			AudioProcessingStreamConfig inputConfig,
+			AudioProcessingStreamConfig outputConfig, float[] dest);
+
+	public native int ProcessReverseStream(short[] src,
+			AudioProcessingStreamConfig inputConfig,
+			AudioProcessingStreamConfig outputConfig, short[] dest);
+
+	public native int ProcessReverseStream(float[] src,
+			AudioProcessingStreamConfig inputConfig,
+			AudioProcessingStreamConfig outputConfig, float[] dest);
 
 	@Override
 	public native void dispose();
 
 	private native void initialize();
+
+	private native void updateStats();
 
 }

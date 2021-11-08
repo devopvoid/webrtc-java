@@ -56,6 +56,31 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			throw jni::Exception("Start worker thread failed");
 		}
 
+
+
+		webrtc::AudioProcessing::Config config;
+		config.echo_canceller.enabled = true;
+		config.echo_canceller.enforce_high_pass_filtering = true;
+		config.echo_canceller.mobile_mode = false;
+
+		config.residual_echo_detector.enabled = true;
+
+		config.noise_suppression.enabled = true;
+		config.noise_suppression.analyze_linear_aec_output_when_available = true;
+
+		config.high_pass_filter.enabled = true;
+
+		config.level_estimation.enabled = true;
+		config.voice_detection.enabled = true;
+		config.transient_suppression.enabled = true;
+
+
+		rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
+		apm->ApplyConfig(config);
+
+
+
+
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
 			workerThread.get(),
@@ -66,7 +91,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			webrtc::CreateBuiltinVideoEncoderFactory(),
 			webrtc::CreateBuiltinVideoDecoderFactory(),
 			nullptr,
-			nullptr);
+			apm);
 
 		if (factory != nullptr) {
 			SetHandle(env, caller, factory.release());
