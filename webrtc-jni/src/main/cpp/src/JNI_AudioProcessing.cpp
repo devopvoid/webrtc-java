@@ -135,9 +135,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispos
 	SetHandle<std::nullptr_t>(env, caller, nullptr);
 
 	apm = nullptr;
-
-	printf("dispose\n");
-	fflush(NULL);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
