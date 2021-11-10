@@ -22,6 +22,7 @@ import dev.onvoid.webrtc.demo.inject.Injector;
 import dev.onvoid.webrtc.demo.javafx.inject.FxViewModule;
 import dev.onvoid.webrtc.demo.presenter.MainPresenter;
 import dev.onvoid.webrtc.demo.view.MainView;
+import dev.onvoid.webrtc.logging.Logging;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +55,8 @@ public class DemoApplication extends Application {
 	}
 
 	public static void main(String[] args) {
+		Logging.logThreads(true);
+
 		launch(args);
 	}
 
