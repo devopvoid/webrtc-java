@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioSource;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +29,7 @@ class MediaSourceTests extends TestBase {
 	@Test
 	void audioSourceStateAfterCreation() {
 		AudioOptions audioOptions = new AudioOptions();
-		AudioSource audioSource = factory.createAudioSource(audioOptions);
+		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 
 		assertEquals(MediaSource.State.LIVE, audioSource.getState());
 	}

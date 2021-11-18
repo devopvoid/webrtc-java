@@ -19,7 +19,7 @@ package dev.onvoid.webrtc;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioSource;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
@@ -93,7 +93,7 @@ class RTCPeerConnectionTests extends TestBase {
 
 	@Test
 	void addTrackNullParams() {
-		AudioSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack track = factory.createAudioTrack("audioTrack", audioSource);
 
 		assertThrows(NullPointerException.class, () -> {
@@ -107,7 +107,7 @@ class RTCPeerConnectionTests extends TestBase {
 
 	@Test
 	void addTrack() {
-		AudioSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
 
 		VideoDeviceSource videoSource = new VideoDeviceSource();
@@ -132,7 +132,7 @@ class RTCPeerConnectionTests extends TestBase {
 
 	@Test
 	void removeTrack() {
-		AudioSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
 
 		VideoDeviceSource videoSource = new VideoDeviceSource();
@@ -159,7 +159,7 @@ class RTCPeerConnectionTests extends TestBase {
 
 	@Test
 	void addAudioTransceiver() {
-		AudioSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack track = factory.createAudioTrack("audioTrack", audioSource);
 
 		RTCRtpTransceiver transceiver = peerConnection.addTransceiver(track, new RTCRtpTransceiverInit());
@@ -176,7 +176,7 @@ class RTCPeerConnectionTests extends TestBase {
 
 	@Test
 	void addSendOnlyAudioTransceiver() {
-		AudioSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack track = factory.createAudioTrack("audioTrack", audioSource);
 
 		RTCRtpTransceiverInit init = new RTCRtpTransceiverInit();
@@ -190,7 +190,7 @@ class RTCPeerConnectionTests extends TestBase {
 
 	@Test
 	void addRecvOnlyAudioTransceiver() {
-		AudioSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack track = factory.createAudioTrack("audioTrack", audioSource);
 
 		RTCRtpTransceiverInit init = new RTCRtpTransceiverInit();

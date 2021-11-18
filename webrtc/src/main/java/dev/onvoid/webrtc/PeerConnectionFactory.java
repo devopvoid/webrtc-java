@@ -22,9 +22,9 @@ import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioSource;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
-import dev.onvoid.webrtc.media.video.VideoSource;
+import dev.onvoid.webrtc.media.video.VideoTrackSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 /**
@@ -74,14 +74,14 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	}
 
 	/**
-	 * Creates an {@link AudioSource}. The audio source may be used by one or
-	 * more {@link AudioTrack}s.
+	 * Creates an {@link AudioTrackSource}. The audio source may be used by one
+	 * or more {@link AudioTrack}s.
 	 *
 	 * @param options Audio options to control the audio processing.
 	 *
 	 * @return The created audio source.
 	 */
-	public native AudioSource createAudioSource(AudioOptions options);
+	public native AudioTrackSource createAudioSource(AudioOptions options);
 
 	/**
 	 * Creates an new {@link AudioTrack}. The audio track can be added to the
@@ -94,7 +94,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 *
 	 * @return The created audio track.
 	 */
-	public native AudioTrack createAudioTrack(String label, AudioSource source);
+	public native AudioTrack createAudioTrack(String label, AudioTrackSource source);
 
 	/**
 	 * Creates a new {@link VideoTrack}. The video track can be added to the
@@ -107,7 +107,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 *
 	 * @return The created video track.
 	 */
-	public native VideoTrack createVideoTrack(String label, VideoSource source);
+	public native VideoTrack createVideoTrack(String label, VideoTrackSource source);
 
 	/**
 	 * Creates a new {@link RTCPeerConnection}.

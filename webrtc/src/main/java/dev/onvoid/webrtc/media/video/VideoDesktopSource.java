@@ -18,7 +18,7 @@ package dev.onvoid.webrtc.media.video;
 
 import dev.onvoid.webrtc.media.video.desktop.DesktopCapturer;
 
-public class VideoDesktopSource extends VideoSource {
+public class VideoDesktopSource extends VideoTrackSource {
 
 	public VideoDesktopSource() {
 		super();

@@ -22,7 +22,7 @@ import dev.onvoid.webrtc.media.MediaSource;
 import dev.onvoid.webrtc.media.MediaStreamTrackState;
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioSource;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
@@ -64,7 +64,7 @@ class PeerConnectionFactoryTests extends TestBase {
 	@Test
 	void createAudioSource() {
 		AudioOptions audioOptions = new AudioOptions();
-		AudioSource audioSource = factory.createAudioSource(audioOptions);
+		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 
 		assertNotNull(audioSource);
 		assertEquals(MediaSource.State.LIVE, audioSource.getState());
@@ -84,7 +84,7 @@ class PeerConnectionFactoryTests extends TestBase {
 	@Test
 	void createAudioTrack() {
 		AudioOptions audioOptions = new AudioOptions();
-		AudioSource audioSource = factory.createAudioSource(audioOptions);
+		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
 
 		assertNotNull(audioTrack);

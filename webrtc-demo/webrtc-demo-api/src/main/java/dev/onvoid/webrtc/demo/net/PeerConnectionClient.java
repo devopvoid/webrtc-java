@@ -46,7 +46,7 @@ import dev.onvoid.webrtc.demo.model.message.ChatMessage;
 import dev.onvoid.webrtc.demo.net.codec.JsonBCodec;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioSource;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoCaptureCapability;
 import dev.onvoid.webrtc.media.video.VideoDesktopSource;
@@ -385,7 +385,7 @@ public class PeerConnectionClient implements PeerConnectionObserver {
 			audioOptions.noiseSuppression = true;
 		}
 
-		AudioSource audioSource = factory.createAudioSource(audioOptions);
+		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
 
 		peerConnection.addTrack(audioTrack, List.of("stream"));

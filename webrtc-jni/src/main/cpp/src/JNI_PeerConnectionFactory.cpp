@@ -163,7 +163,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 	rtc::scoped_refptr<webrtc::AudioSourceInterface> audioSource = factory->CreateAudioSource(audioOptions);
 
 	if (audioSource == nullptr) {
-		env->Throw(jni::JavaError(env, "Create audio source failed"));
+		env->Throw(jni::JavaError(env, "Create audio-track source failed"));
 		return nullptr;
 	}
 
@@ -178,7 +178,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 		return nullptr;
 	}
 	if (jsource == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioSource is null"));
+		env->Throw(jni::JavaNullPointerException(env, "AudioTrackSource is null"));
 		return nullptr;
 	}
 
@@ -203,7 +203,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 		return nullptr;
 	}
 	if (jsource == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoSource is null"));
+		env->Throw(jni::JavaNullPointerException(env, "VideoTrackSource is null"));
 		return nullptr;
 	}
 

@@ -32,7 +32,7 @@ class AudioTrackTests extends TestBase {
 	@BeforeEach
 	void init() {
 		AudioOptions audioOptions = new AudioOptions();
-		AudioSource audioSource = factory.createAudioSource(audioOptions);
+		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 
 		audioTrack = factory.createAudioTrack("audioTrack", audioSource);
 	}

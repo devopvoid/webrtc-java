@@ -10,7 +10,7 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    createAudioSource
-	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioOptions;)Ldev/onvoid/webrtc/media/audio/AudioSource;
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioOptions;)Ldev/onvoid/webrtc/media/audio/AudioTrackSource;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSource
 	(JNIEnv *, jobject, jobject);
@@ -18,7 +18,7 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    createAudioTrack
-	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/audio/AudioSource;)Ldev/onvoid/webrtc/media/audio/AudioTrack;
+	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/audio/AudioTrackSource;)Ldev/onvoid/webrtc/media/audio/AudioTrack;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrack
 	(JNIEnv *, jobject, jstring, jobject);
@@ -26,7 +26,7 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    createVideoTrack
-	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/video/VideoSource;)Ldev/onvoid/webrtc/media/video/VideoTrack;
+	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/video/VideoTrackSource;)Ldev/onvoid/webrtc/media/video/VideoTrack;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVideoTrack
 	(JNIEnv *, jobject, jstring, jobject);

@@ -2,7 +2,7 @@ package dev.onvoid.webrtc;
 
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioSource;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 
 import java.util.ArrayList;
@@ -38,7 +38,7 @@ class RTCRtpTransceiverTests extends TestBase {
 		codecCapabilities.add(audioCapabilities.getCodecs().get(0));
 		codecCapabilities.add(videoCapabilities.getCodecs().get(0));
 
-		AudioSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack track = factory.createAudioTrack("audioTrack", audioSource);
 
 		RTCPeerConnection peerConnection = connection.getPeerConnection();

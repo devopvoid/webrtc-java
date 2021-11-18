@@ -16,7 +16,7 @@
 
 package dev.onvoid.webrtc.media.video;
 
-public class VideoDeviceSource extends VideoSource {
+public class VideoDeviceSource extends VideoTrackSource {
 
 	public VideoDeviceSource() {
 		super();

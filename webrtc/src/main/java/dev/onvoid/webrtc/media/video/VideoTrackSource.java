@@ -21,9 +21,9 @@ import dev.onvoid.webrtc.media.MediaSource;
 /**
  * A source for one or more VideoTracks.
  */
-public class VideoSource extends MediaSource {
+public class VideoTrackSource extends MediaSource {
 
-	protected VideoSource() {
+	protected VideoTrackSource() {
 
 	}
 

@@ -82,7 +82,7 @@ namespace jni
 		JavaEnums::add<webrtc::AudioDeviceModule::AudioLayer>(env, PKG_AUDIO"AudioLayer");
 		JavaEnums::add<jni::RTCStats::RTCStatsType>(env, PKG"RTCStatsType");
 
-		JavaFactories::add<webrtc::AudioSourceInterface>(env, PKG_MEDIA"audio/AudioSource");
+		JavaFactories::add<webrtc::AudioSourceInterface>(env, PKG_MEDIA"audio/AudioTrackSource");
 		JavaFactories::add<webrtc::AudioTrackInterface>(env, PKG_MEDIA"audio/AudioTrack");
 		JavaFactories::add<webrtc::VideoTrackInterface>(env, PKG_MEDIA"video/VideoTrack");
 		JavaFactories::add<webrtc::MediaStreamInterface>(env, PKG_MEDIA"MediaStream");
