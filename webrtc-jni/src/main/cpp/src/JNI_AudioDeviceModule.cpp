@@ -24,6 +24,8 @@
 #include "JavaString.h"
 #include "JavaUtils.h"
 #include "media/audio/AudioDevice.h"
+#include "media/audio/AudioTransportSink.h"
+#include "media/audio/AudioTransportSource.h"
 
 #include "api/scoped_refptr.h"
 #include "api/task_queue/default_task_queue_factory.h"
@@ -127,7 +129,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_g
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_getRecordingDevices
-(JNIEnv* env, jobject caller)
+(JNIEnv * env, jobject caller)
 {
 	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
 	CHECK_HANDLEV(audioModule, nullptr);
@@ -380,7 +382,73 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setM
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_dispose
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_addSinkInternal
+(JNIEnv * env, jobject caller, jobject jSink)
+{
+	if (jSink == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "AudioSink must not be null"));
+		return 0;
+	}
+
+	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLEV(audioModule, 0);
+
+	auto sink = new jni::AudioTransportSink(env, jni::JavaGlobalRef<jobject>(env, jSink));
+
+	audioModule->RegisterAudioCallback(sink);
+
+	return reinterpret_cast<jlong>(sink);
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_removeSinkInternal
+(JNIEnv * env, jobject caller, jlong sinkHandle)
+{
+	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	auto sink = reinterpret_cast<jni::AudioTransportSink *>(sinkHandle);
+
+	if (sink != nullptr) {
+		audioModule->RegisterAudioCallback(nullptr);
+
+		delete sink;
+	}
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_addSourceInternal
+(JNIEnv * env, jobject caller, jobject jSource)
+{
+	if (jSource == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "AudioSource must not be null"));
+		return 0;
+	}
+
+	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLEV(audioModule, 0);
+
+	auto source = new jni::AudioTransportSource(env, jni::JavaGlobalRef<jobject>(env, jSource));
+
+	audioModule->RegisterAudioCallback(source);
+
+	return reinterpret_cast<jlong>(source);
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_removeSourceInternal
+(JNIEnv * env, jobject caller, jlong sourceHandle)
+{
+	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	auto source = reinterpret_cast<jni::AudioTransportSource *>(sourceHandle);
+
+	if (source != nullptr) {
+		audioModule->RegisterAudioCallback(nullptr);
+
+		delete source;
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_disposeInternal
 (JNIEnv * env, jobject caller)
 {
 	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);

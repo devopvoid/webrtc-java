@@ -40,8 +40,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyC
 	apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
 }
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessStream___3SLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3S
-(JNIEnv * env, jobject caller, jshortArray src, jobject inputConfig, jobject outputConfig, jshortArray dest)
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
+(JNIEnv * env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
 {
 	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
 	CHECK_HANDLEV(apm, 0);
@@ -49,39 +49,27 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_Proces
 	webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, inputConfig));
 	webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, outputConfig));
 
-	jshort * srcPtr = env->GetShortArrayElements(src, nullptr);
-	jshort * dstPtr = env->GetShortArrayElements(dest, nullptr);
+	jboolean isDstCopy = JNI_FALSE;
 
-	int result = apm->ProcessStream(srcPtr, srcConfig, dstConfig, dstPtr);
+	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
+	jbyte * dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
 
-	env->ReleaseShortArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseShortArrayElements(dest, dstPtr, JNI_ABORT);
+	int result = apm->ProcessStream(reinterpret_cast<int16_t *>(srcPtr), srcConfig, dstConfig, reinterpret_cast<int16_t *>(dstPtr));
 
-	return result;
-}
+	if (isDstCopy == JNI_TRUE) {
+		jsize dstLength = env->GetArrayLength(dest);
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessStream___3FLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3F
-(JNIEnv * env, jobject caller, jfloatArray src, jobject inputConfig, jobject outputConfig, jfloatArray dest)
-{
-	webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLEV(apm, 0);
+		env->SetByteArrayRegion(dest, 0, dstLength, dstPtr);
+	}
 
-	webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, inputConfig));
-	webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, outputConfig));
-
-	jfloat * srcPtr = env->GetFloatArrayElements(src, nullptr);
-	jfloat * dstPtr = env->GetFloatArrayElements(dest, nullptr);
-
-	int result = apm->ProcessStream(reinterpret_cast<float**>(srcPtr), srcConfig, dstConfig, reinterpret_cast<float**>(dstPtr));
-
-	env->ReleaseFloatArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseFloatArrayElements(dest, dstPtr, JNI_ABORT);
+	env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
+	env->ReleaseByteArrayElements(dest, dstPtr, JNI_ABORT);
 
 	return result;
 }
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessReverseStream___3SLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3S
-(JNIEnv * env, jobject caller, jshortArray src, jobject inputConfig, jobject outputConfig, jshortArray dest)
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processReverseStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
+(JNIEnv * env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
 {
 	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
 	CHECK_HANDLEV(apm, 0);
@@ -89,33 +77,21 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_Proces
 	webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, inputConfig));
 	webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, outputConfig));
 
-	jshort * srcPtr = env->GetShortArrayElements(src, nullptr);
-	jshort * dstPtr = env->GetShortArrayElements(dest, nullptr);
+	jboolean isDstCopy = JNI_FALSE;
 
-	int result = apm->ProcessReverseStream(srcPtr, srcConfig, dstConfig, dstPtr);
+	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
+	jbyte * dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
 
-	env->ReleaseShortArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseShortArrayElements(dest, dstPtr, JNI_ABORT);
+	int result = apm->ProcessReverseStream(reinterpret_cast<int16_t *>(srcPtr), srcConfig, dstConfig, reinterpret_cast<int16_t *>(dstPtr));
 
-	return result;
-}
+	if (isDstCopy == JNI_TRUE) {
+		jsize dstLength = env->GetArrayLength(dest);
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessReverseStream___3FLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3F
-(JNIEnv * env, jobject caller, jfloatArray src, jobject inputConfig, jobject outputConfig, jfloatArray dest)
-{
-	webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLEV(apm, 0);
+		env->SetByteArrayRegion(dest, 0, dstLength, dstPtr);
+	}
 
-	webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, inputConfig));
-	webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, outputConfig));
-
-	jfloat * srcPtr = env->GetFloatArrayElements(src, nullptr);
-	jfloat * dstPtr = env->GetFloatArrayElements(dest, nullptr);
-
-	int result = apm->ProcessStream(reinterpret_cast<float**>(srcPtr), srcConfig, dstConfig, reinterpret_cast<float**>(dstPtr));
-
-	env->ReleaseFloatArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseFloatArrayElements(dest, dstPtr, JNI_ABORT);
+	env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
+	env->ReleaseByteArrayElements(dest, dstPtr, JNI_ABORT);
 
 	return result;
 }

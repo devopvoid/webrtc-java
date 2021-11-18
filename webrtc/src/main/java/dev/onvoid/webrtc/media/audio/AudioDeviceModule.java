@@ -16,11 +16,21 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import static java.util.Objects.nonNull;
+import static java.util.Objects.requireNonNull;
+
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
+import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
+import java.util.Map;
 
 public class AudioDeviceModule extends DisposableNativeObject {
+
+	private Map.Entry<AudioSink, Long> sinkEntry;
+
+	private Map.Entry<AudioSource, Long> sourceEntry;
+
 
 	public AudioDeviceModule() {
 		initialize(AudioLayer.kPlatformDefaultAudio);
@@ -28,6 +38,53 @@ public class AudioDeviceModule extends DisposableNativeObject {
 
 	public AudioDeviceModule(AudioLayer audioLayer) {
 		initialize(audioLayer);
+	}
+
+	@Override
+	public void dispose() {
+		if (nonNull(sinkEntry)) {
+			removeSinkInternal(sinkEntry.getValue());
+		}
+		if (nonNull(sourceEntry)) {
+			removeSourceInternal(sourceEntry.getValue());
+		}
+
+		sinkEntry = null;
+		sourceEntry = null;
+
+		disposeInternal();
+	}
+
+	public void setAudioSink(AudioSink sink) {
+		requireNonNull(sink);
+
+		if (nonNull(sinkEntry)) {
+			if (sink.equals(sinkEntry.getKey())) {
+				return;
+			}
+
+			removeSinkInternal(sinkEntry.getValue());
+		}
+
+		final long nativeSink = addSinkInternal(sink);
+
+		sinkEntry = new SimpleEntry<>(sink, nativeSink);
+	}
+
+	public void setAudioSource(AudioSource source) {
+		requireNonNull(source);
+
+		if (nonNull(sourceEntry)) {
+			if (source.equals(sourceEntry.getKey())) {
+				return;
+			}
+
+			removeSourceInternal(sourceEntry.getValue());
+		}
+
+		final long nativeSource = addSourceInternal(source);
+
+		sourceEntry = new SimpleEntry<>(source, nativeSource);
 	}
 
 	public native void initPlayout();
@@ -74,9 +131,16 @@ public class AudioDeviceModule extends DisposableNativeObject {
 
 	public native void setMicrophoneMute(boolean mute);
 
-	@Override
-	public native void dispose();
-
 	private native void initialize(AudioLayer audioLayer);
+
+	private native void disposeInternal();
+
+	private native long addSinkInternal(AudioSink sink);
+
+	private native void removeSinkInternal(long sinkHandle);
+
+	private native long addSourceInternal(AudioSource source);
+
+	private native void removeSourceInternal(long sourceHandle);
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Alex Andres
+ * Copyright 2019 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,17 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-public interface AudioSource {
+import dev.onvoid.webrtc.media.MediaSource;
 
-	int onPlaybackData(byte[] audioSamples, int nSamples, int nBytesPerSample,
-			int nChannels, int samplesPerSec);
+/**
+ * A source for one or more AudioTracks.
+ *
+ * @author Alex Andres
+ */
+public class AudioTrackSource extends MediaSource {
+
+	protected AudioTrackSource() {
+
+	}
 
 }

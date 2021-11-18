@@ -16,9 +16,9 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-public interface AudioSource {
+public interface AudioSink {
 
-	int onPlaybackData(byte[] audioSamples, int nSamples, int nBytesPerSample,
-			int nChannels, int samplesPerSec);
+	void onRecordedData(byte[] audioSamples, int nSamples, int nBytesPerSample,
+			int nChannels, int samplesPerSec, int totalDelayMS, int clockDrift);
 
 }

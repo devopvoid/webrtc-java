@@ -185,10 +185,42 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
-	 * Method:    dispose
+	 * Method:    addSinkInternal
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioSink;)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_addSinkInternal
+	(JNIEnv*, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    removeSinkInternal
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_removeSinkInternal
+	(JNIEnv*, jobject, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    addSourceInternal
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioSource;)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_addSourceInternal
+	(JNIEnv*, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    removeSourceInternal
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_removeSourceInternal
+	(JNIEnv*, jobject, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+	 * Method:    disposeInternal
 	 * Signature: ()V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_dispose
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_disposeInternal
 	(JNIEnv *, jobject);
 
 	/*
