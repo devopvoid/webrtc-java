@@ -16,6 +16,7 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import dev.onvoid.webrtc.TestBase;
@@ -24,7 +25,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class AudioProcessingTests extends TestBase {
+class AudioProcessingTest extends TestBase {
+
+	private final AudioProcessingStreamConfig streamConfig = new AudioProcessingStreamConfig(48000, 1);
 
 	private AudioProcessing audioProcessing;
 
@@ -59,4 +62,25 @@ class AudioProcessingTests extends TestBase {
 		assertNotNull(audioProcessing.getStatistics());
 	}
 
+	@Test
+	void processByteStream() {
+		int sampleRate = streamConfig.sampleRate;
+		int bytesPerFrame = 2;
+		int frameSize = sampleRate / 100 * bytesPerFrame; // 10 ms frame
+
+		byte[] data = new byte[frameSize];
+
+		assertEquals(0, audioProcessing.processStream(data, streamConfig, streamConfig, data));
+	}
+
+	@Test
+	void processReverseStream() {
+		int sampleRate = streamConfig.sampleRate;
+		int bytesPerFrame = 2;
+		int frameSize = sampleRate / 100 * bytesPerFrame; // 10 ms frame
+
+		byte[] data = new byte[frameSize];
+
+		assertEquals(0, audioProcessing.processReverseStream(data, streamConfig, streamConfig, data));
+	}
 }

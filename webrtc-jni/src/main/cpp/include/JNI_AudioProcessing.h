@@ -17,35 +17,19 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyC
 
 /*
  * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    ProcessStream
- * Signature: ([SLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[S)I
+ * Method:    processStream
+ * Signature: ([BLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[B)I
  */
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessStream___3SLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3S
-  (JNIEnv *, jobject, jshortArray, jobject, jobject, jshortArray);
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
+  (JNIEnv *, jobject, jbyteArray, jobject, jobject, jbyteArray);
 
 /*
  * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    ProcessStream
- * Signature: ([FLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[F)I
+ * Method:    processReverseStream
+ * Signature: ([BLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[B)I
  */
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessStream___3FLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3F
-  (JNIEnv *, jobject, jfloatArray, jobject, jobject, jfloatArray);
-
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    ProcessReverseStream
- * Signature: ([SLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[S)I
- */
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessReverseStream___3SLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3S
-  (JNIEnv *, jobject, jshortArray, jobject, jobject, jshortArray);
-
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    ProcessReverseStream
- * Signature: ([FLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[F)I
- */
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_ProcessReverseStream___3FLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3F
-  (JNIEnv *, jobject, jfloatArray, jobject, jobject, jfloatArray);
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processReverseStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
+  (JNIEnv *, jobject, jbyteArray, jobject, jobject, jbyteArray);
 
 /*
  * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing

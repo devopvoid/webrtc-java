@@ -20,12 +20,11 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.internal.NativeLoader;
 
 /**
- * Audio Processing provides a collection of voice processing components
- * designed for real-time communications software.
- * <br/>
- * Audio Processing
- * accepts only linear PCM audio data in chunks of 10 ms. The int16 interfaces
- * use interleaved data, while the float interfaces use deinterleaved data.
+ * AudioProcessing provides a collection of voice processing components designed
+ * for real-time communications software.
+ * <p>
+ * AudioProcessing accepts only linear PCM audio data in chunks of 10 ms. The
+ * int16 interfaces use interleaved data.
  *
  * @author Alex Andres
  */
@@ -56,21 +55,13 @@ public class AudioProcessing extends DisposableNativeObject {
 		return stats;
 	}
 
-	public native int ProcessStream(short[] src,
+	public native int processStream(byte[] src,
 			AudioProcessingStreamConfig inputConfig,
-			AudioProcessingStreamConfig outputConfig, short[] dest);
+			AudioProcessingStreamConfig outputConfig, byte[] dest);
 
-	public native int ProcessStream(float[] src,
+	public native int processReverseStream(byte[] src,
 			AudioProcessingStreamConfig inputConfig,
-			AudioProcessingStreamConfig outputConfig, float[] dest);
-
-	public native int ProcessReverseStream(short[] src,
-			AudioProcessingStreamConfig inputConfig,
-			AudioProcessingStreamConfig outputConfig, short[] dest);
-
-	public native int ProcessReverseStream(float[] src,
-			AudioProcessingStreamConfig inputConfig,
-			AudioProcessingStreamConfig outputConfig, float[] dest);
+			AudioProcessingStreamConfig outputConfig, byte[] dest);
 
 	@Override
 	public native void dispose();
