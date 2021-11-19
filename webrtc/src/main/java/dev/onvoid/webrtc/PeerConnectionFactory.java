@@ -22,6 +22,7 @@ import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioProcessing;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSource;
@@ -60,17 +61,39 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * Creates an instance of PeerConnectionFactory.
 	 */
 	public PeerConnectionFactory() {
-		this(null);
+		this(null, null);
 	}
 
 	/**
 	 * Creates an instance of PeerConnectionFactory with the provided audio
-	 * module.
+	 * processing module.
 	 *
-	 * @param audioModule The custom audio module.
+	 * @param audioProcessing The custom audio processing module.
+	 */
+	public PeerConnectionFactory(AudioProcessing audioProcessing) {
+		initialize(null, audioProcessing);
+	}
+
+	/**
+	 * Creates an instance of PeerConnectionFactory with the provided audio
+	 * device module.
+	 *
+	 * @param audioModule The custom audio device module.
 	 */
 	public PeerConnectionFactory(AudioDeviceModule audioModule) {
-		initialize(audioModule);
+		initialize(audioModule, null);
+	}
+
+	/**
+	 * Creates an instance of PeerConnectionFactory with provided modules for
+	 * audio devices and audio processing.
+	 *
+	 * @param audioModule     The custom audio device module.
+	 * @param audioProcessing The custom audio processing module.
+	 */
+	public PeerConnectionFactory(AudioDeviceModule audioModule,
+			AudioProcessing audioProcessing) {
+		initialize(audioModule, audioProcessing);
 	}
 
 	/**
@@ -146,6 +169,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	@Override
 	public native void dispose();
 
-	private native void initialize(AudioDeviceModule audioModule);
+	private native void initialize(AudioDeviceModule audioModule,
+			AudioProcessing audioProcessing);
 
 }

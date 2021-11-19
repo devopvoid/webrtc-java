@@ -35,7 +35,7 @@
 #include "api/video_codecs/builtin_video_encoder_factory.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
-(JNIEnv * env, jobject caller, jobject audioModule)
+(JNIEnv * env, jobject caller, jobject audioModule, jobject audioProcessing)
 {
 	webrtc::AudioDeviceModule * audioDevModule = (audioModule != nullptr)
 		? GetHandle<webrtc::AudioDeviceModule>(env, audioModule)
@@ -56,30 +56,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			throw jni::Exception("Start worker thread failed");
 		}
 
-
-
-		webrtc::AudioProcessing::Config config;
-		config.echo_canceller.enabled = true;
-		config.echo_canceller.enforce_high_pass_filtering = true;
-		config.echo_canceller.mobile_mode = false;
-
-		config.residual_echo_detector.enabled = true;
-
-		config.noise_suppression.enabled = true;
-		config.noise_suppression.analyze_linear_aec_output_when_available = true;
-
-		config.high_pass_filter.enabled = true;
-
-		config.level_estimation.enabled = true;
-		config.voice_detection.enabled = true;
-		config.transient_suppression.enabled = true;
-
-
-		rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
-		apm->ApplyConfig(config);
-
-
-
+		webrtc::AudioProcessing * processing = (audioProcessing != nullptr)
+			? GetHandle<webrtc::AudioProcessing>(env, audioProcessing)
+			: nullptr;
+		rtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
 
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),

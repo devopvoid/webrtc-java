@@ -66,10 +66,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    initialize
-	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioDeviceModule;)V
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioDeviceModule;Ldev/onvoid/webrtc/media/audio/AudioProcessing;)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
-	(JNIEnv *, jobject, jobject);
+	(JNIEnv *, jobject, jobject, jobject);
 
 #ifdef __cplusplus
 }
