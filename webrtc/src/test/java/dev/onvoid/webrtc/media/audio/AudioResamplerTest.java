@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.onvoid.webrtc.TestBase;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class AudioResamplerTest extends TestBase {
@@ -29,17 +30,31 @@ class AudioResamplerTest extends TestBase {
 	private AudioResampler resampler;
 
 
+	@BeforeEach
+	void init() {
+		resampler = new AudioResampler();
+	}
+
 	@AfterEach
 	void dispose() {
 		resampler.dispose();
 	}
 
 	@Test
-	void targetBufferUnderflow() {
-		resampler = new AudioResampler(48000, 24000);
+	void notInitialized() {
+		SampleBuffer buffer = new SampleBuffer(48000, 24000, 1);
 
-		SampleBuffer buffer = new SampleBuffer(48000, 24000);
+		assertThrows(IllegalStateException.class, () -> {
+			resampler.resample(buffer.src, buffer.nSamplesIn, buffer.dst);
+		});
+	}
+
+	@Test
+	void targetBufferUnderflow() {
+		SampleBuffer buffer = new SampleBuffer(48000, 24000, 1);
 		buffer.setTargetBufferSize(buffer.frameSizeOut / 2);
+
+		reset(resampler, buffer);
 
 		assertThrows(IllegalArgumentException.class, () -> {
 			resample(resampler, buffer);
@@ -47,10 +62,23 @@ class AudioResamplerTest extends TestBase {
 	}
 
 	@Test
-	void downSample() {
-		resampler = new AudioResampler(48000, 44100);
+	void constructorParameters() {
+		SampleBuffer buffer = new SampleBuffer(48000, 44100, 2);
 
-		SampleBuffer buffer = new SampleBuffer(48000, 44100);
+		AudioResampler resampler = new AudioResampler(48000, 44100, 2);
+
+		int result = resample(resampler, buffer);
+
+		resampler.dispose();
+
+		assertEquals(buffer.nSamplesOut, result);
+	}
+
+	@Test
+	void downSample() {
+		SampleBuffer buffer = new SampleBuffer(48000, 44100, 1);
+
+		reset(resampler, buffer);
 
 		int result = resample(resampler, buffer);
 
@@ -59,13 +87,17 @@ class AudioResamplerTest extends TestBase {
 
 	@Test
 	void upSample() {
-		resampler = new AudioResampler(32000, 48000);
+		SampleBuffer buffer = new SampleBuffer(32000, 48000, 1);
 
-		SampleBuffer buffer = new SampleBuffer(32000, 48000);
+		reset(resampler, buffer);
 
 		int result = resample(resampler, buffer);
 
 		assertEquals(buffer.nSamplesOut, result);
+	}
+
+	private static void reset(AudioResampler resampler, SampleBuffer buffer) {
+		resampler.reset(buffer.sampleRateIn, buffer.sampleRateOut, 1);
 	}
 
 	private static int resample(AudioResampler resampler, SampleBuffer buffer) {
@@ -77,6 +109,8 @@ class AudioResamplerTest extends TestBase {
 	private static class SampleBuffer {
 
 		final int bytesPerFrame = 2;
+
+		final int channels;
 
 		final int sampleRateIn;
 		final int sampleRateOut;
@@ -91,12 +125,13 @@ class AudioResamplerTest extends TestBase {
 		byte[] dst;
 
 
-		SampleBuffer(int sampleRateIn, int sampleRateOut) {
+		SampleBuffer(int sampleRateIn, int sampleRateOut, int channels) {
+			this.channels = channels;
 			this.sampleRateIn = sampleRateIn;
 			this.sampleRateOut = sampleRateOut;
 
-			nSamplesIn = sampleRateIn / 100; // 10 ms frame
-			nSamplesOut = sampleRateOut / 100;
+			nSamplesIn = sampleRateIn / 100 * channels; // 10 ms frame
+			nSamplesOut = sampleRateOut / 100 * channels;
 			frameSizeIn = nSamplesIn * bytesPerFrame;
 			frameSizeOut = nSamplesOut * bytesPerFrame;
 

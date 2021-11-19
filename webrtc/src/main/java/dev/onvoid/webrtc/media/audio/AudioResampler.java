@@ -22,16 +22,24 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
  * Audio sampling rate converter. This resampler operates on audio frames of 10
- * milliseconds.
+ * milliseconds. Each sample is assumed to be a 16-bit PCM sample.
  *
  * @author Alex Andres
  */
 public class AudioResampler extends DisposableNativeObject {
 
-	private final int sourceFrames;
+	private int targetFrames;
 
-	private final int targetFrames;
+	private boolean initialized;
 
+
+	/**
+	 * Creates a new {@code AudioResampler} without sampling parameters. Make
+	 * sure to call {@link #reset(int, int, int)} afterwards.
+	 */
+	public AudioResampler() {
+		initialize();
+	}
 
 	/**
 	 * Creates a new {@code AudioResampler} with specified sampling frequency
@@ -39,13 +47,30 @@ public class AudioResampler extends DisposableNativeObject {
 	 *
 	 * @param sourceSampleRate The sampling frequency of the input signal.
 	 * @param targetSampleRate The sampling frequency of the output signal.
+	 * @param channels         The number of audio channels to resample.
 	 */
-	public AudioResampler(int sourceSampleRate, int targetSampleRate) {
-		// 10 ms frames
-		sourceFrames = sourceSampleRate / 100;
-		targetFrames = targetSampleRate / 100;
+	public AudioResampler(int sourceSampleRate, int targetSampleRate, int channels) {
+		initialize();
+		reset(sourceSampleRate, targetSampleRate, channels);
+	}
 
-		initialize(sourceFrames, targetFrames);
+	/**
+	 * Must be called when created with default constructor or whenever the
+	 * sampling parameters change. Can be called at any time as it is a no-op if
+	 * parameters have not changed since the last call.
+	 *
+	 * @param sourceSampleRate The sampling frequency of the input signal.
+	 * @param targetSampleRate The sampling frequency of the output signal.
+	 * @param channels         The number of audio channels to resample.
+	 */
+	public void reset(int sourceSampleRate, int targetSampleRate, int channels) {
+		initialized = false;
+
+		resetInternal(sourceSampleRate, targetSampleRate, channels);
+
+		targetFrames = targetSampleRate / 100 * channels; // 10 ms frame
+
+		initialized = true;
 	}
 
 	/**
@@ -65,7 +90,11 @@ public class AudioResampler extends DisposableNativeObject {
 		requireNonNull(samplesIn);
 		requireNonNull(samplesOut);
 
-		final int arraySamplesIn = samplesIn.length / 2;
+		if (!initialized) {
+			throw new IllegalStateException("Not initialized: Use reset() to set parameters");
+		}
+
+		final int arraySamplesIn = samplesIn.length / 2; // 16-bit PCM sample
 		final int maxSamplesOut = samplesOut.length / 2;
 
 		nSamplesIn = Math.min(arraySamplesIn, Math.max(0, nSamplesIn));
@@ -80,7 +109,10 @@ public class AudioResampler extends DisposableNativeObject {
 	@Override
 	public native void dispose();
 
-	private native void initialize(int sourceFrames, int targetFrames);
+	private native void initialize();
+
+	private native void resetInternal(int sourceSampleRate, int targetSampleRate,
+			int channels);
 
 	private native int resampleInternal(byte[] samplesIn, int nSamplesIn,
 			byte[] samplesOut, int maxSamplesOut);

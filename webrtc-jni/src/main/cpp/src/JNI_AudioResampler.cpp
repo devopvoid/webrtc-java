@@ -16,20 +16,16 @@
 
 #include "JNI_AudioResampler.h"
 #include "Exception.h"
-#include "JavaArrayList.h"
-#include "JavaEnums.h"
-#include "JavaError.h"
 #include "JavaObject.h"
 #include "JavaRef.h"
-#include "JavaString.h"
 #include "JavaUtils.h"
 
-#include "common_audio/resampler/push_sinc_resampler.h"
+#include "common_audio/resampler/include/push_resampler.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::PushSincResampler * resampler = GetHandle<webrtc::PushSincResampler>(env, caller);
+	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
 	CHECK_HANDLE(resampler);
 
 	delete resampler;
@@ -38,17 +34,26 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_dispose
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
-(JNIEnv * env, jobject caller, jint sourceFrames, jint targetFrames)
+(JNIEnv * env, jobject caller)
 {
-	webrtc::PushSincResampler * resampler = new webrtc::PushSincResampler(sourceFrames, targetFrames);
+	webrtc::PushResampler<int16_t> * resampler = new webrtc::PushResampler<int16_t>();
 
 	SetHandle(env, caller, resampler);
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resetInternal
+(JNIEnv* env, jobject caller, jint sourceRate, jint targetRate, jint channels)
+{
+	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
+	CHECK_HANDLE(resampler);
+
+	resampler->InitializeIfNeeded(sourceRate, targetRate, channels);
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampleInternal
 (JNIEnv * env, jobject caller, jbyteArray samplesIn, jint nSamplesIn, jbyteArray samplesOut, jint maxSamplesOut)
 {
-	webrtc::PushSincResampler * resampler = GetHandle<webrtc::PushSincResampler>(env, caller);
+	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
 	CHECK_HANDLEV(resampler, -1);
 
 	jboolean isDstCopy = JNI_FALSE;

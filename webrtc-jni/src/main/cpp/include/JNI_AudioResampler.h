@@ -18,10 +18,18 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioResampler
 	 * Method:    initialize
-	 * Signature: (II)V
+	 * Signature: ()V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
-	(JNIEnv*, jobject, jint, jint);
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioResampler
+	 * Method:    resetInternal
+	 * Signature: (III)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resetInternal
+	(JNIEnv*, jobject, jint, jint, jint);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioResampler
