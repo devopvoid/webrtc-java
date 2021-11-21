@@ -52,6 +52,7 @@ jobs:
           server-id: ossrh
           server-username: NEXUS_USERNAME
           server-password: NEXUS_PASSWORD
+          settings-path: ${{ github.workspace }}/.github/workflows
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase: GPG_PASSPHRASE
 
