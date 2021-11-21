@@ -7,53 +7,69 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    applyConfig
- * Signature: (Ldev/onvoid/webrtc/media/audio/AudioProcessingConfig;)V
- */
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyConfig
-  (JNIEnv *, jobject, jobject);
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    applyConfig
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioProcessingConfig;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyConfig
+	(JNIEnv*, jobject, jobject);
 
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    processStream
- * Signature: ([BLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[B)I
- */
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
-  (JNIEnv *, jobject, jbyteArray, jobject, jobject, jbyteArray);
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    setStreamDelayMs
+	 * Signature: (I)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setStreamDelayMs
+	(JNIEnv*, jobject, jint);
 
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    processReverseStream
- * Signature: ([BLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[B)I
- */
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processReverseStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
-  (JNIEnv *, jobject, jbyteArray, jobject, jobject, jbyteArray);
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    getStreamDelayMs
+	 * Signature: ()I
+	 */
+	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_getStreamDelayMs
+	(JNIEnv*, jobject);
 
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    dispose
- * Signature: ()V
- */
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispose
-  (JNIEnv *, jobject);
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    processStream
+	 * Signature: ([BLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[B)I
+	 */
+	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processStream
+	(JNIEnv*, jobject, jbyteArray, jobject, jobject, jbyteArray);
 
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    initialize
- * Signature: ()V
- */
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
-  (JNIEnv *, jobject);
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    processReverseStream
+	 * Signature: ([BLdev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;Ldev/onvoid/webrtc/media/audio/AudioProcessingStreamConfig;[B)I
+	 */
+	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processReverseStream
+	(JNIEnv*, jobject, jbyteArray, jobject, jobject, jbyteArray);
 
-/*
- * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
- * Method:    updateStats
- * Signature: ()V
- */
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_updateStats
-  (JNIEnv *, jobject);
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    dispose
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispose
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    initialize
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+	 * Method:    updateStats
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_updateStats
+	(JNIEnv*, jobject);
 
 #ifdef __cplusplus
 }

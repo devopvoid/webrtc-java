@@ -16,22 +16,122 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+/**
+ * This config is intended to be used during setup of {@link AudioProcessing} to
+ * enable/disable audio processing effects.
+ *
+ * @author Alex Andres
+ */
 public class AudioProcessingConfig {
 
-	public boolean echoCancellerEnabled;
+	public final EchoCanceller echoCanceller = new EchoCanceller();
 
-	public boolean residualEchoDetectorEnabled;
+	public final GainControl gainControl = new GainControl();
 
-	public boolean gainControlEnabled;
+	public final HighPassFilter highPassFilter = new HighPassFilter();
 
-	public boolean highPassFilterEnabled;
+	public final LevelEstimation levelEstimation = new LevelEstimation();
 
-	public boolean noiseSuppressionEnabled;
+	public final NoiseSuppression noiseSuppression = new NoiseSuppression();
 
-	public boolean transientSuppressionEnabled;
+	public final ResidualEchoDetector residualEchoDetector = new ResidualEchoDetector();
 
-	public boolean levelEstimationEnabled;
+	public final TransientSuppression transientSuppression = new TransientSuppression();
 
-	public boolean voiceDetectionEnabled;
+	public final VoiceDetection voiceDetection = new VoiceDetection();
 
+
+
+	public static class EchoCanceller {
+
+		public boolean enabled;
+
+		public boolean enforceHighPassFiltering;
+
+	}
+
+	public static class GainControl {
+
+		public static class FixedDigital {
+
+			public float gainDb = 0.0f;
+
+		}
+
+		public static class AdaptiveDigital {
+
+			public boolean enabled;
+
+			/** Run the adaptive digital controller but the signal is not modified. */
+			public boolean dryRun = false;
+
+			public int vadResetPeriodMs = 1500;
+			public int adjacentSpeechFramesThreshold = 12;
+			public float maxGainChangeDbPerSecond = 3.0f;
+			public float maxOutputNoiseLevelDbfs = -50.0f;
+
+			public float vadProbabilityAttack = 1.0f;
+
+			public int levelEstimatorAdjacentSpeechFramesThreshold = 12;
+			public boolean useSaturationProtector = true;
+			public float initialSaturationMarginDb = 25.0f;
+			public float extraSaturationMarginDb = 5.0f;
+			public int gainApplierAdjacentSpeechFramesThreshold = 12;
+
+		}
+
+
+		public final FixedDigital fixedDigital = new FixedDigital();
+
+		public final AdaptiveDigital adaptiveDigital = new AdaptiveDigital();
+
+		public boolean enabled;
+
+	}
+
+	public static class HighPassFilter {
+
+		public boolean enabled;
+
+	}
+
+	public static class LevelEstimation {
+
+		public boolean enabled;
+
+	}
+
+	public static class NoiseSuppression {
+
+		public enum Level {
+			LOW,
+			MODERATE,
+			HIGH,
+			VERY_HIGH
+		}
+
+
+		public boolean enabled;
+
+		public Level level;
+
+	}
+
+	public static class ResidualEchoDetector {
+
+		public boolean enabled;
+
+	}
+
+	public static class TransientSuppression {
+
+		public boolean enabled;
+
+	}
+
+	public static class VoiceDetection {
+
+		public boolean enabled;
+
+	}
 }

@@ -34,17 +34,124 @@ namespace jni
 				explicit JavaAudioProcessingConfigClass(JNIEnv * env);
 
 				jclass cls;
-				jfieldID echoCancellerEnabled;
-				jfieldID residualEchoDetectorEnabled;
-				jfieldID gainControlEnabled;
-				jfieldID highPassFilterEnabled;
-				jfieldID noiseSuppressionEnabled;
-				jfieldID transientSuppressionEnabled;
-				jfieldID levelEstimationEnabled;
-				jfieldID voiceDetectionEnabled;
+				jfieldID echoCanceller;
+				jfieldID gainControl;
+				jfieldID highPassFilter;
+				jfieldID levelEstimation;
+				jfieldID noiseSuppression;
+				jfieldID residualEchoDetector;
+				jfieldID transientSuppression;
+				jfieldID voiceDetection;
 		};
 
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType);
+
+
+		class JavaEchoCancellerClass : public JavaClass
+		{
+			public:
+				explicit JavaEchoCancellerClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID enforceHighPassFiltering;
+		};
+
+		class JavaGainControlClass : public JavaClass
+		{
+			public:
+				explicit JavaGainControlClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID fixedDigital;
+				jfieldID adaptiveDigital;
+		};
+
+		class JavaGainControlFixedDigitalClass : public JavaClass
+		{
+			public:
+				explicit JavaGainControlFixedDigitalClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID gainDb;
+		};
+
+		class JavaGainControlAdaptiveDigitalClass : public JavaClass
+		{
+			public:
+				explicit JavaGainControlAdaptiveDigitalClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID dryRun;
+				jfieldID vadResetPeriodMs;
+				jfieldID adjacentSpeechFramesThreshold;
+				jfieldID maxGainChangeDbPerSecond;
+				jfieldID maxOutputNoiseLevelDbfs;
+				jfieldID vadProbabilityAttack;
+				jfieldID levelEstimatorAdjacentSpeechFramesThreshold;
+				jfieldID useSaturationProtector;
+				jfieldID initialSaturationMarginDb;
+				jfieldID extraSaturationMarginDb;
+				jfieldID gainApplierAdjacentSpeechFramesThreshold;
+		};
+
+		class JavaHighPassFilterClass : public JavaClass
+		{
+			public:
+				explicit JavaHighPassFilterClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+		};
+
+		class JavaLevelEstimationClass : public JavaClass
+		{
+			public:
+				explicit JavaLevelEstimationClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+		};
+
+		class JavaNoiseSuppressionClass : public JavaClass
+		{
+			public:
+				explicit JavaNoiseSuppressionClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID level;
+		};
+
+		class JavaResidualEchoDetectorClass : public JavaClass
+		{
+			public:
+				explicit JavaResidualEchoDetectorClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+		};
+
+		class JavaTransientSuppressionClass : public JavaClass
+		{
+			public:
+				explicit JavaTransientSuppressionClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+		};
+
+		class JavaVoiceDetectionClass : public JavaClass
+		{
+			public:
+				explicit JavaVoiceDetectionClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+		};
 	}
 }
 

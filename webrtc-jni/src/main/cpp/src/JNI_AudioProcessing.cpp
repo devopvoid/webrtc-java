@@ -40,7 +40,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyC
 	apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
 }
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setStreamDelayMs
+(JNIEnv * env, jobject caller, jint delayMs)
+{
+	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+	CHECK_HANDLE(apm);
+
+	apm->set_stream_delay_ms(delayMs);
+}
+
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_getStreamDelayMs
+(JNIEnv * env, jobject caller)
+{
+	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+	CHECK_HANDLEV(apm, 0);
+
+	return apm->stream_delay_ms();
+}
+
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processStream
 (JNIEnv * env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
 {
 	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
@@ -68,7 +86,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 	return result;
 }
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processReverseStream___3BLdev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2Ldev_onvoid_webrtc_media_audio_AudioProcessingStreamConfig_2_3B
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processReverseStream
 (JNIEnv * env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
 {
 	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);

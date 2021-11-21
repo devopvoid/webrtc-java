@@ -20,14 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import dev.onvoid.webrtc.TestBase;
+import dev.onvoid.webrtc.media.audio.AudioProcessingConfig.NoiseSuppression;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class AudioProcessingTest extends TestBase {
-
-	private final AudioProcessingStreamConfig streamConfig = new AudioProcessingStreamConfig(48000, 1);
 
 	private AudioProcessing audioProcessing;
 
@@ -45,14 +44,20 @@ class AudioProcessingTest extends TestBase {
 	@Test
 	void applyConfig() {
 		AudioProcessingConfig config = new AudioProcessingConfig();
-		config.echoCancellerEnabled = true;
-		config.residualEchoDetectorEnabled = true;
-		config.gainControlEnabled = true;
-		config.highPassFilterEnabled = true;
-		config.noiseSuppressionEnabled = true;
-		config.transientSuppressionEnabled = true;
-		config.levelEstimationEnabled = true;
-		config.voiceDetectionEnabled = true;
+		config.echoCanceller.enabled = true;
+		config.echoCanceller.enforceHighPassFiltering = true;
+
+		config.gainControl.enabled = true;
+
+		config.highPassFilter.enabled = true;
+
+		config.noiseSuppression.enabled = true;
+		config.noiseSuppression.level = NoiseSuppression.Level.HIGH;
+
+		config.residualEchoDetector.enabled = true;
+		config.transientSuppression.enabled = true;
+		config.levelEstimation.enabled = true;
+		config.voiceDetection.enabled = true;
 
 		audioProcessing.applyConfig(config);
 	}
@@ -64,23 +69,76 @@ class AudioProcessingTest extends TestBase {
 
 	@Test
 	void processByteStream() {
-		int sampleRate = streamConfig.sampleRate;
-		int bytesPerFrame = 2;
-		int frameSize = sampleRate / 100 * bytesPerFrame; // 10 ms frame
+		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1);
 
-		byte[] data = new byte[frameSize];
-
-		assertEquals(0, audioProcessing.processStream(data, streamConfig, streamConfig, data));
+		assertEquals(0, process(audioProcessing, buffer));
 	}
 
 	@Test
 	void processReverseStream() {
-		int sampleRate = streamConfig.sampleRate;
-		int bytesPerFrame = 2;
-		int frameSize = sampleRate / 100 * bytesPerFrame; // 10 ms frame
+		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1);
 
-		byte[] data = new byte[frameSize];
+		assertEquals(0, processReverse(audioProcessing, buffer));
+	}
 
-		assertEquals(0, audioProcessing.processReverseStream(data, streamConfig, streamConfig, data));
+	@Test
+	void streamDelay() {
+		int delay = 70;
+
+		audioProcessing.setStreamDelayMs(delay);
+
+		assertEquals(delay, audioProcessing.getStreamDelayMs());
+	}
+
+	private static int process(AudioProcessing audioProcessing, ProcessBuffer buffer) {
+		return audioProcessing.processStream(buffer.src, buffer.streamConfigIn,
+				buffer.streamConfigOut, buffer.dst);
+	}
+
+	private static int processReverse(AudioProcessing audioProcessing, ProcessBuffer buffer) {
+		return audioProcessing.processReverseStream(buffer.src, buffer.streamConfigIn,
+				buffer.streamConfigOut, buffer.dst);
+	}
+
+
+
+	private static class ProcessBuffer {
+
+		final int bytesPerFrame = 2;
+
+		final int channels;
+
+		final int sampleRateIn;
+		final int sampleRateOut;
+
+		final int nSamplesIn;
+		final int nSamplesOut;
+
+		final int frameSizeIn;
+		final int frameSizeOut;
+
+		byte[] src;
+		byte[] dst;
+
+		AudioProcessingStreamConfig streamConfigIn;
+		AudioProcessingStreamConfig streamConfigOut;
+
+
+		ProcessBuffer(int sampleRateIn, int sampleRateOut, int channels) {
+			this.channels = channels;
+			this.sampleRateIn = sampleRateIn;
+			this.sampleRateOut = sampleRateOut;
+
+			nSamplesIn = sampleRateIn / 100 * channels; // 10 ms frame
+			nSamplesOut = sampleRateOut / 100 * channels;
+			frameSizeIn = nSamplesIn * bytesPerFrame;
+			frameSizeOut = nSamplesOut * bytesPerFrame;
+
+			src = new byte[frameSizeIn];
+			dst = new byte[frameSizeOut];
+
+			streamConfigIn = new AudioProcessingStreamConfig(sampleRateIn, channels);
+			streamConfigOut = new AudioProcessingStreamConfig(sampleRateOut, channels);
+		}
 	}
 }
