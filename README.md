@@ -9,7 +9,7 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -20,21 +20,21 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   <tr>
     <td>Linux</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.3.0/webrtc-javafx-demo-0.3.0-linux-x86_64.jar">demo app</a></td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.4.0/webrtc-javafx-demo-0.4.0-linux-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>macOS</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.3.0/webrtc-javafx-demo-0.3.0-macos-x86_64.jar">demo app</a></td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.4.0/webrtc-javafx-demo-0.4.0-macos-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>Windows</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.3.0/webrtc-javafx-demo-0.3.0-windows-x86_64.jar">demo app</a></td>
+    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.4.0/webrtc-javafx-demo-0.4.0-windows-x86_64.jar">demo app</a></td>
   </tr>
 </table>
 
-The native libraries were build with WebRTC branch M92/4515.
+The native libraries were build with WebRTC branch M95/4638.
 
 ### Demo
 
@@ -73,6 +73,6 @@ On the first run, the WebRTC source tree will be loaded into the `/<user home>/w
 
 | Parameter          | Description                                            | Default Value               |
 | ------------------ | ------------------------------------------------------ | --------------------------- |
-| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/4515           |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/4638           |
 | webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user_home\>/webrtc       |
 | webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user_home\>/webrtc/build |
