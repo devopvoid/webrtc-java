@@ -72,7 +72,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
 	jbyte * dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
 
-	int result = apm->ProcessStream(reinterpret_cast<int16_t *>(srcPtr), srcConfig, dstConfig, reinterpret_cast<int16_t *>(dstPtr));
+	int result = apm->ProcessStream(reinterpret_cast<const int16_t *>(srcPtr), srcConfig, dstConfig, reinterpret_cast<int16_t *>(dstPtr));
 
 	if (isDstCopy == JNI_TRUE) {
 		jsize dstLength = env->GetArrayLength(dest);

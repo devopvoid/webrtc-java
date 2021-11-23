@@ -39,19 +39,30 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
-		const jbyte * buffer = static_cast<const jbyte *>(audioSamples);
-		jbyteArray dataArray = env->NewByteArray(0);
+		jsize bufferSize = nSamples * nBytesPerSample;
+		jbyteArray dataArray = env->NewByteArray(bufferSize);
+		jsize bufferLength = env->GetArrayLength(dataArray);
 
 		*elapsed_time_ms = 0;
 		*ntp_time_ms = 0;
 
+		if (bufferLength < bufferSize) {
+			env->DeleteLocalRef(dataArray);
+			return 0;
+		}
+
 		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, dataArray, nSamples, nBytesPerSample, nChannels, samplesPerSec);
 
-		if (nSamplesOut < nSamples) {
-			// EOF. Fill with silence.
-			nSamplesOut = nSamples * nChannels;
+		if (nSamplesOut > 0) {
+			jbyte * buf = env->GetByteArrayElements(dataArray, NULL);
 
-			std::memset(audioSamples, 0, nSamples * nBytesPerSample);
+			std::memcpy(audioSamples, buf, bufferSize);
+
+			env->ReleaseByteArrayElements(dataArray, buf, JNI_ABORT);
+		}
+		else if (nSamplesOut < nSamples) {
+			// EOF. Fill with silence.
+			std::memset(audioSamples, 0, bufferSize);
 		}
 
 		return 0;
