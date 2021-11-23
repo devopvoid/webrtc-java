@@ -59,7 +59,12 @@ namespace jni
 			config.level_estimation.enabled = levelEstimation.getBoolean(javaLevelEstimationClass->enabled);
 
 			config.noise_suppression.enabled = noiseSuppression.getBoolean(javaNoiseSuppressionClass->enabled);
-			config.noise_suppression.level = jni::JavaEnums::toNative<webrtc::AudioProcessing::Config::NoiseSuppression::Level>(env, noiseSuppression.getObject(javaNoiseSuppressionClass->level));
+
+			JavaLocalRef<jobject> nsLevel = noiseSuppression.getObject(javaNoiseSuppressionClass->level);
+
+			if (nsLevel.get()) {
+				config.noise_suppression.level = jni::JavaEnums::toNative<webrtc::AudioProcessing::Config::NoiseSuppression::Level>(env, nsLevel);
+			}
 
 			config.residual_echo_detector.enabled = residualEchoDetector.getBoolean(javaResidualEchoDetectorClass->enabled);
 
