@@ -77,7 +77,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 
 	if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2) {
 		// Up-mixing, only mono to stereo.
-		// For complex channel layouts an audio converter is required.
+		// For complex channel layouts a channel mixer is required.
 
 		const size_t srcNumSamples = srcConfig.num_samples();
 		const size_t dstNumChannels = dstConfig.num_channels();
@@ -88,13 +88,15 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 		}
 
 		const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
-		int16_t * dstFrame = reinterpret_cast<int16_t*>(dstPtr);
+		int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
 
 		for (int i = srcNumSamples - 1; i >= 0; i--) {
 			for (size_t j = 0; j < dstNumChannels; ++j) {
 				dstFrame[dstNumChannels * i + j] = srcFrame[i];
 			}
 		}
+
+		srcConfig.set_num_channels(dstNumChannels);
 
 		result = apm->ProcessStream(dstFrame, srcConfig, dstConfig, dstFrame);
 	}
@@ -133,7 +135,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 
 	if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2) {
 		// Up-mixing, only mono to stereo.
-		// For complex channel layouts an audio converter is required.
+		// For complex channel layouts a channel mixer is required.
 
 		const size_t srcNumSamples = srcConfig.num_samples();
 		const size_t dstNumChannels = dstConfig.num_channels();
@@ -151,6 +153,8 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 				dstFrame[dstNumChannels * i + j] = srcFrame[i];
 			}
 		}
+
+		srcConfig.set_num_channels(dstNumChannels);
 
 		result = apm->ProcessStream(dstFrame, srcConfig, dstConfig, dstFrame);
 	}

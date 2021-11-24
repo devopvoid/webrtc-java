@@ -69,14 +69,28 @@ class AudioProcessingTest extends TestBase {
 
 	@Test
 	void processByteStream() {
-		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1);
+		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1, 1);
+
+		assertEquals(0, process(audioProcessing, buffer));
+	}
+
+	@Test
+	void processByteStreamDownMix() {
+		ProcessBuffer buffer = new ProcessBuffer(48000, 44100, 2, 1);
+
+		assertEquals(0, process(audioProcessing, buffer));
+	}
+
+	@Test
+	void processByteStreamUpMix() {
+		ProcessBuffer buffer = new ProcessBuffer(48000, 44100, 1, 2);
 
 		assertEquals(0, process(audioProcessing, buffer));
 	}
 
 	@Test
 	void processReverseStream() {
-		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1);
+		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1, 1);
 
 		assertEquals(0, processReverse(audioProcessing, buffer));
 	}
@@ -106,7 +120,8 @@ class AudioProcessingTest extends TestBase {
 
 		final int bytesPerFrame = 2;
 
-		final int channels;
+		final int channelsIn;
+		final int channelsOut;
 
 		final int sampleRateIn;
 		final int sampleRateOut;
@@ -124,21 +139,22 @@ class AudioProcessingTest extends TestBase {
 		AudioProcessingStreamConfig streamConfigOut;
 
 
-		ProcessBuffer(int sampleRateIn, int sampleRateOut, int channels) {
-			this.channels = channels;
+		ProcessBuffer(int sampleRateIn, int sampleRateOut, int channelsIn, int channelsOut) {
 			this.sampleRateIn = sampleRateIn;
 			this.sampleRateOut = sampleRateOut;
+			this.channelsIn = channelsIn;
+			this.channelsOut = channelsOut;
 
-			nSamplesIn = sampleRateIn / 100 * channels; // 10 ms frame
-			nSamplesOut = sampleRateOut / 100 * channels;
-			frameSizeIn = nSamplesIn * bytesPerFrame;
-			frameSizeOut = nSamplesOut * bytesPerFrame;
+			nSamplesIn = sampleRateIn / 100; // 10 ms frame
+			nSamplesOut = sampleRateOut / 100;
+			frameSizeIn = nSamplesIn * bytesPerFrame * channelsIn;
+			frameSizeOut = Math.max(nSamplesIn, nSamplesOut) * bytesPerFrame * channelsOut;
 
 			src = new byte[frameSizeIn];
 			dst = new byte[frameSizeOut];
 
-			streamConfigIn = new AudioProcessingStreamConfig(sampleRateIn, channels);
-			streamConfigOut = new AudioProcessingStreamConfig(sampleRateOut, channels);
+			streamConfigIn = new AudioProcessingStreamConfig(sampleRateIn, channelsIn);
+			streamConfigOut = new AudioProcessingStreamConfig(sampleRateOut, channelsOut);
 		}
 	}
 }

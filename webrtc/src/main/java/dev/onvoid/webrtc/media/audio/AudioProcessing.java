@@ -51,6 +51,35 @@ public class AudioProcessing extends DisposableNativeObject {
 	}
 
 	/**
+	 * Get the audio processing statistics.
+	 *
+	 * @return The audio processing statistics.
+	 */
+	public AudioProcessingStats getStatistics() {
+		updateStats();
+
+		return stats;
+	}
+
+	/**
+	 * Calculates the buffer size in bytes for the destination buffer used in
+	 * {@link #processStream} and {@link #processReverseStream}.
+	 *
+	 * @param inputConfig  The config that describes the audio input format.
+	 * @param outputConfig The config that describes the desired audio output
+	 *                     format.
+	 *
+	 * @return The target buffer size in bytes.
+	 */
+	public int getTargetBufferSize(AudioProcessingStreamConfig inputConfig,
+			AudioProcessingStreamConfig outputConfig) {
+		int nSamplesIn = inputConfig.sampleRate / 100;
+		int nSamplesOut = outputConfig.sampleRate / 100;
+
+		return Math.max(nSamplesIn, nSamplesOut) * outputConfig.channels * 2;
+	}
+
+	/**
 	 * Set the {@link AudioProcessingConfig} to enable/disable processing
 	 * effects. Should be called prior processing, during processing may cause
 	 * undesired effects and affect the audio quality.
@@ -91,17 +120,6 @@ public class AudioProcessing extends DisposableNativeObject {
 	 * @see #setStreamDelayMs(int)
 	 */
 	public native int getStreamDelayMs();
-
-	/**
-	 * Get the audio processing statistics.
-	 *
-	 * @return The audio processing statistics.
-	 */
-	public AudioProcessingStats getStatistics() {
-		updateStats();
-
-		return stats;
-	}
 
 	/**
 	 * Accepts and produces a 10 ms frame interleaved 16-bit PCM audio as
