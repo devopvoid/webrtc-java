@@ -90,7 +90,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 			return -9;
 		}
 
-		for (int i = srcNumSamples - 1; i >= 0; i--) {
+		for (int i = static_cast<int>(srcNumSamples) - 1; i >= 0; i--) {
 			for (size_t j = 0; j < dstNumChannels; ++j) {
 				dstFrame[dstNumChannels * i + j] = srcFrame[i];
 			}
@@ -148,7 +148,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 			return -9;
 		}
 
-		for (int i = srcNumSamples - 1; i >= 0; i--) {
+		for (int i = static_cast<int>(srcNumSamples) - 1; i >= 0; i--) {
 			for (size_t j = 0; j < dstNumChannels; ++j) {
 				dstFrame[dstNumChannels * i + j] = srcFrame[i];
 			}

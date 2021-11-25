@@ -43,7 +43,7 @@ namespace jni
 		*elapsed_time_ms = 0;
 		*ntp_time_ms = 0;
 
-		jsize bufferSize = nSamples * nBytesPerSample;
+		jsize bufferSize = static_cast<jsize>(nSamples * nBytesPerSample);
 
 		if (buffer.get() == nullptr) {
 			jbyteArray dataArray = env->NewByteArray(bufferSize);
