@@ -26,11 +26,18 @@
 		}																				\
 	} while(0)
 
-#define CHECK_HANDLEV(handle, retValue) \
+#define CHECK_HANDLEV(handle, retValue)													\
 	do {																				\
 		if (handle == NULL) {															\
 			JNIEnv * env = AttachCurrentThread();										\
 			env->Throw(jni::JavaNullPointerException(env, "Object handle is null"));	\
+			return retValue;															\
+		}																				\
+	} while(0)
+
+#define CHECK_HANDLE_DEFAULT(handle, retValue)											\
+	do {																				\
+		if (handle == NULL) {															\
 			return retValue;															\
 		}																				\
 	} while(0)

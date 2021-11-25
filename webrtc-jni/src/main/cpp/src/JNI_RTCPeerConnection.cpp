@@ -447,7 +447,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getSignalingS
 (JNIEnv * env, jobject caller)
 {
 	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
-	CHECK_HANDLEV(pc, nullptr);
+	CHECK_HANDLE_DEFAULT(pc, jni::JavaEnums::toJava(env, webrtc::PeerConnectionInterface::SignalingState::kClosed).release());
 
 	return jni::JavaEnums::toJava(env, pc->signaling_state()).release();
 }
@@ -456,7 +456,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getIceGatheri
 (JNIEnv * env, jobject caller)
 {
 	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
-	CHECK_HANDLEV(pc, nullptr);
+	CHECK_HANDLE_DEFAULT(pc, jni::JavaEnums::toJava(env, webrtc::PeerConnectionInterface::IceGatheringState::kIceGatheringNew).release());
 
 	return jni::JavaEnums::toJava(env, pc->ice_gathering_state()).release();
 }
@@ -465,7 +465,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getIceConnect
 (JNIEnv * env, jobject caller)
 {
 	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
-	CHECK_HANDLEV(pc, nullptr);
+	CHECK_HANDLE_DEFAULT(pc, jni::JavaEnums::toJava(env, webrtc::PeerConnectionInterface::IceConnectionState::kIceConnectionClosed).release());
 
 	return jni::JavaEnums::toJava(env, pc->ice_connection_state()).release();
 }
@@ -474,7 +474,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getConnection
 (JNIEnv * env, jobject caller)
 {
 	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
-	CHECK_HANDLEV(pc, nullptr);
+	CHECK_HANDLE_DEFAULT(pc, jni::JavaEnums::toJava(env, webrtc::PeerConnectionInterface::PeerConnectionState::kClosed).release());
 
 	return jni::JavaEnums::toJava(env, pc->peer_connection_state()).release();
 }

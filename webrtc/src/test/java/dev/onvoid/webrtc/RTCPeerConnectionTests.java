@@ -374,4 +374,24 @@ class RTCPeerConnectionTests extends TestBase {
 		assertNotNull(statsReport.getStats());
 		assertFalse(statsReport.getStats().isEmpty());
 	}
+
+	@Test
+	void statesWhenClosed() {
+		RTCConfiguration config = new RTCConfiguration();
+		PeerConnectionObserver observer = candidate -> { };
+
+		RTCPeerConnection peerConnection = factory.createPeerConnection(config, observer);
+
+		assertEquals(RTCPeerConnectionState.NEW, peerConnection.getConnectionState());
+		assertEquals(RTCSignalingState.STABLE, peerConnection.getSignalingState());
+		assertEquals(RTCIceGatheringState.NEW, peerConnection.getIceGatheringState());
+		assertEquals(RTCIceConnectionState.NEW, peerConnection.getIceConnectionState());
+
+		peerConnection.close();
+
+		assertEquals(RTCPeerConnectionState.CLOSED, peerConnection.getConnectionState());
+		assertEquals(RTCSignalingState.CLOSED, peerConnection.getSignalingState());
+		assertEquals(RTCIceGatheringState.NEW, peerConnection.getIceGatheringState());
+		assertEquals(RTCIceConnectionState.CLOSED, peerConnection.getIceConnectionState());
+	}
 }
