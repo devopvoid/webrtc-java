@@ -58,7 +58,7 @@ namespace jni
 			}
 		}
 
-		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer, nSamples, nBytesPerSample, nChannels, samplesPerSec);
+		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample, nChannels, samplesPerSec);
 
 		if (nSamplesOut > 0) {
 			env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<int8_t *>(audioSamples));
