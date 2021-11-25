@@ -24,6 +24,7 @@
 #include "JavaError.h"
 #include "JavaFactories.h"
 #include "JavaNullPointerException.h"
+#include "JavaRuntimeException.h"
 #include "JavaRef.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
@@ -219,7 +220,16 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 	webrtc::PeerConnectionObserver * observer = new jni::PeerConnectionObserver(env, jni::JavaGlobalRef<jobject>(env, jobserver));
 	webrtc::PeerConnectionDependencies dependencies(observer);
 
-	auto pc = factory->CreatePeerConnection(configuration, std::move(dependencies));
+	auto result = factory->CreatePeerConnectionOrError(configuration, std::move(dependencies));
+
+	if (!result.ok()) {
+		env->Throw(jni::JavaRuntimeException(env, "Create PeerConnection failed: %s %s",
+			ToString(result.error().type()), result.error().message()));
+
+		return nullptr;
+	}
+
+	auto pc = result.MoveValue();
 
 	if (pc != nullptr) {
 		auto javaPeerConnection = jni::JavaFactories::create(env, pc.release());

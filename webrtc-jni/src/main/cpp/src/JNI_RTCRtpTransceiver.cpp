@@ -21,6 +21,7 @@
 #include "JavaFactories.h"
 #include "JavaList.h"
 #include "JavaRef.h"
+#include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
 #include "WebRTCUtils.h"
@@ -73,7 +74,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setDirection
 	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
 	CHECK_HANDLE(transceiver);
 
-	transceiver->SetDirection(jni::JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, jDirection));
+	webrtc::RTCError result = transceiver->SetDirectionWithError(jni::JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, jDirection));
+
+	if (!result.ok()) {
+		env->Throw(jni::JavaRuntimeException(env, "Set direction failed: %s %s",
+			ToString(result.type()), result.message()));
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCurrentDirection
@@ -97,7 +103,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stop
 	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
 	CHECK_HANDLE(transceiver);
 
-	transceiver->Stop();
+	webrtc::RTCError result = transceiver->StopStandard();
+
+	if (!result.ok()) {
+		env->Throw(jni::JavaRuntimeException(env, "Stop transceiver failed: %s %s",
+			ToString(result.type()), result.message()));
+	}
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopped

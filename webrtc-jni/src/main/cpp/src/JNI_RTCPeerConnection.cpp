@@ -206,7 +206,16 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_createDataCha
 	webrtc::DataChannelInit dict = jni::RTCDataChannelInit::toNative(env, jni::JavaLocalRef<jobject>(env, jDict));
 
 	try {
-		auto dataChannel = pc->CreateDataChannel(label, &dict);
+		auto result = pc->CreateDataChannelOrError(label, &dict);
+
+		if (!result.ok()) {
+			env->Throw(jni::JavaRuntimeException(env, "Create DataChannel failed: %s %s",
+				ToString(result.error().type()), result.error().message()));
+
+			return nullptr;
+		}
+
+		auto dataChannel = result.MoveValue();
 
 		return jni::JavaFactories::create(env, dataChannel.release()).release();
 	}
