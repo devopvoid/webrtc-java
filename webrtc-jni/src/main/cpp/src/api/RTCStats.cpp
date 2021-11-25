@@ -168,6 +168,34 @@ namespace jni
 				case webrtc::RTCStatsMemberInterface::kSequenceString:
 					return jni::static_java_ref_cast<jobject>(env,
 						JavaString::createArray(env, *member.cast_to<webrtc::RTCStatsMember<std::vector<std::string>>>()));
+
+				case webrtc::RTCStatsMemberInterface::kMapStringDouble:
+				{
+					std::map<std::string, double> map = *member.cast_to<webrtc::RTCStatsMember<std::map<std::string, double>>>();
+
+					JavaHashMap memberMap(env);
+
+					for (const auto& item : map) {
+						memberMap.put(jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, item.first)),
+							Double::create(env, item.second));
+					}
+
+					return jni::static_java_ref_cast<jobject>(env, memberMap);
+				}
+
+				case webrtc::RTCStatsMemberInterface::kMapStringUint64:
+				{
+					std::map<std::string, uint64_t> map = *member.cast_to<webrtc::RTCStatsMember<std::map<std::string, uint64_t>>>();
+
+					JavaHashMap memberMap(env);
+
+					for (const auto& item : map) {
+						memberMap.put(jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, item.first)),
+							JavaBigInteger::toJava(env, rtc::ToString(item.second)));
+					}
+
+					return jni::static_java_ref_cast<jobject>(env, memberMap);
+				}
 			}
 
 			return nullptr;
