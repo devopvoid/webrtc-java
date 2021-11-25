@@ -70,8 +70,11 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 
 	jboolean isDstCopy = JNI_FALSE;
 
-	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
+	jbyte * srcPtr = env->GetByteArrayElements(src, NULL);
 	jbyte * dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
+
+	const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
+	int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
 
 	int result;
 
@@ -87,9 +90,6 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 			return -9;
 		}
 
-		const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
-		int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
-
 		for (int i = srcNumSamples - 1; i >= 0; i--) {
 			for (size_t j = 0; j < dstNumChannels; ++j) {
 				dstFrame[dstNumChannels * i + j] = srcFrame[i];
@@ -102,7 +102,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 	}
 	else {
 		// Will also down-mix if required, e.g. from stereo to mono.
-		result = apm->ProcessStream(reinterpret_cast<const int16_t *>(srcPtr), srcConfig, dstConfig, reinterpret_cast<int16_t *>(dstPtr));
+		result = apm->ProcessStream(srcFrame, srcConfig, dstConfig, dstFrame);
 	}
 
 	if (isDstCopy == JNI_TRUE) {
@@ -131,6 +131,9 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
 	jbyte * dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
 
+	const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
+	int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
+
 	int result;
 
 	if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2) {
@@ -145,9 +148,6 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 			return -9;
 		}
 
-		const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
-		int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
-
 		for (int i = srcNumSamples - 1; i >= 0; i--) {
 			for (size_t j = 0; j < dstNumChannels; ++j) {
 				dstFrame[dstNumChannels * i + j] = srcFrame[i];
@@ -160,7 +160,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 	}
 	else {
 		// Will also down-mix if required, e.g. from stereo to mono.
-		result = apm->ProcessStream(reinterpret_cast<const int16_t *>(srcPtr), srcConfig, dstConfig, reinterpret_cast<int16_t *>(dstPtr));
+		result = apm->ProcessStream(srcFrame, srcConfig, dstConfig, dstFrame);
 	}
 
 	if (isDstCopy == JNI_TRUE) {

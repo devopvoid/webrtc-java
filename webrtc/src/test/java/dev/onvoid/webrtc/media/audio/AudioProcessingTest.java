@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Alex Andres
+ * Copyright 2021 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,13 @@ package dev.onvoid.webrtc.media.audio;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.audio.AudioProcessingConfig.NoiseSuppression;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class AudioProcessingTest extends TestBase {
+class AudioProcessingTest {
 
 	private AudioProcessing audioProcessing;
 

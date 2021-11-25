@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Alex Andres
+ * Copyright 2021 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,13 +19,11 @@ package dev.onvoid.webrtc.media.audio;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.onvoid.webrtc.TestBase;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class AudioResamplerTest extends TestBase {
+class AudioResamplerTest {
 
 	private AudioResampler resampler;
 

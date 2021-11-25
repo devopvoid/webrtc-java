@@ -54,6 +54,7 @@ namespace jni
 
 		private:
 			JavaGlobalRef<jobject> source;
+			JavaGlobalRef<jbyteArray> buffer;
 
 			const std::shared_ptr<JavaAudioSourceClass> javaClass;
 	};

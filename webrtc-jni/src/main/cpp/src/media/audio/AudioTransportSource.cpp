@@ -24,6 +24,7 @@ namespace jni
 {
 	AudioTransportSource::AudioTransportSource(JNIEnv * env, const JavaGlobalRef<jobject> & source) :
 		source(source),
+		buffer(nullptr),
 		javaClass(JavaClasses::get<JavaAudioSourceClass>(env))
 	{
 	}
@@ -39,30 +40,28 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
-		jsize bufferSize = nSamples * nBytesPerSample;
-		jbyteArray dataArray = env->NewByteArray(bufferSize);
-		jsize bufferLength = env->GetArrayLength(dataArray);
-
 		*elapsed_time_ms = 0;
 		*ntp_time_ms = 0;
 
-		if (bufferLength < bufferSize) {
-			env->DeleteLocalRef(dataArray);
-			return 0;
+		jsize bufferSize = nSamples * nBytesPerSample;
+
+		if (buffer.get() == nullptr) {
+			jbyteArray dataArray = env->NewByteArray(bufferSize);
+
+			buffer = JavaGlobalRef<jbyteArray>(env, dataArray);
+
+			jsize bufferLength = env->GetArrayLength(buffer);
+
+			if (bufferLength < bufferSize) {
+				buffer = JavaGlobalRef<jbyteArray>(env, nullptr);
+				return 0;
+			}
 		}
 
-		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, dataArray, nSamples, nBytesPerSample, nChannels, samplesPerSec);
+		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer, nSamples, nBytesPerSample, nChannels, samplesPerSec);
 
 		if (nSamplesOut > 0) {
-			jbyte * buf = env->GetByteArrayElements(dataArray, NULL);
-
-			std::memcpy(audioSamples, buf, bufferSize);
-
-			env->ReleaseByteArrayElements(dataArray, buf, JNI_ABORT);
-		}
-		else if (nSamplesOut < nSamples) {
-			// EOF. Fill with silence.
-			std::memset(audioSamples, 0, bufferSize);
+			env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<int8_t *>(audioSamples));
 		}
 
 		return 0;
