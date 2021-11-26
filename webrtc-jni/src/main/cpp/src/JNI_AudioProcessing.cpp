@@ -156,11 +156,11 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 
 		srcConfig.set_num_channels(dstNumChannels);
 
-		result = apm->ProcessStream(dstFrame, srcConfig, dstConfig, dstFrame);
+		result = apm->ProcessReverseStream(dstFrame, srcConfig, dstConfig, dstFrame);
 	}
 	else {
 		// Will also down-mix if required, e.g. from stereo to mono.
-		result = apm->ProcessStream(srcFrame, srcConfig, dstConfig, dstFrame);
+		result = apm->ProcessReverseStream(srcFrame, srcConfig, dstConfig, dstFrame);
 	}
 
 	if (isDstCopy == JNI_TRUE) {
