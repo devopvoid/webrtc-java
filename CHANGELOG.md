@@ -1,3 +1,20 @@
+## [0.5.0]() (2021-11-25)
+
+### Enhancement
+
+- Improved audio processing by basic channel up-mixing to avoid additional audio converter ([e665a4a](https://github.com/devopvoid/webrtc-java/commit/e665a4a))
+- AudioConverter implementation for remixing and resampling ([3182d06](https://github.com/devopvoid/webrtc-java/commit/3182d06))
+- Updated RTCStats.cpp to Java mapping ([76769e2](https://github.com/devopvoid/webrtc-java/commit/76769e2))
+- Use new api calls which support RTCError ([e665a4a](https://github.com/devopvoid/webrtc-java/commit/e665a4a))
+
+### Fixed bugs
+
+- Fixed CoInitialize has not been called #43 ([73df466](https://github.com/devopvoid/webrtc-java/commit/73df466))
+- Fixed NPE on RTCPeerConnection.getConnectionState when peer-connectio n has been closed #35 ([e075d60](https://github.com/devopvoid/webrtc-java/commit/e075d60))
+- Fixed NPE in AudioProcessingConfig when no NS level was set ([81164ef](https://github.com/devopvoid/webrtc-java/commit/81164ef))
+- Fixed AudioTransportSource buffer reading ([071cbe9](https://github.com/devopvoid/webrtc-java/commit/071cbe9))
+- Fixed basic channel up-mixing in AudioProcessing ([4717db1](https://github.com/devopvoid/webrtc-java/commit/4717db1))
+
 ## [0.4.0]() (2021-11-21)
 
 ### API changes
