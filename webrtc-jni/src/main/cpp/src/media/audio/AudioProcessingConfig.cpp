@@ -95,12 +95,6 @@ namespace jni
 			gainController.adaptive_digital.adjacent_speech_frames_threshold = gainControlAdaptiveDigital.getInt(javaGainControlAdaptiveDigitalClass->adjacentSpeechFramesThreshold);
 			gainController.adaptive_digital.max_gain_change_db_per_second = gainControlAdaptiveDigital.getFloat(javaGainControlAdaptiveDigitalClass->maxGainChangeDbPerSecond);
 			gainController.adaptive_digital.max_output_noise_level_dbfs = gainControlAdaptiveDigital.getFloat(javaGainControlAdaptiveDigitalClass->maxOutputNoiseLevelDbfs);
-			gainController.adaptive_digital.vad_probability_attack = gainControlAdaptiveDigital.getFloat(javaGainControlAdaptiveDigitalClass->vadProbabilityAttack);
-			gainController.adaptive_digital.level_estimator_adjacent_speech_frames_threshold = gainControlAdaptiveDigital.getInt(javaGainControlAdaptiveDigitalClass->levelEstimatorAdjacentSpeechFramesThreshold);
-			gainController.adaptive_digital.use_saturation_protector = gainControlAdaptiveDigital.getBoolean(javaGainControlAdaptiveDigitalClass->useSaturationProtector);
-			gainController.adaptive_digital.initial_saturation_margin_db = gainControlAdaptiveDigital.getFloat(javaGainControlAdaptiveDigitalClass->initialSaturationMarginDb);
-			gainController.adaptive_digital.extra_saturation_margin_db = gainControlAdaptiveDigital.getFloat(javaGainControlAdaptiveDigitalClass->extraSaturationMarginDb);
-			gainController.adaptive_digital.gain_applier_adjacent_speech_frames_threshold = gainControlAdaptiveDigital.getInt(javaGainControlAdaptiveDigitalClass->gainApplierAdjacentSpeechFramesThreshold);
 
 			return gainController;
 		}
@@ -153,12 +147,6 @@ namespace jni
 			adjacentSpeechFramesThreshold = GetFieldID(env, cls, "adjacentSpeechFramesThreshold", "I");
 			maxGainChangeDbPerSecond = GetFieldID(env, cls, "maxGainChangeDbPerSecond", "F");
 			maxOutputNoiseLevelDbfs = GetFieldID(env, cls, "maxOutputNoiseLevelDbfs", "F");
-			vadProbabilityAttack = GetFieldID(env, cls, "vadProbabilityAttack", "F");
-			levelEstimatorAdjacentSpeechFramesThreshold = GetFieldID(env, cls, "levelEstimatorAdjacentSpeechFramesThreshold", "I");
-			useSaturationProtector = GetFieldID(env, cls, "useSaturationProtector", "Z");
-			initialSaturationMarginDb = GetFieldID(env, cls, "initialSaturationMarginDb", "F");
-			extraSaturationMarginDb = GetFieldID(env, cls, "extraSaturationMarginDb", "F");
-			gainApplierAdjacentSpeechFramesThreshold = GetFieldID(env, cls, "gainApplierAdjacentSpeechFramesThreshold", "I");
 		}
 
 		JavaHighPassFilterClass::JavaHighPassFilterClass(JNIEnv* env)

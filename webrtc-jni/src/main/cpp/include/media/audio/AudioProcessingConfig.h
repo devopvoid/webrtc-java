@@ -90,12 +90,6 @@ namespace jni
 				jfieldID adjacentSpeechFramesThreshold;
 				jfieldID maxGainChangeDbPerSecond;
 				jfieldID maxOutputNoiseLevelDbfs;
-				jfieldID vadProbabilityAttack;
-				jfieldID levelEstimatorAdjacentSpeechFramesThreshold;
-				jfieldID useSaturationProtector;
-				jfieldID initialSaturationMarginDb;
-				jfieldID extraSaturationMarginDb;
-				jfieldID gainApplierAdjacentSpeechFramesThreshold;
 		};
 
 		class JavaHighPassFilterClass : public JavaClass

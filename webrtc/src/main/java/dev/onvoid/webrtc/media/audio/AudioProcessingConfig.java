@@ -70,14 +70,6 @@ public class AudioProcessingConfig {
 			public float maxGainChangeDbPerSecond = 3.0f;
 			public float maxOutputNoiseLevelDbfs = -50.0f;
 
-			public float vadProbabilityAttack = 1.0f;
-
-			public int levelEstimatorAdjacentSpeechFramesThreshold = 12;
-			public boolean useSaturationProtector = true;
-			public float initialSaturationMarginDb = 25.0f;
-			public float extraSaturationMarginDb = 5.0f;
-			public int gainApplierAdjacentSpeechFramesThreshold = 12;
-
 		}
 
 

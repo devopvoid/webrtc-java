@@ -12,7 +12,7 @@
 	<packaging>pom</packaging>
 
 	<properties>
-		<webrtc.branch>branch-heads/4638</webrtc.branch>
+		<webrtc.branch>branch-heads/4664</webrtc.branch>
 		<webrtc.src.dir>${user.home}/webrtc</webrtc.src.dir>
 		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
