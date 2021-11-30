@@ -34,7 +34,6 @@ namespace jni
 				explicit JavaAudioProcessingStatsClass(JNIEnv * env);
 
 				jclass cls;
-				jfieldID outputRmsDbfs;
 				jfieldID voiceDetected;
 				jfieldID echoReturnLoss;
 				jfieldID echoReturnLossEnhancement;

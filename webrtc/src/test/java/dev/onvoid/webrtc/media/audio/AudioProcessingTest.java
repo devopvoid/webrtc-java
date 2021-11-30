@@ -55,7 +55,6 @@ class AudioProcessingTest {
 
 		config.residualEchoDetector.enabled = true;
 		config.transientSuppression.enabled = true;
-		config.levelEstimation.enabled = true;
 		config.voiceDetection.enabled = true;
 
 		audioProcessing.applyConfig(config);

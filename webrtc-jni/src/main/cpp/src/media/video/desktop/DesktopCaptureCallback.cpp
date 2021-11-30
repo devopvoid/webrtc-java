@@ -46,7 +46,7 @@ namespace jni
 		// Crop black window borders.
 		bool fullscreen = cFrame->stride() == (cFrame->size().width() * webrtc::DesktopFrame::kBytesPerPixel);
 
-		if (rtc::IsWindows8OrLater() && !fullscreen) {
+		if (!fullscreen) {
 			const webrtc::DesktopVector & top_left = cFrame->top_left();
 			const webrtc::DesktopSize & size = cFrame->size();
 			const int32_t border = GetSystemMetrics(SM_CXPADDEDBORDER);

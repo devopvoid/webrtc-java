@@ -30,8 +30,6 @@ public class AudioProcessingConfig {
 
 	public final HighPassFilter highPassFilter = new HighPassFilter();
 
-	public final LevelEstimation levelEstimation = new LevelEstimation();
-
 	public final NoiseSuppression noiseSuppression = new NoiseSuppression();
 
 	public final ResidualEchoDetector residualEchoDetector = new ResidualEchoDetector();

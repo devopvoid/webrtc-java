@@ -34,7 +34,6 @@ namespace jni
 			JavaObject obj(env, javaType);
 			JavaObject statsObj(env, obj.getObject(javaClass->stats));
 
-			statsObj.setInt(javaStatsClass->outputRmsDbfs, stats.output_rms_dbfs.value_or(0));
 			statsObj.setBoolean(javaStatsClass->voiceDetected, stats.voice_detected.value_or(false));
 			statsObj.setDouble(javaStatsClass->echoReturnLoss, stats.echo_return_loss.value_or(0));
 			statsObj.setDouble(javaStatsClass->echoReturnLossEnhancement, stats.echo_return_loss_enhancement.value_or(0));

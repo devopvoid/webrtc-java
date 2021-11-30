@@ -37,7 +37,6 @@ namespace jni
 				jfieldID echoCanceller;
 				jfieldID gainControl;
 				jfieldID highPassFilter;
-				jfieldID levelEstimation;
 				jfieldID noiseSuppression;
 				jfieldID residualEchoDetector;
 				jfieldID transientSuppression;
@@ -96,15 +95,6 @@ namespace jni
 		{
 			public:
 				explicit JavaHighPassFilterClass(JNIEnv * env);
-
-				jclass cls;
-				jfieldID enabled;
-		};
-
-		class JavaLevelEstimationClass : public JavaClass
-		{
-			public:
-				explicit JavaLevelEstimationClass(JNIEnv * env);
 
 				jclass cls;
 				jfieldID enabled;

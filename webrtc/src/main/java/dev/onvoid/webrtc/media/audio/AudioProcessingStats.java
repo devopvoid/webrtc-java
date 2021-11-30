@@ -19,19 +19,6 @@ package dev.onvoid.webrtc.media.audio;
 public class AudioProcessingStats {
 
 	/**
-	 * The root-mean-square (RMS) level in dBFS (decibels from digital
-	 * full-scale) of the last capture frame, after processing. It is
-	 * constrained to [-127, 0].
-	 * <p>
-	 * The computation follows: https://tools.ietf.org/html/rfc6465 with the
-	 * intent that it can provide the RTP audio level indication.
-	 * <p>
-	 * Only reported if level estimation is enabled via {@code
-	 * AudioProcessingConfig}.
-	 */
-	public int outputRmsDbfs;
-
-	/**
 	 * True if voice is detected in the last capture frame, after processing.
 	 * <p>
 	 * It is conservative in flagging audio as speech, with low likelihood of

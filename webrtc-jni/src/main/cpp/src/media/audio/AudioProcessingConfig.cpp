@@ -32,7 +32,6 @@ namespace jni
 			const auto javaClass = JavaClasses::get<JavaAudioProcessingConfigClass>(env);
 			const auto javaEchoCancellerClass = JavaClasses::get<JavaEchoCancellerClass>(env);
 			const auto javaHighPassFilterClass = JavaClasses::get<JavaHighPassFilterClass>(env);
-			const auto javaLevelEstimationClass = JavaClasses::get<JavaLevelEstimationClass>(env);
 			const auto javaNoiseSuppressionClass = JavaClasses::get<JavaNoiseSuppressionClass>(env);
 			const auto javaResidualEchoDetectorClass = JavaClasses::get<JavaResidualEchoDetectorClass>(env);
 			const auto javaTransientSuppressionClass = JavaClasses::get<JavaTransientSuppressionClass>(env);
@@ -41,7 +40,6 @@ namespace jni
 			JavaObject obj(env, javaType);
 			JavaObject echoCanceller(env, obj.getObject(javaClass->echoCanceller));
 			JavaObject highPassFilter(env, obj.getObject(javaClass->highPassFilter));
-			JavaObject levelEstimation(env, obj.getObject(javaClass->levelEstimation));
 			JavaObject noiseSuppression(env, obj.getObject(javaClass->noiseSuppression));
 			JavaObject residualEchoDetector(env, obj.getObject(javaClass->residualEchoDetector));
 			JavaObject transientSuppression(env, obj.getObject(javaClass->transientSuppression));
@@ -55,8 +53,6 @@ namespace jni
 			config.gain_controller2 = toGainController2(env, obj.getObject(javaClass->gainControl));
 
 			config.high_pass_filter.enabled = highPassFilter.getBoolean(javaHighPassFilterClass->enabled);
-
-			config.level_estimation.enabled = levelEstimation.getBoolean(javaLevelEstimationClass->enabled);
 
 			config.noise_suppression.enabled = noiseSuppression.getBoolean(javaNoiseSuppressionClass->enabled);
 
@@ -106,7 +102,6 @@ namespace jni
 			echoCanceller = GetFieldID(env, cls, "echoCanceller", "L" PKG_AUDIO "AudioProcessingConfig$EchoCanceller;");
 			gainControl = GetFieldID(env, cls, "gainControl", "L" PKG_AUDIO "AudioProcessingConfig$GainControl;");
 			highPassFilter = GetFieldID(env, cls, "highPassFilter", "L" PKG_AUDIO "AudioProcessingConfig$HighPassFilter;");
-			levelEstimation = GetFieldID(env, cls, "levelEstimation", "L" PKG_AUDIO "AudioProcessingConfig$LevelEstimation;");
 			noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "L" PKG_AUDIO "AudioProcessingConfig$NoiseSuppression;");
 			residualEchoDetector = GetFieldID(env, cls, "residualEchoDetector", "L" PKG_AUDIO "AudioProcessingConfig$ResidualEchoDetector;");
 			transientSuppression = GetFieldID(env, cls, "transientSuppression", "L" PKG_AUDIO "AudioProcessingConfig$TransientSuppression;");
@@ -152,13 +147,6 @@ namespace jni
 		JavaHighPassFilterClass::JavaHighPassFilterClass(JNIEnv* env)
 		{
 			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$HighPassFilter");
-
-			enabled = GetFieldID(env, cls, "enabled", "Z");
-		}
-
-		JavaLevelEstimationClass::JavaLevelEstimationClass(JNIEnv* env)
-		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$LevelEstimation");
 
 			enabled = GetFieldID(env, cls, "enabled", "Z");
 		}
