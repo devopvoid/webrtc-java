@@ -14,14 +14,6 @@ namespace jni
 	{
 	}
 
-	void JavaContext::initialize(JNIEnv * env)
-	{
-	}
-
-	void JavaContext::destroy(JNIEnv * env)
-	{
-	}
-
 	JavaVM * JavaContext::getVM()
 	{
 		return vm;

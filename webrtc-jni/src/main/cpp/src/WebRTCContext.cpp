@@ -18,6 +18,7 @@
 #include "api/DataBufferFactory.h"
 #include "api/RTCStats.h"
 #include "Exception.h"
+#include "JavaClassLoader.h"
 #include "JavaError.h"
 #include "JavaEnums.h"
 #include "JavaFactories.h"
@@ -55,8 +56,6 @@ namespace jni
 
 	void WebRTCContext::initialize(JNIEnv * env)
 	{
-		JavaContext::initialize(env);
-
 		if (!rtc::InitializeSSL()) {
 			throw Exception("Initialize SSL failed");
 		}
@@ -96,7 +95,23 @@ namespace jni
 		JavaFactories::add<webrtc::RtpTransceiverInterface>(env, PKG"RTCRtpTransceiver");
 		JavaFactories::add<webrtc::DataBuffer>(std::make_unique<DataBufferFactory>(env, PKG"RTCDataChannelBuffer"));
 
-		initDeviceManagers();
+		initializeClassLoader(env, PKG_INTERNAL"NativeClassLoader");
+		initializeDeviceManagers();
+	}
+
+	void WebRTCContext::initializeClassLoader(JNIEnv* env, const char * loaderName)
+	{
+		auto javaClass = JavaLocalRef<jclass>(env, FindClass(env, loaderName));
+
+		if (ExceptionCheck(env)) {
+			return;
+		}
+
+		auto javaGet = GetStaticMethod(env, javaClass, "getClassLoader", "()Ljava/lang/ClassLoader;");
+
+		auto loaderRef = jni::JavaGlobalRef<jobject>(env, env->CallStaticObjectMethod(javaClass, javaGet));
+
+		InitClassLoader(env, loaderRef);
 	}
 
 	void WebRTCContext::destroy(JNIEnv * env)
@@ -107,8 +122,6 @@ namespace jni
 
 		audioDevManager = nullptr;
 		videoDevManager = nullptr;
-
-		JavaContext::destroy(env);
 	}
 
 	avdev::AudioDeviceManager * WebRTCContext::getAudioDeviceManager()
@@ -121,7 +134,7 @@ namespace jni
 		return videoDevManager.get();
 	}
 
-	void WebRTCContext::initDeviceManagers()
+	void WebRTCContext::initializeDeviceManagers()
 	{
 #ifdef _WIN32
 		audioDevManager = std::make_unique<avdev::WindowsAudioDeviceManager>();

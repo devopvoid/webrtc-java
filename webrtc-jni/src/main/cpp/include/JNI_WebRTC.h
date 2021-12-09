@@ -17,12 +17,13 @@
 #ifndef JNI_WEBRTC_H_
 #define JNI_WEBRTC_H_
 
-#define PKG         "dev/onvoid/webrtc/"
-#define PKG_LOG     "dev/onvoid/webrtc/logging/"
-#define PKG_MEDIA   "dev/onvoid/webrtc/media/"
-#define PKG_AUDIO   "dev/onvoid/webrtc/media/audio/"
-#define PKG_VIDEO   "dev/onvoid/webrtc/media/video/"
-#define PKG_DESKTOP "dev/onvoid/webrtc/media/video/desktop/"
+#define PKG          "dev/onvoid/webrtc/"
+#define PKG_INTERNAL "dev/onvoid/webrtc/internal/"
+#define PKG_LOG      "dev/onvoid/webrtc/logging/"
+#define PKG_MEDIA    "dev/onvoid/webrtc/media/"
+#define PKG_AUDIO    "dev/onvoid/webrtc/media/audio/"
+#define PKG_VIDEO    "dev/onvoid/webrtc/media/video/"
+#define PKG_DESKTOP  "dev/onvoid/webrtc/media/video/desktop/"
 
 #define BOOLEAN_SIG     "Ljava/lang/Boolean;"
 #define DOUBLE_SIG      "Ljava/lang/Double;"

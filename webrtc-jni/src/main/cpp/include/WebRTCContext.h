@@ -33,13 +33,14 @@ namespace jni
 			~WebRTCContext() = default;
 
 			void initialize(JNIEnv * env) override;
+			void initializeClassLoader(JNIEnv* env, const char * loaderName) override;
 			void destroy(JNIEnv * env) override;
 
 			avdev::AudioDeviceManager * getAudioDeviceManager();
 			avdev::VideoDeviceManager * getVideoDeviceManager();
 
 		private:
-			void initDeviceManagers();
+			void initializeDeviceManagers();
 
 		private:
 			std::unique_ptr<avdev::AudioDeviceManager> audioDevManager;

@@ -33,8 +33,9 @@ namespace jni
 			void operator=(const JavaContext &) = delete;
 			JavaContext & operator=(JavaContext &&) = delete;
 
-			virtual void initialize(JNIEnv * env);
-			virtual void destroy(JNIEnv * env);
+			virtual void initialize(JNIEnv * env) = 0;
+			virtual void initializeClassLoader(JNIEnv * env, const char * loaderName) = 0;
+			virtual void destroy(JNIEnv * env) = 0;
 
 			JavaVM * getVM();
 

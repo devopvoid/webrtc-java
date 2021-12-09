@@ -7,6 +7,7 @@
 
 #include "Exception.h"
 #include "JavaUtils.h"
+#include "JavaClassLoader.h"
 #include "JavaContext.h"
 #include "JavaError.h"
 #include "JavaIterable.h"
@@ -60,7 +61,7 @@ void ThrowCxxJavaException(JNIEnv * env)
 
 jclass FindClass(JNIEnv * env, const char * name)
 {
-	jclass cls = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass(name)));
+	jclass cls = reinterpret_cast<jclass>(env->NewGlobalRef(jni::ClassLoaderGetClass(env, name)));
 
 	if (cls == nullptr) {
 		ExceptionCheck(env);

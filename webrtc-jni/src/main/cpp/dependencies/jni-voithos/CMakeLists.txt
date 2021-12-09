@@ -12,6 +12,7 @@ target_sources(${PROJECT_NAME}
 		include/JavaBigInteger.h
 		include/JavaClasses.h
 		include/JavaClass.h
+		include/JavaClassLoader.h
 		include/JavaClassUtils.h
 		include/JavaContext.h
 		include/JavaDimension.h
@@ -40,6 +41,7 @@ target_sources(${PROJECT_NAME}
 		src/Exception.cpp
 		src/JavaArrayList.cpp
 		src/JavaBigInteger.cpp
+		src/JavaClassLoader.cpp
 		src/JavaClassUtils.cpp
 		src/JavaContext.cpp
 		src/JavaDimension.cpp
