@@ -96,7 +96,6 @@ namespace jni
 		JavaFactories::add<webrtc::DataBuffer>(std::make_unique<DataBufferFactory>(env, PKG"RTCDataChannelBuffer"));
 
 		initializeClassLoader(env, PKG_INTERNAL"NativeClassLoader");
-		initializeDeviceManagers();
 	}
 
 	void WebRTCContext::initializeClassLoader(JNIEnv* env, const char * loaderName)
@@ -126,26 +125,48 @@ namespace jni
 
 	avdev::AudioDeviceManager * WebRTCContext::getAudioDeviceManager()
 	{
+		std::unique_lock<std::mutex> mlock(aMutex);
+
+		if (audioDevManager == nullptr) {
+			initializeAudioManager();
+		}
+
 		return audioDevManager.get();
 	}
 
 	avdev::VideoDeviceManager * WebRTCContext::getVideoDeviceManager()
 	{
+		std::unique_lock<std::mutex> mlock(vMutex);
+
+		if (videoDevManager == nullptr) {
+			initializeVideoManager();
+		}
+
 		return videoDevManager.get();
 	}
 
-	void WebRTCContext::initializeDeviceManagers()
+	void WebRTCContext::initializeAudioManager()
 	{
 #ifdef _WIN32
 		audioDevManager = std::make_unique<avdev::WindowsAudioDeviceManager>();
-		videoDevManager = std::make_unique<avdev::WindowsVideoDeviceManager>();
 #endif
 #ifdef __linux__
 		audioDevManager = std::make_unique<avdev::PulseAudioDeviceManager>();
-		videoDevManager = std::make_unique<avdev::V4l2VideoDeviceManager>();
 #endif
 #ifdef __APPLE__
 		audioDevManager = std::make_unique<avdev::CoreAudioDeviceManager>();
+#endif
+	}
+
+	void WebRTCContext::initializeVideoManager()
+	{
+#ifdef _WIN32
+		videoDevManager = std::make_unique<avdev::WindowsVideoDeviceManager>();
+#endif
+#ifdef __linux__
+		videoDevManager = std::make_unique<avdev::V4l2VideoDeviceManager>();
+#endif
+#ifdef __APPLE__
 		videoDevManager = std::make_unique<avdev::AVFVideoDeviceManager>();
 #endif
 	}

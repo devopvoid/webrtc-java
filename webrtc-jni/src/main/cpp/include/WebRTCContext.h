@@ -23,6 +23,7 @@
 
 #include <jni.h>
 #include <memory>
+#include <mutex>
 
 namespace jni
 {
@@ -40,9 +41,12 @@ namespace jni
 			avdev::VideoDeviceManager * getVideoDeviceManager();
 
 		private:
-			void initializeDeviceManagers();
+			void initializeAudioManager();
+			void initializeVideoManager();
 
 		private:
+			std::mutex aMutex;
+			std::mutex vMutex;
 			std::unique_ptr<avdev::AudioDeviceManager> audioDevManager;
 			std::unique_ptr<avdev::VideoDeviceManager> videoDevManager;
 	};
