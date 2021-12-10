@@ -60,6 +60,40 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_removeDeviceCha
 	}
 }
 
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAudioRenderDevice
+(JNIEnv * env, jclass caller)
+{
+	jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+
+	auto device = context->getAudioDeviceManager()->getDefaultAudioPlaybackDevice();
+
+	try {
+		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+
+	return nullptr;
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAudioCaptureDevice
+(JNIEnv * env, jclass caller)
+{
+	jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+
+	auto device = context->getAudioDeviceManager()->getDefaultAudioCaptureDevice();
+
+	try {
+		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+
+	return nullptr;
+}
+
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioRenderDevices
 (JNIEnv * env, jclass caller)
 {

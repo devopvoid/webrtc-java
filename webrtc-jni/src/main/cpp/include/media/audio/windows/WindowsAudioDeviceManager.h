@@ -36,10 +36,14 @@ namespace jni
 				std::set<AudioDevicePtr> getAudioCaptureDevices() override;
 				std::set<AudioDevicePtr> getAudioPlaybackDevices() override;
 
+				AudioDevicePtr getDefaultAudioCaptureDevice() override;
+				AudioDevicePtr getDefaultAudioPlaybackDevice() override;
+
 			private:
 				void enumerateDevices(EDataFlow dataFlow);
 				void addDevice(LPCWSTR deviceId);
 				void removeDevice(LPCWSTR deviceId);
+				AudioDevicePtr createDefaultAudioDevice(const EDataFlow & dataFlow);
 				AudioDevicePtr createAudioDevice(LPCWSTR deviceId, EDataFlow * dataFlow);
 				bool insertAudioDevice(AudioDevicePtr device, EDataFlow dataFlow);
 				void removeAudioDevice(DeviceList<AudioDevicePtr> & devices, std::string id);
