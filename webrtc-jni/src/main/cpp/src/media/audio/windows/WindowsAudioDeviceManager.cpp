@@ -36,8 +36,6 @@ namespace jni
 			HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL, CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (void**)&deviceEnumerator);
 			THROW_IF_FAILED(hr, "MMF: Create device enumerator failed");
 
-			enumerateDevices(eAll);
-
 			deviceEnumerator->RegisterEndpointNotificationCallback(this);
 		}
 
@@ -46,6 +44,16 @@ namespace jni
 			if (deviceEnumerator) {
 				deviceEnumerator->UnregisterEndpointNotificationCallback(this);
 			}
+		}
+
+		AudioDevicePtr WindowsAudioDeviceManager::getDefaultAudioCaptureDevice()
+		{
+			return createDefaultAudioDevice(EDataFlow::eCapture);
+		}
+
+		AudioDevicePtr WindowsAudioDeviceManager::getDefaultAudioPlaybackDevice()
+		{
+			return createDefaultAudioDevice(EDataFlow::eRender);
 		}
 
 		std::set<AudioDevicePtr> WindowsAudioDeviceManager::getAudioCaptureDevices()
@@ -145,6 +153,38 @@ namespace jni
 
 			removeAudioDevice(captureDevices, id);
 			removeAudioDevice(playbackDevices, id);
+		}
+
+		AudioDevicePtr WindowsAudioDeviceManager::createDefaultAudioDevice(const EDataFlow& dataFlow)
+		{
+			MFInitializer initializer;
+			ComPtr<IMMDeviceCollection> deviceCollection;
+			ComPtr<IMMDevice> defaultDevice;
+			ComPtr<IPropertyStore> propertyStore;
+			LPWSTR defaultDeviceId = nullptr;
+			PROPVARIANT pv;
+			PropVariantInit(&pv);
+
+			HRESULT hr = deviceEnumerator->GetDefaultAudioEndpoint(dataFlow, eMultimedia, &defaultDevice);
+			THROW_IF_FAILED(hr, "MMF: Get default audio endpoint failed");
+
+			hr = defaultDevice->GetId(&defaultDeviceId);
+			THROW_IF_FAILED(hr, "MMF: Get default device ID failed");
+
+			hr = defaultDevice->OpenPropertyStore(STGM_READ, &propertyStore);
+			THROW_IF_FAILED(hr, "MMF: Device open property store failed");
+
+			hr = propertyStore->GetValue(PKEY_Device_FriendlyName, &pv);
+			THROW_IF_FAILED(hr, "MMF: PropertyStore get friendly name failed");
+
+			std::string id = WideStrToStr(defaultDeviceId);
+			std::string name = WideStrToStr(pv.pwszVal);
+
+			AudioDevicePtr device = std::make_shared<AudioDevice>(name, id);
+
+			PropVariantClear(&pv);
+
+			return device;
 		}
 
 		AudioDevicePtr WindowsAudioDeviceManager::createAudioDevice(LPCWSTR deviceId, EDataFlow * dataFlow)

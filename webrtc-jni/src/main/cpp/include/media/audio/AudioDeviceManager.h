@@ -37,8 +37,8 @@ namespace jni
 				AudioDeviceManager();
 				virtual ~AudioDeviceManager() {};
 
-				AudioDevicePtr getDefaultAudioCaptureDevice();
-				AudioDevicePtr getDefaultAudioPlaybackDevice();
+				virtual AudioDevicePtr getDefaultAudioCaptureDevice();
+				virtual AudioDevicePtr getDefaultAudioPlaybackDevice();
 
 				virtual std::set<AudioDevicePtr> getAudioCaptureDevices() = 0;
 				virtual std::set<AudioDevicePtr> getAudioPlaybackDevices() = 0;

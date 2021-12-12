@@ -13,7 +13,7 @@ extern "C" {
 	 * Signature: (Ldev/onvoid/webrtc/media/DeviceChangeListener;)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_addDeviceChangeListener
-	(JNIEnv *, jclass, jobject);
+	(JNIEnv*, jclass, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_MediaDevices
@@ -21,7 +21,23 @@ extern "C" {
 	 * Signature: (Ldev/onvoid/webrtc/media/DeviceChangeListener;)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_removeDeviceChangeListener
-	(JNIEnv *, jclass, jobject);
+	(JNIEnv*, jclass, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaDevices
+	 * Method:    getDefaultAudioRenderDevice
+	 * Signature: ()Ldev/onvoid/webrtc/media/audio/AudioDevice;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAudioRenderDevice
+	(JNIEnv*, jclass);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaDevices
+	 * Method:    getDefaultAudioCaptureDevice
+	 * Signature: ()Ldev/onvoid/webrtc/media/audio/AudioDevice;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAudioCaptureDevice
+	(JNIEnv*, jclass);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_MediaDevices
@@ -29,7 +45,7 @@ extern "C" {
 	 * Signature: ()Ljava/util/List;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioRenderDevices
-	(JNIEnv *, jclass);
+	(JNIEnv*, jclass);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_MediaDevices
@@ -37,7 +53,7 @@ extern "C" {
 	 * Signature: ()Ljava/util/List;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioCaptureDevices
-	(JNIEnv *, jclass);
+	(JNIEnv*, jclass);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_MediaDevices
@@ -45,7 +61,7 @@ extern "C" {
 	 * Signature: ()Ljava/util/List;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCaptureDevices
-	(JNIEnv *, jclass);
+	(JNIEnv*, jclass);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_MediaDevices
@@ -53,7 +69,7 @@ extern "C" {
 	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoDevice;)Ljava/util/List;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCaptureCapabilities
-	(JNIEnv *, jclass, jobject);
+	(JNIEnv*, jclass, jobject);
 
 #ifdef __cplusplus
 }

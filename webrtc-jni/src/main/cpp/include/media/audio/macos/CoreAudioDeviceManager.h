@@ -34,11 +34,15 @@ namespace jni
 				std::set<AudioDevicePtr> getAudioCaptureDevices() override;
 				std::set<AudioDevicePtr> getAudioPlaybackDevices() override;
 
+				AudioDevicePtr getDefaultAudioCaptureDevice() override;
+				AudioDevicePtr getDefaultAudioPlaybackDevice() override;
+
 			private:
 				void enumerateDevices(const AudioObjectPropertyScope & scope);
 				void onDevicesChanged();
 				void onDefaultDeviceChanged(const AudioObjectPropertyScope & scope, DeviceList<AudioDevicePtr> & devices, const AudioDevicePtr & device);
 				void checkDeviceGone(DeviceList<AudioDevicePtr> & devices, AudioDeviceID * devIDs, const int numDevIDs, const AudioObjectPropertyScope & scope);
+				AudioDevicePtr createDefaultAudioDevice(const AudioObjectPropertyScope & scope);
 				AudioDevicePtr createAudioDevice(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope);
 				bool insertAudioDevice(const AudioDevicePtr & device, const AudioObjectPropertyScope & scope);
 				int getChannelCount(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope);

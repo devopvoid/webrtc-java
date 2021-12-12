@@ -32,8 +32,8 @@ namespace jni
 				PulseAudioDeviceManager();
 				~PulseAudioDeviceManager();
 
-				AudioDevicePtr getDefaultAudioCaptureDevice();
-				AudioDevicePtr getDefaultAudioPlaybackDevice();
+				AudioDevicePtr getDefaultAudioCaptureDevice() override;
+				AudioDevicePtr getDefaultAudioPlaybackDevice() override;
 
 				std::set<AudioDevicePtr> getAudioCaptureDevices() override;
 				std::set<AudioDevicePtr> getAudioPlaybackDevices() override;
@@ -47,8 +47,10 @@ namespace jni
 				static void stateCallback(pa_context * ctx, void * userdata);
 				static void serverInfoCallback(pa_context * ctx, const pa_server_info * info, void * userdata);
 				static void subscribeCallback(pa_context * ctx, pa_subscription_event_type_t t, uint32_t idx, void * userdata);
+				static void getSourceInfoCallback(pa_context * ctx, const pa_source_info * info, int last, void * userdata);
 				static void getSourceCallback(pa_context * ctx, const pa_source_info * info, int last, void * userdata);
 				static void newSourceCallback(pa_context * ctx, const pa_source_info * info, int last, void * userdata);
+				static void getSinkInfoCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata);
 				static void getSinkCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata);
 				static void newSinkCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata);
 
@@ -60,7 +62,9 @@ namespace jni
 				pa_context * context;
 
 				std::string defaultCaptureName;
+				std::string defaultCaptureDescName;
 				std::string defaultPlaybackName;
+				std::string defaultPlaybackDescName;
 
 				std::unordered_map<uint32_t, AudioDevicePtr> deviceMap;
 		};
