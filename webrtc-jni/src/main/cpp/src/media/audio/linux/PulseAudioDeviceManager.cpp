@@ -123,31 +123,23 @@ namespace jni
 
 		AudioDevicePtr PulseAudioDeviceManager::getDefaultAudioCaptureDevice()
 		{
-			if (defaultCaptureName.empty()) {
-				if (!pa_threaded_mainloop_in_thread(mainloop))
-					pa_threaded_mainloop_lock(mainloop);
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				pa_threaded_mainloop_lock(mainloop);
 
-				pa_operation * op = pa_context_get_server_info(context, serverInfoCallback, this);
+			pa_operation * op = pa_context_get_server_info(context, serverInfoCallback, this);
 
-				if (!pa_threaded_mainloop_in_thread(mainloop))
-					iterate(mainloop, op);
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				iterate(mainloop, op);
 
-				if (!pa_threaded_mainloop_in_thread(mainloop))
-					pa_threaded_mainloop_unlock(mainloop);
-			}
+			op = pa_context_get_source_info_by_name(context, defaultCaptureName.c_str(), getSourceInfoCallback, this);
 
-			auto predicate = [this](const std::shared_ptr<AudioDevice> & dev) {
-				return defaultCaptureName == dev->getDescriptor();
-			};
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				iterate(mainloop, op);
 
-			AudioDevicePtr found = captureDevices.findDevice(predicate);
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				pa_threaded_mainloop_unlock(mainloop);
 
-			if (found) {
-				//setDefaultCaptureDevice(found);
-				return found;
-			}
-
-			return *captureDevices.devices().begin();
+			return std::make_shared<AudioDevice>(defaultCaptureDescName, defaultCaptureName);
 		}
 
 		std::set<AudioDevicePtr> PulseAudioDeviceManager::getAudioCaptureDevices()
@@ -166,31 +158,23 @@ namespace jni
 
 		AudioDevicePtr PulseAudioDeviceManager::getDefaultAudioPlaybackDevice()
 		{
-			if (defaultPlaybackName.empty()) {
-				if (!pa_threaded_mainloop_in_thread(mainloop))
-					pa_threaded_mainloop_lock(mainloop);
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				pa_threaded_mainloop_lock(mainloop);
 
-				pa_operation * op = pa_context_get_server_info(context, serverInfoCallback, this);
+			pa_operation * op = pa_context_get_server_info(context, serverInfoCallback, this);
 
-				if (!pa_threaded_mainloop_in_thread(mainloop))
-					iterate(mainloop, op);
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				iterate(mainloop, op);
 
-				if (!pa_threaded_mainloop_in_thread(mainloop))
-					pa_threaded_mainloop_unlock(mainloop);
-			}
+			op = pa_context_get_sink_info_by_name(context, defaultPlaybackName.c_str(), getSinkInfoCallback, this);
 
-			auto predicate = [this](const std::shared_ptr<AudioDevice> & dev) {
-				return defaultPlaybackName == dev->getDescriptor();
-			};
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				iterate(mainloop, op);
 
-			AudioDevicePtr found = playbackDevices.findDevice(predicate);
+			if (!pa_threaded_mainloop_in_thread(mainloop))
+				pa_threaded_mainloop_unlock(mainloop);
 
-			if (found) {
-				//setDefaultCaptureDevice(found);
-				return found;
-			}
-
-			return *playbackDevices.devices().begin();
+			return std::make_shared<AudioDevice>(defaultPlaybackDescName, defaultPlaybackName);
 		}
 
 		std::set<AudioDevicePtr> PulseAudioDeviceManager::getAudioPlaybackDevices()
@@ -207,6 +191,18 @@ namespace jni
 			return playbackDevices.devices();
 		}
 
+		void PulseAudioDeviceManager::getSourceInfoCallback(pa_context * ctx, const pa_source_info * info, int last, void * userdata)
+		{
+			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
+
+			if (last > 0) {
+				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				return;
+			}
+
+			engine->defaultCaptureDescName = info->description;
+		}
+
 		void PulseAudioDeviceManager::getSourceCallback(pa_context * ctx, const pa_source_info * info, int last, void * userdata)
 		{
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
@@ -216,7 +212,9 @@ namespace jni
 				return;
 			}
 
-			engine->insertDevice(engine->captureDevices, info->description, info->name, info->index, false);
+			if (info->monitor_of_sink == PA_INVALID_INDEX) {
+				engine->insertDevice(engine->captureDevices, info->description, info->name, info->index, false);
+			}
 		}
 
 		void PulseAudioDeviceManager::newSourceCallback(pa_context * ctx, const pa_source_info * info, int last, void * userdata)
@@ -229,6 +227,18 @@ namespace jni
 			}
 
 			engine->insertDevice(engine->captureDevices, info->description, info->name, info->index, true);
+		}
+
+		void PulseAudioDeviceManager::getSinkInfoCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata)
+		{
+			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
+
+			if (last > 0) {
+				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				return;
+			}
+
+			engine->defaultPlaybackDescName = info->description;
 		}
 
 		void PulseAudioDeviceManager::getSinkCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata)
