@@ -65,6 +65,16 @@ namespace jni
 			return playbackDevices.devices();
 		}
 
+		AudioDevicePtr CoreAudioDeviceManager::getDefaultAudioCaptureDevice()
+        {
+        	return createDefaultAudioDevice(kAudioObjectPropertyScopeInput);
+        }
+
+        AudioDevicePtr CoreAudioDeviceManager::getDefaultAudioPlaybackDevice()
+        {
+        	return createDefaultAudioDevice(kAudioObjectPropertyScopeOutput);
+        }
+
 		void CoreAudioDeviceManager::enumerateDevices(const AudioObjectPropertyScope & scope) {
 			// Get all devices.
 			AudioObjectPropertyAddress pa;
@@ -254,6 +264,13 @@ namespace jni
 
 				notifyDeviceDisconnected(removed);
 			}
+		}
+
+		AudioDevicePtr CoreAudioDeviceManager::createDefaultAudioDevice(const AudioObjectPropertyScope & scope)
+		{
+			AudioDeviceID defaultID = getDefaultDeviceID(scope);
+
+			return createAudioDevice(defaultID, scope);
 		}
 
 		AudioDevicePtr CoreAudioDeviceManager::createAudioDevice(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope) {
