@@ -61,18 +61,40 @@ namespace jni
 		}
 
 		if (device) {
-			const auto devGuid = device->getDescriptor();
+			std::string devUid;
+			const uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
 
-			captureModule = webrtc::VideoCaptureFactory::Create(devGuid.c_str());
+			for (uint32_t i = 0; i < num; ++i) {
+				char name[size] = { 0 };
+				char guid[size] = { 0 };
+
+				int32_t ret = info->GetDeviceName(i, name, size, guid, size);
+
+				if (ret != 0) {
+					RTC_LOG(WARNING) << "Get video capture device name failed";
+					continue;
+				}
+
+				if (device->getName().compare(name) == 0) {
+					devUid = guid;
+					break;
+				}
+			}
+
+			if (devUid.empty()) {
+				throw new Exception("Device %s not found", device->getName().c_str());
+			}
+
+			captureModule = webrtc::VideoCaptureFactory::Create(devUid.c_str());
 
 			if (!captureModule) {
-				throw new Exception("Create VideoCaptureModule for UID %s failed", devGuid.c_str());
+				throw new Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
 			}
 
 			if (!startCapture()) {
 				destroy();
 
-				throw new Exception("Start video capture for UID %s failed", devGuid.c_str());
+				throw new Exception("Start video capture for UID %s failed", devUid.c_str());
 			}
 		}
 
