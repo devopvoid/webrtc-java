@@ -1,3 +1,20 @@
+## [0.6.0]() (2022-01-17)
+
+### API changes
+
+- Moved to WebRTC branch 4692 (M97) ([29a6e3b](https://github.com/devopvoid/webrtc-java/commit/29a6e3b))
+
+### Enhancement
+
+- Lazy-load audio/video managers #44 ([674b6af](https://github.com/devopvoid/webrtc-java/commit/674b6af))
+- Get default audio devices #50 ([a630f28](https://github.com/devopvoid/webrtc-java/commit/a630f28))
+
+### Fixed bugs
+
+- Fixed AudioProcessing native ProcessReverseStream function call #46 ([e912543](https://github.com/devopvoid/webrtc-java/commit/e912543))
+- Fixed loading classes from native threads with detached class-loaders #49 ([e50249b](https://github.com/devopvoid/webrtc-java/commit/e50249b))
+-  Fixed camera device selection for a video track on Unix systems #30 ([8b0fb4f](https://github.com/devopvoid/webrtc-java/commit/8b0fb4f))
+
 ## [0.5.0]() (2021-11-25)
 
 ### Enhancement
