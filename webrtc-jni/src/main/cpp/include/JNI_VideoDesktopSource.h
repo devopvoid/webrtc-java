@@ -9,11 +9,11 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
-	 * Method:    setDesktopCapturer
-	 * Signature: (Ldev/onvoid/webrtc/media/video/desktop/DesktopCapturer;)V
+	 * Method:    setSourceId
+	 * Signature: (JZ)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setDesktopCapturer
-	(JNIEnv *, jobject, jobject);
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setSourceId
+	(JNIEnv*, jobject, jlong, jboolean);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
@@ -21,7 +21,7 @@ extern "C" {
 	 * Signature: (I)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRate
-	(JNIEnv *, jobject, jint);
+	(JNIEnv*, jobject, jint);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
@@ -29,7 +29,7 @@ extern "C" {
 	 * Signature: ()V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_start
-	(JNIEnv *, jobject);
+	(JNIEnv*, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
@@ -37,7 +37,7 @@ extern "C" {
 	 * Signature: ()V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_stop
-	(JNIEnv *, jobject);
+	(JNIEnv*, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
@@ -45,7 +45,7 @@ extern "C" {
 	 * Signature: ()V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_dispose
-	(JNIEnv *, jobject);
+	(JNIEnv*, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
@@ -53,7 +53,7 @@ extern "C" {
 	 * Signature: ()V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_initialize
-	(JNIEnv *, jobject);
+	(JNIEnv*, jobject);
 
 #ifdef __cplusplus
 }

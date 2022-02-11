@@ -21,19 +21,16 @@
 #include "JavaObject.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/ref_counted_object.h"
 
-#include "modules/desktop_capture/desktop_capturer.h"
-
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setDesktopCapturer
-(JNIEnv * env, jobject caller, jobject jcapturer)
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setSourceId
+(JNIEnv * env, jobject caller, jlong sourceId, jboolean isWindow)
 {
 	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
 	CHECK_HANDLE(videoSource);
 
-	webrtc::DesktopCapturer * capturer = GetHandle<webrtc::DesktopCapturer>(env, jcapturer);
-	CHECK_HANDLE(capturer);
-
-
+	videoSource->setSourceId(static_cast<webrtc::DesktopCapturer::SourceId>(sourceId), static_cast<bool>(isWindow));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRate

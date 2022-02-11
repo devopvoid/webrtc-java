@@ -16,8 +16,6 @@
 
 package dev.onvoid.webrtc.media.video;
 
-import dev.onvoid.webrtc.media.video.desktop.DesktopCapturer;
-
 public class VideoDesktopSource extends VideoTrackSource {
 
 	public VideoDesktopSource() {
@@ -26,7 +24,7 @@ public class VideoDesktopSource extends VideoTrackSource {
 		initialize();
 	}
 
-	public native void setDesktopCapturer(DesktopCapturer capturer);
+	public native void setSourceId(long sourceId, boolean isWindow);
 
 	public native void setFrameRate(int frameRate);
 

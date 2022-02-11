@@ -19,19 +19,25 @@
 
 #include "api/video/i420_buffer.h"
 #include "libyuv/convert.h"
+#include "modules/desktop_capture/cropping_window_capturer.h"
 #include "modules/desktop_capture/desktop_capture_options.h"
 #include "modules/video_capture/video_capture_factory.h"
 #include "third_party/libyuv/include/libyuv/video_common.h"
+#include "system_wrappers/include/sleep.h"
 
-#include <chrono>
+#include "modules/desktop_capture/desktop_capturer.h"
+#include "modules/desktop_capture/desktop_and_cursor_composer.h"
+#include "modules/desktop_capture/mouse_cursor_monitor.h"
 
 namespace jni
 {
 	VideoTrackDesktopSource::VideoTrackDesktopSource() :
-		VideoTrackSource(/*remote=*/false),
-		frameRate(15),
+		AdaptedVideoTrackSource(),
+		frameRate(20),
 		isCapturing(false),
-		capturer(nullptr)
+		sourceState(kInitializing),
+		sourceId(-1),
+		sourceIsWindow(false)
 	{
 	}
 
@@ -40,19 +46,10 @@ namespace jni
 		stop();
 	}
 
-	void VideoTrackDesktopSource::setDesktopCapturer(webrtc::DesktopCapturer * capturer)
+	void VideoTrackDesktopSource::setSourceId(webrtc::DesktopCapturer::SourceId source, bool isWindow)
 	{
-		bool restart = isCapturing;
-
-		if (capturer != nullptr) {
-			stop();
-		}
-
-		this->capturer = capturer;
-
-		if (restart) {
-			start();
-		}
+		this->sourceId = source;
+		this->sourceIsWindow = isWindow;
 	}
 
 	void VideoTrackDesktopSource::setFrameRate(const uint16_t frameRate)
@@ -62,131 +59,136 @@ namespace jni
 
 	void VideoTrackDesktopSource::start()
 	{
-		if (capturer == nullptr) {
-			throw Exception("DesktopCapturer is null");
-		}
-
-		capturer->Start(this);
-		
 		isCapturing = true;
 
-		capturethread = std::thread(&VideoTrackDesktopSource::capture, this);
+		captureThread = rtc::Thread::Create();
+		captureThread->Start();
+		captureThread->PostTask(RTC_FROM_HERE, [&] { capture(); });
 	}
 
 	void VideoTrackDesktopSource::stop()
 	{
-		isCapturing = false;
+		if (isCapturing) {
+			isCapturing = false;
 
-		if (capturethread.joinable()) {
-			capturethread.join();
+			captureThread->Stop();
+			captureThread.reset();
 		}
 	}
 
-	void VideoTrackDesktopSource::AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const rtc::VideoSinkWants & wants)
-	{
-		broadcaster.AddOrUpdateSink(sink, wants);
-
-		updateVideoAdapter();
+	bool VideoTrackDesktopSource::is_screencast() const {
+		return true;
 	}
 
-	void VideoTrackDesktopSource::RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink)
-	{
-		broadcaster.RemoveSink(sink);
-
-		updateVideoAdapter();
+	absl::optional<bool> VideoTrackDesktopSource::needs_denoising() const {
+		return false;
 	}
 
-	rtc::VideoSourceInterface<webrtc::VideoFrame> * VideoTrackDesktopSource::source()
-	{
-		return this;
+	webrtc::MediaSourceInterface::SourceState VideoTrackDesktopSource::state() const {
+		return sourceState;
+	}
+
+	bool VideoTrackDesktopSource::remote() const {
+		return false;
 	}
 
 	void VideoTrackDesktopSource::OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame)
 	{
-		if (result == webrtc::DesktopCapturer::Result::SUCCESS) {
-			int width = frame->rect().width();
-			int height = frame->rect().height();
-
-			int croppedWidth = 0;
-			int croppedHeight = 0;
-			int outWidth = 0;
-			int outHeight = 0;
-
-			int64_t timestamp = rtc::TimeMicros();
-
-			if (!videoAdapter.AdaptFrameResolution(width, height, timestamp * 1000,
-				&croppedWidth, &croppedHeight, &outWidth, &outHeight)) {
-				// Drop frame in order to respect frame rate constraint.
-				return;
-			}
-
-			if (!buffer || buffer->width() != width || buffer->height() != height) {
-				buffer = webrtc::I420Buffer::Create(width, height);
-			}
-
-			const int conversionResult = libyuv::ConvertToI420(
-				frame->data(),
-				static_cast<size_t>(frame->stride()) * webrtc::DesktopFrame::kBytesPerPixel,
-				buffer->MutableDataY(), buffer->StrideY(),
-				buffer->MutableDataU(), buffer->StrideU(),
-				buffer->MutableDataV(), buffer->StrideV(),
-				0, 0,
-				width, height,
-				width, height,
-				libyuv::kRotate0, libyuv::FOURCC_ARGB);
-
-			if (conversionResult >= 0) {
-				if (outWidth != width || outHeight != height) {
-					// Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
-					rtc::scoped_refptr<webrtc::I420Buffer> scaledBuffer = webrtc::I420Buffer::Create(outWidth, outHeight);
-
-					scaledBuffer->ScaleFrom(*buffer);
-
-					broadcaster.OnFrame(webrtc::VideoFrame::Builder()
-						.set_video_frame_buffer(scaledBuffer)
-						.set_rotation(webrtc::kVideoRotation_0)
-						.set_timestamp_us(timestamp)
-						.build());
-				}
-				else {
-					// No adaptations needed, just return the frame as is.
-					webrtc::VideoFrame videoFrame(buffer, webrtc::VideoRotation::kVideoRotation_0, timestamp);
-
-					broadcaster.OnFrame(videoFrame);
-				}
-			}
+		if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
+			return;
 		}
-		else if (result == webrtc::DesktopCapturer::Result::ERROR_TEMPORARY) {
-			RTC_LOG(LS_ERROR) << "Capture frame failed";
+
+		int width = frame->size().width();
+		int height = frame->size().height();
+		int64_t time = rtc::TimeMicros();
+
+		int adapted_width;
+		int adapted_height;
+		int crop_width;
+		int crop_height;
+		int crop_x;
+		int crop_y;
+
+		if (!AdaptFrame(width, height, time, &adapted_width, &adapted_height, &crop_width, &crop_height, &crop_x, &crop_y)) {
+			// Drop frame in order to respect frame rate constraint.
+			return;
 		}
-		else if (result == webrtc::DesktopCapturer::Result::ERROR_PERMANENT) {
-			RTC_LOG(LS_ERROR) << "Capture frame failed permanently";
-			isCapturing = false;
+
+		if (!buffer || buffer->width() != width || buffer->height() != height) {
+			buffer = webrtc::I420Buffer::Create(width, height);
+		}
+
+		const int conversionResult = libyuv::ARGBToI420(frame->data(), frame->stride(),
+			buffer->MutableDataY(), buffer->StrideY(),
+			buffer->MutableDataU(), buffer->StrideU(),
+			buffer->MutableDataV(), buffer->StrideV(),
+			width, height);
+
+		if (conversionResult >= 0) {
+			if (adapted_width != width || adapted_height != height) {
+				// Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
+				rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
+
+				scaled_buffer->ScaleFrom(*buffer);
+
+				OnFrame(webrtc::VideoFrame::Builder()
+					.set_video_frame_buffer(scaled_buffer)
+					.set_rotation(webrtc::kVideoRotation_0)
+					.set_timestamp_us(time)
+					.build());
+			}
+			else {
+				// No adaptations needed, just return the frame as is.
+				OnFrame(webrtc::VideoFrame::Builder()
+					.set_video_frame_buffer(buffer)
+					.set_rotation(webrtc::kVideoRotation_0)
+					.set_timestamp_us(time)
+					.build());
+			}
 		}
 	}
 
 	void VideoTrackDesktopSource::capture()
 	{
-		RTC_LOG(INFO) << "Start capture";
+		auto options = webrtc::DesktopCaptureOptions::CreateDefault();
+		// Enable desktop effects.
+		options.set_disable_effects(false);
 
-		auto framerate = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / frameRate));
-		auto nextFrame = std::chrono::high_resolution_clock::now();
+#if defined(WEBRTC_WIN)
+		options.set_allow_directx_capturer(true);
+		options.set_allow_use_magnification_api(true);
+#endif
+
+		std::unique_ptr<webrtc::DesktopCapturer> capturer;
+
+		if (sourceIsWindow) {
+			capturer.reset(new webrtc::DesktopAndCursorComposer(
+				webrtc::DesktopCapturer::CreateWindowCapturer(options),
+				options));
+		}
+		else {
+			capturer.reset(new webrtc::DesktopAndCursorComposer(
+				webrtc::DesktopCapturer::CreateScreenCapturer(options),
+				options));
+		}
+
+		if (!capturer->SelectSource(sourceId)) {
+
+			return;
+		}
+
+		capturer->Start(this);
+
+		sourceState = kLive;
+
+		int msPerFrame = 1000 / frameRate;
 
 		while (isCapturing) {
 			capturer->CaptureFrame();
 
-			nextFrame += framerate;
-
-			std::this_thread::sleep_until(nextFrame);
+			webrtc::SleepMs(msPerFrame);
 		}
 
-		RTC_LOG(INFO) << "Stop capture";
-	}
-
-	void VideoTrackDesktopSource::updateVideoAdapter()
-	{
-		rtc::VideoSinkWants wants = broadcaster.wants();
-
-		videoAdapter.OnOutputFormatRequest(std::make_pair(0, 0), wants.max_pixel_count, wants.max_framerate_fps);
+		sourceState = kEnded;
 	}
 }

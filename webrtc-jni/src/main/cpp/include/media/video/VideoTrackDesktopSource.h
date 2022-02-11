@@ -17,55 +17,49 @@
 #ifndef JNI_WEBRTC_MEDIA_VIDEO_TRACK_DESKTOP_SOURCE_H_
 #define JNI_WEBRTC_MEDIA_VIDEO_TRACK_DESKTOP_SOURCE_H_
 
-#include "api/create_peerconnection_factory.h"
 #include "api/video/i420_buffer.h"
-#include "api/video/video_frame.h"
-#include "api/video/video_sink_interface.h"
-#include "pc/video_track_source.h"
-#include "media/base/video_adapter.h"
-#include "media/base/video_broadcaster.h"
+#include "media/base/adapted_video_track_source.h"
 #include "modules/desktop_capture/desktop_capturer.h"
-
-#include <thread>
+#include "rtc_base/thread.h"
 
 namespace jni
 {
-	class VideoTrackDesktopSource : public webrtc::VideoTrackSource, public webrtc::DesktopCapturer::Callback
+	class VideoTrackDesktopSource : public rtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback
 	{
 		public:
 			VideoTrackDesktopSource();
 			~VideoTrackDesktopSource();
 
-			void setDesktopCapturer(webrtc::DesktopCapturer * capturer);
+			void setSourceId(webrtc::DesktopCapturer::SourceId source, bool isWindow);
 			void setFrameRate(const uint16_t frameRate);
 
 			void start();
 			void stop();
 
-			// VideoSourceInterface implementation.
-			void AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const rtc::VideoSinkWants & wants) override;
-			void RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink) override;
-
-			// VideoTrackSource implementation.
-			rtc::VideoSourceInterface<webrtc::VideoFrame> * source() override;
+			// AdaptedVideoTrackSource implementation.
+			virtual bool is_screencast() const override;
+			virtual absl::optional<bool> needs_denoising() const override;
+			SourceState state() const override;
+			bool remote() const override;
 
 			// DesktopCapturer::Callback implementation.
 			void OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame) override;
 
 		private:
 			void capture();
-			void updateVideoAdapter();
 
 		private:
 			uint16_t frameRate;
 			bool isCapturing;
 
-			std::thread capturethread;
+			webrtc::MediaSourceInterface::SourceState sourceState;
 
-			webrtc::DesktopCapturer * capturer;
+			webrtc::DesktopCapturer::SourceId sourceId;
+			bool sourceIsWindow;
+
+			std::unique_ptr<rtc::Thread> captureThread;
+
 			rtc::scoped_refptr<webrtc::I420Buffer> buffer;
-			rtc::VideoBroadcaster broadcaster;
-			cricket::VideoAdapter videoAdapter;
 	};
 }
 
