@@ -451,7 +451,6 @@ public class PeerConnectionClient implements PeerConnectionObserver {
 		DesktopCaptureConfiguration desktopConfig = config.getDesktopCaptureConfiguration();
 
 		desktopSource = new VideoDesktopSource();
-		desktopSource.setDesktopCapturer(null);
 		desktopSource.setFrameRate(desktopConfig.getFrameRate());
 
 		VideoTrack videoTrack = factory.createVideoTrack("desktopTrack", desktopSource);
