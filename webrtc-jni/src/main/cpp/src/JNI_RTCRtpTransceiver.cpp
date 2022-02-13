@@ -141,11 +141,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferen
 		auto ref = jni::JavaLocalRef<jobject>(env, jPreferences);
 		auto preferences = jni::JavaList::toVector(env, ref, &jni::RTCRtpCodecCapability::toNative);
 
-		//webrtc::RTCError result = transceiver->SetCodecPreferences(preferences);
+		webrtc::RTCError result = transceiver->SetCodecPreferences(preferences);
 
-		//if (!result.ok()) {
-		//	env->Throw(jni::JavaError(env, "Set codec preferences failed: %s", jni::RTCErrorToString(result).c_str()));
-		//}
+		if (!result.ok()) {
+			env->Throw(jni::JavaError(env, "Set codec preferences failed: %s", jni::RTCErrorToString(result).c_str()));
+		}
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

@@ -4,6 +4,8 @@ import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.video.VideoDesktopSource;
+import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,17 +36,26 @@ class RTCRtpTransceiverTests extends TestBase {
 		RTCRtpCapabilities videoCapabilities = factory
 				.getRtpReceiverCapabilities(MediaType.VIDEO);
 
-		List<RTCRtpCodecCapability> codecCapabilities = new ArrayList<>();
-		codecCapabilities.add(audioCapabilities.getCodecs().get(0));
-		codecCapabilities.add(videoCapabilities.getCodecs().get(0));
+		List<RTCRtpCodecCapability> audioPreferences = new ArrayList<>();
+		audioPreferences.add(audioCapabilities.getCodecs().get(0));
+
+		List<RTCRtpCodecCapability> videoPreferences = new ArrayList<>();
+		videoPreferences.add(videoCapabilities.getCodecs().get(0));
 
 		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
-		AudioTrack track = factory.createAudioTrack("audioTrack", audioSource);
+		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+
+		VideoDesktopSource desktopSource = new VideoDesktopSource();
+		VideoTrack videoTrack = factory.createVideoTrack("videoTrack", desktopSource);
 
 		RTCPeerConnection peerConnection = connection.getPeerConnection();
-		RTCRtpTransceiver transceiver = peerConnection.addTransceiver(track,
+		RTCRtpTransceiver audioTransceiver = peerConnection.addTransceiver(audioTrack,
 				new RTCRtpTransceiverInit());
-		transceiver.setCodecPreferences(codecCapabilities);
+		RTCRtpTransceiver videoTransceiver = peerConnection.addTransceiver(videoTrack,
+				new RTCRtpTransceiverInit());
+
+		audioTransceiver.setCodecPreferences(audioPreferences);
+//		videoTransceiver.setCodecPreferences(videoPreferences);
 	}
 
 }
