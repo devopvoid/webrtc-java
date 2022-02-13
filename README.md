@@ -20,25 +20,18 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   <tr>
     <td>Linux</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.6.0/webrtc-javafx-demo-0.6.0-linux-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>macOS</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.6.0/webrtc-javafx-demo-0.6.0-macos-x86_64.jar">demo app</a></td>
   </tr>
   <tr>
     <td>Windows</td>
     <td>x86_64</td>
-    <td><a href="https://github.com/devopvoid/webrtc-java/releases/download/v0.6.0/webrtc-javafx-demo-0.6.0-windows-x86_64.jar">demo app</a></td>
   </tr>
 </table>
 
 The native libraries were build with WebRTC branch M97/4692.
-
-### Demo
-
-The client demo implements the [AppRTC](https://github.com/webrtc/apprtc) signaling protocol which allows the JavaFX demo application to communicate with the reference [AppRTC video chat app](https://appr.tc) in a browser.
 
 ### Build Notes
 
