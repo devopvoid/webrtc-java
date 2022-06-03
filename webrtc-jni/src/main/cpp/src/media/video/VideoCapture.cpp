@@ -78,7 +78,7 @@ namespace jni
 			int32_t ret = info->GetDeviceName(i, name, size, guid, size);
 
 			if (ret != 0) {
-				RTC_LOG(WARNING) << "Get video capture device name failed";
+				RTC_LOG(LS_WARNING) << "Get video capture device name failed";
 				continue;
 			}
 

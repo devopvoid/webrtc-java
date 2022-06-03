@@ -99,7 +99,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_disp
 	rtc::RefCountReleaseStatus status = videoSource->Release();
 
 	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
 	}
 
 	SetHandle<std::nullptr_t>(env, caller, nullptr);

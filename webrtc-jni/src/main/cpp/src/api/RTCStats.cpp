@@ -94,7 +94,7 @@ namespace jni
 				type = jni::JavaEnums::toJava(env, static_cast<RTCStatsType>(result->second));
 			}
 			else {
-				RTC_LOG(WARNING) << "No Java Enum for '" << stats.type() << "' found";
+				RTC_LOG(LS_WARNING) << "No Java Enum for '" << stats.type() << "' found";
 			}
 
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,

@@ -33,13 +33,13 @@ namespace jni
 
 	void RawVideoFileSink::OnFrame(const webrtc::VideoFrame & frame)
 	{
-		RTC_LOG(INFO) << "VideoFrame: " << frame.width() << "x" << frame.height() << " timestamp: " << frame.timestamp_us();
+		RTC_LOG(LS_INFO) << "VideoFrame: " << frame.width() << "x" << frame.height() << " timestamp: " << frame.timestamp_us();
 
 		//frame.video_frame_buffer()->ToI420();
 	}
 
 	void RawVideoFileSink::OnDiscardedFrame()
 	{
-		RTC_LOG(INFO) << __FUNCTION__;
+		RTC_LOG(LS_INFO) << __FUNCTION__;
 	}
 }
