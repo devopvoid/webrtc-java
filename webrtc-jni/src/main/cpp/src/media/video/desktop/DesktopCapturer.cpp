@@ -16,6 +16,7 @@
 
 #include "media/video/desktop/DesktopCapturer.h"
 
+#include "modules/desktop_capture/desktop_capturer.h"
 #include "modules/desktop_capture/desktop_capture_options.h"
 
 namespace jni
@@ -23,9 +24,12 @@ namespace jni
 	DesktopCapturer::DesktopCapturer(bool screenCapturer)
 	{
 		auto options = webrtc::DesktopCaptureOptions::CreateDefault();
+		// Disable desktop effects.
+		options.set_disable_effects(false);
 
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
+		options.set_allow_use_magnification_api(true);
 #endif
 
 		if (screenCapturer) {
