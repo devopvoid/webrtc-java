@@ -27,7 +27,7 @@ namespace jni
 	{
 		wavReader = std::make_unique<webrtc::WavReader>(fileName);
 
-		RTC_LOG(INFO) << "WAV file opened:"
+		RTC_LOG(LS_INFO) << "WAV file opened:"
 			<< " Sample Rate: " << wavReader->sample_rate()
 			<< ", Channels: " << wavReader->num_channels()
 			<< ", Samples: " << wavReader->num_samples();
