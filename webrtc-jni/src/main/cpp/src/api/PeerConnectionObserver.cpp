@@ -132,15 +132,6 @@ namespace jni
 		env->CallVoidMethod(observer, javaClass->onIceCandidate, jCandidate.get());
 	}
 
-	void PeerConnectionObserver::OnIceCandidateError(const std::string & host, const std::string & url, int error_code, const std::string & error_text)
-	{
-		JNIEnv * env = AttachCurrentThread();
-
-		JavaLocalRef<jobject> event = RTCPeerConnectionIceErrorEvent::toJava(env, host, 0, url, error_code, error_text);
-
-		env->CallVoidMethod(observer, javaClass->onIceCandidateError, event.get());
-	}
-	
 	void PeerConnectionObserver::OnIceCandidateError(const std::string & address, int port, const std::string & url, int error_code, const std::string & error_text)
 	{
 		JNIEnv * env = AttachCurrentThread();
