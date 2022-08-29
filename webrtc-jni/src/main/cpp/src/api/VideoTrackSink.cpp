@@ -49,6 +49,7 @@ namespace jni
 		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
 
 		env->CallVoidMethod(sink, javaClass->onFrame, jFrame);
+		env->DeleteLocalRef(jFrame);
 	}
 
 	VideoTrackSink::JavaVideoTrackSinkClass::JavaVideoTrackSinkClass(JNIEnv * env)
