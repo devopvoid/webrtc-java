@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <api/video/i420_buffer.h>
 #include "api/VideoFrame.h"
 #include "JavaObject.h"
 #include "JavaUtils.h"
@@ -32,10 +33,24 @@ namespace jni
 
 			int rotation = obj.getInt(javaClass->rotation);
 			int64_t timestamp_ns = obj.getLong(javaClass->timestampNs);
+            const auto jBuffer = JavaClasses::get<JavaNativeI420BufferClass>(env);
+            JavaObject objBuffer(env, obj.getObject(javaClass->buffer));
 
+            const uint8_t * src_y = static_cast<uint8_t *>(env->GetDirectBufferAddress(objBuffer.getObject(jBuffer->dataY).get()));
+            const uint8_t * src_u = static_cast<uint8_t *>(env->GetDirectBufferAddress(objBuffer.getObject(jBuffer->dataU).get()));
+            const uint8_t * src_v = static_cast<uint8_t *>(env->GetDirectBufferAddress(objBuffer.getObject(jBuffer->dataV).get()));
+
+            int stride_y = static_cast<int32_t>(objBuffer.getInt(jBuffer->strideY));
+            int stride_u = static_cast<int32_t>(objBuffer.getInt(jBuffer->strideU));
+            int stride_v = static_cast<int32_t>(objBuffer.getInt(jBuffer->strideV));
+
+            int width = static_cast<int32_t>(objBuffer.getInt(jBuffer->width));
+            int height = static_cast<int32_t>(objBuffer.getInt(jBuffer->height));
+
+            const rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = webrtc::I420Buffer::Copy(width,height,src_y,stride_y,src_u,stride_u,src_v,stride_v);
 			return webrtc::VideoFrame::Builder()
-				//.set_video_frame_buffer(buffer)
-				//.set_timestamp_rtp(timestamp_rtp)
+				.set_video_frame_buffer(buffer)
+				.set_timestamp_rtp(timestamp_ns)
 				.set_timestamp_ms(timestamp_ns / rtc::kNumNanosecsPerMillisec)
 				.set_rotation(static_cast<webrtc::VideoRotation>(rotation))
 				.build();
