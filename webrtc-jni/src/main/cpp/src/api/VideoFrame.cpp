@@ -56,7 +56,9 @@ namespace jni
 				yBuffer, buffer->StrideY(), uBuffer, buffer->StrideU(), vBuffer, buffer->StrideV());
 
 			SetHandle(env, jBuffer, buffer.get());
-
+			env->DeleteLocalRef(yBuffer);
+			env->DeleteLocalRef(uBuffer);
+			env->DeleteLocalRef(vBuffer);
 			return JavaLocalRef<jobject>(env, jBuffer);
 		}
 	}
