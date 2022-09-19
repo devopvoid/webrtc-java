@@ -38,9 +38,9 @@ namespace jni
 		rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = frame.video_frame_buffer();
 		rtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = buffer->ToI420();
 
-		if (frame.rotation() != webrtc::kVideoRotation_0) {
-			i420Buffer = webrtc::I420Buffer::Rotate(*i420Buffer, frame.rotation());
-		}
+//		if (frame.rotation() != webrtc::kVideoRotation_0) {
+//			i420Buffer = webrtc::I420Buffer::Rotate(*i420Buffer, frame.rotation());
+//		}
 
 		jint rotation = static_cast<jint>(frame.rotation());
 		jlong timestamp = frame.timestamp_us() * rtc::kNumNanosecsPerMicrosec;
