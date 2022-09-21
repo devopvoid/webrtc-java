@@ -32,6 +32,7 @@ namespace jni
 
 			void setSourceId(webrtc::DesktopCapturer::SourceId source, bool isWindow);
 			void setFrameRate(const uint16_t frameRate);
+			void setFocusSelectedSource(bool focus);
 
 			void start();
 			void stop();
@@ -51,6 +52,7 @@ namespace jni
 		private:
 			uint16_t frameRate;
 			bool isCapturing;
+			bool focusSelectedSource;
 
 			webrtc::MediaSourceInterface::SourceState sourceState;
 

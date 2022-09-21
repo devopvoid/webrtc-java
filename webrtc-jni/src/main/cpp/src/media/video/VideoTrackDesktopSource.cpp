@@ -35,6 +35,7 @@ namespace jni
 		AdaptedVideoTrackSource(),
 		frameRate(20),
 		isCapturing(false),
+		focusSelectedSource(true),
 		sourceState(kInitializing),
 		sourceId(-1),
 		sourceIsWindow(false)
@@ -55,6 +56,11 @@ namespace jni
 	void VideoTrackDesktopSource::setFrameRate(const uint16_t frameRate)
 	{
 		this->frameRate = frameRate;
+	}
+
+	void VideoTrackDesktopSource::setFocusSelectedSource(bool focus)
+	{
+		this->focusSelectedSource = focus;
 	}
 
 	void VideoTrackDesktopSource::start()
@@ -173,11 +179,14 @@ namespace jni
 		}
 
 		if (!capturer->SelectSource(sourceId)) {
-
 			return;
 		}
 
 		capturer->Start(this);
+
+		if (focusSelectedSource) {
+			capturer->FocusOnSelectedSource();
+		}
 
 		sourceState = kLive;
 
