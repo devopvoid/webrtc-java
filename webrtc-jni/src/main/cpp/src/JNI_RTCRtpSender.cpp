@@ -59,7 +59,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_replaceTrack
 	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
 	CHECK_HANDLE(sender);
 
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
+	webrtc::MediaStreamTrackInterface * track = jTrack == nullptr
+		? nullptr
+		: GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
 
 	if (!sender->SetTrack(track)) {
 		env->Throw(jni::JavaRuntimeException(env, "Set track failed"));

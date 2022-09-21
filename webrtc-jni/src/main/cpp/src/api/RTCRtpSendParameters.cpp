@@ -68,10 +68,19 @@ namespace jni
 
 			webrtc::RtpParameters params;
 			params.transaction_id = JavaString::toNative(env, transactionId);
-			params.rtcp = RTCRtcpParameters::toNative(env, rtcp);
-			params.encodings = JavaList::toVector(env, encodings, &RTCRtpEncodingParameters::toNative);
-			params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtension::toNative);
-			params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
+
+			if (encodings) {
+				params.encodings = JavaList::toVector(env, encodings, &RTCRtpEncodingParameters::toNative);
+			}
+			if (headerExtensions) {
+				params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtension::toNative);
+			}
+			if (rtcp) {
+				params.rtcp = RTCRtcpParameters::toNative(env, rtcp);
+			}
+			if (codecs) {
+				params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
+			}
 
 			return params;
 		}
