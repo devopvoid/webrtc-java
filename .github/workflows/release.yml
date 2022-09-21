@@ -11,11 +11,11 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest, windows-2019]
         java: [13]
 
     env:
-      WEBRTC_CACHE_BRANCH: 4692
+      WEBRTC_CACHE_BRANCH: 4844
       WEBRTC_CHECKOUT_FOLDER: webrtc
       WEBRTC_INSTALL_FOLDER: webrtc/build
 
