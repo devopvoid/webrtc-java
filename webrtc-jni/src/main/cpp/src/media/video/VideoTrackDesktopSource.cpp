@@ -131,6 +131,20 @@ namespace jni
 			width, height);
 
 		if (conversionResult >= 0) {
+			int max_width = 1920;
+			int max_height = 1600;
+
+			if (adapted_width > max_width) {
+				double scale = max_width / (double) adapted_width;
+				adapted_width = max_width;
+				adapted_height = (int)(adapted_height * scale);
+			}
+			else if (adapted_height > max_height) {
+				double scale = max_height / adapted_height;
+				adapted_width = (int)(adapted_width * scale);
+				adapted_height = adapted_height;
+			}
+
 			if (adapted_width != width || adapted_height != height) {
 				// Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
 				rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
