@@ -55,13 +55,19 @@ target_include_directories(${PROJECT_NAME}
 		include/media
 		include/rtc
 )
-
-set_target_properties(${PROJECT_NAME} PROPERTIES
-	CXX_STANDARD 14
-	CXX_STANDARD_REQUIRED ON
-	CXX_EXTENSIONS OFF
-)
-
+if(LINUX)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+elseif(WIN32)
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        CXX_STANDARD 14
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+endif()
 target_link_libraries(${PROJECT_NAME} jni-voithos)
 target_link_libraries(${PROJECT_NAME} webrtc)
 
