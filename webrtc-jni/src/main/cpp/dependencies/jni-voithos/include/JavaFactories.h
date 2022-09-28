@@ -76,7 +76,7 @@ namespace jni
 
 				JavaFactory<T> & f = std::any_cast<JavaFactory<T>>(found->second);
 
-				return JavaLocalRef<jobject>(env, f.createArray(env, length));
+				return JavaLocalRef<jobjectArray>(env, f.createArray(env, length));
 			}
 
 		private:
@@ -133,7 +133,7 @@ namespace jni
 				unique_void_ptr & p = found->second;
 				JavaFactory<T> * f = static_cast<JavaFactory<T> *>(p.get());
 
-				return JavaLocalRef<jobject>(env, f->createArray(env, length));
+				return JavaLocalRef<jobjectArray>(env, f->createArray(env, length));
 			}
 
 		private:
