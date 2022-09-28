@@ -49,7 +49,7 @@ namespace jni
 					throw Exception("JavaEnum for [%s] was not registered", typeid(T).name());
 				}
 
-				const JavaEnum<T> & e = std::any_cast<JavaEnum<T>>(found->second);
+				JavaEnum<T> & e = std::any_cast<JavaEnum<T>>(found->second);
 
 				return e.toJava(env, nativeType);
 			}
@@ -65,7 +65,7 @@ namespace jni
 					throw Exception("JavaEnum for [%s] was not registered", typeid(T).name());
 				}
 
-				const JavaEnum<T> & e = std::any_cast<JavaEnum<T>>(found->second);
+				JavaEnum<T> & e = std::any_cast<JavaEnum<T>>(found->second);
 
 				return e.toNative(env, javaType);
 			}
@@ -96,7 +96,7 @@ namespace jni
 					throw Exception("JavaEnum for [%s] was not registered", typeid(T).name());
 				}
 
-				const unique_void_ptr & p = found->second;
+				unique_void_ptr & p = found->second;
 				JavaEnum<T> * e = static_cast<JavaEnum<T> *>(p.get());
 
 				return JavaLocalRef<jobject>(env, e->toJava(env, nativeType));
@@ -113,7 +113,7 @@ namespace jni
 					throw Exception("JavaEnum for [%s] was not registered", typeid(T).name());
 				}
 
-				const unique_void_ptr & p = found->second;
+				unique_void_ptr & p = found->second;
 				JavaEnum<T> * e = static_cast<JavaEnum<T> *>(p.get());
 
 				return e->toNative(env, javaType);

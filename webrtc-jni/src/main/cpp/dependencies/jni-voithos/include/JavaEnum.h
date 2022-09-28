@@ -64,7 +64,7 @@ namespace jni
 					return nullptr;
 				}
 
-				return env->GetObjectArrayElement(values, index);
+				return JavaLocalRef<jobject>(env, env->GetObjectArrayElement(values, index));
 			}
 
 			T toNative(JNIEnv * env, const jobject & javaType)
