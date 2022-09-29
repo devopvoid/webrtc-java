@@ -55,7 +55,7 @@ namespace jni
 			{
 			}
 
-			jobject toJava(JNIEnv * env, const T & nativeType)
+			JavaLocalRef<jobject> toJava(JNIEnv * env, const T & nativeType)
 			{
 				jsize index = static_cast<jsize>(nativeType);
 

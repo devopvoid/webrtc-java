@@ -99,7 +99,7 @@ namespace jni
 				unique_void_ptr & p = found->second;
 				JavaEnum<T> * e = static_cast<JavaEnum<T> *>(p.get());
 
-				return JavaLocalRef<jobject>(env, e->toJava(env, nativeType));
+				return e->toJava(env, nativeType);
 			}
 
 			template <class T>
