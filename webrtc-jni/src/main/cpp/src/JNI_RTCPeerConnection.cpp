@@ -146,8 +146,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_removeTrack
 	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, jSender);
 	CHECK_HANDLE(sender);
 
-	if (!pc->RemoveTrack(sender)) {
-		env->Throw(jni::JavaRuntimeException(env, "Remove RTCRtpSender from the peer connection failed"));
+	auto result = pc->RemoveTrackOrError(sender);
+
+	if (!result.ok()) {
+		env->Throw(jni::JavaRuntimeException(env, "Remove track (RTCRtpSender) failed: %s %s",
+			ToString(result.type()), result.message()));
 	}
 }
 
