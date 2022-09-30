@@ -18,7 +18,6 @@
 #include "platform/windows/WinUtils.h"
 #include "platform/windows/ComPtr.h"
 
-#include <codecvt>
 #include <locale>
 #include <unordered_map>
 #include <mfapi.h>
@@ -36,8 +35,7 @@ namespace jni
 			GUID idKey;
 			HRESULT hr;
 
-			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-			std::wstring link = converter.from_bytes(symlink);
+			std::wstring link = UTF8Decode(symlink);
 
 			hr = MFCreateAttributes(&attributes, 2);
 			THROW_IF_FAILED(hr, "MMF: Create attributes failed");

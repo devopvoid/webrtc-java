@@ -15,12 +15,13 @@
  */
 
 #include "platform/windows/WinHotplugNotifier.h"
+#include "platform/windows/WinUtils.h"
+
 #include <dbt.h>
 #include <ks.h>
 #include <ksmedia.h>
 #include <windowsx.h>
 #include <algorithm>
-#include <codecvt>
 #include <locale>
 
 #include "rtc_base/logging.h"
@@ -181,14 +182,13 @@ namespace jni
 
 		WinHotplugNotifier * win = reinterpret_cast<WinHotplugNotifier *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 
-		char buffer[512];
+		char buffer[512] = { 0 };
 		strncpy_s(buffer, devInterface->dbcc_name, 512);
 
 		std::string symLink(buffer);
 		std::transform(symLink.begin(), symLink.end(), symLink.begin(), ::tolower);
 
-		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-		std::wstring symLink_w = converter.from_bytes(symLink);
+		std::wstring symLink_w = UTF8Decode(symLink);
 
 		switch (wParam) {
 			case DBT_DEVICEARRIVAL:

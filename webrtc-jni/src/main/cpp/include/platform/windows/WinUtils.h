@@ -22,6 +22,7 @@
 #include <comdef.h>
 #include "mmdeviceapi.h"
 #include <string>
+#include <stdexcept>
 #include <windows.h>
 
 
@@ -34,6 +35,40 @@ inline std::string WideStrToStr(LPCWSTR wstr)
 	int length = WideCharToMultiByte(CP_UTF8, 0, wstr, wslen, NULL, 0, NULL, NULL);
 	std::string str(length, 0);
 	WideCharToMultiByte(CP_UTF8, 0, wstr, wslen, &str[0], length, NULL, NULL);
+
+	return str;
+}
+
+inline std::wstring UTF8Decode(const std::string & str)
+{
+	if (str.empty()) {
+		return std::wstring();
+	}
+
+	int strSize = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int) str.size(), NULL, 0);
+	if (strSize <= 0) {
+		throw std::runtime_error("MultiByteToWideChar() failed: " + std::to_string(strSize));
+	}
+
+	std::wstring wstrTo(strSize, 0);
+	MultiByteToWideChar(CP_UTF8, 0, &str[0], (int) str.size(), &wstrTo[0], strSize);
+
+	return wstrTo;
+}
+
+inline std::string UTF8Encode(const std::wstring & wstr)
+{
+	if (wstr.empty()) {
+		return std::string();
+	}
+
+	int strSize = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int) wstr.size(), NULL, 0, NULL, NULL);
+	if (strSize <= 0) {
+		throw std::runtime_error("WideCharToMultiByte() failed: " + std::to_string(strSize));
+	}
+
+	std::string str(strSize, 0);
+	WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int) wstr.size(), &str[0], strSize, NULL, NULL);
 
 	return str;
 }

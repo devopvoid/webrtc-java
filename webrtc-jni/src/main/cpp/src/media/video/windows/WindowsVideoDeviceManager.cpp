@@ -16,11 +16,11 @@
 
 #include "Exception.h"
 #include "media/video/windows/WindowsVideoDeviceManager.h"
+#include "platform/windows/WinUtils.h"
 
 #include "modules/video_capture/video_capture_factory.h"
 
 #include <algorithm>
-#include <codecvt>
 #include <ks.h>
 #include <ksmedia.h>
 
@@ -120,10 +120,8 @@ namespace jni
 
 		void WindowsVideoDeviceManager::onDeviceDisconnected(std::wstring symLink)
 		{
-			std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-
-			auto predicate = [&converter, symLink](const VideoDevicePtr & dev) {
-				std::wstring link = converter.from_bytes(dev->getDescriptor());
+			auto predicate = [symLink](const VideoDevicePtr & dev) {
+				std::wstring link = UTF8Decode(dev->getDescriptor());
 				std::transform(link.begin(), link.end(), link.begin(), ::tolower);
 
 				// IMFActivate and the device broadcaster return different
