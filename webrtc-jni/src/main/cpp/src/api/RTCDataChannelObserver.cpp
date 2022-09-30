@@ -23,6 +23,7 @@ namespace jni
 {
 	RTCDataChannelObserver::RTCDataChannelObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
 		observer(observer),
+		bufferFactory(std::make_unique<DataBufferFactory>(env, PKG"RTCDataChannelBuffer")),
 		javaClass(JavaClasses::get<JavaRTCDataChannelObserverClass>(env))
 	{
 	}
@@ -38,9 +39,9 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
-		JavaLocalRef<jobject> jBuffer = JavaFactories::create(env, &buffer);
+		JavaLocalRef<jobject> jBuffer = bufferFactory->create(env, &buffer);
 
-		env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.get());
+		env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.release());
 	}
 
 	RTCDataChannelObserver::JavaRTCDataChannelObserverClass::JavaRTCDataChannelObserverClass(JNIEnv * env)

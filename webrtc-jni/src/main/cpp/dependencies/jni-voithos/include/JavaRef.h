@@ -125,11 +125,13 @@ namespace jni
 				retain(other);
 			}
 
-			~JavaLocalRef() {
+			~JavaLocalRef()
+			{
 				deleteLocalRef();
 			}
 
-			JavaLocalRef & operator=(const JavaLocalRef & other) {
+			JavaLocalRef & operator=(const JavaLocalRef & other)
+			{
 				env = other.env;
 
 				retain(other);
@@ -137,7 +139,8 @@ namespace jni
 				return *this;
 			}
 
-			JavaLocalRef & operator=(JavaLocalRef && other) {
+			JavaLocalRef & operator=(JavaLocalRef && other)
+			{
 				env = AttachCurrentThread();
 
 				adopt(other.release());
@@ -145,7 +148,15 @@ namespace jni
 				return *this;
 			}
 
-			T release() {
+			T release()
+			{
+				T ret = static_cast<T>(this->obj);
+				this->obj = nullptr;
+				return ret;
+			}
+
+			T release() const
+			{
 				T ret = static_cast<T>(this->obj);
 				this->obj = nullptr;
 				return ret;

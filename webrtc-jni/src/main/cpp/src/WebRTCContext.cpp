@@ -93,7 +93,6 @@ namespace jni
 		JavaFactories::add<webrtc::RtpReceiverInterface>(env, PKG"RTCRtpReceiver");
 		JavaFactories::add<webrtc::RtpSenderInterface>(env, PKG"RTCRtpSender");
 		JavaFactories::add<webrtc::RtpTransceiverInterface>(env, PKG"RTCRtpTransceiver");
-		JavaFactories::add<webrtc::DataBuffer>(std::make_unique<DataBufferFactory>(env, PKG"RTCDataChannelBuffer"));
 
 		initializeClassLoader(env, PKG_INTERNAL"NativeClassLoader");
 	}

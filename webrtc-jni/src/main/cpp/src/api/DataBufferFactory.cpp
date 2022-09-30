@@ -25,7 +25,7 @@ namespace jni
 	{
 	}
 
-	JavaLocalRef<jobject> DataBufferFactory::create(JNIEnv * env, const webrtc::DataBuffer * dataBuffer)
+	JavaLocalRef<jobject> DataBufferFactory::create(JNIEnv * env, const webrtc::DataBuffer * dataBuffer) const
 	{
 		jobject directBuffer = env->NewDirectByteBuffer(const_cast<char *>(dataBuffer->data.data<char>()), dataBuffer->data.size());
 		const jboolean isBinary = static_cast<jboolean>(dataBuffer->binary);

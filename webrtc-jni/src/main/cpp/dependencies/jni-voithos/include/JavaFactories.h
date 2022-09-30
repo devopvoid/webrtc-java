@@ -58,7 +58,7 @@ namespace jni
 					throw Exception("JavaFactory for [%s] was not registered", typeid(T).name());
 				}
 
-				JavaFactory<T> & f = std::any_cast<JavaFactory<T>>(found->second);
+				const JavaFactory<T> & f = std::any_cast<JavaFactory<T>>(found->second);
 
 				return JavaLocalRef<jobject>(env, f.create(env, nativeObject));
 			}
@@ -74,7 +74,7 @@ namespace jni
 					throw Exception("JavaFactory for [%s] was not registered", typeid(T).name());
 				}
 
-				JavaFactory<T> & f = std::any_cast<JavaFactory<T>>(found->second);
+				const JavaFactory<T> & f = std::any_cast<JavaFactory<T>>(found->second);
 
 				return JavaLocalRef<jobjectArray>(env, f.createArray(env, length));
 			}
@@ -114,7 +114,7 @@ namespace jni
 				}
 
 				unique_void_ptr & p = found->second;
-				JavaFactory<T> * f = static_cast<JavaFactory<T> *>(p.get());
+				const JavaFactory<T> * f = static_cast<JavaFactory<T> *>(p.get());
 
 				return JavaLocalRef<jobject>(env, f->create(env, nativeObject));
 			}
@@ -131,7 +131,7 @@ namespace jni
 				}
 
 				unique_void_ptr & p = found->second;
-				JavaFactory<T> * f = static_cast<JavaFactory<T> *>(p.get());
+				const JavaFactory<T> * f = static_cast<JavaFactory<T> *>(p.get());
 
 				return JavaLocalRef<jobjectArray>(env, f->createArray(env, length));
 			}

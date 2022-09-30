@@ -192,6 +192,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBuffer
 	rtc::CopyOnWriteBuffer data(arrayPtr, arrayLength);
 
 	env->ReleaseByteArrayElements(jBufferArray, arrayPtr, JNI_ABORT);
-
-	channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)));
+	
+	try {
+		channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }

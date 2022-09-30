@@ -28,7 +28,7 @@ namespace jni
 		public:
 			DataBufferFactory(JNIEnv * env, const char * className);
 
-			JavaLocalRef<jobject> create(JNIEnv * env, const webrtc::DataBuffer * dataBuffer) override;
+			JavaLocalRef<jobject> create(JNIEnv * env, const webrtc::DataBuffer * dataBuffer) const override;
 	};
 }
 

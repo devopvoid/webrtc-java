@@ -21,6 +21,7 @@
 #include "JavaRef.h"
 
 #include "api/data_channel_interface.h"
+#include <api/DataBufferFactory.h>
 
 #include <jni.h>
 #include <memory>
@@ -49,6 +50,8 @@ namespace jni
 
 		private:
 			JavaGlobalRef<jobject> observer;
+
+			std::unique_ptr<DataBufferFactory> bufferFactory;
 
 			const std::shared_ptr<JavaRTCDataChannelObserverClass> javaClass;
 	};

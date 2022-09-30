@@ -28,7 +28,7 @@ namespace jni
 			{
 			}
 
-			virtual JavaLocalRef<jobject> create(JNIEnv * env, const T * nativeObject)
+			virtual JavaLocalRef<jobject> create(JNIEnv * env, const T * nativeObject) const
 			{
 				jobject object = env->NewObject(javaClass, javaCtor);
 				ExceptionCheck(env);
@@ -38,7 +38,7 @@ namespace jni
 				return JavaLocalRef<jobject>(env, object);
 			}
 
-			virtual JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const jsize & length)
+			virtual JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const jsize & length) const
 			{
 				return JavaLocalRef<jobjectArray>(env, env->NewObjectArray(length, javaClass, nullptr));
 			}
