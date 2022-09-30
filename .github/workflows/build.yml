@@ -31,6 +31,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Select Xcode version
+        if: runner.os == 'macOS'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_11.7.app/Contents/Developer
+        run:
+          xcodebuild -version
+
       - name: Set up Linux audio system
         if: runner.os == 'Linux'
         run: |
