@@ -38,6 +38,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
+			return;
+		}
+
 		auto jresult = JavaEnums::toJava(env, result);
 
 		std::unique_ptr<webrtc::DesktopFrame> cFrame = std::move(frame);
