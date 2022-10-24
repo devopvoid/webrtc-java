@@ -35,8 +35,11 @@ namespace jni
 
 				jclass cls;
 				jmethodID ctor;
+				jfieldID ssrc;
 				jfieldID active;
+				jfieldID minBitrate;
 				jfieldID maxBitrate;
+				jfieldID maxFramerate;
 				jfieldID scaleResolution;
 		};
 

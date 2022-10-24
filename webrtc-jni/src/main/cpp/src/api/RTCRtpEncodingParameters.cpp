@@ -33,8 +33,17 @@ namespace jni
 			jobject object = env->NewObject(javaClass->cls, javaClass->ctor);
 			env->SetObjectField(object, javaClass->active, Boolean::create(env, parameters.active));
 
+			if (parameters.ssrc.has_value()) {
+				env->SetObjectField(object, javaClass->ssrc, Long::create(env, parameters.ssrc.value()));
+			}
+			if (parameters.min_bitrate_bps.has_value()) {
+				env->SetObjectField(object, javaClass->minBitrate, Integer::create(env, parameters.min_bitrate_bps.value()));
+			}
 			if (parameters.max_bitrate_bps.has_value()) {
 				env->SetObjectField(object, javaClass->maxBitrate, Integer::create(env, parameters.max_bitrate_bps.value()));
+			}
+			if (parameters.max_framerate.has_value()) {
+				env->SetObjectField(object, javaClass->maxFramerate, Double::create(env, parameters.max_framerate.value()));
 			}
 			if (parameters.scale_resolution_down_by.has_value()) {
 				env->SetObjectField(object, javaClass->scaleResolution, Double::create(env, parameters.scale_resolution_down_by.value()));
@@ -50,7 +59,10 @@ namespace jni
 			JavaObject obj(env, parameters);
 
 			auto active = obj.getObject(javaClass->active);
+			auto ssrc = obj.getObject(javaClass->ssrc);
+			auto minBitrate = obj.getObject(javaClass->minBitrate);
 			auto maxBitrate = obj.getObject(javaClass->maxBitrate);
+			auto maxFramerate = obj.getObject(javaClass->maxFramerate);
 			auto scaleResolution = obj.getObject(javaClass->scaleResolution);
 
 			webrtc::RtpEncodingParameters params;
@@ -58,8 +70,17 @@ namespace jni
 			if (active.get()) {
 				params.active = Boolean::getValue(env, active);
 			}
+			if (ssrc.get()) {
+				params.ssrc = static_cast<uint32_t>(Long::getValue(env, ssrc));
+			}
+			if (minBitrate.get()) {
+				params.min_bitrate_bps.emplace(Integer::getValue(env, minBitrate));
+			}
 			if (maxBitrate.get()) {
 				params.max_bitrate_bps.emplace(Integer::getValue(env, maxBitrate));
+			}
+			if (maxFramerate.get()) {
+				params.max_framerate.emplace(Double::getValue(env, maxFramerate));
 			}
 			if (scaleResolution.get()) {
 				params.scale_resolution_down_by.emplace(Double::getValue(env, scaleResolution));
@@ -74,8 +95,11 @@ namespace jni
 
 			ctor = GetMethod(env, cls, "<init>", "()V");
 			
+			ssrc = GetFieldID(env, cls, "ssrc", LONG_SIG);
 			active = GetFieldID(env, cls, "active", BOOLEAN_SIG);
+			minBitrate = GetFieldID(env, cls, "minBitrate", INTEGER_SIG);
 			maxBitrate = GetFieldID(env, cls, "maxBitrate", INTEGER_SIG);
+			maxFramerate = GetFieldID(env, cls, "maxFramerate", DOUBLE_SIG);
 			scaleResolution = GetFieldID(env, cls, "scaleResolutionDownBy", DOUBLE_SIG);
 		}
 	}

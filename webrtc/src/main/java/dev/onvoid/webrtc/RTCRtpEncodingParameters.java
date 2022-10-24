@@ -24,6 +24,16 @@ package dev.onvoid.webrtc;
 public class RTCRtpEncodingParameters {
 
 	/**
+	 * If unset, a value is chosen by the implementation.
+	 * <br>
+	 * Note that the chosen value is NOT returned by GetParameters, because it
+	 * may change due to an SSRC conflict, in which case the conflict is handled
+	 * internally without any event. Another way of looking at this is that an
+	 * unset SSRC acts as a "wildcard" SSRC.
+	 */
+	public Long ssrc;
+
+	/**
 	 * Indicates that this encoding is actively being sent. Setting it to false
 	 * causes this encoding to no longer be sent. Setting it to true causes this
 	 * encoding to be sent.
@@ -35,6 +45,18 @@ public class RTCRtpEncodingParameters {
 	 * encoding. If unset, there is no maximum bitrate.
 	 */
 	public Integer maxBitrate;
+
+	/**
+	 * When present, indicates the minimum bitrate that can be used to send this
+	 * encoding. If unset, there is no minimum bitrate.
+	 */
+	public Integer minBitrate;
+
+	/**
+	 * When present, indicates the maximum frame rate that can be used to send
+	 * this encoding, in frames per second.
+	 */
+	public Double maxFramerate;
 
 	/**
 	 * Only present if the sender's kind is "video". The video's resolution will
@@ -57,8 +79,9 @@ public class RTCRtpEncodingParameters {
 
 	@Override
 	public String toString() {
-		return String.format("%s [active=%s, maxBitrate=%s, scaleResolutionDownBy=%s]",
-				RTCRtpEncodingParameters.class.getSimpleName(), active,
-				maxBitrate, scaleResolutionDownBy);
+		return "RTCRtpEncodingParameters{" + "ssrc=" + ssrc + ", active="
+				+ active + ", maxBitrate=" + maxBitrate + ", minBitrate="
+				+ minBitrate + ", maxFramerate=" + maxFramerate
+				+ ", scaleResolutionDownBy=" + scaleResolutionDownBy + '}';
 	}
 }

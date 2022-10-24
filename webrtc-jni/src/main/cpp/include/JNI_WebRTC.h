@@ -27,6 +27,7 @@
 
 #define BOOLEAN_SIG     "Ljava/lang/Boolean;"
 #define DOUBLE_SIG      "Ljava/lang/Double;"
+#define LONG_SIG        "Ljava/lang/Long;"
 #define INTEGER_SIG     "Ljava/lang/Integer;"
 
 #define BYTE_BUFFER_SIG "Ljava/nio/ByteBuffer;"

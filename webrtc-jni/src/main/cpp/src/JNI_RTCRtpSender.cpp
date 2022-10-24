@@ -16,6 +16,7 @@
 
 #include "JNI_RTCRtpSender.h"
 #include "api/RTCRtpSendParameters.h"
+#include <api/WebRTCUtils.h>
 #include "JavaFactories.h"
 #include "JavaList.h"
 #include "JavaRef.h"
@@ -74,7 +75,13 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setParameters
 	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
 	CHECK_HANDLE(sender);
 
-	sender->SetParameters(jni::RTCRtpSendParameters::toNative(env, jni::JavaLocalRef<jobject>(env, jParams)));
+	webrtc::RtpParameters rtp_parameters = jni::RTCRtpSendParameters::toNative(env, jni::JavaLocalRef<jobject>(env, jParams));
+
+	webrtc::RTCError result = sender->SetParameters(rtp_parameters);
+
+	if (!result.ok()) {
+		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result).c_str()));
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getParameters
