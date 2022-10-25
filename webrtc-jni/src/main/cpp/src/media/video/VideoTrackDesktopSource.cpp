@@ -58,6 +58,11 @@ namespace jni
 		this->frameRate = frameRate;
 	}
 
+	void VideoTrackDesktopSource::setMaxFrameSize(webrtc::DesktopSize size)
+	{
+		this->maxFrameSize = size;
+	}
+
 	void VideoTrackDesktopSource::setFocusSelectedSource(bool focus)
 	{
 		this->focusSelectedSource = focus;
@@ -106,8 +111,29 @@ namespace jni
 
 		int width = frame->size().width();
 		int height = frame->size().height();
+
+		if (width == 1 && height == 1) {
+			// Window has been minimized (hidden).
+			if (lastFrame != nullptr) {
+				process(lastFrame);
+			}
+		}
+		else {
+			// Copy current frame as backup, in order to show it when the window is minimized.
+			lastFrame.reset(new webrtc::BasicDesktopFrame(webrtc::DesktopSize(width, height)));
+			lastFrame->CopyPixelsFrom(frame->data(), frame->stride(), webrtc::DesktopRect::MakeWH(width, height));
+
+			process(frame);
+		}
+	}
+
+	void VideoTrackDesktopSource::process(std::unique_ptr<webrtc::DesktopFrame> & frame)
+	{
 		int64_t time = rtc::TimeMicros();
 
+		int width = frame->size().width();
+		int height = frame->size().height();
+		
 		int adapted_width;
 		int adapted_height;
 		int crop_width;
@@ -131,18 +157,21 @@ namespace jni
 			width, height);
 
 		if (conversionResult >= 0) {
-			int max_width = 1920;
-			int max_height = 1600;
+			if (!maxFrameSize.is_empty()) {
+				// Adapt frame size to contraints.
+				int max_width = maxFrameSize.width();
+				int max_height = maxFrameSize.height();
 
-			if (adapted_width > max_width) {
-				double scale = max_width / (double) adapted_width;
-				adapted_width = max_width;
-				adapted_height = (int)(adapted_height * scale);
-			}
-			else if (adapted_height > max_height) {
-				double scale = max_height / adapted_height;
-				adapted_width = (int)(adapted_width * scale);
-				adapted_height = adapted_height;
+				if (adapted_width > max_width) {
+					double scale = max_width / (double)adapted_width;
+					adapted_width = max_width;
+					adapted_height = (int)(adapted_height * scale);
+				}
+				else if (adapted_height > max_height) {
+					double scale = max_height / (double)adapted_height;
+					adapted_width = (int)(adapted_width * scale);
+					adapted_height = max_height;
+				}
 			}
 
 			if (adapted_width != width || adapted_height != height) {

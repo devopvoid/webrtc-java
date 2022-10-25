@@ -28,6 +28,8 @@ public class VideoDesktopSource extends VideoTrackSource {
 
 	public native void setFrameRate(int frameRate);
 
+	public native void setMaxFrameSize(int width, int height);
+
 	public native void start();
 
 	public native void stop();

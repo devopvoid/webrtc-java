@@ -32,6 +32,7 @@ namespace jni
 
 			void setSourceId(webrtc::DesktopCapturer::SourceId source, bool isWindow);
 			void setFrameRate(const uint16_t frameRate);
+			void setMaxFrameSize(webrtc::DesktopSize size);
 			void setFocusSelectedSource(bool focus);
 
 			void start();
@@ -48,16 +49,21 @@ namespace jni
 
 		private:
 			void capture();
+			void process(std::unique_ptr<webrtc::DesktopFrame> & frame);
 
 		private:
 			uint16_t frameRate;
 			bool isCapturing;
 			bool focusSelectedSource;
 
+			webrtc::DesktopSize maxFrameSize;
+
 			webrtc::MediaSourceInterface::SourceState sourceState;
 
 			webrtc::DesktopCapturer::SourceId sourceId;
 			bool sourceIsWindow;
+
+			std::unique_ptr<webrtc::DesktopFrame> lastFrame;
 
 			std::unique_ptr<rtc::Thread> captureThread;
 

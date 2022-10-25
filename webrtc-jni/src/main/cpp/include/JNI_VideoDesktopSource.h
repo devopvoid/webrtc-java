@@ -25,6 +25,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
+	 * Method:    setMaxFrameSize
+	 * Signature: (II)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setMaxFrameSize
+	(JNIEnv*, jobject, jint, jint);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
 	 * Method:    setFocusSelectedSource
 	 * Signature: (Z)V
 	 */
