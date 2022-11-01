@@ -48,17 +48,19 @@ namespace jni
 		{
 			const auto javaClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
 			
-			jobject yBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataY()), buffer->StrideY() * buffer->height());
-			jobject uBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataU()), buffer->StrideU() * buffer->ChromaHeight());
-			jobject vBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataV()), buffer->StrideV() * buffer->ChromaHeight());
+			jobject yBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataY()), static_cast<jlong>(buffer->StrideY()) * buffer->height());
+			jobject uBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataU()), static_cast<jlong>(buffer->StrideU()) * buffer->ChromaHeight());
+			jobject vBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataV()), static_cast<jlong>(buffer->StrideV()) * buffer->ChromaHeight());
 
 			jobject jBuffer = env->NewObject(javaClass->cls, javaClass->ctor, buffer->width(), buffer->height(),
 				yBuffer, buffer->StrideY(), uBuffer, buffer->StrideU(), vBuffer, buffer->StrideV());
 
 			SetHandle(env, jBuffer, buffer.get());
+
 			env->DeleteLocalRef(yBuffer);
 			env->DeleteLocalRef(uBuffer);
 			env->DeleteLocalRef(vBuffer);
+
 			return JavaLocalRef<jobject>(env, jBuffer);
 		}
 	}

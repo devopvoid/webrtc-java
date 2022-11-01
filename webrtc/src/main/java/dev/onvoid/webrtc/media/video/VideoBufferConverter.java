@@ -84,7 +84,7 @@ public final class VideoBufferConverter {
 		
 		i420.release();
 	}
-	
+
 	private native static void I420toByteArray(
 			ByteBuffer srcY, int srcStrideY,
 			ByteBuffer srcU, int srcStrideU,
@@ -100,5 +100,5 @@ public final class VideoBufferConverter {
 			ByteBuffer dst,
 			int width, int height,
 			int fourCC) throws Exception;
-	
+
 }

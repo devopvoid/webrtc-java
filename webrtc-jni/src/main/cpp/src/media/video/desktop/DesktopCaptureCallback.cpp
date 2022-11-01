@@ -20,7 +20,11 @@
 #include "JavaEnums.h"
 #include "JNI_WebRTC.h"
 
+#include "libyuv/convert.h"
+#include "libyuv/video_common.h"
 #include "modules/desktop_capture/desktop_frame.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/time_utils.h"
 
 #if defined(WEBRTC_WIN)
 #include "rtc_base/win32.h"
@@ -30,7 +34,8 @@ namespace jni
 {
 	DesktopCaptureCallback::DesktopCaptureCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback) :
 		callback(callback),
-		javaClass(JavaClasses::get<JavaDesktopCaptureCallbackClass>(env))
+		javaClass(JavaClasses::get<JavaDesktopCaptureCallbackClass>(env)),
+		javaFrameClass(JavaClasses::get<JavaVideoFrameClass>(env))
 	{
 	}
 
@@ -44,39 +49,64 @@ namespace jni
 
 		auto jresult = JavaEnums::toJava(env, result);
 
-		std::unique_ptr<webrtc::DesktopFrame> cFrame = std::move(frame);
+		int width = frame->size().width();
+		int height = frame->size().height();
+
+		int crop_x = 0;
+		int crop_y = 0;
+		int crop_w = width;
+		int crop_h = height;
 
 #if defined(WEBRTC_WIN)
 		// Crop black window borders.
-		bool fullscreen = cFrame->stride() == (cFrame->size().width() * webrtc::DesktopFrame::kBytesPerPixel);
+		bool fullscreen = frame->stride() == (frame->size().width() * webrtc::DesktopFrame::kBytesPerPixel);
 
 		if (!fullscreen) {
-			const webrtc::DesktopVector & top_left = cFrame->top_left();
-			const webrtc::DesktopSize & size = cFrame->size();
+			const webrtc::DesktopVector & top_left = frame->top_left();
 			const int32_t border = GetSystemMetrics(SM_CXPADDEDBORDER);
 
-			int32_t x = border;
-			int32_t y = top_left.y() < 0 ? -top_left.y() : 0;
-			int32_t w = size.width() - x * 2;
-			int32_t h = size.height() - (y + border);
-
-			auto croppedFrame = std::make_unique<webrtc::BasicDesktopFrame>(webrtc::DesktopSize(w, h));
-			croppedFrame->set_top_left(top_left.add(webrtc::DesktopVector(x, y)));
-			croppedFrame->CopyPixelsFrom(*cFrame, webrtc::DesktopVector(x, y),
-				webrtc::DesktopRect::MakeSize(croppedFrame->size()));
-
-			cFrame = std::move(croppedFrame);
+			crop_x = border;
+			crop_y = top_left.y() < 0 ? -top_left.y() : 0;
+			crop_w = width - crop_x * 2;
+			crop_h = height - (crop_y + border);
 		}
 #endif
 
-		env->CallVoidMethod(callback, javaClass->onCaptureResult,
-			jresult.get(), DesktopFrame::toJava(env, cFrame.get()).get());
+		if (!i420Buffer || i420Buffer->width() != crop_w || i420Buffer->height() != crop_h) {
+			i420Buffer = webrtc::I420Buffer::Create(crop_w, crop_h);
+		}
+
+		const int conversionResult = libyuv::ConvertToI420(
+			frame->data(),
+			0,
+			i420Buffer->MutableDataY(), i420Buffer->StrideY(),
+			i420Buffer->MutableDataU(), i420Buffer->StrideU(),
+			i420Buffer->MutableDataV(), i420Buffer->StrideV(),
+			crop_x, crop_y,
+			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, i420Buffer->height(), crop_w, crop_h,
+			libyuv::kRotate0,
+			libyuv::FOURCC_ARGB);
+		
+		if (conversionResult < 0) {
+			RTC_LOG(LS_ERROR) << "Failed to convert desktop frame to I420";
+			return;
+		}
+		
+		jint rotation = static_cast<jint>(webrtc::kVideoRotation_0);
+		jlong timestamp = rtc::TimeMicros() * rtc::kNumNanosecsPerMicrosec;
+
+		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420Buffer);
+		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
+
+		env->CallVoidMethod(callback, javaClass->onCaptureResult, jresult.get(), jFrame);
+		env->DeleteLocalRef(jBuffer);
+		env->DeleteLocalRef(jFrame);
 	}
 
 	DesktopCaptureCallback::JavaDesktopCaptureCallbackClass::JavaDesktopCaptureCallbackClass(JNIEnv * env)
 	{
 		jclass cls = FindClass(env, PKG_DESKTOP"DesktopCaptureCallback");
 
-		onCaptureResult = GetMethod(env, cls, "onCaptureResult", "(L" PKG_DESKTOP "DesktopCapturer$Result;L" PKG_DESKTOP "DesktopFrame;)V");
+		onCaptureResult = GetMethod(env, cls, "onCaptureResult", "(L" PKG_DESKTOP "DesktopCapturer$Result;L" PKG_VIDEO "VideoFrame;)V");
 	}
 }

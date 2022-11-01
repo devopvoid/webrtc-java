@@ -16,8 +16,10 @@
 
 package dev.onvoid.webrtc.media.video.desktop;
 
+import dev.onvoid.webrtc.media.video.VideoFrame;
+
 public interface DesktopCaptureCallback {
 
-	void onCaptureResult(DesktopCapturer.Result result, DesktopFrame frame);
+	void onCaptureResult(DesktopCapturer.Result result, VideoFrame frame);
 
 }

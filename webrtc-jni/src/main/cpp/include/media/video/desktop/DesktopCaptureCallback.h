@@ -17,9 +17,11 @@
 #ifndef JNI_WEBRTC_MEDIA_DESKTOP_CAPTURE_CALLBACK_H_
 #define JNI_WEBRTC_MEDIA_DESKTOP_CAPTURE_CALLBACK_H_
 
+#include "api/VideoFrame.h"
 #include "JavaClass.h"
 #include "JavaRef.h"
 
+#include "api/video/i420_buffer.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 
 #include <jni.h>
@@ -48,6 +50,9 @@ namespace jni
 			JavaGlobalRef<jobject> callback;
 
 			const std::shared_ptr<JavaDesktopCaptureCallbackClass> javaClass;
+			const std::shared_ptr<JavaVideoFrameClass> javaFrameClass;
+
+			rtc::scoped_refptr<webrtc::I420Buffer> i420Buffer;
 	};
 }
 
