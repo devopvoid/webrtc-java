@@ -136,25 +136,46 @@ namespace jni
 		
 		int adapted_width;
 		int adapted_height;
-		int crop_width;
-		int crop_height;
-		int crop_x;
-		int crop_y;
 
-		if (!AdaptFrame(width, height, time, &adapted_width, &adapted_height, &crop_width, &crop_height, &crop_x, &crop_y)) {
+		int crop_x = 0;
+		int crop_y = 0;
+		int crop_w = width;
+		int crop_h = height;
+
+		if (!AdaptFrame(width, height, time, &adapted_width, &adapted_height, &crop_w, &crop_h, &crop_x, &crop_y)) {
 			// Drop frame in order to respect frame rate constraint.
 			return;
 		}
 
-		if (!buffer || buffer->width() != width || buffer->height() != height) {
-			buffer = webrtc::I420Buffer::Create(width, height);
+#if defined(WEBRTC_WIN)
+		// Crop black window borders.
+		bool fullscreen = frame->stride() == (frame->size().width() * webrtc::DesktopFrame::kBytesPerPixel);
+
+		if (!fullscreen) {
+			const webrtc::DesktopVector& top_left = frame->top_left();
+			const int32_t border = GetSystemMetrics(SM_CXPADDEDBORDER);
+
+			crop_x = border;
+			crop_y = top_left.y() < 0 ? -top_left.y() : 0;
+			crop_w = width - crop_x * 2;
+			crop_h = height - (crop_y + border);
+		}
+#endif
+
+		if (!buffer || buffer->width() != crop_w || buffer->height() != crop_h) {
+			buffer = webrtc::I420Buffer::Create(crop_w, crop_h);
 		}
 
-		const int conversionResult = libyuv::ARGBToI420(frame->data(), frame->stride(),
+		const int conversionResult = libyuv::ConvertToI420(
+			frame->data(),
+			0,
 			buffer->MutableDataY(), buffer->StrideY(),
 			buffer->MutableDataU(), buffer->StrideU(),
 			buffer->MutableDataV(), buffer->StrideV(),
-			width, height);
+			crop_x, crop_y,
+			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, buffer->height(), crop_w, crop_h,
+			libyuv::kRotate0,
+			libyuv::FOURCC_ARGB);
 
 		if (conversionResult >= 0) {
 			if (!maxFrameSize.is_empty()) {
