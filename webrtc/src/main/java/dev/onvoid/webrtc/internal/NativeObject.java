@@ -17,7 +17,7 @@
 package dev.onvoid.webrtc.internal;
 
 /**
- * Binds a native object pointer to an Java object extending this class.
+ * Binds a native object pointer to a Java object extending this class.
  *
  * @author Alex Andres
  */

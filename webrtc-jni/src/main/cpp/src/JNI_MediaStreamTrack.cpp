@@ -19,6 +19,8 @@
 #include "JavaError.h"
 #include "JavaString.h"
 
+#include "media/MediaStreamTrackObserver.h"
+
 #include "api/media_stream_interface.h"
 #include "rtc_base/logging.h"
 
@@ -36,6 +38,13 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 	else {
 		SetHandle<std::nullptr_t>(env, caller, nullptr);
 		track = nullptr;
+	}
+
+	// Dispose the attached listener.
+	auto listener = GetHandle<jni::MediaStreamTrackObserver>(env, caller, "listenerNativeHandle");
+
+	if (listener) {
+		delete listener;
 	}
 }
 
