@@ -23,6 +23,7 @@
 #include "modules/desktop_capture/desktop_capture_options.h"
 #include "modules/video_capture/video_capture_factory.h"
 #include "third_party/libyuv/include/libyuv/video_common.h"
+#include "rtc_base/logging.h"
 #include "system_wrappers/include/sleep.h"
 
 #include "modules/desktop_capture/desktop_capturer.h"
@@ -106,6 +107,16 @@ namespace jni
 	void VideoTrackDesktopSource::OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame)
 	{
 		if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
+			if (result == webrtc::DesktopCapturer::Result::ERROR_PERMANENT) {
+				RTC_LOG(LS_ERROR) << "Permanent error capturing desktop frame. Stopping track.";
+
+				// Notify the track that we are permanently done.
+				sourceState = kEnded;
+				FireOnChanged();
+
+				stop();
+			}
+			
 			return;
 		}
 
@@ -261,7 +272,5 @@ namespace jni
 
 			webrtc::SleepMs(msPerFrame);
 		}
-
-		sourceState = kEnded;
 	}
 }
