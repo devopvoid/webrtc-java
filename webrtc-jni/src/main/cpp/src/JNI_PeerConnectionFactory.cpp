@@ -17,7 +17,6 @@
 #include "JNI_PeerConnectionFactory.h"
 #include "api/AudioOptions.h"
 #include "api/CreateSessionDescriptionObserver.h"
-#include "media/MediaStreamTrackObserver.h"
 #include "api/PeerConnectionObserver.h"
 #include "api/RTCConfiguration.h"
 #include "api/RTCRtpCapabilities.h"
@@ -173,18 +172,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 	std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
 
 	rtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
-	webrtc::AudioTrackInterface * track = audioTrack.release();
 
-	jni::JavaLocalRef<jobject> jTrack = jni::JavaFactories::create(env, track);
-
-	jni::MediaStreamTrackObserver * trackObserver = new jni::MediaStreamTrackObserver(env, jni::JavaGlobalRef<jobject>(env, jTrack.get()), track);
-
-	track->RegisterObserver(trackObserver);
-
-	// Bind native observer to Java handle.
-	SetHandle(env, jTrack, "listenerNativeHandle", trackObserver);
-
-	return jTrack.release();
+	return jni::JavaFactories::create(env, audioTrack.release()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVideoTrack
@@ -208,18 +197,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 	std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
 
 	rtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(label, source);
-	webrtc::VideoTrackInterface * track = videoTrack.release();
 
-	jni::JavaLocalRef<jobject> jTrack = jni::JavaFactories::create(env, track);
-
-	jni::MediaStreamTrackObserver * trackObserver = new jni::MediaStreamTrackObserver(env, jni::JavaGlobalRef<jobject>(env, jTrack.get()), track);
-
-	track->RegisterObserver(trackObserver);
-
-	// Bind native observer to Java handle.
-	SetHandle(env, jTrack, "listenerNativeHandle", trackObserver);
-
-	return jTrack.release();
+	return jni::JavaFactories::create(env, videoTrack.release()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnection

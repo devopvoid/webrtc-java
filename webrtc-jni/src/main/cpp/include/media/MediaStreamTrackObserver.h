@@ -27,31 +27,40 @@
 
 namespace jni
 {
+	enum class MediaStreamTrackEvent {
+		ended,
+		mute
+	};
+
 	class MediaStreamTrackObserver : public webrtc::ObserverInterface
 	{
 		public:
-			explicit MediaStreamTrackObserver(JNIEnv * env, const JavaGlobalRef<jobject> & javaTrack, const webrtc::MediaStreamTrackInterface * track);
+			explicit MediaStreamTrackObserver(JNIEnv * env, const JavaGlobalRef<jobject> & javaTrack, const webrtc::MediaStreamTrackInterface * track, const MediaStreamTrackEvent & eventType);
 			~MediaStreamTrackObserver() = default;
 
 			// ObserverInterface implementation.
 			void OnChanged() override;
 
 		private:
-			class JavaMediaStreamTrackClass : public JavaClass
+			class JavaMediaStreamTrackListenerClass : public JavaClass
 			{
 				public:
-					explicit JavaMediaStreamTrackClass(JNIEnv * env);
+					explicit JavaMediaStreamTrackListenerClass(JNIEnv * env);
 
-					jmethodID onEnded;
-					jmethodID onMuteState;
+					jmethodID onTrackEnd;
+					jmethodID onTrackMute;
 			};
+
+			JavaLocalRef<jobject> createJavaTrack(JNIEnv * env);
 
 		private:
 			const webrtc::MediaStreamTrackInterface * track;
 
+			const MediaStreamTrackEvent eventType;
+
 			const JavaGlobalRef<jobject> javaTrack;
 
-			const std::shared_ptr<JavaMediaStreamTrackClass> javaClass;
+			const std::shared_ptr<JavaMediaStreamTrackListenerClass> javaClass;
 
 			webrtc::MediaStreamTrackInterface::TrackState trackState;
 			bool trackEnabled;

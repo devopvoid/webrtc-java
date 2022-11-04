@@ -18,10 +18,6 @@ package dev.onvoid.webrtc.media;
 
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
-
 /**
  * The MediaStreamTrack represents media of a single type that originates from
  * one media source, e.g. video produced by a web camera.
@@ -49,10 +45,6 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 */
 	public static final String VIDEO_TRACK_KIND = "video";
 
-	private final List<Consumer<Boolean>> muteListeners = new ArrayList<>();
-
-	private final List<Runnable> endedListeners = new ArrayList<>();
-
 
 	protected MediaStreamTrack() {
 
@@ -63,10 +55,8 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 *
 	 * @param listener The listener to add.
 	 */
-	public void addTrackMuteListener(Consumer<Boolean> listener) {
-		if (!muteListeners.contains(listener)) {
-			muteListeners.add(listener);
-		}
+	public void addTrackMuteListener(MediaStreamTrackMuteListener listener) {
+		addMuteEventListener(listener);
 	}
 
 	/**
@@ -74,8 +64,8 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 *
 	 * @param listener The listener to remove.
 	 */
-	public void removeTrackMuteListener(Consumer<Boolean> listener) {
-		muteListeners.remove(listener);
+	public void removeTrackMuteListener(MediaStreamTrackMuteListener listener) {
+		removeMuteEventListener(listener);
 	}
 
 	/**
@@ -83,10 +73,8 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 *
 	 * @param listener The listener to add.
 	 */
-	public void addTrackEndedListener(Runnable listener) {
-		if (!endedListeners.contains(listener)) {
-			endedListeners.add(listener);
-		}
+	public void addTrackEndedListener(MediaStreamTrackEndedListener listener) {
+		addEndedEventListener(listener);
 	}
 
 	/**
@@ -94,8 +82,8 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 *
 	 * @param listener The listener to remove.
 	 */
-	public void removeTrackEndedListener(Runnable listener) {
-		endedListeners.remove(listener);
+	public void removeTrackEndedListener(MediaStreamTrackEndedListener listener) {
+		removeEndedEventListener(listener);
 	}
 
 	@Override
@@ -145,21 +133,10 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 */
 	public native MediaStreamTrackState getState();
 
-	/**
-	 * Called by the native implementation when the track ended.
-	 */
-	private void onEnded() {
-		for (Runnable listener : endedListeners) {
-			listener.run();
-		}
-	}
+	private native void addEndedEventListener(MediaStreamTrackEndedListener listener);
+	private native void removeEndedEventListener(MediaStreamTrackEndedListener listener);
 
-	/**
-	 * Called by the native implementation when the mute state has changed.
-	 */
-	private void onMuteState(boolean muted) {
-		for (Consumer<Boolean> listener : muteListeners) {
-			listener.accept(muted);
-		}
-	}
+	private native void addMuteEventListener(MediaStreamTrackMuteListener listener);
+	private native void removeMuteEventListener(MediaStreamTrackMuteListener listener);
+
 }

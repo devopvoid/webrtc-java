@@ -21,10 +21,11 @@
 
 namespace jni
 {
-	MediaStreamTrackObserver::MediaStreamTrackObserver(JNIEnv * env, const JavaGlobalRef<jobject> & javaTrack, const webrtc::MediaStreamTrackInterface * track) :
+	MediaStreamTrackObserver::MediaStreamTrackObserver(JNIEnv * env, const JavaGlobalRef<jobject> & javaTrack, const webrtc::MediaStreamTrackInterface * track, const MediaStreamTrackEvent & eventType) :
 		javaTrack(javaTrack),
 		track(track),
-		javaClass(JavaClasses::get<JavaMediaStreamTrackClass>(env))
+		eventType(eventType),
+		javaClass(JavaClasses::get<JavaMediaStreamTrackListenerClass>(env))
 	{
 		trackEnabled = track->enabled();
 		trackState = track->state();
@@ -36,13 +37,16 @@ namespace jni
 
 		// Check state changes.
 
-		if (track->enabled() != trackEnabled) {
-			// The condition "muted" is managed using the "enabled" property.
-			env->CallVoidMethod(javaTrack, javaClass->onMuteState, !track->enabled());
+		if (eventType == MediaStreamTrackEvent::mute) {
+			if (track->enabled() != trackEnabled) {
+				// The condition "muted" is managed using the "enabled" property.
+				env->CallVoidMethod(javaTrack, javaClass->onTrackMute, createJavaTrack(env).release(), !track->enabled());
+			}
 		}
-
-		if (track->state() != trackState && track->state() == webrtc::MediaStreamTrackInterface::TrackState::kEnded) {
-			env->CallVoidMethod(javaTrack, javaClass->onEnded);
+		else if (eventType == MediaStreamTrackEvent::ended) {
+			if (track->state() != trackState && track->state() == webrtc::MediaStreamTrackInterface::TrackState::kEnded) {
+				env->CallVoidMethod(javaTrack, javaClass->onTrackEnd, createJavaTrack(env).release());
+			}
 		}
 
 		// Save current state.
@@ -50,11 +54,25 @@ namespace jni
 		trackState = track->state();
 	}
 
-	MediaStreamTrackObserver::JavaMediaStreamTrackClass::JavaMediaStreamTrackClass(JNIEnv * env)
+	JavaLocalRef<jobject> MediaStreamTrackObserver::createJavaTrack(JNIEnv * env)
 	{
-		jclass cls = FindClass(env, PKG_MEDIA"MediaStreamTrack");
+		if (const webrtc::AudioTrackInterface * t = dynamic_cast<const webrtc::AudioTrackInterface *>(track)) {
+			return jni::JavaFactories::create(env, t);
+		}
+		else if (const webrtc::VideoTrackInterface * t = dynamic_cast<const webrtc::VideoTrackInterface *>(track)) {
+			return jni::JavaFactories::create(env, t);
+		}
+		else {
+			return jni::JavaLocalRef<jobject>(env, nullptr);
+		}
+	}
 
-		onEnded = GetMethod(env, cls, "onEnded", "()V");
-		onMuteState = GetMethod(env, cls, "onMuteState", "(Z)V");
+	MediaStreamTrackObserver::JavaMediaStreamTrackListenerClass::JavaMediaStreamTrackListenerClass(JNIEnv * env)
+	{
+		jclass clsEnded = FindClass(env, PKG_MEDIA"MediaStreamTrackEndedListener");
+		jclass clsMute = FindClass(env, PKG_MEDIA"MediaStreamTrackMuteListener");
+
+		onTrackEnd = GetMethod(env, clsEnded, "onTrackEnd", "(L" PKG_MEDIA "MediaStreamTrack;)V");
+		onTrackMute = GetMethod(env, clsMute, "onTrackMute", "(L" PKG_MEDIA "MediaStreamTrack;Z)V");
 	}
 }

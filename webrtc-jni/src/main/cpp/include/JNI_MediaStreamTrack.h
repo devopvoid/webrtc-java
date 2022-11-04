@@ -55,6 +55,38 @@ extern "C" {
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getState
 	(JNIEnv *, jobject);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaStreamTrack
+	 * Method:    addEndedEventListener
+	 * Signature: (Ljava/lang/Runnable;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addEndedEventListener
+	(JNIEnv*, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaStreamTrack
+	 * Method:    removeEndedEventListener
+	 * Signature: (Ljava/lang/Runnable;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeEndedEventListener
+	(JNIEnv*, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaStreamTrack
+	 * Method:    addMuteEventListener
+	 * Signature: (Ljava/util/function/Consumer;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addMuteEventListener
+	(JNIEnv*, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_MediaStreamTrack
+	 * Method:    removeMuteEventListener
+	 * Signature: (Ljava/util/function/Consumer;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeMuteEventListener
+	(JNIEnv*, jobject, jobject);
+
 #ifdef __cplusplus
 }
 #endif
