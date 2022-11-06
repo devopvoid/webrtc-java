@@ -31,6 +31,6 @@ public enum MediaType {
 	/**
 	 * Represents a data media type.
 	 */
-	DATA;
+	DATA
 
 }

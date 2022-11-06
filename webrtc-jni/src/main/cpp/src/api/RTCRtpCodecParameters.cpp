@@ -30,7 +30,7 @@ namespace jni
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpCodecParameters & parameters)
 		{
 			jint payloadType = static_cast<jint>(parameters.payload_type);
-			jobject mediaType = JavaEnums::toJava(env, parameters.kind);
+			JavaLocalRef<jobject> mediaType = JavaEnums::toJava(env, parameters.kind);
 			JavaLocalRef<jstring> codecName = JavaString::toJava(env, parameters.name);
 			jint clockRate = static_cast<jint>(parameters.clock_rate.value_or(0));
 			jint channels = static_cast<jint>(parameters.num_channels.value_or(0));
@@ -46,7 +46,7 @@ namespace jni
 
 			const auto javaClass = JavaClasses::get<JavaRTCRtpCodecParametersClass>(env);
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, payloadType, mediaType, codecName.get(), clockRate, channels, ((JavaLocalRef<jobject>)paramMap).get());
+			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, payloadType, mediaType.get(), codecName.get(), clockRate, channels, ((JavaLocalRef<jobject>)paramMap).get());
 			ExceptionCheck(env);
 
 			return JavaLocalRef<jobject>(env, object);
@@ -79,10 +79,10 @@ namespace jni
 		{
 			cls = FindClass(env, PKG"RTCRtpCodecParameters");
 
-			ctor = GetMethod(env, cls, "<init>", "(IL" PKG "MediaType;" STRING_SIG "II" MAP_SIG ")V");
+			ctor = GetMethod(env, cls, "<init>", "(IL" PKG_MEDIA "MediaType;" STRING_SIG "II" MAP_SIG ")V");
 
 			payloadType = GetFieldID(env, cls, "payloadType", "I");
-			mediaType = GetFieldID(env, cls, "mediaType", "L" PKG "MediaType;");
+			mediaType = GetFieldID(env, cls, "mediaType", "L" PKG_MEDIA "MediaType;");
 			codecName = GetFieldID(env, cls, "codecName", STRING_SIG);
 			clockRate = GetFieldID(env, cls, "clockRate", "I");
 			channels = GetFieldID(env, cls, "channels", "I");
