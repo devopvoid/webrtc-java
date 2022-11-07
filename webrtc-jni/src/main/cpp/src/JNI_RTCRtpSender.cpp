@@ -76,7 +76,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setParameters
 	CHECK_HANDLE(sender);
 
 	webrtc::RtpParameters rtp_parameters = jni::RTCRtpSendParameters::toNative(env, jni::JavaLocalRef<jobject>(env, jParams));
-
 	webrtc::RTCError result = sender->SetParameters(rtp_parameters);
 
 	if (!result.ok()) {
