@@ -37,6 +37,7 @@ namespace jni
 
 			void start();
 			void stop();
+			void terminate();
 
 			// AdaptedVideoTrackSource implementation.
 			virtual bool is_screencast() const override;

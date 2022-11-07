@@ -88,6 +88,13 @@ namespace jni
 		}
 	}
 
+	void VideoTrackDesktopSource::terminate()
+	{
+		// Notify the track that we are permanently done.
+		sourceState = kEnded;
+		FireOnChanged();
+	}
+
 	bool VideoTrackDesktopSource::is_screencast() const {
 		return true;
 	}
@@ -110,10 +117,7 @@ namespace jni
 			if (result == webrtc::DesktopCapturer::Result::ERROR_PERMANENT) {
 				RTC_LOG(LS_ERROR) << "Permanent error capturing desktop frame. Stopping track.";
 
-				// Notify the track that we are permanently done.
-				sourceState = kEnded;
-				FireOnChanged();
-
+				terminate();
 				stop();
 			}
 			
@@ -254,6 +258,7 @@ namespace jni
 		}
 
 		if (!capturer->SelectSource(sourceId)) {
+			terminate();
 			return;
 		}
 
