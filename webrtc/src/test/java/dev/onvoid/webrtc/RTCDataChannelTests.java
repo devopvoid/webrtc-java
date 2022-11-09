@@ -18,7 +18,7 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.List;
+import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
@@ -43,8 +43,8 @@ class RTCDataChannelTests extends TestBase {
 
 		Thread.sleep(500);
 
-		assertEquals(List.of("Hello world"), callee.getReceivedTexts());
-		assertEquals(List.of("Hi :)"), caller.getReceivedTexts());
+		assertEquals(Arrays.asList("Hello world"), callee.getReceivedTexts());
+		assertEquals(Arrays.asList("Hi :)"), caller.getReceivedTexts());
 
 		caller.close();
 		callee.close();

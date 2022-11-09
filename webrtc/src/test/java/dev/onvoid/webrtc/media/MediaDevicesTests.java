@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.onvoid.webrtc.media.audio.AudioDevice;
+import dev.onvoid.webrtc.media.video.VideoCaptureCapability;
 import dev.onvoid.webrtc.media.video.VideoDevice;
 
 import java.util.List;
@@ -42,8 +43,8 @@ class MediaDevicesTests {
 
 		assertNotNull(captureDevices);
 
-		for (var device : captureDevices) {
-			var capabilities = MediaDevices.getVideoCaptureCapabilities(device);
+		for (VideoDevice device : captureDevices) {
+			List<VideoCaptureCapability> capabilities = MediaDevices.getVideoCaptureCapabilities(device);
 
 			assertNotNull(capabilities);
 		}
