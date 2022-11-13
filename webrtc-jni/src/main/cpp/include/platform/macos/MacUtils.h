@@ -38,4 +38,9 @@ inline void ThrowIfFailed(OSStatus status, const char * msg, ...)
 	}
 }
 
+namespace jni
+{
+	const std::string CFStringRefToUTF8(CFStringRef stringRef);
+}
+
 #endif

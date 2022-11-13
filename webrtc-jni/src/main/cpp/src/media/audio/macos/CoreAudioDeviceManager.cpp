@@ -275,7 +275,7 @@ namespace jni
 
 		AudioDevicePtr CoreAudioDeviceManager::createAudioDevice(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope) {
 			AudioDevicePtr device = nullptr;
-			CFStringRef devNameRef;
+			CFStringRef devNameRef = nullptr;
 			UInt32 dataSize = sizeof(devNameRef);
 
 			AudioObjectPropertyAddress pa;
@@ -286,15 +286,10 @@ namespace jni
 			OSStatus status = AudioObjectGetPropertyData(deviceID, &pa, 0, nullptr, &dataSize, &devNameRef);
 			ThrowIfFailed(status, "CoreAudio: Get device name failed");
 
-			CFIndex length = CFStringGetLength(devNameRef) + 1;
-
-			char deviceName[length];
-
-			CFStringGetCString(devNameRef, deviceName, length, kCFStringEncodingUTF8);
-			CFRelease(devNameRef);
-
-			std::string name(deviceName, length);
+			std::string name = CFStringRefToUTF8(devNameRef);
 			std::string id = std::to_string(deviceID);
+
+			CFRelease(devNameRef);
 
 			unsigned channels = getChannelCount(deviceID, scope);
 
