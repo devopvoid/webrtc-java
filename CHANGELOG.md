@@ -1,3 +1,31 @@
+## [0.7.0]() (2022-11-14)
+
+### API changes
+
+- Set native branch to 4844 (Milestone 99)
+
+### Enhancement
+
+- Compile release with backward compatibility for Java 8
+- Added setFocusSelectedSource to VideoTrackDesktopSource
+- Set maximum width and height for captured screen frames
+- DesktopCaptureCallback converts DesktopFrame to I420
+- VideoTrackDesktopSource crops black window borders on Windows
+- Added MediaStreamTrack "ended" and "muted" event observation
+
+### Fixed bugs
+
+- Fixed desktop capturing
+- Fixed setting codec preferences
+- Fixed setting sender parameters
+- Fixed memory leak in AudioTransportSink
+- Fixed memory leak with audio & video frames related to JNI local references
+- Fixed audio device names on mac with Cyrillic and other characters
+
+### Demo
+- Removed demos since AppRTC services have been turned down
+- A new demo app will follow soon
+
 ## [0.6.0]() (2022-01-17)
 
 ### API changes
