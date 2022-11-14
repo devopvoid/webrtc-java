@@ -79,27 +79,3 @@ jobs:
           NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
           NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: mvn deploy -Prelease -DskipTests -s .github/workflows/settings.xml
-
-      - name: Get demo bundle name
-        id: get-bundle
-        run: echo ::set-output name=bundle::$(basename webrtc-demo/webrtc-demo-javafx/target/webrtc-javafx-demo-*.jar)
-        shell: bash
-
-      - name: Get release context
-        id: get-release-context
-        run: |
-          owner=${{ github.event.repository.owner.name }}
-          api_url=https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest
-          upload_url=$(curl -s -u $owner:${{ secrets.GITHUB_TOKEN }} $api_url | jq -r '.upload_url')
-          echo ::set-output name=upload_url::$upload_url
-        shell: bash
-
-      - name: Upload demo release asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get-release-context.outputs.upload_url }}
-          asset_path: ./webrtc-demo/webrtc-demo-javafx/target/${{ steps.get-bundle.outputs.bundle }}
-          asset_name: ${{ steps.get-bundle.outputs.bundle }}
-          asset_content_type: application/java-archive
