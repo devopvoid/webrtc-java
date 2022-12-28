@@ -70,6 +70,22 @@ function(execute_command)
 	print("${COMMAND_ERROR}")
 endfunction()
 
+function(sysroot_link)
+	message(STATUS "Retrieving libm.so from sysroot")
+	execute_process(
+		COMMAND find src/build/linux/debian_sid_amd64-sysroot -iname libm-*.so
+		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
+		OUTPUT_VARIABLE COMMAND_OUTPUT
+		ERROR_VARIABLE COMMAND_ERROR
+	)
+
+	string(STRIP ${COMMAND_OUTPUT} LIBM_PATH)
+
+	message(STATUS "Linking libm.so from: ${WEBRTC_SRC_DIR}/${LIBM_PATH}")
+
+	target_link_libraries(${PROJECT_NAME} "${WEBRTC_SRC_DIR}/${LIBM_PATH}")
+endfunction()
+
 file(TO_CMAKE_PATH "${WEBRTC_SRC_DIR}" WEBRTC_SRC_DIR)
 
 set(WEBRTC_DIR ${WEBRTC_SRC_DIR})
@@ -118,6 +134,11 @@ endif()
 
 if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
 	message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
+
+	if(LINUX)
+		sysroot_link()
+	endif()
+
 	return()
 endif()
 
@@ -189,6 +210,10 @@ execute_command(
 	COMMAND ninja -C "${WEBRTC_BUILD}"
 	WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
+
+if(LINUX)
+	sysroot_link()
+endif()
 
 install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")
 install(
