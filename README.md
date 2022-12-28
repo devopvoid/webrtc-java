@@ -5,12 +5,23 @@
 
 Java native interface implementation based on the free, open [WebRTC](https://webrtc.org) project. The goal of this project is to enable development of RTC applications for desktop platforms running Java. This project wraps the [WebRTC Native API](https://webrtc.github.io/webrtc-org/native-code/native-apis) and is similar to the [JS API](https://w3c.github.io/webrtc-pc).
 
+### Maven
+
 ```xml
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
     <version>0.7.0</version>
 </dependency>
+```
+
+### Gradle
+
+```groovy
+implementation "dev.onvoid.webrtc:webrtc-java:0.7.0"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.7.0", classifier: "windows-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.7.0", classifier: "macos-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.7.0", classifier: "linux-x86_64"
 ```
 
 ### Supported Platforms
