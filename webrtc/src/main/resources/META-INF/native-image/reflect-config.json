@@ -1,0 +1,170 @@
+[
+  {
+	"name": "dev.onvoid.webrtc.RTCCertificatePEM"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCConfiguration"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCDataChannel"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCDataChannelBuffer"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCDataChannelState"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCDtlsTransport"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCDtlsTransportState"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCDtxStatus"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCIceCandidate"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCIceConnectionState"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCIceGatheringState"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCPeerConnection"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCPeerConnectionState"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCPriorityType"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtcpParameters"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpCapabilities"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpCodecCapability"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpCodecParameters"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpContributingSource"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpEncodingParameters"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionCapability"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionParameters"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpParameters"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpReceiver"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpSender"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpSendParameters"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpSynchronizationSource"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpTransceiver"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCRtpTransceiverDirection"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCSdpType"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCSessionDescription"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCSignalingState"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCStats"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCStatsCollectorCallback"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCStatsReport"
+  },
+  {
+	"name": "dev.onvoid.webrtc.RTCStatsType"
+  },
+  {
+	"name": "dev.onvoid.webrtc.TlsCertPolicy"
+  },
+  {
+	"name": "dev.onvoid.webrtc.logging.LogSink"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioDevice"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioOptions"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioProcessing"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioProcessingStats"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioProcessingStreamConfig"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioSink"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioSource"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioTrack"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioTrackSink"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.audio.AudioTrackSource"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.video.VideoCapture"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.video.VideoCaptureCapability"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.video.VideoDesktopSource"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.video.VideoDevice"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.video.desktop.DesktopCaptureCallback"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.video.desktop.DesktopFrame"
+  },
+  {
+	"name": "dev.onvoid.webrtc.media.video.desktop.DesktopSource"
+  }
+]

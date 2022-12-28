@@ -1,0 +1,161 @@
+[
+  {
+	"name":"java.lang.ClassLoader",
+	"methods":[
+	  {"name":"getPlatformClassLoader","parameterTypes":[] },
+	  {"name":"loadClass","parameterTypes":["java.lang.String"] }
+	]
+  },
+  {
+	"name":"java.util.ArrayList",
+	"methods":[
+	  {"name":"<init>","parameterTypes":["int"] },
+	  {"name":"add","parameterTypes":["java.lang.Object"] },
+	  {"name":"get","parameterTypes":["int"] },
+	  {"name":"size","parameterTypes":[] }
+	]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCBundlePolicy",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCDataChannel",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCDataChannelState",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCDtlsTransport",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCDtlsTransportState",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCDtxStatus",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCIceConnectionState",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCIceGatheringState",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCIceTransport",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCIceTransportPolicy",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCPeerConnection",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCPeerConnectionState",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCRtcpMuxPolicy",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCRtpReceiver",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCRtpSender",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCRtpTransceiver",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCRtpTransceiverDirection",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCSdpType",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCSignalingState",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.RTCStatsType",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.TlsCertPolicy",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.internal.NativeClassLoader",
+	"methods":[{"name":"getClassLoader","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.logging.Logging$Severity",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.Device",
+	"fields":[
+	  {"name":"descriptor"},
+	  {"name":"name"}
+	]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.MediaSource$State",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.MediaStream",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.MediaStreamTrackState",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.MediaType",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.audio.AudioDevice",
+	"methods":[{"name":"<init>","parameterTypes":["java.lang.String","java.lang.String"] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.audio.AudioLayer",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.audio.AudioProcessingConfig$NoiseSuppression$Level",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.audio.AudioTrack",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.audio.AudioTrackSource",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.video.VideoTrack",
+	"methods":[{"name":"<init>","parameterTypes":[] }]
+  },
+  {
+	"name":"dev.onvoid.webrtc.media.video.desktop.DesktopCapturer$Result",
+	"methods":[{"name":"values","parameterTypes":[] }]
+  }
+]
