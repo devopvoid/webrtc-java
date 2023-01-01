@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.13)
 project(webrtc)
 
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.hxx
@@ -13,6 +13,10 @@ if(NOT DEFINED TARGET_CPU)
 		set(TARGET_CPU "x86")
 	elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
 		set(TARGET_CPU "x64")
+	endif()
+
+	if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+		set(TARGET_CPU "${CMAKE_SYSTEM_PROCESSOR}")
 	endif()
 endif()
 
@@ -254,3 +258,4 @@ install(CODE "
 		endif()
 	endforeach()
 ")
+
