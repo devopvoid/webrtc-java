@@ -33,6 +33,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_desktop_DesktopCapturer
+	 * Method:    setFocusSelectedSource
+	 * Signature: (Z)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setFocusSelectedSource
+	(JNIEnv*, jobject, jboolean);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_desktop_DesktopCapturer
 	 * Method:    start
 	 * Signature: (Ldev/onvoid/webrtc/media/video/desktop/DesktopCaptureCallback;)V
 	 */

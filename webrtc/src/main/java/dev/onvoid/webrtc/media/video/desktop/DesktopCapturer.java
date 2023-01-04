@@ -63,6 +63,8 @@ public abstract class DesktopCapturer extends DisposableNativeObject {
 
 	public native void selectSource(DesktopSource source);
 
+	public native void setFocusSelectedSource(boolean focus);
+
 	public native void start(DesktopCaptureCallback callback);
 
 	public native void captureFrame();

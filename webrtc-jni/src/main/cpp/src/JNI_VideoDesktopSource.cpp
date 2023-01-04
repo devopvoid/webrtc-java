@@ -54,7 +54,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_set
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFocusSelectedSource
 (JNIEnv * env, jobject caller, jboolean focus)
 {
-	jni::VideoTrackDesktopSource* videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
+	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	videoSource->setFocusSelectedSource(focus);

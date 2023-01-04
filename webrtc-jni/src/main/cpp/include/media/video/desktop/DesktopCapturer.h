@@ -42,10 +42,13 @@ namespace jni
 			bool GetSourceList(SourceList * sources) override;
 			bool SelectSource(SourceId id) override;
 			bool FocusOnSelectedSource() override;
+			void setFocusSelectedSource(bool focus);
 			bool IsOccluded(const webrtc::DesktopVector & pos) override;
 
 		protected:
 			std::unique_ptr<webrtc::DesktopCapturer> capturer;
+
+			bool focusSelectedSource;
 
 #if defined(WEBRTC_WIN)
 		private:
