@@ -75,7 +75,12 @@ namespace jni
 
 			configuration.servers = JavaList::toVector(env, is, &RTCIceServer::toNative);
 			configuration.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
-			configuration.enable_dtls_srtp = true;
+            // TODO(bugs.webrtc.org/11066): Remove entirely once Fuchsia does not use.
+            // TODO(bugs.webrtc.org/9891) - Move to crypto_options
+            // Can be used to disable DTLS-SRTP. This should never be done, but can be
+            // useful for testing purposes, for example in setting up a loopback call
+            // with a single PeerConnection.
+//			configuration.enable_dtls_srtp = true; //todo
 			configuration.type = JavaEnums::toNative<webrtc::PeerConnectionInterface::IceTransportsType>(env, tp);
 			configuration.bundle_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::BundlePolicy>(env, bp);
 			configuration.rtcp_mux_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::RtcpMuxPolicy>(env, mp);
