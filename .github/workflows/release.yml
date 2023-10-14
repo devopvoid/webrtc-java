@@ -8,12 +8,12 @@ on:
 
 jobs:
   release:
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted, "${{ matrix.os }}"]
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-20.04, windows-2019]
-        java: [13]
+        os: [linux, macos, windows]
+        java: [17]
 
     env:
       WEBRTC_CACHE_BRANCH: 4844
