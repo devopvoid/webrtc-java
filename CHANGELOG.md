@@ -1,3 +1,14 @@
+## [0.8.0]() (2023-10-14)
+
+### Enhancement
+
+- Link libm from sysroot to increase GLIBC (<= 2.18) compatibility #108
+- Initialized configs to be used with GraalVM
+- Added setFocusSelectedSource to DesktopCapturer and capture with DesktopAndCursorComposer
+
+### Demo
+- Dropped demo code. New demo will be in a new repository.
+
 ## [0.7.0]() (2022-11-14)
 
 ### API changes
