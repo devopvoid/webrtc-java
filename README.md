@@ -21,6 +21,7 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 implementation "dev.onvoid.webrtc:webrtc-java:0.8.0"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "windows-x86_64"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "macos-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "macos-aarch64"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "linux-x86_64"
 ```
 
@@ -34,7 +35,7 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   </tr>
   <tr>
     <td>macOS</td>
-    <td>x86_64</td>
+    <td>x86_64, arm64</td>
   </tr>
   <tr>
     <td>Windows</td>
