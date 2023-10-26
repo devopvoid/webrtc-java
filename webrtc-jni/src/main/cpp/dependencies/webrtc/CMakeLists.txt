@@ -15,7 +15,7 @@ if(NOT DEFINED TARGET_CPU)
 		set(TARGET_CPU "x64")
 	endif()
 
-	if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+	if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
 		set(TARGET_CPU "${CMAKE_SYSTEM_PROCESSOR}")
 	endif()
 endif()
