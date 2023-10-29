@@ -74,10 +74,23 @@ function(execute_command)
 	print("${COMMAND_ERROR}")
 endfunction()
 
+function(sysroot_install)
+	message(STATUS "Installing sysroot")
+	execute_process(
+		COMMAND python build/linux/sysroot_scripts/install-sysroot.py --arch=${SYSROOT_ARCH}
+		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}/src"
+		OUTPUT_VARIABLE COMMAND_OUTPUT
+		ERROR_VARIABLE COMMAND_ERROR
+	)
+
+	print("${COMMAND_OUTPUT}")
+    print("${COMMAND_ERROR}")
+endfunction()
+
 function(sysroot_link)
 	message(STATUS "Retrieving libm.so from sysroot")
 	execute_process(
-		COMMAND find src/build/linux/debian_sid_amd64-sysroot -iname libm-*.so
+		COMMAND find ${SYSROOT_PATH} -iname libm-*.so
 		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
 		OUTPUT_VARIABLE COMMAND_OUTPUT
 		ERROR_VARIABLE COMMAND_ERROR
@@ -105,7 +118,7 @@ file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH_INSTALLED}" WEBRTC_LIB_PATH_INSTALLED)
 
 message(STATUS "WebRTC checkout path: ${WEBRTC_DIR}")
 message(STATUS "WebRTC checkout branch: ${WEBRTC_BRANCH}")
-message(STATUS "WebRTC target CPU: ${TARGET_CPU}")
+message(STATUS "WebRTC target: ${SOURCE_TARGET} ${TARGET_CPU}")
 message(STATUS "WebRTC build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
 
@@ -144,6 +157,10 @@ if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
 	endif()
 
 	return()
+endif()
+
+if(LINUX)
+	sysroot_install()
 endif()
 
 if(NOT EXISTS "${WEBRTC_SRC_DIR}/depot_tools")
@@ -258,4 +275,3 @@ install(CODE "
 		endif()
 	endforeach()
 ")
-

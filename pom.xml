@@ -288,6 +288,32 @@
 			</properties>
 		</profile>
 		<profile>
+			<id>linux-aarch32</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch32</arch>
+				</os>
+			</activation>
+			<properties>
+				<platform.classifier>linux-aarch32</platform.classifier>
+				<platform.module>webrtc.linux.aarch32</platform.module>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-aarch64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch64</arch>
+				</os>
+			</activation>
+			<properties>
+				<platform.classifier>linux-aarch64</platform.classifier>
+				<platform.module>webrtc.linux.aarch64</platform.module>
+			</properties>
+		</profile>
+		<profile>
 			<id>mac-x86_64</id>
 			<activation>
 				<os>

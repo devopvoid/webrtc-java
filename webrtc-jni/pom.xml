@@ -16,6 +16,7 @@
 		<webrtc.src.dir>${user.home}/webrtc</webrtc.src.dir>
 		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
+		<cmake.toolchain.file></cmake.toolchain.file>
 	</properties>
 
 	<build>
@@ -94,6 +95,9 @@
 									"${cmake.options}"
 								</option>
 								<option>
+									-DWEBRTC_TOOLCHAIN_FILE=${cmake.toolchain.file}
+								</option>
+								<option>
 									-DWEBRTC_BRANCH=${webrtc.branch}
 								</option>
 								<option>
@@ -140,6 +144,42 @@
 			<properties>
 				<cmake.options>-Ax64</cmake.options>
 				<cmake.config>${cmake.build.type}</cmake.config>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-x86_64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>toolchain/x86_64-linux-gnu.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-aarch32</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch32</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>toolchain/aarch32-linux-gnu.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-aarch64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>toolchain/aarch64-linux-gnu.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 	</profiles>
