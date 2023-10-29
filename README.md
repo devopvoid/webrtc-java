@@ -23,6 +23,8 @@ implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "macos-x86_64"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "macos-aarch64"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "linux-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "linux-aarch64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "linux-aarch32"
 ```
 
 ### Supported Platforms
@@ -31,7 +33,7 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
 <table>
   <tr>
     <td>Linux</td>
-    <td>x86_64</td>
+    <td>x86_64, arm64, arm32</td>
   </tr>
   <tr>
     <td>macOS</td>
@@ -72,7 +74,7 @@ Assuming you have all the prerequisites installed for your OS, run:
 mvn install
 ```
 
-On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 12 GB of disk space.
+On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 18 GB of disk space.
 
 #### Build Parameters
 
