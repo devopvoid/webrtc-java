@@ -20,6 +20,8 @@
 	</properties>
 
 	<build>
+		<finalName>webrtc-java-${project.version}</finalName>
+
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -40,7 +42,6 @@
 						<configuration>
 							<classifier>${platform.classifier}</classifier>
 							<classesDirectory>${project.build.directory}/lib</classesDirectory>
-							<finalName>webrtc-java-${project.version}</finalName>
 							<archive>
 								<addMavenDescriptor>false</addMavenDescriptor>
 								<manifestEntries>
@@ -79,7 +80,7 @@
 			<plugin>
 				<groupId>com.googlecode.cmake-maven-project</groupId>
 				<artifactId>cmake-maven-plugin</artifactId>
-				<version>3.22.1-b1</version>
+				<version>3.26.3-b1</version>
 				<executions>
 					<execution>
 						<id>cmake-generate</id>
