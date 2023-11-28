@@ -22,7 +22,7 @@
 
 #include <jni.h>
 
-#include "rtc_base/constructor_magic.h"
+#include "third_party/breakpad/breakpad/src/common/basictypes.h"
 
 namespace jni
 {
@@ -52,7 +52,7 @@ namespace jni
 			const size_t dstChannels;
 
 		private:
-			RTC_DISALLOW_COPY_AND_ASSIGN(AudioConverter);
+        DISALLOW_COPY_AND_ASSIGN(AudioConverter);
 	};
 }
 

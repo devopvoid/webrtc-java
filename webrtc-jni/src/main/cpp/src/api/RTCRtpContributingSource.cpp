@@ -49,8 +49,8 @@ namespace jni
 				static_cast<int64_t>(obj.getLong(javaClass->timestamp)),
 				static_cast<uint32_t>(obj.getLong(javaClass->source)),
 				webrtc::RtpSourceType::CSRC,
-				static_cast<uint8_t>(obj.getDouble(javaClass->audioLevel)),
-				static_cast<uint32_t>(obj.getLong(javaClass->rtpTimestamp))
+				static_cast<uint32_t>(obj.getLong(javaClass->rtpTimestamp)),
+                {static_cast<uint8_t>(obj.getDouble(javaClass->audioLevel)), absl::nullopt}
 			);
 		}
 

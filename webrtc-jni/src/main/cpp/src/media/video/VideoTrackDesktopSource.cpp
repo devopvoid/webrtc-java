@@ -75,7 +75,7 @@ namespace jni
 
 		captureThread = rtc::Thread::Create();
 		captureThread->Start();
-		captureThread->PostTask(RTC_FROM_HERE, [&] { capture(); });
+		captureThread->PostTask([&] { capture(); });
 	}
 
 	void VideoTrackDesktopSource::stop()
