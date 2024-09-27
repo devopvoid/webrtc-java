@@ -99,7 +99,7 @@ namespace jni
 
 	void WebRTCContext::initializeClassLoader(JNIEnv* env, const char * loaderName)
 	{
-		auto javaClass = JavaLocalRef<jclass>(env, FindClass(env, loaderName));
+		jclass javaClass = FindClass(env, loaderName);
 
 		if (ExceptionCheck(env)) {
 			return;
