@@ -48,13 +48,13 @@ namespace jni
 
 			JavaObject obj(env, source);
 
-			return webrtc::RtpSource(
-				static_cast<int64_t>(obj.getLong(parentClass->timestamp)),
-				static_cast<uint32_t>(obj.getLong(parentClass->source)),
-				webrtc::RtpSourceType::SSRC,
-				static_cast<uint8_t>(obj.getDouble(parentClass->audioLevel)),
-				static_cast<uint32_t>(obj.getLong(parentClass->rtpTimestamp))
-			);
+            return webrtc::RtpSource(
+                    static_cast<int64_t>(obj.getLong(parentClass->timestamp)),
+                    static_cast<uint32_t>(obj.getLong(parentClass->source)),
+                    webrtc::RtpSourceType::CSRC,
+                    static_cast<uint32_t>(obj.getLong(parentClass->rtpTimestamp)),
+                    {static_cast<uint8_t>(obj.getDouble(parentClass->audioLevel)), absl::nullopt}
+            );
 		}
 
 		JavaRTCRtpSynchronizationSourceClass::JavaRTCRtpSynchronizationSourceClass(JNIEnv * env)

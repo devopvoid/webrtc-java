@@ -66,7 +66,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			networkThread.get(),
 			workerThread.get(),
 			signalingThread.get(),
-			audioDevModule,
+            rtc::scoped_refptr<webrtc::AudioDeviceModule>(audioDevModule),
 			webrtc::CreateBuiltinAudioEncoderFactory(),
 			webrtc::CreateBuiltinAudioDecoderFactory(),
 			webrtc::CreateBuiltinVideoEncoderFactory(),
