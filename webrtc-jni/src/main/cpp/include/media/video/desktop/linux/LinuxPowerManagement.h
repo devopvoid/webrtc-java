@@ -19,6 +19,9 @@
 
 #include "media/video/desktop/PowerManagement.h"
 
+#include <cstdio>
+#include <cstdint>
+
 namespace jni
 {
 	namespace avdev
@@ -33,13 +36,15 @@ namespace jni
 				void disableUserActivity();
 
 			private:
-				DBusConnection * dbusConnection;
 				uint32_t dbusCookie = 0;
 
-				const char BUS_SERVICE_NAME = "org.freedesktop.ScreenSaver";
-				const char BUS_SERVICE_PATH = "/org/freedesktop/ScreenSaver";
-				const char BUS_SERVICE_UNINHIBIT = "UnInhibit";
-				const char BUS_INTERFACE = "org.freedesktop.ScreenSaver";
+				const char * BUS_SERVICE_NAME = "org.freedesktop.ScreenSaver";
+				const char * BUS_SERVICE_PATH = "/org/freedesktop/ScreenSaver";
+				const char * BUS_SERVICE_UNINHIBIT = "UnInhibit";
+				const char * BUS_INTERFACE = "org.freedesktop.ScreenSaver";
+
+				const char * appName = "WebRTC - Java";
+				const char * reason = "Running WebRTC";
 		};
 	}
 }

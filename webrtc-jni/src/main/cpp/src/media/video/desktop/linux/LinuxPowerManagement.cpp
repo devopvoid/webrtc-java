@@ -31,21 +31,21 @@ namespace jni
 			DBusError error;
 			dbus_error_init(&error);
 
-			dbusConnection = dbus_bus_get(DBUS_BUS_SESSION, &error);
+			DBusConnection * dbusConnection = dbus_bus_get(DBUS_BUS_SESSION, &error);
 
 			if (dbusConnection == nullptr) {
 				// throw
-				printf("[PowerManagement] Cannot connect to session bus: %s\n", err.message);
+				printf("[PowerManagement] Cannot connect to session bus: %s\n", error.message);
 				dbus_error_free(&error);
 				return;
 			}
 
 			if (dbus_bus_name_has_owner(dbusConnection, BUS_SERVICE_NAME, NULL)) {
-				printf("[PowerManagement] Found service %s", BUS_SERVICE_NAME);
+				printf("[PowerManagement] Found service %s\n", BUS_SERVICE_NAME);
 			}
 			else {
 				// throw
-				printf("[PowerManagement] Cannot find service %s", BUS_SERVICE_NAME);
+				printf("[PowerManagement] Cannot find service %s\n", BUS_SERVICE_NAME);
 				return;
 			}
 
@@ -57,7 +57,7 @@ namespace jni
 				return;
 			}
 
-			dbus_bool_t ret = dbus_message_append_args(message, DBUS_TYPE_STRING, &app_name, DBUS_TYPE_STRING, &reason,
+			dbus_bool_t ret = dbus_message_append_args(message, DBUS_TYPE_STRING, &appName, DBUS_TYPE_STRING, &reason,
 				DBUS_TYPE_INVALID);
 
 			DBusMessage * reply = dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
@@ -67,7 +67,7 @@ namespace jni
 				dbus_error_free(&error);
 				dbus_connection_unref(dbusConnection);
 				// throw
-                printf("[PowerManagement] Cannot retrieve cookie");
+                printf("[PowerManagement] Cannot retrieve cookie\n");
 				return;
 			}
 
@@ -75,7 +75,7 @@ namespace jni
 			dbus_message_iter_init(reply, &reply_iter);
 			dbus_message_iter_get_basic(&reply_iter, &dbusCookie);
 
-			printf("[PowerManagement]: Acquired screensaver inhibition cookie");
+			printf("[PowerManagement] Acquired screensaver inhibition cookie\n");
 
 			dbus_message_unref(reply);
 			dbus_connection_unref(dbusConnection);
