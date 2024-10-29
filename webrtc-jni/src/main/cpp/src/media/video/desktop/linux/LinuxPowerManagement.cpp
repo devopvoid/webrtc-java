@@ -16,6 +16,7 @@
 
 #include "media/video/desktop/linux/LinuxPowerManagement.h"
 
+#include <cstdio>
 #include <dbus/dbus.h>
 
 namespace jni
@@ -33,7 +34,7 @@ namespace jni
 
 			DBusConnection * dbusConnection = dbus_bus_get(DBUS_BUS_SESSION, &error);
 
-			if (dbusConnection == nullptr) {
+			if (dbus_error_is_set(&error)) {
 				// throw
 				printf("[PowerManagement] Cannot connect to session bus: %s\n", error.message);
 				dbus_error_free(&error);
@@ -49,16 +50,15 @@ namespace jni
 				return;
 			}
 
-			DBusMessage * message = dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH,
-				BUS_INTERFACE, "Inhibit");
+			DBusMessage * message = dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
+				"Inhibit");
 
 			if (message == nullptr) {
 				// throw
 				return;
 			}
 
-			dbus_bool_t ret = dbus_message_append_args(message, DBUS_TYPE_STRING, &appName, DBUS_TYPE_STRING, &reason,
-				DBUS_TYPE_INVALID);
+			dbus_message_append_args(message, DBUS_TYPE_STRING, &appName, DBUS_TYPE_STRING, &reason, DBUS_TYPE_INVALID);
 
 			DBusMessage * reply = dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
 			dbus_message_unref(message);
@@ -83,7 +83,44 @@ namespace jni
 
 		void LinuxPowerManagement::disableUserActivity()
         {
+			DBusError error;
+			dbus_error_init(&error);
 
+			DBusConnection * dbusConnection = dbus_bus_get(DBUS_BUS_SESSION, &error);
+
+			if (dbus_error_is_set(&error)) {
+				// throw
+				printf("[PowerManagement] Cannot connect to session bus: %s\n", error.message);
+				dbus_error_free(&error);
+				return;
+			}
+
+			DBusMessage * message = dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
+				"UnInhibit");
+
+			if (message == nullptr) {
+				// throw
+				return;
+			}
+
+			dbus_message_append_args(message, DBUS_TYPE_UINT32, &dbusCookie, DBUS_TYPE_INVALID);
+
+			DBusMessage * reply = dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
+			dbus_message_unref(message);
+
+			if (dbus_error_is_set(&error)) {
+				// throw
+				printf("[PowerManagement] Cannot release cookie\n");
+
+				dbus_error_free(&error);
+				dbus_connection_unref(dbusConnection);
+				return;
+			}
+
+			printf("[PowerManagement] Released screensaver inhibition cookie\n");
+
+			dbus_message_unref(reply);
+			dbus_connection_unref(dbusConnection);
         }
 	}
 }

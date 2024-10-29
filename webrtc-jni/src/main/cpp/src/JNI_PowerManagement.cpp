@@ -32,7 +32,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagemen
 	fflush(NULL);
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_ScreenSaver_PowerManagement_disableUserActivity
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_disableUserActivity
 (JNIEnv * env, jobject caller)
 {
     jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);

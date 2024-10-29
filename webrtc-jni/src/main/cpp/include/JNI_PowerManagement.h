@@ -8,16 +8,16 @@
 extern "C" {
 #endif
     /*
-     * Class:     dev_onvoid_webrtc_media_video_desktop_ScreenSaver
-     * Method:    inhibit
+     * Class:     dev_onvoid_webrtc_media_video_desktop_PowerManagement
+     * Method:    enableUserActivity
      * Signature: ()V
      */
     JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_enableUserActivity
       (JNIEnv *, jobject);
 
     /*
-     * Class:     dev_onvoid_webrtc_media_video_desktop_ScreenSaver
-     * Method:    uninhibit
+     * Class:     dev_onvoid_webrtc_media_video_desktop_PowerManagement
+     * Method:    disableUserActivity
      * Signature: ()V
      */
     JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_disableUserActivity
