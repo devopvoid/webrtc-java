@@ -28,6 +28,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagemen
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
+
+	fflush(NULL);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_ScreenSaver_PowerManagement_disableUserActivity
@@ -41,4 +43,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_ScreenSaver_Po
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
+
+	fflush(NULL);
 }
