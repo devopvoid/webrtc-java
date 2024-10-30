@@ -20,6 +20,7 @@
 #include "JavaContext.h"
 #include "media/audio/AudioDeviceManager.h"
 #include "media/video/VideoDeviceManager.h"
+#include "media/video/desktop/PowerManagement.h"
 
 #include <jni.h>
 #include <memory>
@@ -39,16 +40,19 @@ namespace jni
 
 			avdev::AudioDeviceManager * getAudioDeviceManager();
 			avdev::VideoDeviceManager * getVideoDeviceManager();
+			avdev::PowerManagement * getPowerManagement();
 
 		private:
 			void initializeAudioManager();
 			void initializeVideoManager();
+			void initializePowerManagement();
 
 		private:
 			std::mutex aMutex;
 			std::mutex vMutex;
 			std::unique_ptr<avdev::AudioDeviceManager> audioDevManager;
 			std::unique_ptr<avdev::VideoDeviceManager> videoDevManager;
+			std::unique_ptr<avdev::PowerManagement> powerManagement;
 	};
 }
 
