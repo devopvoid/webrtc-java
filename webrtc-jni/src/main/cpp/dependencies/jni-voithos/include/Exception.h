@@ -10,6 +10,7 @@
 
 #include <stdarg.h>
 #include <string>
+#include <stdint.h>
 
 #ifndef _MSC_VER
 #define NOEXCEPT noexcept

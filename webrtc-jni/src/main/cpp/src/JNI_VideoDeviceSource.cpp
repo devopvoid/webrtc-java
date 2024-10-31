@@ -110,7 +110,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_disp
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_initialize
 (JNIEnv * env, jobject caller)
 {
-	rtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = new rtc::RefCountedObject<jni::VideoTrackDeviceSource>();
+	rtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = rtc::scoped_refptr<jni::VideoTrackDeviceSource>(new rtc::RefCountedObject<jni::VideoTrackDeviceSource>());
 
 	SetHandle(env, caller, videoSource.release());
 }
