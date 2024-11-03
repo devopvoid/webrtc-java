@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.13)
 project(webrtc)
 
+# Used for Linux sysroot installation
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.hxx
 "template<class T> class pseudo{}\n")
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.cxx
@@ -74,11 +77,18 @@ function(execute_command)
 	print("${COMMAND_ERROR}")
 endfunction()
 
-function(sysroot_install)
+function(sysroot_install use_webrtc_root)
 	message(STATUS "Installing sysroot")
+
+	if(${use_webrtc_root})
+		set(SCRIPT_PATH ${WEBRTC_SRC_DIR}/src/build/linux/sysroot_scripts/install-sysroot.py)
+	else()
+		set(SCRIPT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/linux/sysroot/install-sysroot.py)
+	endif()
+
 	execute_process(
-		COMMAND python build/linux/sysroot_scripts/install-sysroot.py --arch=${SYSROOT_ARCH}
-		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}/src"
+		COMMAND ${Python3_EXECUTABLE} ${SCRIPT_PATH} --arch=${TARGET_CPU}
+		WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 		OUTPUT_VARIABLE COMMAND_OUTPUT
 		ERROR_VARIABLE COMMAND_ERROR
 	)
@@ -87,8 +97,15 @@ function(sysroot_install)
     print("${COMMAND_ERROR}")
 endfunction()
 
-function(sysroot_link)
+function(sysroot_link use_webrtc_root)
 	message(STATUS "Retrieving libm.so from sysroot")
+
+	if(${use_webrtc_root})
+		set(SYSROOT_PATH ${WEBRTC_SRC_DIR}/src/build/linux)
+	else()
+		set(SYSROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/linux)
+	endif()
+
 	execute_process(
 		COMMAND find ${SYSROOT_PATH} -iname libm-*.so
 		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
@@ -98,9 +115,9 @@ function(sysroot_link)
 
 	string(STRIP ${COMMAND_OUTPUT} LIBM_PATH)
 
-	message(STATUS "Linking libm.so from: ${WEBRTC_SRC_DIR}/${LIBM_PATH}")
+	message(STATUS "Linking libm.so from: ${LIBM_PATH}")
 
-	target_link_libraries(${PROJECT_NAME} "${WEBRTC_SRC_DIR}/${LIBM_PATH}")
+	target_link_libraries(${PROJECT_NAME} "${LIBM_PATH}")
 endfunction()
 
 file(TO_CMAKE_PATH "${WEBRTC_SRC_DIR}" WEBRTC_SRC_DIR)
@@ -158,14 +175,15 @@ if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
 	message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
 
 	if(LINUX)
-		sysroot_link()
+		sysroot_install(FALSE)
+		sysroot_link(FALSE)
 	endif()
 
 	return()
 endif()
 
 if(LINUX)
-	sysroot_install()
+	sysroot_install(TRUE)
 endif()
 
 if(NOT EXISTS "${WEBRTC_SRC_DIR}/depot_tools")
@@ -238,7 +256,7 @@ execute_command(
 )
 
 if(LINUX)
-	sysroot_link()
+	sysroot_link(TRUE)
 endif()
 
 install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")

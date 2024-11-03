@@ -1,4 +1,4 @@
-name: Maven CI
+name: Build
 
 on:
   push:
@@ -15,63 +15,150 @@ on:
 
   workflow_dispatch:
 
+env:
+  WEBRTC_CACHE_BRANCH: 4844
+  WEBRTC_CHECKOUT_FOLDER: webrtc
+  WEBRTC_INSTALL_FOLDER: webrtc/build
+
 jobs:
-  build:
-    runs-on: [self-hosted, "${{ matrix.os }}"]
-
+  build-windows:
     strategy:
+      fail-fast: false
       matrix:
-        os: [linux, macos, windows]
+        platform:
+          - name: windows_x86_64
+            runs-on: windows-2019
         java: [17]
-
-    env:
-      WEBRTC_CACHE_BRANCH: 4844
-      WEBRTC_CHECKOUT_FOLDER: webrtc
-      WEBRTC_INSTALL_FOLDER: webrtc/build
-
+    runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
-      - name: Set up Linux audio system
-        if: runner.os == 'Linux'
+      - name: Set up Python 3.11
+        if: false
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Disk cleanup
+        if: false
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pulseaudio libpulse-dev libasound2-dev libudev-dev libv4l-dev
-          # Required for testing
-          pulseaudio --start
+          Get-PSDrive
+          # Docker Images
+          docker rmi $(docker images -q -a)
+          # Android SDK
+          if ($Env:ANDROID_HOME) {
+            Remove-Item -Recurse -Force $Env:ANDROID_HOME -ErrorAction Ignore
+          }
+          if ($Env:ANDROID_NDK_HOME) {
+            Remove-Item -Recurse -Force $Env:ANDROID_NDK_HOME -ErrorAction Ignore
+          }
+          # JVM
+          if ($Env:JAVA_HOME_11_X64) {
+            Remove-Item -Recurse -Force $Env:JAVA_HOME_11_X64 -ErrorAction Ignore
+          }
+          if ($Env:JAVA_HOME_8_X64) {
+            Remove-Item -Recurse -Force $Env:JAVA_HOME_8_X64 -ErrorAction Ignore
+          }
+          Get-PSDrive
 
-      - name: Set up WebRTC cache
-        uses: actions/cache@v1
-        with:
-          path: ~/${{ env.WEBRTC_INSTALL_FOLDER }}
-          key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ runner.os }}-${{ hashFiles('webrtc-jni/pom.xml') }}
-          restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ runner.os }}-
+      - name: Install required packages
+        run: |
+          choco install ninja
 
-      - name: Set up Maven cache
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2/repository
-          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
-          restore-keys: maven-${{ runner.os }}-
-
-      - name: Set up JDK ${{ matrix.java }}
-        uses: actions/setup-java@v1
+      - id: maven-build
+        name: Maven build
+        uses: ./.github/maven-action
         with:
           java-version: ${{ matrix.java }}
-          server-id: ossrh
-          server-username: NEXUS_USERNAME
-          server-password: NEXUS_PASSWORD
-          settings-path: ${{ github.workspace }}/.github/workflows
+          platform-name: ${{ matrix.platform.name }}
+          nexus-username: ${{ secrets.NEXUS_USERNAME }}
+          nexus-password: ${{ secrets.NEXUS_PASSWORD }}
 
-      - name: Build
-        run: mvn package -DskipTests -s .github/workflows/settings.xml
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: linux_x86-64
+            runs-on: ubuntu-24.04
+        java: [17]
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Test
-        run: mvn -B jar:jar surefire:test
+      - name: Disk cleanup
+        run: |
+          set -x
+          df -h
+          #sudo du -h -d1 /usr/local
+          #sudo du -h -d1 /usr/local/share
+          #sudo du -h -d1 /usr/local/lib
+          #sudo du -h -d1 /usr/share
+          RMI=`docker images -q -a`
+          if [ -n "$RMI" ]; then
+            docker rmi $RMI
+          fi
+          # 4.6G
+          sudo rm -rf /usr/local/.ghcup
+          # 1.7G
+          sudo rm -rf /usr/share/swift
+          # 1.4G
+          sudo rm -rf /usr/share/dotnet
+          # 13G
+          sudo rm -rf /usr/local/lib/android
+          df -h
 
-      - name: Deploy
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-        run: mvn deploy -DskipTests -s .github/workflows/settings.xml
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y findutils libpulse-dev libasound2-dev libudev-dev libv4l-dev libx11-dev binutils cmake git locales lsb-release ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
+          # Required for testing
+          sudo apt-get install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
+          systemctl --user daemon-reload
+          systemctl --user --now enable pipewire{,-pulse}.{socket,service}
+
+      - id: maven-build
+        name: Maven build
+        uses: ./.github/maven-action
+        with:
+          java-version: ${{ matrix.java }}
+          platform-name: ${{ matrix.platform.name }}
+          nexus-username: ${{ secrets.NEXUS_USERNAME }}
+          nexus-password: ${{ secrets.NEXUS_PASSWORD }}
+
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: macos_x86-64
+            runs-on: macos-13
+          - name: macos_arm64
+            runs-on: macos-14
+        java: [17]
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install required packages
+        run: |
+          brew install ninja
+          # Required for macos-13
+          pip install setuptools
+          # Required for macos-14
+          brew install python-setuptools
+
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_14.3.1.app/Contents/Developer
+
+      - id: maven-build
+        name: Maven build
+        uses: ./.github/maven-action
+        with:
+          java-version: ${{ matrix.java }}
+          platform-name: ${{ matrix.platform.name }}
+          nexus-username: ${{ secrets.NEXUS_USERNAME }}
+          nexus-password: ${{ secrets.NEXUS_PASSWORD }}

@@ -20,12 +20,23 @@ import static java.util.Objects.nonNull;
 import static java.util.Objects.requireNonNull;
 
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
+import dev.onvoid.webrtc.internal.NativeLoader;
 
 import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.Map;
 
 public class AudioDeviceModule extends DisposableNativeObject {
+
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
+
 
 	private Map.Entry<AudioSink, Long> sinkEntry;
 

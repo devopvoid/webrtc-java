@@ -1,0 +1,63 @@
+name: 'Maven Build'
+
+description: 'Build the platform dependent Java library'
+
+inputs:
+  java-version:
+    description: 'The Java build version.'
+    required: true
+    default: '17'
+
+  platform-name:
+    description: 'The target platform.'
+    required: true
+
+  nexus-username:
+    description: 'The Nexus username.'
+    required: true
+
+  nexus-password:
+    description: 'The Nexus password.'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up WebRTC cache
+      uses: actions/cache@v4
+      with:
+        path: ~/${{ env.WEBRTC_INSTALL_FOLDER }}
+        key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/pom.xml') }}
+        restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-
+
+    - name: Set up Maven cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository
+        key: maven-${{ inputs.platform-name }}-${{ hashFiles('**/pom.xml') }}
+        restore-keys: maven-${{ inputs.platform-name }}-
+
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+        server-id: ossrh
+        server-username: NEXUS_USERNAME
+        server-password: NEXUS_PASSWORD
+        settings-path: ${{ github.workspace }}/.github/workflows
+
+    - name: Build
+      run: mvn package -DskipTests -s .github/workflows/settings.xml
+      shell: bash
+
+    - name: Test
+      run: mvn -B jar:jar surefire:test
+      shell: bash
+
+    - name: Deploy
+      env:
+        NEXUS_USERNAME: ${{ inputs.nexus-username }}
+        NEXUS_PASSWORD: ${{ inputs.nexus-password }}
+      run: mvn deploy -DskipTests -s .github/workflows/settings.xml
+      shell: bash
