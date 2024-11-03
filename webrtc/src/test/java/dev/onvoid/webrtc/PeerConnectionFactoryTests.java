@@ -21,11 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import dev.onvoid.webrtc.media.MediaSource;
 import dev.onvoid.webrtc.media.MediaStreamTrackState;
 import dev.onvoid.webrtc.media.MediaType;
-import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
-import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioProcessing;
-import dev.onvoid.webrtc.media.audio.AudioTrackSource;
-import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.*;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
@@ -35,7 +31,7 @@ class PeerConnectionFactoryTests extends TestBase {
 
 	@Test
 	void createWithAudioDeviceModule() {
-		AudioDeviceModule audioDevModule = new AudioDeviceModule();
+		AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
 
 		PeerConnectionFactory factory = new PeerConnectionFactory(audioDevModule);
 		factory.dispose();
@@ -43,19 +39,10 @@ class PeerConnectionFactoryTests extends TestBase {
 
 	@Test
 	void createWithAudioProcessing() {
+		AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
 		AudioProcessing audioProcessing = new AudioProcessing();
 
-		PeerConnectionFactory factory = new PeerConnectionFactory(audioProcessing);
-		factory.dispose();
-	}
-
-	@Test
-	void createWithAudioModules() {
-		AudioDeviceModule audioDevModule = new AudioDeviceModule();
-		AudioProcessing audioProcessing = new AudioProcessing();
-
-		PeerConnectionFactory factory = new PeerConnectionFactory(
-				audioDevModule, audioProcessing);
+		PeerConnectionFactory factory = new PeerConnectionFactory(audioDevModule, audioProcessing);
 		factory.dispose();
 	}
 

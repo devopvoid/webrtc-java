@@ -8,6 +8,7 @@
 #ifndef JNI_EXCEPTION_H_
 #define JNI_EXCEPTION_H_
 
+#include <cstdint>
 #include <stdarg.h>
 #include <string>
 

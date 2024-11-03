@@ -16,6 +16,9 @@
 
 package dev.onvoid.webrtc;
 
+import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
+import dev.onvoid.webrtc.media.audio.AudioLayer;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.TestInstance;
@@ -33,14 +36,18 @@ public abstract class TestBase {
 
 	protected PeerConnectionFactory factory;
 
+	protected AudioDeviceModule audioDevModule;
+
 
 	@BeforeAll
 	protected void initFactory() {
-		factory = new PeerConnectionFactory();
+		audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		factory = new PeerConnectionFactory(audioDevModule);
 	}
 
 	@AfterAll
 	protected void disposeFactory() {
+		audioDevModule.dispose();
 		factory.dispose();
 	}
 
