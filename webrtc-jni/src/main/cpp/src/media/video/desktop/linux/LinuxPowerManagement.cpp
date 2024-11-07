@@ -19,6 +19,8 @@
 #include <cstdio>
 #include <dbus/dbus.h>
 
+#include "rtc_base/logging.h"
+
 namespace jni
 {
 	namespace avdev
@@ -36,17 +38,17 @@ namespace jni
 
 			if (dbus_error_is_set(&error)) {
 				// throw
-				printf("[PowerManagement] Cannot connect to session bus: %s\n", error.message);
+				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot connect to session bus: " << error.message;
 				dbus_error_free(&error);
 				return;
 			}
 
 			if (dbus_bus_name_has_owner(dbusConnection, BUS_SERVICE_NAME, NULL)) {
-				printf("[PowerManagement] Found service %s\n", BUS_SERVICE_NAME);
+				RTC_LOG(LS_INFO) << "[PowerManagement] Found service: " << BUS_SERVICE_NAME;
 			}
 			else {
 				// throw
-				printf("[PowerManagement] Cannot find service %s\n", BUS_SERVICE_NAME);
+				RTC_LOG(LS_WARNING) << "[PowerManagement] Cannot find service: " << BUS_SERVICE_NAME;
 				return;
 			}
 
@@ -67,7 +69,7 @@ namespace jni
 				dbus_error_free(&error);
 				dbus_connection_unref(dbusConnection);
 				// throw
-                printf("[PowerManagement] Cannot retrieve cookie\n");
+				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot retrieve cookie";
 				return;
 			}
 
@@ -75,7 +77,7 @@ namespace jni
 			dbus_message_iter_init(reply, &reply_iter);
 			dbus_message_iter_get_basic(&reply_iter, &dbusCookie);
 
-			printf("[PowerManagement] Acquired screensaver inhibition cookie\n");
+			RTC_LOG(LS_INFO) << "[PowerManagement] Acquired screensaver inhibition cookie";
 
 			dbus_message_unref(reply);
 			dbus_connection_unref(dbusConnection);
@@ -90,7 +92,7 @@ namespace jni
 
 			if (dbus_error_is_set(&error)) {
 				// throw
-				printf("[PowerManagement] Cannot connect to session bus: %s\n", error.message);
+				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot connect to session bus: " << error.message;
 				dbus_error_free(&error);
 				return;
 			}
@@ -110,14 +112,14 @@ namespace jni
 
 			if (dbus_error_is_set(&error)) {
 				// throw
-				printf("[PowerManagement] Cannot release cookie\n");
+				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot release cookie";
 
 				dbus_error_free(&error);
 				dbus_connection_unref(dbusConnection);
 				return;
 			}
 
-			printf("[PowerManagement] Released screensaver inhibition cookie\n");
+			RTC_LOG(LS_INFO) << "[PowerManagement] Released screensaver inhibition cookie";
 
 			dbus_message_unref(reply);
 			dbus_connection_unref(dbusConnection);
