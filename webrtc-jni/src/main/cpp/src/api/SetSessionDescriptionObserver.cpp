@@ -18,6 +18,7 @@
 #include "api/WebRTCUtils.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
+#include "JavaUtils.h"
 
 namespace jni
 {
@@ -32,6 +33,8 @@ namespace jni
 		JNIEnv * env = AttachCurrentThread();
 
 		env->CallVoidMethod(observer, javaClass->onSuccess);
+
+		ExceptionCheck(env);
 	}
 
 	void SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
@@ -41,6 +44,8 @@ namespace jni
 		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
 		env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+
+		ExceptionCheck(env);
 	}
 
 	SetSessionDescriptionObserver::JavaSetSessionDescObserverClass::JavaSetSessionDescObserverClass(JNIEnv * env)

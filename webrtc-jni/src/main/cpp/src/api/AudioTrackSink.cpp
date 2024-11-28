@@ -37,6 +37,7 @@ namespace jni
 		env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
 
 		env->CallVoidMethod(sink, javaClass->onData, dataArray, bitsPerSample, sampleRate, channels, frames);
+		ExceptionCheck(env);
 		env->DeleteLocalRef(dataArray);
 	}
 

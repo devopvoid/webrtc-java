@@ -47,7 +47,7 @@ namespace jni
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::scoped_refptr<webrtc::I420BufferInterface> & buffer)
 		{
 			const auto javaClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
-			
+
 			jobject yBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataY()), static_cast<jlong>(buffer->StrideY()) * buffer->height());
 			jobject uBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataU()), static_cast<jlong>(buffer->StrideU()) * buffer->ChromaHeight());
 			jobject vBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataV()), static_cast<jlong>(buffer->StrideV()) * buffer->ChromaHeight());

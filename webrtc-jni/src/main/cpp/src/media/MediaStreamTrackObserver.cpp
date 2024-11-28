@@ -41,11 +41,13 @@ namespace jni
 			if (track->enabled() != trackEnabled) {
 				// The condition "muted" is managed using the "enabled" property.
 				env->CallVoidMethod(javaTrack, javaClass->onTrackMute, createJavaTrack(env).release(), !track->enabled());
+				ExceptionCheck(env);
 			}
 		}
 		else if (eventType == MediaStreamTrackEvent::ended) {
 			if (track->state() != trackState && track->state() == webrtc::MediaStreamTrackInterface::TrackState::kEnded) {
 				env->CallVoidMethod(javaTrack, javaClass->onTrackEnd, createJavaTrack(env).release());
+				ExceptionCheck(env);
 			}
 		}
 
