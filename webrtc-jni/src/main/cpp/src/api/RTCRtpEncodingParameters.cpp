@@ -51,7 +51,7 @@ namespace jni
 
 			return JavaLocalRef<jobject>(env, object);
 		}
-		
+
 		webrtc::RtpEncodingParameters toNative(JNIEnv * env, const JavaRef<jobject> & parameters)
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCRtpEncodingParametersClass>(env);
@@ -94,7 +94,7 @@ namespace jni
 			cls = FindClass(env, PKG"RTCRtpEncodingParameters");
 
 			ctor = GetMethod(env, cls, "<init>", "()V");
-			
+
 			ssrc = GetFieldID(env, cls, "ssrc", LONG_SIG);
 			active = GetFieldID(env, cls, "active", BOOLEAN_SIG);
 			minBitrate = GetFieldID(env, cls, "minBitrate", INTEGER_SIG);

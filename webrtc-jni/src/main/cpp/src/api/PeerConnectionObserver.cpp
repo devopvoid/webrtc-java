@@ -42,6 +42,8 @@ namespace jni
 		auto jState = JavaEnums::toJava(env, state);
 
 		env->CallVoidMethod(observer, javaClass->onConnectionChange, jState.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnSignalingChange(webrtc::PeerConnectionInterface::SignalingState state)
@@ -51,6 +53,8 @@ namespace jni
 		auto jState = JavaEnums::toJava(env, state);
 
 		env->CallVoidMethod(observer, javaClass->onSignalingChange, jState.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver)
@@ -60,6 +64,8 @@ namespace jni
 		auto jTransceiver = JavaFactories::create(env, transceiver.get());
 
 		env->CallVoidMethod(observer, javaClass->onTrack, jTransceiver.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver, const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>> & streams)
@@ -78,6 +84,8 @@ namespace jni
 		catch (...) {
 			ThrowCxxJavaException(env);
 		}
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnRemoveTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver)
@@ -87,6 +95,8 @@ namespace jni
 		auto jReceiver = JavaFactories::create(env, receiver.get());
 
 		env->CallVoidMethod(observer, javaClass->onRemoveTrack, jReceiver.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnDataChannel(rtc::scoped_refptr<webrtc::DataChannelInterface> channel)
@@ -96,6 +106,8 @@ namespace jni
 		auto jDataChannel = JavaFactories::create(env, channel.release());
 
 		env->CallVoidMethod(observer, javaClass->onDataChannel, jDataChannel.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnRenegotiationNeeded()
@@ -103,6 +115,8 @@ namespace jni
 		JNIEnv * env = AttachCurrentThread();
 
 		env->CallVoidMethod(observer, javaClass->onRenegotiationNeeded);
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnIceConnectionChange(webrtc::PeerConnectionInterface::IceConnectionState state)
@@ -112,6 +126,8 @@ namespace jni
 		auto jState = JavaEnums::toJava(env, state);
 
 		env->CallVoidMethod(observer, javaClass->onIceConnectionChange, jState.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnIceGatheringChange(webrtc::PeerConnectionInterface::IceGatheringState state)
@@ -121,6 +137,8 @@ namespace jni
 		auto jState = JavaEnums::toJava(env, state);
 
 		env->CallVoidMethod(observer, javaClass->onIceGatheringChange, jState.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnIceCandidate(const webrtc::IceCandidateInterface * candidate)
@@ -130,6 +148,8 @@ namespace jni
 		JavaLocalRef<jobject> jCandidate = RTCIceCandidate::toJava(env, candidate);
 
 		env->CallVoidMethod(observer, javaClass->onIceCandidate, jCandidate.get());
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnIceCandidateError(const std::string & address, int port, const std::string & url, int error_code, const std::string & error_text)
@@ -139,8 +159,10 @@ namespace jni
 		JavaLocalRef<jobject> event = RTCPeerConnectionIceErrorEvent::toJava(env, address, port, url, error_code, error_text);
 
 		env->CallVoidMethod(observer, javaClass->onIceCandidateError, event.get());
+
+		ExceptionCheck(env);
 	}
-	
+
 	void PeerConnectionObserver::OnIceCandidatesRemoved(const std::vector<cricket::Candidate> & candidates)
 	{
 		JNIEnv * env = AttachCurrentThread();
@@ -158,6 +180,8 @@ namespace jni
 		catch (...) {
 			ThrowCxxJavaException(env);
 		}
+
+		ExceptionCheck(env);
 	}
 
 	void PeerConnectionObserver::OnIceConnectionReceivingChange(bool receiving)
@@ -165,6 +189,8 @@ namespace jni
 		JNIEnv * env = AttachCurrentThread();
 
 		env->CallVoidMethod(observer, javaClass->onIceConnectionReceivingChange, receiving);
+
+		ExceptionCheck(env);
 	}
 
 	PeerConnectionObserver::JavaPeerConnectionObserverClass::JavaPeerConnectionObserverClass(JNIEnv * env)

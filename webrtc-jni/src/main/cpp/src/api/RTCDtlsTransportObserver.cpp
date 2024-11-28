@@ -33,10 +33,12 @@ namespace jni
 	void RTCDtlsTransportObserver::OnStateChange(webrtc::DtlsTransportInformation info)
 	{
 		JNIEnv * env = AttachCurrentThread();
-		
+
 		auto state = JavaEnums::toJava(env, info.state());
 
 		env->CallVoidMethod(observer, javaClass->onStateChange, state.get());
+
+		ExceptionCheck(env);
 	}
 
 	void RTCDtlsTransportObserver::OnError(webrtc::RTCError error)
@@ -46,6 +48,8 @@ namespace jni
 		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
 		env->CallVoidMethod(observer, javaClass->onError, errorMessage.get());
+
+		ExceptionCheck(env);
 	}
 
 	RTCDtlsTransportObserver::JavaRTCDtlsTransportObserverClass::JavaRTCDtlsTransportObserverClass(JNIEnv * env)

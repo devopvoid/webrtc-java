@@ -34,7 +34,7 @@ namespace jni
 	void VideoTrackSink::OnFrame(const webrtc::VideoFrame & frame)
 	{
 		JNIEnv * env = AttachCurrentThread();
-		
+
 		rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = frame.video_frame_buffer();
 		rtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = buffer->ToI420();
 
@@ -44,11 +44,12 @@ namespace jni
 
 		jint rotation = static_cast<jint>(frame.rotation());
 		jlong timestamp = frame.timestamp_us() * rtc::kNumNanosecsPerMicrosec;
-		
+
 		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420Buffer);
 		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
 
 		env->CallVoidMethod(sink, javaClass->onFrame, jFrame);
+		ExceptionCheck(env);
 		env->DeleteLocalRef(jBuffer);
 		env->DeleteLocalRef(jFrame);
 	}

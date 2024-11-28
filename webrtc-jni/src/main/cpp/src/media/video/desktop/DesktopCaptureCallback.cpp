@@ -86,12 +86,12 @@ namespace jni
 			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, i420Buffer->height(), crop_w, crop_h,
 			libyuv::kRotate0,
 			libyuv::FOURCC_ARGB);
-		
+
 		if (conversionResult < 0) {
 			RTC_LOG(LS_ERROR) << "Failed to convert desktop frame to I420";
 			return;
 		}
-		
+
 		jint rotation = static_cast<jint>(webrtc::kVideoRotation_0);
 		jlong timestamp = rtc::TimeMicros() * rtc::kNumNanosecsPerMicrosec;
 
@@ -99,6 +99,8 @@ namespace jni
 		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
 
 		env->CallVoidMethod(callback, javaClass->onCaptureResult, jresult.get(), jFrame);
+
+		ExceptionCheck(env);
 		env->DeleteLocalRef(jBuffer);
 		env->DeleteLocalRef(jFrame);
 	}
