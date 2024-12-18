@@ -72,8 +72,10 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
-          nexus-username: ${{ secrets.NEXUS_USERNAME }}
-          nexus-password: ${{ secrets.NEXUS_PASSWORD }}
+          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_PASSWORD }}
 
   build-linux:
     strategy:
@@ -126,8 +128,10 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
-          nexus-username: ${{ secrets.NEXUS_USERNAME }}
-          nexus-password: ${{ secrets.NEXUS_PASSWORD }}
+          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_PASSWORD }}
 
   build-macos:
     strategy:
@@ -161,5 +165,7 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
-          nexus-username: ${{ secrets.NEXUS_USERNAME }}
-          nexus-password: ${{ secrets.NEXUS_PASSWORD }}
+          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_PASSWORD }}

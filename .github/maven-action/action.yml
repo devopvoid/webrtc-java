@@ -12,12 +12,20 @@ inputs:
     description: 'The target platform.'
     required: true
 
-  nexus-username:
-    description: 'The Nexus username.'
+  gpg-key:
+    description: 'The GPG private key to sign Maven artifacts.'
     required: true
 
-  nexus-password:
-    description: 'The Nexus password.'
+  gpg-pass:
+    description: 'The GPG passphrase for the GPG key.'
+    required: true
+
+  maven-username:
+    description: 'The Maven username.'
+    required: true
+
+  maven-password:
+    description: 'The Maven password.'
     required: true
 
 runs:
@@ -43,8 +51,10 @@ runs:
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
         server-id: ossrh
-        server-username: ${{ inputs.nexus-username }}
-        server-password: ${{ inputs.nexus-password }}
+        server-username: MAVEN_USERNAME
+        server-password: MAVEN_TOKEN
+        gpg-private-key: GPG_PRIVATE_KEY
+        gpg-passphrase: GPG_PASSPHRASE
         settings-path: ${{ github.workspace }}/.github/workflows
 
     - name: Build
@@ -57,7 +67,9 @@ runs:
 
     - name: Deploy
       env:
-        NEXUS_USERNAME: ${{ inputs.nexus-username }}
-        NEXUS_PASSWORD: ${{ inputs.nexus-password }}
+        GPG_PRIVATE_KEY: ${{ inputs.gpg-key }}
+        GPG_PASSPHRASE: ${{ inputs.gpg-pass }}
+        MAVEN_USERNAME: ${{ inputs.maven-username }}
+        MAVEN_TOKEN: ${{ inputs.maven-password }}
       run: mvn deploy -DskipTests -s .github/workflows/settings.xml
       shell: bash
