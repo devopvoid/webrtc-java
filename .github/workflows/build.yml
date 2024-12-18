@@ -72,8 +72,6 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
-          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_PASSWORD }}
 
@@ -128,8 +126,6 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
-          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_PASSWORD }}
 
@@ -165,7 +161,5 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
-          gpg-key: ${{ secrets.GPG_PRIVATE_KEY }}
-          gpg-pass: ${{ secrets.GPG_PASSPHRASE }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_PASSWORD }}

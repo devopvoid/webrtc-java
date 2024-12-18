@@ -53,8 +53,6 @@ runs:
         server-id: ossrh
         server-username: MAVEN_USERNAME
         server-password: MAVEN_TOKEN
-        gpg-private-key: GPG_PRIVATE_KEY
-        gpg-passphrase: GPG_PASSPHRASE
         settings-path: ${{ github.workspace }}/.github/workflows
 
     - name: Build
@@ -67,8 +65,6 @@ runs:
 
     - name: Deploy
       env:
-        GPG_PRIVATE_KEY: ${{ inputs.gpg-key }}
-        GPG_PASSPHRASE: ${{ inputs.gpg-pass }}
         MAVEN_USERNAME: ${{ inputs.maven-username }}
         MAVEN_TOKEN: ${{ inputs.maven-password }}
       run: mvn deploy -DskipTests -s .github/workflows/settings.xml
