@@ -43,8 +43,8 @@ runs:
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
         server-id: ossrh
-        server-username: NEXUS_USERNAME
-        server-password: NEXUS_PASSWORD
+        server-username: ${{ inputs.nexus-username }}
+        server-password: ${{ inputs.nexus-password }}
         settings-path: ${{ github.workspace }}/.github/workflows
 
     - name: Build
