@@ -73,7 +73,9 @@ jobs:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_PASSWORD }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
+          maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 
   build-linux:
     strategy:
@@ -127,7 +129,9 @@ jobs:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_PASSWORD }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
+          maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 
   build-macos:
     strategy:
@@ -153,7 +157,7 @@ jobs:
           brew install python-setuptools
 
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_14.3.1.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_15.0.1.app/Contents/Developer
 
       - id: maven-build
         name: Maven build
@@ -162,4 +166,6 @@ jobs:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_PASSWORD }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
+          maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
