@@ -33,6 +33,8 @@ namespace jni
 		JNIEnv * env = AttachCurrentThread();
 
 		env->CallVoidMethod(observer, javaClass->onStateChange);
+
+		ExceptionCheck(env);
 	}
 
 	void RTCDataChannelObserver::OnMessage(const webrtc::DataBuffer & buffer)
@@ -42,6 +44,8 @@ namespace jni
 		JavaLocalRef<jobject> jBuffer = bufferFactory->create(env, &buffer);
 
 		env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.release());
+
+		ExceptionCheck(env);
 	}
 
 	RTCDataChannelObserver::JavaRTCDataChannelObserverClass::JavaRTCDataChannelObserverClass(JNIEnv * env)

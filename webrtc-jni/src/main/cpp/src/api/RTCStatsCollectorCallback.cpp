@@ -34,6 +34,8 @@ namespace jni
 		JavaLocalRef<jobject> javaReport = jni::RTCStatsReport::toJava(env, report);
 
 		env->CallVoidMethod(callback, javaClass->onStatsDelivered, javaReport.get());
+
+		ExceptionCheck(env);
 	}
 
 	RTCStatsCollectorCallback::JavaRTCStatsCollectorCallbackClass::JavaRTCStatsCollectorCallbackClass(JNIEnv * env)

@@ -39,6 +39,8 @@ namespace jni
 		JavaLocalRef<jstring> jMessage = JavaString::toJava(env, message);
 
 		env->CallVoidMethod(javaSink, javaClass->onLogMessage, jSeverity.get(), jMessage.get());
+
+		ExceptionCheck(env);
 	}
 
 	LogSink::JavaLogSinkClass::JavaLogSinkClass(JNIEnv * env)

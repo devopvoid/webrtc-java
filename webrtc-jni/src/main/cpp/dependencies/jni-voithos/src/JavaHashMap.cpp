@@ -34,6 +34,7 @@ namespace jni
 	void JavaHashMap::put(const JavaRef<jobject> & key, const JavaRef<jobject> & value)
 	{
 		env->CallVoidMethod(jMap, mapClass->put, key.get(), value.get());
+		ExceptionCheck(env);
 	}
 
 	JavaMapIterator JavaHashMap::begin()
