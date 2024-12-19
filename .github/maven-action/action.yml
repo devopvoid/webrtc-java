@@ -53,10 +53,9 @@ runs:
         server-id: ossrh
         server-username: MAVEN_USERNAME
         server-password: MAVEN_TOKEN
-        settings-path: ${{ github.workspace }}/.github/workflows
 
     - name: Build
-      run: mvn package -DskipTests -s .github/workflows/settings.xml
+      run: mvn package -DskipTests
       shell: bash
 
     - name: Test
@@ -67,5 +66,5 @@ runs:
       env:
         MAVEN_USERNAME: ${{ inputs.maven-username }}
         MAVEN_TOKEN: ${{ inputs.maven-password }}
-      run: mvn deploy -DskipTests -s .github/workflows/settings.xml
+      run: mvn deploy -DskipTests
       shell: bash
