@@ -1,6 +1,6 @@
-name: 'Maven Build'
+name: 'Maven Release'
 
-description: 'Build the platform dependent Java library'
+description: 'Release the platform dependent Java library'
 
 inputs:
   java-version:
@@ -69,5 +69,5 @@ runs:
         MAVEN_USERNAME: ${{ inputs.maven-username }}
         MAVEN_TOKEN: ${{ inputs.maven-password }}
         MAVEN_GPG_PASSPHRASE: ${{ inputs.maven-gpg-passphrase }}
-      run: mvn deploy -DskipTests
+      run: mvn deploy -Prelease -DskipTests
       shell: bash

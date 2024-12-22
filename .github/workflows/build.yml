@@ -68,14 +68,12 @@ jobs:
 
       - id: maven-build
         name: Maven build
-        uses: ./.github/maven-action
+        uses: ./.github/actions/build
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_TOKEN }}
-          maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 
   build-linux:
     strategy:
@@ -124,14 +122,12 @@ jobs:
 
       - id: maven-build
         name: Maven build
-        uses: ./.github/maven-action
+        uses: ./.github/actions/build
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_TOKEN }}
-          maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
 
   build-macos:
     strategy:
@@ -161,11 +157,9 @@ jobs:
 
       - id: maven-build
         name: Maven build
-        uses: ./.github/maven-action
+        uses: ./.github/actions/build
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_TOKEN }}
-          maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
