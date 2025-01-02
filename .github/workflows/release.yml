@@ -18,8 +18,36 @@ env:
 
 jobs:
   prepare-release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
+      - name: Disk cleanup
+        run: |
+          set -x
+          df -h
+          #sudo du -h -d1 /usr/local
+          #sudo du -h -d1 /usr/local/share
+          #sudo du -h -d1 /usr/local/lib
+          #sudo du -h -d1 /usr/share
+          # 4.6G
+          sudo rm -rf /usr/local/.ghcup
+          # 1.7G
+          sudo rm -rf /usr/share/swift
+          # 1.4G
+          sudo rm -rf /usr/share/dotnet
+          # 13G
+          sudo rm -rf /usr/local/lib/android
+          df -h
+
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pulseaudio libpulse-dev libasound2-dev libdbus-1-dev libudev-dev libv4l-dev libx11-dev binutils cmake git locales lsb-release ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
+          # Required for testing
+          pulseaudio --start
+          #sudo apt-get install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
+          #systemctl --user daemon-reload
+          #systemctl --user --now enable pipewire{,-pulse}.{socket,service}
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
@@ -57,6 +85,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+
+      - name: Get tag from current branch
+        id: tag-selector
+        shell: bash
+        run: |
+          git fetch -a
+          tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git checkout $tag
 
       - name: Set up Python 3.11
         if: false
@@ -163,7 +202,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.tag-selector.outputs.tag }}
-          release_name: Release $${{ steps.tag-selector.outputs.tag }}
+          release_name: Release ${{ steps.tag-selector.outputs.tag }}
           draft: false
           prerelease: false
 
@@ -193,6 +232,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+
+      - name: Get tag from current branch
+        id: tag-selector
+        run: |
+          git fetch -a
+          tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git checkout $tag
 
       - name: Install required packages
         run: |
