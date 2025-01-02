@@ -68,12 +68,12 @@ jobs:
 
       - id: maven-build
         name: Maven build
-        uses: ./.github/maven-action
+        uses: ./.github/actions/build
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_PASSWORD }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
 
   build-linux:
     strategy:
@@ -122,12 +122,12 @@ jobs:
 
       - id: maven-build
         name: Maven build
-        uses: ./.github/maven-action
+        uses: ./.github/actions/build
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_PASSWORD }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
 
   build-macos:
     strategy:
@@ -153,13 +153,13 @@ jobs:
           brew install python-setuptools
 
       - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_14.3.1.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_15.0.1.app/Contents/Developer
 
       - id: maven-build
         name: Maven build
-        uses: ./.github/maven-action
+        uses: ./.github/actions/build
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
           maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_PASSWORD }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}

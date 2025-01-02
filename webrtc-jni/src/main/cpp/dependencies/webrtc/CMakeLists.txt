@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
 project(webrtc)
 
-# Used for Linux sysroot installation
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
+if(LINUX)
+	# Used for Linux sysroot installation
+	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+endif()
 
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.hxx
 "template<class T> class pseudo{}\n")
