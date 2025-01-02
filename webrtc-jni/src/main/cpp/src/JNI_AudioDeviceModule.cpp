@@ -199,7 +199,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setR
 	}
 
 	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
-	
+
 	const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
 	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 

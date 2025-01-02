@@ -35,6 +35,8 @@ namespace jni
 		JavaLocalRef<jobject> javaDesc = jni::RTCSessionDescription::toJava(env, desc);
 
 		env->CallVoidMethod(observer, javaClass->onSuccess, javaDesc.get());
+
+		ExceptionCheck(env);
 	}
 
 	void CreateSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
@@ -44,6 +46,8 @@ namespace jni
 		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
 		env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+
+ 		ExceptionCheck(env);
 	}
 
 	CreateSessionDescriptionObserver::JavaCreateSessionDescObserverClass::JavaCreateSessionDescObserverClass(JNIEnv * env)

@@ -34,7 +34,7 @@ namespace jni
 
 			std::string sdpStr;
 			nativeType->ToString(&sdpStr);
-			
+
 			JavaLocalRef<jobject> type = JavaEnums::toJava(env, nativeType->GetType());
 			JavaLocalRef<jstring> sdp = JavaString::toJava(env, sdpStr);
 
