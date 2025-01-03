@@ -36,7 +36,7 @@ public class VideoFrame implements RefCounted {
 	public final long timestampNs;
 
 
-	private VideoFrame(VideoFrameBuffer buffer, int rotation, long timestampNs) {
+	public VideoFrame(VideoFrameBuffer buffer, int rotation, long timestampNs) {
 		if (buffer == null) {
 			throw new IllegalArgumentException("VideoFrameBuffer must not be null");
 		}
