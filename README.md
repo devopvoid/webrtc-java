@@ -11,20 +11,20 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
-    <version>0.8.0</version>
+    <version>0.9.0</version>
 </dependency>
 ```
 
 ### Gradle
 
 ```groovy
-implementation "dev.onvoid.webrtc:webrtc-java:0.8.0"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "windows-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "macos-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "macos-aarch64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "linux-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "linux-aarch64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.8.0", classifier: "linux-aarch32"
+implementation "dev.onvoid.webrtc:webrtc-java:0.9.0"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "windows-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "macos-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "macos-aarch64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "linux-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "linux-aarch64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "linux-aarch32"
 ```
 
 ### Supported Platforms
@@ -56,7 +56,7 @@ In order to build the native code, be sure to install the prerequisite software 
 <table>
   <tr>
     <td>Linux</td>
-    <td><a href="https://webrtc.googlesource.com/src/+/refs/heads/master/docs/native-code/development/prerequisite-sw/index.md#linux-ubuntu_debian">Debian & Ubuntu</a>, <a href="https://chromium.googlesource.com/chromium/src/+/master/docs/linux/build_instructions.md#notes">other distros</a></td>
+    <td><a href="https://chromium.googlesource.com/chromium/src/+/master/docs/linux/build_instructions.md#system-requirements">Ubuntu</a>, <a href="https://chromium.googlesource.com/chromium/src/+/master/docs/linux/build_instructions.md#Notes-for-other-distros">other distros</a></td>
   </tr>
   <tr>
     <td>macOS</td>
