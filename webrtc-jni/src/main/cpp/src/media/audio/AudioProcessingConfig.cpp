@@ -61,12 +61,13 @@ namespace jni
 			if (nsLevel.get()) {
 				config.noise_suppression.level = jni::JavaEnums::toNative<webrtc::AudioProcessing::Config::NoiseSuppression::Level>(env, nsLevel);
 			}
-
-			config.residual_echo_detector.enabled = residualEchoDetector.getBoolean(javaResidualEchoDetectorClass->enabled);
+            // TODO(bugs.webrtc.org/11539): Deprecated. Delete this flag. Replaced by
+            // injectable submodule.
+//			config.residual_echo_detector.enabled = residualEchoDetector.getBoolean(javaResidualEchoDetectorClass->enabled); todo
 
 			config.transient_suppression.enabled = transientSuppression.getBoolean(javaTransientSuppressionClass->enabled);
 
-			config.voice_detection.enabled = voiceDetection.getBoolean(javaVoiceDetectionClass->enabled);
+//			config.voice_detection.enabled = voiceDetection.getBoolean(javaVoiceDetectionClass->enabled); todo
 			
 			return config;
 		}
@@ -86,9 +87,14 @@ namespace jni
 			gainController.enabled = gainControl.getBoolean(javaGainControlClass->enabled);
 			gainController.fixed_digital.gain_db = gainControlFixedDigital.getFloat(javaGainControlFixedDigitalClass->gainDb);
 			gainController.adaptive_digital.enabled = gainControlAdaptiveDigital.getBoolean(javaGainControlAdaptiveDigitalClass->enabled);
-			gainController.adaptive_digital.dry_run = gainControlAdaptiveDigital.getBoolean(javaGainControlAdaptiveDigitalClass->dryRun);
-			gainController.adaptive_digital.vad_reset_period_ms = gainControlAdaptiveDigital.getInt(javaGainControlAdaptiveDigitalClass->vadResetPeriodMs);
-			gainController.adaptive_digital.adjacent_speech_frames_threshold = gainControlAdaptiveDigital.getInt(javaGainControlAdaptiveDigitalClass->adjacentSpeechFramesThreshold);
+            // TODO(bugs.webrtc.org/7494): Remove `dry_run`.
+            // When true, the adaptive digital controller runs but the signal is not
+            // modified. dfba28e30eaa791147c98e34ef0476e99eb93f5e
+//			gainController.adaptive_digital.dry_run = gainControlAdaptiveDigital.getBoolean(javaGainControlAdaptiveDigitalClass->dryRun); todo
+            // TODO(bugs.webrtc.org/7494): Hard-code and remove parameter below. dfba28e30eaa791147c98e34ef0476e99eb93f5e
+//			gainController.adaptive_digital.vad_reset_period_ms = gainControlAdaptiveDigital.getInt(javaGainControlAdaptiveDigitalClass->vadResetPeriodMs); todo
+            // TODO(bugs.webrtc.org/7494): Hard-code and remove parameter below. dfba28e30eaa791147c98e34ef0476e99eb93f5e
+//			gainController.adaptive_digital.adjacent_speech_frames_threshold = gainControlAdaptiveDigital.getInt(javaGainControlAdaptiveDigitalClass->adjacentSpeechFramesThreshold); todo
 			gainController.adaptive_digital.max_gain_change_db_per_second = gainControlAdaptiveDigital.getFloat(javaGainControlAdaptiveDigitalClass->maxGainChangeDbPerSecond);
 			gainController.adaptive_digital.max_output_noise_level_dbfs = gainControlAdaptiveDigital.getFloat(javaGainControlAdaptiveDigitalClass->maxOutputNoiseLevelDbfs);
 
