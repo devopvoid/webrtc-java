@@ -7,6 +7,23 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+    /*
+     * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+     * Method:    setStereoPlayout
+     * Signature: (Z)V
+     */
+    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setStereoPlayout
+      (JNIEnv *, jobject, jboolean);
+
+    /*
+     * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
+     * Method:    setStereoRecording
+     * Signature: (Z)V
+     */
+    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setStereoRecording
+      (JNIEnv *, jobject, jboolean);
+
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioDeviceModule
 	 * Method:    initPlayout

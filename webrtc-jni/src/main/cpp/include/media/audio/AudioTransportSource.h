@@ -21,12 +21,12 @@
 #include "JavaRef.h"
 
 #include "AudioSource.h"
-
+#include "modules/audio_device/include/audio_device_defines.h"
 #include <jni.h>
 
 namespace jni
 {
-	class AudioTransportSource : public AudioSource
+	class AudioTransportSource : public webrtc::AudioTransport
 	{
 		public:
 			AudioTransportSource(JNIEnv * env, const JavaGlobalRef<jobject> & sink);
@@ -43,6 +43,26 @@ namespace jni
             		int64_t * elapsed_time_ms,
             		int64_t * ntp_time_ms) override;
 
+			int32_t RecordedDataIsAvailable(const void* audioSamples,
+					const size_t nSamples,
+					const size_t nBytesPerSample,
+					const size_t nChannels,
+					const uint32_t samplesPerSec,
+					const uint32_t totalDelayMS,
+					const int32_t clockDrift,
+					const uint32_t currentMicLevel,
+					const bool keyPressed,
+					uint32_t& newMicLevel) override;
+
+			void PullRenderData(int bits_per_sample,
+						int sample_rate,
+						size_t number_of_channels,
+						size_t number_of_frames,
+						void* audio_data,
+						int64_t* elapsed_time_ms,
+						int64_t* ntp_time_ms)
+			{
+			}
 		private:
 			class JavaAudioSourceClass : public JavaClass
 			{

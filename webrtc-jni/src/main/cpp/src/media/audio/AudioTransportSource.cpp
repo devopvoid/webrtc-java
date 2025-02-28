@@ -57,15 +57,55 @@ namespace jni
 				return 0;
 			}
 		}
-
+		
 		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample, nChannels, samplesPerSec);
 
 		if (nSamplesOut > 0) {
 			env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<int8_t *>(audioSamples));
+			return nSamplesOut;
 		}
 
-		return 0;
+		return nSamples;
 	}
+
+	int32_t AudioTransportSource::RecordedDataIsAvailable(const void* audioSamples,
+					const size_t nSamples,
+					const size_t nBytesPerSample,
+					const size_t nChannels,
+					const uint32_t samplesPerSec,
+					const uint32_t totalDelayMS,
+					const int32_t clockDrift,
+					const uint32_t currentMicLevel,
+					const bool keyPressed,
+					uint32_t& newMicLevel)
+	{
+		JNIEnv * env = AttachCurrentThread();
+
+		jsize bufferSize = static_cast<jsize>(nSamples * nBytesPerSample);
+
+		if (buffer.get() == nullptr) {
+			jbyteArray dataArray = env->NewByteArray(bufferSize);
+
+			buffer = JavaGlobalRef<jbyteArray>(env, dataArray);
+
+			jsize bufferLength = env->GetArrayLength(buffer);
+
+			if (bufferLength < bufferSize) {
+				buffer = JavaGlobalRef<jbyteArray>(env, nullptr);
+				return 0;
+			}
+		}
+		
+		int32_t nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample, nChannels, samplesPerSec);
+
+		// if (nSamplesOut > 0) {
+		// 	env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<const int8_t *>(audioSamples));
+		// 	return nSamplesOut;
+		// }
+
+		return nSamplesOut;
+	}
+	
 
 	AudioTransportSource::JavaAudioSourceClass::JavaAudioSourceClass(JNIEnv * env)
 	{

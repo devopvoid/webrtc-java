@@ -63,6 +63,22 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
 	(JNIEnv*, jobject);
 
+    /*
+     * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+     * Method:    initialize
+     * Signature: (IIILdev/onvoid/webrtc/media/audio/ChannelLayout;Ldev/onvoid/webrtc/media/audio/ChannelLayout;Ldev/onvoid/webrtc/media/audio/ChannelLayout;)V
+     */
+    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__IIILdev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2
+      (JNIEnv *, jobject, jint, jint, jint, jobject, jobject, jobject);
+
+    /*
+     * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
+     * Method:    initialize
+     * Signature: (Ldev/onvoid/webrtc/media/audio/ProcessingConfig;)V
+     */
+    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__Ldev_onvoid_webrtc_media_audio_ProcessingConfig_2
+      (JNIEnv *, jobject, jobject);
+
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
 	 * Method:    updateStats

@@ -32,6 +32,31 @@
 #include "modules/audio_device/include/audio_device.h"
 #include "rtc_base/logging.h"
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setStereoPlayout
+  (JNIEnv * env, jobject caller, jboolean enabled)
+{
+	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	
+	if (audioModule->SetStereoPlayout(enabled) != 0) {
+		env->Throw(jni::JavaError(env, "Set stereo playout failed"));
+		return;
+	}
+}
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setStereoRecording
+  (JNIEnv * env, jobject caller, jboolean enabled)
+{
+	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+	CHECK_HANDLE(audioModule);
+
+	
+	if (audioModule->SetStereoRecording(enabled) != 0) {
+		env->Throw(jni::JavaError(env, "Set stereo recording failed"));
+		return;
+	}
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_initPlayout
 (JNIEnv * env, jobject caller)
 {

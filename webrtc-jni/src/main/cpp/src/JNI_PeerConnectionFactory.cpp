@@ -16,6 +16,7 @@
 
 #include "JNI_PeerConnectionFactory.h"
 
+#include <audio/AudioProcessingStreamConfig.h>
 #include <audio/AudioTransportSource.h>
 
 #include "api/AudioOptions.h"
@@ -65,7 +66,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			: nullptr;
 		
 		rtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
-		
+
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
 			workerThread.get(),

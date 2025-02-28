@@ -98,6 +98,10 @@ public class AudioDeviceModule extends DisposableNativeObject {
 		sourceEntry = new SimpleEntry<>(source, nativeSource);
 	}
 
+	public native void setStereoPlayout(boolean enabled);
+
+	public native void setStereoRecording(boolean enabled);
+
 	public native void initPlayout();
 
 	public native void stopPlayout();

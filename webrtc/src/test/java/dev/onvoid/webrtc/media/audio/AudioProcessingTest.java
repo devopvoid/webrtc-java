@@ -35,6 +35,21 @@ class AudioProcessingTest {
 		audioProcessing = new AudioProcessing();
 	}
 
+	@Test
+	void initWithParams(){
+		AudioProcessing processing = new AudioProcessing(48000, 96000, 960000, ChannelLayout.kStereo, ChannelLayout.kStereo, ChannelLayout.kStereo);
+	}
+
+	@Test
+	void initWithProcessingConfig(){
+		ProcessingConfig processingConfig = new ProcessingConfig();
+		processingConfig.streams.put(StreamName.kInputStream, new AudioProcessingStreamConfig(96000, 2));
+		processingConfig.streams.put(StreamName.kOutputStream, new AudioProcessingStreamConfig(96000, 2));
+		processingConfig.streams.put(StreamName.kReverseInputStream, new AudioProcessingStreamConfig(96000, 2));
+		processingConfig.streams.put(StreamName.kReverseOutputStream, new AudioProcessingStreamConfig(96000, 2));
+		AudioProcessing processing = new AudioProcessing(processingConfig);
+	}
+
 	@AfterEach
 	void dispose() {
 		audioProcessing.dispose();

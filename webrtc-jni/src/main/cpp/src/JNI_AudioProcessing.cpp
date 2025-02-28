@@ -37,7 +37,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyC
 {
 	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
 	CHECK_HANDLE(apm);
-
+	
 	apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
 }
 
@@ -196,6 +196,36 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initia
 (JNIEnv * env, jobject caller)
 {
 	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
+	
+	if (!apm) {
+		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
+		return;
+	}
+
+	SetHandle(env, caller, apm.release());
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__IIILdev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2
+	 (JNIEnv * env, jobject caller, jint capture_input_sample_rate_hz, jint capture_output_sample_rate_hz, jint render_sample_rate_hz, jobject capture_input_layout, jobject capture_output_layout, jobject render_input_layout)
+{
+	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
+
+	apm->Initialize(capture_input_sample_rate_hz, capture_output_sample_rate_hz, render_sample_rate_hz, jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, capture_input_layout), jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, capture_output_layout), jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, render_input_layout));
+	
+	if (!apm) {
+		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
+		return;
+	}
+
+	SetHandle(env, caller, apm.release());
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__Ldev_onvoid_webrtc_media_audio_ProcessingConfig_2
+  (JNIEnv * env, jobject caller, jobject jconfig)
+{
+	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
+	webrtc::ProcessingConfig * config = GetHandle<webrtc::ProcessingConfig>(env, jconfig);
+	apm->Initialize(*config);
 
 	if (!apm) {
 		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
