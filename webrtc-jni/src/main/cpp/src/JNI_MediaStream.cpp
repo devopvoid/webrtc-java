@@ -77,7 +77,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_addTrack
 
 	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
 	CHECK_HANDLE(track);
-
+	
 	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track)) {
 		stream->AddTrack(t);
 	}

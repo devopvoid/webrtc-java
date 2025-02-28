@@ -75,7 +75,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 
 	const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
 	int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
-
+	
 	int result;
 
 	if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2) {
@@ -97,7 +97,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 		}
 
 		srcConfig.set_num_channels(dstNumChannels);
-
+		
 		result = apm->ProcessStream(dstFrame, srcConfig, dstConfig, dstFrame);
 	}
 	else {

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
+import dev.onvoid.webrtc.media.MediaStream;
 import org.junit.jupiter.api.Assertions;
 
 /**
@@ -120,7 +121,6 @@ class TestPeerConnection implements PeerConnectionObserver {
 
 		localPeerConnection.setLocalDescription(answerDesc, setObserver);
 		setObserver.get();
-
 		return answerDesc;
 	}
 

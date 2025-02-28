@@ -71,4 +71,8 @@ class AudioTrackTests extends TestBase {
 		audioTrack.removeSink(sink);
 	}
 
+	@Test
+	void getSource(){
+		assertNotNull(audioTrack.getSource());
+	}
 }

@@ -90,4 +90,5 @@ public class AudioTrack extends MediaStreamTrack {
 
 	private native void removeSinkInternal(long sinkHandle);
 
+	public native AudioTrackSource getSource();
 }

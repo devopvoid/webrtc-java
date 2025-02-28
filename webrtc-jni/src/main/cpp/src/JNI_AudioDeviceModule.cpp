@@ -49,7 +49,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_stop
 {
 	webrtc::AudioDeviceModule* audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
 	CHECK_HANDLE(audioModule);
-
+	
 	if (audioModule->StopPlayout() != 0) {
 		env->Throw(jni::JavaError(env, "Stop playout failed"));
 		return;
@@ -354,7 +354,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setS
 {
 	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
 	CHECK_HANDLE(audioModule);
-
+		
 	if (audioModule->SetSpeakerMute(mute) != 0) {
 		env->Throw(jni::JavaError(env, "Set speaker mute failed"));
 	}

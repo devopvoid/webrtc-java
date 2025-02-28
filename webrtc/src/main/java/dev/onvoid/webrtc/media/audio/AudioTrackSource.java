@@ -18,6 +18,12 @@ package dev.onvoid.webrtc.media.audio;
 
 import dev.onvoid.webrtc.media.MediaSource;
 
+import java.util.IdentityHashMap;
+import java.util.Map;
+
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 /**
  * A source for one or more AudioTracks.
  *
@@ -25,8 +31,59 @@ import dev.onvoid.webrtc.media.MediaSource;
  */
 public class AudioTrackSource extends MediaSource {
 
+	private final Map<AudioTrackSink, Long> sinks = new IdentityHashMap<>();
+
 	protected AudioTrackSource() {
 
 	}
+
+	public void dispose() {
+		for (long nativeSink : sinks.values()) {
+			removeSinkInternal(nativeSink);
+		}
+
+		sinks.clear();
+	}
+
+	/**
+	 * Adds an AudioSink to the track source. A track source can have any number of
+	 * AudioSinks.
+	 *
+	 * @param sink The audio sink that will receive audio data from the track.
+	 */
+	public void addSink(AudioTrackSink sink) {
+		if (isNull(sink)) {
+			throw new NullPointerException();
+		}
+		if (sinks.containsKey(sink)) {
+			return;
+		}
+
+		final long nativeSink = addSinkInternal(sink);
+
+		sinks.put(sink, nativeSink);
+	}
+
+	/**
+	 * Removes an AudioSink from the track. If the AudioSink was not attached to
+	 * the track source, this is a no-op.
+	 */
+	public void removeSink(AudioTrackSink sink) {
+		if (isNull(sink)) {
+			throw new NullPointerException();
+		}
+
+		final Long nativeSink = sinks.remove(sink);
+
+		if (nonNull(nativeSink)) {
+			removeSinkInternal(nativeSink);
+		}
+	}
+
+	private native long addSinkInternal(AudioTrackSink sink);
+
+	private native void removeSinkInternal(long sinkHandle);
+
+	public native void setVolume(double volume);
 
 }

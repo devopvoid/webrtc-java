@@ -15,11 +15,12 @@
  */
 
 #include "JNI_AudioTrack.h"
+
+#include "JavaFactories.h"
 #include "api/AudioTrackSink.h"
 #include "JavaNullPointerException.h"
 #include "JavaUtils.h"
 
-#include "api/media_stream_interface.h"
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInternal
 (JNIEnv * env, jobject caller, jobject jsink)
@@ -33,9 +34,8 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInt
 	CHECK_HANDLEV(track, 0);
 
 	auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
-
 	track->AddSink(sink);
-
+	
 	return reinterpret_cast<jlong>(sink);
 }
 
@@ -44,12 +44,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeSinkI
 {
 	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
 	CHECK_HANDLE(track);
-
+	
 	auto sink = reinterpret_cast<jni::AudioTrackSink *>(sinkHandle);
 
 	if (sink != nullptr) {
 		track->RemoveSink(sink);
-
+		
 		delete sink;
 	}
 }
@@ -61,8 +61,19 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_getSignalLe
 
 	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
 	CHECK_HANDLEV(track, level);
-
 	track->GetSignalLevel(&level);
 
 	return static_cast<jint>(level);
 }
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_getSource
+  (JNIEnv * env, jobject caller)
+{
+	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+	CHECK_HANDLEV(track, nullptr);
+
+	auto source = track->GetSource();
+
+	return jni::JavaFactories::create(env, source).release();
+}
+
