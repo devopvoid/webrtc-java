@@ -52,6 +52,8 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	@SuppressWarnings("unused")
 	private long workerThreadHandle;
 
+	public AudioEncoderFactory audioEncoderFactory;
+	public AudioDecoderFactory audioDecoderFactory;
 
 	/**
 	 * Creates an instance of PeerConnectionFactory.

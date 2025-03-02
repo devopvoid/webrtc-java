@@ -16,6 +16,7 @@
 
 #include "JNI_PeerConnectionFactory.h"
 
+#include <JNI_WebRTC.h>
 #include <audio/AudioProcessingStreamConfig.h>
 #include <audio/AudioTransportSource.h>
 
@@ -38,6 +39,17 @@
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/builtin_video_encoder_factory.h"
+
+void SetAudioFactories(JNIEnv * env, jobject caller, rtc::scoped_refptr<webrtc::AudioEncoderFactory>& factory, rtc::scoped_refptr<webrtc::AudioDecoderFactory>& decoderFactory)
+{
+	auto cls = FindClass(env, PKG"PeerConnectionFactory");
+	auto encoderField = env->GetFieldID(cls, "audioEncoderFactory", "L" PKG_AUDIO "AudioEncoderFactory;");
+	auto decoderField = env->GetFieldID(cls, "audioDecoderFactory", "L" PKG_AUDIO "AudioDecoderFactory;");
+	
+	env->SetObjectField(caller, encoderField, jni::JavaFactories::create(env, factory.get()).release());
+	env->SetObjectField(caller, decoderField, jni::JavaFactories::create(env, decoderFactory.get()).release());
+}
+
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 (JNIEnv * env, jobject caller, jobject audioModule, jobject audioProcessing)
@@ -67,23 +79,26 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		
 		rtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
 
+		auto encoderFactory = webrtc::CreateBuiltinAudioEncoderFactory();
+		auto decoderFactory = webrtc::CreateBuiltinAudioDecoderFactory();
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
 			workerThread.get(),
 			signalingThread.get(),
 			audioDevModule,
-			webrtc::CreateBuiltinAudioEncoderFactory(),
-			webrtc::CreateBuiltinAudioDecoderFactory(),
+			encoderFactory,
+			decoderFactory,
 			webrtc::CreateBuiltinVideoEncoderFactory(),
 			webrtc::CreateBuiltinVideoDecoderFactory(),
 			nullptr,
 			apm);
-		
+			
 		if (factory != nullptr) {
 			SetHandle(env, caller, factory.release());
 			SetHandle(env, caller, "networkThreadHandle", networkThread.release());
 			SetHandle(env, caller, "signalingThreadHandle", signalingThread.release());
 			SetHandle(env, caller, "workerThreadHandle", workerThread.release());
+			SetAudioFactories(env, caller, encoderFactory, decoderFactory);
 		}
 		else {
 			throw jni::Exception("Create PeerConnectionFactory failed");
@@ -94,6 +109,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 	}
 }
 
+
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 (JNIEnv * env, jobject caller)
 {
@@ -103,7 +120,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 	rtc::Thread * networkThread = GetHandle<rtc::Thread>(env, caller, "networkThreadHandle");
 	rtc::Thread * signalingThread = GetHandle<rtc::Thread>(env, caller, "signalingThreadHandle");
 	rtc::Thread * workerThread = GetHandle<rtc::Thread>(env, caller, "workerThreadHandle");
-
+		
 	rtc::RefCountReleaseStatus status = factory->Release();
 
 	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {

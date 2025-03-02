@@ -15,6 +15,9 @@
  */
 
 #include "api/RTCRtpSendParameters.h"
+
+#include <api/audio_codecs/builtin_audio_decoder_factory.h>
+
 #include "api/RTCRtpCodecParameters.h"
 #include "api/RTCRtpEncodingParameters.h"
 #include "api/RTCRtpHeaderExtension.h"
@@ -59,7 +62,7 @@ namespace jni
 			const auto javaParentClass = JavaClasses::get<RTCRtpParameters::JavaRTCRtpParametersClass>(env);
 
 			JavaObject obj(env, parameters);
-
+			
 			JavaLocalRef<jstring> transactionId = obj.getString(javaClass->transactionId);
 			JavaLocalRef<jobject> encodings = obj.getObject(javaClass->encodings);
 			JavaLocalRef<jobject> headerExtensions = obj.getObject(javaParentClass->headerExtensions);
