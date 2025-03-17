@@ -165,13 +165,17 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 					buffer.getStrideU(), dataV.slice(), buffer.getStrideV());
 		}
 
+		buffer.retain();
+
 		I420Buffer newBuffer = allocate(scaleWidth, scaleHeight);
-		
+
 		cropAndScale(buffer.getDataY(), buffer.getStrideY(), buffer.getDataU(), buffer.getStrideU(),
 				buffer.getDataV(), buffer.getStrideV(), cropX, cropY, cropWidth, cropHeight,
 				newBuffer.getDataY(), newBuffer.getStrideY(), newBuffer.getDataU(), newBuffer.getStrideU(),
 				newBuffer.getDataV(), newBuffer.getStrideV(), scaleWidth, scaleHeight);
-		
+
+		buffer.release();
+
 		return newBuffer;
 	}
 

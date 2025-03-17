@@ -38,6 +38,13 @@ namespace jni
 		rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = frame.video_frame_buffer();
 		rtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = buffer->ToI420();
 
+		if (i420Buffer == nullptr) {
+			return;
+		}
+
+		rtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
+		i420BufferCopy->AddRef();
+
 //		if (frame.rotation() != webrtc::kVideoRotation_0) {
 //			i420Buffer = webrtc::I420Buffer::Rotate(*i420Buffer, frame.rotation());
 //		}
@@ -45,7 +52,7 @@ namespace jni
 		jint rotation = static_cast<jint>(frame.rotation());
 		jlong timestamp = frame.timestamp_us() * rtc::kNumNanosecsPerMicrosec;
 
-		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420Buffer);
+		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
 		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
 
 		env->CallVoidMethod(sink, javaClass->onFrame, jFrame);
