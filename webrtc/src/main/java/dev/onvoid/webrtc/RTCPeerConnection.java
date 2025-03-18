@@ -337,4 +337,6 @@ public class RTCPeerConnection extends NativeObject {
 	 */
 	public native void close();
 
+	public native void setBitrate(BitrateSettings settings);
+
 }

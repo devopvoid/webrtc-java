@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_STREAM_CONFIG_H_
-#define JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_STREAM_CONFIG_H_
+#ifndef JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_CONFIG_H_
+#define JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_CONFIG_H_
 
 #include "JavaClass.h"
 #include "JavaRef.h"
@@ -26,21 +26,20 @@
 
 namespace jni
 {
-	namespace AudioProcessingStreamConfig
+	namespace ProcessingConfig
 	{
-		class JavaAudioProcessingStreamConfigClass : public JavaClass
+		class JavaProcessingConfigClass : public JavaClass
 		{
 			public:
-				explicit JavaAudioProcessingStreamConfigClass(JNIEnv * env);
+				explicit JavaProcessingConfigClass(JNIEnv * env);
 
 				jclass cls;
 				jmethodID ctor;
-				jfieldID sampleRate;
-				jfieldID channels;
+				jfieldID streams;
 		};
 
-		webrtc::StreamConfig toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
-        JavaLocalRef<jobject> toJava(JNIEnv * env, webrtc::StreamConfig& config);
+		webrtc::ProcessingConfig toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, webrtc::ProcessingConfig config);
 	}
 }
 

@@ -50,6 +50,14 @@ public class AudioProcessing extends DisposableNativeObject {
 		initialize();
 	}
 
+	public AudioProcessing(int captureInputSampleRate, int captureOutputSampleRate, int renderSampleRate, ChannelLayout captureInputLayout, ChannelLayout captureOutputLayout, ChannelLayout renderInputLayout){
+		initialize(captureInputSampleRate, captureOutputSampleRate, renderSampleRate, captureInputLayout, captureOutputLayout, renderInputLayout);
+	}
+
+	public AudioProcessing(ProcessingConfig config){
+		initialize(config);
+	}
+
 	/**
 	 * Get the audio processing statistics.
 	 *
@@ -160,6 +168,10 @@ public class AudioProcessing extends DisposableNativeObject {
 	public native void dispose();
 
 	private native void initialize();
+
+	private native void initialize(int captureInputSampleRate, int captureOutputSampleRate, int renderSampleRate, ChannelLayout captureInputLayout, ChannelLayout captureOutputLayout, ChannelLayout renderInputLayout);
+
+	private native void initialize(ProcessingConfig config);
 
 	private native void updateStats();
 

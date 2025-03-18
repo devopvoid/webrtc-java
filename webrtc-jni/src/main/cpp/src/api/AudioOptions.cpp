@@ -44,7 +44,7 @@ namespace jni
 		JavaAudioOptionsClass::JavaAudioOptionsClass(JNIEnv * env)
 		{
 			cls = FindClass(env, PKG_AUDIO"AudioOptions");
-	
+			
 			echoCancellation = GetFieldID(env, cls, "echoCancellation", "Z");
 			autoGainControl = GetFieldID(env, cls, "autoGainControl", "Z");
 			noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "Z");

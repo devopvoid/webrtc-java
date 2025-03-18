@@ -57,7 +57,7 @@ namespace jni
 			params.rtcp = RTCRtcpParameters::toNative(env, rtcp);
 			params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtension::toNative);
 			params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
-
+			
 			return params;
 		}
 

@@ -394,4 +394,11 @@ class RTCPeerConnectionTests extends TestBase {
 		assertEquals(RTCIceGatheringState.NEW, peerConnection.getIceGatheringState());
 		assertEquals(RTCIceConnectionState.CLOSED, peerConnection.getIceConnectionState());
 	}
+
+	@Test
+	void setBitrate(){
+		BitrateSettings settings = new BitrateSettings();
+		settings.maxBitrateBps = BitrateSettings.kDefaultStartBitrateBps + 1;
+		peerConnection.setBitrate(settings);
+	}
 }

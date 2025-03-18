@@ -15,6 +15,9 @@
  */
 
 #include "JNI_RTCPeerConnection.h"
+
+#include <BitrateSettings.h>
+
 #include "api/CreateSessionDescriptionObserver.h"
 #include "api/SetSessionDescriptionObserver.h"
 #include "api/RTCAnswerOptions.h"
@@ -116,7 +119,6 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrack
 
 	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
 	CHECK_HANDLEV(track, nullptr);
-
 	std::vector<std::string> streamIDs = jni::JavaList::toStringVector(env, jni::JavaLocalRef<jobject>(env, jStreamIds));
 
 	auto result = pc->AddTrack(track, streamIDs);
@@ -610,5 +612,27 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setBitrate
+  (JNIEnv * env, jobject caller, jobject jBitrateSettings)
+{
+	if (jBitrateSettings == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "BitrateSettings is null"));
+		return;
+	}
+
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLE(pc);
+	
+	auto settings = jni::BitrateSettings::toNative(env, jni::JavaLocalRef<jobject>(env, jBitrateSettings));
+
+	auto result = pc->SetBitrate(settings);
+	
+	if (! result.ok())
+	{
+		env->Throw(jni::JavaRuntimeException(env, "Create PeerConnection failed: %s %s",
+		ToString(result.type()), result.message()));
 	}
 }

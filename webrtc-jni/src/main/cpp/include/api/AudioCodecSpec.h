@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Alex Andres
+ * Copyright 2019 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,33 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_STREAM_CONFIG_H_
-#define JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_STREAM_CONFIG_H_
+#ifndef JNI_WEBRTC_API_AUDIO_CODEC_SPEC_H_
+#define JNI_WEBRTC_API_AUDIO_CODEC_SPEC_H_
 
 #include "JavaClass.h"
 #include "JavaRef.h"
 
-#include "modules/audio_processing/include/audio_processing.h"
+#include "api/audio_codecs/audio_format.h"
 
 #include <jni.h>
 
 namespace jni
 {
-	namespace AudioProcessingStreamConfig
+	namespace AudioCodecSpec
 	{
-		class JavaAudioProcessingStreamConfigClass : public JavaClass
+		class JavaAudioCodecSpecClass : public JavaClass
 		{
 			public:
-				explicit JavaAudioProcessingStreamConfigClass(JNIEnv * env);
+				explicit JavaAudioCodecSpecClass(JNIEnv * env);
 
 				jclass cls;
-				jmethodID ctor;
-				jfieldID sampleRate;
-				jfieldID channels;
+                jmethodID ctor;
+				jfieldID format;
+				jfieldID info;
 		};
 
-		webrtc::StreamConfig toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
-        JavaLocalRef<jobject> toJava(JNIEnv * env, webrtc::StreamConfig& config);
+		webrtc::AudioCodecSpec toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::AudioCodecSpec & info);
 	}
 }
 
