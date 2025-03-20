@@ -43,7 +43,7 @@ class AudioResamplerTest {
 		SampleBuffer buffer = new SampleBuffer(48000, 24000, 1);
 
 		assertThrows(IllegalStateException.class, () -> {
-			resampler.resample(buffer.src, buffer.nSamplesIn, buffer.dst);
+			resampler.resample(buffer.src, buffer.nSamplesIn, buffer.dst, buffer.nSamplesOut, 1);
 		});
 	}
 
@@ -51,8 +51,6 @@ class AudioResamplerTest {
 	void targetBufferUnderflow() {
 		SampleBuffer buffer = new SampleBuffer(48000, 24000, 1);
 		buffer.setTargetBufferSize(buffer.frameSizeOut / 2);
-
-		reset(resampler, buffer);
 
 		assertThrows(IllegalArgumentException.class, () -> {
 			resample(resampler, buffer);
@@ -76,8 +74,6 @@ class AudioResamplerTest {
 	void downSample() {
 		SampleBuffer buffer = new SampleBuffer(48000, 44100, 1);
 
-		reset(resampler, buffer);
-
 		int result = resample(resampler, buffer);
 
 		assertEquals(buffer.nSamplesOut, result);
@@ -87,19 +83,13 @@ class AudioResamplerTest {
 	void upSample() {
 		SampleBuffer buffer = new SampleBuffer(32000, 48000, 1);
 
-		reset(resampler, buffer);
-
 		int result = resample(resampler, buffer);
 
 		assertEquals(buffer.nSamplesOut, result);
 	}
 
-	private static void reset(AudioResampler resampler, SampleBuffer buffer) {
-		resampler.reset(buffer.sampleRateIn, buffer.sampleRateOut, 1);
-	}
-
 	private static int resample(AudioResampler resampler, SampleBuffer buffer) {
-		return resampler.resample(buffer.src, buffer.nSamplesIn, buffer.dst);
+		return resampler.resample(buffer.src, buffer.nSamplesIn, buffer.dst, buffer.nSamplesOut, 1);
 	}
 
 
@@ -128,8 +118,8 @@ class AudioResamplerTest {
 			this.sampleRateIn = sampleRateIn;
 			this.sampleRateOut = sampleRateOut;
 
-			nSamplesIn = sampleRateIn / 100 * channels; // 10 ms frame
-			nSamplesOut = sampleRateOut / 100 * channels;
+			nSamplesIn = AudioResampler.getSamplesPerChannel(sampleRateIn); // 10 ms frame
+			nSamplesOut = AudioResampler.getSamplesPerChannel(sampleRateOut);;
 			frameSizeIn = nSamplesIn * bytesPerFrame;
 			frameSizeOut = nSamplesOut * bytesPerFrame;
 

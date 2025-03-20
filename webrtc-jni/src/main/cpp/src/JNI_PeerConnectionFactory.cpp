@@ -61,12 +61,13 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			? GetHandle<webrtc::AudioProcessing>(env, audioProcessing)
 			: nullptr;
 		rtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
+		rtc::scoped_refptr<webrtc::AudioDeviceModule> adm(audioDevModule);
 
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
 			workerThread.get(),
 			signalingThread.get(),
-			audioDevModule,
+			adm,
 			webrtc::CreateBuiltinAudioEncoderFactory(),
 			webrtc::CreateBuiltinAudioDecoderFactory(),
 			webrtc::CreateBuiltinVideoEncoderFactory(),
@@ -99,9 +100,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 	rtc::Thread * signalingThread = GetHandle<rtc::Thread>(env, caller, "signalingThreadHandle");
 	rtc::Thread * workerThread = GetHandle<rtc::Thread>(env, caller, "workerThreadHandle");
 
-	rtc::RefCountReleaseStatus status = factory->Release();
+	webrtc::RefCountReleaseStatus status = factory->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
 	}
 

@@ -41,17 +41,16 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initial
 	SetHandle(env, caller, resampler);
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resetInternal
-(JNIEnv* env, jobject caller, jint sourceRate, jint targetRate, jint channels)
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
+(JNIEnv* env, jobject caller, jint srcSamplesPerChannel, jint dstSamplesPerChannel, jint channels)
 {
-	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
-	CHECK_HANDLE(resampler);
+	webrtc::PushResampler<int16_t> * resampler = new webrtc::PushResampler<int16_t>(srcSamplesPerChannel, dstSamplesPerChannel, channels);
 
-	resampler->InitializeIfNeeded(sourceRate, targetRate, channels);
+	SetHandle(env, caller, resampler);
 }
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampleInternal
-(JNIEnv * env, jobject caller, jbyteArray samplesIn, jint nSamplesIn, jbyteArray samplesOut, jint maxSamplesOut)
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resample
+(JNIEnv * env, jobject caller, jbyteArray samplesIn, jint srcSamplesPerChannel, jbyteArray samplesOut, jint dstSamplesPerChannel, jint channels)
 {
 	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
 	CHECK_HANDLEV(resampler, -1);
@@ -61,7 +60,13 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampl
 	jbyte * srcPtr = env->GetByteArrayElements(samplesIn, nullptr);
 	jbyte * dstPtr = env->GetByteArrayElements(samplesOut, &isDstCopy);
 
-	size_t result = resampler->Resample(reinterpret_cast<int16_t *>(srcPtr), nSamplesIn, reinterpret_cast<int16_t *>(dstPtr), maxSamplesOut);
+	int16_t * src16Ptr = reinterpret_cast<int16_t *>(srcPtr);
+	int16_t * dst16Ptr = reinterpret_cast<int16_t*>(dstPtr);
+
+	webrtc::InterleavedView<const int16_t> src(src16Ptr, srcSamplesPerChannel, channels);
+	webrtc::InterleavedView<int16_t> dst(dst16Ptr, dstSamplesPerChannel, channels);
+
+	size_t result = resampler->Resample(src, dst);
 
 	if (isDstCopy == JNI_TRUE) {
 		jsize dstLength = env->GetArrayLength(samplesOut);

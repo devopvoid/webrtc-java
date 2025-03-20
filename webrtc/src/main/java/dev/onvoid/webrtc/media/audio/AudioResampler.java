@@ -16,8 +16,6 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-import static java.util.Objects.requireNonNull;
-
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
@@ -28,14 +26,8 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
  */
 public class AudioResampler extends DisposableNativeObject {
 
-	private int targetFrames;
-
-	private boolean initialized;
-
-
 	/**
-	 * Creates a new {@code AudioResampler} without sampling parameters. Make
-	 * sure to call {@link #reset(int, int, int)} afterwards.
+	 * Creates a new {@code AudioResampler} without sampling parameters.
 	 */
 	public AudioResampler() {
 		initialize();
@@ -50,27 +42,7 @@ public class AudioResampler extends DisposableNativeObject {
 	 * @param channels         The number of audio channels to resample.
 	 */
 	public AudioResampler(int sourceSampleRate, int targetSampleRate, int channels) {
-		initialize();
-		reset(sourceSampleRate, targetSampleRate, channels);
-	}
-
-	/**
-	 * Must be called when created with default constructor or whenever the
-	 * sampling parameters change. Can be called at any time as it is a no-op if
-	 * parameters have not changed since the last call.
-	 *
-	 * @param sourceSampleRate The sampling frequency of the input signal.
-	 * @param targetSampleRate The sampling frequency of the output signal.
-	 * @param channels         The number of audio channels to resample.
-	 */
-	public void reset(int sourceSampleRate, int targetSampleRate, int channels) {
-		initialized = false;
-
-		resetInternal(sourceSampleRate, targetSampleRate, channels);
-
-		targetFrames = targetSampleRate / 100 * channels; // 10 ms frame
-
-		initialized = true;
+		initialize(getSamplesPerChannel(sourceSampleRate), getSamplesPerChannel(targetSampleRate), channels);
 	}
 
 	/**
@@ -79,42 +51,32 @@ public class AudioResampler extends DisposableNativeObject {
 	 * length of 10 milliseconds. Accordingly, the output has the length of 10
 	 * milliseconds.
 	 *
-	 * @param samplesIn  The audio samples to convert.
-	 * @param nSamplesIn The number of audio samples to consider from {@code
-	 *                   samplesIn}.
-	 * @param samplesOut The converted audio samples.
+	 * @param samplesIn            The audio samples to convert.
+	 * @param srcSamplesPerChannel The number of samples per source channel.
+	 * @param samplesOut           The converted audio samples.
+	 * @param dstSamplesPerChannel The number of samples per destination channel.
+	 * @param channels             The number of audio channels to resample.
 	 *
 	 * @return The number of converted audio samples.
 	 */
-	public int resample(byte[] samplesIn, int nSamplesIn, byte[] samplesOut) {
-		requireNonNull(samplesIn);
-		requireNonNull(samplesOut);
-
-		if (!initialized) {
-			throw new IllegalStateException("Not initialized: Use reset() to set parameters");
-		}
-
-		final int arraySamplesIn = samplesIn.length / 2; // 16-bit PCM sample
-		final int maxSamplesOut = samplesOut.length / 2;
-
-		nSamplesIn = Math.min(arraySamplesIn, Math.max(0, nSamplesIn));
-
-		if (targetFrames > maxSamplesOut) {
-			throw new IllegalArgumentException("Insufficient samples output length");
-		}
-
-		return resampleInternal(samplesIn, nSamplesIn, samplesOut, maxSamplesOut);
-	}
+	public native int resample(byte[] samplesIn, int srcSamplesPerChannel, byte[] samplesOut, int dstSamplesPerChannel,
+							   int channels);
 
 	@Override
 	public native void dispose();
 
 	private native void initialize();
 
-	private native void resetInternal(int sourceSampleRate, int targetSampleRate,
-			int channels);
+	private native void initialize(int srcSamplesPerChannel, int dstSamplesPerChannel, int channels);
 
-	private native int resampleInternal(byte[] samplesIn, int nSamplesIn,
-			byte[] samplesOut, int maxSamplesOut);
-
+	/**
+	 * Returns the number of samples a buffer needs to hold for ~10ms of a single audio channel at a given sample rate.
+	 *
+	 * @param sampleRate The sample rate.
+	 *
+	 * @return The number of samples per channel.
+	 */
+	public static int getSamplesPerChannel(int sampleRate) {
+		return sampleRate / 100;
+	}
 }

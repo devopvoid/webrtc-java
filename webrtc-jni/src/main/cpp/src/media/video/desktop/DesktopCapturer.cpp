@@ -31,7 +31,6 @@ namespace jni
 
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
-		options.set_allow_use_magnification_api(true);
 #endif
 
 		if (screenCapturer) {

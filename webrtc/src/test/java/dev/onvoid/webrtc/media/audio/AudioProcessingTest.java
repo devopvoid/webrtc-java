@@ -53,10 +53,6 @@ class AudioProcessingTest {
 		config.noiseSuppression.enabled = true;
 		config.noiseSuppression.level = NoiseSuppression.Level.HIGH;
 
-		config.residualEchoDetector.enabled = true;
-		config.transientSuppression.enabled = true;
-		config.voiceDetection.enabled = true;
-
 		audioProcessing.applyConfig(config);
 	}
 

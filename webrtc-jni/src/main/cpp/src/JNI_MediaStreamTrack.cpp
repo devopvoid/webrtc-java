@@ -33,9 +33,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
 	CHECK_HANDLE(track);
 
-	rtc::RefCountReleaseStatus status = track->Release();
+	webrtc::RefCountReleaseStatus status = track->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
 	}
 	else {

@@ -79,10 +79,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_addTrack
 	CHECK_HANDLE(track);
 
 	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track)) {
-		stream->AddTrack(t);
+		stream->AddTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
 	}
 	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track)) {
-		stream->AddTrack(t);
+		stream->AddTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
 	}
 }
 
@@ -96,10 +96,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_removeTrack
 	CHECK_HANDLE(track);
 
 	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track)) {
-		stream->RemoveTrack(t);
+		stream->RemoveTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
 	}
 	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track)) {
-		stream->RemoveTrack(t);
+		stream->RemoveTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
 	}
 }
 
@@ -109,9 +109,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_dispose
 	webrtc::MediaStreamInterface * stream = GetHandle<webrtc::MediaStreamInterface>(env, caller);
 	CHECK_HANDLE(stream);
 
-	rtc::RefCountReleaseStatus status = stream->Release();
+	webrtc::RefCountReleaseStatus status = stream->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
 	}
 

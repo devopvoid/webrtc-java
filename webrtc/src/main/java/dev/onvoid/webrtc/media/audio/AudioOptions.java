@@ -56,14 +56,4 @@ public class AudioOptions {
 	 */
 	public boolean highpassFilter;
 
-	/**
-	 * Audio processing to detect typing.
-	 */
-	public boolean typingDetection;
-
-	/**
-	 * Audio processing to detect residual echoes.
-	 */
-	public boolean residualEchoDetector;
-
 }

@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioConverter.h"
+#include "api/audio/audio_processing.h"
 #include "media/audio/AudioConverter.h"
 #include "JavaUtils.h"
 
@@ -56,8 +57,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_initial
 (JNIEnv * env, jobject caller, jint srcSampleRate, jint srcChannels, jint dstSampleRate, jint dstChannels)
 {
 	// 10 ms frames
-	size_t srcFrames = srcSampleRate / 100;
-	size_t dstFrames = dstSampleRate / 100;
+	size_t srcFrames = webrtc::AudioProcessing::GetFrameSize(srcSampleRate);
+	size_t dstFrames = webrtc::AudioProcessing::GetFrameSize(dstSampleRate);
 
 	jni::AudioConverter * converter = jni::AudioConverter::create(srcFrames, srcChannels, dstFrames, dstChannels).release();
 
