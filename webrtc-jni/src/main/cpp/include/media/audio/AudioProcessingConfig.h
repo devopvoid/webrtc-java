@@ -38,9 +38,6 @@ namespace jni
 				jfieldID gainControl;
 				jfieldID highPassFilter;
 				jfieldID noiseSuppression;
-				jfieldID residualEchoDetector;
-				jfieldID transientSuppression;
-				jfieldID voiceDetection;
 		};
 
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType);

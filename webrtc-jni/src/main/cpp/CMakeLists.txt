@@ -65,7 +65,7 @@ target_include_directories(${PROJECT_NAME}
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-	CXX_STANDARD 17
+	CXX_STANDARD 20
 	CXX_STANDARD_REQUIRED ON
 	CXX_EXTENSIONS OFF
 )
@@ -79,7 +79,7 @@ if(APPLE)
 elseif(LINUX)
 	target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++ pulse udev)
 elseif(WIN32)
-	target_link_libraries(${PROJECT_NAME} mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib)
+	target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
 endif()
 
 install(TARGETS ${PROJECT_NAME}

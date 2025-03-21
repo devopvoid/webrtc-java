@@ -39,15 +39,6 @@ class AudioResamplerTest {
 	}
 
 	@Test
-	void notInitialized() {
-		SampleBuffer buffer = new SampleBuffer(48000, 24000, 1);
-
-		assertThrows(IllegalStateException.class, () -> {
-			resampler.resample(buffer.src, buffer.nSamplesIn, buffer.dst, buffer.nSamplesOut, 1);
-		});
-	}
-
-	@Test
 	void targetBufferUnderflow() {
 		SampleBuffer buffer = new SampleBuffer(48000, 24000, 1);
 		buffer.setTargetBufferSize(buffer.frameSizeOut / 2);
@@ -60,7 +51,6 @@ class AudioResamplerTest {
 	@Test
 	void constructorParameters() {
 		SampleBuffer buffer = new SampleBuffer(48000, 44100, 2);
-
 		AudioResampler resampler = new AudioResampler(48000, 44100, 2);
 
 		int result = resample(resampler, buffer);

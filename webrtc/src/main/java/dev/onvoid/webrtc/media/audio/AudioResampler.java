@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import static java.util.Objects.requireNonNull;
+
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
@@ -59,8 +61,19 @@ public class AudioResampler extends DisposableNativeObject {
 	 *
 	 * @return The number of converted audio samples.
 	 */
-	public native int resample(byte[] samplesIn, int srcSamplesPerChannel, byte[] samplesOut, int dstSamplesPerChannel,
-							   int channels);
+	public int resample(byte[] samplesIn, int srcSamplesPerChannel, byte[] samplesOut, int dstSamplesPerChannel,
+						int channels) {
+		requireNonNull(samplesIn);
+		requireNonNull(samplesOut);
+
+		final int maxSamplesOut = samplesOut.length / 2; // 16-bit PCM sample
+
+		if (dstSamplesPerChannel > maxSamplesOut) {
+			throw new IllegalArgumentException("Insufficient samples output length");
+		}
+
+		return resampleInternal(samplesIn, srcSamplesPerChannel, samplesOut, maxSamplesOut, channels);
+	}
 
 	@Override
 	public native void dispose();
@@ -68,6 +81,9 @@ public class AudioResampler extends DisposableNativeObject {
 	private native void initialize();
 
 	private native void initialize(int srcSamplesPerChannel, int dstSamplesPerChannel, int channels);
+
+	private native int resampleInternal(byte[] samplesIn, int srcSamplesPerChannel,
+										byte[] samplesOut, int dstSamplesPerChannel, int channels);
 
 	/**
 	 * Returns the number of samples a buffer needs to hold for ~10ms of a single audio channel at a given sample rate.
