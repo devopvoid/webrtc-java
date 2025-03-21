@@ -43,9 +43,7 @@ class AudioResamplerTest {
 		SampleBuffer buffer = new SampleBuffer(48000, 24000, 1);
 		buffer.setTargetBufferSize(buffer.frameSizeOut / 2);
 
-		assertThrows(IllegalArgumentException.class, () -> {
-			resample(resampler, buffer);
-		});
+		assertThrows(IllegalArgumentException.class, () -> resample(resampler, buffer));
 	}
 
 	@Test
@@ -109,7 +107,7 @@ class AudioResamplerTest {
 			this.sampleRateOut = sampleRateOut;
 
 			nSamplesIn = AudioResampler.getSamplesPerChannel(sampleRateIn); // 10 ms frame
-			nSamplesOut = AudioResampler.getSamplesPerChannel(sampleRateOut);;
+			nSamplesOut = AudioResampler.getSamplesPerChannel(sampleRateOut);
 			frameSizeIn = nSamplesIn * bytesPerFrame;
 			frameSizeOut = nSamplesOut * bytesPerFrame;
 
