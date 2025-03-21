@@ -27,7 +27,7 @@ jobs:
       matrix:
         platform:
           - name: windows_x86_64
-            runs-on: windows-2019
+            runs-on: windows-2022
         java: [17]
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
