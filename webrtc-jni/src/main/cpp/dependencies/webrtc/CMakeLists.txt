@@ -259,6 +259,7 @@ install(
 	DESTINATION "${WEBRTC_INSTALL_DIR}/include"
 	FILES_MATCHING
 		PATTERN "*.h"
+		PATTERN "*.inc"
 		REGEX /src/base/ EXCLUDE
 		REGEX /src/build/ EXCLUDE
 		REGEX /src/build_overrides/ EXCLUDE
