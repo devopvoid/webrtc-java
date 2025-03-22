@@ -22,7 +22,7 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_retain
 (JNIEnv * env, jobject caller)
 {
-	rtc::RefCountInterface * ref = GetHandle<rtc::RefCountInterface>(env, caller);
+	webrtc::RefCountInterface * ref = GetHandle<webrtc::RefCountInterface>(env, caller);
 	CHECK_HANDLE(ref);
 
 	ref->AddRef();
@@ -31,12 +31,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_retain
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_release
 (JNIEnv * env, jobject caller)
 {
-	rtc::RefCountInterface * ref = GetHandle<rtc::RefCountInterface>(env, caller);
+	webrtc::RefCountInterface * ref = GetHandle<webrtc::RefCountInterface>(env, caller);
 	CHECK_HANDLE(ref);
 
 	const auto status = ref->Release();
 
-	if (status == rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status == webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		SetHandle<std::nullptr_t>(env, caller, nullptr);
 	}
 }

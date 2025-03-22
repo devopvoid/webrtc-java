@@ -28,6 +28,9 @@
 #include "media/audio/AudioProcessingConfig.h"
 #include "media/audio/AudioProcessingStreamConfig.h"
 #include "api/audio/audio_frame.h"
+#include "api/audio/audio_processing.h"
+#include "api/audio/builtin_audio_processing_builder.h"
+#include "api/environment/environment_factory.h"
 #include "api/scoped_refptr.h"
 #include "modules/audio_processing/include/audio_processing.h"
 #include "rtc_base/logging.h"
@@ -181,9 +184,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispos
 	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
 	CHECK_HANDLE(apm);
 
-	rtc::RefCountReleaseStatus status = apm->Release();
+	webrtc::RefCountReleaseStatus status = apm->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
 	}
 
@@ -195,7 +198,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispos
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
 (JNIEnv * env, jobject caller)
 {
-	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
+	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::BuiltinAudioProcessingBuilder().Build(webrtc::CreateEnvironment());
 
 	if (!apm) {
 		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));

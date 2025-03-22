@@ -23,6 +23,7 @@
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
 
+#include "api/stats/attribute.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/string_encode.h"
 
@@ -74,17 +75,17 @@ namespace jni
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCStatsClass>(env);
 
-			JavaHashMap memberMap(env);
+			JavaHashMap attributeMap(env);
 
-			for (const auto * member : stats.Members()) {
-				if (!member->is_defined()) {
+			for (const auto & attribute : stats.Attributes()) {
+				if (!attribute.has_value()) {
 					continue;
 				}
 
-				JavaLocalRef<jstring> key = JavaString::toJava(env, member->name());
-				JavaLocalRef<jobject> value = toJava(env, *member);
+				JavaLocalRef<jstring> key = JavaString::toJava(env, attribute.name());
+				JavaLocalRef<jobject> value = toJava(env, attribute);
 
-				memberMap.put(key, value);
+				attributeMap.put(key, value);
 			}
 
 			JavaLocalRef<jobject> type = nullptr;
@@ -98,61 +99,69 @@ namespace jni
 			}
 
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				stats.timestamp_us(),
+				stats.timestamp(),
 				type ? type.get() : type,
 				JavaString::toJava(env, stats.id()).get(),
-				((JavaLocalRef<jobject>)memberMap).get());
+				((JavaLocalRef<jobject>)attributeMap).get());
 
 			return JavaLocalRef<jobject>(env, obj);
 		}
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCStatsMemberInterface & member)
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::Attribute & attribute)
 		{
-			switch (member.type()) {
+			if (attribute.has_value()) {
+				auto value = attribute.as_variant();
+
+				
+			}
+
+
+			/*
+			switch (attribute.type()) {
 				case webrtc::RTCStatsMemberInterface::kBool:
-					return Boolean::create(env, *member.cast_to<webrtc::RTCStatsMember<bool>>());
+					return Boolean::create(env, *attribute.cast_to<webrtc::RTCStatsMember<bool>>());
 
 				case webrtc::RTCStatsMemberInterface::kInt32:
-					return Integer::create(env, *member.cast_to<webrtc::RTCStatsMember<int32_t>>());
+					return Integer::create(env, *attribute.cast_to<webrtc::RTCStatsMember<int32_t>>());
 
 				case webrtc::RTCStatsMemberInterface::kUint32:
-					return Long::create(env, *member.cast_to<webrtc::RTCStatsMember<uint32_t>>());
+					return Long::create(env, *attribute.cast_to<webrtc::RTCStatsMember<uint32_t>>());
 
 				case webrtc::RTCStatsMemberInterface::kInt64:
-					return Long::create(env, *member.cast_to<webrtc::RTCStatsMember<int64_t>>());
+					return Long::create(env, *attribute.cast_to<webrtc::RTCStatsMember<int64_t>>());
 
 				case webrtc::RTCStatsMemberInterface::kUint64:
-					return JavaBigInteger::toJava(env, rtc::ToString(*member.cast_to<webrtc::RTCStatsMember<uint64_t>>()));
+					return JavaBigInteger::toJava(env, rtc::ToString(*attribute.cast_to<webrtc::RTCStatsMember<uint64_t>>()));
 
 				case webrtc::RTCStatsMemberInterface::kDouble:
-					return Double::create(env, *member.cast_to<webrtc::RTCStatsMember<double>>());
+					return Double::create(env, *attribute.cast_to<webrtc::RTCStatsMember<double>>());
 
 				case webrtc::RTCStatsMemberInterface::kString:
 					return jni::static_java_ref_cast<jobject>(env,
-						JavaString::toJava(env, *member.cast_to<webrtc::RTCStatsMember<std::string>>()));
+						JavaString::toJava(env, *attribute.cast_to<webrtc::RTCStatsMember<std::string>>()));
 
 				case webrtc::RTCStatsMemberInterface::kSequenceBool:
 					return jni::static_java_ref_cast<jobject>(env,
-						Boolean::createArray(env, *member.cast_to<webrtc::RTCStatsMember<std::vector<bool>>>()));
+						Boolean::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<bool>>>()));
 
 				case webrtc::RTCStatsMemberInterface::kSequenceInt32:
 					return jni::static_java_ref_cast<jobject>(env,
-						Integer::createArray(env, *member.cast_to<webrtc::RTCStatsMember<std::vector<int32_t>>>()));
+						Integer::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<int32_t>>>()));
 
 				case webrtc::RTCStatsMemberInterface::kSequenceUint32:
 				{
-					const std::vector<uint32_t> & v = *member.cast_to<webrtc::RTCStatsMember<std::vector<uint32_t>>>();
+					const std::vector<uint32_t> & v = *attribute.cast_to<webrtc::RTCStatsMember<std::vector<uint32_t>>>();
 					return jni::static_java_ref_cast<jobject>(env,
 						Long::createArray(env, std::vector<int64_t>(v.begin(), v.end())));
 				}
 
 				case webrtc::RTCStatsMemberInterface::kSequenceInt64:
 					return jni::static_java_ref_cast<jobject>(env,
-						Long::createArray(env, *member.cast_to<webrtc::RTCStatsMember<std::vector<int64_t>>>()));
+						Long::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<int64_t>>>()));
 
 				case webrtc::RTCStatsMemberInterface::kSequenceUint64:
 				{
-					const std::vector<uint64_t> & v = *member.cast_to<webrtc::RTCStatsMember<std::vector<uint64_t>>>();
+					const std::vector<uint64_t> & v = *attribute.cast_to<webrtc::RTCStatsMember<std::vector<uint64_t>>>();
 					std::vector<std::string> r;
 
 					std::transform(v.begin(), v.end(), std::back_inserter(r),
@@ -163,15 +172,15 @@ namespace jni
 
 				case webrtc::RTCStatsMemberInterface::kSequenceDouble:
 					return jni::static_java_ref_cast<jobject>(env,
-						Double::createArray(env, *member.cast_to<webrtc::RTCStatsMember<std::vector<double>>>()));
+						Double::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<double>>>()));
 
 				case webrtc::RTCStatsMemberInterface::kSequenceString:
 					return jni::static_java_ref_cast<jobject>(env,
-						JavaString::createArray(env, *member.cast_to<webrtc::RTCStatsMember<std::vector<std::string>>>()));
+						JavaString::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<std::string>>>()));
 
 				case webrtc::RTCStatsMemberInterface::kMapStringDouble:
 				{
-					std::map<std::string, double> map = *member.cast_to<webrtc::RTCStatsMember<std::map<std::string, double>>>();
+					std::map<std::string, double> map = *attribute.cast_to<webrtc::RTCStatsMember<std::map<std::string, double>>>();
 
 					JavaHashMap memberMap(env);
 
@@ -185,7 +194,7 @@ namespace jni
 
 				case webrtc::RTCStatsMemberInterface::kMapStringUint64:
 				{
-					std::map<std::string, uint64_t> map = *member.cast_to<webrtc::RTCStatsMember<std::map<std::string, uint64_t>>>();
+					std::map<std::string, uint64_t> map = *attribute.cast_to<webrtc::RTCStatsMember<std::map<std::string, uint64_t>>>();
 
 					JavaHashMap memberMap(env);
 
@@ -197,6 +206,7 @@ namespace jni
 					return jni::static_java_ref_cast<jobject>(env, memberMap);
 				}
 			}
+			*/
 
 			return nullptr;
 		}

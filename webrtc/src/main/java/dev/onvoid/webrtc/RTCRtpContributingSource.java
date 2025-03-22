@@ -33,7 +33,7 @@ public class RTCRtpContributingSource {
 	 * The CSRC or SSRC identifier of the contributing or synchronization
 	 * source.
 	 */
-	public final long source;
+	public final long sourceId;
 
 	/**
 	 * Only present for audio receivers. This is a value between 0..1 (linear),
@@ -54,16 +54,16 @@ public class RTCRtpContributingSource {
 	 * contributing source information.
 	 *
 	 * @param timestamp    The most recent time a frame from an RTP packet.
-	 * @param source       The CSRC or SSRC identifier of the contributing or
+	 * @param sourceId     The CSRC or SSRC identifier of the contributing or
 	 *                     synchronization source.
 	 * @param audioLevel   The sound pressure level. Only present for audio
 	 *                     receivers.
 	 * @param rtpTimestamp The last RTP timestamp.
 	 */
-	protected RTCRtpContributingSource(long timestamp, long source,
+	protected RTCRtpContributingSource(long timestamp, long sourceId,
 			double audioLevel, long rtpTimestamp) {
 		this.timestamp = timestamp;
-		this.source = source;
+		this.sourceId = sourceId;
 		this.audioLevel = audioLevel;
 		this.rtpTimestamp = rtpTimestamp;
 	}

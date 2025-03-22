@@ -458,9 +458,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_disp
 		audioModule->Terminate();
 	}
 
-	rtc::RefCountReleaseStatus status = audioModule->Release();
+	webrtc::RefCountReleaseStatus status = audioModule->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
 	}
 

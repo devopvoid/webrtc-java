@@ -41,7 +41,7 @@ namespace jni
 
 			// AdaptedVideoTrackSource implementation.
 			virtual bool is_screencast() const override;
-			virtual absl::optional<bool> needs_denoising() const override;
+			virtual std::optional<bool> needs_denoising() const override;
 			SourceState state() const override;
 			bool remote() const override;
 

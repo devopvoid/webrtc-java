@@ -150,18 +150,18 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 
 if(APPLE)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
-	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
+	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX NDEBUG)
+	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
 	# Find DBus
 	find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
 	pkg_check_modules(DBUS REQUIRED dbus-1)
 
 	target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
-	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX NDEBUG)
 	target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
 elseif(WIN32)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
 	target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
 endif()
 
@@ -259,6 +259,7 @@ install(
 	DESTINATION "${WEBRTC_INSTALL_DIR}/include"
 	FILES_MATCHING
 		PATTERN "*.h"
+		PATTERN "*.inc"
 		REGEX /src/base/ EXCLUDE
 		REGEX /src/build/ EXCLUDE
 		REGEX /src/build_overrides/ EXCLUDE

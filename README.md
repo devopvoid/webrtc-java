@@ -45,11 +45,11 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   </tr>
 </table>
 
-The native libraries were build with WebRTC branch M99/4844.
+The native libraries were built with WebRTC branch M134/6998.
 
 ### Build Notes
 
-In order to build the native code, be sure to install the prerequisite software (follow the links):
+To build the native code, be sure to install the prerequisite software (follow the links):
 
 **Note**: You don't have to install the Depot Tools, the build script will do that for you.
 
@@ -80,6 +80,6 @@ On the first run, the WebRTC source tree will be loaded into the `/<user home>/w
 
 | Parameter          | Description                                            | Default Value               |
 | ------------------ | ------------------------------------------------------ |-----------------------------|
-| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/4844           |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/6997           |
 | webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user_home\>/webrtc       |
 | webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user_home\>/webrtc/build |
