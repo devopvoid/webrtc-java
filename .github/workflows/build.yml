@@ -115,10 +115,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pulseaudio libpulse-dev libasound2-dev libdbus-1-dev libudev-dev libv4l-dev libx11-dev libxcomposite-dev libxrandr-dev libxfixes-dev binutils cmake git locales lsb-release ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
           # Required for testing
-          pulseaudio --start
-          #sudo apt-get install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
-          #systemctl --user daemon-reload
-          #systemctl --user --now enable pipewire{,-pulse}.{socket,service}
+          #pulseaudio --start
+          sudo apt-get install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
+          systemctl --user daemon-reload
+          systemctl --user --now enable pipewire{,-pulse}.{socket,service}
 
       - id: maven-build
         name: Maven build
