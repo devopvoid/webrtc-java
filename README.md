@@ -32,16 +32,28 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
 
 <table>
   <tr>
-    <td>Linux</td>
-    <td>x86_64, arm64, arm32</td>
+    <td></td>
+    <td>x64</td>
+    <td>arm</td>
+    <td>arm64</td>
   </tr>
-  <tr>
-    <td>macOS</td>
-    <td>x86_64, arm64</td>
+  <tr align="center">
+    <th>Linux</th>
+    <td>✔</td>
+    <td>-</td>
+    <td>-</td>
   </tr>
-  <tr>
-    <td>Windows</td>
-    <td>x86_64</td>
+  <tr align="center">
+    <th>macOS</th>
+    <td>✔</td>
+    <td>-</td>
+    <td>✔</td>
+  </tr>
+  <tr align="center">
+    <th>Windows</th>
+    <td>✔</td>
+    <td>-</td>
+    <td>-</td>
   </tr>
 </table>
 
@@ -74,7 +86,7 @@ Assuming you have all the prerequisites installed for your OS, run:
 mvn install
 ```
 
-On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 18 GB of disk space.
+On the first run, the WebRTC source tree will be loaded into the `/<user home>/webrtc` directory. This will take a while and require about 20 GB of disk space.
 
 #### Build Parameters
 

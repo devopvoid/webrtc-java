@@ -38,6 +38,8 @@ class RTCDataChannelTests extends TestBase {
 		caller.waitUntilConnected();
 		callee.waitUntilConnected();
 
+		Thread.sleep(500);
+
 		caller.sendTextMessage("Hello world");
 		callee.sendTextMessage("Hi :)");
 
