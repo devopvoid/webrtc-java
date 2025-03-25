@@ -43,5 +43,16 @@ namespace jni
 			sampleRate = GetFieldID(env, cls, "sampleRate", "I");
 			channels = GetFieldID(env, cls, "channels", "I");
 		}
+
+		JavaLocalRef<jobject> toJava(JNIEnv * env, webrtc::StreamConfig& config)
+		{
+			const auto javaClass = JavaClasses::get<JavaAudioProcessingStreamConfigClass>(env);
+
+			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+				config.sample_rate_hz(),
+				config.num_channels());
+
+			return JavaLocalRef<jobject>(env, obj);
+		}
 	}
 }

@@ -13,8 +13,8 @@
 
 	<properties>
 		<webrtc.branch>branch-heads/4844</webrtc.branch>
-		<webrtc.src.dir>${user.home}/webrtc</webrtc.src.dir>
-		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
+		<webrtc.src.dir>${project.build.directory}/webrtcbuild/webrtc</webrtc.src.dir>
+		<webrtc.install.dir>${project.build.directory}/webrtcbuild/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
 		<cmake.toolchain.file />
 	</properties>

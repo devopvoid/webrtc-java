@@ -20,11 +20,7 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.internal.NativeLoader;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
-import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
-import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioProcessing;
-import dev.onvoid.webrtc.media.audio.AudioTrackSource;
-import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.*;
 import dev.onvoid.webrtc.media.video.VideoTrackSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
@@ -56,6 +52,8 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	@SuppressWarnings("unused")
 	private long workerThreadHandle;
 
+	public AudioEncoderFactory audioEncoderFactory;
+	public AudioDecoderFactory audioDecoderFactory;
 
 	/**
 	 * Creates an instance of PeerConnectionFactory.

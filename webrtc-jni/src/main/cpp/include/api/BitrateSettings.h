@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Alex Andres
+ * Copyright 2019 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_STREAM_CONFIG_H_
-#define JNI_WEBRTC_MEDIA_AUDIO_PROCESSING_STREAM_CONFIG_H_
+#ifndef JNI_WEBRTC_API_BITRATE_SETTINGS_H_
+#define JNI_WEBRTC_API_BITRATE_SETTINGS_H_
 
 #include "JavaClass.h"
 #include "JavaRef.h"
-
-#include "modules/audio_processing/include/audio_processing.h"
-
+#include "api/transport/bitrate_settings.h"
 #include <jni.h>
 
 namespace jni
 {
-	namespace AudioProcessingStreamConfig
+	namespace BitrateSettings
 	{
-		class JavaAudioProcessingStreamConfigClass : public JavaClass
+		class JavaBitrateSettingsClass : public JavaClass
 		{
 			public:
-				explicit JavaAudioProcessingStreamConfigClass(JNIEnv * env);
+				explicit JavaBitrateSettingsClass(JNIEnv * env);
 
 				jclass cls;
-				jmethodID ctor;
-				jfieldID sampleRate;
-				jfieldID channels;
+				jfieldID minBitrateBps;
+				jfieldID startBitrateBps;
+				jfieldID maxBitrateBps;
 		};
 
-		webrtc::StreamConfig toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
-        JavaLocalRef<jobject> toJava(JNIEnv * env, webrtc::StreamConfig& config);
+		webrtc::BitrateSettings toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
 	}
 }
 
