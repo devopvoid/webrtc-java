@@ -25,6 +25,10 @@ elseif(WIN32)
 	set(SOURCE_TARGET windows)
 endif()
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL Clang)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /showFilenames")
+endif()
+
 add_subdirectory(dependencies/webrtc)
 add_subdirectory(dependencies/jni-voithos)
 

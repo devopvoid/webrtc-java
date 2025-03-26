@@ -17,6 +17,7 @@
 		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
 		<cmake.toolchain.file />
+		<cmake.clang />
 	</properties>
 
 	<build>
@@ -96,6 +97,9 @@
 									"${cmake.options}"
 								</option>
 								<option>
+									"${cmake.clang}"
+								</option>
+								<option>
 									-DWEBRTC_TOOLCHAIN_FILE=${cmake.toolchain.file}
 								</option>
 								<option>
@@ -145,6 +149,12 @@
 			<properties>
 				<cmake.options>-Ax64</cmake.options>
 				<cmake.config>${cmake.build.type}</cmake.config>
+			</properties>
+		</profile>
+		<profile>
+			<id>windows-clang-x86_64</id>
+			<properties>
+				<cmake.clang>-T ClangCL</cmake.clang>
 			</properties>
 		</profile>
 		<profile>
