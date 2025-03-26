@@ -29,7 +29,6 @@ namespace jni
 		{
 			cls = FindClass(env, PKG_AUDIO"AudioProcessingStats");
 
-			voiceDetected = GetFieldID(env, cls, "voiceDetected", "Z");
 			echoReturnLoss = GetFieldID(env, cls, "echoReturnLoss", "D");
 			echoReturnLossEnhancement = GetFieldID(env, cls, "echoReturnLossEnhancement", "D");
 			divergentFilterFraction = GetFieldID(env, cls, "divergentFilterFraction", "D");

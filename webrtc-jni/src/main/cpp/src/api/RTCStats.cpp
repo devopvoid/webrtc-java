@@ -109,8 +109,6 @@ namespace jni
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::Attribute & attribute)
 		{
-			auto value = attribute.as_variant();
-
 			if (attribute.holds_alternative<bool>()) {
 				return Boolean::create(env, attribute.get<bool>());
 			}
