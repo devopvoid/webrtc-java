@@ -152,7 +152,13 @@
 			</properties>
 		</profile>
 		<profile>
-			<id>windows-clang-x86_64</id>
+			<id>windows-clang</id>
+			<activation>
+				<os>
+					<family>windows</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
 			<properties>
 				<cmake.clang>-T ClangCL</cmake.clang>
 			</properties>
@@ -166,7 +172,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>toolchain/x86_64-linux-gnu.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>toolchain/x86_64-linux-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>
