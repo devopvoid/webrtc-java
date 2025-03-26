@@ -109,104 +109,81 @@ namespace jni
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::Attribute & attribute)
 		{
-			if (attribute.has_value()) {
-				auto value = attribute.as_variant();
+			auto value = attribute.as_variant();
 
-				
+			if (attribute.holds_alternative<bool>()) {
+				return Boolean::create(env, attribute.get<bool>());
 			}
-
-
-			/*
-			switch (attribute.type()) {
-				case webrtc::RTCStatsMemberInterface::kBool:
-					return Boolean::create(env, *attribute.cast_to<webrtc::RTCStatsMember<bool>>());
-
-				case webrtc::RTCStatsMemberInterface::kInt32:
-					return Integer::create(env, *attribute.cast_to<webrtc::RTCStatsMember<int32_t>>());
-
-				case webrtc::RTCStatsMemberInterface::kUint32:
-					return Long::create(env, *attribute.cast_to<webrtc::RTCStatsMember<uint32_t>>());
-
-				case webrtc::RTCStatsMemberInterface::kInt64:
-					return Long::create(env, *attribute.cast_to<webrtc::RTCStatsMember<int64_t>>());
-
-				case webrtc::RTCStatsMemberInterface::kUint64:
-					return JavaBigInteger::toJava(env, rtc::ToString(*attribute.cast_to<webrtc::RTCStatsMember<uint64_t>>()));
-
-				case webrtc::RTCStatsMemberInterface::kDouble:
-					return Double::create(env, *attribute.cast_to<webrtc::RTCStatsMember<double>>());
-
-				case webrtc::RTCStatsMemberInterface::kString:
-					return jni::static_java_ref_cast<jobject>(env,
-						JavaString::toJava(env, *attribute.cast_to<webrtc::RTCStatsMember<std::string>>()));
-
-				case webrtc::RTCStatsMemberInterface::kSequenceBool:
-					return jni::static_java_ref_cast<jobject>(env,
-						Boolean::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<bool>>>()));
-
-				case webrtc::RTCStatsMemberInterface::kSequenceInt32:
-					return jni::static_java_ref_cast<jobject>(env,
-						Integer::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<int32_t>>>()));
-
-				case webrtc::RTCStatsMemberInterface::kSequenceUint32:
-				{
-					const std::vector<uint32_t> & v = *attribute.cast_to<webrtc::RTCStatsMember<std::vector<uint32_t>>>();
-					return jni::static_java_ref_cast<jobject>(env,
-						Long::createArray(env, std::vector<int64_t>(v.begin(), v.end())));
-				}
-
-				case webrtc::RTCStatsMemberInterface::kSequenceInt64:
-					return jni::static_java_ref_cast<jobject>(env,
-						Long::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<int64_t>>>()));
-
-				case webrtc::RTCStatsMemberInterface::kSequenceUint64:
-				{
-					const std::vector<uint64_t> & v = *attribute.cast_to<webrtc::RTCStatsMember<std::vector<uint64_t>>>();
-					std::vector<std::string> r;
-
-					std::transform(v.begin(), v.end(), std::back_inserter(r),
-						[](uint64_t n) { return rtc::ToString(n); });
-
-					return jni::static_java_ref_cast<jobject>(env, JavaBigInteger::createArray(env, r));
-				}
-
-				case webrtc::RTCStatsMemberInterface::kSequenceDouble:
-					return jni::static_java_ref_cast<jobject>(env,
-						Double::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<double>>>()));
-
-				case webrtc::RTCStatsMemberInterface::kSequenceString:
-					return jni::static_java_ref_cast<jobject>(env,
-						JavaString::createArray(env, *attribute.cast_to<webrtc::RTCStatsMember<std::vector<std::string>>>()));
-
-				case webrtc::RTCStatsMemberInterface::kMapStringDouble:
-				{
-					std::map<std::string, double> map = *attribute.cast_to<webrtc::RTCStatsMember<std::map<std::string, double>>>();
-
-					JavaHashMap memberMap(env);
-
-					for (const auto& item : map) {
-						memberMap.put(jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, item.first)),
-							Double::create(env, item.second));
-					}
-
-					return jni::static_java_ref_cast<jobject>(env, memberMap);
-				}
-
-				case webrtc::RTCStatsMemberInterface::kMapStringUint64:
-				{
-					std::map<std::string, uint64_t> map = *attribute.cast_to<webrtc::RTCStatsMember<std::map<std::string, uint64_t>>>();
-
-					JavaHashMap memberMap(env);
-
-					for (const auto& item : map) {
-						memberMap.put(jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, item.first)),
-							JavaBigInteger::toJava(env, rtc::ToString(item.second)));
-					}
-
-					return jni::static_java_ref_cast<jobject>(env, memberMap);
-				}
+			else if (attribute.holds_alternative<int32_t>()) {
+				return Integer::create(env, attribute.get<int32_t>());
 			}
-			*/
+			else if (attribute.holds_alternative<uint32_t>()) {
+				return Long::create(env, attribute.get<uint32_t>());
+			}
+			else if (attribute.holds_alternative<int64_t>()) {
+				return Long::create(env, attribute.get<int64_t>());
+			}
+			else if (attribute.holds_alternative<uint64_t>()) {
+				return JavaBigInteger::toJava(env, rtc::ToString(attribute.get<uint64_t>()));
+			}
+			else if (attribute.holds_alternative<double>()) {
+				return Double::create(env, attribute.get<double>());
+			}
+			else if (attribute.holds_alternative<std::string>()) {
+				return jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, attribute.get<std::string>()));
+			}
+			else if (attribute.holds_alternative<std::vector<bool>>()) {
+				return jni::static_java_ref_cast<jobject>(env, Boolean::createArray(env, attribute.get<std::vector<bool>>()));
+			}
+			else if (attribute.holds_alternative<std::vector<int32_t>>()) {
+				return jni::static_java_ref_cast<jobject>(env, Integer::createArray(env, attribute.get<std::vector<int32_t>>()));
+			}
+			else if (attribute.holds_alternative<std::vector<uint32_t>>()) {
+				const std::vector<uint32_t> & v = attribute.get<std::vector<uint32_t>>();
+				return jni::static_java_ref_cast<jobject>(env, Long::createArray(env, std::vector<int64_t>(v.begin(), v.end())));
+			}
+			else if (attribute.holds_alternative<std::vector<int64_t>>()) {
+				return jni::static_java_ref_cast<jobject>(env, Long::createArray(env, attribute.get<std::vector<int64_t>>()));
+			}
+			else if (attribute.holds_alternative<std::vector<uint64_t>>()) {
+				const std::vector<uint64_t> & v = attribute.get<std::vector<uint64_t>>();
+				std::vector<std::string> r;
+
+				std::transform(v.begin(), v.end(), std::back_inserter(r),
+					[](uint64_t n) { return rtc::ToString(n); });
+
+				return jni::static_java_ref_cast<jobject>(env, JavaBigInteger::createArray(env, r));
+			}
+			else if (attribute.holds_alternative<std::vector<double>>()) {
+				return jni::static_java_ref_cast<jobject>(env, Double::createArray(env, attribute.get<std::vector<double>>()));
+			}
+			else if (attribute.holds_alternative<std::vector<std::string>>()) {
+				return jni::static_java_ref_cast<jobject>(env, JavaString::createArray(env, attribute.get<std::vector<std::string>>()));
+			}
+			else if (attribute.holds_alternative<std::map<std::string, uint64_t>>()) {
+				std::map<std::string, uint64_t> map = attribute.get<std::map<std::string, uint64_t>>();
+
+				JavaHashMap memberMap(env);
+
+				for (const auto & item : map) {
+					memberMap.put(jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, item.first)),
+						JavaBigInteger::toJava(env, rtc::ToString(item.second)));
+				}
+
+				return jni::static_java_ref_cast<jobject>(env, memberMap);
+			}
+			else if (attribute.holds_alternative<std::map<std::string, double>>()) {
+				std::map<std::string, double> map = attribute.get<std::map<std::string, double>>();
+
+				JavaHashMap memberMap(env);
+
+				for (const auto& item : map) {
+					memberMap.put(jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, item.first)),
+						Double::create(env, item.second));
+				}
+
+				return jni::static_java_ref_cast<jobject>(env, memberMap);
+			}
 
 			return nullptr;
 		}

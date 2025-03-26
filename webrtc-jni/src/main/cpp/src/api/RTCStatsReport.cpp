@@ -38,7 +38,7 @@ namespace jni
 				statsMap.put(key, value);
 			}
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor, ((JavaLocalRef<jobject>)statsMap).get());
+			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor, ((JavaLocalRef<jobject>)statsMap).get(), report->timestamp().us());
 
 			return JavaLocalRef<jobject>(env, obj);
 		}
@@ -47,7 +47,7 @@ namespace jni
 		{
 			cls = FindClass(env, PKG"RTCStatsReport");
 
-			ctor = GetMethod(env, cls, "<init>", "(" MAP_SIG ")V");
+			ctor = GetMethod(env, cls, "<init>", "(" MAP_SIG "J)V");
 		}
 	}
 }

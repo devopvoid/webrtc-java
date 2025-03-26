@@ -54,14 +54,10 @@ namespace jni
 			JavaLocalRef<jobject> createJavaTrack(JNIEnv * env);
 
 		private:
-			const webrtc::MediaStreamTrackInterface * track;
-
-			const MediaStreamTrackEvent eventType;
-
 			const JavaGlobalRef<jobject> javaTrack;
-
+			const webrtc::MediaStreamTrackInterface * track;
+			const MediaStreamTrackEvent eventType;
 			const std::shared_ptr<JavaMediaStreamTrackListenerClass> javaClass;
-
 			webrtc::MediaStreamTrackInterface::TrackState trackState;
 			bool trackEnabled;
 	};

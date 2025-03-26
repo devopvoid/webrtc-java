@@ -219,7 +219,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 
 	std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
 
-	rtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(label, source);
+	rtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(
+		rtc::scoped_refptr<webrtc::VideoTrackSourceInterface>(source), label);
 
 	return jni::JavaFactories::create(env, videoTrack.release()).release();
 }

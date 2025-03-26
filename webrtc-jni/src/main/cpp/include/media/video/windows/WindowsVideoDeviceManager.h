@@ -34,8 +34,8 @@ namespace jni
 				std::set<VideoCaptureCapability> getVideoCaptureCapabilities(const VideoDevice & device) override;
 
 			protected:
-				void onDeviceConnected(std::wstring symLink);
-				void onDeviceDisconnected(std::wstring symLink);
+				void onDeviceConnected(std::wstring symLink) override;
+				void onDeviceDisconnected(std::wstring symLink) override;
 
 			private:
 				void enumerateDevices(std::wstring * symLink);

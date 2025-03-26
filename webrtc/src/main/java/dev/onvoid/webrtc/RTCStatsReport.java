@@ -30,13 +30,30 @@ public class RTCStatsReport {
 
 	private final Map<String, RTCStats> stats;
 
+	private final long timestamp;
 
-	protected RTCStatsReport(Map<String, RTCStats> stats) {
+
+	protected RTCStatsReport(Map<String, RTCStats> stats, long timestamp) {
 		this.stats = stats;
+		this.timestamp = timestamp;
 	}
 
+	/**
+	 * Returns the map of RTCStats objects.
+	 *
+	 * @return a map where the key is a string identifier and the value is an RTCStats object.
+	 */
 	public Map<String, RTCStats> getStats() {
 		return stats;
+	}
+
+	/**
+	 * Get the timestamp in microseconds.
+	 *
+	 * @return the timestamp in microseconds relative to the UNIX epoch.
+	 */
+	public long getTimestamp() {
+		return timestamp;
 	}
 
 	@Override

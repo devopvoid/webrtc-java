@@ -25,10 +25,6 @@ namespace jni
 		private:
 			jclass cls;
 			jmethodID ctor;
-			jfieldID x;
-			jfieldID y;
-			jfieldID width;
-			jfieldID height;
 	};
 }
 
