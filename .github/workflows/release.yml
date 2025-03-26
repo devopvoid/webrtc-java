@@ -77,7 +77,7 @@ jobs:
           git checkout $tag
 
       - id: prepare
-        name: Prepare build
+        name: Prepare release build
         uses: ./.github/actions/prepare-windows
 
       - id: maven-build
