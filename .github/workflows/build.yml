@@ -34,37 +34,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        if: false
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Disk cleanup
-        if: false
-        run: |
-          Get-PSDrive
-          # Docker Images
-          docker rmi $(docker images -q -a)
-          # Android SDK
-          if ($Env:ANDROID_HOME) {
-            Remove-Item -Recurse -Force $Env:ANDROID_HOME -ErrorAction Ignore
-          }
-          if ($Env:ANDROID_NDK_HOME) {
-            Remove-Item -Recurse -Force $Env:ANDROID_NDK_HOME -ErrorAction Ignore
-          }
-          # JVM
-          if ($Env:JAVA_HOME_11_X64) {
-            Remove-Item -Recurse -Force $Env:JAVA_HOME_11_X64 -ErrorAction Ignore
-          }
-          if ($Env:JAVA_HOME_8_X64) {
-            Remove-Item -Recurse -Force $Env:JAVA_HOME_8_X64 -ErrorAction Ignore
-          }
-          Get-PSDrive
-
-      - name: Install required packages
-        run: |
-          choco install ninja
+      - id: prepare
+        name: Prepare build
+        uses: ./.github/actions/prepare-windows
 
       - id: maven-build
         name: Maven build
@@ -89,43 +61,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Disk cleanup
-        run: |
-          set -x
-          df -h
-          #sudo du -h -d1 /usr/local
-          #sudo du -h -d1 /usr/local/share
-          #sudo du -h -d1 /usr/local/lib
-          #sudo du -h -d1 /usr/share
-          RMI=`docker images -q -a`
-          if [ -n "$RMI" ]; then
-            docker rmi $RMI
-          fi
-          # 4.6G
-          sudo rm -rf /usr/local/.ghcup
-          # 1.7G
-          sudo rm -rf /usr/share/swift
-          # 1.4G
-          sudo rm -rf /usr/share/dotnet
-          # 13G
-          sudo rm -rf /usr/local/lib/android
-          df -h
-
-      - name: Install required packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pulseaudio libpulse-dev libasound2-dev libdbus-1-dev libudev-dev libv4l-dev libx11-dev libxcomposite-dev libxrandr-dev libxfixes-dev binutils cmake git locales lsb-release ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
-          
-          # More recent LLVM and Clang.
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh ${{ matrix.llvm }} all
-          
-          # Required for testing
-          #pulseaudio --start
-          sudo apt-get install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
-          systemctl --user daemon-reload
-          systemctl --user --now enable pipewire{,-pulse}.{socket,service}
+      - id: prepare
+        name: Prepare build
+        uses: ./.github/actions/prepare-linux
 
       - id: maven-build
         name: Maven build
@@ -151,16 +89,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install required packages
-        run: |
-          brew install ninja
-          # Required for macos-13
-          pip install setuptools
-          # Required for macos-14
-          brew install python-setuptools
-
-      - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_15.0.1.app/Contents/Developer
+      - id: prepare-build
+        name: Prepare release build
+        uses: ./.github/actions/prepare-macos
 
       - id: maven-build
         name: Maven build
