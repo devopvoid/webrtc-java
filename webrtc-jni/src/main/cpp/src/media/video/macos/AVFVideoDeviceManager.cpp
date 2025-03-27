@@ -62,7 +62,6 @@ namespace jni
                 AVCaptureDeviceDiscoverySession * discoverySession = [AVCaptureDeviceDiscoverySession
                     discoverySessionWithDeviceTypes:@[
                         AVCaptureDeviceTypeBuiltInWideAngleCamera,
-                        AVCaptureDeviceTypeExternal,
                         AVCaptureDeviceTypeDeskViewCamera,
                     #if (MAC_OS_X_VERSION_MIN_REQUIRED >= 140000)
                         AVCaptureDeviceTypeExternal
