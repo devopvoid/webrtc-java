@@ -21,6 +21,10 @@
 
 #include <Foundation/Foundation.h>
 
+#if !defined(MAC_OS_VERSION_12_0) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_VERSION_12_0
+    #define kAudioObjectPropertyElementMain kAudioObjectPropertyElementMaster
+#endif
+
 namespace jni
 {
 	namespace avdev
@@ -80,7 +84,7 @@ namespace jni
 			AudioObjectPropertyAddress pa;
 			pa.mSelector = kAudioHardwarePropertyDevices;
 			pa.mScope = kAudioObjectPropertyScopeGlobal;
-			pa.mElement = kAudioObjectPropertyElementMaster;
+			pa.mElement = kAudioObjectPropertyElementMain;
 
 			UInt32 dataSize;
 
@@ -122,7 +126,7 @@ namespace jni
 			AudioObjectPropertyAddress pa;
 			pa.mSelector = kAudioHardwarePropertyDevices;
 			pa.mScope = kAudioObjectPropertyScopeGlobal;
-			pa.mElement = kAudioObjectPropertyElementMaster;
+			pa.mElement = kAudioObjectPropertyElementMain;
 
 			UInt32 dataSize;
 
@@ -281,7 +285,7 @@ namespace jni
 			AudioObjectPropertyAddress pa;
 			pa.mSelector = kAudioObjectPropertyName;
 			pa.mScope = kAudioObjectPropertyScopeGlobal;
-			pa.mElement = kAudioObjectPropertyElementMaster;
+			pa.mElement = kAudioObjectPropertyElementMain;
 
 			OSStatus status = AudioObjectGetPropertyData(deviceID, &pa, 0, nullptr, &dataSize, &devNameRef);
 			ThrowIfFailed(status, "CoreAudio: Get device name failed");
@@ -324,7 +328,7 @@ namespace jni
 		int CoreAudioDeviceManager::getChannelCount(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope) {
 			AudioObjectPropertyAddress pa;
 			pa.mSelector = kAudioDevicePropertyStreamConfiguration;
-			pa.mElement = kAudioObjectPropertyElementMaster;
+			pa.mElement = kAudioObjectPropertyElementMain;
 			pa.mScope = scope;
 
 			int channels = 0;
@@ -348,7 +352,7 @@ namespace jni
 		AudioDeviceID CoreAudioDeviceManager::getDefaultDeviceID(const AudioObjectPropertyScope & scope) {
 			AudioObjectPropertyAddress pa;
 			pa.mScope = kAudioObjectPropertyScopeGlobal;
-			pa.mElement = kAudioObjectPropertyElementMaster;
+			pa.mElement = kAudioObjectPropertyElementMain;
 
 			switch (scope) {
 				case kAudioObjectPropertyScopeInput:
