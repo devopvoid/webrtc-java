@@ -12,11 +12,12 @@
 	<packaging>pom</packaging>
 
 	<properties>
-		<webrtc.branch>branch-heads/4844</webrtc.branch>
+		<webrtc.branch>branch-heads/6998</webrtc.branch>
 		<webrtc.src.dir>${user.home}/webrtc</webrtc.src.dir>
 		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
 		<cmake.toolchain.file />
+		<cmake.clang />
 	</properties>
 
 	<build>
@@ -96,6 +97,9 @@
 									"${cmake.options}"
 								</option>
 								<option>
+									"${cmake.clang}"
+								</option>
+								<option>
 									-DWEBRTC_TOOLCHAIN_FILE=${cmake.toolchain.file}
 								</option>
 								<option>
@@ -148,6 +152,18 @@
 			</properties>
 		</profile>
 		<profile>
+			<id>windows-clang</id>
+			<activation>
+				<os>
+					<family>windows</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.clang>-T ClangCL</cmake.clang>
+			</properties>
+		</profile>
+		<profile>
 			<id>linux-x86_64</id>
 			<activation>
 				<os>
@@ -156,7 +172,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>toolchain/x86_64-linux-gnu.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>toolchain/x86_64-linux-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>

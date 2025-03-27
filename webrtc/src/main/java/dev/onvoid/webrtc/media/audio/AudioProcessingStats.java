@@ -16,16 +16,12 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+/**
+ * This class holds various statistics related to audio processing.
+ *
+ * @author Alex Andres
+ */
 public class AudioProcessingStats {
-
-	/**
-	 * True if voice is detected in the last capture frame, after processing.
-	 * <p>
-	 * It is conservative in flagging audio as speech, with low likelihood of
-	 * incorrectly flagging a frame as voice. Only reported if voice detection
-	 * is enabled via {@code AudioProcessingConfig}.
-	 */
-	public boolean voiceDetected;
 
 	/**
 	 * AEC Statistic: ERL = 10log_10(P_far / P_echo)
@@ -56,11 +52,14 @@ public class AudioProcessingStats {
 	 * cancellation perform poorly. The values are aggregated until the first
 	 * call to getStatistics() and afterwards aggregated and updated every
 	 * second. Note that if there are several clients pulling metrics from
-	 * getStatistics() during a session the first call from any of them will
+	 * getStatistics() during a session, the first call from any of them will
 	 * change to one-second aggregation window for all.
 	 */
 	public int delayMedianMs;
 
+	/**
+	 * The standard deviation of the delay, in milliseconds.
+	 */
 	public int delayStandardDeviationMs;
 
 	/**

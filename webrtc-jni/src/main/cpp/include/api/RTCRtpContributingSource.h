@@ -36,7 +36,8 @@ namespace jni
 				jclass cls;
 				jmethodID ctor;
 				jfieldID timestamp;
-				jfieldID source;
+				jfieldID sourceId;
+				jfieldID sourceType;
 				jfieldID audioLevel;
 				jfieldID rtpTimestamp;
 		};

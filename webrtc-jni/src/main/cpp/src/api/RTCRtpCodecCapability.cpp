@@ -35,9 +35,9 @@ namespace jni
 
 			JavaHashMap paramMap(env);
 
-			for (const std::pair<std::string, std::string> & param : capability.parameters) {
-				JavaLocalRef<jstring> key = JavaString::toJava(env, param.first);
-				JavaLocalRef<jstring> value = JavaString::toJava(env, param.second);
+			for (const auto & [p_key, p_value] : capability.parameters) {
+				JavaLocalRef<jstring> key = JavaString::toJava(env, p_key);
+				JavaLocalRef<jstring> value = JavaString::toJava(env, p_value);
 
 				paramMap.put(key, value);
 			}

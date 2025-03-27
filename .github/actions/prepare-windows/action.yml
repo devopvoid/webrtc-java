@@ -1,0 +1,40 @@
+name: 'Prepare Windows Build'
+
+description: 'Frees up disk space and installs required packages for Windows builds.'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python 3.11
+      if: false
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Disk cleanup
+      if: false
+      run: |
+        Get-PSDrive
+        # Docker Images
+        docker rmi $(docker images -q -a)
+        # Android SDK
+        if ($Env:ANDROID_HOME) {
+          Remove-Item -Recurse -Force $Env:ANDROID_HOME -ErrorAction Ignore
+        }
+        if ($Env:ANDROID_NDK_HOME) {
+          Remove-Item -Recurse -Force $Env:ANDROID_NDK_HOME -ErrorAction Ignore
+        }
+        # JVM
+        if ($Env:JAVA_HOME_11_X64) {
+          Remove-Item -Recurse -Force $Env:JAVA_HOME_11_X64 -ErrorAction Ignore
+        }
+        if ($Env:JAVA_HOME_8_X64) {
+          Remove-Item -Recurse -Force $Env:JAVA_HOME_8_X64 -ErrorAction Ignore
+        }
+        Get-PSDrive
+      shell: powershell
+
+    - name: Install required packages
+      run: |
+        choco install ninja
+      shell: powershell

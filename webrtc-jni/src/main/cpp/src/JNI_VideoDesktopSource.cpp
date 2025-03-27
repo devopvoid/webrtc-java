@@ -94,9 +94,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_dis
 	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
 	CHECK_HANDLE(videoSource);
 
-	rtc::RefCountReleaseStatus status = videoSource->Release();
+	webrtc::RefCountReleaseStatus status = videoSource->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
 	}
 
@@ -108,7 +108,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_dis
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_initialize
 (JNIEnv * env, jobject caller)
 {
-	rtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = new rtc::RefCountedObject<jni::VideoTrackDesktopSource>();
+	rtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDesktopSource>();
 
 	SetHandle(env, caller, videoSource.release());
 }

@@ -77,7 +77,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getMaxPacketLifeTim
 	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
 	CHECK_HANDLEV(channel, 0);
 
-	return static_cast<jint>(channel->maxRetransmitTime());
+	return static_cast<jint>(channel->maxPacketLifeTime().value_or(0));
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getMaxRetransmits
@@ -86,7 +86,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getMaxRetransmits
 	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
 	CHECK_HANDLEV(channel, 0);
 
-	return static_cast<jint>(channel->maxRetransmits());
+	return static_cast<jint>(channel->maxRetransmitsOpt().value_or(0));
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getProtocol
@@ -149,9 +149,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_dispose
 	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
 	CHECK_HANDLE(channel);
 
-	rtc::RefCountReleaseStatus status = channel->Release();
+	webrtc::RefCountReleaseStatus status = channel->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
 	}
 

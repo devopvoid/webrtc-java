@@ -25,7 +25,7 @@ package dev.onvoid.webrtc;
 public interface RTCStatsCollectorCallback {
 
 	/**
-	 * All necessary statistics have been gathered and an stats report has been
+	 * All necessary statistics have been gathered and a stats report has been
 	 * generated.
 	 *
 	 * @param report The stats report with updated statistics.

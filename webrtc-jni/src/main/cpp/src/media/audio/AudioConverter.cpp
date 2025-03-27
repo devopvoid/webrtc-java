@@ -84,18 +84,18 @@ namespace jni
             ResampleConverter(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels)
                 : AudioConverter(srcFrames, srcChannels, dstFrames, dstChannels)
             {
-                resampler = std::make_unique<webrtc::PushResampler<int16_t>>();
-                resampler->InitializeIfNeeded(static_cast<int>(srcFrames * 100), static_cast<int>(dstFrames * 100), srcChannels);
+                resampler = std::make_unique<webrtc::PushResampler<int16_t>>(srcFrames, dstFrames, srcChannels);
             }
 
             ~ResampleConverter() override
             {
             }
 
-            void convert(const int16_t * src, size_t srcSize, int16_t * dst, size_t dstSize) override {
-                checkSizes(srcSize, dstSize);
+            void convert(const int16_t * src, size_t srcSamplesPerChannel, int16_t * dst, size_t dstSamplesPerChannel) override {
+                webrtc::InterleavedView<const int16_t> srcView(src, srcSamplesPerChannel, srcChannels);
+                webrtc::InterleavedView<int16_t> dstView(dst, dstSamplesPerChannel, srcChannels);
 
-                resampler->Resample(src, srcSize, dst, dstSize);
+                resampler->Resample(srcView, dstView);
             }
 
         private:

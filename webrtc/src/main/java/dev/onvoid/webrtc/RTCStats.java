@@ -48,14 +48,14 @@ public class RTCStats {
 	/**
 	 * The stats data.
 	 */
-	private final Map<String, Object> members;
+	private final Map<String, Object> attributes;
 
 
-	protected RTCStats(long timestamp, RTCStatsType type, String id, Map<String, Object> members) {
+	protected RTCStats(long timestamp, RTCStatsType type, String id, Map<String, Object> attributes) {
 		this.timestamp = timestamp;
 		this.type = type;
 		this.id = id;
-		this.members = members;
+		this.attributes = attributes;
 	}
 
 	/**
@@ -89,7 +89,7 @@ public class RTCStats {
 	}
 
 	/**
-	 * Returns map of member names to values. Returns as an ordered map so that
+	 * Returns map of attributes names to values. Returns as an ordered map so that
 	 * the stats object can be serialized with a consistent ordering.
 	 * <p>
 	 * Values will be one of the following objects:
@@ -99,12 +99,12 @@ public class RTCStats {
 	 * - BigInteger (for 64-bit unsigned integers)
 	 * - Double
 	 * - String
-	 * - The array form of any of the above (e.g., Integer[])
+	 * - The array form of the above (e.g., Integer[])
 	 *
 	 * @return the stats map.
 	 */
-	public Map<String, Object> getMembers() {
-		return members;
+	public Map<String, Object> getAttributes() {
+		return attributes;
 	}
 
 	@Override
@@ -115,7 +115,7 @@ public class RTCStats {
 				.append(", type: ").append(type)
 				.append(", id: ").append(id);
 
-		for (Map.Entry<String, Object> entry : members.entrySet()) {
+		for (Map.Entry<String, Object> entry : attributes.entrySet()) {
 			builder.append(", ").append(entry.getKey()).append(": ");
 			appendValue(builder, entry.getValue());
 		}

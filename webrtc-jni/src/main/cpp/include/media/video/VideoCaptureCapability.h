@@ -31,7 +31,7 @@ namespace jni
 		class VideoCaptureCapability : public webrtc::VideoCaptureCapability
 		{
 			public:
-				virtual bool operator<(const VideoCaptureCapability & other) const;
+				bool operator<(const VideoCaptureCapability & other) const;
 		};
 	}
 

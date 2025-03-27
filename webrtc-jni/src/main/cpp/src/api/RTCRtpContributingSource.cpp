@@ -28,7 +28,7 @@ namespace jni
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCRtpContributingSourceClass>(env);
 
-			jlong timestamp = static_cast<jlong>(source.timestamp_ms());
+			jlong timestamp = static_cast<jlong>(source.timestamp().us());
 			jlong sourceId = static_cast<jlong>(source.source_id());
 			jdouble audioLevel = static_cast<jdouble>(source.audio_level().value_or(0));
 			jlong rtpTimestamp = static_cast<jlong>(source.rtp_timestamp());
@@ -45,12 +45,15 @@ namespace jni
 
 			JavaObject obj(env, source);
 
+			webrtc::RtpSource::Extensions extensions;
+			extensions.audio_level = static_cast<uint8_t>(obj.getDouble(javaClass->audioLevel));
+
 			return webrtc::RtpSource(
-				static_cast<int64_t>(obj.getLong(javaClass->timestamp)),
-				static_cast<uint32_t>(obj.getLong(javaClass->source)),
+				webrtc::Timestamp::Micros(static_cast<int64_t>(obj.getLong(javaClass->timestamp))),
+				static_cast<uint32_t>(obj.getLong(javaClass->sourceId)),
 				webrtc::RtpSourceType::CSRC,
-				static_cast<uint8_t>(obj.getDouble(javaClass->audioLevel)),
-				static_cast<uint32_t>(obj.getLong(javaClass->rtpTimestamp))
+				static_cast<uint32_t>(obj.getLong(javaClass->rtpTimestamp)),
+				extensions
 			);
 		}
 
@@ -61,7 +64,8 @@ namespace jni
 			ctor = GetMethod(env, cls, "<init>", "(JJDJ)V");
 
 			timestamp = GetFieldID(env, cls, "timestamp", "J");
-			source = GetFieldID(env, cls, "source", "J");
+			sourceId = GetFieldID(env, cls, "sourceId", "J");
+			sourceType = GetFieldID(env, cls, "sourceType", "J");
 			audioLevel = GetFieldID(env, cls, "audioLevel", "D");
 			rtpTimestamp = GetFieldID(env, cls, "rtpTimestamp", "J");
 		}

@@ -75,7 +75,6 @@ namespace jni
 
 			configuration.servers = JavaList::toVector(env, is, &RTCIceServer::toNative);
 			configuration.sdp_semantics = webrtc::SdpSemantics::kUnifiedPlan;
-			configuration.enable_dtls_srtp = true;
 			configuration.type = JavaEnums::toNative<webrtc::PeerConnectionInterface::IceTransportsType>(env, tp);
 			configuration.bundle_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::BundlePolicy>(env, bp);
 			configuration.rtcp_mux_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::RtcpMuxPolicy>(env, mp);
