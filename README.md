@@ -1,5 +1,6 @@
 [![](https://github.com/devopvoid/webrtc-java/actions/workflows/build.yml/badge.svg)](https://github.com/devopvoid/webrtc-java/actions/workflows/build.yml)
 [![](https://img.shields.io/maven-central/v/dev.onvoid.webrtc/webrtc-java.svg?label=Maven%20Central&logo=apache-maven)](https://search.maven.org/search?q=g:%22dev.onvoid.webrtc%22%20AND%20a:%22webrtc-java%22)
+[![libs.tech recommends](https://libs.tech/project/224890850/badge.svg)](https://libs.tech/project/224890850/webrtc-java)
 
 ## webrtc-java
 
