@@ -42,7 +42,7 @@ runs:
       with:
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
-        server-id: ossrh
+        server-id: central
         server-username: MAVEN_USERNAME
         server-password: MAVEN_TOKEN
 
