@@ -79,7 +79,7 @@ target_link_libraries(${PROJECT_NAME} webrtc)
 
 if(APPLE)
 	set_source_files_properties(${SOURCES} PROPERTIES COMPILE_FLAGS "-x objective-c++")
-	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreAudio")
+	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreAudio" "-framework IOKit")
 elseif(LINUX)
 	target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++ pulse udev)
 elseif(WIN32)

@@ -43,6 +43,7 @@
 #ifdef __APPLE__
 #include "media/audio/macos/CoreAudioDeviceManager.h"
 #include "media/video/macos/AVFVideoDeviceManager.h"
+#include "media/video/desktop/macos/MacOSPowerManagement.h"
 #endif
 
 #include <memory>
@@ -193,7 +194,7 @@ namespace jni
 		powerManagement = std::make_unique<avdev::LinuxPowerManagement>();
 #endif
 #ifdef __APPLE__
-		//powerManagement = std::make_unique<avdev::MacPowerManagement>();
+		powerManagement = std::make_unique<avdev::MacOSPowerManagement>();
 #endif
 	}
 }
