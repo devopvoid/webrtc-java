@@ -39,9 +39,8 @@ namespace jni
 				options));
 		}
 		else {
-			capturer.reset(new webrtc::DesktopAndCursorComposer(
-				webrtc::DesktopCapturer::CreateWindowCapturer(options),
-				options));
+			capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(
+				webrtc::DesktopCapturer::CreateWindowCapturer(options), options);
 		}
 	}
 

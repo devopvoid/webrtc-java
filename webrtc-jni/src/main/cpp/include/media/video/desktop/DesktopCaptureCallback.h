@@ -32,7 +32,7 @@ namespace jni
 	{
 		public:
 			DesktopCaptureCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback);
-			~DesktopCaptureCallback() = default;
+			~DesktopCaptureCallback() override = default;
 
 			// DesktopCapturer::Callback implementation.
 			void OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame) override;
