@@ -242,7 +242,7 @@ if (PATCHES)
 endif()
 
 message(STATUS "WebRTC: generate")
-set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" is_clang=${WEBRTC_CLANG} is_debug=false is_component_build=false treat_warnings_as_errors=false rtc_enable_protobuf=false rtc_build_examples=false rtc_include_tests=false use_rtti=true rtc_use_h264=true use_custom_libcxx=false symbol_level=0")
+set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" is_clang=${WEBRTC_CLANG} is_debug=false is_component_build=false treat_warnings_as_errors=false rtc_use_pipewire=false rtc_enable_protobuf=false rtc_build_examples=false rtc_include_tests=false use_rtti=true rtc_use_h264=true use_custom_libcxx=false symbol_level=0")
 execute_command(
 	COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
 	WORKING_DIRECTORY "${WEBRTC_SRC}"
