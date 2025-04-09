@@ -74,6 +74,17 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 
 target_include_directories(${PROJECT_NAME}
+    PUBLIC
+        /home/alex/webrtc/src/buildtools/third_party/libc++
+)
+target_include_directories(${PROJECT_NAME}
+    SYSTEM
+    PRIVATE
+        /home/alex/webrtc/src/third_party/libc++/src/include
+        /home/alex/webrtc/src/third_party/libc++abi/src/include
+)
+
+target_include_directories(${PROJECT_NAME}
 	PUBLIC
 		include
 		include/jni

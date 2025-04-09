@@ -155,9 +155,6 @@ if(APPLE)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
 	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
-	# Due to branch 6998 (m134) build with gcc. Linking webrtc built with clang causes errors.
-	set(WEBRTC_CLANG "false")
-
 	# Find DBus
 	find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
 	pkg_check_modules(DBUS REQUIRED dbus-1)
@@ -242,7 +239,7 @@ if (PATCHES)
 endif()
 
 message(STATUS "WebRTC: generate")
-set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" is_clang=${WEBRTC_CLANG} is_debug=false is_component_build=false treat_warnings_as_errors=false rtc_build_tools=false rtc_use_perfetto=false rtc_use_pipewire=false rtc_enable_protobuf=false rtc_build_examples=false rtc_include_tests=false use_rtti=true rtc_use_h264=true use_custom_libcxx=false symbol_level=0")
+set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" is_clang=${WEBRTC_CLANG} is_debug=false is_component_build=false treat_warnings_as_errors=false rtc_build_tools=false rtc_use_perfetto=false rtc_use_pipewire=false rtc_enable_protobuf=false rtc_build_examples=false rtc_include_tests=false use_rtti=true rtc_use_h264=true use_custom_libcxx=true symbol_level=0")
 execute_command(
 	COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
 	WORKING_DIRECTORY "${WEBRTC_SRC}"
