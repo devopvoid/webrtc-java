@@ -85,6 +85,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 	capturer->setFocusSelectedSource(focus);
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setMaxFrameRate
+(JNIEnv * env, jobject caller, jint maxFrameRate)
+{
+	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
+	CHECK_HANDLE(capturer);
+
+	capturer->setMaxFrameRate(maxFrameRate);
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_start
 (JNIEnv * env, jobject caller, jobject jcallback)
 {

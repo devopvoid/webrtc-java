@@ -18,8 +18,20 @@ package dev.onvoid.webrtc.media.video.desktop;
 
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
+/**
+ * Callback interface for desktop capture operations. Implementers receive captured frames from a desktop capture
+ * source.
+ *
+ * @author Alex Andres
+ */
 public interface DesktopCaptureCallback {
 
+	/**
+	 * Called when a frame has been captured from the desktop.
+	 *
+	 * @param result The result of the capture operation.
+	 * @param frame  The captured video frame data, if successful.
+	 */
 	void onCaptureResult(DesktopCapturer.Result result, VideoFrame frame);
 
 }

@@ -16,12 +16,24 @@
 
 package dev.onvoid.webrtc.media.video.desktop;
 
+/**
+ * A capturer for individual windows on the desktop. Allows for capturing specific application windows for streaming
+ * or recording.
+ *
+ * @author Alex Andres
+ */
 public class WindowCapturer extends DesktopCapturer {
 
+	/**
+	 * Constructs a new WindowCapturer instance and initializes the components required for window capturing.
+	 */
 	public WindowCapturer() {
 		initialize();
 	}
 
+	/**
+	 * Initializes the native implementation of the window capturer.
+	 */
 	private native void initialize();
 
 }

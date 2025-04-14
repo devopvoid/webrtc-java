@@ -62,7 +62,7 @@ public class VoiceActivityDetectorTest {
 
 	@Test
 	void testDispose() {
-		// First operation should work.
+		// The First operation should work.
 		detector.process(new byte[320], 160, 16000);
 
 		// Dispose resources.

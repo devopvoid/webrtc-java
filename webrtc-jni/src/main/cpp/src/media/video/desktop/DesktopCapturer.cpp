@@ -22,26 +22,10 @@
 
 namespace jni
 {
-	DesktopCapturer::DesktopCapturer(bool screenCapturer) :
+	DesktopCapturer::DesktopCapturer(webrtc::DesktopCapturer * capturer) :
 		focusSelectedSource(false)
 	{
-		auto options = webrtc::DesktopCaptureOptions::CreateDefault();
-		// Enable desktop effects.
-		options.set_disable_effects(false);
-
-#if defined(WEBRTC_WIN)
-		options.set_allow_directx_capturer(true);
-#endif
-
-		if (screenCapturer) {
-			capturer.reset(new webrtc::DesktopAndCursorComposer(
-				webrtc::DesktopCapturer::CreateScreenCapturer(options),
-				options));
-		}
-		else {
-			capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(
-				webrtc::DesktopCapturer::CreateWindowCapturer(options), options);
-		}
+	    this->capturer.reset(capturer);
 	}
 
 	DesktopCapturer::~DesktopCapturer()
@@ -49,7 +33,7 @@ namespace jni
 		capturer.reset();
 	}
 
-	void DesktopCapturer::Start(Callback * callback)
+	void DesktopCapturer::Start(webrtc::DesktopCapturer::Callback * callback)
 	{
 		capturer->Start(callback);
 
@@ -63,6 +47,11 @@ namespace jni
 		capturer->SetSharedMemoryFactory(std::move(factory));
 	}
 
+	void DesktopCapturer::SetMaxFrameRate(uint32_t max_frame_rate)
+	{
+		capturer->SetMaxFrameRate(max_frame_rate);
+	}
+
 	void DesktopCapturer::CaptureFrame()
 	{
 		capturer->CaptureFrame();
@@ -73,12 +62,12 @@ namespace jni
 		capturer->SetExcludedWindow(window);
 	}
 
-	bool DesktopCapturer::GetSourceList(SourceList * sources)
+	bool DesktopCapturer::GetSourceList(webrtc::DesktopCapturer::SourceList * sources)
 	{
 		return capturer->GetSourceList(sources);
 	}
 
-	bool DesktopCapturer::SelectSource(SourceId id)
+	bool DesktopCapturer::SelectSource(webrtc::DesktopCapturer::SourceId id)
 	{
 		return capturer->SelectSource(id);
 	}

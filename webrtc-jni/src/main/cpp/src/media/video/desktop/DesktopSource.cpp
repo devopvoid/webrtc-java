@@ -26,7 +26,7 @@ namespace jni
 	{
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::DesktopCapturer::Source & source)
 		{
-			const auto javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
+			const std::shared_ptr<JavaDesktopSourceClass> javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
 
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
 				JavaString::toJava(env, source.title).get(),
@@ -37,7 +37,7 @@ namespace jni
 
 		webrtc::DesktopCapturer::Source toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
 		{
-			const auto javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
+			const std::shared_ptr<JavaDesktopSourceClass> javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
 
 			JavaObject obj(env, javaType);
 

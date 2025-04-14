@@ -17,15 +17,28 @@
 package dev.onvoid.webrtc.media.video.desktop;
 
 import java.util.Objects;
-import java.util.StringJoiner;
 
+/**
+ * Represents a desktop source that can be captured, such as a screen or window.
+ * Desktop sources are uniquely identified by their ID.
+ *
+ * @author Alex Andres
+ */
 public class DesktopSource {
 
+	/** The title or name of the desktop source. */
 	public final String title;
 
+	/** The unique identifier of the desktop source. */
 	public final long id;
 
 
+	/**
+	 * Creates a new desktop source with the specified title and ID.
+	 *
+	 * @param title The title or name of the desktop source.
+	 * @param id    The unique identifier of the desktop source.
+	 */
 	public DesktopSource(String title, long id) {
 		this.title = title;
 		this.id = id;

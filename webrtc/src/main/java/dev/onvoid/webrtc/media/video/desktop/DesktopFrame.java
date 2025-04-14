@@ -21,34 +21,38 @@ import java.awt.Rectangle;
 import java.nio.ByteBuffer;
 import java.util.StringJoiner;
 
+/**
+ * Represents a desktop frame captured from a screen or window.
+ *
+ * @author Alex Andres
+ */
 public class DesktopFrame {
 
-	/**
-	 * The rectangle in full desktop coordinates.
-	 */
+	/** The rectangle in full desktop coordinates. */
 	public final Rectangle frameRect;
 
-	/**
-	 * The size of the frame in full desktop coordinate space.
-	 */
+	/** The size of the frame in full desktop coordinate space. */
 	public final Dimension frameSize;
 
-	/**
-	 * The scale factor from DIPs to physical pixels of the frame.
-	 */
+	/** The scale factor from DIPs to physical pixels of the frame. */
 	public final float scale;
 
-	/**
-	 * Distance in the buffer between two neighboring rows in bytes.
-	 */
+	/** Distance in the buffer between two neighboring rows in bytes. */
 	public final int stride;
 
-	/**
-	 * The underlying frame buffer.
-	 */
+	/** The underlying frame buffer. */
 	public final ByteBuffer buffer;
 
 
+	/**
+	 * Creates a new desktop frame with the specified properties.
+	 *
+	 * @param frameRect The rectangle in full desktop coordinates.
+	 * @param frameSize The size of the frame in full desktop coordinate space.
+	 * @param scale     The scale factor from DIPs to physical pixels of the frame.
+	 * @param stride    Distance in the buffer between two neighboring rows in bytes.
+	 * @param buffer    The underlying frame buffer.
+	 */
 	public DesktopFrame(Rectangle frameRect, Dimension frameSize, float scale, int stride, ByteBuffer buffer) {
 		this.frameRect = frameRect;
 		this.frameSize = frameSize;
