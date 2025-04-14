@@ -91,7 +91,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
 	CHECK_HANDLE(capturer);
 
-	capturer->setMaxFrameRate(maxFrameRate);
+	capturer->SetMaxFrameRate(maxFrameRate);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_start
