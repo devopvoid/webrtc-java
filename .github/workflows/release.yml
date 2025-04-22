@@ -18,9 +18,6 @@ env:
 
 jobs:
   prepare-release:
-    strategy:
-      matrix:
-        llvm: [ 21 ]
     runs-on: ubuntu-22.04
     steps:
       - id: prepare
@@ -100,7 +97,6 @@ jobs:
           - name: linux_x86-64
             runs-on: ubuntu-22.04
         java: [17]
-        llvm: [21]
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout code

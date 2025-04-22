@@ -5,19 +5,6 @@ if(NOT WEBRTC_TOOLCHAIN_FILE STREQUAL "")
 	set(CMAKE_TOOLCHAIN_FILE "${WEBRTC_TOOLCHAIN_FILE}")
 endif()
 
-foreach(LINKER SHARED_LINKER)
-    set(CMAKE_${LINKER}_FLAGS "-fuse-ld=lld -Wl,-s")
-endforeach()
-
-# lib++ objects
-file(GLOB_RECURSE LibCPP_OBJS
-    /home/alex/webrtc/src/out/x64/obj/buildtools/third_party/libc++/libc++/*.o
-)
-# lib++abi objects
-file(GLOB_RECURSE LibCPP_ABI_OBJS
-    /home/alex/webrtc/src/out/x64/obj/buildtools/third_party/libc++abi/libc++abi/*.o
-)
-
 project(webrtc-java)
 
 if(UNIX AND NOT APPLE)
@@ -74,17 +61,6 @@ list(APPEND SOURCES
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
 target_include_directories(${PROJECT_NAME}
-    PUBLIC
-        /home/alex/webrtc/src/buildtools/third_party/libc++
-)
-target_include_directories(${PROJECT_NAME}
-    SYSTEM
-    PRIVATE
-        /home/alex/webrtc/src/third_party/libc++/src/include
-        /home/alex/webrtc/src/third_party/libc++abi/src/include
-)
-
-target_include_directories(${PROJECT_NAME}
 	PRIVATE
 		include
 		include/api
@@ -105,7 +81,7 @@ if(APPLE)
 	set_source_files_properties(${SOURCES} PROPERTIES COMPILE_FLAGS "-x objective-c++")
 	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreAudio" "-framework IOKit")
 elseif(LINUX)
-	target_link_libraries(${PROJECT_NAME} -static-libgcc -stdlib=libc++ ${LibCPP_OBJS} ${LibCPP_ABI_OBJS} pulse udev)
+	target_link_libraries(${PROJECT_NAME} -static-libgcc -stdlib=libc++ c++ c++abi pulse udev)
 elseif(WIN32)
 	target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
 endif()
