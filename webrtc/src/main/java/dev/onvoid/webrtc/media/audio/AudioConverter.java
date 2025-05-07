@@ -27,10 +27,13 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
  */
 public class AudioConverter extends DisposableNativeObject {
 
+	/** The number of samples in a 10 ms frame for the input audio. */
 	private final int srcSamples;
 
+	/** The number of samples in a 10 ms frame for the output audio. */
 	private final int dstSamples;
 
+	/** The number of output samples after conversion in a 10 ms frame. */
 	private final int dstSamplesOut;
 
 
@@ -46,7 +49,7 @@ public class AudioConverter extends DisposableNativeObject {
 	public AudioConverter(int srcSampleRate, int srcChannels, int dstSampleRate,
 			int dstChannels) {
 		this.srcSamples = srcSampleRate / 100 * srcChannels;
-		this.dstSamples = Math.max(srcSampleRate, dstSampleRate) / 100 * dstChannels;
+		this.dstSamples = dstSampleRate / 100 * dstChannels;
 		this.dstSamplesOut = (dstSampleRate / 100) * dstChannels;
 
 		initialize(srcSampleRate, srcChannels, dstSampleRate, dstChannels);
@@ -96,10 +99,8 @@ public class AudioConverter extends DisposableNativeObject {
 	@Override
 	public native void dispose();
 
-	private native void initialize(int srcSampleRate, int srcChannels,
-			int dstSampleRate, int dstChannels);
+	private native void initialize(int srcSampleRate, int srcChannels, int dstSampleRate, int dstChannels);
 
-	public native void convertInternal(byte[] src, int nSrcSamples, byte[] dst,
-			int nDstSamples);
+	public native void convertInternal(byte[] src, int nSrcSamples, byte[] dst, int nDstSamples);
 
 }
