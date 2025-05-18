@@ -30,6 +30,8 @@ namespace jni
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
 		{
 			const auto javaClass = JavaClasses::get<JavaAudioProcessingConfigClass>(env);
+			const auto javaPreAmplifierClass = JavaClasses::get<JavaPreAmplifierClass>(env);
+			const auto javaCaptureLevelAdjustmentClass = JavaClasses::get<JavaCaptureLevelAdjustmentClass>(env);
 			const auto javaEchoCancellerClass = JavaClasses::get<JavaEchoCancellerClass>(env);
 			const auto javaHighPassFilterClass = JavaClasses::get<JavaHighPassFilterClass>(env);
 			const auto javaNoiseSuppressionClass = JavaClasses::get<JavaNoiseSuppressionClass>(env);
@@ -38,6 +40,8 @@ namespace jni
 			const auto javaVoiceDetectionClass = JavaClasses::get<JavaVoiceDetectionClass>(env);
 			
 			JavaObject obj(env, javaType);
+			JavaObject preAmplifier(env, obj.getObject(javaClass->preAmplifier));
+			JavaObject captureLevelAdjustment(env, obj.getObject(javaClass->captureLevelAdjustment));
 			JavaObject echoCanceller(env, obj.getObject(javaClass->echoCanceller));
 			JavaObject highPassFilter(env, obj.getObject(javaClass->highPassFilter));
 			JavaObject noiseSuppression(env, obj.getObject(javaClass->noiseSuppression));
@@ -46,6 +50,14 @@ namespace jni
 			JavaObject voiceDetection(env, obj.getObject(javaClass->voiceDetection));
 
 			webrtc::AudioProcessing::Config config;
+
+			config.pre_amplifier.enabled = preAmplifier.getBoolean(javaPreAmplifierClass->enabled);
+			config.pre_amplifier.fixed_gain_factor = preAmplifier.getFloat(javaPreAmplifierClass->fixedGainFactor);
+
+			config.capture_level_adjustment.enabled = captureLevelAdjustment.getBoolean(javaCaptureLevelAdjustmentClass->enabled);
+			config.capture_level_adjustment.pre_gain_factor = captureLevelAdjustment.getFloat(javaCaptureLevelAdjustmentClass->preGainFactor);
+			config.capture_level_adjustment.post_gain_factor = captureLevelAdjustment.getFloat(javaCaptureLevelAdjustmentClass->postGainFactor);
+			config.capture_level_adjustment.analog_mic_gain_emulation = toAnalogMicGainEmulation(env, captureLevelAdjustment.getObject(javaCaptureLevelAdjustmentClass->analogMicGainEmulation));
 			
 			config.echo_canceller.enabled = echoCanceller.getBoolean(javaEchoCancellerClass->enabled);
 			config.echo_canceller.enforce_high_pass_filtering = echoCanceller.getBoolean(javaEchoCancellerClass->enforceHighPassFiltering);
@@ -71,6 +83,20 @@ namespace jni
 			return config;
 		}
 
+		webrtc::AudioProcessing::Config::CaptureLevelAdjustment::AnalogMicGainEmulation toAnalogMicGainEmulation(JNIEnv* env, const JavaLocalRef<jobject>& javaType)
+		{
+			const auto javaAnalogMicGainEmulationClass = JavaClasses::get<JavaAnalogMicGainEmulationClass>(env);
+			JavaObject analogMicGainEmulation(env, javaType);
+
+			webrtc::AudioProcessing::Config::CaptureLevelAdjustment::AnalogMicGainEmulation analog_mic_gain_emulation;
+
+			analog_mic_gain_emulation.enabled = analogMicGainEmulation.getBoolean(javaAnalogMicGainEmulationClass->enabled);
+			analog_mic_gain_emulation.initial_level = analogMicGainEmulation.getInt(javaAnalogMicGainEmulationClass->initialLevel);
+
+			return analog_mic_gain_emulation;
+		}
+		
+
 		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType)
 		{
 			const auto javaGainControlClass = JavaClasses::get<JavaGainControlClass>(env);
@@ -82,7 +108,7 @@ namespace jni
 			JavaObject gainControlAdaptiveDigital(env, gainControl.getObject(javaGainControlClass->adaptiveDigital));
 
 			webrtc::AudioProcessing::Config::GainController2 gainController;
-
+			
 			gainController.enabled = gainControl.getBoolean(javaGainControlClass->enabled);
 			gainController.fixed_digital.gain_db = gainControlFixedDigital.getFloat(javaGainControlFixedDigitalClass->gainDb);
 			gainController.adaptive_digital.enabled = gainControlAdaptiveDigital.getBoolean(javaGainControlAdaptiveDigitalClass->enabled);
@@ -99,6 +125,8 @@ namespace jni
 		{
 			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig");
 
+			preAmplifier = GetFieldID(env, cls, "preAmplifier", "L" PKG_AUDIO "AudioProcessingConfig$PreAmplifier;");
+			captureLevelAdjustment = GetFieldID(env, cls, "captureLevelAdjustment", "L" PKG_AUDIO "AudioProcessingConfig$CaptureLevelAdjustment;");
 			echoCanceller = GetFieldID(env, cls, "echoCanceller", "L" PKG_AUDIO "AudioProcessingConfig$EchoCanceller;");
 			gainControl = GetFieldID(env, cls, "gainControl", "L" PKG_AUDIO "AudioProcessingConfig$GainControl;");
 			highPassFilter = GetFieldID(env, cls, "highPassFilter", "L" PKG_AUDIO "AudioProcessingConfig$HighPassFilter;");
@@ -107,7 +135,30 @@ namespace jni
 			transientSuppression = GetFieldID(env, cls, "transientSuppression", "L" PKG_AUDIO "AudioProcessingConfig$TransientSuppression;");
 			voiceDetection = GetFieldID(env, cls, "voiceDetection", "L" PKG_AUDIO "AudioProcessingConfig$VoiceDetection;");
 		}
+		
+		JavaPreAmplifierClass::JavaPreAmplifierClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$PreAmplifier");
+			enabled = GetFieldID(env , cls, "enabled", "Z");
+			fixedGainFactor = GetFieldID(env, cls, "fixedGainFactor", "F");
+		}
 
+		JavaCaptureLevelAdjustmentClass::JavaCaptureLevelAdjustmentClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$CaptureLevelAdjustment");
+			enabled = GetFieldID(env, cls, "enabled", "Z");
+			preGainFactor = GetFieldID(env, cls, "preGainFactor", "F");
+			postGainFactor = GetFieldID(env, cls, "postGainFactor", "F");
+			analogMicGainEmulation = GetFieldID(env, cls, "analogMicGainEmulation", "L" PKG_AUDIO "AudioProcessingConfig$CaptureLevelAdjustment$AnalogMicGainEmulation;");
+		}
+
+		JavaAnalogMicGainEmulationClass::JavaAnalogMicGainEmulationClass(JNIEnv * env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$CaptureLevelAdjustment$AnalogMicGainEmulation");
+			enabled = GetFieldID(env, cls, "enabled", "Z");
+			initialLevel = GetFieldID(env, cls, "initialLevel", "I");
+		}
+		
 		JavaEchoCancellerClass::JavaEchoCancellerClass(JNIEnv* env)
 		{
 			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$EchoCanceller");

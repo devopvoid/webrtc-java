@@ -92,7 +92,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			webrtc::CreateBuiltinVideoDecoderFactory(),
 			nullptr,
 			apm);
-			
+		
 		if (factory != nullptr) {
 			SetHandle(env, caller, factory.release());
 			SetHandle(env, caller, "networkThreadHandle", networkThread.release());
@@ -116,7 +116,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 {
 	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
 	CHECK_HANDLE(factory);
-
+	
 	rtc::Thread * networkThread = GetHandle<rtc::Thread>(env, caller, "networkThreadHandle");
 	rtc::Thread * signalingThread = GetHandle<rtc::Thread>(env, caller, "signalingThreadHandle");
 	rtc::Thread * workerThread = GetHandle<rtc::Thread>(env, caller, "workerThreadHandle");
@@ -256,7 +256,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 		auto javaPeerConnection = jni::JavaFactories::create(env, pc.release());
 
 		SetHandle(env, javaPeerConnection.get(), "observerHandle", observer);
-
+		
 		return javaPeerConnection.release();
 	}
 

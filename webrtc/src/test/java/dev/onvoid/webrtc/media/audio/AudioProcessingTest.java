@@ -58,6 +58,15 @@ class AudioProcessingTest {
 	@Test
 	void applyConfig() {
 		AudioProcessingConfig config = new AudioProcessingConfig();
+		config.captureLevelAdjustment.analogMicGainEmulation.initialLevel = 100;
+		config.captureLevelAdjustment.analogMicGainEmulation.enabled = true;
+		config.captureLevelAdjustment.postGainFactor = 10f;
+		config.captureLevelAdjustment.preGainFactor = 1f;
+		config.captureLevelAdjustment.enabled = true;
+
+		config.preAmplifier.enabled = true;
+		config.preAmplifier.fixedGainFactor = 10f;
+
 		config.echoCanceller.enabled = true;
 		config.echoCanceller.enforceHighPassFiltering = true;
 

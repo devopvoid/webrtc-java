@@ -50,7 +50,7 @@ namespace jni
             cls = FindClass(env, PKG_AUDIO"AudioCodecSpec");
 
             ctor = GetMethod(env, cls, "<init>", "()V");
-
+            
             info = GetFieldID(env, cls, "info", "L" PKG_AUDIO "AudioCodecInfo;");
             format = GetFieldID(env, cls, "format", "L" PKG_AUDIO "SdpAudioFormat;"); 
         }

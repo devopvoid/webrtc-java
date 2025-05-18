@@ -37,7 +37,7 @@ namespace jni
 			options.highpass_filter = obj.getBoolean(javaClass->highpassFilter);
 			options.typing_detection = obj.getBoolean(javaClass->typingDetection);
 			options.residual_echo_detector = obj.getBoolean(javaClass->residualEchoDetector);
-
+		
 			return options;
 		}
 

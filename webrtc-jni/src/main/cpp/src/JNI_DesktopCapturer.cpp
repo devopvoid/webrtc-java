@@ -35,7 +35,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 	SetHandle<std::nullptr_t>(env, caller, nullptr);
 
 	auto callback = GetHandle<jni::DesktopCaptureCallback>(env, caller, "callbackHandle");
-
+	
 	if (callback) {
 		delete callback;
 	}

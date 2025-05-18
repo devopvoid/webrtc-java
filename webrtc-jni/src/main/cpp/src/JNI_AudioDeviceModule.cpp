@@ -37,7 +37,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_setS
 {
 	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
 	CHECK_HANDLE(audioModule);
-
+	
 	
 	if (audioModule->SetStereoPlayout(enabled) != 0) {
 		env->Throw(jni::JavaError(env, "Set stereo playout failed"));

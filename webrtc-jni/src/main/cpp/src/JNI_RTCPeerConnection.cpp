@@ -40,7 +40,6 @@
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
-
 #include "api/peer_connection_interface.h"
 #include "api/rtp_receiver_interface.h"
 #include "api/rtp_sender_interface.h"
