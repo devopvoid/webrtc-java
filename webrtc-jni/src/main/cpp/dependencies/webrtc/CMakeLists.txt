@@ -128,7 +128,7 @@ file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH}" WEBRTC_LIB_PATH)
 file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH_INSTALLED}" WEBRTC_LIB_PATH_INSTALLED)
 
 message(STATUS "WebRTC checkout path: ${WEBRTC_DIR}")
-message(STATUS "WebRTC checkout branch: ${WEBRTC_BRANCH}")
+message(STATUS "WebRTcC heckout branch: ${WEBRTC_BRANCH}")
 message(STATUS "WebRTC target: ${SOURCE_TARGET} ${TARGET_CPU}")
 message(STATUS "WebRTC build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
@@ -146,6 +146,7 @@ target_include_directories(${PROJECT_NAME}
 		${TARGET_INC_DIR}
 		${TARGET_INC_DIR}/third_party/abseil-cpp
 		${TARGET_INC_DIR}/third_party/libyuv/include
+    	${TARGET_INC_DIR}/third_party/ffmpeg
 )
 target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 

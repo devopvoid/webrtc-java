@@ -27,6 +27,11 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import org.junit.jupiter.api.Test;
 
+import javax.swing.plaf.synth.SynthUI;
+import java.util.List;
+import java.util.logging.Logger;
+
+
 class PeerConnectionFactoryTests extends TestBase {
 
 	@Test
@@ -35,6 +40,7 @@ class PeerConnectionFactoryTests extends TestBase {
 
 		PeerConnectionFactory factory = new PeerConnectionFactory(audioDevModule);
 		factory.dispose();
+
 	}
 
 	@Test
@@ -177,4 +183,48 @@ class PeerConnectionFactoryTests extends TestBase {
 		assertFalse(videoCapabilities.getCodecs().isEmpty());
 		assertFalse(videoCapabilities.getHeaderExtensions().isEmpty());
 	}
+
+	@Test
+	void getAudioFactory(){
+		assertNotNull(factory.audioEncoderFactory);
+		assertNotNull(factory.audioDecoderFactory);
+	}
+
+	@Test
+	void getEncoderCodecs(){
+		getAudioFactory();
+
+		List<AudioCodecSpec> encoders = factory.audioEncoderFactory.getSupportedEncoders();
+		List<AudioCodecSpec> decoders = factory.audioDecoderFactory.getSupportedDecoders();
+		assertNotNull(encoders);
+		assertNotNull(decoders);
+
+		assertFalse(encoders.isEmpty());
+		assertFalse(decoders.isEmpty());
+
+		for (AudioCodecSpec encoder : encoders) {
+			assertNotNull(encoder.info);
+			assertNotNull(encoder.format);
+
+			printCodec(encoder.info);
+			printFormat(encoder.format);
+		}
+
+		for (AudioCodecSpec decoder : decoders) {
+			assertNotNull(decoder.info);
+			assertNotNull(decoder.format);
+
+			printCodec(decoder.info);
+			printFormat(decoder.format);
+		}
+	}
+
+	private void printCodec(AudioCodecInfo codec){
+		System.out.println(codec.info());
+	}
+	private void printFormat(SdpAudioFormat format){
+		System.out.println(format.info());
+	}
+
+
 }

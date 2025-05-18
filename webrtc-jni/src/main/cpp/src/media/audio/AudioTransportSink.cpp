@@ -15,6 +15,9 @@
  */
 
 #include "media/audio/AudioTransportSink.h"
+
+#include <api/rtc_error.h>
+
 #include "JavaClasses.h"
 #include "JNI_WebRTC.h"
 
@@ -48,7 +51,7 @@ namespace jni
 
 		ExceptionCheck(env);
 		env->DeleteLocalRef(dataArray);
-
+	
 		return 0;
 	}
 

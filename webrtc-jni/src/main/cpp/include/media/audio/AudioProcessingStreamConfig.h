@@ -40,6 +40,7 @@ namespace jni
 		};
 
 		webrtc::StreamConfig toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+        JavaLocalRef<jobject> toJava(JNIEnv * env, webrtc::StreamConfig& config);
 	}
 }
 

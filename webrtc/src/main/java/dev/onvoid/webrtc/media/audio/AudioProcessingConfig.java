@@ -24,6 +24,10 @@ package dev.onvoid.webrtc.media.audio;
  */
 public class AudioProcessingConfig {
 
+	public final PreAmplifier preAmplifier = new PreAmplifier();
+
+	public final CaptureLevelAdjustment captureLevelAdjustment = new CaptureLevelAdjustment();
+
 	public final EchoCanceller echoCanceller = new EchoCanceller();
 
 	public final GainControl gainControl = new GainControl();
@@ -38,7 +42,41 @@ public class AudioProcessingConfig {
 
 	public final VoiceDetection voiceDetection = new VoiceDetection();
 
+	public static class PreAmplifier{
+		public boolean enabled;
+		public float fixedGainFactor;
 
+		public PreAmplifier(){
+			enabled = false;
+			fixedGainFactor = 1.0f;
+		}
+	}
+
+	public static class CaptureLevelAdjustment{
+
+		public boolean enabled;
+		public float preGainFactor;
+		public float postGainFactor;
+
+		public AnalogMicGainEmulation analogMicGainEmulation;
+
+		public CaptureLevelAdjustment(){
+			enabled = false;
+			preGainFactor = 1.0f;
+			postGainFactor = 1.0f;
+			analogMicGainEmulation = new AnalogMicGainEmulation();
+		}
+
+		public static class AnalogMicGainEmulation{
+			public boolean enabled;
+			public int initialLevel;
+
+			public AnalogMicGainEmulation(){
+				enabled = false;
+				initialLevel = 255;
+			}
+		}
+	}
 
 	public static class EchoCanceller {
 

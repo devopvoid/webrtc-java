@@ -34,6 +34,8 @@ namespace jni
 				explicit JavaAudioProcessingConfigClass(JNIEnv * env);
 
 				jclass cls;
+				jfieldID preAmplifier;
+				jfieldID captureLevelAdjustment;
 				jfieldID echoCanceller;
 				jfieldID gainControl;
 				jfieldID highPassFilter;
@@ -45,8 +47,41 @@ namespace jni
 
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
 		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType);
+		webrtc::AudioProcessing::Config::CaptureLevelAdjustment::AnalogMicGainEmulation toAnalogMicGainEmulation(JNIEnv* env, const JavaLocalRef<jobject>& javaType);
+		
+		class JavaPreAmplifierClass : public JavaClass
+		{
+			public:
+				explicit JavaPreAmplifierClass(JNIEnv * env);
+				jclass cls;
+				jfieldID enabled;
+				jfieldID fixedGainFactor;
+		};
 
+		class JavaCaptureLevelAdjustmentClass : public JavaClass
+		{
+		public:
+			explicit JavaCaptureLevelAdjustmentClass(JNIEnv * env);
 
+			jclass cls;
+			jfieldID enabled;
+			jfieldID preGainFactor;
+			jfieldID postGainFactor;
+			jfieldID analogMicGainEmulation;
+			
+		};
+
+		class JavaAnalogMicGainEmulationClass : public JavaClass
+		{
+		public:
+			explicit JavaAnalogMicGainEmulationClass(JNIEnv * env);
+
+			jclass cls;
+			jfieldID enabled;
+			jfieldID initialLevel;
+			
+		};
+		
 		class JavaEchoCancellerClass : public JavaClass
 		{
 			public:
