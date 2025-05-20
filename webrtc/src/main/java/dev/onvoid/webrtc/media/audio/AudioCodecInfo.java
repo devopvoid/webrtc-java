@@ -1,5 +1,7 @@
 package dev.onvoid.webrtc.media.audio;
 
+import java.util.Objects;
+
 public class AudioCodecInfo {
 
     public int sampleRateHz;
@@ -26,5 +28,22 @@ public class AudioCodecInfo {
                 ", allowComfortNoise=" + allowComfortNoise +
                 ", supportsNetworkAdaption=" + supportsNetworkAdaption +
                 '}';
+    }
+
+    @Override
+    public String toString() {
+        return info();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        AudioCodecInfo that = (AudioCodecInfo) o;
+        return sampleRateHz == that.sampleRateHz && numChannels == that.numChannels && defaultBitrateBps == that.defaultBitrateBps && minBitrateBps == that.minBitrateBps && maxBitrateBps == that.maxBitrateBps && allowComfortNoise == that.allowComfortNoise && supportsNetworkAdaption == that.supportsNetworkAdaption;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sampleRateHz, numChannels, defaultBitrateBps, minBitrateBps, maxBitrateBps, allowComfortNoise, supportsNetworkAdaption);
     }
 }

@@ -121,14 +121,18 @@ set(WEBRTC_SRC ${WEBRTC_DIR}/src)
 set(WEBRTC_BUILD out/${TARGET_CPU})
 set(WEBRTC_LIB_PATH ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${WEBRTC_LIB})
 set(WEBRTC_LIB_PATH_INSTALLED ${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB})
+set(FFMPEG_LIB_PATH ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/third_party/ffmpeg/ffmpeg_internal.lib)
+set(FFMPEG_LIB_PATH_INSTALLED ${WEBRTC_INSTALL_DIR}/lib/ffmpeg_internal.lib)
+
 
 file(TO_CMAKE_PATH "${WEBRTC_DIR}" WEBRTC_DIR)
 file(TO_CMAKE_PATH "${WEBRTC_INSTALL_DIR}" WEBRTC_INSTALL_DIR)
 file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH}" WEBRTC_LIB_PATH)
+
 file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH_INSTALLED}" WEBRTC_LIB_PATH_INSTALLED)
 
 message(STATUS "WebRTC checkout path: ${WEBRTC_DIR}")
-message(STATUS "WebRTcC heckout branch: ${WEBRTC_BRANCH}")
+message(STATUS "WebRTC heckout branch: ${WEBRTC_BRANCH}")
 message(STATUS "WebRTC target: ${SOURCE_TARGET} ${TARGET_CPU}")
 message(STATUS "WebRTC build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
@@ -146,7 +150,6 @@ target_include_directories(${PROJECT_NAME}
 		${TARGET_INC_DIR}
 		${TARGET_INC_DIR}/third_party/abseil-cpp
 		${TARGET_INC_DIR}/third_party/libyuv/include
-    	${TARGET_INC_DIR}/third_party/ffmpeg
 )
 target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 
@@ -167,7 +170,7 @@ elseif(WIN32)
 endif()
 
 if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
-	message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
+	message(STATUS "WebRTC: Compiled version found '${WEBRTC_LIB_PATH_INSTALLED}'")
 
 	if(LINUX)
 		sysroot_install()
@@ -238,11 +241,13 @@ if (PATCHES)
 endif()
 
 message(STATUS "WebRTC: generate")
-set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" treat_warnings_as_errors=false rtc_build_examples=false rtc_include_tests=false use_rtti=true use_custom_libcxx=false symbol_level=0 rtc_use_h264=true")
+set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" treat_warnings_as_errors=false rtc_build_examples=false rtc_include_tests=false use_rtti=true use_custom_libcxx=false symbol_level=0 rtc_use_h264=false")
 execute_command(
 	COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
 	WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
+
+message(STATUS "gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}")
 
 message(STATUS "WebRTC: compile")
 execute_command(

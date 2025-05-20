@@ -21,7 +21,7 @@
 #include <audio/AudioTransportSource.h>
 
 #include "api/AudioOptions.h"
-#include "api/CreateSessionDescriptionObserver.h"
+
 #include "api/PeerConnectionObserver.h"
 #include "api/RTCConfiguration.h"
 #include "api/RTCRtpCapabilities.h"
@@ -36,7 +36,8 @@
 
 #include "api/create_peerconnection_factory.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
-#include "api/audio_codecs/builtin_audio_encoder_factory.h"
+#include "media/audio/FfmpegAudioEncoderFactory.h"
+#include "media/audio/FfmpegAudioDecoderFactory.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/builtin_video_encoder_factory.h"
 
@@ -78,9 +79,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			: nullptr;
 		
 		rtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
-
-		auto encoderFactory = webrtc::CreateBuiltinAudioEncoderFactory();
-		auto decoderFactory = webrtc::CreateBuiltinAudioDecoderFactory();
+		
+		auto encoderFactory = webrtc::CreateFfmpegAudioEncoderFactory();
+		auto decoderFactory = webrtc::CreateFfmpegAudioDecoderFactory();
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
 			workerThread.get(),

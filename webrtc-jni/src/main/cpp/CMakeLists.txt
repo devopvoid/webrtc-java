@@ -25,8 +25,11 @@ elseif(WIN32)
 	set(SOURCE_TARGET windows)
 endif()
 
+find_package(FFMPEG REQUIRED)
+
 add_subdirectory(dependencies/webrtc)
 add_subdirectory(dependencies/jni-voithos)
+
 
 file(GLOB SOURCES_ROOT "src/*.cpp")
 file(GLOB SOURCES_API "src/api/*.cpp")
@@ -56,6 +59,8 @@ list(APPEND SOURCES
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
+target_compile_definitions(${PROJECT_NAME} PUBLIC FFMPEG_STATIC_DEFINE)
+
 target_include_directories(${PROJECT_NAME}
 	PRIVATE
 		include
@@ -64,14 +69,18 @@ target_include_directories(${PROJECT_NAME}
 		include/rtc
 )
 
+target_include_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_INCLUDE_DIRS})
+
 set_target_properties(${PROJECT_NAME} PROPERTIES
 	CXX_STANDARD 17
 	CXX_STANDARD_REQUIRED ON
 	CXX_EXTENSIONS OFF
 )
+target_link_directories(${PROJECT_NAME} PRIVATE ${FFMPEG_LIBRARY_DIRS})
 
 target_link_libraries(${PROJECT_NAME} jni-voithos)
 target_link_libraries(${PROJECT_NAME} webrtc)
+target_link_libraries(${PROJECT_NAME} ${FFMPEG_LIBRARIES})
 
 if(APPLE)
 	set_source_files_properties(${SOURCES} PROPERTIES COMPILE_FLAGS "-x objective-c++")

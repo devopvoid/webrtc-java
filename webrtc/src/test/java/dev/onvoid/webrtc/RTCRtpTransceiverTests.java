@@ -51,6 +51,7 @@ class RTCRtpTransceiverTests extends TestBase {
 		RTCPeerConnection peerConnection = connection.getPeerConnection();
 		RTCRtpTransceiver audioTransceiver = peerConnection.addTransceiver(audioTrack,
 				new RTCRtpTransceiverInit());
+
 		RTCRtpTransceiver videoTransceiver = peerConnection.addTransceiver(videoTrack,
 				new RTCRtpTransceiverInit());
 

@@ -16,7 +16,8 @@
 		<webrtc.src.dir>${project.build.directory}/webrtcbuild/webrtc</webrtc.src.dir>
 		<webrtc.install.dir>${project.build.directory}/webrtcbuild/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
-		<cmake.toolchain.file />
+		<vcpkg.target.triplet>x64-windows-static</vcpkg.target.triplet>
+		<cmake.toolchain.file>C:/vcpkg/scripts/buildsystems/vcpkg.cmake</cmake.toolchain.file>
 	</properties>
 
 	<build>
@@ -112,6 +113,9 @@
 								</option>
 								<option>
 									-DCMAKE_INSTALL_PREFIX=${project.build.directory}/lib
+								</option>
+								<option>
+									-DVCPKG_TARGET_TRIPLET=${vcpkg.target.triplet}
 								</option>
 							</options>
 						</configuration>

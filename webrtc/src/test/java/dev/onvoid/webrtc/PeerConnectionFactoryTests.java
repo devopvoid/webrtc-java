@@ -202,6 +202,9 @@ class PeerConnectionFactoryTests extends TestBase {
 		assertFalse(encoders.isEmpty());
 		assertFalse(decoders.isEmpty());
 
+		System.out.println("-----------------------------------");
+		System.out.println("AUDIO ENCODER CODECS");
+		System.out.println("-----------------------------------");
 		for (AudioCodecSpec encoder : encoders) {
 			assertNotNull(encoder.info);
 			assertNotNull(encoder.format);
@@ -209,7 +212,9 @@ class PeerConnectionFactoryTests extends TestBase {
 			printCodec(encoder.info);
 			printFormat(encoder.format);
 		}
-
+		System.out.println("-----------------------------------");
+		System.out.println("AUDIO DECODER CODECS");
+		System.out.println("-----------------------------------");
 		for (AudioCodecSpec decoder : decoders) {
 			assertNotNull(decoder.info);
 			assertNotNull(decoder.format);
