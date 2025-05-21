@@ -9,7 +9,7 @@ Java native interface implementation based on the free, open [WebRTC](https://we
 
 ```xml
 <repository>
-    <name>singlerrrepo</name>
+    <id>singlerrrepo</id>
     <url>https://github.com/singlerr/mvn-repo/raw/maven2/</url>
 </repository>
 ```
