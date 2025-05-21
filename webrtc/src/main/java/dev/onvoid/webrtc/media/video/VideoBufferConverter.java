@@ -22,83 +22,81 @@ import java.nio.ByteBuffer;
 
 public final class VideoBufferConverter {
 
-	public static void convertFromI420(VideoFrameBuffer src, byte[] dst, FourCC fourCC) throws Exception {
-		if (src == null) {
-			throw new NullPointerException("Source buffer must not be null");
-		}
-		if (dst == null) {
-			throw new NullPointerException("Destination buffer must not be null");
-		}
-		
-		I420Buffer i420 = src.toI420();
-		
-		I420toByteArray(
-				i420.getDataY(), i420.getStrideY(),
-				i420.getDataU(), i420.getStrideU(),
-				i420.getDataV(), i420.getStrideV(),
-				dst,
-				i420.getWidth(), i420.getHeight(),
-				fourCC.value());
-		
-		i420.release();
-	}
-	
-	public static void convertFromI420(VideoFrameBuffer src, ByteBuffer dst, FourCC fourCC) throws Exception {
-		if (src == null) {
-			throw new NullPointerException("Source buffer must not be null");
-		}
-		if (dst == null) {
-			throw new NullPointerException("Destination buffer must not be null");
-		}
-		
-		I420Buffer i420 = src.toI420();
-		
-		if (dst.isDirect()) {
-			I420toDirectBuffer(
-					i420.getDataY(), i420.getStrideY(),
-					i420.getDataU(), i420.getStrideU(),
-					i420.getDataV(), i420.getStrideV(),
-					dst,
-					i420.getWidth(), i420.getHeight(),
-					fourCC.value());
-		}
-		else {
-			byte[] arrayBuffer = null;
+    public static void convertFromI420(VideoFrameBuffer src, byte[] dst, FourCC fourCC) throws Exception {
+        if (src == null) {
+            throw new NullPointerException("Source buffer must not be null");
+        }
+        if (dst == null) {
+            throw new NullPointerException("Destination buffer must not be null");
+        }
 
-			if (dst.hasArray()) {
-				arrayBuffer = dst.array();
-			}
-			else {
-				arrayBuffer = new byte[dst.remaining()];
-				dst.get(arrayBuffer);
-			}
+        I420Buffer i420 = src.toI420();
 
-			I420toByteArray(
-					i420.getDataY(), i420.getStrideY(),
-					i420.getDataU(), i420.getStrideU(),
-					i420.getDataV(), i420.getStrideV(),
-					arrayBuffer,
-					i420.getWidth(), i420.getHeight(),
-					fourCC.value());
-		}
-		
-		i420.release();
-	}
+        I420toByteArray(
+                i420.getDataY(), i420.getStrideY(),
+                i420.getDataU(), i420.getStrideU(),
+                i420.getDataV(), i420.getStrideV(),
+                dst,
+                i420.getWidth(), i420.getHeight(),
+                fourCC.value());
 
-	private native static void I420toByteArray(
-			ByteBuffer srcY, int srcStrideY,
-			ByteBuffer srcU, int srcStrideU,
-			ByteBuffer srcV, int srcStrideV,
-			byte[] dst,
-			int width, int height,
-			int fourCC) throws Exception;
-	
-	private native static void I420toDirectBuffer(
-			ByteBuffer srcY, int srcStrideY,
-			ByteBuffer srcU, int srcStrideU,
-			ByteBuffer srcV, int srcStrideV,
-			ByteBuffer dst,
-			int width, int height,
-			int fourCC) throws Exception;
+        i420.release();
+    }
+
+    public static void convertFromI420(VideoFrameBuffer src, ByteBuffer dst, FourCC fourCC) throws Exception {
+        if (src == null) {
+            throw new NullPointerException("Source buffer must not be null");
+        }
+        if (dst == null) {
+            throw new NullPointerException("Destination buffer must not be null");
+        }
+
+        I420Buffer i420 = src.toI420();
+
+        if (dst.isDirect()) {
+            I420toDirectBuffer(
+                    i420.getDataY(), i420.getStrideY(),
+                    i420.getDataU(), i420.getStrideU(),
+                    i420.getDataV(), i420.getStrideV(),
+                    dst,
+                    i420.getWidth(), i420.getHeight(),
+                    fourCC.value());
+        } else {
+            byte[] arrayBuffer = null;
+
+            if (dst.hasArray()) {
+                arrayBuffer = dst.array();
+            } else {
+                arrayBuffer = new byte[dst.remaining()];
+                dst.get(arrayBuffer);
+            }
+
+            I420toByteArray(
+                    i420.getDataY(), i420.getStrideY(),
+                    i420.getDataU(), i420.getStrideU(),
+                    i420.getDataV(), i420.getStrideV(),
+                    arrayBuffer,
+                    i420.getWidth(), i420.getHeight(),
+                    fourCC.value());
+        }
+
+        i420.release();
+    }
+
+    private native static void I420toByteArray(
+            ByteBuffer srcY, int srcStrideY,
+            ByteBuffer srcU, int srcStrideU,
+            ByteBuffer srcV, int srcStrideV,
+            byte[] dst,
+            int width, int height,
+            int fourCC) throws Exception;
+
+    private native static void I420toDirectBuffer(
+            ByteBuffer srcY, int srcStrideY,
+            ByteBuffer srcU, int srcStrideU,
+            ByteBuffer srcV, int srcStrideV,
+            ByteBuffer dst,
+            int width, int height,
+            int fourCC) throws Exception;
 
 }

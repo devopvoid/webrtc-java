@@ -18,8 +18,8 @@ package dev.onvoid.webrtc.media.video.desktop;
 
 public enum DesktopSourceType {
 
-	SCREEN,
+    SCREEN,
 
-	WINDOW;
+    WINDOW;
 
 }

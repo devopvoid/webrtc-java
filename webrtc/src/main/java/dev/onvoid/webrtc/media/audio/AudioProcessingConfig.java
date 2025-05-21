@@ -24,142 +24,139 @@ package dev.onvoid.webrtc.media.audio;
  */
 public class AudioProcessingConfig {
 
-	public final PreAmplifier preAmplifier = new PreAmplifier();
+    public final PreAmplifier preAmplifier = new PreAmplifier();
 
-	public final CaptureLevelAdjustment captureLevelAdjustment = new CaptureLevelAdjustment();
+    public final CaptureLevelAdjustment captureLevelAdjustment = new CaptureLevelAdjustment();
 
-	public final EchoCanceller echoCanceller = new EchoCanceller();
+    public final EchoCanceller echoCanceller = new EchoCanceller();
 
-	public final GainControl gainControl = new GainControl();
+    public final GainControl gainControl = new GainControl();
 
-	public final HighPassFilter highPassFilter = new HighPassFilter();
+    public final HighPassFilter highPassFilter = new HighPassFilter();
 
-	public final NoiseSuppression noiseSuppression = new NoiseSuppression();
+    public final NoiseSuppression noiseSuppression = new NoiseSuppression();
 
-	public final ResidualEchoDetector residualEchoDetector = new ResidualEchoDetector();
+    public final ResidualEchoDetector residualEchoDetector = new ResidualEchoDetector();
 
-	public final TransientSuppression transientSuppression = new TransientSuppression();
+    public final TransientSuppression transientSuppression = new TransientSuppression();
 
-	public final VoiceDetection voiceDetection = new VoiceDetection();
+    public final VoiceDetection voiceDetection = new VoiceDetection();
 
-	public static class PreAmplifier{
-		public boolean enabled;
-		public float fixedGainFactor;
+    public static class PreAmplifier {
+        public boolean enabled;
+        public float fixedGainFactor;
 
-		public PreAmplifier(){
-			enabled = false;
-			fixedGainFactor = 1.0f;
-		}
-	}
+        public PreAmplifier() {
+            enabled = false;
+            fixedGainFactor = 1.0f;
+        }
+    }
 
-	public static class CaptureLevelAdjustment{
+    public static class CaptureLevelAdjustment {
 
-		public boolean enabled;
-		public float preGainFactor;
-		public float postGainFactor;
+        public boolean enabled;
+        public float preGainFactor;
+        public float postGainFactor;
 
-		public AnalogMicGainEmulation analogMicGainEmulation;
+        public AnalogMicGainEmulation analogMicGainEmulation;
 
-		public CaptureLevelAdjustment(){
-			enabled = false;
-			preGainFactor = 1.0f;
-			postGainFactor = 1.0f;
-			analogMicGainEmulation = new AnalogMicGainEmulation();
-		}
+        public CaptureLevelAdjustment() {
+            enabled = false;
+            preGainFactor = 1.0f;
+            postGainFactor = 1.0f;
+            analogMicGainEmulation = new AnalogMicGainEmulation();
+        }
 
-		public static class AnalogMicGainEmulation{
-			public boolean enabled;
-			public int initialLevel;
+        public static class AnalogMicGainEmulation {
+            public boolean enabled;
+            public int initialLevel;
 
-			public AnalogMicGainEmulation(){
-				enabled = false;
-				initialLevel = 255;
-			}
-		}
-	}
+            public AnalogMicGainEmulation() {
+                enabled = false;
+                initialLevel = 255;
+            }
+        }
+    }
 
-	public static class EchoCanceller {
+    public static class EchoCanceller {
 
-		public boolean enabled;
+        public boolean enabled;
 
-		public boolean enforceHighPassFiltering;
+        public boolean enforceHighPassFiltering;
 
-	}
+    }
 
-	public static class GainControl {
+    public static class GainControl {
 
-		public static class FixedDigital {
+        public final FixedDigital fixedDigital = new FixedDigital();
+        public final AdaptiveDigital adaptiveDigital = new AdaptiveDigital();
+        public boolean enabled;
 
-			public float gainDb = 0.0f;
+        public static class FixedDigital {
 
-		}
+            public float gainDb = 0.0f;
 
-		public static class AdaptiveDigital {
+        }
 
-			public boolean enabled;
+        public static class AdaptiveDigital {
 
-			/** Run the adaptive digital controller but the signal is not modified. */
-			public boolean dryRun = false;
+            public boolean enabled;
 
-			public int vadResetPeriodMs = 1500;
-			public int adjacentSpeechFramesThreshold = 12;
-			public float maxGainChangeDbPerSecond = 3.0f;
-			public float maxOutputNoiseLevelDbfs = -50.0f;
+            /**
+             * Run the adaptive digital controller but the signal is not modified.
+             */
+            public boolean dryRun = false;
 
-		}
+            public int vadResetPeriodMs = 1500;
+            public int adjacentSpeechFramesThreshold = 12;
+            public float maxGainChangeDbPerSecond = 3.0f;
+            public float maxOutputNoiseLevelDbfs = -50.0f;
 
+        }
 
-		public final FixedDigital fixedDigital = new FixedDigital();
+    }
 
-		public final AdaptiveDigital adaptiveDigital = new AdaptiveDigital();
+    public static class HighPassFilter {
 
-		public boolean enabled;
+        public boolean enabled;
 
-	}
+    }
 
-	public static class HighPassFilter {
+    public static class LevelEstimation {
 
-		public boolean enabled;
+        public boolean enabled;
 
-	}
+    }
 
-	public static class LevelEstimation {
+    public static class NoiseSuppression {
 
-		public boolean enabled;
+        public boolean enabled;
+        public Level level;
 
-	}
+        public enum Level {
+            LOW,
+            MODERATE,
+            HIGH,
+            VERY_HIGH
+        }
 
-	public static class NoiseSuppression {
+    }
 
-		public enum Level {
-			LOW,
-			MODERATE,
-			HIGH,
-			VERY_HIGH
-		}
+    public static class ResidualEchoDetector {
 
+        public boolean enabled;
 
-		public boolean enabled;
+    }
 
-		public Level level;
+    public static class TransientSuppression {
 
-	}
+        public boolean enabled;
 
-	public static class ResidualEchoDetector {
+    }
 
-		public boolean enabled;
+    public static class VoiceDetection {
 
-	}
+        public boolean enabled;
 
-	public static class TransientSuppression {
-
-		public boolean enabled;
-
-	}
-
-	public static class VoiceDetection {
-
-		public boolean enabled;
-
-	}
+    }
 }

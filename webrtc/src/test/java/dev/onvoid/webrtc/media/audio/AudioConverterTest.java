@@ -16,114 +16,112 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class AudioConverterTest {
 
-	@Test
-	void downSample() {
-		convert(new ProcessBuffer(48000, 44100, 1, 1));
-	}
+    private static void convert(ProcessBuffer buffer) {
+        AudioConverter converter = new AudioConverter(buffer.sampleRateIn,
+                buffer.channelsIn, buffer.sampleRateOut, buffer.channelsOut);
+        converter.convert(buffer.src, buffer.dst);
+        converter.dispose();
+    }
 
-	@Test
-	void upSample() {
-		convert(new ProcessBuffer(44100, 48000, 1, 1));
-	}
+    @Test
+    void downSample() {
+        convert(new ProcessBuffer(48000, 44100, 1, 1));
+    }
 
-	@Test
-	void downMix() {
-		convert(new ProcessBuffer(32000, 32000, 2, 1));
-	}
+    @Test
+    void upSample() {
+        convert(new ProcessBuffer(44100, 48000, 1, 1));
+    }
 
-	@Test
-	void upMix() {
-		convert(new ProcessBuffer(32000, 32000, 1, 2));
-	}
+    @Test
+    void downMix() {
+        convert(new ProcessBuffer(32000, 32000, 2, 1));
+    }
 
-	@Test
-	void downSampleDownMix() {
-		convert(new ProcessBuffer(48000, 44100, 2, 1));
-	}
+    @Test
+    void upMix() {
+        convert(new ProcessBuffer(32000, 32000, 1, 2));
+    }
 
-	@Test
-	void downSampleUpMix() {
-		convert(new ProcessBuffer(48000, 44100, 1, 2));
-	}
+    @Test
+    void downSampleDownMix() {
+        convert(new ProcessBuffer(48000, 44100, 2, 1));
+    }
 
-	@Test
-	void upSampleDownMix() {
-		convert(new ProcessBuffer(44100, 48000, 2, 1));
-	}
+    @Test
+    void downSampleUpMix() {
+        convert(new ProcessBuffer(48000, 44100, 1, 2));
+    }
 
-	@Test
-	void upSampleUpMix() {
-		convert(new ProcessBuffer(44100, 48000, 1, 2));
-	}
+    @Test
+    void upSampleDownMix() {
+        convert(new ProcessBuffer(44100, 48000, 2, 1));
+    }
 
-	@Test
-	void targetBufferUnderflow() {
-		ProcessBuffer buffer = new ProcessBuffer(48000, 24000, 2, 2);
-		buffer.setTargetBufferSize(buffer.frameSizeOut / 2);
+    @Test
+    void upSampleUpMix() {
+        convert(new ProcessBuffer(44100, 48000, 1, 2));
+    }
 
-		assertThrows(IllegalArgumentException.class, () -> {
-			convert(buffer);
-		});
-	}
+    @Test
+    void targetBufferUnderflow() {
+        ProcessBuffer buffer = new ProcessBuffer(48000, 24000, 2, 2);
+        buffer.setTargetBufferSize(buffer.frameSizeOut / 2);
 
-	private static void convert(ProcessBuffer buffer) {
-		AudioConverter converter = new AudioConverter(buffer.sampleRateIn,
-				buffer.channelsIn, buffer.sampleRateOut, buffer.channelsOut);
-		converter.convert(buffer.src, buffer.dst);
-		converter.dispose();
-	}
+        assertThrows(IllegalArgumentException.class, () -> {
+            convert(buffer);
+        });
+    }
 
+    private static class ProcessBuffer {
 
+        final int bytesPerFrame = 2;
 
-	private static class ProcessBuffer {
+        final int channelsIn;
+        final int channelsOut;
 
-		final int bytesPerFrame = 2;
+        final int sampleRateIn;
+        final int sampleRateOut;
 
-		final int channelsIn;
-		final int channelsOut;
+        final int nSamplesIn;
+        final int nSamplesOut;
 
-		final int sampleRateIn;
-		final int sampleRateOut;
+        final int frameSizeIn;
+        final int frameSizeOut;
 
-		final int nSamplesIn;
-		final int nSamplesOut;
+        byte[] src;
+        byte[] dst;
 
-		final int frameSizeIn;
-		final int frameSizeOut;
-
-		byte[] src;
-		byte[] dst;
-
-		AudioProcessingStreamConfig streamConfigIn;
-		AudioProcessingStreamConfig streamConfigOut;
+        AudioProcessingStreamConfig streamConfigIn;
+        AudioProcessingStreamConfig streamConfigOut;
 
 
-		ProcessBuffer(int sampleRateIn, int sampleRateOut, int channelsIn, int channelsOut) {
-			this.sampleRateIn = sampleRateIn;
-			this.sampleRateOut = sampleRateOut;
-			this.channelsIn = channelsIn;
-			this.channelsOut = channelsOut;
+        ProcessBuffer(int sampleRateIn, int sampleRateOut, int channelsIn, int channelsOut) {
+            this.sampleRateIn = sampleRateIn;
+            this.sampleRateOut = sampleRateOut;
+            this.channelsIn = channelsIn;
+            this.channelsOut = channelsOut;
 
-			nSamplesIn = sampleRateIn / 100; // 10 ms frame
-			nSamplesOut = sampleRateOut / 100;
-			frameSizeIn = nSamplesIn * channelsIn;
-			frameSizeOut = Math.max(nSamplesIn, nSamplesOut) * channelsOut;
+            nSamplesIn = sampleRateIn / 100; // 10 ms frame
+            nSamplesOut = sampleRateOut / 100;
+            frameSizeIn = nSamplesIn * channelsIn;
+            frameSizeOut = Math.max(nSamplesIn, nSamplesOut) * channelsOut;
 
-			src = new byte[frameSizeIn * bytesPerFrame];
-			dst = new byte[frameSizeOut * bytesPerFrame];
+            src = new byte[frameSizeIn * bytesPerFrame];
+            dst = new byte[frameSizeOut * bytesPerFrame];
 
-			streamConfigIn = new AudioProcessingStreamConfig(sampleRateIn, channelsIn);
-			streamConfigOut = new AudioProcessingStreamConfig(sampleRateOut, channelsOut);
-		}
+            streamConfigIn = new AudioProcessingStreamConfig(sampleRateIn, channelsIn);
+            streamConfigOut = new AudioProcessingStreamConfig(sampleRateOut, channelsOut);
+        }
 
-		void setTargetBufferSize(int size) {
-			dst = new byte[size];
-		}
-	}
+        void setTargetBufferSize(int size) {
+            dst = new byte[size];
+        }
+    }
 }

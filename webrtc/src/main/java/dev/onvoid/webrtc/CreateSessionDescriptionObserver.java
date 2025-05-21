@@ -25,22 +25,22 @@ package dev.onvoid.webrtc;
  */
 public interface CreateSessionDescriptionObserver {
 
-	/**
-	 * Receives the generated SDP answer/offer. The SDP contains descriptions of
-	 * the local MediaStreamTracks attached to the RTCPeerConnection, the
-	 * codec/RTP/RTCP options negotiated for the current session, and any
-	 * candidates that have been gathered by the ICE Agent.
-	 *
-	 * @param description The generated answer/offer session description.
-	 */
-	void onSuccess(RTCSessionDescription description);
+    /**
+     * Receives the generated SDP answer/offer. The SDP contains descriptions of
+     * the local MediaStreamTracks attached to the RTCPeerConnection, the
+     * codec/RTP/RTCP options negotiated for the current session, and any
+     * candidates that have been gathered by the ICE Agent.
+     *
+     * @param description The generated answer/offer session description.
+     */
+    void onSuccess(RTCSessionDescription description);
 
-	/**
-	 * An error has occurred, causing the RTCPeerConnection to abort the SDP
-	 * generation procedure.
-	 *
-	 * @param error The error message.
-	 */
-	void onFailure(String error);
+    /**
+     * An error has occurred, causing the RTCPeerConnection to abort the SDP
+     * generation procedure.
+     *
+     * @param error The error message.
+     */
+    void onFailure(String error);
 
 }

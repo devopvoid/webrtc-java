@@ -16,58 +16,58 @@
 
 package dev.onvoid.webrtc.media.video;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import dev.onvoid.webrtc.TestBase;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 class VideoTrackTests extends TestBase {
 
-	private VideoTrack videoTrack;
+    private VideoTrack videoTrack;
 
 
-	@BeforeEach
-	void init() {
-		VideoDeviceSource videoSource = new VideoDeviceSource();
+    @BeforeEach
+    void init() {
+        VideoDeviceSource videoSource = new VideoDeviceSource();
 
-		videoTrack = factory.createVideoTrack("videoTrack", videoSource);
-	}
+        videoTrack = factory.createVideoTrack("videoTrack", videoSource);
+    }
 
-	@AfterEach
-	void dispose() {
-		videoTrack.dispose();
-	}
+    @AfterEach
+    void dispose() {
+        videoTrack.dispose();
+    }
 
-	@Test
-	void disableEnableTrack() {
-		videoTrack.setEnabled(false);
+    @Test
+    void disableEnableTrack() {
+        videoTrack.setEnabled(false);
 
-		assertFalse(videoTrack.isEnabled());
+        assertFalse(videoTrack.isEnabled());
 
-		videoTrack.setEnabled(true);
+        videoTrack.setEnabled(true);
 
-		assertTrue(videoTrack.isEnabled());
-	}
+        assertTrue(videoTrack.isEnabled());
+    }
 
-	@Test
-	void addNullSink() {
-		assertThrows(NullPointerException.class, () -> videoTrack.addSink(null));
-	}
+    @Test
+    void addNullSink() {
+        assertThrows(NullPointerException.class, () -> videoTrack.addSink(null));
+    }
 
-	@Test
-	void removeNullSink() {
-		assertThrows(NullPointerException.class, () -> videoTrack.removeSink(null));
-	}
+    @Test
+    void removeNullSink() {
+        assertThrows(NullPointerException.class, () -> videoTrack.removeSink(null));
+    }
 
-	@Test
-	void addRemoveSink() {
-		VideoTrackSink sink = frame -> { };
+    @Test
+    void addRemoveSink() {
+        VideoTrackSink sink = frame -> {
+        };
 
-		videoTrack.addSink(sink);
-		videoTrack.removeSink(sink);
-	}
+        videoTrack.addSink(sink);
+        videoTrack.removeSink(sink);
+    }
 
 }

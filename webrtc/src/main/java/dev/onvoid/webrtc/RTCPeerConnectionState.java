@@ -23,42 +23,42 @@ package dev.onvoid.webrtc;
  */
 public enum RTCPeerConnectionState {
 
-	/**
-	 * None of the previous states apply and all {@link RTCIceTransport}s and
-	 * {@link RTCDtlsTransport}s are in the "NEW" or "CLOSED" state, or there
-	 * are no transports.
-	 */
-	NEW,
+    /**
+     * None of the previous states apply and all {@link RTCIceTransport}s and
+     * {@link RTCDtlsTransport}s are in the "NEW" or "CLOSED" state, or there
+     * are no transports.
+     */
+    NEW,
 
-	/**
-	 * None of the previous states apply and all {@link RTCIceTransport}s or
-	 * {@link RTCDtlsTransport}s are in the "NEW", "CONNECTING" or "CHECKING"
-	 * state.
-	 */
-	CONNECTING,
+    /**
+     * None of the previous states apply and all {@link RTCIceTransport}s or
+     * {@link RTCDtlsTransport}s are in the "NEW", "CONNECTING" or "CHECKING"
+     * state.
+     */
+    CONNECTING,
 
-	/**
-	 * None of the previous states apply and all {@link RTCIceTransport}s and
-	 * {@link RTCDtlsTransport}s are in the "CONNECTED", "COMPLETED" or "CLOSED"
-	 * state.
-	 */
-	CONNECTED,
+    /**
+     * None of the previous states apply and all {@link RTCIceTransport}s and
+     * {@link RTCDtlsTransport}s are in the "CONNECTED", "COMPLETED" or "CLOSED"
+     * state.
+     */
+    CONNECTED,
 
-	/**
-	 * None of the previous states apply and any {@link RTCIceTransport}s or
-	 * {@link RTCDtlsTransport}s are in the "DISCONNECTED" state.
-	 */
-	DISCONNECTED,
+    /**
+     * None of the previous states apply and any {@link RTCIceTransport}s or
+     * {@link RTCDtlsTransport}s are in the "DISCONNECTED" state.
+     */
+    DISCONNECTED,
 
-	/**
-	 * The previous state doesn't apply and any {@link RTCIceTransport}s or
-	 * {@link RTCDtlsTransport}s are in the "FAILED" state.
-	 */
-	FAILED,
+    /**
+     * The previous state doesn't apply and any {@link RTCIceTransport}s or
+     * {@link RTCDtlsTransport}s are in the "FAILED" state.
+     */
+    FAILED,
 
-	/**
-	 * The RTCPeerConnection is closed.
-	 */
-	CLOSED;
+    /**
+     * The RTCPeerConnection is closed.
+     */
+    CLOSED;
 
 }

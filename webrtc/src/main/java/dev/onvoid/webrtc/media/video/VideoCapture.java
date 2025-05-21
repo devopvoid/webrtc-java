@@ -20,22 +20,22 @@ import dev.onvoid.webrtc.internal.NativeObject;
 
 public class VideoCapture extends NativeObject {
 
-	public VideoCapture() {
-		initialize();
-	}
+    public VideoCapture() {
+        initialize();
+    }
 
-	public native void setVideoCaptureDevice(VideoDevice device);
+    public native void setVideoCaptureDevice(VideoDevice device);
 
-	public native void setVideoCaptureCapability(VideoCaptureCapability capability);
+    public native void setVideoCaptureCapability(VideoCaptureCapability capability);
 
-	public native void setVideoSink(VideoTrackSink sink);
+    public native void setVideoSink(VideoTrackSink sink);
 
-	public native void start();
+    public native void start();
 
-	public native void stop();
+    public native void stop();
 
-	public native void dispose();
+    public native void dispose();
 
-	private native void initialize();
+    private native void initialize();
 
 }

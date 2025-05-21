@@ -21,36 +21,35 @@ import java.util.List;
 
 /**
  * Provides configuration options for {@link RTCRtpTransceiver}s.
- * 
- * @see RTCPeerConnection#addTransceiver
  *
  * @author Alex Andres
+ * @see RTCPeerConnection#addTransceiver
  */
 public class RTCRtpTransceiverInit {
 
-	/**
-	 * The direction of the RTCRtpTransceiver.
-	 */
-	public RTCRtpTransceiverDirection direction;
+    /**
+     * The direction of the RTCRtpTransceiver.
+     */
+    public RTCRtpTransceiverDirection direction;
 
-	/**
-	 * Media stream ids associated with the transceiver.
-	 */
-	public List<String> streamIds;
+    /**
+     * Media stream ids associated with the transceiver.
+     */
+    public List<String> streamIds;
 
-	/**
-	 * Parameters for sending RTP encodings of media.
-	 */
-	public List<RTCRtpEncodingParameters> sendEncodings;
+    /**
+     * Parameters for sending RTP encodings of media.
+     */
+    public List<RTCRtpEncodingParameters> sendEncodings;
 
 
-	/**
-	 * Creates an instance of RTCRtpTransceiverInit.
-	 */
-	public RTCRtpTransceiverInit() {
-		direction = RTCRtpTransceiverDirection.SEND_RECV;
-		streamIds = new ArrayList<>();
-		sendEncodings = new ArrayList<>();
-	}
+    /**
+     * Creates an instance of RTCRtpTransceiverInit.
+     */
+    public RTCRtpTransceiverInit() {
+        direction = RTCRtpTransceiverDirection.SEND_RECV;
+        streamIds = new ArrayList<>();
+        sendEncodings = new ArrayList<>();
+    }
 
 }

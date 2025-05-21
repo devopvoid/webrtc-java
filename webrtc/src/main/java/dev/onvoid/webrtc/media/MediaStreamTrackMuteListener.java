@@ -25,12 +25,12 @@ package dev.onvoid.webrtc.media;
 @FunctionalInterface
 public interface MediaStreamTrackMuteListener {
 
-	/**
-	 * The 'mute' condition has changed for the given track.
-	 *
-	 * @param track The track that has been (un)muted.
-	 * @param muted True if the track has been muted.
-	 */
-	void onTrackMute(MediaStreamTrack track, boolean muted);
+    /**
+     * The 'mute' condition has changed for the given track.
+     *
+     * @param track The track that has been (un)muted.
+     * @param muted True if the track has been muted.
+     */
+    void onTrackMute(MediaStreamTrack track, boolean muted);
 
 }

@@ -23,27 +23,27 @@ package dev.onvoid.webrtc;
  */
 public interface RTCDataChannelObserver {
 
-	/**
-	 * The RTCDataChannel's buffered amount has changed.
-	 *
-	 * @param previousAmount The previous buffer amount.
-	 */
-	void onBufferedAmountChange(long previousAmount);
+    /**
+     * The RTCDataChannel's buffered amount has changed.
+     *
+     * @param previousAmount The previous buffer amount.
+     */
+    void onBufferedAmountChange(long previousAmount);
 
-	/**
-	 * The RTCDataChannel's state has changed.
-	 */
-	void onStateChange();
+    /**
+     * The RTCDataChannel's state has changed.
+     */
+    void onStateChange();
 
-	/**
-	 * A data buffer was successfully received.
-	 * <p>
-	 * NOTE: {@link RTCDataChannelBuffer#data} will be freed once this function
-	 * returns so observers who want to use the data asynchronously must make
-	 * sure to copy it first.
-	 *
-	 * @param buffer The buffer containing the received message.
-	 */
-	void onMessage(RTCDataChannelBuffer buffer);
+    /**
+     * A data buffer was successfully received.
+     * <p>
+     * NOTE: {@link RTCDataChannelBuffer#data} will be freed once this function
+     * returns so observers who want to use the data asynchronously must make
+     * sure to copy it first.
+     *
+     * @param buffer The buffer containing the received message.
+     */
+    void onMessage(RTCDataChannelBuffer buffer);
 
 }

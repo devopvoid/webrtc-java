@@ -25,30 +25,30 @@ package dev.onvoid.webrtc;
  */
 public enum RTCIceTransportPolicy {
 
-	NONE,
+    NONE,
 
-	/**
-	 * The ICE Agent uses only media relay candidates such as candidates passing
-	 * through a TURN server.
-	 * <p>
-	 * NOTE: This can be used to prevent the remote endpoint from learning the
-	 * user's IP addresses, which may be desired in certain use cases. For
-	 * example, in a "call"-based application, the application may want to
-	 * prevent an unknown caller from learning the callee's IP addresses until
-	 * the callee has consented in some way.
-	 */
-	RELAY,
+    /**
+     * The ICE Agent uses only media relay candidates such as candidates passing
+     * through a TURN server.
+     * <p>
+     * NOTE: This can be used to prevent the remote endpoint from learning the
+     * user's IP addresses, which may be desired in certain use cases. For
+     * example, in a "call"-based application, the application may want to
+     * prevent an unknown caller from learning the callee's IP addresses until
+     * the callee has consented in some way.
+     */
+    RELAY,
 
-	NO_HOST,
+    NO_HOST,
 
-	/**
-	 * The ICE Agent can use any type of candidate when this value is
-	 * specified.
-	 * <p>
-	 * NOTE: The implementation can still use its own candidate filtering policy
-	 * in order to limit the IP addresses exposed to the application, as noted
-	 * in the description of RTCIceCandidate.address.
-	 */
-	ALL;
+    /**
+     * The ICE Agent can use any type of candidate when this value is
+     * specified.
+     * <p>
+     * NOTE: The implementation can still use its own candidate filtering policy
+     * in order to limit the IP addresses exposed to the application, as noted
+     * in the description of RTCIceCandidate.address.
+     */
+    ALL;
 
 }

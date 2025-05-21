@@ -24,50 +24,50 @@ package dev.onvoid.webrtc;
  */
 public class RTCDataChannelInit {
 
-	/**
-	 * If set to false, data is allowed to be delivered out of order. The
-	 * default value of true, guarantees that data will be delivered in order.
-	 */
-	public boolean ordered = true;
+    /**
+     * If set to false, data is allowed to be delivered out of order. The
+     * default value of true, guarantees that data will be delivered in order.
+     */
+    public boolean ordered = true;
 
-	/**
-	 * The default value of false tells the application to announce the channel
-	 * in-band and instruct the other peer to dispatch a corresponding
-	 * RTCDataChannel. If set to true, it is up to the application to negotiate
-	 * the channel and create an RTCDataChannel with the same id at the other
-	 * peer.
-	 */
-	public boolean negotiated = false;
+    /**
+     * The default value of false tells the application to announce the channel
+     * in-band and instruct the other peer to dispatch a corresponding
+     * RTCDataChannel. If set to true, it is up to the application to negotiate
+     * the channel and create an RTCDataChannel with the same id at the other
+     * peer.
+     */
+    public boolean negotiated = false;
 
-	/**
-	 * Limits the time (in milliseconds) during which the channel will transmit
-	 * or retransmit data if not acknowledged. This value may be clamped if it
-	 * exceeds the maximum value supported by the user agent.
-	 */
-	public int maxPacketLifeTime = -1;
+    /**
+     * Limits the time (in milliseconds) during which the channel will transmit
+     * or retransmit data if not acknowledged. This value may be clamped if it
+     * exceeds the maximum value supported by the user agent.
+     */
+    public int maxPacketLifeTime = -1;
 
-	/**
-	 * Limits the number of times a channel will retransmit data if not
-	 * successfully delivered. This value may be clamped if it exceeds the
-	 * maximum value supported by the user agent.
-	 *
-	 * Note: Cannot be set along with maxPacketLifeTime.
-	 */
-	public int maxRetransmits = -1;
+    /**
+     * Limits the number of times a channel will retransmit data if not
+     * successfully delivered. This value may be clamped if it exceeds the
+     * maximum value supported by the user agent.
+     * <p>
+     * Note: Cannot be set along with maxPacketLifeTime.
+     */
+    public int maxRetransmits = -1;
 
-	/**
-	 * Overrides the default selection of ID for this channel.
-	 */
-	public int id = -1;
+    /**
+     * Overrides the default selection of ID for this channel.
+     */
+    public int id = -1;
 
-	/**
-	 * Sub-protocol name used for this channel.
-	 */
-	public String protocol;
+    /**
+     * Sub-protocol name used for this channel.
+     */
+    public String protocol;
 
-	/**
-	 * Priority of this channel.
-	 */
-	public RTCPriorityType priority = RTCPriorityType.LOW;
+    /**
+     * Priority of this channel.
+     */
+    public RTCPriorityType priority = RTCPriorityType.LOW;
 
 }

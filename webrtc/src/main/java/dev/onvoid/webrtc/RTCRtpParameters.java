@@ -26,31 +26,31 @@ import java.util.List;
  */
 public class RTCRtpParameters {
 
-	/**
-	 * A list containing parameters for RTP header extensions.
-	 */
-	public List<RTCRtpHeaderExtensionParameters> headerExtensions;
+    /**
+     * A list containing parameters for RTP header extensions.
+     */
+    public List<RTCRtpHeaderExtensionParameters> headerExtensions;
 
-	/**
-	 * Parameters used for RTCP.
-	 */
-	public RTCRtcpParameters rtcp;
+    /**
+     * Parameters used for RTCP.
+     */
+    public RTCRtcpParameters rtcp;
 
-	/**
-	 * A list containing the media codecs that an RTCRtpSender will choose from,
-	 * as well as entries for RTX, RED and FEC mechanisms. Corresponding to each
-	 * media codec where retransmission via RTX is enabled, there will be an
-	 * entry in codecs with a mimeType attribute indicating retransmission via
-	 * "audio/rtx" or "video/rtx", and an sdpFmtpLine attribute (providing the
-	 * "apt" and "rtx-time" parameters).
-	 */
-	public List<RTCRtpCodecParameters> codecs;
+    /**
+     * A list containing the media codecs that an RTCRtpSender will choose from,
+     * as well as entries for RTX, RED and FEC mechanisms. Corresponding to each
+     * media codec where retransmission via RTX is enabled, there will be an
+     * entry in codecs with a mimeType attribute indicating retransmission via
+     * "audio/rtx" or "video/rtx", and an sdpFmtpLine attribute (providing the
+     * "apt" and "rtx-time" parameters).
+     */
+    public List<RTCRtpCodecParameters> codecs;
 
 
-	@Override
-	public String toString() {
-		return String.format("%s [headerExtensions=%s, rtcp=%s, codecs=%s]",
-				RTCRtpParameters.class.getSimpleName(), headerExtensions, rtcp,
-				codecs);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [headerExtensions=%s, rtcp=%s, codecs=%s]",
+                RTCRtpParameters.class.getSimpleName(), headerExtensions, rtcp,
+                codecs);
+    }
 }

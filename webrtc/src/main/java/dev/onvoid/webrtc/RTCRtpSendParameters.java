@@ -25,23 +25,23 @@ import java.util.List;
  */
 public class RTCRtpSendParameters extends RTCRtpParameters {
 
-	/**
-	 * An unique identifier for the last set of parameters applied. Ensures that
-	 * setParameters can only be called based on a previous getParameters, and
-	 * that there are no intervening changes.
-	 */
-	public String transactionId;
+    /**
+     * An unique identifier for the last set of parameters applied. Ensures that
+     * setParameters can only be called based on a previous getParameters, and
+     * that there are no intervening changes.
+     */
+    public String transactionId;
 
-	/**
-	 * A list containing parameters for RTP encodings of media.
-	 */
-	public List<RTCRtpEncodingParameters> encodings;
+    /**
+     * A list containing parameters for RTP encodings of media.
+     */
+    public List<RTCRtpEncodingParameters> encodings;
 
 
-	@Override
-	public String toString() {
-		return String.format("%s [transactionId=%s, encodings=%s, headerExtensions=%s, rtcp=%s, codecs=%s]",
-				RTCRtpSendParameters.class.getSimpleName(), transactionId,
-				encodings, headerExtensions, rtcp, codecs);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [transactionId=%s, encodings=%s, headerExtensions=%s, rtcp=%s, codecs=%s]",
+                RTCRtpSendParameters.class.getSimpleName(), transactionId,
+                encodings, headerExtensions, rtcp, codecs);
+    }
 }

@@ -18,6 +18,6 @@ package dev.onvoid.webrtc.media.video;
 
 public interface VideoTrackSink {
 
-	void onVideoFrame(VideoFrame frame);
+    void onVideoFrame(VideoFrame frame);
 
 }

@@ -23,33 +23,33 @@ package dev.onvoid.webrtc;
  */
 public class RTCRtcpParameters {
 
-	/**
-	 * The Canonical Name (CNAME) used by RTCP (e.g. in SDES messages).
-	 */
-	public final String cName;
+    /**
+     * The Canonical Name (CNAME) used by RTCP (e.g. in SDES messages).
+     */
+    public final String cName;
 
-	/**
-	 * Whether reduced size RTCP is configured (if true) or compound RTCP.
-	 */
-	public final boolean reducedSize;
+    /**
+     * Whether reduced size RTCP is configured (if true) or compound RTCP.
+     */
+    public final boolean reducedSize;
 
 
-	/**
-	 * Creates an instance of RTCRtcpParameters with the specified canonical
-	 * name and the reduced size flag.
-	 *
-	 * @param cName       The Canonical Name used by RTCP.
-	 * @param reducedSize True if reduced size RTCP is configured, false
-	 *                    otherwise.
-	 */
-	public RTCRtcpParameters(String cName, boolean reducedSize) {
-		this.cName = cName;
-		this.reducedSize = reducedSize;
-	}
+    /**
+     * Creates an instance of RTCRtcpParameters with the specified canonical
+     * name and the reduced size flag.
+     *
+     * @param cName       The Canonical Name used by RTCP.
+     * @param reducedSize True if reduced size RTCP is configured, false
+     *                    otherwise.
+     */
+    public RTCRtcpParameters(String cName, boolean reducedSize) {
+        this.cName = cName;
+        this.reducedSize = reducedSize;
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s [cName=%s, reducedSize=%s]",
-				RTCRtcpParameters.class.getSimpleName(), cName, reducedSize);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [cName=%s, reducedSize=%s]",
+                RTCRtcpParameters.class.getSimpleName(), cName, reducedSize);
+    }
 }

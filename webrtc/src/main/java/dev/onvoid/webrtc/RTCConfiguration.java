@@ -28,46 +28,46 @@ import java.util.List;
  */
 public class RTCConfiguration {
 
-	/**
-	 * A list of ICE server's describing servers available to be used by ICE,
-	 * such as STUN and TURN servers.
-	 */
-	public List<RTCIceServer> iceServers;
+    /**
+     * A list of ICE server's describing servers available to be used by ICE,
+     * such as STUN and TURN servers.
+     */
+    public List<RTCIceServer> iceServers;
 
-	/**
-	 * Indicates which candidates the ICE Agent is allowed to use.
-	 */
-	public RTCIceTransportPolicy iceTransportPolicy;
+    /**
+     * Indicates which candidates the ICE Agent is allowed to use.
+     */
+    public RTCIceTransportPolicy iceTransportPolicy;
 
-	/**
-	 * Indicates which media-bundling policy to use when gathering ICE
-	 * candidates.
-	 */
-	public RTCBundlePolicy bundlePolicy;
+    /**
+     * Indicates which media-bundling policy to use when gathering ICE
+     * candidates.
+     */
+    public RTCBundlePolicy bundlePolicy;
 
-	/**
-	 * Indicates which rtcp-mux policy to use when gathering ICE candidates.
-	 */
-	public RTCRtcpMuxPolicy rtcpMuxPolicy;
+    /**
+     * Indicates which rtcp-mux policy to use when gathering ICE candidates.
+     */
+    public RTCRtcpMuxPolicy rtcpMuxPolicy;
 
-	/**
-	 * A list of certificates that the RTCPeerConnection uses to authenticate.
-	 * <p>
-	 * If this value is absent, then a default set of certificates is generated
-	 * for each RTCPeerConnection instance.
-	 */
-	public List<RTCCertificatePEM> certificates;
+    /**
+     * A list of certificates that the RTCPeerConnection uses to authenticate.
+     * <p>
+     * If this value is absent, then a default set of certificates is generated
+     * for each RTCPeerConnection instance.
+     */
+    public List<RTCCertificatePEM> certificates;
 
 
-	/**
-	 * Creates an instance of RTCConfiguration.
-	 */
-	public RTCConfiguration() {
-		iceServers = new ArrayList<>();
-		iceTransportPolicy = RTCIceTransportPolicy.ALL;
-		bundlePolicy = RTCBundlePolicy.BALANCED;
-		rtcpMuxPolicy = RTCRtcpMuxPolicy.REQUIRE;
-		certificates = new ArrayList<>();
-	}
+    /**
+     * Creates an instance of RTCConfiguration.
+     */
+    public RTCConfiguration() {
+        iceServers = new ArrayList<>();
+        iceTransportPolicy = RTCIceTransportPolicy.ALL;
+        bundlePolicy = RTCBundlePolicy.BALANCED;
+        rtcpMuxPolicy = RTCRtcpMuxPolicy.REQUIRE;
+        certificates = new ArrayList<>();
+    }
 
 }

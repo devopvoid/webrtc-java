@@ -16,56 +16,55 @@
 
 package dev.onvoid.webrtc.media.video.desktop;
 
-import java.awt.Dimension;
-import java.awt.Rectangle;
+import java.awt.*;
 import java.nio.ByteBuffer;
 import java.util.StringJoiner;
 
 public class DesktopFrame {
 
-	/**
-	 * The rectangle in full desktop coordinates.
-	 */
-	public final Rectangle frameRect;
+    /**
+     * The rectangle in full desktop coordinates.
+     */
+    public final Rectangle frameRect;
 
-	/**
-	 * The size of the frame in full desktop coordinate space.
-	 */
-	public final Dimension frameSize;
+    /**
+     * The size of the frame in full desktop coordinate space.
+     */
+    public final Dimension frameSize;
 
-	/**
-	 * The scale factor from DIPs to physical pixels of the frame.
-	 */
-	public final float scale;
+    /**
+     * The scale factor from DIPs to physical pixels of the frame.
+     */
+    public final float scale;
 
-	/**
-	 * Distance in the buffer between two neighboring rows in bytes.
-	 */
-	public final int stride;
+    /**
+     * Distance in the buffer between two neighboring rows in bytes.
+     */
+    public final int stride;
 
-	/**
-	 * The underlying frame buffer.
-	 */
-	public final ByteBuffer buffer;
+    /**
+     * The underlying frame buffer.
+     */
+    public final ByteBuffer buffer;
 
 
-	public DesktopFrame(Rectangle frameRect, Dimension frameSize, float scale, int stride, ByteBuffer buffer) {
-		this.frameRect = frameRect;
-		this.frameSize = frameSize;
-		this.scale = scale;
-		this.stride = stride;
-		this.buffer = buffer;
-	}
+    public DesktopFrame(Rectangle frameRect, Dimension frameSize, float scale, int stride, ByteBuffer buffer) {
+        this.frameRect = frameRect;
+        this.frameSize = frameSize;
+        this.scale = scale;
+        this.stride = stride;
+        this.buffer = buffer;
+    }
 
-	@Override
-	public String toString() {
-		return new StringJoiner(", ",
-				DesktopFrame.class.getSimpleName() + "[", "]")
-				.add("frameRect=" + frameRect)
-				.add("frameSize=" + frameSize)
-				.add("scale=" + scale)
-				.add("stride=" + stride)
-				.add("buffer=" + buffer)
-				.toString();
-	}
+    @Override
+    public String toString() {
+        return new StringJoiner(", ",
+                DesktopFrame.class.getSimpleName() + "[", "]")
+                .add("frameRect=" + frameRect)
+                .add("frameSize=" + frameSize)
+                .add("scale=" + scale)
+                .add("stride=" + stride)
+                .add("buffer=" + buffer)
+                .toString();
+    }
 }

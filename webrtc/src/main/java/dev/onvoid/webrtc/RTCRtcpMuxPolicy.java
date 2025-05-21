@@ -24,21 +24,21 @@ package dev.onvoid.webrtc;
  */
 public enum RTCRtcpMuxPolicy {
 
-	/**
-	 * Gather ICE candidates for both RTP and RTCP candidates. If the
-	 * remote-endpoint is capable of multiplexing RTCP, multiplex RTCP on the
-	 * RTP candidates. If it is not, use both the RTP and RTCP candidates
-	 * separately. Note that, the user agent MAY not implement non-multiplexed
-	 * RTCP, in which case it will reject attempts to construct an
-	 * RTCPeerConnection with the negotiate policy.
-	 */
-	NEGOTIATE,
+    /**
+     * Gather ICE candidates for both RTP and RTCP candidates. If the
+     * remote-endpoint is capable of multiplexing RTCP, multiplex RTCP on the
+     * RTP candidates. If it is not, use both the RTP and RTCP candidates
+     * separately. Note that, the user agent MAY not implement non-multiplexed
+     * RTCP, in which case it will reject attempts to construct an
+     * RTCPeerConnection with the negotiate policy.
+     */
+    NEGOTIATE,
 
-	/**
-	 * Gather ICE candidates only for RTP and multiplex RTCP on the RTP
-	 * candidates. If the remote endpoint is not capable of rtcp-mux, session
-	 * negotiation will fail.
-	 */
-	REQUIRE;
+    /**
+     * Gather ICE candidates only for RTP and multiplex RTCP on the RTP
+     * candidates. If the remote endpoint is not capable of rtcp-mux, session
+     * negotiation will fail.
+     */
+    REQUIRE;
 
 }

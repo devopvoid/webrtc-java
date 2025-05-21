@@ -24,25 +24,25 @@ package dev.onvoid.webrtc;
  */
 public class RTCOfferOptions extends RTCOfferAnswerOptions {
 
-	/**
-	 * When set to {@code true}, the generated description will have ICE
-	 * credentials that are different from the current credentials. Applying the
-	 * generated description will restart ICE.
-	 * <p>
-	 * When the value is set to {@code false}, and the current local description
-	 * has valid ICE credentials, the generated description will have the same
-	 * ICE credentials as the current value from the current local description.
-	 */
-	public boolean iceRestart;
+    /**
+     * When set to {@code true}, the generated description will have ICE
+     * credentials that are different from the current credentials. Applying the
+     * generated description will restart ICE.
+     * <p>
+     * When the value is set to {@code false}, and the current local description
+     * has valid ICE credentials, the generated description will have the same
+     * ICE credentials as the current value from the current local description.
+     */
+    public boolean iceRestart;
 
 
-	/**
-	 * Creates an instance of RTCOfferOptions.
-	 */
-	public RTCOfferOptions() {
-		super();
+    /**
+     * Creates an instance of RTCOfferOptions.
+     */
+    public RTCOfferOptions() {
+        super();
 
-		iceRestart = false;
-	}
+        iceRestart = false;
+    }
 
 }

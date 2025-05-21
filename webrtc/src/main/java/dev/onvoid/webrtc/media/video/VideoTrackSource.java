@@ -23,8 +23,8 @@ import dev.onvoid.webrtc.media.MediaSource;
  */
 public class VideoTrackSource extends MediaSource {
 
-	protected VideoTrackSource() {
+    protected VideoTrackSource() {
 
-	}
+    }
 
 }

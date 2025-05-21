@@ -32,91 +32,86 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class NativeLoader {
 
-	private static final Set<String> LOADED_LIB_SET = ConcurrentHashMap.newKeySet();
+    private static final Set<String> LOADED_LIB_SET = ConcurrentHashMap.newKeySet();
 
 
-	/**
-	 * Loads the specified native library. The <code>libName</code> argument
-	 * must not contain any platform specific prefix, file extension or path.
-	 *
-	 * @param libName The name of library to load.
-	 *
-	 * @throws Exception if the library could not be loaded.
-	 *
-	 * @see System#load(String)
-	 * @see System#loadLibrary(String)
-	 */
-	public static void loadLibrary(final String libName) throws Exception {
-		if (LOADED_LIB_SET.contains(libName)) {
-			return;
-		}
+    /**
+     * Loads the specified native library. The <code>libName</code> argument
+     * must not contain any platform specific prefix, file extension or path.
+     *
+     * @param libName The name of library to load.
+     * @throws Exception if the library could not be loaded.
+     * @see System#load(String)
+     * @see System#loadLibrary(String)
+     */
+    public static void loadLibrary(final String libName) throws Exception {
+        if (LOADED_LIB_SET.contains(libName)) {
+            return;
+        }
 
-		String libFileName = System.mapLibraryName(libName);
-		String tempName = removeExtension(libFileName);
-		String ext = getExtension(libFileName);
+        String libFileName = System.mapLibraryName(libName);
+        String tempName = removeExtension(libFileName);
+        String ext = getExtension(libFileName);
 
-		Path tempPath = Files.createTempFile(tempName, ext);
-		File tempFile = tempPath.toFile();
+        Path tempPath = Files.createTempFile(tempName, ext);
+        File tempFile = tempPath.toFile();
 
-		try (InputStream is = NativeLoader.class.getClassLoader().getResourceAsStream(libFileName)) {
-			Files.copy(is, tempPath, StandardCopyOption.REPLACE_EXISTING);
-		}
-		catch (Exception e) {
-			tempFile.delete();
+        try (InputStream is = NativeLoader.class.getClassLoader().getResourceAsStream(libFileName)) {
+            Files.copy(is, tempPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception e) {
+            tempFile.delete();
 
-			throw e;
-		}
+            throw e;
+        }
 
-		try {
-			System.load(tempPath.toAbsolutePath().toString());
+        try {
+            System.load(tempPath.toAbsolutePath().toString());
 
-			LOADED_LIB_SET.add(libName);
-		}
-		catch (Exception e) {
-			tempFile.delete();
+            LOADED_LIB_SET.add(libName);
+        } catch (Exception e) {
+            tempFile.delete();
 
-			throw e;
-		}
+            throw e;
+        }
 
-		if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
-			// Assume POSIX compliant file system, library can be deleted after loading.
-			tempFile.delete();
-		}
-		else {
-			tempFile.deleteOnExit();
-		}
-	}
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            // Assume POSIX compliant file system, library can be deleted after loading.
+            tempFile.delete();
+        } else {
+            tempFile.deleteOnExit();
+        }
+    }
 
-	private static String getExtension(String fileName) {
-		final int index = getExtensionIndex(fileName);
+    private static String getExtension(String fileName) {
+        final int index = getExtensionIndex(fileName);
 
-		if (index < 0) {
-			return "";
-		}
+        if (index < 0) {
+            return "";
+        }
 
-		return fileName.substring(index);
-	}
+        return fileName.substring(index);
+    }
 
-	private static String removeExtension(String fileName) {
-		final int index = getExtensionIndex(fileName);
+    private static String removeExtension(String fileName) {
+        final int index = getExtensionIndex(fileName);
 
-		if (index < 0) {
-			return fileName;
-		}
+        if (index < 0) {
+            return fileName;
+        }
 
-		return fileName.substring(0, index);
-	}
+        return fileName.substring(0, index);
+    }
 
-	private static int getExtensionIndex(String fileName) {
-		final String file = fileName.replace("\\", "/");
-		final int extSeparator = file.lastIndexOf(".");
-		final int pathSeparator = file.lastIndexOf("/");
+    private static int getExtensionIndex(String fileName) {
+        final String file = fileName.replace("\\", "/");
+        final int extSeparator = file.lastIndexOf(".");
+        final int pathSeparator = file.lastIndexOf("/");
 
-		if (pathSeparator > extSeparator) {
-			return -1;
-		}
+        if (pathSeparator > extSeparator) {
+            return -1;
+        }
 
-		return extSeparator;
-	}
+        return extSeparator;
+    }
 
 }

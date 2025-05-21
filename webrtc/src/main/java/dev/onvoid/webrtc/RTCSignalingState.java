@@ -24,37 +24,37 @@ package dev.onvoid.webrtc;
  */
 public enum RTCSignalingState {
 
-	/**
-	 * There is no offer/answer exchange in progress. This is also the initial
-	 * state, in which case the local and remote descriptions are empty.
-	 */
-	STABLE,
+    /**
+     * There is no offer/answer exchange in progress. This is also the initial
+     * state, in which case the local and remote descriptions are empty.
+     */
+    STABLE,
 
-	/**
-	 * A local description, of type "offer", has been successfully applied.
-	 */
-	HAVE_LOCAL_OFFER,
+    /**
+     * A local description, of type "offer", has been successfully applied.
+     */
+    HAVE_LOCAL_OFFER,
 
-	/**
-	 * A remote description of type "offer" has been successfully applied and a
-	 * local description of type "pranswer" has been successfully applied.
-	 */
-	HAVE_LOCAL_PR_ANSWER,
+    /**
+     * A remote description of type "offer" has been successfully applied and a
+     * local description of type "pranswer" has been successfully applied.
+     */
+    HAVE_LOCAL_PR_ANSWER,
 
-	/**
-	 * A remote description, of type "offer", has been successfully applied.
-	 */
-	HAVE_REMOTE_OFFER,
+    /**
+     * A remote description, of type "offer", has been successfully applied.
+     */
+    HAVE_REMOTE_OFFER,
 
-	/**
-	 * A local description of type "offer" has been successfully applied and a
-	 * remote description of type "pranswer" has been successfully applied.
-	 */
-	HAVE_REMOTE_PR_ANSWER,
+    /**
+     * A local description of type "offer" has been successfully applied and a
+     * remote description of type "pranswer" has been successfully applied.
+     */
+    HAVE_REMOTE_PR_ANSWER,
 
-	/**
-	 * The RTCPeerConnection has been closed.
-	 */
-	CLOSED;
+    /**
+     * The RTCPeerConnection has been closed.
+     */
+    CLOSED;
 
 }

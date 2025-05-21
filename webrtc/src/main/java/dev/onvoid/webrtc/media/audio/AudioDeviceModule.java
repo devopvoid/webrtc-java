@@ -16,9 +16,6 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-import static java.util.Objects.nonNull;
-import static java.util.Objects.requireNonNull;
-
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.internal.NativeLoader;
 
@@ -26,136 +23,138 @@ import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Objects.nonNull;
+import static java.util.Objects.requireNonNull;
+
 public class AudioDeviceModule extends DisposableNativeObject {
 
-	static {
-		try {
-			NativeLoader.loadLibrary("webrtc-java");
-		}
-		catch (Exception e) {
-			throw new RuntimeException("Load library 'webrtc-java' failed", e);
-		}
-	}
+    static {
+        try {
+            NativeLoader.loadLibrary("webrtc-java");
+        } catch (Exception e) {
+            throw new RuntimeException("Load library 'webrtc-java' failed", e);
+        }
+    }
 
 
-	private Map.Entry<AudioSink, Long> sinkEntry;
+    private Map.Entry<AudioSink, Long> sinkEntry;
 
-	private Map.Entry<AudioSource, Long> sourceEntry;
+    private Map.Entry<AudioSource, Long> sourceEntry;
 
 
-	public AudioDeviceModule() {
-		initialize(AudioLayer.kPlatformDefaultAudio);
-	}
+    public AudioDeviceModule() {
+        initialize(AudioLayer.kPlatformDefaultAudio);
+    }
 
-	public AudioDeviceModule(AudioLayer audioLayer) {
-		initialize(audioLayer);
-	}
+    public AudioDeviceModule(AudioLayer audioLayer) {
+        initialize(audioLayer);
+    }
 
-	@Override
-	public void dispose() {
-		if (nonNull(sinkEntry)) {
-			removeSinkInternal(sinkEntry.getValue());
-		}
-		if (nonNull(sourceEntry)) {
-			removeSourceInternal(sourceEntry.getValue());
-		}
+    @Override
+    public void dispose() {
+        if (nonNull(sinkEntry)) {
+            removeSinkInternal(sinkEntry.getValue());
+        }
+        if (nonNull(sourceEntry)) {
+            removeSourceInternal(sourceEntry.getValue());
+        }
 
-		sinkEntry = null;
-		sourceEntry = null;
+        sinkEntry = null;
+        sourceEntry = null;
 
-		disposeInternal();
-	}
+        disposeInternal();
+    }
 
-	public void setAudioSink(AudioSink sink) {
-		requireNonNull(sink);
+    public void setAudioSink(AudioSink sink) {
+        requireNonNull(sink);
 
-		if (nonNull(sinkEntry)) {
-			if (sink.equals(sinkEntry.getKey())) {
-				return;
-			}
+        if (nonNull(sinkEntry)) {
+            if (sink.equals(sinkEntry.getKey())) {
+                return;
+            }
 
-			removeSinkInternal(sinkEntry.getValue());
-		}
+            removeSinkInternal(sinkEntry.getValue());
+        }
 
-		final long nativeSink = addSinkInternal(sink);
+        final long nativeSink = addSinkInternal(sink);
 
-		sinkEntry = new SimpleEntry<>(sink, nativeSink);
-	}
+        sinkEntry = new SimpleEntry<>(sink, nativeSink);
+    }
 
-	public void setAudioSource(AudioSource source) {
-		requireNonNull(source);
+    public void setAudioSource(AudioSource source) {
+        requireNonNull(source);
 
-		if (nonNull(sourceEntry)) {
-			if (source.equals(sourceEntry.getKey())) {
-				return;
-			}
+        if (nonNull(sourceEntry)) {
+            if (source.equals(sourceEntry.getKey())) {
+                return;
+            }
 
-			removeSourceInternal(sourceEntry.getValue());
-		}
+            removeSourceInternal(sourceEntry.getValue());
+        }
 
-		final long nativeSource = addSourceInternal(source);
+        final long nativeSource = addSourceInternal(source);
 
-		sourceEntry = new SimpleEntry<>(source, nativeSource);
-	}
+        sourceEntry = new SimpleEntry<>(source, nativeSource);
+    }
 
-	public native void setStereoPlayout(boolean enabled);
+    public native void setStereoPlayout(boolean enabled);
 
-	public native void setStereoRecording(boolean enabled);
+    public native void setStereoRecording(boolean enabled);
 
-	public native void initPlayout();
+    public native void initPlayout();
 
-	public native void stopPlayout();
+    public native void stopPlayout();
 
-	public native void startPlayout();
+    public native void startPlayout();
 
-	public native void initRecording();
+    public native void initRecording();
 
-	public native void stopRecording();
+    public native void stopRecording();
 
-	public native void startRecording();
+    public native void startRecording();
 
-	public native List<AudioDevice> getPlayoutDevices();
+    public native List<AudioDevice> getPlayoutDevices();
 
-	public native List<AudioDevice> getRecordingDevices();
+    public native List<AudioDevice> getRecordingDevices();
 
-	public native void setPlayoutDevice(AudioDevice device);
+    public native void setPlayoutDevice(AudioDevice device);
 
-	public native void setRecordingDevice(AudioDevice device);
+    public native void setRecordingDevice(AudioDevice device);
 
-	public native boolean isSpeakerMuted();
+    public native boolean isSpeakerMuted();
 
-	public native boolean isMicrophoneMuted();
+    public native boolean isMicrophoneMuted();
 
-	public native int getSpeakerVolume();
+    public native int getSpeakerVolume();
 
-	public native int getMaxSpeakerVolume();
+    public native void setSpeakerVolume(int volume);
 
-	public native int getMinSpeakerVolume();
+    public native int getMaxSpeakerVolume();
 
-	public native int getMicrophoneVolume();
+    public native int getMinSpeakerVolume();
 
-	public native int getMaxMicrophoneVolume();
+    public native int getMicrophoneVolume();
 
-	public native int getMinMicrophoneVolume();
+    public native void setMicrophoneVolume(int volume);
 
-	public native void setSpeakerVolume(int volume);
+    public native int getMaxMicrophoneVolume();
 
-	public native void setSpeakerMute(boolean mute);
+    public native int getMinMicrophoneVolume();
 
-	public native void setMicrophoneVolume(int volume);
+    public native void setSpeakerMute(boolean mute);
 
-	public native void setMicrophoneMute(boolean mute);
+    public native void setMicrophoneMute(boolean mute);
 
-	private native void initialize(AudioLayer audioLayer);
+    private native void initialize(AudioLayer audioLayer);
 
-	private native void disposeInternal();
+    private native void disposeInternal();
 
-	private native long addSinkInternal(AudioSink sink);
+    private native long addSinkInternal(AudioSink sink);
 
-	private native void removeSinkInternal(long sinkHandle);
+    private native void removeSinkInternal(long sinkHandle);
 
-	private native long addSourceInternal(AudioSource source);
+    private native long addSourceInternal(AudioSource source);
 
-	private native void removeSourceInternal(long sourceHandle);
+    private native void removeSourceInternal(long sourceHandle);
 
 }

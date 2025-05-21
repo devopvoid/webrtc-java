@@ -18,6 +18,6 @@ package dev.onvoid.webrtc.media.audio;
 
 public interface AudioTrackSink {
 
-	void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames);
+    void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames);
 
 }

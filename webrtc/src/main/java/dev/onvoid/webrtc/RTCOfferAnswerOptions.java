@@ -24,22 +24,22 @@ package dev.onvoid.webrtc;
  */
 public class RTCOfferAnswerOptions {
 
-	/**
-	 * Many codecs and systems are capable of detecting "silence" and changing
-	 * their behavior in this case by doing things such as not transmitting any
-	 * media. In many cases, such as when dealing with emergency calling or
-	 * sounds other than spoken voice, it is desirable to be able to turn off
-	 * this behavior. This option allows the application to provide information
-	 * about whether it wishes this type of processing enabled or disabled.
-	 */
-	public boolean voiceActivityDetection;
+    /**
+     * Many codecs and systems are capable of detecting "silence" and changing
+     * their behavior in this case by doing things such as not transmitting any
+     * media. In many cases, such as when dealing with emergency calling or
+     * sounds other than spoken voice, it is desirable to be able to turn off
+     * this behavior. This option allows the application to provide information
+     * about whether it wishes this type of processing enabled or disabled.
+     */
+    public boolean voiceActivityDetection;
 
 
-	/**
-	 * Creates an instance of RTCOfferAnswerOptions.
-	 */
-	public RTCOfferAnswerOptions() {
-		voiceActivityDetection = true;
-	}
+    /**
+     * Creates an instance of RTCOfferAnswerOptions.
+     */
+    public RTCOfferAnswerOptions() {
+        voiceActivityDetection = true;
+    }
 
 }

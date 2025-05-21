@@ -34,5 +34,4 @@ import dev.onvoid.webrtc.internal.NativeObject;
 public class RTCIceTransport extends NativeObject {
 
 
-
 }

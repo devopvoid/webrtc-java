@@ -16,20 +16,12 @@
 
 package dev.onvoid.webrtc.media;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-import dev.onvoid.webrtc.media.audio.AudioDevice;
-import dev.onvoid.webrtc.media.video.VideoCaptureCapability;
-import dev.onvoid.webrtc.media.video.VideoDevice;
-
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class MediaDevicesTests {
 
-	@Test
-	void getAudioDevices() {
+    @Test
+    void getAudioDevices() {
 		/*
 		List<AudioDevice> captureDevices = MediaDevices.getAudioCaptureDevices();
 		List<AudioDevice> renderDevices = MediaDevices.getAudioRenderDevices();
@@ -37,10 +29,10 @@ class MediaDevicesTests {
 		assertNotNull(captureDevices);
 		assertNotNull(renderDevices);
   		*/
-	}
+    }
 
-	@Test
-	void getVideoDevices() {
+    @Test
+    void getVideoDevices() {
 		/*
 		List<VideoDevice> captureDevices = MediaDevices.getVideoCaptureDevices();
 
@@ -52,10 +44,10 @@ class MediaDevicesTests {
 			assertNotNull(capabilities);
 		}
 		*/
-	}
+    }
 
-	@Test
-	void deviceChangeListener() {
+    @Test
+    void deviceChangeListener() {
 		/*
 		DeviceChangeListener listener = new DeviceChangeListener() {
 
@@ -73,5 +65,5 @@ class MediaDevicesTests {
 		MediaDevices.addDeviceChangeListener(listener);
 		MediaDevices.removeDeviceChangeListener(listener);
 		*/
-	}
+    }
 }

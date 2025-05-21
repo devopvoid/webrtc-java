@@ -16,9 +16,9 @@
 
 package dev.onvoid.webrtc;
 
-import java.util.List;
-
 import dev.onvoid.webrtc.internal.NativeObject;
+
+import java.util.List;
 
 /**
  * Allows an application to access information about the Datagram Transport
@@ -36,42 +36,42 @@ import dev.onvoid.webrtc.internal.NativeObject;
  */
 public class RTCDtlsTransport extends NativeObject {
 
-	/**
-	 * Returns the underlying transport that is used to send and receive
-	 * packets. The underlying transport may not be shared between multiple
-	 * active RTCDtlsTransport objects.
-	 *
-	 * @return The transport that is used to send and receive packets.
-	 */
-	public native RTCIceTransport getIceTransport();
+    /**
+     * Returns the underlying transport that is used to send and receive
+     * packets. The underlying transport may not be shared between multiple
+     * active RTCDtlsTransport objects.
+     *
+     * @return The transport that is used to send and receive packets.
+     */
+    public native RTCIceTransport getIceTransport();
 
-	/**
-	 * Returns the current Datagram Transport Layer Security (DTLS) transport
-	 * state.
-	 *
-	 * @return The current DTLS transport state.
-	 */
-	public native RTCDtlsTransportState getState();
+    /**
+     * Returns the current Datagram Transport Layer Security (DTLS) transport
+     * state.
+     *
+     * @return The current DTLS transport state.
+     */
+    public native RTCDtlsTransportState getState();
 
-	/**
-	 * Returns the certificate chain in use by the remote side, with each
-	 * certificate encoded in PEM format.
-	 *
-	 * @return The certificate chain in use by the remote side.
-	 */
-	public native List<RTCCertificatePEM> getRemoteCertificates();
+    /**
+     * Returns the certificate chain in use by the remote side, with each
+     * certificate encoded in PEM format.
+     *
+     * @return The certificate chain in use by the remote side.
+     */
+    public native List<RTCCertificatePEM> getRemoteCertificates();
 
-	/**
-	 * Register an observer to receive events from this transport. The observer
-	 * will replace the previously registered observer.
-	 *
-	 * @param observer The new DTLS transport observer.
-	 */
-	public native void registerObserver(RTCDtlsTransportObserver observer);
+    /**
+     * Register an observer to receive events from this transport. The observer
+     * will replace the previously registered observer.
+     *
+     * @param observer The new DTLS transport observer.
+     */
+    public native void registerObserver(RTCDtlsTransportObserver observer);
 
-	/**
-	 * Unregister the last set RTCDtlsTransportObserver.
-	 */
-	public native void unregisterObserver();
+    /**
+     * Unregister the last set RTCDtlsTransportObserver.
+     */
+    public native void unregisterObserver();
 
 }

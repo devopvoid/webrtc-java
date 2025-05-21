@@ -16,13 +16,9 @@
 
 package dev.onvoid.webrtc;
 
-import static java.util.Objects.nonNull;
+import java.util.concurrent.*;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import static java.util.Objects.nonNull;
 
 /**
  * {@link SetSessionDescriptionObserver} implementation providing synchronized
@@ -33,62 +29,61 @@ import java.util.concurrent.TimeoutException;
  */
 class TestSetDescObserver implements SetSessionDescriptionObserver, Future<Void> {
 
-	private CountDownLatch latch = new CountDownLatch(1);
+    private CountDownLatch latch = new CountDownLatch(1);
 
-	private String error;
+    private String error;
 
 
-	@Override
-	public void onSuccess() {
-		latch.countDown();
-	}
+    @Override
+    public void onSuccess() {
+        latch.countDown();
+    }
 
-	@Override
-	public void onFailure(String error) {
-		this.error = error;
+    @Override
+    public void onFailure(String error) {
+        this.error = error;
 
-		latch.countDown();
-	}
+        latch.countDown();
+    }
 
-	@Override
-	public boolean cancel(boolean mayInterruptIfRunning) {
-		return false;
-	}
+    @Override
+    public boolean cancel(boolean mayInterruptIfRunning) {
+        return false;
+    }
 
-	@Override
-	public boolean isCancelled() {
-		return false;
-	}
+    @Override
+    public boolean isCancelled() {
+        return false;
+    }
 
-	@Override
-	public boolean isDone() {
-		return latch.getCount() == 0;
-	}
+    @Override
+    public boolean isDone() {
+        return latch.getCount() == 0;
+    }
 
-	@Override
-	public Void get() throws InterruptedException, ExecutionException {
-		latch.await();
+    @Override
+    public Void get() throws InterruptedException, ExecutionException {
+        latch.await();
 
-		checkError();
+        checkError();
 
-		return null;
-	}
+        return null;
+    }
 
-	@Override
-	public Void get(long timeout, TimeUnit unit)
-			throws InterruptedException, ExecutionException, TimeoutException {
-		if (latch.await(timeout, unit)) {
-			checkError();
-			return null;
-		}
-		else {
-			throw new TimeoutException();
-		}
-	}
+    @Override
+    public Void get(long timeout, TimeUnit unit)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        if (latch.await(timeout, unit)) {
+            checkError();
+            return null;
+        } else {
+            throw new TimeoutException();
+        }
+    }
 
-	private void checkError() throws ExecutionException {
-		if (nonNull(error)) {
-			throw new ExecutionException(error, new IllegalStateException());
-		}
-	}
+    private void checkError() throws ExecutionException {
+        if (nonNull(error)) {
+            throw new ExecutionException(error, new IllegalStateException());
+        }
+    }
 }

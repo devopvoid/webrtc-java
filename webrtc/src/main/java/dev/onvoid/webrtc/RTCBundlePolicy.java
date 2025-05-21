@@ -26,23 +26,23 @@ package dev.onvoid.webrtc;
  */
 public enum RTCBundlePolicy {
 
-	/**
-	 * Gather ICE candidates for each media type in use (audio, video, and
-	 * data). If the remote endpoint is not bundle-aware, negotiate only one
-	 * audio and video track on separate transports.
-	 */
-	BALANCED,
+    /**
+     * Gather ICE candidates for each media type in use (audio, video, and
+     * data). If the remote endpoint is not bundle-aware, negotiate only one
+     * audio and video track on separate transports.
+     */
+    BALANCED,
 
-	/**
-	 * Gather ICE candidates for only one track. If the remote endpoint is not
-	 * bundle-aware, negotiate only one media track.
-	 */
-	MAX_BUNDLE,
+    /**
+     * Gather ICE candidates for only one track. If the remote endpoint is not
+     * bundle-aware, negotiate only one media track.
+     */
+    MAX_BUNDLE,
 
-	/**
-	 * Gather ICE candidates for each track. If the remote endpoint is not
-	 * bundle-aware, negotiate all media tracks on separate transports.
-	 */
-	MAX_COMPAT;
+    /**
+     * Gather ICE candidates for each track. If the remote endpoint is not
+     * bundle-aware, negotiate all media tracks on separate transports.
+     */
+    MAX_COMPAT;
 
 }

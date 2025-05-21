@@ -21,8 +21,8 @@ import dev.onvoid.webrtc.internal.NativeLoader;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.*;
-import dev.onvoid.webrtc.media.video.VideoTrackSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.media.video.VideoTrackSource;
 
 /**
  * The PeerConnectionFactory is the main entry point for a WebRTC application.
@@ -33,141 +33,130 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
  */
 public class PeerConnectionFactory extends DisposableNativeObject {
 
-	static {
-		try {
-			NativeLoader.loadLibrary("webrtc-java");
-		}
-		catch (Exception e) {
-			throw new RuntimeException("Load library 'webrtc-java' failed", e);
-		}
-	}
+    static {
+        try {
+            NativeLoader.loadLibrary("webrtc-java");
+        } catch (Exception e) {
+            throw new RuntimeException("Load library 'webrtc-java' failed", e);
+        }
+    }
 
+    public AudioEncoderFactory audioEncoderFactory;
+    public AudioDecoderFactory audioDecoderFactory;
+    @SuppressWarnings("unused")
+    private long networkThreadHandle;
+    @SuppressWarnings("unused")
+    private long signalingThreadHandle;
+    @SuppressWarnings("unused")
+    private long workerThreadHandle;
 
-	@SuppressWarnings("unused")
-	private long networkThreadHandle;
+    /**
+     * Creates an instance of PeerConnectionFactory.
+     */
+    public PeerConnectionFactory() {
+        this(null, null);
+    }
 
-	@SuppressWarnings("unused")
-	private long signalingThreadHandle;
+    /**
+     * Creates an instance of PeerConnectionFactory with the provided audio
+     * processing module.
+     *
+     * @param audioProcessing The custom audio processing module.
+     */
+    public PeerConnectionFactory(AudioProcessing audioProcessing) {
+        initialize(null, audioProcessing);
+    }
 
-	@SuppressWarnings("unused")
-	private long workerThreadHandle;
+    /**
+     * Creates an instance of PeerConnectionFactory with the provided audio
+     * device module.
+     *
+     * @param audioModule The custom audio device module.
+     */
+    public PeerConnectionFactory(AudioDeviceModule audioModule) {
+        initialize(audioModule, null);
+    }
 
-	public AudioEncoderFactory audioEncoderFactory;
-	public AudioDecoderFactory audioDecoderFactory;
+    /**
+     * Creates an instance of PeerConnectionFactory with provided modules for
+     * audio devices and audio processing.
+     *
+     * @param audioModule     The custom audio device module.
+     * @param audioProcessing The custom audio processing module.
+     */
+    public PeerConnectionFactory(AudioDeviceModule audioModule,
+                                 AudioProcessing audioProcessing) {
+        initialize(audioModule, audioProcessing);
+    }
 
-	/**
-	 * Creates an instance of PeerConnectionFactory.
-	 */
-	public PeerConnectionFactory() {
-		this(null, null);
-	}
+    /**
+     * Creates an {@link AudioTrackSource}. The audio source may be used by one
+     * or more {@link AudioTrack}s.
+     *
+     * @param options Audio options to control the audio processing.
+     * @return The created audio source.
+     */
+    public native AudioTrackSource createAudioSource(AudioOptions options);
 
-	/**
-	 * Creates an instance of PeerConnectionFactory with the provided audio
-	 * processing module.
-	 *
-	 * @param audioProcessing The custom audio processing module.
-	 */
-	public PeerConnectionFactory(AudioProcessing audioProcessing) {
-		initialize(null, audioProcessing);
-	}
+    /**
+     * Creates an new {@link AudioTrack}. The audio track can be added to the
+     * {@link RTCPeerConnection} using the {@link RTCPeerConnection#addTrack
+     * addTrack} or {@link RTCPeerConnection#addTransceiver addTransceiver}
+     * methods.
+     *
+     * @param label  The identifier string of the audio track.
+     * @param source The audio source that provides audio data.
+     * @return The created audio track.
+     */
+    public native AudioTrack createAudioTrack(String label, AudioTrackSource source);
 
-	/**
-	 * Creates an instance of PeerConnectionFactory with the provided audio
-	 * device module.
-	 *
-	 * @param audioModule The custom audio device module.
-	 */
-	public PeerConnectionFactory(AudioDeviceModule audioModule) {
-		initialize(audioModule, null);
-	}
+    /**
+     * Creates a new {@link VideoTrack}. The video track can be added to the
+     * {@link RTCPeerConnection} using the {@link RTCPeerConnection#addTrack
+     * addTrack} or {@link RTCPeerConnection#addTransceiver addTransceiver}
+     * methods.
+     *
+     * @param label  The identifier string of the video track.
+     * @param source The video source that provides video data.
+     * @return The created video track.
+     */
+    public native VideoTrack createVideoTrack(String label, VideoTrackSource source);
 
-	/**
-	 * Creates an instance of PeerConnectionFactory with provided modules for
-	 * audio devices and audio processing.
-	 *
-	 * @param audioModule     The custom audio device module.
-	 * @param audioProcessing The custom audio processing module.
-	 */
-	public PeerConnectionFactory(AudioDeviceModule audioModule,
-			AudioProcessing audioProcessing) {
-		initialize(audioModule, audioProcessing);
-	}
+    /**
+     * Creates a new {@link RTCPeerConnection}.
+     *
+     * @param config   The peer connection configuration.
+     * @param observer The observer that receives peer connection state
+     *                 changes.
+     * @return The created peer connection.
+     */
+    public native RTCPeerConnection createPeerConnection(
+            RTCConfiguration config, PeerConnectionObserver observer);
 
-	/**
-	 * Creates an {@link AudioTrackSource}. The audio source may be used by one
-	 * or more {@link AudioTrack}s.
-	 *
-	 * @param options Audio options to control the audio processing.
-	 *
-	 * @return The created audio source.
-	 */
-	public native AudioTrackSource createAudioSource(AudioOptions options);
+    /**
+     * Returns the capabilities of the system for receiving media of the given
+     * media type.
+     *
+     * @param type The type value must be either {@code AUDIO} or {@code
+     *             VIDEO}.
+     * @return The supported capabilities for an {@link RTCRtpReceiver}.
+     */
+    public native RTCRtpCapabilities getRtpReceiverCapabilities(MediaType type);
 
-	/**
-	 * Creates an new {@link AudioTrack}. The audio track can be added to the
-	 * {@link RTCPeerConnection} using the {@link RTCPeerConnection#addTrack
-	 * addTrack} or {@link RTCPeerConnection#addTransceiver addTransceiver}
-	 * methods.
-	 *
-	 * @param label  The identifier string of the audio track.
-	 * @param source The audio source that provides audio data.
-	 *
-	 * @return The created audio track.
-	 */
-	public native AudioTrack createAudioTrack(String label, AudioTrackSource source);
+    /**
+     * Returns the capabilities of the system for sending media of the given
+     * media type.
+     *
+     * @param type The type value must be either {@code AUDIO} or {@code
+     *             VIDEO}.
+     * @return The supported capabilities for an {@link RTCRtpSender}.
+     */
+    public native RTCRtpCapabilities getRtpSenderCapabilities(MediaType type);
 
-	/**
-	 * Creates a new {@link VideoTrack}. The video track can be added to the
-	 * {@link RTCPeerConnection} using the {@link RTCPeerConnection#addTrack
-	 * addTrack} or {@link RTCPeerConnection#addTransceiver addTransceiver}
-	 * methods.
-	 *
-	 * @param label  The identifier string of the video track.
-	 * @param source The video source that provides video data.
-	 *
-	 * @return The created video track.
-	 */
-	public native VideoTrack createVideoTrack(String label, VideoTrackSource source);
+    @Override
+    public native void dispose();
 
-	/**
-	 * Creates a new {@link RTCPeerConnection}.
-	 *
-	 * @param config   The peer connection configuration.
-	 * @param observer The observer that receives peer connection state
-	 *                 changes.
-	 *
-	 * @return The created peer connection.
-	 */
-	public native RTCPeerConnection createPeerConnection(
-			RTCConfiguration config, PeerConnectionObserver observer);
-
-	/**
-	 * Returns the capabilities of the system for receiving media of the given
-	 * media type.
-	 *
-	 * @param type The type value must be either {@code AUDIO} or {@code
-	 *             VIDEO}.
-	 *
-	 * @return The supported capabilities for an {@link RTCRtpReceiver}.
-	 */
-	public native RTCRtpCapabilities getRtpReceiverCapabilities(MediaType type);
-
-	/**
-	 * Returns the capabilities of the system for sending media of the given
-	 * media type.
-	 *
-	 * @param type The type value must be either {@code AUDIO} or {@code
-	 *             VIDEO}.
-	 *
-	 * @return The supported capabilities for an {@link RTCRtpSender}.
-	 */
-	public native RTCRtpCapabilities getRtpSenderCapabilities(MediaType type);
-
-	@Override
-	public native void dispose();
-
-	private native void initialize(AudioDeviceModule audioModule,
-			AudioProcessing audioProcessing);
+    private native void initialize(AudioDeviceModule audioModule,
+                                   AudioProcessing audioProcessing);
 
 }

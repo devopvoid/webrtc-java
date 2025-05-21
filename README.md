@@ -5,40 +5,52 @@
 
 Java native interface implementation based on the free, open [WebRTC](https://webrtc.org) project. The goal of this project is to enable development of RTC applications for desktop platforms running Java. This project wraps the [WebRTC Native API](https://webrtc.github.io/webrtc-org/native-code/native-apis) and is similar to the [JS API](https://w3c.github.io/webrtc-pc).
 
+### Repository
+
+```xml
+<repository>
+    <name>singlerrrepo</name>
+    <url>https://github.com/singlerr/mvn-repo/raw/maven2/</url>
+</repository>
+```
+
 ### Maven
 
 ```xml
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
-    <version>0.9.0</version>
+    <version>0.11.0-SNAPSHOT</version>
 </dependency>
 ```
 
 ### Gradle
 
 ```groovy
-implementation "dev.onvoid.webrtc:webrtc-java:0.9.0"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "windows-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "macos-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "macos-aarch64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "linux-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "linux-aarch64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.9.0", classifier: "linux-aarch32"
+implementation "dev.onvoid.webrtc:webrtc-java:0.11.0-SNAPSHOT"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.11.0-SNAPSHOT", classifier: "windows-x86_64"
 ```
 
 ### Supported Platforms
 Maven Central artifacts contain native libraries that can be loaded on the following platforms:
 
 <table>
-  <tr>
-    <td>Linux</td>
-    <td>x86_64, arm64, arm32</td>
-  </tr>
-  <tr>
-    <td>macOS</td>
-    <td>x86_64, arm64</td>
-  </tr>
+
+[//]: # (  <tr>)
+
+[//]: # (    <td>Linux</td>)
+
+[//]: # (    <td>x86_64, arm64, arm32</td>)
+
+[//]: # (  </tr>)
+
+[//]: # (  <tr>)
+
+[//]: # (    <td>macOS</td>)
+
+[//]: # (    <td>x86_64, arm64</td>)
+
+[//]: # (  </tr>)
   <tr>
     <td>Windows</td>
     <td>x86_64</td>

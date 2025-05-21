@@ -29,49 +29,49 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
  */
 public class MediaStream extends DisposableNativeObject {
 
-	private MediaStream() {
+    private MediaStream() {
 
-	}
+    }
 
-	/**
-	 * Returns the media stream ID which was initialized when the object was
-	 * created.
-	 *
-	 * @return The media stream ID.
-	 */
-	public native String id();
+    /**
+     * Returns the media stream ID which was initialized when the object was
+     * created.
+     *
+     * @return The media stream ID.
+     */
+    public native String id();
 
-	/**
-	 * Returns an array of MediaStreamTrack objects representing the audio
-	 * tracks in this stream.
-	 *
-	 * @return The audio tracks in this stream.
-	 */
-	public native AudioTrack[] getAudioTracks();
+    /**
+     * Returns an array of MediaStreamTrack objects representing the audio
+     * tracks in this stream.
+     *
+     * @return The audio tracks in this stream.
+     */
+    public native AudioTrack[] getAudioTracks();
 
-	/**
-	 * Returns an array of MediaStreamTrack objects representing the video
-	 * tracks in this stream.
-	 *
-	 * @return The video tracks in this stream.
-	 */
-	public native VideoTrack[] getVideoTracks();
+    /**
+     * Returns an array of MediaStreamTrack objects representing the video
+     * tracks in this stream.
+     *
+     * @return The video tracks in this stream.
+     */
+    public native VideoTrack[] getVideoTracks();
 
-	/**
-	 * Adds the given MediaStreamTrack to this MediaStream.
-	 *
-	 * @param track The track to add.
-	 */
-	public native void addTrack(MediaStreamTrack track);
+    /**
+     * Adds the given MediaStreamTrack to this MediaStream.
+     *
+     * @param track The track to add.
+     */
+    public native void addTrack(MediaStreamTrack track);
 
-	/**
-	 * Removes the given MediaStreamTrack object from this MediaStream.
-	 *
-	 * @param track The track to remove.
-	 */
-	public native void removeTrack(MediaStreamTrack track);
+    /**
+     * Removes the given MediaStreamTrack object from this MediaStream.
+     *
+     * @param track The track to remove.
+     */
+    public native void removeTrack(MediaStreamTrack track);
 
-	@Override
-	public native void dispose();
+    @Override
+    public native void dispose();
 
 }

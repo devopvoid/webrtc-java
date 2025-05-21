@@ -16,22 +16,21 @@
 
 package dev.onvoid.webrtc.media;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
-
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class MediaSourceTests extends TestBase {
 
-	@Test
-	void audioSourceStateAfterCreation() {
-		AudioOptions audioOptions = new AudioOptions();
-		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
+    @Test
+    void audioSourceStateAfterCreation() {
+        AudioOptions audioOptions = new AudioOptions();
+        AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 
-		assertEquals(MediaSource.State.LIVE, audioSource.getState());
-	}
+        assertEquals(MediaSource.State.LIVE, audioSource.getState());
+    }
 
 }

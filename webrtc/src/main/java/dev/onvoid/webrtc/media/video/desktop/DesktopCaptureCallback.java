@@ -20,6 +20,6 @@ import dev.onvoid.webrtc.media.video.VideoFrame;
 
 public interface DesktopCaptureCallback {
 
-	void onCaptureResult(DesktopCapturer.Result result, VideoFrame frame);
+    void onCaptureResult(DesktopCapturer.Result result, VideoFrame frame);
 
 }

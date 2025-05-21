@@ -23,65 +23,65 @@ package dev.onvoid.webrtc;
  */
 public class RTCRtpEncodingParameters {
 
-	/**
-	 * If unset, a value is chosen by the implementation.
-	 * <br>
-	 * Note that the chosen value is NOT returned by GetParameters, because it
-	 * may change due to an SSRC conflict, in which case the conflict is handled
-	 * internally without any event. Another way of looking at this is that an
-	 * unset SSRC acts as a "wildcard" SSRC.
-	 */
-	public Long ssrc;
+    /**
+     * If unset, a value is chosen by the implementation.
+     * <br>
+     * Note that the chosen value is NOT returned by GetParameters, because it
+     * may change due to an SSRC conflict, in which case the conflict is handled
+     * internally without any event. Another way of looking at this is that an
+     * unset SSRC acts as a "wildcard" SSRC.
+     */
+    public Long ssrc;
 
-	/**
-	 * Indicates that this encoding is actively being sent. Setting it to false
-	 * causes this encoding to no longer be sent. Setting it to true causes this
-	 * encoding to be sent.
-	 */
-	public Boolean active;
+    /**
+     * Indicates that this encoding is actively being sent. Setting it to false
+     * causes this encoding to no longer be sent. Setting it to true causes this
+     * encoding to be sent.
+     */
+    public Boolean active;
 
-	/**
-	 * When present, indicates the maximum bitrate that can be used to send this
-	 * encoding. If unset, there is no maximum bitrate.
-	 */
-	public Integer maxBitrate;
+    /**
+     * When present, indicates the maximum bitrate that can be used to send this
+     * encoding. If unset, there is no maximum bitrate.
+     */
+    public Integer maxBitrate;
 
-	/**
-	 * When present, indicates the minimum bitrate that can be used to send this
-	 * encoding. If unset, there is no minimum bitrate.
-	 */
-	public Integer minBitrate;
+    /**
+     * When present, indicates the minimum bitrate that can be used to send this
+     * encoding. If unset, there is no minimum bitrate.
+     */
+    public Integer minBitrate;
 
-	/**
-	 * When present, indicates the maximum frame rate that can be used to send
-	 * this encoding, in frames per second.
-	 */
-	public Double maxFramerate;
+    /**
+     * When present, indicates the maximum frame rate that can be used to send
+     * this encoding, in frames per second.
+     */
+    public Double maxFramerate;
 
-	/**
-	 * Only present if the sender's kind is "video". The video's resolution will
-	 * be scaled down in each dimension by the given value before sending. For
-	 * example, if the value is 2.0, the video will be scaled down by a factor
-	 * of 2 in each dimension, resulting in sending a video of one quarter the
-	 * size. If the value is 1.0, the video will not be affected. The value must
-	 * be greater than or equal to 1.0. By default, the sender will not apply
-	 * any scaling
-	 */
-	public Double scaleResolutionDownBy;
+    /**
+     * Only present if the sender's kind is "video". The video's resolution will
+     * be scaled down in each dimension by the given value before sending. For
+     * example, if the value is 2.0, the video will be scaled down by a factor
+     * of 2 in each dimension, resulting in sending a video of one quarter the
+     * size. If the value is 1.0, the video will not be affected. The value must
+     * be greater than or equal to 1.0. By default, the sender will not apply
+     * any scaling
+     */
+    public Double scaleResolutionDownBy;
 
 
-	/**
-	 * Creates an instance of RTCRtpEncodingParameters.
-	 */
-	public RTCRtpEncodingParameters() {
-		active = true;
-	}
+    /**
+     * Creates an instance of RTCRtpEncodingParameters.
+     */
+    public RTCRtpEncodingParameters() {
+        active = true;
+    }
 
-	@Override
-	public String toString() {
-		return "RTCRtpEncodingParameters{" + "ssrc=" + ssrc + ", active="
-				+ active + ", maxBitrate=" + maxBitrate + ", minBitrate="
-				+ minBitrate + ", maxFramerate=" + maxFramerate
-				+ ", scaleResolutionDownBy=" + scaleResolutionDownBy + '}';
-	}
+    @Override
+    public String toString() {
+        return "RTCRtpEncodingParameters{" + "ssrc=" + ssrc + ", active="
+                + active + ", maxBitrate=" + maxBitrate + ", minBitrate="
+                + minBitrate + ", maxFramerate=" + maxFramerate
+                + ", scaleResolutionDownBy=" + scaleResolutionDownBy + '}';
+    }
 }

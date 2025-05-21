@@ -16,13 +16,9 @@
 
 package dev.onvoid.webrtc;
 
-import static java.util.Objects.nonNull;
+import java.util.concurrent.*;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import static java.util.Objects.nonNull;
 
 /**
  * {@link CreateSessionDescriptionObserver} implementation providing
@@ -33,66 +29,65 @@ import java.util.concurrent.TimeoutException;
  */
 class TestCreateDescObserver implements CreateSessionDescriptionObserver, Future<RTCSessionDescription> {
 
-	private CountDownLatch latch = new CountDownLatch(1);
+    private CountDownLatch latch = new CountDownLatch(1);
 
-	private RTCSessionDescription description;
+    private RTCSessionDescription description;
 
-	private String error;
+    private String error;
 
 
-	@Override
-	public void onSuccess(RTCSessionDescription description) {
-		this.description = description;
+    @Override
+    public void onSuccess(RTCSessionDescription description) {
+        this.description = description;
 
-		latch.countDown();
-	}
+        latch.countDown();
+    }
 
-	@Override
-	public void onFailure(String error) {
-		this.error = error;
+    @Override
+    public void onFailure(String error) {
+        this.error = error;
 
-		latch.countDown();
-	}
+        latch.countDown();
+    }
 
-	@Override
-	public boolean cancel(boolean mayInterruptIfRunning) {
-		return false;
-	}
+    @Override
+    public boolean cancel(boolean mayInterruptIfRunning) {
+        return false;
+    }
 
-	@Override
-	public boolean isCancelled() {
-		return false;
-	}
+    @Override
+    public boolean isCancelled() {
+        return false;
+    }
 
-	@Override
-	public boolean isDone() {
-		return latch.getCount() == 0;
-	}
+    @Override
+    public boolean isDone() {
+        return latch.getCount() == 0;
+    }
 
-	@Override
-	public RTCSessionDescription get() throws InterruptedException, ExecutionException {
-		latch.await();
+    @Override
+    public RTCSessionDescription get() throws InterruptedException, ExecutionException {
+        latch.await();
 
-		checkError();
+        checkError();
 
-		return description;
-	}
+        return description;
+    }
 
-	@Override
-	public RTCSessionDescription get(long timeout, TimeUnit unit)
-			throws InterruptedException, ExecutionException, TimeoutException {
-		if (latch.await(timeout, unit)) {
-			checkError();
-			return description;
-		}
-		else {
-			throw new TimeoutException();
-		}
-	}
+    @Override
+    public RTCSessionDescription get(long timeout, TimeUnit unit)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        if (latch.await(timeout, unit)) {
+            checkError();
+            return description;
+        } else {
+            throw new TimeoutException();
+        }
+    }
 
-	private void checkError() throws ExecutionException {
-		if (nonNull(error)) {
-			throw new ExecutionException(error, new IllegalStateException());
-		}
-	}
+    private void checkError() throws ExecutionException {
+        if (nonNull(error)) {
+            throw new ExecutionException(error, new IllegalStateException());
+        }
+    }
 }

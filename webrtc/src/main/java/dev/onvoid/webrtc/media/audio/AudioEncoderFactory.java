@@ -10,8 +10,7 @@ public class AudioEncoderFactory extends NativeObject {
     static {
         try {
             NativeLoader.loadLibrary("webrtc-java");
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             throw new RuntimeException("Load library 'webrtc-java' failed", e);
         }
     }

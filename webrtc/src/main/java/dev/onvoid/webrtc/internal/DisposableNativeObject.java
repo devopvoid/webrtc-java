@@ -24,9 +24,9 @@ package dev.onvoid.webrtc.internal;
  */
 public abstract class DisposableNativeObject extends NativeObject {
 
-	/**
-	 * Invoke native object destructors and free native resources.
-	 */
-	public abstract void dispose();
+    /**
+     * Invoke native object destructors and free native resources.
+     */
+    public abstract void dispose();
 
 }

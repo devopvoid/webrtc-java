@@ -19,51 +19,50 @@ package dev.onvoid.webrtc.media.audio;
 /**
  * Audio options to control AudioTracks.
  *
- * @link https://www.w3.org/TR/mediacapture-streams/
- *
  * @author Alex Andres
+ * @link https://www.w3.org/TR/mediacapture-streams/
  */
 public class AudioOptions {
 
-	/**
-	 * When one or more audio streams is being played in the processes of
-	 * various microphones, it is often desirable to attempt to remove the sound
-	 * being played from the input signals recorded by the microphones. This is
-	 * referred to as echo cancellation. There are cases where it is not needed
-	 * and it is desirable to turn it off so that no audio artifacts are
-	 * introduced. This allows applications to control this behavior.
-	 */
-	public boolean echoCancellation;
+    /**
+     * When one or more audio streams is being played in the processes of
+     * various microphones, it is often desirable to attempt to remove the sound
+     * being played from the input signals recorded by the microphones. This is
+     * referred to as echo cancellation. There are cases where it is not needed
+     * and it is desirable to turn it off so that no audio artifacts are
+     * introduced. This allows applications to control this behavior.
+     */
+    public boolean echoCancellation;
 
-	/**
-	 * Automatic gain control is often desirable on the input signal recorded by
-	 * the microphone. There are cases where it is not needed and it is
-	 * desirable to turn it off so that the audio is not altered. This allows
-	 * applications to control this behavior.
-	 */
-	public boolean autoGainControl;
+    /**
+     * Automatic gain control is often desirable on the input signal recorded by
+     * the microphone. There are cases where it is not needed and it is
+     * desirable to turn it off so that the audio is not altered. This allows
+     * applications to control this behavior.
+     */
+    public boolean autoGainControl;
 
-	/**
-	 * Noise suppression is often desirable on the input signal recorded by the
-	 * microphone. There are cases where it is not needed and it is desirable to
-	 * turn it off so that the audio is not altered. This allows applications to
-	 * control this behavior.
-	 */
-	public boolean noiseSuppression;
+    /**
+     * Noise suppression is often desirable on the input signal recorded by the
+     * microphone. There are cases where it is not needed and it is desirable to
+     * turn it off so that the audio is not altered. This allows applications to
+     * control this behavior.
+     */
+    public boolean noiseSuppression;
 
-	/**
-	 * Audio processing to remove background noise of lower frequencies.
-	 */
-	public boolean highpassFilter;
+    /**
+     * Audio processing to remove background noise of lower frequencies.
+     */
+    public boolean highpassFilter;
 
-	/**
-	 * Audio processing to detect typing.
-	 */
-	public boolean typingDetection;
+    /**
+     * Audio processing to detect typing.
+     */
+    public boolean typingDetection;
 
-	/**
-	 * Audio processing to detect residual echoes.
-	 */
-	public boolean residualEchoDetector;
+    /**
+     * Audio processing to detect residual echoes.
+     */
+    public boolean residualEchoDetector;
 
 }

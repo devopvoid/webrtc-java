@@ -35,14 +35,15 @@ public class AudioTrackSourceTests extends TestBase {
 
     @Test
     void addRemoveSink() {
-        AudioTrackSink sink = (data, bitsPerSample, sampleRate, channels, frames) -> { };
+        AudioTrackSink sink = (data, bitsPerSample, sampleRate, channels, frames) -> {
+        };
 
         audioSource.addSink(sink);
         audioSource.removeSink(sink);
     }
 
     @Test
-    void setVolume(){
+    void setVolume() {
         audioSource.setVolume(1.0);
     }
 }

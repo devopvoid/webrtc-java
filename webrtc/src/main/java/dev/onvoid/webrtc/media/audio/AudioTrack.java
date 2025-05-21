@@ -16,79 +16,79 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
-
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 public class AudioTrack extends MediaStreamTrack {
 
-	private final Map<AudioTrackSink, Long> sinks = new IdentityHashMap<>();
+    private final Map<AudioTrackSink, Long> sinks = new IdentityHashMap<>();
 
 
-	private AudioTrack() {
-		super();
-	}
+    private AudioTrack() {
+        super();
+    }
 
-	@Override
-	public void dispose() {
-		for (long nativeSink : sinks.values()) {
-			removeSinkInternal(nativeSink);
-		}
+    @Override
+    public void dispose() {
+        for (long nativeSink : sinks.values()) {
+            removeSinkInternal(nativeSink);
+        }
 
-		sinks.clear();
+        sinks.clear();
 
-		super.dispose();
-	}
+        super.dispose();
+    }
 
-	/**
-	 * Adds an AudioSink to the track. A track can have any number of
-	 * AudioSinks.
-	 *
-	 * @param sink The audio sink that will receive audio data from the track.
-	 */
-	public void addSink(AudioTrackSink sink) {
-		if (isNull(sink)) {
-			throw new NullPointerException();
-		}
-		if (sinks.containsKey(sink)) {
-			return;
-		}
+    /**
+     * Adds an AudioSink to the track. A track can have any number of
+     * AudioSinks.
+     *
+     * @param sink The audio sink that will receive audio data from the track.
+     */
+    public void addSink(AudioTrackSink sink) {
+        if (isNull(sink)) {
+            throw new NullPointerException();
+        }
+        if (sinks.containsKey(sink)) {
+            return;
+        }
 
-		final long nativeSink = addSinkInternal(sink);
+        final long nativeSink = addSinkInternal(sink);
 
-		sinks.put(sink, nativeSink);
-	}
+        sinks.put(sink, nativeSink);
+    }
 
-	/**
-	 * Removes an AudioSink from the track. If the AudioSink was not attached to
-	 * the track, this is a no-op.
-	 */
-	public void removeSink(AudioTrackSink sink) {
-		if (isNull(sink)) {
-			throw new NullPointerException();
-		}
+    /**
+     * Removes an AudioSink from the track. If the AudioSink was not attached to
+     * the track, this is a no-op.
+     */
+    public void removeSink(AudioTrackSink sink) {
+        if (isNull(sink)) {
+            throw new NullPointerException();
+        }
 
-		final Long nativeSink = sinks.remove(sink);
+        final Long nativeSink = sinks.remove(sink);
 
-		if (nonNull(nativeSink)) {
-			removeSinkInternal(nativeSink);
-		}
-	}
+        if (nonNull(nativeSink)) {
+            removeSinkInternal(nativeSink);
+        }
+    }
 
-	/**
-	 * Get the signal level from the audio track.
-	 *
-	 * @return The signal level.
-	 */
-	public native int getSignalLevel();
+    /**
+     * Get the signal level from the audio track.
+     *
+     * @return The signal level.
+     */
+    public native int getSignalLevel();
 
-	private native long addSinkInternal(AudioTrackSink sink);
+    private native long addSinkInternal(AudioTrackSink sink);
 
-	private native void removeSinkInternal(long sinkHandle);
+    private native void removeSinkInternal(long sinkHandle);
 
-	public native AudioTrackSource getSource();
+    public native AudioTrackSource getSource();
 }

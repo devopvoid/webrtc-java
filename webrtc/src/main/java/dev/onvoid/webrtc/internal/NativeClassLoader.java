@@ -26,14 +26,14 @@ package dev.onvoid.webrtc.internal;
  */
 class NativeClassLoader {
 
-	static ClassLoader getClassLoader() {
-		ClassLoader loader = NativeClassLoader.class.getClassLoader();
+    static ClassLoader getClassLoader() {
+        ClassLoader loader = NativeClassLoader.class.getClassLoader();
 
-		if (loader == null) {
-			throw new RuntimeException("Get NativeClassLoader failed");
-		}
+        if (loader == null) {
+            throw new RuntimeException("Get NativeClassLoader failed");
+        }
 
-		return loader;
-	}
+        return loader;
+    }
 
 }

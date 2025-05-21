@@ -18,14 +18,14 @@ package dev.onvoid.webrtc.media.audio;
 
 public class AudioProcessingStreamConfig {
 
-	public final int sampleRate;
+    public final int sampleRate;
 
-	public final int channels;
+    public final int channels;
 
 
-	public AudioProcessingStreamConfig(int sampleRate, int channels) {
-		this.sampleRate = sampleRate;
-		this.channels = channels;
-	}
+    public AudioProcessingStreamConfig(int sampleRate, int channels) {
+        this.sampleRate = sampleRate;
+        this.channels = channels;
+    }
 
 }

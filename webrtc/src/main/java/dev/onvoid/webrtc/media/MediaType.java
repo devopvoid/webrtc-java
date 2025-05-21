@@ -18,19 +18,19 @@ package dev.onvoid.webrtc.media;
 
 public enum MediaType {
 
-	/**
-	 * Represents an audio media type.
-	 */
-	AUDIO,
+    /**
+     * Represents an audio media type.
+     */
+    AUDIO,
 
-	/**
-	 * Represents a video media type.
-	 */
-	VIDEO,
+    /**
+     * Represents a video media type.
+     */
+    VIDEO,
 
-	/**
-	 * Represents a data media type.
-	 */
-	DATA
+    /**
+     * Represents a data media type.
+     */
+    DATA
 
 }

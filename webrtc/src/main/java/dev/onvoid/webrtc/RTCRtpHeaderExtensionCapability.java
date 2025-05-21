@@ -23,34 +23,34 @@ package dev.onvoid.webrtc;
  */
 public class RTCRtpHeaderExtensionCapability {
 
-	/**
-	 * The URI of the RTP header extension.
-	 */
-	private final String uri;
+    /**
+     * The URI of the RTP header extension.
+     */
+    private final String uri;
 
 
-	/**
-	 * Creates an instance of RTCRtpHeaderExtensionCapability with the specified
-	 * RTP header extension URI.
-	 *
-	 * @param uri The URI of the RTP header extension.
-	 */
-	public RTCRtpHeaderExtensionCapability(String uri) {
-		this.uri = uri;
-	}
+    /**
+     * Creates an instance of RTCRtpHeaderExtensionCapability with the specified
+     * RTP header extension URI.
+     *
+     * @param uri The URI of the RTP header extension.
+     */
+    public RTCRtpHeaderExtensionCapability(String uri) {
+        this.uri = uri;
+    }
 
-	/**
-	 * Returns the URI of the supported RTP header extension by the system.
-	 *
-	 * @return The URI of the RTP header extension.
-	 */
-	public String getUri() {
-		return uri;
-	}
+    /**
+     * Returns the URI of the supported RTP header extension by the system.
+     *
+     * @return The URI of the RTP header extension.
+     */
+    public String getUri() {
+        return uri;
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s [uri=%s]",
-				RTCRtpHeaderExtensionCapability.class.getSimpleName(), uri);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [uri=%s]",
+                RTCRtpHeaderExtensionCapability.class.getSimpleName(), uri);
+    }
 }

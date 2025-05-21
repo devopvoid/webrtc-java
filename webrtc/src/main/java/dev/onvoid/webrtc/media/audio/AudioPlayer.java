@@ -20,42 +20,42 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AudioPlayer {
 
-	private final AtomicBoolean playing;
+    private final AtomicBoolean playing;
 
-	private AudioDeviceModule module;
+    private AudioDeviceModule module;
 
-	private AudioDevice device;
+    private AudioDevice device;
 
-	private AudioSource source;
+    private AudioSource source;
 
 
-	public AudioPlayer() {
-		playing = new AtomicBoolean();
-	}
+    public AudioPlayer() {
+        playing = new AtomicBoolean();
+    }
 
-	public void setAudioDevice(AudioDevice device) {
-		this.device = device;
-	}
+    public void setAudioDevice(AudioDevice device) {
+        this.device = device;
+    }
 
-	public void setAudioSource(AudioSource source) {
-		this.source = source;
-	}
+    public void setAudioSource(AudioSource source) {
+        this.source = source;
+    }
 
-	public void start() {
-		if (playing.compareAndSet(false, true)) {
-			module = new AudioDeviceModule();
-			module.setPlayoutDevice(device);
-			module.setAudioSource(source);
-			module.initPlayout();
-			module.startPlayout();
-		}
-	}
+    public void start() {
+        if (playing.compareAndSet(false, true)) {
+            module = new AudioDeviceModule();
+            module.setPlayoutDevice(device);
+            module.setAudioSource(source);
+            module.initPlayout();
+            module.startPlayout();
+        }
+    }
 
-	public void stop() {
-		if (playing.compareAndSet(true, false)) {
-			module.stopPlayout();
-			module.dispose();
-		}
-	}
+    public void stop() {
+        if (playing.compareAndSet(true, false)) {
+            module.stopPlayout();
+            module.dispose();
+        }
+    }
 
 }

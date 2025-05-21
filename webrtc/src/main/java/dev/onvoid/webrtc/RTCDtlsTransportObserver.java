@@ -23,19 +23,19 @@ package dev.onvoid.webrtc;
  */
 public interface RTCDtlsTransportObserver {
 
-	/**
-	 * The transport state has changed.
-	 *
-	 * @param info The information about the state of the transport.
-	 */
-	void onStateChange(RTCDtlsTransportState info);
+    /**
+     * The transport state has changed.
+     *
+     * @param info The information about the state of the transport.
+     */
+    void onStateChange(RTCDtlsTransportState info);
 
-	/**
-	 * An error has occurred, causing the transport to go to the {@code FAILED}
-	 * state.
-	 *
-	 * @param error The error message.
-	 */
-	void onError(String error);
+    /**
+     * An error has occurred, causing the transport to go to the {@code FAILED}
+     * state.
+     *
+     * @param error The error message.
+     */
+    void onError(String error);
 
 }

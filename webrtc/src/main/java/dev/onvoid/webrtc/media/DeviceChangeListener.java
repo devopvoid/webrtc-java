@@ -24,18 +24,18 @@ package dev.onvoid.webrtc.media;
  */
 public interface DeviceChangeListener {
 
-	/**
-	 * A media device has been connected to the system.
-	 *
-	 * @param device The connected device.
-	 */
-	void deviceConnected(Device device);
+    /**
+     * A media device has been connected to the system.
+     *
+     * @param device The connected device.
+     */
+    void deviceConnected(Device device);
 
-	/**
-	 * A media device has been disconnected from the system.
-	 *
-	 * @param device The disconnected device.
-	 */
-	void deviceDisconnected(Device device);
+    /**
+     * A media device has been disconnected from the system.
+     *
+     * @param device The disconnected device.
+     */
+    void deviceDisconnected(Device device);
 
 }

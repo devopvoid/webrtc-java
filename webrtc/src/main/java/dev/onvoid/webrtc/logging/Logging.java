@@ -16,95 +16,93 @@
 
 package dev.onvoid.webrtc.logging;
 
+import dev.onvoid.webrtc.internal.NativeLoader;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
-import dev.onvoid.webrtc.internal.NativeLoader;
-
 public class Logging {
 
-	static {
-		try {
-			NativeLoader.loadLibrary("webrtc-java");
-		}
-		catch (Exception e) {
-			throw new RuntimeException("Load library 'webrtc-java' failed", e);
-		}
-	}
+    static {
+        try {
+            NativeLoader.loadLibrary("webrtc-java");
+        } catch (Exception e) {
+            throw new RuntimeException("Load library 'webrtc-java' failed", e);
+        }
+    }
 
+    public static native void addLogSink(Severity severity, LogSink sink);
 
-	public enum Severity {
+    public static native void log(Severity severity, String message);
 
-		/**
-		 * For data which should not appear in the normal debug log, but should
-		 * appear in diagnostic logs.
-		 */
-		VERBOSE,
+    public static native void logToDebug(Severity severity);
 
-		/**
-		 * Used in debugging.
-		 */
-		INFO,
+    public static native void logThreads(boolean enable);
 
-		/**
-		 * Something that may warrant investigation.
-		 */
-		WARNING,
+    public static native void logTimestamps(boolean enable);
 
-		/**
-		 * A critical error has occurred.
-		 */
-		ERROR,
+    public static void verbose(String message) {
+        log(Severity.VERBOSE, message);
+    }
 
-		/**
-		 * Do not log.
-		 */
-		NONE;
+    public static void info(String message) {
+        log(Severity.INFO, message);
+    }
 
-	}
+    public static void warn(String message) {
+        log(Severity.WARNING, message);
+    }
 
-	public static native void addLogSink(Severity severity, LogSink sink);
+    public static void error(String message) {
+        log(Severity.ERROR, message);
+    }
 
-	public static native void log(Severity severity, String message);
+    public static void error(String message, Throwable e) {
+        log(Severity.ERROR, message);
+        log(Severity.ERROR, e.toString());
+        log(Severity.ERROR, getStackTraceString(e));
+    }
 
-	public static native void logToDebug(Severity severity);
+    private static String getStackTraceString(Throwable e) {
+        if (e == null) {
+            return "";
+        }
 
-	public static native void logThreads(boolean enable);
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
 
-	public static native void logTimestamps(boolean enable);
+        e.printStackTrace(pw);
 
-	public static void verbose(String message) {
-		log(Severity.VERBOSE, message);
-	}
+        return sw.toString();
+    }
 
-	public static void info(String message) {
-		log(Severity.INFO, message);
-	}
+    public enum Severity {
 
-	public static void warn(String message) {
-		log(Severity.WARNING, message);
-	}
+        /**
+         * For data which should not appear in the normal debug log, but should
+         * appear in diagnostic logs.
+         */
+        VERBOSE,
 
-	public static void error(String message) {
-		log(Severity.ERROR, message);
-	}
+        /**
+         * Used in debugging.
+         */
+        INFO,
 
-	public static void error(String message, Throwable e) {
-		log(Severity.ERROR, message);
-		log(Severity.ERROR, e.toString());
-		log(Severity.ERROR, getStackTraceString(e));
-	}
+        /**
+         * Something that may warrant investigation.
+         */
+        WARNING,
 
-	private static String getStackTraceString(Throwable e) {
-		if (e == null) {
-			return "";
-		}
+        /**
+         * A critical error has occurred.
+         */
+        ERROR,
 
-		StringWriter sw = new StringWriter();
-		PrintWriter pw = new PrintWriter(sw);
+        /**
+         * Do not log.
+         */
+        NONE;
 
-		e.printStackTrace(pw);
-
-		return sw.toString();
-	}
+    }
 }

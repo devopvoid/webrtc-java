@@ -27,17 +27,17 @@ package dev.onvoid.webrtc;
  */
 public interface SetSessionDescriptionObserver {
 
-	/**
-	 * The local/remote session description has been successfully set.
-	 */
-	void onSuccess();
+    /**
+     * The local/remote session description has been successfully set.
+     */
+    void onSuccess();
 
-	/**
-	 * An error has occurred, causing the RTCPeerConnection to abort the SDP
-	 * setting procedure.
-	 *
-	 * @param error The error message.
-	 */
-	void onFailure(String error);
+    /**
+     * An error has occurred, causing the RTCPeerConnection to abort the SDP
+     * setting procedure.
+     *
+     * @param error The error message.
+     */
+    void onFailure(String error);
 
 }

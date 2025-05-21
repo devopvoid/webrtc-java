@@ -20,43 +20,43 @@ import java.util.Objects;
 
 public class VideoCaptureCapability {
 
-	public final int width;
+    public final int width;
 
-	public final int height;
+    public final int height;
 
-	public final int frameRate;
+    public final int frameRate;
 
 
-	public VideoCaptureCapability(int width, int height, int frameRate) {
-		this.width = width;
-		this.height = height;
-		this.frameRate = frameRate;
-	}
+    public VideoCaptureCapability(int width, int height, int frameRate) {
+        this.width = width;
+        this.height = height;
+        this.frameRate = frameRate;
+    }
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) {
-			return true;
-		}
-		if (o == null || getClass() != o.getClass()) {
-			return false;
-		}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
 
-		VideoCaptureCapability other = (VideoCaptureCapability) o;
+        VideoCaptureCapability other = (VideoCaptureCapability) o;
 
-		return width == other.width && height == other.height &&
-				frameRate == other.frameRate;
-	}
+        return width == other.width && height == other.height &&
+                frameRate == other.frameRate;
+    }
 
-	@Override
-	public int hashCode() {
-		return Objects.hash(width, height, frameRate);
-	}
+    @Override
+    public int hashCode() {
+        return Objects.hash(width, height, frameRate);
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s [width=%s, height=%s, frameRate=%s]",
-				VideoCaptureCapability.class.getSimpleName(),
-				width, height, frameRate);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [width=%s, height=%s, frameRate=%s]",
+                VideoCaptureCapability.class.getSimpleName(),
+                width, height, frameRate);
+    }
 }

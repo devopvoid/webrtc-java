@@ -23,6 +23,6 @@ package dev.onvoid.webrtc.logging;
  */
 public interface LogSink {
 
-	void onLogMessage(Logging.Severity severity, String message);
+    void onLogMessage(Logging.Severity severity, String message);
 
 }

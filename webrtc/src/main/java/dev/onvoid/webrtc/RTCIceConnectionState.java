@@ -24,45 +24,45 @@ package dev.onvoid.webrtc;
  */
 public enum RTCIceConnectionState {
 
-	/**
-	 * None of the previous states apply and all RTCIceTransports are in the
-	 * "NEW" or "CLOSED" state, or there are no transports.
-	 */
-	NEW,
+    /**
+     * None of the previous states apply and all RTCIceTransports are in the
+     * "NEW" or "CLOSED" state, or there are no transports.
+     */
+    NEW,
 
-	/**
-	 * None of the previous states apply and any RTCIceTransports are in the
-	 * "NEW" or "CHECKING" state.
-	 */
-	CHECKING,
+    /**
+     * None of the previous states apply and any RTCIceTransports are in the
+     * "NEW" or "CHECKING" state.
+     */
+    CHECKING,
 
-	/**
-	 * None of the previous states apply and all RTCIceTransports are in the
-	 * "CONNECTED", "COMPLETED" or "CLOSED" state.
-	 */
-	CONNECTED,
+    /**
+     * None of the previous states apply and all RTCIceTransports are in the
+     * "CONNECTED", "COMPLETED" or "CLOSED" state.
+     */
+    CONNECTED,
 
-	/**
-	 * None of the previous states apply and all RTCIceTransports are in the
-	 * "COMPLETED" or "CLOSED" state.
-	 */
-	COMPLETED,
+    /**
+     * None of the previous states apply and all RTCIceTransports are in the
+     * "COMPLETED" or "CLOSED" state.
+     */
+    COMPLETED,
 
-	/**
-	 * The previous state doesn't apply and any RTCIceTransports are in the
-	 * "FAILED" state.
-	 */
-	FAILED,
+    /**
+     * The previous state doesn't apply and any RTCIceTransports are in the
+     * "FAILED" state.
+     */
+    FAILED,
 
-	/**
-	 * None of the previous states apply and any RTCIceTransports are in the
-	 * "DISCONNECTED" state.
-	 */
-	DISCONNECTED,
+    /**
+     * None of the previous states apply and any RTCIceTransports are in the
+     * "DISCONNECTED" state.
+     */
+    DISCONNECTED,
 
-	/**
-	 * The RTCPeerConnection is closed.
-	 */
-	CLOSED;
+    /**
+     * The RTCPeerConnection is closed.
+     */
+    CLOSED;
 
 }

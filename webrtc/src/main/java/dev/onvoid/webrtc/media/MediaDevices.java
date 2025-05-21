@@ -25,30 +25,29 @@ import java.util.List;
 
 public class MediaDevices {
 
-	static {
-		try {
-			NativeLoader.loadLibrary("webrtc-java");
-		}
-		catch (Exception e) {
-			throw new RuntimeException("Load library 'webrtc-java' failed", e);
-		}
-	}
+    static {
+        try {
+            NativeLoader.loadLibrary("webrtc-java");
+        } catch (Exception e) {
+            throw new RuntimeException("Load library 'webrtc-java' failed", e);
+        }
+    }
 
 
-	public static native void addDeviceChangeListener(DeviceChangeListener listener);
+    public static native void addDeviceChangeListener(DeviceChangeListener listener);
 
-	public static native void removeDeviceChangeListener(DeviceChangeListener listener);
+    public static native void removeDeviceChangeListener(DeviceChangeListener listener);
 
-	public static native AudioDevice getDefaultAudioRenderDevice();
+    public static native AudioDevice getDefaultAudioRenderDevice();
 
-	public static native AudioDevice getDefaultAudioCaptureDevice();
+    public static native AudioDevice getDefaultAudioCaptureDevice();
 
-	public static native List<AudioDevice> getAudioRenderDevices();
+    public static native List<AudioDevice> getAudioRenderDevices();
 
-	public static native List<AudioDevice> getAudioCaptureDevices();
+    public static native List<AudioDevice> getAudioCaptureDevices();
 
-	public static native List<VideoDevice> getVideoCaptureDevices();
+    public static native List<VideoDevice> getVideoCaptureDevices();
 
-	public static native List<VideoCaptureCapability> getVideoCaptureCapabilities(VideoDevice device);
+    public static native List<VideoCaptureCapability> getVideoCaptureCapabilities(VideoDevice device);
 
 }

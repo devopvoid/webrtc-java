@@ -26,57 +26,57 @@ import java.util.Objects;
  */
 public class RTCSessionDescription {
 
-	/**
-	 * The type of this RTCSessionDescription.
-	 */
-	public final RTCSdpType sdpType;
+    /**
+     * The type of this RTCSessionDescription.
+     */
+    public final RTCSdpType sdpType;
 
-	/**
-	 * The string representation of the SDP, if type is "ROLLBACK", this member
-	 * is unused.
-	 */
-	public final String sdp;
+    /**
+     * The string representation of the SDP, if type is "ROLLBACK", this member
+     * is unused.
+     */
+    public final String sdp;
 
 
-	/**
-	 * Creates an instance of RTCSessionDescription with the specified SDP and
-	 * the SDP type.
-	 *
-	 * @param sdpType The type of this RTCSessionDescription.
-	 * @param sdp     The string representation of the SDP; unused if type is
-	 *                {@link RTCSdpType#ROLLBACK}.
-	 */
-	public RTCSessionDescription(RTCSdpType sdpType, String sdp) {
-		this.sdpType = sdpType;
-		this.sdp = sdp;
-	}
+    /**
+     * Creates an instance of RTCSessionDescription with the specified SDP and
+     * the SDP type.
+     *
+     * @param sdpType The type of this RTCSessionDescription.
+     * @param sdp     The string representation of the SDP; unused if type is
+     *                {@link RTCSdpType#ROLLBACK}.
+     */
+    public RTCSessionDescription(RTCSdpType sdpType, String sdp) {
+        this.sdpType = sdpType;
+        this.sdp = sdp;
+    }
 
-	@Override
-	public int hashCode() {
-		return Objects.hash(sdp, sdpType);
-	}
+    @Override
+    public int hashCode() {
+        return Objects.hash(sdp, sdpType);
+    }
 
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj) {
-			return true;
-		}
-		if (obj == null) {
-			return false;
-		}
-		if (getClass() != obj.getClass()) {
-			return false;
-		}
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
 
-		RTCSessionDescription other = (RTCSessionDescription) obj;
+        RTCSessionDescription other = (RTCSessionDescription) obj;
 
-		return Objects.equals(sdp, other.sdp) && sdpType == other.sdpType;
-	}
+        return Objects.equals(sdp, other.sdp) && sdpType == other.sdpType;
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s@%d [sdpType=%s, sdp=%s]",
-				RTCSessionDescription.class.getSimpleName(), hashCode(),
-				sdpType, sdp);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s@%d [sdpType=%s, sdp=%s]",
+                RTCSessionDescription.class.getSimpleName(), hashCode(),
+                sdpType, sdp);
+    }
 }

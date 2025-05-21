@@ -23,21 +23,21 @@ package dev.onvoid.webrtc;
  */
 public enum RTCIceGatheringState {
 
-	/**
-	 * Any of the RTCIceTransports are in the "NEW" gathering state and none of
-	 * the transports are in the "GATHERING" state, or there are no transports.
-	 */
-	NEW,
+    /**
+     * Any of the RTCIceTransports are in the "NEW" gathering state and none of
+     * the transports are in the "GATHERING" state, or there are no transports.
+     */
+    NEW,
 
-	/**
-	 * Any of the RTCIceTransports are in the "GATHERING" state.
-	 */
-	GATHERING,
+    /**
+     * Any of the RTCIceTransports are in the "GATHERING" state.
+     */
+    GATHERING,
 
-	/**
-	 * At least one RTCIceTransport exists, and all RTCIceTransports are in the
-	 * "COMPLETE" gathering state.
-	 */
-	COMPLETE;
+    /**
+     * At least one RTCIceTransport exists, and all RTCIceTransports are in the
+     * "COMPLETE" gathering state.
+     */
+    COMPLETE;
 
 }

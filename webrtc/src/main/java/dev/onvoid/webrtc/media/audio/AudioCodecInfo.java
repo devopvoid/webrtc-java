@@ -13,7 +13,7 @@ public class AudioCodecInfo {
     boolean allowComfortNoise;
     boolean supportsNetworkAdaption;
 
-    public AudioCodecInfo(){
+    public AudioCodecInfo() {
         this.allowComfortNoise = true;
         supportsNetworkAdaption = false;
     }

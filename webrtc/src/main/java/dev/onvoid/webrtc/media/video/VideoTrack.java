@@ -16,71 +16,71 @@
 
 package dev.onvoid.webrtc.media.video;
 
-import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
-
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
 
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 public class VideoTrack extends MediaStreamTrack {
 
-	private final Map<VideoTrackSink, Long> sinks = new IdentityHashMap<>();
+    private final Map<VideoTrackSink, Long> sinks = new IdentityHashMap<>();
 
 
-	private VideoTrack() {
-		super();
-	}
+    private VideoTrack() {
+        super();
+    }
 
-	@Override
-	public void dispose() {
-		for (long nativeSink : sinks.values()) {
-			removeSinkInternal(nativeSink);
-		}
+    @Override
+    public void dispose() {
+        for (long nativeSink : sinks.values()) {
+            removeSinkInternal(nativeSink);
+        }
 
-		sinks.clear();
+        sinks.clear();
 
-		super.dispose();
-	}
+        super.dispose();
+    }
 
-	/**
-	 * Adds a VideoSink to the track. A track can have any number of
-	 * VideoSinks.
-	 *
-	 * @param sink The video sink to add.
-	 */
-	public void addSink(VideoTrackSink sink) {
-		if (isNull(sink)) {
-			throw new NullPointerException();
-		}
-		if (sinks.containsKey(sink)) {
-			return;
-		}
+    /**
+     * Adds a VideoSink to the track. A track can have any number of
+     * VideoSinks.
+     *
+     * @param sink The video sink to add.
+     */
+    public void addSink(VideoTrackSink sink) {
+        if (isNull(sink)) {
+            throw new NullPointerException();
+        }
+        if (sinks.containsKey(sink)) {
+            return;
+        }
 
-		final long nativeSink = addSinkInternal(sink);
+        final long nativeSink = addSinkInternal(sink);
 
-		sinks.put(sink, nativeSink);
-	}
+        sinks.put(sink, nativeSink);
+    }
 
-	/**
-	 * Removes a VideoSink from the track. If the VideoSink was not attached to
-	 * the track, this is a no-op.
-	 */
-	public void removeSink(VideoTrackSink sink) {
-		if (isNull(sink)) {
-			throw new NullPointerException();
-		}
+    /**
+     * Removes a VideoSink from the track. If the VideoSink was not attached to
+     * the track, this is a no-op.
+     */
+    public void removeSink(VideoTrackSink sink) {
+        if (isNull(sink)) {
+            throw new NullPointerException();
+        }
 
-		final Long nativeSink = sinks.remove(sink);
+        final Long nativeSink = sinks.remove(sink);
 
-		if (nonNull(nativeSink)) {
-			removeSinkInternal(nativeSink);
-		}
-	}
+        if (nonNull(nativeSink)) {
+            removeSinkInternal(nativeSink);
+        }
+    }
 
-	private native long addSinkInternal(VideoTrackSink sink);
+    private native long addSinkInternal(VideoTrackSink sink);
 
-	private native void removeSinkInternal(long sinkHandle);
+    private native void removeSinkInternal(long sinkHandle);
 
 }

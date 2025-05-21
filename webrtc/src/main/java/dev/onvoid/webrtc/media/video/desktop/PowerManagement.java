@@ -23,14 +23,14 @@ package dev.onvoid.webrtc.media.video.desktop;
  */
 public class PowerManagement {
 
-	/**
-	 * Declares that the user is active on the system and prevents the sleep idle time-out.
-	 */
-	native public void enableUserActivity();
+    /**
+     * Declares that the user is active on the system and prevents the sleep idle time-out.
+     */
+    native public void enableUserActivity();
 
-	/**
-	 * Declares that the user is no longer active on the system and allow the system to idle to sleep normally.
-	 */
-	native public void disableUserActivity();
+    /**
+     * Declares that the user is no longer active on the system and allow the system to idle to sleep normally.
+     */
+    native public void disableUserActivity();
 
 }

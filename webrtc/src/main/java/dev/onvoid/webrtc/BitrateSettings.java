@@ -8,7 +8,7 @@ public class BitrateSettings {
     public int startBitrateBps;
     public int maxBitrateBps;
 
-    public BitrateSettings(){
+    public BitrateSettings() {
         this.minBitrateBps = 0;
         this.startBitrateBps = kDefaultStartBitrateBps;
         this.maxBitrateBps = -1;

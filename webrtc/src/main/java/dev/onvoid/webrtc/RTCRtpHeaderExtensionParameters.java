@@ -24,41 +24,41 @@ package dev.onvoid.webrtc;
  */
 public class RTCRtpHeaderExtensionParameters {
 
-	/**
-	 * The URI of the RTP header extension.
-	 */
-	public final String uri;
+    /**
+     * The URI of the RTP header extension.
+     */
+    public final String uri;
 
-	/**
-	 * The value put in the RTP packet to identify the header extension.
-	 */
-	public final int id;
+    /**
+     * The value put in the RTP packet to identify the header extension.
+     */
+    public final int id;
 
-	/**
-	 * Whether the header extension is encrypted or not.
-	 */
-	public final boolean encrypted;
+    /**
+     * Whether the header extension is encrypted or not.
+     */
+    public final boolean encrypted;
 
 
-	/**
-	 * Creates an instance of RTCRtpHeaderExtensionParameters with the specified
-	 * header extension parameters.
-	 *
-	 * @param uri       The URI of the RTP header extension.
-	 * @param id        The value put in the RTP packet to identify the header
-	 *                  extension.
-	 * @param encrypted Whether the header extension is encrypted or not.
-	 */
-	public RTCRtpHeaderExtensionParameters(String uri, int id, boolean encrypted) {
-		this.uri = uri;
-		this.id = id;
-		this.encrypted = encrypted;
-	}
+    /**
+     * Creates an instance of RTCRtpHeaderExtensionParameters with the specified
+     * header extension parameters.
+     *
+     * @param uri       The URI of the RTP header extension.
+     * @param id        The value put in the RTP packet to identify the header
+     *                  extension.
+     * @param encrypted Whether the header extension is encrypted or not.
+     */
+    public RTCRtpHeaderExtensionParameters(String uri, int id, boolean encrypted) {
+        this.uri = uri;
+        this.id = id;
+        this.encrypted = encrypted;
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s [uri=%s, id=%s, encrypted=%s]",
-				RTCRtpHeaderExtensionParameters.class.getSimpleName(), uri, id,
-				encrypted);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [uri=%s, id=%s, encrypted=%s]",
+                RTCRtpHeaderExtensionParameters.class.getSimpleName(), uri, id,
+                encrypted);
+    }
 }

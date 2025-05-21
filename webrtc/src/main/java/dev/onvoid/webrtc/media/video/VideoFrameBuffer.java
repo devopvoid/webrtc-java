@@ -22,27 +22,27 @@ import dev.onvoid.webrtc.internal.RefCounted;
  * Base class for frame buffers of different types of pixel format and storage.
  */
 public interface VideoFrameBuffer extends RefCounted {
-	
-	/**
-	 * Resolution of the buffer in pixels.
-	 */
-	int getWidth();
 
-	int getHeight();
+    /**
+     * Resolution of the buffer in pixels.
+     */
+    int getWidth();
 
-	/**
-	 * Returns a memory-backed frame in I420 format. If the pixel data is in
-	 * another format, a conversion will take place. All implementations must
-	 * provide a fallback to I420 for compatibility with e.g. the internal
-	 * WebRTC software encoders.
-	 */
-	I420Buffer toI420();
+    int getHeight();
 
-	/**
-	 * Crops a region defined by |cropx|, |cropY|, |cropWidth| and |cropHeight|.
-	 * Scales it to size |scaleWidth| x |scaleHeight|.
-	 */
-	VideoFrameBuffer cropAndScale(int cropX, int cropY, int cropWidth,
-			int cropHeight, int scaleWidth, int scaleHeight);
+    /**
+     * Returns a memory-backed frame in I420 format. If the pixel data is in
+     * another format, a conversion will take place. All implementations must
+     * provide a fallback to I420 for compatibility with e.g. the internal
+     * WebRTC software encoders.
+     */
+    I420Buffer toI420();
+
+    /**
+     * Crops a region defined by |cropx|, |cropY|, |cropWidth| and |cropHeight|.
+     * Scales it to size |scaleWidth| x |scaleHeight|.
+     */
+    VideoFrameBuffer cropAndScale(int cropX, int cropY, int cropWidth,
+                                  int cropHeight, int scaleWidth, int scaleHeight);
 
 }

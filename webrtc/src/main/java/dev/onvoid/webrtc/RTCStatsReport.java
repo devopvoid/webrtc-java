@@ -28,21 +28,21 @@ import java.util.stream.Collectors;
  */
 public class RTCStatsReport {
 
-	private final Map<String, RTCStats> stats;
+    private final Map<String, RTCStats> stats;
 
 
-	protected RTCStatsReport(Map<String, RTCStats> stats) {
-		this.stats = stats;
-	}
+    protected RTCStatsReport(Map<String, RTCStats> stats) {
+        this.stats = stats;
+    }
 
-	public Map<String, RTCStats> getStats() {
-		return stats;
-	}
+    public Map<String, RTCStats> getStats() {
+        return stats;
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s@%d [stats=%s]",
-				RTCStatsReport.class.getSimpleName(), hashCode(),
-				stats.values().stream().map(Object::toString).collect(Collectors.joining(",\n")));
-	}
+    @Override
+    public String toString() {
+        return String.format("%s@%d [stats=%s]",
+                RTCStatsReport.class.getSimpleName(), hashCode(),
+                stats.values().stream().map(Object::toString).collect(Collectors.joining(",\n")));
+    }
 }

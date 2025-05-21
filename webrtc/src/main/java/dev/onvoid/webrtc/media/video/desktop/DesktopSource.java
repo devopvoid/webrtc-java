@@ -17,42 +17,41 @@
 package dev.onvoid.webrtc.media.video.desktop;
 
 import java.util.Objects;
-import java.util.StringJoiner;
 
 public class DesktopSource {
 
-	public final String title;
+    public final String title;
 
-	public final long id;
+    public final long id;
 
 
-	public DesktopSource(String title, long id) {
-		this.title = title;
-		this.id = id;
-	}
+    public DesktopSource(String title, long id) {
+        this.title = title;
+        this.id = id;
+    }
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) {
-			return true;
-		}
-		if (o == null || getClass() != o.getClass()) {
-			return false;
-		}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
 
-		DesktopSource other = (DesktopSource) o;
+        DesktopSource other = (DesktopSource) o;
 
-		return id == other.id;
-	}
+        return id == other.id;
+    }
 
-	@Override
-	public int hashCode() {
-		return Objects.hash(id);
-	}
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s@%d [title=%s, id=%s]",
-				DesktopSource.class.getSimpleName(), hashCode(), title, id);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s@%d [title=%s, id=%s]",
+                DesktopSource.class.getSimpleName(), hashCode(), title, id);
+    }
 }

@@ -23,50 +23,50 @@ package dev.onvoid.webrtc;
  */
 public enum RTCRtpTransceiverDirection {
 
-	/**
-	 * The RTCRtpTransceiver's RTCRtpSender will offer to send RTP, and will
-	 * send RTP if the remote peer accepts and sender.getParameters().encodings[i].active
-	 * is true for any value of i.
-	 * <p>
-	 * The RTCRtpTransceiver's RTCRtpReceiver will offer to receive RTP, and
-	 * will receive RTP if the remote peer accepts.
-	 */
-	SEND_RECV,
+    /**
+     * The RTCRtpTransceiver's RTCRtpSender will offer to send RTP, and will
+     * send RTP if the remote peer accepts and sender.getParameters().encodings[i].active
+     * is true for any value of i.
+     * <p>
+     * The RTCRtpTransceiver's RTCRtpReceiver will offer to receive RTP, and
+     * will receive RTP if the remote peer accepts.
+     */
+    SEND_RECV,
 
-	/**
-	 * The RTCRtpTransceiver's RTCRtpSender sender will offer to send RTP, and
-	 * will send RTP if the remote peer accepts and sender.getParameters().encodings[i].active
-	 * is true for any value of i.
-	 * <p>
-	 * The RTCRtpTransceiver's RTCRtpReceiver will not offer to receive RTP, and
-	 * will not receive RTP.
-	 */
-	SEND_ONLY,
+    /**
+     * The RTCRtpTransceiver's RTCRtpSender sender will offer to send RTP, and
+     * will send RTP if the remote peer accepts and sender.getParameters().encodings[i].active
+     * is true for any value of i.
+     * <p>
+     * The RTCRtpTransceiver's RTCRtpReceiver will not offer to receive RTP, and
+     * will not receive RTP.
+     */
+    SEND_ONLY,
 
-	/**
-	 * The RTCRtpTransceiver's RTCRtpSender will not offer to send RTP, and will
-	 * not send RTP.
-	 * <p>
-	 * The RTCRtpTransceiver's RTCRtpReceiver will offer to receive RTP, and
-	 * will receive RTP if the remote peer accepts.
-	 */
-	RECV_ONLY,
+    /**
+     * The RTCRtpTransceiver's RTCRtpSender will not offer to send RTP, and will
+     * not send RTP.
+     * <p>
+     * The RTCRtpTransceiver's RTCRtpReceiver will offer to receive RTP, and
+     * will receive RTP if the remote peer accepts.
+     */
+    RECV_ONLY,
 
-	/**
-	 * The RTCRtpTransceiver's RTCRtpSender will not offer to send RTP, and will
-	 * not send RTP.
-	 * <p>
-	 * The RTCRtpTransceiver's RTCRtpReceiver will not offer to receive RTP, and
-	 * will not receive RTP.
-	 */
-	INACTIVE,
+    /**
+     * The RTCRtpTransceiver's RTCRtpSender will not offer to send RTP, and will
+     * not send RTP.
+     * <p>
+     * The RTCRtpTransceiver's RTCRtpReceiver will not offer to receive RTP, and
+     * will not receive RTP.
+     */
+    INACTIVE,
 
-	/**
-	 * The RTCRtpTransceiver will neither send nor receive RTP. It will generate
-	 * a zero port in the offer. In answers, its RTCRtpSender will not offer to
-	 * send RTP, and its RTCRtpReceiver will not offer to receive RTP. This is a
-	 * terminal state.
-	 */
-	STOPPED;
+    /**
+     * The RTCRtpTransceiver will neither send nor receive RTP. It will generate
+     * a zero port in the offer. In answers, its RTCRtpSender will not offer to
+     * send RTP, and its RTCRtpReceiver will not offer to receive RTP. This is a
+     * terminal state.
+     */
+    STOPPED;
 
 }

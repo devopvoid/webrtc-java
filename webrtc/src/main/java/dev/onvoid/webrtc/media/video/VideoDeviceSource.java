@@ -18,22 +18,22 @@ package dev.onvoid.webrtc.media.video;
 
 public class VideoDeviceSource extends VideoTrackSource {
 
-	public VideoDeviceSource() {
-		super();
+    public VideoDeviceSource() {
+        super();
 
-		initialize();
-	}
+        initialize();
+    }
 
-	public native void setVideoCaptureDevice(VideoDevice device);
+    public native void setVideoCaptureDevice(VideoDevice device);
 
-	public native void setVideoCaptureCapability(VideoCaptureCapability capability);
+    public native void setVideoCaptureCapability(VideoCaptureCapability capability);
 
-	public native void start();
+    public native void start();
 
-	public native void stop();
+    public native void stop();
 
-	public native void dispose();
+    public native void dispose();
 
-	private native void initialize();
+    private native void initialize();
 
 }

@@ -23,24 +23,24 @@ package dev.onvoid.webrtc;
  */
 public enum RTCPriorityType {
 
-	/**
-	 * Corresponds to "below normal".
-	 */
-	VERY_LOW,
+    /**
+     * Corresponds to "below normal".
+     */
+    VERY_LOW,
 
-	/**
-	 * Corresponds to "normal".
-	 */
-	LOW,
+    /**
+     * Corresponds to "normal".
+     */
+    LOW,
 
-	/**
-	 * Corresponds to "high".
-	 */
-	MEDIUM,
+    /**
+     * Corresponds to "high".
+     */
+    MEDIUM,
 
-	/**
-	 * Corresponds to "extra high".
-	 */
-	HIGH;
+    /**
+     * Corresponds to "extra high".
+     */
+    HIGH;
 
 }

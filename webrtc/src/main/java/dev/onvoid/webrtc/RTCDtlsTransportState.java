@@ -23,32 +23,32 @@ package dev.onvoid.webrtc;
  */
 public enum RTCDtlsTransportState {
 
-	/**
-	 * DTLS has not started negotiating yet.
-	 */
-	NEW,
+    /**
+     * DTLS has not started negotiating yet.
+     */
+    NEW,
 
-	/**
-	 * DTLS is in the process of negotiating a secure connection and verifying
-	 * the remote fingerprint.
-	 */
-	CONNECTING,
+    /**
+     * DTLS is in the process of negotiating a secure connection and verifying
+     * the remote fingerprint.
+     */
+    CONNECTING,
 
-	/**
-	 * DTLS has completed negotiation of a secure connection and verified the
-	 * remote fingerprint.
-	 */
-	CONNECTED,
+    /**
+     * DTLS has completed negotiation of a secure connection and verified the
+     * remote fingerprint.
+     */
+    CONNECTED,
 
-	/**
-	 * The transport has been closed intentionally.
-	 */
-	CLOSED,
+    /**
+     * The transport has been closed intentionally.
+     */
+    CLOSED,
 
-	/**
-	 * The transport has failed as the result of an error (such as receipt of an
-	 * error alert or failure to validate the remote fingerprint).
-	 */
-	FAILED;
+    /**
+     * The transport has failed as the result of an error (such as receipt of an
+     * error alert or failure to validate the remote fingerprint).
+     */
+    FAILED;
 
 }

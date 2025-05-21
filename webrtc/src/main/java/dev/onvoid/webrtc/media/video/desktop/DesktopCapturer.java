@@ -22,51 +22,49 @@ import java.util.List;
 
 public abstract class DesktopCapturer extends DisposableNativeObject {
 
-	public enum Result {
+    /**
+     * The DesktopCapturer doesn't take ownership of the callback. When the
+     * DesktopCapturer is disposed the callback will be disposed using this
+     * handle.
+     */
+    private long callbackHandle;
 
-		/**
-		 * The frame was captured successfully.
-		 */
-		SUCCESS,
+    @Override
+    public native void dispose();
 
-		/**
-		 * There was a temporary error. The caller should continue calling
-		 * CaptureFrame(), in the expectation that it will eventually recover.
-		 */
-		ERROR_TEMPORARY,
+    public native List<DesktopSource> getDesktopSources();
 
-		/**
-		 * Capture has failed and will keep failing if the caller tries calling
-		 * CaptureFrame() again.
-		 */
-		ERROR_PERMANENT,
+    public native void selectSource(DesktopSource source);
 
-		/**
-		 * ERROR_PERMANENT
-		 */
-		MAX_VALUE;
-	}
+    public native void setFocusSelectedSource(boolean focus);
 
+    public native void start(DesktopCaptureCallback callback);
 
-	/**
-	 * The DesktopCapturer doesn't take ownership of the callback. When the
-	 * DesktopCapturer is disposed the callback will be disposed using this
-	 * handle.
-	 */
-	private long callbackHandle;
+    public native void captureFrame();
 
+    public enum Result {
 
-	@Override
-	public native void dispose();
+        /**
+         * The frame was captured successfully.
+         */
+        SUCCESS,
 
-	public native List<DesktopSource> getDesktopSources();
+        /**
+         * There was a temporary error. The caller should continue calling
+         * CaptureFrame(), in the expectation that it will eventually recover.
+         */
+        ERROR_TEMPORARY,
 
-	public native void selectSource(DesktopSource source);
+        /**
+         * Capture has failed and will keep failing if the caller tries calling
+         * CaptureFrame() again.
+         */
+        ERROR_PERMANENT,
 
-	public native void setFocusSelectedSource(boolean focus);
-
-	public native void start(DesktopCaptureCallback callback);
-
-	public native void captureFrame();
+        /**
+         * ERROR_PERMANENT
+         */
+        MAX_VALUE;
+    }
 
 }

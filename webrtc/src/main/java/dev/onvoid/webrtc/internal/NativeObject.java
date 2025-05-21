@@ -23,12 +23,12 @@ package dev.onvoid.webrtc.internal;
  */
 public abstract class NativeObject {
 
-	/**
-	 * Field used to store a pointer to the native instance allocated on the
-	 * heap. Don't modify this value directly, or else you risk causing
-	 * segfaults or memory leaks.
-	 */
-	@SuppressWarnings("unused")
-	private long nativeHandle;
+    /**
+     * Field used to store a pointer to the native instance allocated on the
+     * heap. Don't modify this value directly, or else you risk causing
+     * segfaults or memory leaks.
+     */
+    @SuppressWarnings("unused")
+    private long nativeHandle;
 
 }

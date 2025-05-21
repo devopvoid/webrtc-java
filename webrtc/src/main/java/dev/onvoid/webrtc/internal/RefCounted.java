@@ -24,14 +24,16 @@ package dev.onvoid.webrtc.internal;
  * calling release is not necessary unless retain is called.
  */
 public interface RefCounted {
-	
-	/** Increases ref count by one. */
-	void retain();
 
-	/**
-	 * Decreases ref count by one. When the ref count reaches zero, resources
-	 * related to the object will be freed.
-	 */
-	void release();
-	
+    /**
+     * Increases ref count by one.
+     */
+    void retain();
+
+    /**
+     * Decreases ref count by one. When the ref count reaches zero, resources
+     * related to the object will be freed.
+     */
+    void release();
+
 }

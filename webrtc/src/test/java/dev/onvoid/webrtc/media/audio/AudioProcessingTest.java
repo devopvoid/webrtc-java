@@ -16,167 +16,163 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-
 import dev.onvoid.webrtc.media.audio.AudioProcessingConfig.NoiseSuppression;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 class AudioProcessingTest {
 
-	private AudioProcessing audioProcessing;
+    private AudioProcessing audioProcessing;
+
+    private static int process(AudioProcessing audioProcessing, ProcessBuffer buffer) {
+        return audioProcessing.processStream(buffer.src, buffer.streamConfigIn,
+                buffer.streamConfigOut, buffer.dst);
+    }
+
+    private static int processReverse(AudioProcessing audioProcessing, ProcessBuffer buffer) {
+        return audioProcessing.processReverseStream(buffer.src, buffer.streamConfigIn,
+                buffer.streamConfigOut, buffer.dst);
+    }
+
+    @BeforeEach
+    void init() {
+        audioProcessing = new AudioProcessing();
+    }
+
+    @Test
+    void initWithParams() {
+        AudioProcessing processing = new AudioProcessing(48000, 96000, 960000, ChannelLayout.kStereo, ChannelLayout.kStereo, ChannelLayout.kStereo);
+    }
+
+    @Test
+    void initWithProcessingConfig() {
+        ProcessingConfig processingConfig = new ProcessingConfig();
+        processingConfig.streams.put(StreamName.kInputStream, new AudioProcessingStreamConfig(96000, 2));
+        processingConfig.streams.put(StreamName.kOutputStream, new AudioProcessingStreamConfig(96000, 2));
+        processingConfig.streams.put(StreamName.kReverseInputStream, new AudioProcessingStreamConfig(96000, 2));
+        processingConfig.streams.put(StreamName.kReverseOutputStream, new AudioProcessingStreamConfig(96000, 2));
+        AudioProcessing processing = new AudioProcessing(processingConfig);
+    }
+
+    @AfterEach
+    void dispose() {
+        audioProcessing.dispose();
+    }
+
+    @Test
+    void applyConfig() {
+        AudioProcessingConfig config = new AudioProcessingConfig();
+        config.captureLevelAdjustment.analogMicGainEmulation.initialLevel = 100;
+        config.captureLevelAdjustment.analogMicGainEmulation.enabled = true;
+        config.captureLevelAdjustment.postGainFactor = 10f;
+        config.captureLevelAdjustment.preGainFactor = 1f;
+        config.captureLevelAdjustment.enabled = true;
+
+        config.preAmplifier.enabled = true;
+        config.preAmplifier.fixedGainFactor = 10f;
+
+        config.echoCanceller.enabled = true;
+        config.echoCanceller.enforceHighPassFiltering = true;
+
+        config.gainControl.enabled = true;
+
+        config.highPassFilter.enabled = true;
+
+        config.noiseSuppression.enabled = true;
+        config.noiseSuppression.level = NoiseSuppression.Level.HIGH;
+
+        config.residualEchoDetector.enabled = true;
+        config.transientSuppression.enabled = true;
+        config.voiceDetection.enabled = true;
+
+        audioProcessing.applyConfig(config);
+    }
+
+    @Test
+    void getStats() {
+        assertNotNull(audioProcessing.getStatistics());
+    }
+
+    @Test
+    void processByteStream() {
+        ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1, 1);
+
+        assertEquals(0, process(audioProcessing, buffer));
+    }
+
+    @Test
+    void processByteStreamDownMix() {
+        ProcessBuffer buffer = new ProcessBuffer(48000, 44100, 2, 1);
+
+        assertEquals(0, process(audioProcessing, buffer));
+    }
+
+    @Test
+    void processByteStreamUpMix() {
+        ProcessBuffer buffer = new ProcessBuffer(48000, 44100, 1, 2);
+
+        assertEquals(0, process(audioProcessing, buffer));
+    }
+
+    @Test
+    void processReverseStream() {
+        ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1, 1);
+
+        assertEquals(0, processReverse(audioProcessing, buffer));
+    }
+
+    @Test
+    void streamDelay() {
+        int delay = 70;
+
+        audioProcessing.setStreamDelayMs(delay);
+
+        assertEquals(delay, audioProcessing.getStreamDelayMs());
+    }
+
+    private static class ProcessBuffer {
+
+        final int bytesPerFrame = 2;
+
+        final int channelsIn;
+        final int channelsOut;
+
+        final int sampleRateIn;
+        final int sampleRateOut;
+
+        final int nSamplesIn;
+        final int nSamplesOut;
+
+        final int frameSizeIn;
+        final int frameSizeOut;
+
+        byte[] src;
+        byte[] dst;
+
+        AudioProcessingStreamConfig streamConfigIn;
+        AudioProcessingStreamConfig streamConfigOut;
 
 
-	@BeforeEach
-	void init() {
-		audioProcessing = new AudioProcessing();
-	}
+        ProcessBuffer(int sampleRateIn, int sampleRateOut, int channelsIn, int channelsOut) {
+            this.sampleRateIn = sampleRateIn;
+            this.sampleRateOut = sampleRateOut;
+            this.channelsIn = channelsIn;
+            this.channelsOut = channelsOut;
 
-	@Test
-	void initWithParams(){
-		AudioProcessing processing = new AudioProcessing(48000, 96000, 960000, ChannelLayout.kStereo, ChannelLayout.kStereo, ChannelLayout.kStereo);
-	}
+            nSamplesIn = sampleRateIn / 100; // 10 ms frame
+            nSamplesOut = sampleRateOut / 100;
+            frameSizeIn = nSamplesIn * bytesPerFrame * channelsIn;
+            frameSizeOut = Math.max(nSamplesIn, nSamplesOut) * bytesPerFrame * channelsOut;
 
-	@Test
-	void initWithProcessingConfig(){
-		ProcessingConfig processingConfig = new ProcessingConfig();
-		processingConfig.streams.put(StreamName.kInputStream, new AudioProcessingStreamConfig(96000, 2));
-		processingConfig.streams.put(StreamName.kOutputStream, new AudioProcessingStreamConfig(96000, 2));
-		processingConfig.streams.put(StreamName.kReverseInputStream, new AudioProcessingStreamConfig(96000, 2));
-		processingConfig.streams.put(StreamName.kReverseOutputStream, new AudioProcessingStreamConfig(96000, 2));
-		AudioProcessing processing = new AudioProcessing(processingConfig);
-	}
+            src = new byte[frameSizeIn];
+            dst = new byte[frameSizeOut];
 
-	@AfterEach
-	void dispose() {
-		audioProcessing.dispose();
-	}
-
-	@Test
-	void applyConfig() {
-		AudioProcessingConfig config = new AudioProcessingConfig();
-		config.captureLevelAdjustment.analogMicGainEmulation.initialLevel = 100;
-		config.captureLevelAdjustment.analogMicGainEmulation.enabled = true;
-		config.captureLevelAdjustment.postGainFactor = 10f;
-		config.captureLevelAdjustment.preGainFactor = 1f;
-		config.captureLevelAdjustment.enabled = true;
-
-		config.preAmplifier.enabled = true;
-		config.preAmplifier.fixedGainFactor = 10f;
-
-		config.echoCanceller.enabled = true;
-		config.echoCanceller.enforceHighPassFiltering = true;
-
-		config.gainControl.enabled = true;
-
-		config.highPassFilter.enabled = true;
-
-		config.noiseSuppression.enabled = true;
-		config.noiseSuppression.level = NoiseSuppression.Level.HIGH;
-
-		config.residualEchoDetector.enabled = true;
-		config.transientSuppression.enabled = true;
-		config.voiceDetection.enabled = true;
-
-		audioProcessing.applyConfig(config);
-	}
-
-	@Test
-	void getStats() {
-		assertNotNull(audioProcessing.getStatistics());
-	}
-
-	@Test
-	void processByteStream() {
-		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1, 1);
-
-		assertEquals(0, process(audioProcessing, buffer));
-	}
-
-	@Test
-	void processByteStreamDownMix() {
-		ProcessBuffer buffer = new ProcessBuffer(48000, 44100, 2, 1);
-
-		assertEquals(0, process(audioProcessing, buffer));
-	}
-
-	@Test
-	void processByteStreamUpMix() {
-		ProcessBuffer buffer = new ProcessBuffer(48000, 44100, 1, 2);
-
-		assertEquals(0, process(audioProcessing, buffer));
-	}
-
-	@Test
-	void processReverseStream() {
-		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1, 1);
-
-		assertEquals(0, processReverse(audioProcessing, buffer));
-	}
-
-	@Test
-	void streamDelay() {
-		int delay = 70;
-
-		audioProcessing.setStreamDelayMs(delay);
-
-		assertEquals(delay, audioProcessing.getStreamDelayMs());
-	}
-
-	private static int process(AudioProcessing audioProcessing, ProcessBuffer buffer) {
-		return audioProcessing.processStream(buffer.src, buffer.streamConfigIn,
-				buffer.streamConfigOut, buffer.dst);
-	}
-
-	private static int processReverse(AudioProcessing audioProcessing, ProcessBuffer buffer) {
-		return audioProcessing.processReverseStream(buffer.src, buffer.streamConfigIn,
-				buffer.streamConfigOut, buffer.dst);
-	}
-
-
-
-	private static class ProcessBuffer {
-
-		final int bytesPerFrame = 2;
-
-		final int channelsIn;
-		final int channelsOut;
-
-		final int sampleRateIn;
-		final int sampleRateOut;
-
-		final int nSamplesIn;
-		final int nSamplesOut;
-
-		final int frameSizeIn;
-		final int frameSizeOut;
-
-		byte[] src;
-		byte[] dst;
-
-		AudioProcessingStreamConfig streamConfigIn;
-		AudioProcessingStreamConfig streamConfigOut;
-
-
-		ProcessBuffer(int sampleRateIn, int sampleRateOut, int channelsIn, int channelsOut) {
-			this.sampleRateIn = sampleRateIn;
-			this.sampleRateOut = sampleRateOut;
-			this.channelsIn = channelsIn;
-			this.channelsOut = channelsOut;
-
-			nSamplesIn = sampleRateIn / 100; // 10 ms frame
-			nSamplesOut = sampleRateOut / 100;
-			frameSizeIn = nSamplesIn * bytesPerFrame * channelsIn;
-			frameSizeOut = Math.max(nSamplesIn, nSamplesOut) * bytesPerFrame * channelsOut;
-
-			src = new byte[frameSizeIn];
-			dst = new byte[frameSizeOut];
-
-			streamConfigIn = new AudioProcessingStreamConfig(sampleRateIn, channelsIn);
-			streamConfigOut = new AudioProcessingStreamConfig(sampleRateOut, channelsOut);
-		}
-	}
+            streamConfigIn = new AudioProcessingStreamConfig(sampleRateIn, channelsIn);
+            streamConfigOut = new AudioProcessingStreamConfig(sampleRateOut, channelsOut);
+        }
+    }
 }

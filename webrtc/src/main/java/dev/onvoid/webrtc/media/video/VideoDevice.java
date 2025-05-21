@@ -20,8 +20,8 @@ import dev.onvoid.webrtc.media.Device;
 
 public class VideoDevice extends Device {
 
-	protected VideoDevice(String name, String descriptor) {
-		super(name, descriptor);
-	}
+    protected VideoDevice(String name, String descriptor) {
+        super(name, descriptor);
+    }
 
 }

@@ -18,18 +18,18 @@ package dev.onvoid.webrtc.media;
 
 public enum MediaStreamTrackState {
 
-	/**
-	 * The track is active (the track's underlying media source is making a
-	 * best-effort attempt to provide data in real time). The output of a track
-	 * in the live state can be switched on and off.
-	 */
-	LIVE,
+    /**
+     * The track is active (the track's underlying media source is making a
+     * best-effort attempt to provide data in real time). The output of a track
+     * in the live state can be switched on and off.
+     */
+    LIVE,
 
-	/**
-	 * The track has ended (the track's underlying media source is no longer
-	 * providing data, and will never provide more data for this track). Once a
-	 * track enters this state, it never exits it.
-	 */
-	ENDED;
+    /**
+     * The track has ended (the track's underlying media source is no longer
+     * providing data, and will never provide more data for this track). Once a
+     * track enters this state, it never exits it.
+     */
+    ENDED;
 
 }

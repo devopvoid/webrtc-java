@@ -26,18 +26,18 @@ import dev.onvoid.webrtc.internal.NativeObject;
  */
 public abstract class MediaSource extends NativeObject {
 
-	public enum State {
+    public native State getState();
 
-		INITIALIZING,
+    public enum State {
 
-		LIVE,
+        INITIALIZING,
 
-		ENDED,
+        LIVE,
 
-		MUTED;
+        ENDED,
 
-	}
+        MUTED;
 
-	public native State getState();
+    }
 
 }

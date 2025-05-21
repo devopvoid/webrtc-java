@@ -25,56 +25,56 @@ package dev.onvoid.webrtc;
  */
 public class RTCCertificatePEM {
 
-	/**
-	 * Indicates the time in milliseconds relative to the Unix epoch after which
-	 * the certificate will be considered invalid.
-	 */
-	private final long expires;
+    /**
+     * Indicates the time in milliseconds relative to the Unix epoch after which
+     * the certificate will be considered invalid.
+     */
+    private final long expires;
 
-	/**
-	 * PEM string representation of the private key.
-	 */
-	private final String privateKey;
+    /**
+     * PEM string representation of the private key.
+     */
+    private final String privateKey;
 
-	/**
-	 * PEM string representation of the certificate.
-	 */
-	private final String certificate;
+    /**
+     * PEM string representation of the certificate.
+     */
+    private final String certificate;
 
 
-	/**
-	 * Creates a new RTCCertificatePEM instance with the specified PEM string
-	 * representation of the private key and certificate.
-	 *
-	 * @param privateKey  Private key as PEM string.
-	 * @param certificate Certificate as PEM string.
-	 * @param expires     The expiration date of this certificate.
-	 */
-	public RTCCertificatePEM(String privateKey, String certificate, long expires) {
-		this.privateKey = privateKey;
-		this.certificate = certificate;
-		this.expires = expires;
-	}
+    /**
+     * Creates a new RTCCertificatePEM instance with the specified PEM string
+     * representation of the private key and certificate.
+     *
+     * @param privateKey  Private key as PEM string.
+     * @param certificate Certificate as PEM string.
+     * @param expires     The expiration date of this certificate.
+     */
+    public RTCCertificatePEM(String privateKey, String certificate, long expires) {
+        this.privateKey = privateKey;
+        this.certificate = certificate;
+        this.expires = expires;
+    }
 
-	/**
-	 * @return The PEM string representation of the private key.
-	 */
-	public String getPrivateKey() {
-		return privateKey;
-	}
+    /**
+     * @return The PEM string representation of the private key.
+     */
+    public String getPrivateKey() {
+        return privateKey;
+    }
 
-	/**
-	 * @return The PEM string representation of the certificate.
-	 */
-	public String getCertificate() {
-		return certificate;
-	}
+    /**
+     * @return The PEM string representation of the certificate.
+     */
+    public String getCertificate() {
+        return certificate;
+    }
 
-	/**
-	 * @return The expiration time in milliseconds of this certificate relative
-	 * to the Unix epoch.
-	 */
-	public long getExpires() {
-		return expires;
-	}
+    /**
+     * @return The expiration time in milliseconds of this certificate relative
+     * to the Unix epoch.
+     */
+    public long getExpires() {
+        return expires;
+    }
 }

@@ -23,34 +23,34 @@ package dev.onvoid.webrtc;
  */
 public enum RTCSdpType {
 
-	/**
-	 * Indicates that a description MUST be treated as an SDP offer.
-	 */
-	OFFER,
+    /**
+     * Indicates that a description MUST be treated as an SDP offer.
+     */
+    OFFER,
 
-	/**
-	 * Indicates that a description MUST be treated as an SDP answer, but not a
-	 * final answer. A description used as an SDP PrAnswer may be applied as a
-	 * response to an SDP offer, or an update to a previously sent SDP
-	 * PrAnswer.
-	 */
-	PR_ANSWER,
+    /**
+     * Indicates that a description MUST be treated as an SDP answer, but not a
+     * final answer. A description used as an SDP PrAnswer may be applied as a
+     * response to an SDP offer, or an update to a previously sent SDP
+     * PrAnswer.
+     */
+    PR_ANSWER,
 
-	/**
-	 * Indicates that a description MUST be treated as an SDP final answer, and
-	 * the offer-answer exchange MUST be considered complete. A description used
-	 * as an SDP answer may be applied as a response to an SDP offer or as an
-	 * update to a previously sent SDP PrAnswer.
-	 */
-	ANSWER,
+    /**
+     * Indicates that a description MUST be treated as an SDP final answer, and
+     * the offer-answer exchange MUST be considered complete. A description used
+     * as an SDP answer may be applied as a response to an SDP offer or as an
+     * update to a previously sent SDP PrAnswer.
+     */
+    ANSWER,
 
-	/**
-	 * Indicates that a description MUST be treated as canceling the current SDP
-	 * negotiation and moving the SDP offer and answer back to what it was in
-	 * the previous stable state. Note the local or remote SDP descriptions in
-	 * the previous stable state could be null if there has not yet been a
-	 * successful offer-answer negotiation.
-	 */
-	ROLLBACK;
+    /**
+     * Indicates that a description MUST be treated as canceling the current SDP
+     * negotiation and moving the SDP offer and answer back to what it was in
+     * the previous stable state. Note the local or remote SDP descriptions in
+     * the previous stable state could be null if there has not yet been a
+     * successful offer-answer negotiation.
+     */
+    ROLLBACK;
 
 }

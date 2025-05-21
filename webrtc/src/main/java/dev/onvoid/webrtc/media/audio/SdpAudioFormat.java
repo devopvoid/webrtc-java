@@ -8,9 +8,9 @@ public class SdpAudioFormat {
     public String name;
     public int clockRateHz;
     public int numChannels;
-    public Map<String,String> parameters;
+    public Map<String, String> parameters;
 
-    public SdpAudioFormat(){
+    public SdpAudioFormat() {
 
     }
 

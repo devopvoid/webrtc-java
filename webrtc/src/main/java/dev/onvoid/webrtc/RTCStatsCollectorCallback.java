@@ -24,12 +24,12 @@ package dev.onvoid.webrtc;
  */
 public interface RTCStatsCollectorCallback {
 
-	/**
-	 * All necessary statistics have been gathered and an stats report has been
-	 * generated.
-	 *
-	 * @param report The stats report with updated statistics.
-	 */
-	void onStatsDelivered(RTCStatsReport report);
+    /**
+     * All necessary statistics have been gathered and an stats report has been
+     * generated.
+     *
+     * @param report The stats report with updated statistics.
+     */
+    void onStatsDelivered(RTCStatsReport report);
 
 }

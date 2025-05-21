@@ -18,10 +18,10 @@ package dev.onvoid.webrtc.internal;
 
 public abstract class RefCountedObject extends NativeObject implements RefCounted {
 
-	@Override
-	native public void retain();
-	
-	@Override
-	native public void release();
-	
+    @Override
+    native public void retain();
+
+    @Override
+    native public void release();
+
 }

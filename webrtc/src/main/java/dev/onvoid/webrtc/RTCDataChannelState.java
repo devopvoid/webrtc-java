@@ -23,27 +23,27 @@ package dev.onvoid.webrtc;
  */
 public enum RTCDataChannelState {
 
-	/**
-	 * The user agent is attempting to establish the underlying data transport.
-	 * This is the initial state of an RTCDataChannel object.
-	 */
-	CONNECTING,
+    /**
+     * The user agent is attempting to establish the underlying data transport.
+     * This is the initial state of an RTCDataChannel object.
+     */
+    CONNECTING,
 
-	/**
-	 * The underlying data transport is established and communication is
-	 * possible.
-	 */
-	OPEN,
+    /**
+     * The underlying data transport is established and communication is
+     * possible.
+     */
+    OPEN,
 
-	/**
-	 * The procedure to close down the underlying data transport has started.
-	 */
-	CLOSING,
+    /**
+     * The procedure to close down the underlying data transport has started.
+     */
+    CLOSING,
 
-	/**
-	 * The underlying data transport has been closed or could not be
-	 * established.
-	 */
-	CLOSED;
+    /**
+     * The underlying data transport has been closed or could not be
+     * established.
+     */
+    CLOSED;
 
 }

@@ -18,10 +18,10 @@ package dev.onvoid.webrtc.media.video.desktop;
 
 public class WindowCapturer extends DesktopCapturer {
 
-	public WindowCapturer() {
-		initialize();
-	}
+    public WindowCapturer() {
+        initialize();
+    }
 
-	private native void initialize();
+    private native void initialize();
 
 }

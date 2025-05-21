@@ -27,54 +27,54 @@ import java.util.List;
  */
 public class RTCRtpCapabilities {
 
-	/**
-	 * Supported media codecs as well as entries for RTX, RED and FEC
-	 * mechanisms.
-	 */
-	private final List<RTCRtpCodecCapability> codecs;
+    /**
+     * Supported media codecs as well as entries for RTX, RED and FEC
+     * mechanisms.
+     */
+    private final List<RTCRtpCodecCapability> codecs;
 
-	/**
-	 * Supported RTP header extensions.
-	 */
-	private final List<RTCRtpHeaderExtensionCapability> headerExtensions;
+    /**
+     * Supported RTP header extensions.
+     */
+    private final List<RTCRtpHeaderExtensionCapability> headerExtensions;
 
 
-	/**
-	 * Creates an instance of RTCRtpCapabilities with the supported codec and
-	 * RTP header extension capabilities.
-	 *
-	 * @param codecs           The supported media codecs.
-	 * @param headerExtensions The supported RTP header extensions.
-	 */
-	public RTCRtpCapabilities(List<RTCRtpCodecCapability> codecs,
-			List<RTCRtpHeaderExtensionCapability> headerExtensions) {
-		this.codecs = codecs;
-		this.headerExtensions = headerExtensions;
-	}
+    /**
+     * Creates an instance of RTCRtpCapabilities with the supported codec and
+     * RTP header extension capabilities.
+     *
+     * @param codecs           The supported media codecs.
+     * @param headerExtensions The supported RTP header extensions.
+     */
+    public RTCRtpCapabilities(List<RTCRtpCodecCapability> codecs,
+                              List<RTCRtpHeaderExtensionCapability> headerExtensions) {
+        this.codecs = codecs;
+        this.headerExtensions = headerExtensions;
+    }
 
-	/**
-	 * Returns the supported media codecs as well as entries for RTX, RED and
-	 * FEC mechanisms.
-	 *
-	 * @return The supported media codecs.
-	 */
-	public List<RTCRtpCodecCapability> getCodecs() {
-		return codecs;
-	}
+    /**
+     * Returns the supported media codecs as well as entries for RTX, RED and
+     * FEC mechanisms.
+     *
+     * @return The supported media codecs.
+     */
+    public List<RTCRtpCodecCapability> getCodecs() {
+        return codecs;
+    }
 
-	/**
-	 * Returns the supported RTP header extensions.
-	 *
-	 * @return The supported RTP header extensions.
-	 */
-	public List<RTCRtpHeaderExtensionCapability> getHeaderExtensions() {
-		return headerExtensions;
-	}
+    /**
+     * Returns the supported RTP header extensions.
+     *
+     * @return The supported RTP header extensions.
+     */
+    public List<RTCRtpHeaderExtensionCapability> getHeaderExtensions() {
+        return headerExtensions;
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s [codecs=%s, headerExtensions=%s]",
-				RTCRtpCapabilities.class.getSimpleName(), codecs,
-				headerExtensions);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [codecs=%s, headerExtensions=%s]",
+                RTCRtpCapabilities.class.getSimpleName(), codecs,
+                headerExtensions);
+    }
 }

@@ -20,42 +20,42 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AudioRecorder {
 
-	private final AtomicBoolean capturing;
+    private final AtomicBoolean capturing;
 
-	private AudioDeviceModule module;
+    private AudioDeviceModule module;
 
-	private AudioDevice device;
+    private AudioDevice device;
 
-	private AudioSink sink;
+    private AudioSink sink;
 
 
-	public AudioRecorder() {
-		capturing = new AtomicBoolean();
-	}
+    public AudioRecorder() {
+        capturing = new AtomicBoolean();
+    }
 
-	public void setAudioDevice(AudioDevice device) {
-		this.device = device;
-	}
+    public void setAudioDevice(AudioDevice device) {
+        this.device = device;
+    }
 
-	public void setAudioSink(AudioSink sink) {
-		this.sink = sink;
-	}
+    public void setAudioSink(AudioSink sink) {
+        this.sink = sink;
+    }
 
-	public void start() {
-		if (capturing.compareAndSet(false, true)) {
-			module = new AudioDeviceModule();
-			module.setRecordingDevice(device);
-			module.setAudioSink(sink);
-			module.initRecording();
-			module.startRecording();
-		}
-	}
+    public void start() {
+        if (capturing.compareAndSet(false, true)) {
+            module = new AudioDeviceModule();
+            module.setRecordingDevice(device);
+            module.setAudioSink(sink);
+            module.initRecording();
+            module.startRecording();
+        }
+    }
 
-	public void stop() {
-		if (capturing.compareAndSet(true, false)) {
-			module.stopRecording();
-			module.dispose();
-		}
-	}
+    public void stop() {
+        if (capturing.compareAndSet(true, false)) {
+            module.stopRecording();
+            module.dispose();
+        }
+    }
 
 }

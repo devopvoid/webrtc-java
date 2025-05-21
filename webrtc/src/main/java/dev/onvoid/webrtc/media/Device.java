@@ -20,47 +20,47 @@ import java.util.Objects;
 
 public abstract class Device {
 
-	private final String descriptor;
+    private final String descriptor;
 
-	private final String name;
+    private final String name;
 
 
-	protected Device(String name, String descriptor) {
-		this.name = name;
-		this.descriptor = descriptor;
-	}
+    protected Device(String name, String descriptor) {
+        this.name = name;
+        this.descriptor = descriptor;
+    }
 
-	public String getDescriptor() {
-		return descriptor;
-	}
+    public String getDescriptor() {
+        return descriptor;
+    }
 
-	public String getName() {
-		return name;
-	}
+    public String getName() {
+        return name;
+    }
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) {
-			return true;
-		}
-		if (o == null || getClass() != o.getClass()) {
-			return false;
-		}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
 
-		Device device = (Device) o;
+        Device device = (Device) o;
 
-		return Objects.equals(descriptor, device.descriptor) &&
-				Objects.equals(name, device.name);
-	}
+        return Objects.equals(descriptor, device.descriptor) &&
+                Objects.equals(name, device.name);
+    }
 
-	@Override
-	public int hashCode() {
-		return Objects.hash(descriptor, name);
-	}
+    @Override
+    public int hashCode() {
+        return Objects.hash(descriptor, name);
+    }
 
-	@Override
-	public String toString() {
-		return String.format("%s [name=%s, descriptor=%s]",
-				Device.class.getSimpleName(), name, descriptor);
-	}
+    @Override
+    public String toString() {
+        return String.format("%s [name=%s, descriptor=%s]",
+                Device.class.getSimpleName(), name, descriptor);
+    }
 }

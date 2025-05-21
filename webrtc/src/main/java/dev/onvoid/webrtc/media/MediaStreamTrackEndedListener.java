@@ -25,11 +25,11 @@ package dev.onvoid.webrtc.media;
 @FunctionalInterface
 public interface MediaStreamTrackEndedListener {
 
-	/**
-	 * The given track ended.
-	 *
-	 * @param track The ended track.
-	 */
-	void onTrackEnd(MediaStreamTrack track);
+    /**
+     * The given track ended.
+     *
+     * @param track The ended track.
+     */
+    void onTrackEnd(MediaStreamTrack track);
 
 }

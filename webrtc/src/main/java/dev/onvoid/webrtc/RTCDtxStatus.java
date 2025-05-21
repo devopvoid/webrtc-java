@@ -23,14 +23,14 @@ package dev.onvoid.webrtc;
  */
 public enum RTCDtxStatus {
 
-	/**
-	 * Discontinuous transmission is disabled.
-	 */
-	DISABLED,
+    /**
+     * Discontinuous transmission is disabled.
+     */
+    DISABLED,
 
-	/**
-	 * Discontinuous transmission is enabled if negotiated.
-	 */
-	ENABLED;
+    /**
+     * Discontinuous transmission is enabled if negotiated.
+     */
+    ENABLED;
 
 }

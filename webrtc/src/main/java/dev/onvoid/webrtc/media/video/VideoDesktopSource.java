@@ -18,24 +18,24 @@ package dev.onvoid.webrtc.media.video;
 
 public class VideoDesktopSource extends VideoTrackSource {
 
-	public VideoDesktopSource() {
-		super();
+    public VideoDesktopSource() {
+        super();
 
-		initialize();
-	}
+        initialize();
+    }
 
-	public native void setSourceId(long sourceId, boolean isWindow);
+    public native void setSourceId(long sourceId, boolean isWindow);
 
-	public native void setFrameRate(int frameRate);
+    public native void setFrameRate(int frameRate);
 
-	public native void setMaxFrameSize(int width, int height);
+    public native void setMaxFrameSize(int width, int height);
 
-	public native void start();
+    public native void start();
 
-	public native void stop();
+    public native void stop();
 
-	public native void dispose();
+    public native void dispose();
 
-	private native void initialize();
+    private native void initialize();
 
 }

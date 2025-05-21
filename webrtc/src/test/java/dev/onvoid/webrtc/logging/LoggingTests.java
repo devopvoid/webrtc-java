@@ -16,39 +16,39 @@
 
 package dev.onvoid.webrtc.logging;
 
-import static org.junit.jupiter.api.Assertions.*;
-
-import java.util.concurrent.CountDownLatch;
-
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.logging.Logging.Severity;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioLayer;
-
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoggingTests {
 
-	@Test
-	void logInfo() throws Exception {
-		CountDownLatch latch = new CountDownLatch(3);
+    @Test
+    void logInfo() throws Exception {
+        CountDownLatch latch = new CountDownLatch(3);
 
-		LogSink sink = (severity, message) -> {
-			assertTrue(severity.ordinal() > Severity.VERBOSE.ordinal());
-			assertNotNull(message);
+        LogSink sink = (severity, message) -> {
+            assertTrue(severity.ordinal() > Severity.VERBOSE.ordinal());
+            assertNotNull(message);
 
-			latch.countDown();
-		};
+            latch.countDown();
+        };
 
-		Logging.addLogSink(Logging.Severity.INFO, sink);
+        Logging.addLogSink(Logging.Severity.INFO, sink);
 
-		AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
-		PeerConnectionFactory factory = new PeerConnectionFactory(audioDevModule);
+        AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+        PeerConnectionFactory factory = new PeerConnectionFactory(audioDevModule);
 
-		latch.await();
+        latch.await();
 
-		audioDevModule.dispose();
-		factory.dispose();
-	}
+        audioDevModule.dispose();
+        factory.dispose();
+    }
 
 }

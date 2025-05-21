@@ -16,63 +16,63 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-import static org.junit.jupiter.api.Assertions.*;
-
 import dev.onvoid.webrtc.TestBase;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 class AudioTrackTests extends TestBase {
 
-	private AudioTrack audioTrack;
+    private AudioTrack audioTrack;
 
 
-	@BeforeEach
-	void init() {
-		AudioOptions audioOptions = new AudioOptions();
-		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
+    @BeforeEach
+    void init() {
+        AudioOptions audioOptions = new AudioOptions();
+        AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 
-		audioTrack = factory.createAudioTrack("audioTrack", audioSource);
-	}
+        audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+    }
 
-	@AfterEach
-	void dispose() {
-		audioTrack.dispose();
-	}
+    @AfterEach
+    void dispose() {
+        audioTrack.dispose();
+    }
 
-	@Test
-	void disableEnableTrack() {
-		audioTrack.setEnabled(false);
+    @Test
+    void disableEnableTrack() {
+        audioTrack.setEnabled(false);
 
-		assertFalse(audioTrack.isEnabled());
+        assertFalse(audioTrack.isEnabled());
 
-		audioTrack.setEnabled(true);
+        audioTrack.setEnabled(true);
 
-		assertTrue(audioTrack.isEnabled());
-	}
+        assertTrue(audioTrack.isEnabled());
+    }
 
-	@Test
-	void addNullSink() {
-		assertThrows(NullPointerException.class, () -> audioTrack.addSink(null));
-	}
+    @Test
+    void addNullSink() {
+        assertThrows(NullPointerException.class, () -> audioTrack.addSink(null));
+    }
 
-	@Test
-	void removeNullSink() {
-		assertThrows(NullPointerException.class, () -> audioTrack.removeSink(null));
-	}
+    @Test
+    void removeNullSink() {
+        assertThrows(NullPointerException.class, () -> audioTrack.removeSink(null));
+    }
 
-	@Test
-	void addRemoveSink() {
-		AudioTrackSink sink = (data, bitsPerSample, sampleRate, channels, frames) -> { };
+    @Test
+    void addRemoveSink() {
+        AudioTrackSink sink = (data, bitsPerSample, sampleRate, channels, frames) -> {
+        };
 
-		audioTrack.addSink(sink);
-		audioTrack.removeSink(sink);
-	}
+        audioTrack.addSink(sink);
+        audioTrack.removeSink(sink);
+    }
 
-	@Test
-	void getSource(){
-		assertNotNull(audioTrack.getSource());
-	}
+    @Test
+    void getSource() {
+        assertNotNull(audioTrack.getSource());
+    }
 }

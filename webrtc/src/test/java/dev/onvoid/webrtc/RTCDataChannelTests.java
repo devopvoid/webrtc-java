@@ -16,38 +16,38 @@
 
 package dev.onvoid.webrtc;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RTCDataChannelTests extends TestBase {
 
-	@Test
-	void textMessage() throws Exception {
-		TestPeerConnection caller = new TestPeerConnection(factory);
-		TestPeerConnection callee = new TestPeerConnection(factory);
+    @Test
+    void textMessage() throws Exception {
+        TestPeerConnection caller = new TestPeerConnection(factory);
+        TestPeerConnection callee = new TestPeerConnection(factory);
 
-		caller.setRemotePeerConnection(callee);
-		callee.setRemotePeerConnection(caller);
+        caller.setRemotePeerConnection(callee);
+        callee.setRemotePeerConnection(caller);
 
-		callee.setRemoteDescription(caller.createOffer());
-		caller.setRemoteDescription(callee.createAnswer());
+        callee.setRemoteDescription(caller.createOffer());
+        caller.setRemoteDescription(callee.createAnswer());
 
-		caller.waitUntilConnected();
-		callee.waitUntilConnected();
+        caller.waitUntilConnected();
+        callee.waitUntilConnected();
 
-		caller.sendTextMessage("Hello world");
-		callee.sendTextMessage("Hi :)");
+        caller.sendTextMessage("Hello world");
+        callee.sendTextMessage("Hi :)");
 
-		Thread.sleep(500);
+        Thread.sleep(500);
 
-		assertEquals(Arrays.asList("Hello world"), callee.getReceivedTexts());
-		assertEquals(Arrays.asList("Hi :)"), caller.getReceivedTexts());
+        assertEquals(Arrays.asList("Hello world"), callee.getReceivedTexts());
+        assertEquals(Arrays.asList("Hi :)"), caller.getReceivedTexts());
 
-		caller.close();
-		callee.close();
-	}
+        caller.close();
+        callee.close();
+    }
 
 }

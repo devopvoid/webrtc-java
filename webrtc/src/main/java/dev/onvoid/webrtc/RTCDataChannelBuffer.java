@@ -25,27 +25,27 @@ import java.nio.ByteBuffer;
  */
 public class RTCDataChannelBuffer {
 
-	/**
-	 * The underlying data.
-	 */
-	public final ByteBuffer data;
+    /**
+     * The underlying data.
+     */
+    public final ByteBuffer data;
 
-	/**
-	 * Indicates whether the data contains UTF-8 text or binary data.
-	 */
-	public final boolean binary;
+    /**
+     * Indicates whether the data contains UTF-8 text or binary data.
+     */
+    public final boolean binary;
 
 
-	/**
-	 * Creates an instance of RTCDataChannelBuffer with the specified payload
-	 * and indicator what kind of data the payload contains.
-	 *
-	 * @param data   The byte buffer containing the data to send.
-	 * @param binary Whether the buffer contains UTF-8 text or binary data.
-	 */
-	public RTCDataChannelBuffer(ByteBuffer data, boolean binary) {
-		this.data = data;
-		this.binary = binary;
-	}
+    /**
+     * Creates an instance of RTCDataChannelBuffer with the specified payload
+     * and indicator what kind of data the payload contains.
+     *
+     * @param data   The byte buffer containing the data to send.
+     * @param binary Whether the buffer contains UTF-8 text or binary data.
+     */
+    public RTCDataChannelBuffer(ByteBuffer data, boolean binary) {
+        this.data = data;
+        this.binary = binary;
+    }
 
 }

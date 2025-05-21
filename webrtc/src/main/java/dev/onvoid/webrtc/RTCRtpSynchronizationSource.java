@@ -23,34 +23,34 @@ package dev.onvoid.webrtc;
  */
 public class RTCRtpSynchronizationSource extends RTCRtpContributingSource {
 
-	/**
-	 * Only present for audio receivers. Whether the last RTP packet, delivered
-	 * from this source, contains voice activity (true) or not (false). If the
-	 * RFC 6464 extension header was not present, or if the peer has signaled
-	 * that it is not using the V bit by setting the "vad" extension attribute
-	 * to "off".
-	 */
-	public final boolean voiceActivityFlag;
+    /**
+     * Only present for audio receivers. Whether the last RTP packet, delivered
+     * from this source, contains voice activity (true) or not (false). If the
+     * RFC 6464 extension header was not present, or if the peer has signaled
+     * that it is not using the V bit by setting the "vad" extension attribute
+     * to "off".
+     */
+    public final boolean voiceActivityFlag;
 
 
-	/**
-	 * Creates an instance of RTCRtpSynchronizationSource with the specified
-	 * synchronization source information.
-	 *
-	 * @param timestamp         The most recent time a frame from an RTP
-	 *                          packet.
-	 * @param source            The CSRC or SSRC identifier of the contributing
-	 *                          or synchronization source.
-	 * @param audioLevel        The sound pressure level. Only present for audio
-	 *                          receivers.
-	 * @param rtpTimestamp      The last RTP timestamp.
-	 * @param voiceActivityFlag Whether the last RTP packet contains voice
-	 *                          activity (true) or not (false).
-	 */
-	protected RTCRtpSynchronizationSource(long timestamp, long source,
-			double audioLevel, long rtpTimestamp, boolean voiceActivityFlag) {
-		super(timestamp, source, audioLevel, rtpTimestamp);
+    /**
+     * Creates an instance of RTCRtpSynchronizationSource with the specified
+     * synchronization source information.
+     *
+     * @param timestamp         The most recent time a frame from an RTP
+     *                          packet.
+     * @param source            The CSRC or SSRC identifier of the contributing
+     *                          or synchronization source.
+     * @param audioLevel        The sound pressure level. Only present for audio
+     *                          receivers.
+     * @param rtpTimestamp      The last RTP timestamp.
+     * @param voiceActivityFlag Whether the last RTP packet contains voice
+     *                          activity (true) or not (false).
+     */
+    protected RTCRtpSynchronizationSource(long timestamp, long source,
+                                          double audioLevel, long rtpTimestamp, boolean voiceActivityFlag) {
+        super(timestamp, source, audioLevel, rtpTimestamp);
 
-		this.voiceActivityFlag = voiceActivityFlag;
-	}
+        this.voiceActivityFlag = voiceActivityFlag;
+    }
 }
