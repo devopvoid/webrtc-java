@@ -20,23 +20,24 @@
 #include "rtc_base/ref_count.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_retain
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	rtc::RefCountInterface * ref = GetHandle<rtc::RefCountInterface>(env, caller);
-	CHECK_HANDLE(ref);
+    rtc::RefCountInterface* ref = GetHandle<rtc::RefCountInterface>(env, caller);
+    CHECK_HANDLE(ref);
 
-	ref->AddRef();
+    ref->AddRef();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_release
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	rtc::RefCountInterface * ref = GetHandle<rtc::RefCountInterface>(env, caller);
-	CHECK_HANDLE(ref);
+    rtc::RefCountInterface* ref = GetHandle<rtc::RefCountInterface>(env, caller);
+    CHECK_HANDLE(ref);
 
-	const auto status = ref->Release();
+    const auto status = ref->Release();
 
-	if (status == rtc::RefCountReleaseStatus::kDroppedLastRef) {
-		SetHandle<std::nullptr_t>(env, caller, nullptr);
-	}
+    if (status == rtc::RefCountReleaseStatus::kDroppedLastRef)
+    {
+        SetHandle<std::nullptr_t>(env, caller, nullptr);
+    }
 }

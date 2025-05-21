@@ -22,95 +22,102 @@
 
 namespace jni
 {
-	AudioTransportSource::AudioTransportSource(JNIEnv * env, const JavaGlobalRef<jobject> & source) :
-		source(source),
-		buffer(nullptr),
-		javaClass(JavaClasses::get<JavaAudioSourceClass>(env))
-	{
-	}
+    AudioTransportSource::AudioTransportSource(JNIEnv* env, const JavaGlobalRef<jobject>& source) :
+        source(source),
+        buffer(nullptr),
+        javaClass(JavaClasses::get<JavaAudioSourceClass>(env))
+    {
+    }
 
-	int32_t AudioTransportSource::NeedMorePlayData(const size_t nSamples,
+    int32_t AudioTransportSource::NeedMorePlayData(const size_t nSamples,
                                                    const size_t nBytesPerSample,
                                                    const size_t nChannels,
                                                    const uint32_t samplesPerSec,
-                                                   void * audioSamples,
-                                                   size_t & nSamplesOut,
-                                                   int64_t * elapsed_time_ms,
-                                                   int64_t * ntp_time_ms)
-	{
-		JNIEnv * env = AttachCurrentThread();
+                                                   void* audioSamples,
+                                                   size_t& nSamplesOut,
+                                                   int64_t* elapsed_time_ms,
+                                                   int64_t* ntp_time_ms)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		*elapsed_time_ms = 0;
-		*ntp_time_ms = 0;
+        *elapsed_time_ms = 0;
+        *ntp_time_ms = 0;
 
-		jsize bufferSize = static_cast<jsize>(nSamples * nBytesPerSample);
+        jsize bufferSize = static_cast<jsize>(nSamples * nBytesPerSample);
 
-		if (buffer.get() == nullptr) {
-			jbyteArray dataArray = env->NewByteArray(bufferSize);
+        if (buffer.get() == nullptr)
+        {
+            jbyteArray dataArray = env->NewByteArray(bufferSize);
 
-			buffer = JavaGlobalRef<jbyteArray>(env, dataArray);
+            buffer = JavaGlobalRef<jbyteArray>(env, dataArray);
 
-			jsize bufferLength = env->GetArrayLength(buffer);
+            jsize bufferLength = env->GetArrayLength(buffer);
 
-			if (bufferLength < bufferSize) {
-				buffer = JavaGlobalRef<jbyteArray>(env, nullptr);
-				return 0;
-			}
-		}
-		
-		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample, nChannels, samplesPerSec);
+            if (bufferLength < bufferSize)
+            {
+                buffer = JavaGlobalRef<jbyteArray>(env, nullptr);
+                return 0;
+            }
+        }
 
-		if (nSamplesOut > 0) {
-			env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<int8_t *>(audioSamples));
-			return nSamplesOut;
-		}
+        nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample,
+                                         nChannels, samplesPerSec);
 
-		return nSamples;
-	}
+        if (nSamplesOut > 0)
+        {
+            env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<int8_t*>(audioSamples));
+            return nSamplesOut;
+        }
 
-	int32_t AudioTransportSource::RecordedDataIsAvailable(const void* audioSamples,
-					const size_t nSamples,
-					const size_t nBytesPerSample,
-					const size_t nChannels,
-					const uint32_t samplesPerSec,
-					const uint32_t totalDelayMS,
-					const int32_t clockDrift,
-					const uint32_t currentMicLevel,
-					const bool keyPressed,
-					uint32_t& newMicLevel)
-	{
-		JNIEnv * env = AttachCurrentThread();
+        return nSamples;
+    }
 
-		jsize bufferSize = static_cast<jsize>(nSamples * nBytesPerSample);
+    int32_t AudioTransportSource::RecordedDataIsAvailable(const void* audioSamples,
+                                                          const size_t nSamples,
+                                                          const size_t nBytesPerSample,
+                                                          const size_t nChannels,
+                                                          const uint32_t samplesPerSec,
+                                                          const uint32_t totalDelayMS,
+                                                          const int32_t clockDrift,
+                                                          const uint32_t currentMicLevel,
+                                                          const bool keyPressed,
+                                                          uint32_t& newMicLevel)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		if (buffer.get() == nullptr) {
-			jbyteArray dataArray = env->NewByteArray(bufferSize);
+        jsize bufferSize = static_cast<jsize>(nSamples * nBytesPerSample);
 
-			buffer = JavaGlobalRef<jbyteArray>(env, dataArray);
+        if (buffer.get() == nullptr)
+        {
+            jbyteArray dataArray = env->NewByteArray(bufferSize);
 
-			jsize bufferLength = env->GetArrayLength(buffer);
+            buffer = JavaGlobalRef<jbyteArray>(env, dataArray);
 
-			if (bufferLength < bufferSize) {
-				buffer = JavaGlobalRef<jbyteArray>(env, nullptr);
-				return 0;
-			}
-		}
-		
-		int32_t nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample, nChannels, samplesPerSec);
+            jsize bufferLength = env->GetArrayLength(buffer);
 
-		// if (nSamplesOut > 0) {
-		// 	env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<const int8_t *>(audioSamples));
-		// 	return nSamplesOut;
-		// }
+            if (bufferLength < bufferSize)
+            {
+                buffer = JavaGlobalRef<jbyteArray>(env, nullptr);
+                return 0;
+            }
+        }
 
-		return nSamplesOut;
-	}
-	
+        int32_t nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples,
+                                                 nBytesPerSample, nChannels, samplesPerSec);
 
-	AudioTransportSource::JavaAudioSourceClass::JavaAudioSourceClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG_AUDIO"AudioSource");
+        // if (nSamplesOut > 0) {
+        // 	env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<const int8_t *>(audioSamples));
+        // 	return nSamplesOut;
+        // }
 
-		onPlaybackData = GetMethod(env, cls, "onPlaybackData", "([BIIII)I");
-	}
+        return nSamplesOut;
+    }
+
+
+    AudioTransportSource::JavaAudioSourceClass::JavaAudioSourceClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG_AUDIO"AudioSource");
+
+        onPlaybackData = GetMethod(env, cls, "onPlaybackData", "([BIIII)I");
+    }
 }

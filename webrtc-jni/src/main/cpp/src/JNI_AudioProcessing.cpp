@@ -33,213 +33,239 @@
 #include "rtc_base/logging.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyConfig
-(JNIEnv * env, jobject caller, jobject config)
+(JNIEnv* env, jobject caller, jobject config)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLE(apm);
-	
-	apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
+    webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+    CHECK_HANDLE(apm);
+
+    apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setStreamDelayMs
-(JNIEnv * env, jobject caller, jint delayMs)
+(JNIEnv* env, jobject caller, jint delayMs)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLE(apm);
+    webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+    CHECK_HANDLE(apm);
 
-	apm->set_stream_delay_ms(delayMs);
+    apm->set_stream_delay_ms(delayMs);
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_getStreamDelayMs
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLEV(apm, 0);
+    webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+    CHECK_HANDLEV(apm, 0);
 
-	return apm->stream_delay_ms();
+    return apm->stream_delay_ms();
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processStream
-(JNIEnv * env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
+(JNIEnv* env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLEV(apm, 0);
+    webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+    CHECK_HANDLEV(apm, 0);
 
-	webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, inputConfig));
-	webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, outputConfig));
+    webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(
+        env, jni::JavaLocalRef<jobject>(env, inputConfig));
+    webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(
+        env, jni::JavaLocalRef<jobject>(env, outputConfig));
 
-	jboolean isDstCopy = JNI_FALSE;
+    jboolean isDstCopy = JNI_FALSE;
 
-	jbyte * srcPtr = env->GetByteArrayElements(src, NULL);
-	jbyte * dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
+    jbyte* srcPtr = env->GetByteArrayElements(src, nullptr);
+    jbyte* dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
 
-	const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
-	int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
-	
-	int result;
+    auto srcFrame = reinterpret_cast<const int16_t*>(srcPtr);
+    auto dstFrame = reinterpret_cast<int16_t*>(dstPtr);
 
-	if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2) {
-		// Up-mixing, only mono to stereo.
-		// For complex channel layouts a channel mixer is required.
+    int result;
 
-		const size_t srcNumSamples = srcConfig.num_samples();
-		const size_t dstNumChannels = dstConfig.num_channels();
-		const size_t frameSize = srcNumSamples * dstNumChannels;
+    if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2)
+    {
+        // Up-mixing, only mono to stereo.
+        // For complex channel layouts a channel mixer is required.
 
-		if (frameSize > webrtc::AudioFrame::kMaxDataSizeSamples) {
-			return -9;
-		}
+        const size_t srcNumSamples = srcConfig.num_samples();
+        const size_t dstNumChannels = dstConfig.num_channels();
+        const size_t frameSize = srcNumSamples * dstNumChannels;
 
-		for (int i = static_cast<int>(srcNumSamples) - 1; i >= 0; i--) {
-			for (size_t j = 0; j < dstNumChannels; ++j) {
-				dstFrame[dstNumChannels * i + j] = srcFrame[i];
-			}
-		}
+        if (frameSize > webrtc::AudioFrame::kMaxDataSizeSamples)
+        {
+            return -9;
+        }
 
-		srcConfig.set_num_channels(dstNumChannels);
-		
-		result = apm->ProcessStream(dstFrame, srcConfig, dstConfig, dstFrame);
-	}
-	else {
-		// Will also down-mix if required, e.g. from stereo to mono.
-		result = apm->ProcessStream(srcFrame, srcConfig, dstConfig, dstFrame);
-	}
+        for (int i = static_cast<int>(srcNumSamples) - 1; i >= 0; i--)
+        {
+            for (size_t j = 0; j < dstNumChannels; ++j)
+            {
+                dstFrame[dstNumChannels * i + j] = srcFrame[i];
+            }
+        }
 
-	if (isDstCopy == JNI_TRUE) {
-		jsize dstLength = env->GetArrayLength(dest);
+        srcConfig.set_num_channels(dstNumChannels);
 
-		env->SetByteArrayRegion(dest, 0, dstLength, dstPtr);
-	}
+        result = apm->ProcessStream(dstFrame, srcConfig, dstConfig, dstFrame);
+    }
+    else
+    {
+        // Will also down-mix if required, e.g. from stereo to mono.
+        result = apm->ProcessStream(srcFrame, srcConfig, dstConfig, dstFrame);
+    }
 
-	env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseByteArrayElements(dest, dstPtr, JNI_ABORT);
+    if (isDstCopy == JNI_TRUE)
+    {
+        jsize dstLength = env->GetArrayLength(dest);
 
-	return result;
+        env->SetByteArrayRegion(dest, 0, dstLength, dstPtr);
+    }
+
+    env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
+    env->ReleaseByteArrayElements(dest, dstPtr, JNI_ABORT);
+
+    return result;
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_processReverseStream
-(JNIEnv * env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
+(JNIEnv* env, jobject caller, jbyteArray src, jobject inputConfig, jobject outputConfig, jbyteArray dest)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLEV(apm, 0);
+    webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+    CHECK_HANDLEV(apm, 0);
 
-	webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, inputConfig));
-	webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, outputConfig));
+    webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(
+        env, jni::JavaLocalRef<jobject>(env, inputConfig));
+    webrtc::StreamConfig dstConfig = jni::AudioProcessingStreamConfig::toNative(
+        env, jni::JavaLocalRef<jobject>(env, outputConfig));
 
-	jboolean isDstCopy = JNI_FALSE;
+    jboolean isDstCopy = JNI_FALSE;
 
-	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
-	jbyte * dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
+    jbyte* srcPtr = env->GetByteArrayElements(src, nullptr);
+    jbyte* dstPtr = env->GetByteArrayElements(dest, &isDstCopy);
 
-	const int16_t * srcFrame = reinterpret_cast<const int16_t *>(srcPtr);
-	int16_t * dstFrame = reinterpret_cast<int16_t *>(dstPtr);
+    auto srcFrame = reinterpret_cast<const int16_t*>(srcPtr);
+    auto dstFrame = reinterpret_cast<int16_t*>(dstPtr);
 
-	int result;
+    int result;
 
-	if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2) {
-		// Up-mixing, only mono to stereo.
-		// For complex channel layouts a channel mixer is required.
+    if (srcConfig.num_channels() == 1 && dstConfig.num_channels() == 2)
+    {
+        // Up-mixing, only mono to stereo.
+        // For complex channel layouts a channel mixer is required.
 
-		const size_t srcNumSamples = srcConfig.num_samples();
-		const size_t dstNumChannels = dstConfig.num_channels();
-		const size_t frameSize = srcNumSamples * dstNumChannels;
+        const size_t srcNumSamples = srcConfig.num_samples();
+        const size_t dstNumChannels = dstConfig.num_channels();
+        const size_t frameSize = srcNumSamples * dstNumChannels;
 
-		if (frameSize > webrtc::AudioFrame::kMaxDataSizeSamples) {
-			return -9;
-		}
+        if (frameSize > webrtc::AudioFrame::kMaxDataSizeSamples)
+        {
+            return -9;
+        }
 
-		for (int i = static_cast<int>(srcNumSamples) - 1; i >= 0; i--) {
-			for (size_t j = 0; j < dstNumChannels; ++j) {
-				dstFrame[dstNumChannels * i + j] = srcFrame[i];
-			}
-		}
+        for (int i = static_cast<int>(srcNumSamples) - 1; i >= 0; i--)
+        {
+            for (size_t j = 0; j < dstNumChannels; ++j)
+            {
+                dstFrame[dstNumChannels * i + j] = srcFrame[i];
+            }
+        }
 
-		srcConfig.set_num_channels(dstNumChannels);
+        srcConfig.set_num_channels(dstNumChannels);
 
-		result = apm->ProcessReverseStream(dstFrame, srcConfig, dstConfig, dstFrame);
-	}
-	else {
-		// Will also down-mix if required, e.g. from stereo to mono.
-		result = apm->ProcessReverseStream(srcFrame, srcConfig, dstConfig, dstFrame);
-	}
+        result = apm->ProcessReverseStream(dstFrame, srcConfig, dstConfig, dstFrame);
+    }
+    else
+    {
+        // Will also down-mix if required, e.g. from stereo to mono.
+        result = apm->ProcessReverseStream(srcFrame, srcConfig, dstConfig, dstFrame);
+    }
 
-	if (isDstCopy == JNI_TRUE) {
-		jsize dstLength = env->GetArrayLength(dest);
+    if (isDstCopy == JNI_TRUE)
+    {
+        jsize dstLength = env->GetArrayLength(dest);
 
-		env->SetByteArrayRegion(dest, 0, dstLength, dstPtr);
-	}
+        env->SetByteArrayRegion(dest, 0, dstLength, dstPtr);
+    }
 
-	env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseByteArrayElements(dest, dstPtr, JNI_ABORT);
+    env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
+    env->ReleaseByteArrayElements(dest, dstPtr, JNI_ABORT);
 
-	return result;
+    return result;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispose
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLE(apm);
+    webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+    CHECK_HANDLE(apm);
 
-	rtc::RefCountReleaseStatus status = apm->Release();
+    rtc::RefCountReleaseStatus status = apm->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-	}
+    if (status != rtc::RefCountReleaseStatus::kDroppedLastRef)
+    {
+        RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+    }
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+    SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-	apm = nullptr;
+    apm = nullptr;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
-	
-	if (!apm) {
-		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
-		return;
-	}
+    rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
 
-	SetHandle(env, caller, apm.release());
+    if (!apm)
+    {
+        env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
+        return;
+    }
+
+    SetHandle(env, caller, apm.release());
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__IIILdev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2
-	 (JNIEnv * env, jobject caller, jint capture_input_sample_rate_hz, jint capture_output_sample_rate_hz, jint render_sample_rate_hz, jobject capture_input_layout, jobject capture_output_layout, jobject render_input_layout)
+JNIEXPORT void JNICALL
+Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__IIILdev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2Ldev_onvoid_webrtc_media_audio_ChannelLayout_2
+(JNIEnv* env, jobject caller, jint capture_input_sample_rate_hz, jint capture_output_sample_rate_hz,
+ jint render_sample_rate_hz, jobject capture_input_layout, jobject capture_output_layout, jobject render_input_layout)
 {
-	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
+    rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
 
-	apm->Initialize(capture_input_sample_rate_hz, capture_output_sample_rate_hz, render_sample_rate_hz, jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, capture_input_layout), jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, capture_output_layout), jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, render_input_layout));
-	
-	if (!apm) {
-		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
-		return;
-	}
+    apm->Initialize(capture_input_sample_rate_hz, capture_output_sample_rate_hz, render_sample_rate_hz,
+                    jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, capture_input_layout),
+                    jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, capture_output_layout),
+                    jni::JavaEnums::toNative<webrtc::AudioProcessing::ChannelLayout>(env, render_input_layout));
 
-	SetHandle(env, caller, apm.release());
+    if (!apm)
+    {
+        env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
+        return;
+    }
+
+    SetHandle(env, caller, apm.release());
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__Ldev_onvoid_webrtc_media_audio_ProcessingConfig_2
-  (JNIEnv * env, jobject caller, jobject jconfig)
+JNIEXPORT void JNICALL
+Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize__Ldev_onvoid_webrtc_media_audio_ProcessingConfig_2
+(JNIEnv* env, jobject caller, jobject jconfig)
 {
-	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
-	webrtc::ProcessingConfig * config = GetHandle<webrtc::ProcessingConfig>(env, jconfig);
-	apm->Initialize(*config);
+    rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::AudioProcessingBuilder().Create();
+    webrtc::ProcessingConfig* config = GetHandle<webrtc::ProcessingConfig>(env, jconfig);
+    apm->Initialize(*config);
 
-	if (!apm) {
-		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
-		return;
-	}
+    if (!apm)
+    {
+        env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
+        return;
+    }
 
-	SetHandle(env, caller, apm.release());
+    SetHandle(env, caller, apm.release());
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_updateStats
 (JNIEnv* env, jobject caller)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLE(apm);
+    webrtc::AudioProcessing* apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+    CHECK_HANDLE(apm);
 
-	jni::AudioProcessing::updateStats(apm->GetStatistics(), env, jni::JavaLocalRef<jobject>(env, caller));
+    jni::AudioProcessing::updateStats(apm->GetStatistics(), env, jni::JavaLocalRef<jobject>(env, caller));
 }

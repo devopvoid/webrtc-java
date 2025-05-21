@@ -28,197 +28,216 @@
 
 namespace jni
 {
-	WinHotplugNotifier::WinHotplugNotifier(std::list<GUID> devInterfaces) :
-		deviceInterfaces(devInterfaces),
-		hWnd(nullptr),
-		threadHandle(nullptr)
-	{
-	}
+    WinHotplugNotifier::WinHotplugNotifier(std::list<GUID> devInterfaces) :
+        deviceInterfaces(devInterfaces),
+        hWnd(nullptr),
+        threadHandle(nullptr)
+    {
+    }
 
-	WinHotplugNotifier::~WinHotplugNotifier()
-	{
-		stop();
-	}
+    WinHotplugNotifier::~WinHotplugNotifier()
+    {
+        stop();
+    }
 
-	void WinHotplugNotifier::start()
-	{
-		threadHandle = CreateThread(nullptr, 0, run, this, 0, nullptr);
-	}
+    void WinHotplugNotifier::start()
+    {
+        threadHandle = CreateThread(nullptr, 0, run, this, 0, nullptr);
+    }
 
-	void WinHotplugNotifier::stop()
-	{
-		PostMessage(hWnd, WM_CLOSE, 0, 0);
+    void WinHotplugNotifier::stop()
+    {
+        PostMessage(hWnd, WM_CLOSE, 0, 0);
 
-		if (threadHandle != nullptr) {
-			WaitForSingleObject(threadHandle, INFINITE);
-			CloseHandle(threadHandle);
-			threadHandle = nullptr;
-		}
-	}
+        if (threadHandle != nullptr)
+        {
+            WaitForSingleObject(threadHandle, INFINITE);
+            CloseHandle(threadHandle);
+            threadHandle = nullptr;
+        }
+    }
 
-	DWORD WINAPI WinHotplugNotifier::run(void * context)
-	{
-		WinHotplugNotifier * notifier = static_cast<WinHotplugNotifier *>(context);
+    DWORD WINAPI WinHotplugNotifier::run(void* context)
+    {
+        auto notifier = static_cast<WinHotplugNotifier*>(context);
 
-		if (!notifier->initializeWindow()) {
-			RTC_LOG(LS_ERROR) << "MMF: Initialize notification window failed";
-			return 0;
-		}
-		if (!notifier->registerForDeviceNotification()) {
-			RTC_LOG(LS_INFO) << "MMF: Register for device notification failed";
-			return 0;
-		}
+        if (!notifier->initializeWindow())
+        {
+            RTC_LOG(LS_ERROR) << "MMF: Initialize notification window failed";
+            return 0;
+        }
+        if (!notifier->registerForDeviceNotification())
+        {
+            RTC_LOG(LS_INFO) << "MMF: Register for device notification failed";
+            return 0;
+        }
 
-		MSG msg = { 0 };
+        MSG msg = {nullptr};
 
-		while (GetMessage(&msg, notifier->hWnd, 0, 0)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
+        while (GetMessage(&msg, notifier->hWnd, 0, 0))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
 
-		return 0;
-	}
+        return 0;
+    }
 
-	bool WinHotplugNotifier::initializeWindow()
-	{
-		HINSTANCE hInstance = GetModuleHandle(nullptr);
+    bool WinHotplugNotifier::initializeWindow()
+    {
+        HINSTANCE hInstance = GetModuleHandle(nullptr);
 
-		WNDCLASSEX wcex = { 0 };
-		wcex.cbSize = sizeof(WNDCLASSEX);
-		wcex.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-		wcex.lpfnWndProc = WinHotplugNotifier::wndProc;
-		wcex.cbClsExtra = 0;
-		wcex.cbWndExtra = 0;
-		wcex.hInstance = hInstance;
-		wcex.hIcon = NULL;
-		wcex.hCursor = NULL;
-		wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
-		wcex.lpszMenuName = NULL;
-		wcex.lpszClassName = CLASS_NAME;
-		wcex.hIconSm = NULL;
+        WNDCLASSEX wcex = {0};
+        wcex.cbSize = sizeof(WNDCLASSEX);
+        wcex.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
+        wcex.lpfnWndProc = wndProc;
+        wcex.cbClsExtra = 0;
+        wcex.cbWndExtra = 0;
+        wcex.hInstance = hInstance;
+        wcex.hIcon = nullptr;
+        wcex.hCursor = nullptr;
+        wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
+        wcex.lpszMenuName = nullptr;
+        wcex.lpszClassName = CLASS_NAME;
+        wcex.hIconSm = nullptr;
 
-		if (!RegisterClassEx(&wcex)) {
-			return false;
-		}
+        if (!RegisterClassEx(&wcex))
+        {
+            return false;
+        }
 
-		hWnd = CreateWindow(CLASS_NAME, WINDOW_NAME, WS_ICONIC, 0, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
-		
-		if (!hWnd) {
-			return false;
-		}
+        hWnd = CreateWindow(CLASS_NAME, WINDOW_NAME, WS_ICONIC, 0, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance,
+                            nullptr);
 
-		SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+        if (!hWnd)
+        {
+            return false;
+        }
 
-		ShowWindow(hWnd, SW_HIDE);
-		UpdateWindow(hWnd);
+        SetWindowLongPtr(hWnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 
-		return true;
-	}
+        ShowWindow(hWnd, SW_HIDE);
+        UpdateWindow(hWnd);
 
-	bool WinHotplugNotifier::registerForDeviceNotification()
-	{
-		DEV_BROADCAST_DEVICEINTERFACE di = { 0 };
-		di.dbcc_size = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
-		di.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
+        return true;
+    }
 
-		for (GUID & devInterface : deviceInterfaces) {
-			di.dbcc_classguid = devInterface;
+    bool WinHotplugNotifier::registerForDeviceNotification()
+    {
+        DEV_BROADCAST_DEVICEINTERFACE di = {0};
+        di.dbcc_size = sizeof(DEV_BROADCAST_DEVICEINTERFACE);
+        di.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
 
-			HDEVNOTIFY handle = RegisterDeviceNotification(hWnd, &di, DEVICE_NOTIFY_WINDOW_HANDLE);
+        for (GUID& devInterface : deviceInterfaces)
+        {
+            di.dbcc_classguid = devInterface;
 
-			if (handle != nullptr) {
-				deviceNotifyHandles.push_back(handle);
-			}
-			else {
-				RTC_LOG(LS_ERROR) << "Register device notification failed";
-			}
-		}
+            HDEVNOTIFY handle = RegisterDeviceNotification(hWnd, &di, DEVICE_NOTIFY_WINDOW_HANDLE);
 
-		return (deviceInterfaces.size() == deviceNotifyHandles.size());
-	}
+            if (handle != nullptr)
+            {
+                deviceNotifyHandles.push_back(handle);
+            }
+            else
+            {
+                RTC_LOG(LS_ERROR) << "Register device notification failed";
+            }
+        }
 
-	void WinHotplugNotifier::onClose(HWND hWnd)
-	{
-		WinHotplugNotifier * win = reinterpret_cast<WinHotplugNotifier *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
-		
-		for (auto i = win->deviceNotifyHandles.begin(); i != win->deviceNotifyHandles.end();) {
-			HDEVNOTIFY devNotify = *i;
+        return (deviceInterfaces.size() == deviceNotifyHandles.size());
+    }
 
-			if (devNotify != nullptr) {
-				UnregisterDeviceNotification(devNotify);
-			}
+    void WinHotplugNotifier::onClose(HWND hWnd)
+    {
+        auto win = reinterpret_cast<WinHotplugNotifier*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 
-			i = win->deviceNotifyHandles.erase(i);
-		}
+        for (auto i = win->deviceNotifyHandles.begin(); i != win->deviceNotifyHandles.end();)
+        {
+            HDEVNOTIFY devNotify = *i;
 
-		PostQuitMessage(0);
-	}
+            if (devNotify != nullptr)
+            {
+                UnregisterDeviceNotification(devNotify);
+            }
 
-	void WinHotplugNotifier::onDeviceChange(HWND hWnd, WPARAM wParam, LPARAM lParam)
-	{
-		if (lParam == 0) {
-			return;
-		}
-		if (wParam == DBT_USERDEFINED) {
-			return;
-		}
-		
-		// All remaining wParams use DEV_BROADCAST_HDR.
-		auto header = reinterpret_cast<PDEV_BROADCAST_HDR>(lParam);
+            i = win->deviceNotifyHandles.erase(i);
+        }
 
-		if (header == nullptr) {
-			return;
-		}
-		
-		if (header->dbch_devicetype != DBT_DEVTYP_DEVICEINTERFACE) {
-			return;
-		}
-		
-		auto devInterface = reinterpret_cast<PDEV_BROADCAST_DEVICEINTERFACE>(lParam);
+        PostQuitMessage(0);
+    }
 
-		if (devInterface == nullptr) {
-			return;
-		}
+    void WinHotplugNotifier::onDeviceChange(HWND hWnd, WPARAM wParam, LPARAM lParam)
+    {
+        if (lParam == 0)
+        {
+            return;
+        }
+        if (wParam == DBT_USERDEFINED)
+        {
+            return;
+        }
 
-		WinHotplugNotifier * win = reinterpret_cast<WinHotplugNotifier *>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
+        // All remaining wParams use DEV_BROADCAST_HDR.
+        auto header = reinterpret_cast<PDEV_BROADCAST_HDR>(lParam);
 
-		char buffer[512] = { 0 };
-		strncpy_s(buffer, devInterface->dbcc_name, 512);
+        if (header == nullptr)
+        {
+            return;
+        }
 
-		std::string symLink(buffer);
-		std::transform(symLink.begin(), symLink.end(), symLink.begin(), ::tolower);
+        if (header->dbch_devicetype != DBT_DEVTYP_DEVICEINTERFACE)
+        {
+            return;
+        }
 
-		std::wstring symLink_w = UTF8Decode(symLink);
+        auto devInterface = reinterpret_cast<PDEV_BROADCAST_DEVICEINTERFACE>(lParam);
 
-		switch (wParam) {
-			case DBT_DEVICEARRIVAL:
-				win->onDeviceConnected(symLink_w);
-				break;
+        if (devInterface == nullptr)
+        {
+            return;
+        }
 
-			case DBT_DEVICEREMOVECOMPLETE:
-				win->onDeviceDisconnected(symLink_w);
-				break;
-		}
-	}
+        auto win = reinterpret_cast<WinHotplugNotifier*>(GetWindowLongPtr(hWnd, GWLP_USERDATA));
 
-	LRESULT CALLBACK WinHotplugNotifier::wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-	{
-		LRESULT ret = 1;
+        char buffer[512] = {0};
+        strncpy_s(buffer, devInterface->dbcc_name, 512);
 
-		switch (message) {
-			case WM_CLOSE:
-				onClose(hWnd);
-				break;
+        std::string symLink(buffer);
+        std::transform(symLink.begin(), symLink.end(), symLink.begin(), tolower);
 
-			case WM_DEVICECHANGE:
-				onDeviceChange(hWnd, wParam, lParam);
-				break;
+        std::wstring symLink_w = UTF8Decode(symLink);
 
-			default:
-				ret = DefWindowProc(hWnd, message, wParam, lParam);
-				break;
-		}
+        switch (wParam)
+        {
+        case DBT_DEVICEARRIVAL:
+            win->onDeviceConnected(symLink_w);
+            break;
 
-		return ret;
-	}
+        case DBT_DEVICEREMOVECOMPLETE:
+            win->onDeviceDisconnected(symLink_w);
+            break;
+        }
+    }
+
+    LRESULT CALLBACK WinHotplugNotifier::wndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+    {
+        LRESULT ret = 1;
+
+        switch (message)
+        {
+        case WM_CLOSE:
+            onClose(hWnd);
+            break;
+
+        case WM_DEVICECHANGE:
+            onDeviceChange(hWnd, wParam, lParam);
+            break;
+
+        default:
+            ret = DefWindowProc(hWnd, message, wParam, lParam);
+            break;
+        }
+
+        return ret;
+    }
 }

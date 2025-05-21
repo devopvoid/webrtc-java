@@ -23,28 +23,26 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCRtpCapabilities
 {
-	namespace RTCRtpCapabilities
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpCapabilities & capabilities)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpCapabilitiesClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::RtpCapabilities& capabilities)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpCapabilitiesClass>(env);
 
-			JavaLocalRef<jobject> codecs = JavaList::toArrayList(env, capabilities.codecs, &RTCRtpCodecCapability::toJava);
-			JavaLocalRef<jobject> headerExtensions = JavaList::toArrayList(env, capabilities.header_extensions, &RTCRtpHeaderExtensionCapability::toJava);
+        JavaLocalRef<jobject> codecs = JavaList::toArrayList(env, capabilities.codecs, &RTCRtpCodecCapability::toJava);
+        JavaLocalRef<jobject> headerExtensions = JavaList::toArrayList(env, capabilities.header_extensions,
+                                                                       &RTCRtpHeaderExtensionCapability::toJava);
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
-				codecs.get(), headerExtensions.get());
+        jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
+                                        codecs.get(), headerExtensions.get());
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+        return JavaLocalRef<jobject>(env, object);
+    }
 
-		JavaRTCRtpCapabilitiesClass::JavaRTCRtpCapabilitiesClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCRtpCapabilities");
+    JavaRTCRtpCapabilitiesClass::JavaRTCRtpCapabilitiesClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCRtpCapabilities");
 
-			ctor = GetMethod(env, cls, "<init>", "(" LIST_SIG LIST_SIG ")V");
-		}
-	}
+        ctor = GetMethod(env, cls, "<init>", "(" LIST_SIG LIST_SIG ")V");
+    }
 }

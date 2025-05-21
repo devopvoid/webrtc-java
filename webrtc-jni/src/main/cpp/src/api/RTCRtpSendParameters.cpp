@@ -31,71 +31,74 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCRtpSendParameters
 {
-	namespace RTCRtpSendParameters
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpParameters & parameters)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpSendParametersClass>(env);
-			const auto javaParentClass = JavaClasses::get<RTCRtpParameters::JavaRTCRtpParametersClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::RtpParameters& parameters)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpSendParametersClass>(env);
+        const auto javaParentClass = JavaClasses::get<RTCRtpParameters::JavaRTCRtpParametersClass>(env);
 
-			JavaLocalRef<jstring> transactionId = JavaString::toJava(env, parameters.transaction_id);
-			JavaLocalRef<jobject> rtcp = RTCRtcpParameters::toJava(env, parameters.rtcp);
-			JavaLocalRef<jobject> encodings = JavaList::toArrayList(env, parameters.encodings, &RTCRtpEncodingParameters::toJava);
-			JavaLocalRef<jobject> headerExtensions = JavaList::toArrayList(env, parameters.header_extensions, &RTCRtpHeaderExtension::toJava);
-			JavaLocalRef<jobject> codecs = JavaList::toArrayList(env, parameters.codecs, &RTCRtpCodecParameters::toJava);
+        JavaLocalRef<jstring> transactionId = JavaString::toJava(env, parameters.transaction_id);
+        JavaLocalRef<jobject> rtcp = RTCRtcpParameters::toJava(env, parameters.rtcp);
+        JavaLocalRef<jobject> encodings = JavaList::toArrayList(env, parameters.encodings,
+                                                                &RTCRtpEncodingParameters::toJava);
+        JavaLocalRef<jobject> headerExtensions = JavaList::toArrayList(env, parameters.header_extensions,
+                                                                       &RTCRtpHeaderExtension::toJava);
+        JavaLocalRef<jobject> codecs = JavaList::toArrayList(env, parameters.codecs, &RTCRtpCodecParameters::toJava);
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor);
-			env->SetObjectField(object, javaClass->transactionId, transactionId.get());
-			env->SetObjectField(object, javaClass->encodings, encodings.get());
-			env->SetObjectField(object, javaParentClass->headerExtensions, headerExtensions.get());
-			env->SetObjectField(object, javaParentClass->rtcp, rtcp.get());
-			env->SetObjectField(object, javaParentClass->codecs, codecs.get());
+        jobject object = env->NewObject(javaClass->cls, javaClass->ctor);
+        env->SetObjectField(object, javaClass->transactionId, transactionId.get());
+        env->SetObjectField(object, javaClass->encodings, encodings.get());
+        env->SetObjectField(object, javaParentClass->headerExtensions, headerExtensions.get());
+        env->SetObjectField(object, javaParentClass->rtcp, rtcp.get());
+        env->SetObjectField(object, javaParentClass->codecs, codecs.get());
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+        return JavaLocalRef<jobject>(env, object);
+    }
 
-		webrtc::RtpParameters toNative(JNIEnv * env, const JavaRef<jobject> & parameters)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpSendParametersClass>(env);
-			const auto javaParentClass = JavaClasses::get<RTCRtpParameters::JavaRTCRtpParametersClass>(env);
+    webrtc::RtpParameters toNative(JNIEnv* env, const JavaRef<jobject>& parameters)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpSendParametersClass>(env);
+        const auto javaParentClass = JavaClasses::get<RTCRtpParameters::JavaRTCRtpParametersClass>(env);
 
-			JavaObject obj(env, parameters);
-			
-			JavaLocalRef<jstring> transactionId = obj.getString(javaClass->transactionId);
-			JavaLocalRef<jobject> encodings = obj.getObject(javaClass->encodings);
-			JavaLocalRef<jobject> headerExtensions = obj.getObject(javaParentClass->headerExtensions);
-			JavaLocalRef<jobject> rtcp = obj.getObject(javaParentClass->rtcp);
-			JavaLocalRef<jobject> codecs = obj.getObject(javaParentClass->codecs);
+        JavaObject obj(env, parameters);
 
-			webrtc::RtpParameters params;
-			params.transaction_id = JavaString::toNative(env, transactionId);
+        JavaLocalRef<jstring> transactionId = obj.getString(javaClass->transactionId);
+        JavaLocalRef<jobject> encodings = obj.getObject(javaClass->encodings);
+        JavaLocalRef<jobject> headerExtensions = obj.getObject(javaParentClass->headerExtensions);
+        JavaLocalRef<jobject> rtcp = obj.getObject(javaParentClass->rtcp);
+        JavaLocalRef<jobject> codecs = obj.getObject(javaParentClass->codecs);
 
-			if (encodings) {
-				params.encodings = JavaList::toVector(env, encodings, &RTCRtpEncodingParameters::toNative);
-			}
-			if (headerExtensions) {
-				params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtension::toNative);
-			}
-			if (rtcp) {
-				params.rtcp = RTCRtcpParameters::toNative(env, rtcp);
-			}
-			if (codecs) {
-				params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
-			}
+        webrtc::RtpParameters params;
+        params.transaction_id = JavaString::toNative(env, transactionId);
 
-			return params;
-		}
+        if (encodings)
+        {
+            params.encodings = JavaList::toVector(env, encodings, &RTCRtpEncodingParameters::toNative);
+        }
+        if (headerExtensions)
+        {
+            params.header_extensions = JavaList::toVector(env, headerExtensions, &RTCRtpHeaderExtension::toNative);
+        }
+        if (rtcp)
+        {
+            params.rtcp = RTCRtcpParameters::toNative(env, rtcp);
+        }
+        if (codecs)
+        {
+            params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
+        }
 
-		JavaRTCRtpSendParametersClass::JavaRTCRtpSendParametersClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCRtpSendParameters");
+        return params;
+    }
 
-			ctor = GetMethod(env, cls, "<init>", "()V");
+    JavaRTCRtpSendParametersClass::JavaRTCRtpSendParametersClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCRtpSendParameters");
 
-			transactionId = GetFieldID(env, cls, "transactionId", STRING_SIG);
-			encodings = GetFieldID(env, cls, "encodings", LIST_SIG);
-		}
-	}
+        ctor = GetMethod(env, cls, "<init>", "()V");
+
+        transactionId = GetFieldID(env, cls, "transactionId", STRING_SIG);
+        encodings = GetFieldID(env, cls, "encodings", LIST_SIG);
+    }
 }

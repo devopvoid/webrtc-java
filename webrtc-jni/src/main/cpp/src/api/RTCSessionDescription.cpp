@@ -24,55 +24,54 @@
 
 #include <string>
 
-namespace jni
+namespace jni::RTCSessionDescription
 {
-	namespace RTCSessionDescription
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::SessionDescriptionInterface * nativeType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCSessionDescriptionClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::SessionDescriptionInterface* nativeType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCSessionDescriptionClass>(env);
 
-			std::string sdpStr;
-			nativeType->ToString(&sdpStr);
+        std::string sdpStr;
+        nativeType->ToString(&sdpStr);
 
-			JavaLocalRef<jobject> type = JavaEnums::toJava(env, nativeType->GetType());
-			JavaLocalRef<jstring> sdp = JavaString::toJava(env, sdpStr);
+        JavaLocalRef<jobject> type = JavaEnums::toJava(env, nativeType->GetType());
+        JavaLocalRef<jstring> sdp = JavaString::toJava(env, sdpStr);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor, type.get(), sdp.get());
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor, type.get(), sdp.get());
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+        return JavaLocalRef<jobject>(env, obj);
+    }
 
-		std::unique_ptr<webrtc::SessionDescriptionInterface> toNative(JNIEnv * env, const JavaRef<jobject>& javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCSessionDescriptionClass>(env);
+    std::unique_ptr<webrtc::SessionDescriptionInterface> toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCSessionDescriptionClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			auto jType = obj.getObject(javaClass->sdpType);
-			auto jSdp = obj.getString(javaClass->sdp);
+        auto jType = obj.getObject(javaClass->sdpType);
+        auto jSdp = obj.getString(javaClass->sdp);
 
-			auto type = JavaEnums::toNative<webrtc::SdpType>(env, jType);
-			std::string sdp = JavaString::toNative(env, jSdp);
-			webrtc::SdpParseError error;
+        auto type = JavaEnums::toNative<webrtc::SdpType>(env, jType);
+        std::string sdp = JavaString::toNative(env, jSdp);
+        webrtc::SdpParseError error;
 
-			auto desc = webrtc::CreateSessionDescription(type, sdp, &error);
+        auto desc = webrtc::CreateSessionDescription(type, sdp, &error);
 
-			if (desc == nullptr) {
-				throw Exception("Create session description failed: %s [%s]", error.description.c_str(), error.line.c_str());
-			}
+        if (desc == nullptr)
+        {
+            throw Exception("Create session description failed: %s [%s]", error.description.c_str(),
+                            error.line.c_str());
+        }
 
-			return desc;
-		}
+        return desc;
+    }
 
-		JavaRTCSessionDescriptionClass::JavaRTCSessionDescriptionClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCSessionDescription");
+    JavaRTCSessionDescriptionClass::JavaRTCSessionDescriptionClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCSessionDescription");
 
-			ctor = GetMethod(env, cls, "<init>", "(L" PKG "RTCSdpType;" STRING_SIG ")V");
+        ctor = GetMethod(env, cls, "<init>", "(L" PKG "RTCSdpType;" STRING_SIG ")V");
 
-			sdpType = GetFieldID(env, cls, "sdpType", "L" PKG "RTCSdpType;");
-			sdp = GetFieldID(env, cls, "sdp", STRING_SIG);
-		}
-	}
+        sdpType = GetFieldID(env, cls, "sdpType", "L" PKG "RTCSdpType;");
+        sdp = GetFieldID(env, cls, "sdp", STRING_SIG);
+    }
 }

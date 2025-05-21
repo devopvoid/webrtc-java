@@ -28,145 +28,161 @@
 #include "rtc_base/logging.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLE(track);
 
-	rtc::RefCountReleaseStatus status = track->Release();
+    rtc::RefCountReleaseStatus status = track->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
-		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
-	}
-	else {
-		SetHandle<std::nullptr_t>(env, caller, nullptr);
-		track = nullptr;
-	}
+    if (status != rtc::RefCountReleaseStatus::kDroppedLastRef)
+    {
+        env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
+    }
+    else
+    {
+        SetHandle<std::nullptr_t>(env, caller, nullptr);
+        track = nullptr;
+    }
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getKind
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, nullptr);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLEV(track, nullptr);
 
-	return jni::JavaString::toJava(env, track->kind()).release();
+    return jni::JavaString::toJava(env, track->kind()).release();
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getId
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, nullptr);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLEV(track, nullptr);
 
-	return jni::JavaString::toJava(env, track->id()).release();
+    return jni::JavaString::toJava(env, track->id()).release();
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_isEnabled
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, false);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLEV(track, false);
 
-	return static_cast<jboolean>(track->enabled());
+    return track->enabled();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_setEnabled
-(JNIEnv * env, jobject caller, jboolean enabled)
+(JNIEnv* env, jobject caller, jboolean enabled)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLE(track);
 
-	track->set_enabled(static_cast<bool>(enabled));
+    track->set_enabled(static_cast<bool>(enabled));
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getState
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, nullptr);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLEV(track, nullptr);
 
-	return jni::JavaEnums::toJava(env, track->state()).release();
+    return jni::JavaEnums::toJava(env, track->state()).release();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addEndedEventListener
-(JNIEnv * env, jobject caller, jobject jListener)
+(JNIEnv* env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLE(track);
 
-	jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+    auto context = static_cast<jni::WebRTCContext*>(javaContext);
 
-	try {
-		jni::MediaStreamTrackObserver * observer = new jni::MediaStreamTrackObserver(env, jni::JavaGlobalRef<jobject>(env, jListener), track, jni::MediaStreamTrackEvent::ended);
-		auto observerPtr = std::shared_ptr<jni::MediaStreamTrackObserver>(observer);
+    try
+    {
+        auto observer = new jni::MediaStreamTrackObserver(env, jni::JavaGlobalRef<jobject>(env, jListener), track,
+                                                          jni::MediaStreamTrackEvent::ended);
+        auto observerPtr = std::shared_ptr<jni::MediaStreamTrackObserver>(observer);
 
-		track->RegisterObserver(observer);
+        track->RegisterObserver(observer);
 
-		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+        javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr);
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeEndedEventListener
-(JNIEnv * env, jobject caller, jobject jListener)
+(JNIEnv* env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLE(track);
 
-	jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+    auto context = static_cast<jni::WebRTCContext*>(javaContext);
 
-	try {
-		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener));
+    try
+    {
+        auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(
+            env, jni::JavaLocalRef<jobject>(env, jListener));
 
-		if (observerPtr) {
-			track->UnregisterObserver(observerPtr.get());
-		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+        if (observerPtr)
+        {
+            track->UnregisterObserver(observerPtr.get());
+        }
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addMuteEventListener
-(JNIEnv * env, jobject caller, jobject jListener)
+(JNIEnv* env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLE(track);
 
-	jni::WebRTCContext * context = static_cast<jni::WebRTCContext*>(javaContext);
+    auto context = static_cast<jni::WebRTCContext*>(javaContext);
 
-	try {
-		jni::MediaStreamTrackObserver * observer = new jni::MediaStreamTrackObserver(env, jni::JavaGlobalRef<jobject>(env, jListener), track, jni::MediaStreamTrackEvent::mute);
-		auto observerPtr = std::shared_ptr<jni::MediaStreamTrackObserver>(observer);
+    try
+    {
+        auto observer = new jni::MediaStreamTrackObserver(env, jni::JavaGlobalRef<jobject>(env, jListener), track,
+                                                          jni::MediaStreamTrackEvent::mute);
+        auto observerPtr = std::shared_ptr<jni::MediaStreamTrackObserver>(observer);
 
-		track->RegisterObserver(observer);
+        track->RegisterObserver(observer);
 
-		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+        javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr);
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeMuteEventListener
-(JNIEnv * env, jobject caller, jobject jListener)
+(JNIEnv* env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+    webrtc::MediaStreamTrackInterface* track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+    CHECK_HANDLE(track);
 
-	jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+    auto context = static_cast<jni::WebRTCContext*>(javaContext);
 
-	try {
-		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener));
+    try
+    {
+        auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(
+            env, jni::JavaLocalRef<jobject>(env, jListener));
 
-		if (observerPtr) {
-			track->UnregisterObserver(observerPtr.get());
-		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+        if (observerPtr)
+        {
+            track->UnregisterObserver(observerPtr.get());
+        }
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }

@@ -20,45 +20,49 @@
 
 namespace jni
 {
-	namespace avdev
-	{
-		bool VideoCaptureCapability::operator<(const VideoCaptureCapability & other) const
-		{
-			if (width > other.width) {
-				return true;
-			}
-			if (height > other.height) {
-				return true;
-			}
-			if (maxFPS > other.maxFPS) {
-				return true;
-			}
-			if (videoType > other.videoType) {
+    namespace avdev
+    {
+        bool VideoCaptureCapability::operator<(const VideoCaptureCapability& other) const
+        {
+            if (width > other.width)
+            {
+                return true;
+            }
+            if (height > other.height)
+            {
+                return true;
+            }
+            if (maxFPS > other.maxFPS)
+            {
+                return true;
+            }
+            if (videoType > other.videoType)
+            {
                 return true;
             }
             return false;
-		}
-	}
+        }
+    }
 
-	namespace VideoCaptureCapability
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const avdev::VideoCaptureCapability & capability)
-		{
-			const auto javaClass = JavaClasses::get<JavaVideoCaptureCapabilityClass>(env);
+    namespace VideoCaptureCapability
+    {
+        JavaLocalRef<jobject> toJava(JNIEnv* env, const avdev::VideoCaptureCapability& capability)
+        {
+            const auto javaClass = JavaClasses::get<JavaVideoCaptureCapabilityClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				static_cast<jint>(capability.width),
-				static_cast<jint>(capability.height),
-				static_cast<jint>(capability.maxFPS));
+            jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                         static_cast<jint>(capability.width),
+                                         static_cast<jint>(capability.height),
+                                         static_cast<jint>(capability.maxFPS));
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+            return JavaLocalRef<jobject>(env, obj);
+        }
 
-		JavaVideoCaptureCapabilityClass::JavaVideoCaptureCapabilityClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_VIDEO"VideoCaptureCapability");
+        JavaVideoCaptureCapabilityClass::JavaVideoCaptureCapabilityClass(JNIEnv* env)
+        {
+            cls = FindClass(env, PKG_VIDEO"VideoCaptureCapability");
 
-			ctor = GetMethod(env, cls, "<init>", "(III)V");
-		}
-	}
+            ctor = GetMethod(env, cls, "<init>", "(III)V");
+        }
+    }
 }

@@ -29,125 +29,133 @@
 #include "api/rtp_transceiver_interface.h"
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getMid
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLEV(transceiver, nullptr);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLEV(transceiver, nullptr);
 
-	return jni::JavaString::toJava(env, transceiver->mid().value_or("")).release();
+    return jni::JavaString::toJava(env, transceiver->mid().value_or("")).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getSender
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLEV(transceiver, nullptr);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLEV(transceiver, nullptr);
 
-	rtc::scoped_refptr<webrtc::RtpSenderInterface> sender = transceiver->sender();
+    rtc::scoped_refptr<webrtc::RtpSenderInterface> sender = transceiver->sender();
 
-	return jni::JavaFactories::create(env, sender.get()).release();
+    return jni::JavaFactories::create(env, sender.get()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getReceiver
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLEV(transceiver, nullptr);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLEV(transceiver, nullptr);
 
-	rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver = transceiver->receiver();
+    rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver = transceiver->receiver();
 
-	return jni::JavaFactories::create(env, receiver.get()).release();
+    return jni::JavaFactories::create(env, receiver.get()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getDirection
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLEV(transceiver, nullptr);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLEV(transceiver, nullptr);
 
-	return jni::JavaEnums::toJava(env, transceiver->direction()).release();
+    return jni::JavaEnums::toJava(env, transceiver->direction()).release();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setDirection
-(JNIEnv * env, jobject caller, jobject jDirection)
+(JNIEnv* env, jobject caller, jobject jDirection)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLE(transceiver);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLE(transceiver);
 
-	webrtc::RTCError result = transceiver->SetDirectionWithError(jni::JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, jDirection));
+    webrtc::RTCError result = transceiver->SetDirectionWithError(
+        jni::JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, jDirection));
 
-	if (!result.ok()) {
-		env->Throw(jni::JavaRuntimeException(env, "Set direction failed: %s %s",
-			ToString(result.type()), result.message()));
-	}
+    if (!result.ok())
+    {
+        env->Throw(jni::JavaRuntimeException(env, "Set direction failed: %s %s",
+                                             ToString(result.type()), result.message()));
+    }
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCurrentDirection
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLEV(transceiver, nullptr);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLEV(transceiver, nullptr);
 
-	auto directionOpt = transceiver->current_direction();
+    auto directionOpt = transceiver->current_direction();
 
-	if (!directionOpt.has_value()) {
-		return nullptr;
-	}
+    if (!directionOpt.has_value())
+    {
+        return nullptr;
+    }
 
-	return jni::JavaEnums::toJava(env, directionOpt.value()).release();
+    return jni::JavaEnums::toJava(env, directionOpt.value()).release();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stop
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLE(transceiver);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLE(transceiver);
 
-	webrtc::RTCError result = transceiver->StopStandard();
+    webrtc::RTCError result = transceiver->StopStandard();
 
-	if (!result.ok()) {
-		env->Throw(jni::JavaRuntimeException(env, "Stop transceiver failed: %s %s",
-			ToString(result.type()), result.message()));
-	}
+    if (!result.ok())
+    {
+        env->Throw(jni::JavaRuntimeException(env, "Stop transceiver failed: %s %s",
+                                             ToString(result.type()), result.message()));
+    }
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopped
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLEV(transceiver, true);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLEV(transceiver, true);
 
-	return static_cast<jboolean>(transceiver->stopped());
+    return transceiver->stopped();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCodecPreferences
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLEV(transceiver, nullptr);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLEV(transceiver, nullptr);
 
-	auto capabilities = jni::JavaList::toArrayList(env, transceiver->codec_preferences(), jni::RTCRtpCodecCapability::toJava);
+    auto capabilities = jni::JavaList::toArrayList(env, transceiver->codec_preferences(),
+                                                   jni::RTCRtpCodecCapability::toJava);
 
-	return capabilities.get();
+    return capabilities.get();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferences
-(JNIEnv * env, jobject caller, jobject jPreferences)
+(JNIEnv* env, jobject caller, jobject jPreferences)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLE(transceiver);
+    webrtc::RtpTransceiverInterface* transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+    CHECK_HANDLE(transceiver);
 
-	try {
-		auto ref = jni::JavaLocalRef<jobject>(env, jPreferences);
-		auto preferences = jni::JavaList::toVector(env, ref, &jni::RTCRtpCodecCapability::toNative);
+    try
+    {
+        auto ref = jni::JavaLocalRef<jobject>(env, jPreferences);
+        auto preferences = jni::JavaList::toVector(env, ref, &jni::RTCRtpCodecCapability::toNative);
 
-		webrtc::RTCError result = transceiver->SetCodecPreferences(preferences);
+        webrtc::RTCError result = transceiver->SetCodecPreferences(preferences);
 
-		if (!result.ok()) {
-			env->Throw(jni::JavaError(env, "Set codec preferences failed: %s", jni::RTCErrorToString(result).c_str()));
-		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+        if (!result.ok())
+        {
+            env->Throw(jni::JavaError(env, "Set codec preferences failed: %s", jni::RTCErrorToString(result).c_str()));
+        }
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }

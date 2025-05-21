@@ -11,48 +11,47 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::AudioCodecSpec
 {
-    namespace AudioCodecSpec
+    webrtc::AudioCodecSpec toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
     {
-        webrtc::AudioCodecSpec toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
-        {
-            const auto javaClass = JavaClasses::get<JavaAudioCodecSpecClass>(env);
+        const auto javaClass = JavaClasses::get<JavaAudioCodecSpecClass>(env);
 
-            JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-            JavaLocalRef<jobject> format = obj.getObject(javaClass->format);
-            JavaLocalRef<jobject> info = obj.getObject(javaClass->info);
-             
-            webrtc::AudioCodecSpec spec{
-                SdpAudioFormat::toNative(env, format),
-                AudioCodecInfo::toNative(env, info)
-            };
+        JavaLocalRef<jobject> format = obj.getObject(javaClass->format);
+        JavaLocalRef<jobject> info = obj.getObject(javaClass->info);
 
-            return spec;
-        }
-        JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::AudioCodecSpec & spec)
-        {
-            const auto javaClass = JavaClasses::get<JavaAudioCodecSpecClass>(env);
+        webrtc::AudioCodecSpec spec{
+            SdpAudioFormat::toNative(env, format),
+            AudioCodecInfo::toNative(env, info)
+        };
 
-            JavaLocalRef<jobject> format = SdpAudioFormat::toJava(env, spec.format);
-            JavaLocalRef<jobject> info = AudioCodecInfo::toJava(env, spec.info);
+        return spec;
+    }
 
-            jobject obj = env->NewObject(javaClass->cls, javaClass->ctor);
-            env->SetObjectField(obj, javaClass->format, format.get());
-            env->SetObjectField(obj, javaClass->info, info.get());
-            ExceptionCheck(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::AudioCodecSpec& spec)
+    {
+        const auto javaClass = JavaClasses::get<JavaAudioCodecSpecClass>(env);
 
-            return JavaLocalRef<jobject>(env, obj);
-        }
-        JavaAudioCodecSpecClass::JavaAudioCodecSpecClass(JNIEnv * env)
-        {
-            cls = FindClass(env, PKG_AUDIO"AudioCodecSpec");
+        JavaLocalRef<jobject> format = SdpAudioFormat::toJava(env, spec.format);
+        JavaLocalRef<jobject> info = AudioCodecInfo::toJava(env, spec.info);
 
-            ctor = GetMethod(env, cls, "<init>", "()V");
-            
-            info = GetFieldID(env, cls, "info", "L" PKG_AUDIO "AudioCodecInfo;");
-            format = GetFieldID(env, cls, "format", "L" PKG_AUDIO "SdpAudioFormat;"); 
-        }
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor);
+        env->SetObjectField(obj, javaClass->format, format.get());
+        env->SetObjectField(obj, javaClass->info, info.get());
+        ExceptionCheck(env);
+
+        return JavaLocalRef<jobject>(env, obj);
+    }
+
+    JavaAudioCodecSpecClass::JavaAudioCodecSpecClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG_AUDIO"AudioCodecSpec");
+
+        ctor = GetMethod(env, cls, "<init>", "()V");
+
+        info = GetFieldID(env, cls, "info", "L" PKG_AUDIO "AudioCodecInfo;");
+        format = GetFieldID(env, cls, "format", "L" PKG_AUDIO "SdpAudioFormat;");
     }
 }

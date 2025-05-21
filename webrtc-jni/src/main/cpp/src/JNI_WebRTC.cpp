@@ -21,44 +21,51 @@
 
 #include <jni.h>
 
-jni::JavaContext * javaContext = nullptr;
+jni::JavaContext* javaContext = nullptr;
 
-JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM * vm, void * reserved)
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved)
 {
-	JNIEnv * env = nullptr;
+    JNIEnv* env = nullptr;
 
-	if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
-		return -1;
-	}
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK)
+    {
+        return -1;
+    }
 
-	javaContext = new jni::WebRTCContext(vm);
+    javaContext = new jni::WebRTCContext(vm);
 
-	try {
-		javaContext->initialize(env);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+    try
+    {
+        javaContext->initialize(env);
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 
-	return JNI_VERSION_1_6;
+    return JNI_VERSION_1_6;
 }
 
-JNIEXPORT void JNICALL JNI_OnUnload(JavaVM * vm, void * reserved)
+JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved)
 {
-	if (javaContext != nullptr) {
-		JNIEnv * env = nullptr;
+    if (javaContext != nullptr)
+    {
+        JNIEnv* env = nullptr;
 
-		if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
-			return;
-		}
+        if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK)
+        {
+            return;
+        }
 
-		try {
-			javaContext->destroy(env);
-		}
-		catch (...) {
-			ThrowCxxJavaException(env);
-		}
+        try
+        {
+            javaContext->destroy(env);
+        }
+        catch (...)
+        {
+            ThrowCxxJavaException(env);
+        }
 
-		delete javaContext;
-	}
+        delete javaContext;
+    }
 }

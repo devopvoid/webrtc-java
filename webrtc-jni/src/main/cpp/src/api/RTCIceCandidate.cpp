@@ -24,81 +24,80 @@
 
 #include "pc/webrtc_sdp.h"
 
-namespace jni
+namespace jni::RTCIceCandidate
 {
-	namespace RTCIceCandidate
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::IceCandidateInterface * candidate)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::IceCandidateInterface* candidate)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
 
-			std::string sdpStr;
-			candidate->ToString(&sdpStr);
-			
-			jobject jCandidate = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, candidate->sdp_mid()).get(),
-				candidate->sdp_mline_index(),
-				JavaString::toJava(env, sdpStr).get(),
-				JavaString::toJava(env, candidate->server_url()).get());
+        std::string sdpStr;
+        candidate->ToString(&sdpStr);
 
-			return JavaLocalRef<jobject>(env, jCandidate);
-		}
+        jobject jCandidate = env->NewObject(javaClass->cls, javaClass->ctor,
+                                            JavaString::toJava(env, candidate->sdp_mid()).get(),
+                                            candidate->sdp_mline_index(),
+                                            JavaString::toJava(env, sdpStr).get(),
+                                            JavaString::toJava(env, candidate->server_url()).get());
 
-		JavaLocalRef<jobject> toJavaCricket(JNIEnv * env, const cricket::Candidate & candidate)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
+        return JavaLocalRef<jobject>(env, jCandidate);
+    }
 
-			std::string sdp = webrtc::SdpSerializeCandidate(candidate);
+    JavaLocalRef<jobject> toJavaCricket(JNIEnv* env, const cricket::Candidate& candidate)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
 
-			if (sdp.empty()) {
-				throw Exception("Got an empty ICE candidate");
-			}
+        std::string sdp = webrtc::SdpSerializeCandidate(candidate);
 
-			jobject jCandidate = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, candidate.id()).get(),
-				candidate.component(),
-				JavaString::toJava(env, sdp).get(),
-				JavaString::toJava(env, candidate.url()).get());
+        if (sdp.empty())
+        {
+            throw Exception("Got an empty ICE candidate");
+        }
 
-			return JavaLocalRef<jobject>(env, jCandidate);
-		}
+        jobject jCandidate = env->NewObject(javaClass->cls, javaClass->ctor,
+                                            JavaString::toJava(env, candidate.id()).get(),
+                                            candidate.component(),
+                                            JavaString::toJava(env, sdp).get(),
+                                            JavaString::toJava(env, candidate.url()).get());
 
-		std::unique_ptr<webrtc::IceCandidateInterface> toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
+        return JavaLocalRef<jobject>(env, jCandidate);
+    }
 
-			JavaObject obj(env, javaType);
+    std::unique_ptr<webrtc::IceCandidateInterface> toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
 
-			std::string sdp = JavaString::toNative(env, obj.getString(javaClass->sdp));
-			std::string sdpMid = JavaString::toNative(env, obj.getString(javaClass->sdpMid));
-			int sdpMLineIndex = obj.getInt(javaClass->sdpMLineIndex);
+        JavaObject obj(env, javaType);
 
-			webrtc::SdpParseError error;
+        std::string sdp = JavaString::toNative(env, obj.getString(javaClass->sdp));
+        std::string sdpMid = JavaString::toNative(env, obj.getString(javaClass->sdpMid));
+        int sdpMLineIndex = obj.getInt(javaClass->sdpMLineIndex);
 
-			auto candidate = webrtc::CreateIceCandidate(sdpMid, sdpMLineIndex, sdp, &error);
+        webrtc::SdpParseError error;
 
-			if (candidate == nullptr) {
-				throw Exception("Create ICE candidate failed: %s [%s]", error.description.c_str(), error.line.c_str());
-			}
+        auto candidate = webrtc::CreateIceCandidate(sdpMid, sdpMLineIndex, sdp, &error);
 
-			return std::unique_ptr<webrtc::IceCandidateInterface>(candidate);
-		}
+        if (candidate == nullptr)
+        {
+            throw Exception("Create ICE candidate failed: %s [%s]", error.description.c_str(), error.line.c_str());
+        }
 
-		cricket::Candidate toNativeCricket(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			return toNative(env, javaType)->candidate();
-		}
+        return std::unique_ptr<webrtc::IceCandidateInterface>(candidate);
+    }
 
-		JavaRTCIceCandidateClass::JavaRTCIceCandidateClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCIceCandidate");
+    cricket::Candidate toNativeCricket(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        return toNative(env, javaType)->candidate();
+    }
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "I" STRING_SIG STRING_SIG ")V");
+    JavaRTCIceCandidateClass::JavaRTCIceCandidateClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCIceCandidate");
 
-			sdpMid = GetFieldID(env, cls, "sdpMid", STRING_SIG);
-			sdpMLineIndex = GetFieldID(env, cls, "sdpMLineIndex", "I");
-			sdp = GetFieldID(env, cls, "sdp", STRING_SIG);
-			serverUrl = GetFieldID(env, cls, "serverUrl", STRING_SIG);
-		}
-	}
+        ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "I" STRING_SIG STRING_SIG ")V");
+
+        sdpMid = GetFieldID(env, cls, "sdpMid", STRING_SIG);
+        sdpMLineIndex = GetFieldID(env, cls, "sdpMLineIndex", "I");
+        sdp = GetFieldID(env, cls, "sdp", STRING_SIG);
+        serverUrl = GetFieldID(env, cls, "serverUrl", STRING_SIG);
+    }
 }

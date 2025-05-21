@@ -21,23 +21,20 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::AudioProcessingStats
 {
-	namespace AudioProcessingStats
-	{
-		JavaAudioProcessingStatsClass::JavaAudioProcessingStatsClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingStats");
+    JavaAudioProcessingStatsClass::JavaAudioProcessingStatsClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG_AUDIO"AudioProcessingStats");
 
-			voiceDetected = GetFieldID(env, cls, "voiceDetected", "Z");
-			echoReturnLoss = GetFieldID(env, cls, "echoReturnLoss", "D");
-			echoReturnLossEnhancement = GetFieldID(env, cls, "echoReturnLossEnhancement", "D");
-			divergentFilterFraction = GetFieldID(env, cls, "divergentFilterFraction", "D");
-			delayMs = GetFieldID(env, cls, "delayMs", "I");
-			delayMedianMs = GetFieldID(env, cls, "delayMedianMs", "I");
-			delayStandardDeviationMs = GetFieldID(env, cls, "delayStandardDeviationMs", "I");
-			residualEchoLikelihood = GetFieldID(env, cls, "residualEchoLikelihood", "D");
-			residualEchoLikelihoodRecentMax = GetFieldID(env, cls, "residualEchoLikelihoodRecentMax", "D");
-		}
-	}
+        voiceDetected = GetFieldID(env, cls, "voiceDetected", "Z");
+        echoReturnLoss = GetFieldID(env, cls, "echoReturnLoss", "D");
+        echoReturnLossEnhancement = GetFieldID(env, cls, "echoReturnLossEnhancement", "D");
+        divergentFilterFraction = GetFieldID(env, cls, "divergentFilterFraction", "D");
+        delayMs = GetFieldID(env, cls, "delayMs", "I");
+        delayMedianMs = GetFieldID(env, cls, "delayMedianMs", "I");
+        delayStandardDeviationMs = GetFieldID(env, cls, "delayStandardDeviationMs", "I");
+        residualEchoLikelihood = GetFieldID(env, cls, "residualEchoLikelihood", "D");
+        residualEchoLikelihoodRecentMax = GetFieldID(env, cls, "residualEchoLikelihoodRecentMax", "D");
+    }
 }

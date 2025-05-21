@@ -22,35 +22,35 @@
 
 namespace jni
 {
-	namespace avdev
-	{
-		AudioDevice::AudioDevice(std::string name, std::string descriptor) :
-			Device(name, descriptor)
-		{
-		}
-	}
+    namespace avdev
+    {
+        AudioDevice::AudioDevice(std::string name, std::string descriptor) :
+            Device(name, descriptor)
+        {
+        }
+    }
 
-	namespace AudioDevice
-	{
-		JavaLocalRef<jobject> toJavaAudioDevice(JNIEnv * env, avdev::DevicePtr device)
-		{
-			const auto javaClass = JavaClasses::get<JavaAudioDeviceClass>(env);
+    namespace AudioDevice
+    {
+        JavaLocalRef<jobject> toJavaAudioDevice(JNIEnv* env, avdev::DevicePtr device)
+        {
+            const auto javaClass = JavaClasses::get<JavaAudioDeviceClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, device->getName()).get(),
-				JavaString::toJava(env, device->getDescriptor()).get());
+            jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                         JavaString::toJava(env, device->getName()).get(),
+                                         JavaString::toJava(env, device->getDescriptor()).get());
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+            return JavaLocalRef<jobject>(env, obj);
+        }
 
-		JavaAudioDeviceClass::JavaAudioDeviceClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_AUDIO"AudioDevice");
+        JavaAudioDeviceClass::JavaAudioDeviceClass(JNIEnv* env)
+        {
+            cls = FindClass(env, PKG_AUDIO"AudioDevice");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG ")V");
+            ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG ")V");
 
-			name = GetFieldID(env, cls, "name", STRING_SIG);
-			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
-		}
-	}
+            name = GetFieldID(env, cls, "name", STRING_SIG);
+            descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+        }
+    }
 }

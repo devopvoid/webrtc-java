@@ -22,37 +22,37 @@
 
 namespace jni
 {
-	SetSessionDescriptionObserver::SetSessionDescriptionObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
-		observer(observer),
-		javaClass(JavaClasses::get<JavaSetSessionDescObserverClass>(env))
-	{
-	}
+    SetSessionDescriptionObserver::SetSessionDescriptionObserver(JNIEnv* env, const JavaGlobalRef<jobject>& observer) :
+        observer(observer),
+        javaClass(JavaClasses::get<JavaSetSessionDescObserverClass>(env))
+    {
+    }
 
-	void SetSessionDescriptionObserver::OnSuccess()
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void SetSessionDescriptionObserver::OnSuccess()
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		env->CallVoidMethod(observer, javaClass->onSuccess);
+        env->CallVoidMethod(observer, javaClass->onSuccess);
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	void SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
+        JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
-		env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+        env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	SetSessionDescriptionObserver::JavaSetSessionDescObserverClass::JavaSetSessionDescObserverClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG"SetSessionDescriptionObserver");
+    SetSessionDescriptionObserver::JavaSetSessionDescObserverClass::JavaSetSessionDescObserverClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG"SetSessionDescriptionObserver");
 
-		onSuccess = GetMethod(env, cls, "onSuccess", "()V");
-		onFailure = GetMethod(env, cls, "onFailure", "(" STRING_SIG ")V");
-	}
+        onSuccess = GetMethod(env, cls, "onSuccess", "()V");
+        onFailure = GetMethod(env, cls, "onFailure", "(" STRING_SIG ")V");
+    }
 }

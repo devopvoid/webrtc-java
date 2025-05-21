@@ -6,30 +6,27 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::BitrateSettings
 {
-    namespace BitrateSettings
+    webrtc::BitrateSettings toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
     {
-        webrtc::BitrateSettings toNative(JNIEnv * env, const JavaRef<jobject>& javaType)
-        {
-            const auto javaClass = JavaClasses::get<JavaBitrateSettingsClass>(env);
-            JavaObject obj(env, javaType);
+        const auto javaClass = JavaClasses::get<JavaBitrateSettingsClass>(env);
+        JavaObject obj(env, javaType);
 
-            auto settings = webrtc::BitrateSettings();
-            settings.start_bitrate_bps = obj.getInt(javaClass->startBitrateBps);
-            settings.min_bitrate_bps = obj.getInt(javaClass->minBitrateBps);
-            settings.max_bitrate_bps = obj.getInt(javaClass->maxBitrateBps);
+        auto settings = webrtc::BitrateSettings();
+        settings.start_bitrate_bps = obj.getInt(javaClass->startBitrateBps);
+        settings.min_bitrate_bps = obj.getInt(javaClass->minBitrateBps);
+        settings.max_bitrate_bps = obj.getInt(javaClass->maxBitrateBps);
 
-            return settings;
-        }
+        return settings;
+    }
 
-        JavaBitrateSettingsClass::JavaBitrateSettingsClass(JNIEnv * env)
-        {
-            cls = FindClass(env, PKG"BitrateSettings");
+    JavaBitrateSettingsClass::JavaBitrateSettingsClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"BitrateSettings");
 
-            minBitrateBps = GetFieldID(env, cls, "minBitrateBps", "I");
-            startBitrateBps = GetFieldID(env, cls, "startBitrateBps", "I");
-            maxBitrateBps = GetFieldID(env, cls, "maxBitrateBps", "I");
-        }
+        minBitrateBps = GetFieldID(env, cls, "minBitrateBps", "I");
+        startBitrateBps = GetFieldID(env, cls, "startBitrateBps", "I");
+        maxBitrateBps = GetFieldID(env, cls, "maxBitrateBps", "I");
     }
 }

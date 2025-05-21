@@ -11,20 +11,21 @@
  * Signature: (Ldev/onvoid/webrtc/media/audio/AudioTrackSink;)J
  */
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrackSource_addSinkInternal
-  (JNIEnv * env, jobject caller, jobject jsink)
+(JNIEnv* env, jobject caller, jobject jsink)
 {
-	if (jsink == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioTrackSink must not be null"));
-		return 0;
-	}
+    if (jsink == nullptr)
+    {
+        env->Throw(jni::JavaNullPointerException(env, "AudioTrackSink must not be null"));
+        return 0;
+    }
 
-	webrtc::AudioSourceInterface * source = GetHandle<webrtc::AudioSourceInterface>(env, caller);
-	CHECK_HANDLEV(source, 0);
+    webrtc::AudioSourceInterface* source = GetHandle<webrtc::AudioSourceInterface>(env, caller);
+    CHECK_HANDLEV(source, 0);
 
-	auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
-	source->AddSink(sink);
-	
-	return reinterpret_cast<jlong>(sink);
+    auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
+    source->AddSink(sink);
+
+    return reinterpret_cast<jlong>(sink);
 }
 
 /*
@@ -33,18 +34,19 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrackSource_addS
  * Signature: (J)V
  */
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrackSource_removeSinkInternal
-  (JNIEnv * env,jobject caller, jlong sinkHandle)
+(JNIEnv* env, jobject caller, jlong sinkHandle)
 {
-	webrtc::AudioSourceInterface * source = GetHandle<webrtc::AudioSourceInterface>(env, caller);
-	CHECK_HANDLE(source);
-	
-	auto sink = reinterpret_cast<jni::AudioTrackSink *>(sinkHandle);
-	
-	if (sink != nullptr) {
-		source->RemoveSink(sink);
-		
-		delete sink;
-	}
+    webrtc::AudioSourceInterface* source = GetHandle<webrtc::AudioSourceInterface>(env, caller);
+    CHECK_HANDLE(source);
+
+    auto sink = reinterpret_cast<jni::AudioTrackSink*>(sinkHandle);
+
+    if (sink != nullptr)
+    {
+        source->RemoveSink(sink);
+
+        delete sink;
+    }
 }
 
 /*
@@ -53,10 +55,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrackSource_remov
  * Signature: (D)V
  */
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrackSource_setVolume
-  (JNIEnv * env, jobject caller, jdouble jvolume)
+(JNIEnv* env, jobject caller, jdouble jvolume)
 {
-	webrtc::AudioSourceInterface * source = GetHandle<webrtc::AudioSourceInterface>(env, caller);
-	CHECK_HANDLE(source);
-	
-	source->SetVolume(static_cast<uint32_t>(jvolume));
+    webrtc::AudioSourceInterface* source = GetHandle<webrtc::AudioSourceInterface>(env, caller);
+    CHECK_HANDLE(source);
+
+    source->SetVolume(static_cast<uint32_t>(jvolume));
 }

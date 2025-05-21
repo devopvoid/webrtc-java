@@ -22,200 +22,220 @@
 
 namespace jni
 {
-	VideoTrackDeviceSource::VideoTrackDeviceSource() :
-		VideoTrackSource(/*remote=*/false),
-		captureModule(nullptr)
-	{
-		capability.width = static_cast<int32_t>(1280);
-		capability.height = static_cast<int32_t>(720);
-		capability.maxFPS = static_cast<int32_t>(30);
-	}
+    VideoTrackDeviceSource::VideoTrackDeviceSource() :
+        VideoTrackSource(/*remote=*/false),
+        captureModule(nullptr)
+    {
+        capability.width = 1280;
+        capability.height = 720;
+        capability.maxFPS = 30;
+    }
 
-	VideoTrackDeviceSource::~VideoTrackDeviceSource()
-	{
-		destroy();
-	}
+    VideoTrackDeviceSource::~VideoTrackDeviceSource()
+    {
+        destroy();
+    }
 
-	void VideoTrackDeviceSource::setVideoDevice(const avdev::VideoDevicePtr & device)
-	{
-		this->device = device;
-	}
+    void VideoTrackDeviceSource::setVideoDevice(const avdev::VideoDevicePtr& device)
+    {
+        this->device = device;
+    }
 
-	void VideoTrackDeviceSource::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
-	{
-		this->capability = capability;
-	}
+    void VideoTrackDeviceSource::setVideoCaptureCapability(const webrtc::VideoCaptureCapability& capability)
+    {
+        this->capability = capability;
+    }
 
-	void VideoTrackDeviceSource::start()
-	{
-		std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
+    void VideoTrackDeviceSource::start()
+    {
+        std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
 
-		if (!info) {
-			throw new Exception("Create video DeviceInfo failed");
-		}
+        if (!info)
+        {
+            throw new Exception("Create video DeviceInfo failed");
+        }
 
-		uint32_t num = info->NumberOfDevices();
+        uint32_t num = info->NumberOfDevices();
 
-		if (num < 1) {
-			throw new Exception("No video capture devices available");
-		}
+        if (num < 1)
+        {
+            throw new Exception("No video capture devices available");
+        }
 
-		if (device) {
-			std::string devUid;
-			const uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
+        if (device)
+        {
+            std::string devUid;
+            constexpr uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
 
-			for (uint32_t i = 0; i < num; ++i) {
-				char name[size] = { 0 };
-				char guid[size] = { 0 };
+            for (uint32_t i = 0; i < num; ++i)
+            {
+                char name[size] = {0};
+                char guid[size] = {0};
 
-				int32_t ret = info->GetDeviceName(i, name, size, guid, size);
+                int32_t ret = info->GetDeviceName(i, name, size, guid, size);
 
-				if (ret != 0) {
-					RTC_LOG(LS_WARNING) << "Get video capture device name failed";
-					continue;
-				}
+                if (ret != 0)
+                {
+                    RTC_LOG(LS_WARNING) << "Get video capture device name failed";
+                    continue;
+                }
 
-				if (device->getName().compare(name) == 0) {
-					devUid = guid;
-					break;
-				}
-			}
+                if (device->getName().compare(name) == 0)
+                {
+                    devUid = guid;
+                    break;
+                }
+            }
 
-			if (devUid.empty()) {
-				throw new Exception("Device %s not found", device->getName().c_str());
-			}
+            if (devUid.empty())
+            {
+                throw new Exception("Device %s not found", device->getName().c_str());
+            }
 
-			captureModule = webrtc::VideoCaptureFactory::Create(devUid.c_str());
+            captureModule = webrtc::VideoCaptureFactory::Create(devUid.c_str());
 
-			if (!captureModule) {
-				throw new Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
-			}
+            if (!captureModule)
+            {
+                throw new Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
+            }
 
-			if (!startCapture()) {
-				destroy();
+            if (!startCapture())
+            {
+                destroy();
 
-				throw new Exception("Start video capture for UID %s failed", devUid.c_str());
-			}
-		}
+                throw new Exception("Start video capture for UID %s failed", devUid.c_str());
+            }
+        }
 
-		if (!captureModule) {
-			// No user-defined capture device. Select first available device.
-			const uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
+        if (!captureModule)
+        {
+            // No user-defined capture device. Select first available device.
+            constexpr uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
 
-			for (uint32_t i = 0; i < num; ++i) {
-				char name[size] = { 0 };
-				char guid[size] = { 0 };
+            for (uint32_t i = 0; i < num; ++i)
+            {
+                char name[size] = {0};
+                char guid[size] = {0};
 
-				int32_t ret = info->GetDeviceName(i, name, size, guid, size);
+                int32_t ret = info->GetDeviceName(i, name, size, guid, size);
 
-				if (ret != 0) {
-					RTC_LOG(LS_WARNING) << "Get video capture device name failed";
-					continue;
-				}
+                if (ret != 0)
+                {
+                    RTC_LOG(LS_WARNING) << "Get video capture device name failed";
+                    continue;
+                }
 
-				captureModule = webrtc::VideoCaptureFactory::Create(guid);
+                captureModule = webrtc::VideoCaptureFactory::Create(guid);
 
-				if (!captureModule) {
-					continue;
-				}
+                if (!captureModule)
+                {
+                    continue;
+                }
 
-				if (startCapture()) {
-					break;
-				}
-				else {
-					// Clean up resources. Try next device.
-					destroy();
-				}
-			}
-		}
+                if (startCapture())
+                {
+                    break;
+                }
+                // Clean up resources. Try next device.
+                destroy();
+            }
+        }
 
-		if (!captureModule || !captureModule->CaptureStarted()) {
-			throw new Exception("Start video capture failed");
-		}
-	}
+        if (!captureModule || !captureModule->CaptureStarted())
+        {
+            throw new Exception("Start video capture failed");
+        }
+    }
 
-	void VideoTrackDeviceSource::stop()
-	{
-		destroy();
-	}
+    void VideoTrackDeviceSource::stop()
+    {
+        destroy();
+    }
 
-	void VideoTrackDeviceSource::destroy()
-	{
-		if (!captureModule) {
-			return;
-		}
-		if (captureModule->CaptureStarted()) {
-			captureModule->StopCapture();
-		}
-		
-		captureModule->DeRegisterCaptureDataCallback();
-		captureModule = nullptr;
-	}
+    void VideoTrackDeviceSource::destroy()
+    {
+        if (!captureModule)
+        {
+            return;
+        }
+        if (captureModule->CaptureStarted())
+        {
+            captureModule->StopCapture();
+        }
 
-	void VideoTrackDeviceSource::AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const rtc::VideoSinkWants & wants)
-	{
-		broadcaster.AddOrUpdateSink(sink, wants);
+        captureModule->DeRegisterCaptureDataCallback();
+        captureModule = nullptr;
+    }
 
-		updateVideoAdapter();
-	}
+    void VideoTrackDeviceSource::AddOrUpdateSink(VideoSinkInterface<webrtc::VideoFrame>* sink,
+                                                 const rtc::VideoSinkWants& wants)
+    {
+        broadcaster.AddOrUpdateSink(sink, wants);
 
-	void VideoTrackDeviceSource::RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink)
-	{
-		broadcaster.RemoveSink(sink);
+        updateVideoAdapter();
+    }
 
-		updateVideoAdapter();
-	}
+    void VideoTrackDeviceSource::RemoveSink(VideoSinkInterface<webrtc::VideoFrame>* sink)
+    {
+        broadcaster.RemoveSink(sink);
 
-	bool VideoTrackDeviceSource::startCapture()
-	{
-		captureModule->RegisterCaptureDataCallback(this);
+        updateVideoAdapter();
+    }
 
-		capability.videoType = webrtc::VideoType::kI420;
+    bool VideoTrackDeviceSource::startCapture()
+    {
+        captureModule->RegisterCaptureDataCallback(this);
 
-		return captureModule->StartCapture(capability) == 0;
-	}
+        capability.videoType = webrtc::VideoType::kI420;
 
-	void VideoTrackDeviceSource::updateVideoAdapter()
-	{
-		rtc::VideoSinkWants wants = broadcaster.wants();
+        return captureModule->StartCapture(capability) == 0;
+    }
 
-		videoAdapter.OnOutputFormatRequest(std::make_pair(capability.width, capability.height), wants.max_pixel_count, wants.max_framerate_fps);
-	}
+    void VideoTrackDeviceSource::updateVideoAdapter()
+    {
+        rtc::VideoSinkWants wants = broadcaster.wants();
 
-	void VideoTrackDeviceSource::OnFrame(const webrtc::VideoFrame & frame)
-	{
-		int croppedWidth = 0;
-		int croppedHeight = 0;
-		int outWidth = 0;
-		int outHeight = 0;
+        videoAdapter.OnOutputFormatRequest(std::make_pair(capability.width, capability.height), wants.max_pixel_count,
+                                           wants.max_framerate_fps);
+    }
 
-		if (!videoAdapter.AdaptFrameResolution(frame.width(), frame.height(), frame.timestamp_us() * 1000,
-			&croppedWidth, &croppedHeight, &outWidth, &outHeight)) {
-			// Drop frame in order to respect frame rate constraint.
-			return;
-		}
+    void VideoTrackDeviceSource::OnFrame(const webrtc::VideoFrame& frame)
+    {
+        int croppedWidth = 0;
+        int croppedHeight = 0;
+        int outWidth = 0;
+        int outHeight = 0;
 
-		if (outHeight != frame.height() || outWidth != frame.width()) {
-			// Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
-			rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(outWidth, outHeight);
+        if (!videoAdapter.AdaptFrameResolution(frame.width(), frame.height(), frame.timestamp_us() * 1000,
+                                               &croppedWidth, &croppedHeight, &outWidth, &outHeight))
+        {
+            // Drop frame in order to respect frame rate constraint.
+            return;
+        }
 
-			scaled_buffer->ScaleFrom(*frame.video_frame_buffer()->ToI420());
-			
-			broadcaster.OnFrame(webrtc::VideoFrame::Builder()
-				.set_video_frame_buffer(scaled_buffer)
-				.set_rotation(webrtc::kVideoRotation_0)
-				.set_timestamp_us(frame.timestamp_us())
-				.set_id(frame.id())
-				.build());
-		}
-		else {
-			// No adaptations needed, just return the frame as is.
-			broadcaster.OnFrame(frame);
-		}
-	}
+        if (outHeight != frame.height() || outWidth != frame.width())
+        {
+            // Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
+            rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(outWidth, outHeight);
 
-	rtc::VideoSourceInterface<webrtc::VideoFrame> * VideoTrackDeviceSource::source()
-	{
-		return this;
-	}
+            scaled_buffer->ScaleFrom(*frame.video_frame_buffer()->ToI420());
+
+            broadcaster.OnFrame(webrtc::VideoFrame::Builder()
+                                .set_video_frame_buffer(scaled_buffer)
+                                .set_rotation(webrtc::kVideoRotation_0)
+                                .set_timestamp_us(frame.timestamp_us())
+                                .set_id(frame.id())
+                                .build());
+        }
+        else
+        {
+            // No adaptations needed, just return the frame as is.
+            broadcaster.OnFrame(frame);
+        }
+    }
+
+    rtc::VideoSourceInterface<webrtc::VideoFrame>* VideoTrackDeviceSource::source()
+    {
+        return this;
+    }
 }

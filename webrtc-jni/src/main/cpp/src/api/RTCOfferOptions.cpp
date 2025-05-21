@@ -22,43 +22,40 @@
 #include "Exception.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCOfferOptions
 {
-	namespace RTCOfferOptions
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::PeerConnectionInterface::RTCOfferAnswerOptions & nativeType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCOfferOptionsClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::PeerConnectionInterface::RTCOfferAnswerOptions& nativeType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCOfferOptionsClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor);
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor);
 
-			env->SetBooleanField(obj, javaClass->vad, nativeType.voice_activity_detection);
-			env->SetBooleanField(obj, javaClass->iceRestart, nativeType.ice_restart);
+        env->SetBooleanField(obj, javaClass->vad, nativeType.voice_activity_detection);
+        env->SetBooleanField(obj, javaClass->iceRestart, nativeType.ice_restart);
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+        return JavaLocalRef<jobject>(env, obj);
+    }
 
-		webrtc::PeerConnectionInterface::RTCOfferAnswerOptions toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCOfferOptionsClass>(env);
+    webrtc::PeerConnectionInterface::RTCOfferAnswerOptions toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCOfferOptionsClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
-			options.voice_activity_detection = obj.getBoolean(javaClass->vad);
-			options.ice_restart = obj.getBoolean(javaClass->iceRestart);
+        webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
+        options.voice_activity_detection = obj.getBoolean(javaClass->vad);
+        options.ice_restart = obj.getBoolean(javaClass->iceRestart);
 
-			return options;
-		}
+        return options;
+    }
 
-		JavaRTCOfferOptionsClass::JavaRTCOfferOptionsClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCOfferOptions");
+    JavaRTCOfferOptionsClass::JavaRTCOfferOptionsClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCOfferOptions");
 
-			ctor = GetMethod(env, cls, "<init>", "()V");
+        ctor = GetMethod(env, cls, "<init>", "()V");
 
-			vad = GetFieldID(env, cls, "voiceActivityDetection", "Z");
-			iceRestart = GetFieldID(env, cls, "iceRestart", "Z");
-		}
-	}
+        vad = GetFieldID(env, cls, "voiceActivityDetection", "Z");
+        iceRestart = GetFieldID(env, cls, "iceRestart", "Z");
+    }
 }

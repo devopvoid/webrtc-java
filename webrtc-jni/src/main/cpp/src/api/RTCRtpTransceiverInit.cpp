@@ -24,34 +24,31 @@
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCRtpTransceiverInit
 {
-	namespace RTCRtpTransceiverInit
-	{
-		webrtc::RtpTransceiverInit toNative(JNIEnv * env, const JavaRef<jobject>& javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpTransceiverInitClass>(env);
+    webrtc::RtpTransceiverInit toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpTransceiverInitClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			JavaLocalRef<jobject> ids = obj.getObject(javaClass->streamIds);
-			JavaLocalRef<jobject> encodings = obj.getObject(javaClass->sendEncodings);
+        JavaLocalRef<jobject> ids = obj.getObject(javaClass->streamIds);
+        JavaLocalRef<jobject> encodings = obj.getObject(javaClass->sendEncodings);
 
-			webrtc::RtpTransceiverInit init;
-			init.direction = JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, obj.getObject(javaClass->direction));
-			init.stream_ids = JavaList::toStringVector(env, ids);
-			init.send_encodings = JavaList::toVector(env, encodings, &RTCRtpEncodingParameters::toNative);
+        webrtc::RtpTransceiverInit init;
+        init.direction = JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, obj.getObject(javaClass->direction));
+        init.stream_ids = JavaList::toStringVector(env, ids);
+        init.send_encodings = JavaList::toVector(env, encodings, &RTCRtpEncodingParameters::toNative);
 
-			return init;
-		}
+        return init;
+    }
 
-		JavaRTCRtpTransceiverInitClass::JavaRTCRtpTransceiverInitClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCRtpTransceiverInit");
+    JavaRTCRtpTransceiverInitClass::JavaRTCRtpTransceiverInitClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCRtpTransceiverInit");
 
-			direction = GetFieldID(env, cls, "direction", "L" PKG "RTCRtpTransceiverDirection;");
-			streamIds = GetFieldID(env, cls, "streamIds", LIST_SIG);
-			sendEncodings = GetFieldID(env, cls, "sendEncodings", LIST_SIG);
-		}
-	}
+        direction = GetFieldID(env, cls, "direction", "L" PKG "RTCRtpTransceiverDirection;");
+        streamIds = GetFieldID(env, cls, "streamIds", LIST_SIG);
+        sendEncodings = GetFieldID(env, cls, "sendEncodings", LIST_SIG);
+    }
 }

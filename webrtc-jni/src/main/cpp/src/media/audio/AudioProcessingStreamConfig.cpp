@@ -21,38 +21,35 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::AudioProcessingStreamConfig
 {
-	namespace AudioProcessingStreamConfig
-	{
-		webrtc::StreamConfig toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaAudioProcessingStreamConfigClass>(env);
+    webrtc::StreamConfig toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaAudioProcessingStreamConfigClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			return webrtc::StreamConfig(obj.getInt(javaClass->sampleRate), obj.getInt(javaClass->channels));
-		}
+        return webrtc::StreamConfig(obj.getInt(javaClass->sampleRate), obj.getInt(javaClass->channels));
+    }
 
-		JavaAudioProcessingStreamConfigClass::JavaAudioProcessingStreamConfigClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingStreamConfig");
+    JavaAudioProcessingStreamConfigClass::JavaAudioProcessingStreamConfigClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG_AUDIO"AudioProcessingStreamConfig");
 
-			ctor = GetMethod(env, cls, "<init>", "(II)V");
+        ctor = GetMethod(env, cls, "<init>", "(II)V");
 
-			sampleRate = GetFieldID(env, cls, "sampleRate", "I");
-			channels = GetFieldID(env, cls, "channels", "I");
-		}
+        sampleRate = GetFieldID(env, cls, "sampleRate", "I");
+        channels = GetFieldID(env, cls, "channels", "I");
+    }
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, webrtc::StreamConfig& config)
-		{
-			const auto javaClass = JavaClasses::get<JavaAudioProcessingStreamConfigClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, webrtc::StreamConfig& config)
+    {
+        const auto javaClass = JavaClasses::get<JavaAudioProcessingStreamConfigClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				config.sample_rate_hz(),
-				config.num_channels());
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                     config.sample_rate_hz(),
+                                     config.num_channels());
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
-	}
+        return JavaLocalRef<jobject>(env, obj);
+    }
 }

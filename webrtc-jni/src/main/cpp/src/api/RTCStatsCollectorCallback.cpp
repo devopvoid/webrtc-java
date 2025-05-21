@@ -21,27 +21,27 @@
 
 namespace jni
 {
-	RTCStatsCollectorCallback::RTCStatsCollectorCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback) :
-		callback(callback),
-		javaClass(JavaClasses::get<JavaRTCStatsCollectorCallbackClass>(env))
-	{
-	}
+    RTCStatsCollectorCallback::RTCStatsCollectorCallback(JNIEnv* env, const JavaGlobalRef<jobject>& callback) :
+        callback(callback),
+        javaClass(JavaClasses::get<JavaRTCStatsCollectorCallbackClass>(env))
+    {
+    }
 
-	void RTCStatsCollectorCallback::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport> & report)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void RTCStatsCollectorCallback::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		JavaLocalRef<jobject> javaReport = jni::RTCStatsReport::toJava(env, report);
+        JavaLocalRef<jobject> javaReport = RTCStatsReport::toJava(env, report);
 
-		env->CallVoidMethod(callback, javaClass->onStatsDelivered, javaReport.get());
+        env->CallVoidMethod(callback, javaClass->onStatsDelivered, javaReport.get());
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	RTCStatsCollectorCallback::JavaRTCStatsCollectorCallbackClass::JavaRTCStatsCollectorCallbackClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG"RTCStatsCollectorCallback");
+    RTCStatsCollectorCallback::JavaRTCStatsCollectorCallbackClass::JavaRTCStatsCollectorCallbackClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG"RTCStatsCollectorCallback");
 
-		onStatsDelivered = GetMethod(env, cls, "onStatsDelivered", "(L" PKG "RTCStatsReport;)V");
-	}
+        onStatsDelivered = GetMethod(env, cls, "onStatsDelivered", "(L" PKG "RTCStatsReport;)V");
+    }
 }

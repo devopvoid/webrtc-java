@@ -23,42 +23,43 @@
 
 namespace jni
 {
-	WavAudioFileSource::WavAudioFileSource(std::string fileName)
-	{
-		wavReader = std::make_unique<webrtc::WavReader>(fileName);
+    WavAudioFileSource::WavAudioFileSource(std::string fileName)
+    {
+        wavReader = std::make_unique<webrtc::WavReader>(fileName);
 
-		RTC_LOG(LS_INFO) << "WAV file opened:"
-			<< " Sample Rate: " << wavReader->sample_rate()
-			<< ", Channels: " << wavReader->num_channels()
-			<< ", Samples: " << wavReader->num_samples();
-	}
+        RTC_LOG(LS_INFO) << "WAV file opened:"
+            << " Sample Rate: " << wavReader->sample_rate()
+            << ", Channels: " << wavReader->num_channels()
+            << ", Samples: " << wavReader->num_samples();
+    }
 
-	WavAudioFileSource::~WavAudioFileSource()
-	{
-	}
+    WavAudioFileSource::~WavAudioFileSource()
+    {
+    }
 
-	int32_t WavAudioFileSource::NeedMorePlayData(
-		const size_t nSamples,
-		const size_t nBytesPerSample,
-		const size_t nChannels,
-		const uint32_t samplesPerSec,
-		void * audioSamples,
-		size_t & nSamplesOut,
-		int64_t * elapsed_time_ms,
-		int64_t * ntp_time_ms)
-	{
-		*elapsed_time_ms = 0;
-		*ntp_time_ms = 0;
+    int32_t WavAudioFileSource::NeedMorePlayData(
+        const size_t nSamples,
+        const size_t nBytesPerSample,
+        const size_t nChannels,
+        const uint32_t samplesPerSec,
+        void* audioSamples,
+        size_t& nSamplesOut,
+        int64_t* elapsed_time_ms,
+        int64_t* ntp_time_ms)
+    {
+        *elapsed_time_ms = 0;
+        *ntp_time_ms = 0;
 
-		nSamplesOut = wavReader->ReadSamples(nSamples * nChannels, static_cast<int16_t *>(audioSamples));
+        nSamplesOut = wavReader->ReadSamples(nSamples * nChannels, static_cast<int16_t*>(audioSamples));
 
-		if (nSamplesOut < nSamples) {
-			// EOF. Fill with silence.
-			nSamplesOut = nSamples * nChannels;
+        if (nSamplesOut < nSamples)
+        {
+            // EOF. Fill with silence.
+            nSamplesOut = nSamples * nChannels;
 
-			std::memset(audioSamples, 0, nSamples * nBytesPerSample);
-		}
+            std::memset(audioSamples, 0, nSamples * nBytesPerSample);
+        }
 
-		return 0;
-	}
+        return 0;
+    }
 }

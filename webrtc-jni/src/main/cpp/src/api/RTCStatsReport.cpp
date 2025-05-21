@@ -21,33 +21,32 @@
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCStatsReport
 {
-	namespace RTCStatsReport
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::scoped_refptr<const webrtc::RTCStatsReport> & report)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCStatsReportClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCStatsReportClass>(env);
 
-			JavaHashMap statsMap(env);
+        JavaHashMap statsMap(env);
 
-			for (const auto & stats : *report) {
-				JavaLocalRef<jstring> key = JavaString::toJava(env, stats.id());
-				JavaLocalRef<jobject> value = RTCStats::toJava(env, stats);
+        for (const auto& stats : *report)
+        {
+            JavaLocalRef<jstring> key = JavaString::toJava(env, stats.id());
+            JavaLocalRef<jobject> value = RTCStats::toJava(env, stats);
 
-				statsMap.put(key, value);
-			}
+            statsMap.put(key, value);
+        }
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor, ((JavaLocalRef<jobject>)statsMap).get());
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                     static_cast<JavaLocalRef<jobject>>(statsMap).get());
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+        return JavaLocalRef<jobject>(env, obj);
+    }
 
-		JavaRTCStatsReportClass::JavaRTCStatsReportClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCStatsReport");
+    JavaRTCStatsReportClass::JavaRTCStatsReportClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCStatsReport");
 
-			ctor = GetMethod(env, cls, "<init>", "(" MAP_SIG ")V");
-		}
-	}
+        ctor = GetMethod(env, cls, "<init>", "(" MAP_SIG ")V");
+    }
 }

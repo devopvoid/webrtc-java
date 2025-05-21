@@ -20,37 +20,34 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::AudioOptions
 {
-	namespace AudioOptions
-	{
-		cricket::AudioOptions toNative(JNIEnv * env, const JavaRef<jobject>& javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaAudioOptionsClass>(env);
+    cricket::AudioOptions toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaAudioOptionsClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			auto options = cricket::AudioOptions();
-			options.echo_cancellation = obj.getBoolean(javaClass->echoCancellation);
-			options.auto_gain_control = obj.getBoolean(javaClass->autoGainControl);
-			options.noise_suppression = obj.getBoolean(javaClass->noiseSuppression);
-			options.highpass_filter = obj.getBoolean(javaClass->highpassFilter);
-			options.typing_detection = obj.getBoolean(javaClass->typingDetection);
-			options.residual_echo_detector = obj.getBoolean(javaClass->residualEchoDetector);
-		
-			return options;
-		}
+        auto options = cricket::AudioOptions();
+        options.echo_cancellation = obj.getBoolean(javaClass->echoCancellation);
+        options.auto_gain_control = obj.getBoolean(javaClass->autoGainControl);
+        options.noise_suppression = obj.getBoolean(javaClass->noiseSuppression);
+        options.highpass_filter = obj.getBoolean(javaClass->highpassFilter);
+        options.typing_detection = obj.getBoolean(javaClass->typingDetection);
+        options.residual_echo_detector = obj.getBoolean(javaClass->residualEchoDetector);
 
-		JavaAudioOptionsClass::JavaAudioOptionsClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_AUDIO"AudioOptions");
-			
-			echoCancellation = GetFieldID(env, cls, "echoCancellation", "Z");
-			autoGainControl = GetFieldID(env, cls, "autoGainControl", "Z");
-			noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "Z");
-			highpassFilter = GetFieldID(env, cls, "highpassFilter", "Z");
-			typingDetection = GetFieldID(env, cls, "typingDetection", "Z");
-			residualEchoDetector = GetFieldID(env, cls, "residualEchoDetector", "Z");
-		}
-	}
+        return options;
+    }
+
+    JavaAudioOptionsClass::JavaAudioOptionsClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG_AUDIO"AudioOptions");
+
+        echoCancellation = GetFieldID(env, cls, "echoCancellation", "Z");
+        autoGainControl = GetFieldID(env, cls, "autoGainControl", "Z");
+        noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "Z");
+        highpassFilter = GetFieldID(env, cls, "highpassFilter", "Z");
+        typingDetection = GetFieldID(env, cls, "typingDetection", "Z");
+        residualEchoDetector = GetFieldID(env, cls, "residualEchoDetector", "Z");
+    }
 }

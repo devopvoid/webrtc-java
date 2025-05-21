@@ -18,29 +18,29 @@
 
 namespace jni
 {
-	WavAudioFileSink::WavAudioFileSink(std::string fileName)
-	{
-		wavWriter = std::make_unique<webrtc::WavWriter>(fileName, 48000, 2);
-	}
+    WavAudioFileSink::WavAudioFileSink(std::string fileName)
+    {
+        wavWriter = std::make_unique<webrtc::WavWriter>(fileName, 48000, 2);
+    }
 
-	WavAudioFileSink::~WavAudioFileSink()
-	{
-	}
+    WavAudioFileSink::~WavAudioFileSink()
+    {
+    }
 
-	int32_t WavAudioFileSink::RecordedDataIsAvailable(
-		const void * audioSamples,
-		const size_t nSamples,
-		const size_t nBytesPerSample,
-		const size_t nChannels,
-		const uint32_t samplesPerSec,
-		const uint32_t totalDelayMS,
-		const int32_t clockDrift,
-		const uint32_t currentMicLevel,
-		const bool keyPressed,
-		uint32_t & newMicLevel)
-	{
-		wavWriter->WriteSamples(static_cast<const int16_t *>(audioSamples), nSamples * nChannels);
+    int32_t WavAudioFileSink::RecordedDataIsAvailable(
+        const void* audioSamples,
+        const size_t nSamples,
+        const size_t nBytesPerSample,
+        const size_t nChannels,
+        const uint32_t samplesPerSec,
+        const uint32_t totalDelayMS,
+        const int32_t clockDrift,
+        const uint32_t currentMicLevel,
+        const bool keyPressed,
+        uint32_t& newMicLevel)
+    {
+        wavWriter->WriteSamples(static_cast<const int16_t*>(audioSamples), nSamples * nChannels);
 
-		return 0;
-	}
+        return 0;
+    }
 }

@@ -16,67 +16,68 @@
 
 #include "media/audio/AudioDeviceManager.h"
 
-namespace jni
+namespace jni::avdev
 {
-	namespace avdev
-	{
-		AudioDeviceManager::AudioDeviceManager()
-		{
-		}
+    AudioDeviceManager::AudioDeviceManager()
+    {
+    }
 
-		AudioDevicePtr AudioDeviceManager::getDefaultAudioCaptureDevice()
-		{
-			if (getDefaultCaptureDevice() == nullptr && captureDevices.empty()) {
-				getAudioCaptureDevices();
-			}
+    AudioDevicePtr AudioDeviceManager::getDefaultAudioCaptureDevice()
+    {
+        if (getDefaultCaptureDevice() == nullptr && captureDevices.empty())
+        {
+            getAudioCaptureDevices();
+        }
 
-			if (getDefaultCaptureDevice() == nullptr && !captureDevices.empty()) {
-				setDefaultCaptureDevice(*captureDevices.devices().begin());
-			}
+        if (getDefaultCaptureDevice() == nullptr && !captureDevices.empty())
+        {
+            setDefaultCaptureDevice(*captureDevices.devices().begin());
+        }
 
-			return getDefaultCaptureDevice();
-		}
+        return getDefaultCaptureDevice();
+    }
 
-		AudioDevicePtr AudioDeviceManager::getDefaultAudioPlaybackDevice()
-		{
-			if (getDefaultPlaybackDevice() == nullptr && playbackDevices.empty()) {
-				getAudioPlaybackDevices();
-			}
+    AudioDevicePtr AudioDeviceManager::getDefaultAudioPlaybackDevice()
+    {
+        if (getDefaultPlaybackDevice() == nullptr && playbackDevices.empty())
+        {
+            getAudioPlaybackDevices();
+        }
 
-			if (getDefaultPlaybackDevice() == nullptr && !playbackDevices.empty()) {
-				setDefaultPlaybackDevice(*playbackDevices.devices().begin());
-			}
+        if (getDefaultPlaybackDevice() == nullptr && !playbackDevices.empty())
+        {
+            setDefaultPlaybackDevice(*playbackDevices.devices().begin());
+        }
 
-			return getDefaultPlaybackDevice();
-		}
+        return getDefaultPlaybackDevice();
+    }
 
-		void AudioDeviceManager::setDefaultCaptureDevice(AudioDevicePtr device)
-		{
-			std::unique_lock<std::mutex> mlock(mutex);
+    void AudioDeviceManager::setDefaultCaptureDevice(AudioDevicePtr device)
+    {
+        std::unique_lock<std::mutex> mlock(mutex);
 
-			defaultCaptureDevice = device;
-		}
+        defaultCaptureDevice = device;
+    }
 
 
-		AudioDevicePtr AudioDeviceManager::getDefaultCaptureDevice()
-		{
-			std::unique_lock<std::mutex> mlock(mutex);
+    AudioDevicePtr AudioDeviceManager::getDefaultCaptureDevice()
+    {
+        std::unique_lock<std::mutex> mlock(mutex);
 
-			return defaultCaptureDevice;
-		}
+        return defaultCaptureDevice;
+    }
 
-		void AudioDeviceManager::setDefaultPlaybackDevice(AudioDevicePtr device)
-		{
-			std::unique_lock<std::mutex> mlock(mutex);
+    void AudioDeviceManager::setDefaultPlaybackDevice(AudioDevicePtr device)
+    {
+        std::unique_lock<std::mutex> mlock(mutex);
 
-			defaultPlaybackDevice = device;
-		}
+        defaultPlaybackDevice = device;
+    }
 
-		AudioDevicePtr AudioDeviceManager::getDefaultPlaybackDevice()
-		{
-			std::unique_lock<std::mutex> mlock(mutex);
+    AudioDevicePtr AudioDeviceManager::getDefaultPlaybackDevice()
+    {
+        std::unique_lock<std::mutex> mlock(mutex);
 
-			return defaultPlaybackDevice;
-		}
-	}
+        return defaultPlaybackDevice;
+    }
 }

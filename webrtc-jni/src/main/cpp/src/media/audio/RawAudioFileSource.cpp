@@ -21,52 +21,53 @@
 
 namespace jni
 {
-	RawAudioFileSource::RawAudioFileSource(std::string fileName)
-	{
-		inputStream.open(fileName, std::ofstream::in | std::ofstream::binary);
+    RawAudioFileSource::RawAudioFileSource(std::string fileName)
+    {
+        inputStream.open(fileName, std::ofstream::in | std::ofstream::binary);
 
-		// Get length of the file.
-		inputStream.seekg(0, inputStream.end);
-		fileLength = inputStream.tellg();
-		fileRemainingBytes = fileLength;
-		inputStream.seekg(0, inputStream.beg);
-	}
+        // Get length of the file.
+        inputStream.seekg(0, inputStream.end);
+        fileLength = inputStream.tellg();
+        fileRemainingBytes = fileLength;
+        inputStream.seekg(0, inputStream.beg);
+    }
 
-	RawAudioFileSource::~RawAudioFileSource()
-	{
-		inputStream.close();
-	}
+    RawAudioFileSource::~RawAudioFileSource()
+    {
+        inputStream.close();
+    }
 
-	int32_t RawAudioFileSource::NeedMorePlayData(
-		const size_t nSamples,
-		const size_t nBytesPerSample,
-		const size_t nChannels,
-		const uint32_t samplesPerSec,
-		void * audioSamples,
-		size_t & nSamplesOut,
-		int64_t * elapsed_time_ms,
-		int64_t * ntp_time_ms)
-	{
-		size_t audioSamplesSize = nSamples * nBytesPerSample;
-		size_t readBytes = std::min(audioSamplesSize, fileRemainingBytes);
+    int32_t RawAudioFileSource::NeedMorePlayData(
+        const size_t nSamples,
+        const size_t nBytesPerSample,
+        const size_t nChannels,
+        const uint32_t samplesPerSec,
+        void* audioSamples,
+        size_t& nSamplesOut,
+        int64_t* elapsed_time_ms,
+        int64_t* ntp_time_ms)
+    {
+        size_t audioSamplesSize = nSamples * nBytesPerSample;
+        size_t readBytes = std::min(audioSamplesSize, fileRemainingBytes);
 
-		*elapsed_time_ms = 0;
-		*ntp_time_ms = 0;
+        *elapsed_time_ms = 0;
+        *ntp_time_ms = 0;
 
-		if (readBytes < nBytesPerSample) {
-			// EOF. Fill with silence.
-			nSamplesOut = nSamples;
+        if (readBytes < nBytesPerSample)
+        {
+            // EOF. Fill with silence.
+            nSamplesOut = nSamples;
 
-			std::memset(audioSamples, 0, audioSamplesSize);
+            std::memset(audioSamples, 0, audioSamplesSize);
 
-			return 0;
-		}
+            return 0;
+        }
 
-		nSamplesOut = readBytes / nBytesPerSample;
-		fileRemainingBytes -= readBytes;
+        nSamplesOut = readBytes / nBytesPerSample;
+        fileRemainingBytes -= readBytes;
 
-		inputStream.read(static_cast<char *>(audioSamples), readBytes);
+        inputStream.read(static_cast<char*>(audioSamples), readBytes);
 
-		return 0;
-	}
+        return 0;
+    }
 }

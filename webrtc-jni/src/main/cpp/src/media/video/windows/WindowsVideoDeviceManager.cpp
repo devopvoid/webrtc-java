@@ -24,119 +24,128 @@
 #include <ks.h>
 #include <ksmedia.h>
 
-namespace jni
+namespace jni::avdev
 {
-	namespace avdev
-	{
-		WindowsVideoDeviceManager::WindowsVideoDeviceManager() :
-			WinHotplugNotifier(std::list<GUID> { KSCATEGORY_VIDEO })
-		{
-			start();
-		}
+    WindowsVideoDeviceManager::WindowsVideoDeviceManager() :
+        WinHotplugNotifier(std::list<GUID>{KSCATEGORY_VIDEO})
+    {
+        start();
+    }
 
-		std::set<VideoDevicePtr> WindowsVideoDeviceManager::getVideoCaptureDevices()
-		{
-			if (captureDevices.empty()) {
-				enumerateDevices(nullptr);
-			}
+    std::set<VideoDevicePtr> WindowsVideoDeviceManager::getVideoCaptureDevices()
+    {
+        if (captureDevices.empty())
+        {
+            enumerateDevices(nullptr);
+        }
 
-			return captureDevices.devices();
-		}
+        return captureDevices.devices();
+    }
 
-		std::set<VideoCaptureCapability> WindowsVideoDeviceManager::getVideoCaptureCapabilities(const VideoDevice & device)
-		{
-			std::set<VideoCaptureCapability> capabilities;
+    std::set<VideoCaptureCapability> WindowsVideoDeviceManager::getVideoCaptureCapabilities(const VideoDevice& device)
+    {
+        std::set<VideoCaptureCapability> capabilities;
 
-			std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
+        std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
 
-			if (!info) {
-				throw jni::Exception("Create video DeviceInfo failed");
-			}
+        if (!info)
+        {
+            throw Exception("Create video DeviceInfo failed");
+        }
 
-			const std::string guid = device.getDescriptor();
+        const std::string guid = device.getDescriptor();
 
-			uint32_t capabilitiesCount = info->NumberOfCapabilities(guid.data());
+        uint32_t capabilitiesCount = info->NumberOfCapabilities(guid.data());
 
-			if (capabilitiesCount > 0) {
-				for (uint32_t i = 0; i < capabilitiesCount; ++i) {
-					webrtc::VideoCaptureCapability capability;
+        if (capabilitiesCount > 0)
+        {
+            for (uint32_t i = 0; i < capabilitiesCount; ++i)
+            {
+                webrtc::VideoCaptureCapability capability;
 
-					if (info->GetCapability(guid.data(), i, capability) == 0) {
-						VideoCaptureCapability cap;
-						cap.width = capability.width;
-						cap.height = capability.height;
-						cap.maxFPS = capability.maxFPS;
-						cap.videoType = capability.videoType;
+                if (info->GetCapability(guid.data(), i, capability) == 0)
+                {
+                    VideoCaptureCapability cap;
+                    cap.width = capability.width;
+                    cap.height = capability.height;
+                    cap.maxFPS = capability.maxFPS;
+                    cap.videoType = capability.videoType;
 
-						capabilities.emplace(cap);
-					}
-				}
-			}
+                    capabilities.emplace(cap);
+                }
+            }
+        }
 
-			return capabilities;
-		}
+        return capabilities;
+    }
 
-		void WindowsVideoDeviceManager::enumerateDevices(std::wstring * symLink)
-		{
-			std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
+    void WindowsVideoDeviceManager::enumerateDevices(std::wstring* symLink)
+    {
+        std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
 
-			if (!info) {
-				throw jni::Exception("Create video DeviceInfo failed");
-			}
+        if (!info)
+        {
+            throw Exception("Create video DeviceInfo failed");
+        }
 
-			uint32_t deviceCount = info->NumberOfDevices();
+        uint32_t deviceCount = info->NumberOfDevices();
 
-			if (deviceCount > 0) {
-				const uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
+        if (deviceCount > 0)
+        {
+            constexpr uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
 
-				for (uint32_t i = 0; i < deviceCount; ++i) {
-					char name[size] = { 0 };
-					char guid[size] = { 0 };
+            for (uint32_t i = 0; i < deviceCount; ++i)
+            {
+                char name[size] = {0};
+                char guid[size] = {0};
 
-					if (info->GetDeviceName(i, name, size, guid, size) == 0) {
-						std::shared_ptr<VideoDevice> device = std::make_shared<VideoDevice>(name, guid);
+                if (info->GetDeviceName(i, name, size, guid, size) == 0)
+                {
+                    auto device = std::make_shared<VideoDevice>(name, guid);
 
-						insertVideoDevice(device);
-					}
-				}
-			}
-		}
+                    insertVideoDevice(device);
+                }
+            }
+        }
+    }
 
-		bool WindowsVideoDeviceManager::insertVideoDevice(VideoDevicePtr device)
-		{
-			if (device == nullptr) {
-				return false;
-			}
+    bool WindowsVideoDeviceManager::insertVideoDevice(VideoDevicePtr device)
+    {
+        if (device == nullptr)
+        {
+            return false;
+        }
 
-			captureDevices.insertDevice(device);
+        captureDevices.insertDevice(device);
 
-			return true;
-		}
+        return true;
+    }
 
-		void WindowsVideoDeviceManager::onDeviceConnected(std::wstring symLink)
-		{
-			enumerateDevices(&symLink);
-		}
+    void WindowsVideoDeviceManager::onDeviceConnected(std::wstring symLink)
+    {
+        enumerateDevices(&symLink);
+    }
 
-		void WindowsVideoDeviceManager::onDeviceDisconnected(std::wstring symLink)
-		{
-			auto predicate = [symLink](const VideoDevicePtr & dev) {
-				std::wstring link = UTF8Decode(dev->getDescriptor());
-				std::transform(link.begin(), link.end(), link.begin(), ::tolower);
+    void WindowsVideoDeviceManager::onDeviceDisconnected(std::wstring symLink)
+    {
+        auto predicate = [symLink](const VideoDevicePtr& dev)
+        {
+            std::wstring link = UTF8Decode(dev->getDescriptor());
+            std::transform(link.begin(), link.end(), link.begin(), tolower);
 
-				// IMFActivate and the device broadcaster return different
-				// symbolic links. Compare only the device instance id.
-				size_t pos = link.find(L"#{", 0);
-				pos = (pos == -1) ? (std::min)(link.length(), symLink.length()) : pos;
+            // IMFActivate and the device broadcaster return different
+            // symbolic links. Compare only the device instance id.
+            size_t pos = link.find(L"#{", 0);
+            pos = (pos == -1) ? (std::min)(link.length(), symLink.length()) : pos;
 
-				return symLink.compare(0, pos, link, 0, pos) == 0;
-			};
+            return symLink.compare(0, pos, link, 0, pos) == 0;
+        };
 
-			VideoDevicePtr removed = captureDevices.removeDevice(predicate);
+        VideoDevicePtr removed = captureDevices.removeDevice(predicate);
 
-			if (removed) {
-				notifyDeviceDisconnected(removed);
-			}
-		}
-	}
+        if (removed)
+        {
+            notifyDeviceDisconnected(removed);
+        }
+    }
 }

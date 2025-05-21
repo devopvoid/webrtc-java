@@ -17,21 +17,22 @@
  * Signature: ()Ljava/util/List;
  */
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioEncoderFactory_getSupportedEncoders
-  (JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-    webrtc::AudioEncoderFactory * factory = GetHandle<webrtc::AudioEncoderFactory>(env, caller);
+    webrtc::AudioEncoderFactory* factory = GetHandle<webrtc::AudioEncoderFactory>(env, caller);
     CHECK_HANDLEV(factory, nullptr);
     try
     {
         auto encoders = factory->GetSupportedEncoders();
-        jni::JavaArrayList encoderList(env,encoders.size());
+        jni::JavaArrayList encoderList(env, encoders.size());
 
-        for (const auto & encoder : encoders)
+        for (const auto& encoder : encoders)
         {
             encoderList.add(jni::AudioCodecSpec::toJava(env, encoder));
         }
         return encoderList.listObject().release();
-    }catch (...)
+    }
+    catch (...)
     {
         ThrowCxxJavaException(env);
     }
@@ -45,19 +46,19 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioEncoderFactory
  * Signature: (Ldev/onvoid/webrtc/media/audio/SdpAudioFormat;)Ldev/onvoid/webrtc/media/audio/AudioCodecInfo;
  */
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioEncoderFactory_queryAudioEncoder
-  (JNIEnv * env, jobject caller, jobject jformat)
+(JNIEnv* env, jobject caller, jobject jformat)
 {
-    webrtc::AudioEncoderFactory * factory = GetHandle<webrtc::AudioEncoderFactory>(env, caller);
+    webrtc::AudioEncoderFactory* factory = GetHandle<webrtc::AudioEncoderFactory>(env, caller);
     CHECK_HANDLEV(factory, nullptr);
 
     webrtc::SdpAudioFormat format = jni::SdpAudioFormat::toNative(env, jni::JavaLocalRef<jobject>(env, jformat));
 
     auto result = factory->QueryAudioEncoder(format);
 
-    if (! result.has_value())
+    if (!result.has_value())
     {
         return nullptr;
     }
-    
+
     return jni::AudioCodecInfo::toJava(env, *result).release();
 }

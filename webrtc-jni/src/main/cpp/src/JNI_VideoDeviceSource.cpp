@@ -24,93 +24,101 @@
 #include "JavaUtils.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureDevice
-(JNIEnv * env, jobject caller, jobject device)
+(JNIEnv* env, jobject caller, jobject device)
 {
-	if (!device) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoDevice is null"));
-		return;
-	}
+    if (!device)
+    {
+        env->Throw(jni::JavaNullPointerException(env, "VideoDevice is null"));
+        return;
+    }
 
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+    jni::VideoTrackDeviceSource* videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+    CHECK_HANDLE(videoSource);
 
-	const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
+    const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
 
-	videoSource->setVideoDevice(std::make_shared<jni::avdev::VideoDevice>(dev.getName(), dev.getDescriptor()));
+    videoSource->setVideoDevice(std::make_shared<jni::avdev::VideoDevice>(dev.getName(), dev.getDescriptor()));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureCapability
-(JNIEnv * env, jobject caller, jobject jcapability)
+(JNIEnv* env, jobject caller, jobject jcapability)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+    jni::VideoTrackDeviceSource* videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+    CHECK_HANDLE(videoSource);
 
-	if (!jcapability) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoCaptureCapability is null"));
-		return;
-	}
+    if (!jcapability)
+    {
+        env->Throw(jni::JavaNullPointerException(env, "VideoCaptureCapability is null"));
+        return;
+    }
 
-	jint width = env->GetIntField(jcapability, GetFieldID(env, jcapability, "width", "I"));
-	jint height = env->GetIntField(jcapability, GetFieldID(env, jcapability, "height", "I"));
-	jint frameRate = env->GetIntField(jcapability, GetFieldID(env, jcapability, "frameRate", "I"));
+    jint width = env->GetIntField(jcapability, GetFieldID(env, jcapability, "width", "I"));
+    jint height = env->GetIntField(jcapability, GetFieldID(env, jcapability, "height", "I"));
+    jint frameRate = env->GetIntField(jcapability, GetFieldID(env, jcapability, "frameRate", "I"));
 
-	webrtc::VideoCaptureCapability capability;
-	capability.width = static_cast<int32_t>(width);
-	capability.height = static_cast<int32_t>(height);
-	capability.maxFPS = static_cast<int32_t>(frameRate);
+    webrtc::VideoCaptureCapability capability;
+    capability.width = static_cast<int32_t>(width);
+    capability.height = static_cast<int32_t>(height);
+    capability.maxFPS = static_cast<int32_t>(frameRate);
 
-	videoSource->setVideoCaptureCapability(capability);
+    videoSource->setVideoCaptureCapability(capability);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_start
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+    jni::VideoTrackDeviceSource* videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+    CHECK_HANDLE(videoSource);
 
-	try {
-		videoSource->start();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+    try
+    {
+        videoSource->start();
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_stop
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+    jni::VideoTrackDeviceSource* videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+    CHECK_HANDLE(videoSource);
 
-	try {
-		videoSource->stop();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+    try
+    {
+        videoSource->stop();
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_dispose
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+    jni::VideoTrackDeviceSource* videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+    CHECK_HANDLE(videoSource);
 
-	rtc::RefCountReleaseStatus status = videoSource->Release();
+    rtc::RefCountReleaseStatus status = videoSource->Release();
 
-	if (status != rtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-	}
+    if (status != rtc::RefCountReleaseStatus::kDroppedLastRef)
+    {
+        RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+    }
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+    SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-	videoSource = nullptr;
+    videoSource = nullptr;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_initialize
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	rtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = new rtc::RefCountedObject<jni::VideoTrackDeviceSource>();
+    rtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = new rtc::RefCountedObject<
+        jni::VideoTrackDeviceSource>();
 
-	SetHandle(env, caller, videoSource.release());
+    SetHandle(env, caller, videoSource.release());
 }

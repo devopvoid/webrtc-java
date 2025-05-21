@@ -22,112 +22,124 @@
 
 namespace jni
 {
-	VideoCapture::VideoCapture() :
-		captureModule(nullptr)
-	{
-		capability.width = static_cast<int32_t>(1280);
-		capability.height = static_cast<int32_t>(720);
-		capability.maxFPS = static_cast<int32_t>(30);
-	}
+    VideoCapture::VideoCapture() :
+        captureModule(nullptr)
+    {
+        capability.width = 1280;
+        capability.height = 720;
+        capability.maxFPS = 30;
+    }
 
-	VideoCapture::~VideoCapture()
-	{
-		destroy();
-	}
+    VideoCapture::~VideoCapture()
+    {
+        destroy();
+    }
 
-	void VideoCapture::setDevice(const avdev::DevicePtr & device)
-	{
-		this->device = device;
-	}
+    void VideoCapture::setDevice(const avdev::DevicePtr& device)
+    {
+        this->device = device;
+    }
 
-	void VideoCapture::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
-	{
-		this->capability = capability;
-	}
+    void VideoCapture::setVideoCaptureCapability(const webrtc::VideoCaptureCapability& capability)
+    {
+        this->capability = capability;
+    }
 
-	void VideoCapture::setVideoSink(std::unique_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
-	{
-		this->sink = std::move(sink);
-	}
+    void VideoCapture::setVideoSink(std::unique_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
+    {
+        this->sink = std::move(sink);
+    }
 
-	void VideoCapture::start()
-	{
-		if (!device) {
-			throw new Exception("Video device must be set");
-		}
+    void VideoCapture::start()
+    {
+        if (!device)
+        {
+            throw new Exception("Video device must be set");
+        }
 
-		std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
+        std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
 
-		if (!info) {
-			throw new Exception("Create video DeviceInfo failed");
-		}
+        if (!info)
+        {
+            throw new Exception("Create video DeviceInfo failed");
+        }
 
-		uint32_t num = info->NumberOfDevices();
+        uint32_t num = info->NumberOfDevices();
 
-		if (num < 1) {
-			throw new Exception("No video capture devices available");
-		}
-		
-		std::string devUid;
-		const uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
+        if (num < 1)
+        {
+            throw new Exception("No video capture devices available");
+        }
 
-		for (uint32_t i = 0; i < num; ++i) {
-			char name[size] = { 0 };
-			char guid[size] = { 0 };
+        std::string devUid;
+        constexpr uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
 
-			int32_t ret = info->GetDeviceName(i, name, size, guid, size);
+        for (uint32_t i = 0; i < num; ++i)
+        {
+            char name[size] = {0};
+            char guid[size] = {0};
 
-			if (ret != 0) {
-				RTC_LOG(LS_WARNING) << "Get video capture device name failed";
-				continue;
-			}
+            int32_t ret = info->GetDeviceName(i, name, size, guid, size);
 
-			if (device->getName().compare(name) == 0) {
-				devUid = guid;
-				break;
-			}
-		}
+            if (ret != 0)
+            {
+                RTC_LOG(LS_WARNING) << "Get video capture device name failed";
+                continue;
+            }
 
-		if (devUid.empty()) {
-			throw new Exception("Device %s not found", device->getName().c_str());
-		}
+            if (device->getName().compare(name) == 0)
+            {
+                devUid = guid;
+                break;
+            }
+        }
 
-		captureModule = webrtc::VideoCaptureFactory::Create(devUid.c_str());
+        if (devUid.empty())
+        {
+            throw new Exception("Device %s not found", device->getName().c_str());
+        }
 
-		if (!captureModule) {
-			throw new Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
-		}
+        captureModule = webrtc::VideoCaptureFactory::Create(devUid.c_str());
 
-		captureModule->RegisterCaptureDataCallback(std::move(sink).release());
+        if (!captureModule)
+        {
+            throw new Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
+        }
 
-		capability.videoType = webrtc::VideoType::kI420;
+        captureModule->RegisterCaptureDataCallback(std::move(sink).release());
 
-		if (captureModule->StartCapture(capability) != 0) {
-			destroy();
+        capability.videoType = webrtc::VideoType::kI420;
 
-			throw new Exception("Start video capture for UID %s failed", devUid.c_str());
-		}
+        if (captureModule->StartCapture(capability) != 0)
+        {
+            destroy();
 
-		if (!captureModule || !captureModule->CaptureStarted()) {
-			throw new Exception("Start video capture failed");
-		}
-	}
+            throw new Exception("Start video capture for UID %s failed", devUid.c_str());
+        }
 
-	void VideoCapture::stop()
-	{
-		destroy();
-	}
+        if (!captureModule || !captureModule->CaptureStarted())
+        {
+            throw new Exception("Start video capture failed");
+        }
+    }
 
-	void VideoCapture::destroy()
-	{
-		if (!captureModule) {
-			return;
-		}
-		if (captureModule->CaptureStarted()) {
-			captureModule->StopCapture();
-		}
+    void VideoCapture::stop()
+    {
+        destroy();
+    }
 
-		captureModule->DeRegisterCaptureDataCallback();
-		captureModule = nullptr;
-	}
+    void VideoCapture::destroy()
+    {
+        if (!captureModule)
+        {
+            return;
+        }
+        if (captureModule->CaptureStarted())
+        {
+            captureModule->StopCapture();
+        }
+
+        captureModule->DeRegisterCaptureDataCallback();
+        captureModule = nullptr;
+    }
 }

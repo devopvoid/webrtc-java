@@ -21,23 +21,24 @@
 
 namespace jni
 {
-	MFInitializer::MFInitializer() : initialized(false)
-	{
-		HRESULT hr = MFStartup(MF_VERSION, MFSTARTUP_LITE);
-		THROW_IF_FAILED(hr, "Initialize Media Foundation failed.");
+    MFInitializer::MFInitializer() : initialized(false)
+    {
+        HRESULT hr = MFStartup(MF_VERSION, MFSTARTUP_LITE);
+        THROW_IF_FAILED(hr, "Initialize Media Foundation failed.");
 
-		initialized = true;
-	}
+        initialized = true;
+    }
 
-	MFInitializer::~MFInitializer()
-	{
-		if (initialized) {
-			MFShutdown();
-		}
-	}
+    MFInitializer::~MFInitializer()
+    {
+        if (initialized)
+        {
+            MFShutdown();
+        }
+    }
 
-	bool MFInitializer::isInitialized()
-	{
-		return initialized;
-	}
+    bool MFInitializer::isInitialized()
+    {
+        return initialized;
+    }
 }

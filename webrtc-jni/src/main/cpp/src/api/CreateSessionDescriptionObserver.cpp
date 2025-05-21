@@ -22,39 +22,41 @@
 
 namespace jni
 {
-	CreateSessionDescriptionObserver::CreateSessionDescriptionObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
-		observer(observer),
-		javaClass(JavaClasses::get<JavaCreateSessionDescObserverClass>(env))
-	{
-	}
+    CreateSessionDescriptionObserver::CreateSessionDescriptionObserver(JNIEnv* env,
+                                                                       const JavaGlobalRef<jobject>& observer) :
+        observer(observer),
+        javaClass(JavaClasses::get<JavaCreateSessionDescObserverClass>(env))
+    {
+    }
 
-	void CreateSessionDescriptionObserver::OnSuccess(webrtc::SessionDescriptionInterface * desc)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void CreateSessionDescriptionObserver::OnSuccess(webrtc::SessionDescriptionInterface* desc)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		JavaLocalRef<jobject> javaDesc = jni::RTCSessionDescription::toJava(env, desc);
+        JavaLocalRef<jobject> javaDesc = RTCSessionDescription::toJava(env, desc);
 
-		env->CallVoidMethod(observer, javaClass->onSuccess, javaDesc.get());
+        env->CallVoidMethod(observer, javaClass->onSuccess, javaDesc.get());
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	void CreateSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void CreateSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
+        JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
-		env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+        env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
 
- 		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	CreateSessionDescriptionObserver::JavaCreateSessionDescObserverClass::JavaCreateSessionDescObserverClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG"CreateSessionDescriptionObserver");
+    CreateSessionDescriptionObserver::JavaCreateSessionDescObserverClass::JavaCreateSessionDescObserverClass(
+        JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG"CreateSessionDescriptionObserver");
 
-		onSuccess = GetMethod(env, cls, "onSuccess", "(L" PKG "RTCSessionDescription;)V");
-		onFailure = GetMethod(env, cls, "onFailure", "(" STRING_SIG ")V");
-	}
+        onSuccess = GetMethod(env, cls, "onSuccess", "(L" PKG "RTCSessionDescription;)V");
+        onFailure = GetMethod(env, cls, "onFailure", "(" STRING_SIG ")V");
+    }
 }

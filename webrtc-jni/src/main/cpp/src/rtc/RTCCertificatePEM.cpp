@@ -23,44 +23,41 @@
 #include "rtc_base/ref_count.h"
 #include "rtc_base/rtc_certificate_generator.h"
 
-namespace jni
+namespace jni::RTCCertificatePEM
 {
-	namespace RTCCertificatePEM
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::RTCCertificatePEM & certificate)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCCertificatePEMClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const rtc::RTCCertificatePEM& certificate)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCCertificatePEMClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, certificate.private_key()).get(),
-				JavaString::toJava(env, certificate.certificate()).get(),
-				0
-			);
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                     JavaString::toJava(env, certificate.private_key()).get(),
+                                     JavaString::toJava(env, certificate.certificate()).get(),
+                                     0
+        );
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+        return JavaLocalRef<jobject>(env, obj);
+    }
 
-		rtc::RTCCertificatePEM toNative(JNIEnv * env, const JavaRef<jobject> & certificate)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCCertificatePEMClass>(env);
+    rtc::RTCCertificatePEM toNative(JNIEnv* env, const JavaRef<jobject>& certificate)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCCertificatePEMClass>(env);
 
-			JavaObject obj(env, certificate);
+        JavaObject obj(env, certificate);
 
-			return rtc::RTCCertificatePEM(
-				JavaString::toNative(env, obj.getString(javaClass->privateKey)),
-				JavaString::toNative(env, obj.getString(javaClass->certificate))
-			);
-		}
+        return rtc::RTCCertificatePEM(
+            JavaString::toNative(env, obj.getString(javaClass->privateKey)),
+            JavaString::toNative(env, obj.getString(javaClass->certificate))
+        );
+    }
 
-		JavaRTCCertificatePEMClass::JavaRTCCertificatePEMClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCCertificatePEM");
+    JavaRTCCertificatePEMClass::JavaRTCCertificatePEMClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCCertificatePEM");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG "J)V");
+        ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG "J)V");
 
-			expires = GetFieldID(env, cls, "expires", "J");
-			privateKey = GetFieldID(env, cls, "privateKey", STRING_SIG);
-			certificate = GetFieldID(env, cls, "certificate", STRING_SIG);
-		}
-	}
+        expires = GetFieldID(env, cls, "expires", "J");
+        privateKey = GetFieldID(env, cls, "privateKey", STRING_SIG);
+        certificate = GetFieldID(env, cls, "certificate", STRING_SIG);
+    }
 }

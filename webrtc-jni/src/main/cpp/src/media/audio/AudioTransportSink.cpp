@@ -23,42 +23,43 @@
 
 namespace jni
 {
-	AudioTransportSink::AudioTransportSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink) :
-		sink(sink),
-		javaClass(JavaClasses::get<JavaAudioSinkClass>(env))
-	{
-	}
+    AudioTransportSink::AudioTransportSink(JNIEnv* env, const JavaGlobalRef<jobject>& sink) :
+        sink(sink),
+        javaClass(JavaClasses::get<JavaAudioSinkClass>(env))
+    {
+    }
 
-	int32_t AudioTransportSink::RecordedDataIsAvailable(const void * audioSamples,
-                                                    const size_t nSamples,
-                                                    const size_t nBytesPerSample,
-                                                    const size_t nChannels,
-                                                    const uint32_t samplesPerSec,
-                                                    const uint32_t totalDelayMS,
-                                                    const int32_t clockDrift,
-                                                    const uint32_t currentMicLevel,
-                                                    const bool keyPressed,
-                                                    uint32_t & newMicLevel)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    int32_t AudioTransportSink::RecordedDataIsAvailable(const void* audioSamples,
+                                                        const size_t nSamples,
+                                                        const size_t nBytesPerSample,
+                                                        const size_t nChannels,
+                                                        const uint32_t samplesPerSec,
+                                                        const uint32_t totalDelayMS,
+                                                        const int32_t clockDrift,
+                                                        const uint32_t currentMicLevel,
+                                                        const bool keyPressed,
+                                                        uint32_t& newMicLevel)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		const jbyte * buffer = static_cast<const jbyte *>(audioSamples);
-		jsize dataSize = static_cast<jsize>(nSamples * nBytesPerSample);
+        auto buffer = static_cast<const jbyte*>(audioSamples);
+        jsize dataSize = static_cast<jsize>(nSamples * nBytesPerSample);
 
-		jbyteArray dataArray = env->NewByteArray(dataSize);
-		env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
-		env->CallVoidMethod(sink, javaClass->onRecordedData, dataArray, nSamples, nBytesPerSample, nChannels, samplesPerSec, totalDelayMS, clockDrift);
+        jbyteArray dataArray = env->NewByteArray(dataSize);
+        env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
+        env->CallVoidMethod(sink, javaClass->onRecordedData, dataArray, nSamples, nBytesPerSample, nChannels,
+                            samplesPerSec, totalDelayMS, clockDrift);
 
-		ExceptionCheck(env);
-		env->DeleteLocalRef(dataArray);
-	
-		return 0;
-	}
+        ExceptionCheck(env);
+        env->DeleteLocalRef(dataArray);
 
-	AudioTransportSink::JavaAudioSinkClass::JavaAudioSinkClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG_AUDIO"AudioSink");
+        return 0;
+    }
 
-		onRecordedData = GetMethod(env, cls, "onRecordedData", "([BIIIIII)V");
-	}
+    AudioTransportSink::JavaAudioSinkClass::JavaAudioSinkClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG_AUDIO"AudioSink");
+
+        onRecordedData = GetMethod(env, cls, "onRecordedData", "([BIIIIII)V");
+    }
 }

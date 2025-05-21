@@ -23,41 +23,41 @@
 
 namespace jni
 {
-	VideoTrackSink::VideoTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink) :
-		sink(sink),
-		javaClass(JavaClasses::get<JavaVideoTrackSinkClass>(env)),
-		javaFrameClass(JavaClasses::get<JavaVideoFrameClass>(env)),
-		javaBufferClass(JavaClasses::get<JavaNativeI420BufferClass>(env))
-	{
-	}
+    VideoTrackSink::VideoTrackSink(JNIEnv* env, const JavaGlobalRef<jobject>& sink) :
+        sink(sink),
+        javaClass(JavaClasses::get<JavaVideoTrackSinkClass>(env)),
+        javaFrameClass(JavaClasses::get<JavaVideoFrameClass>(env)),
+        javaBufferClass(JavaClasses::get<JavaNativeI420BufferClass>(env))
+    {
+    }
 
-	void VideoTrackSink::OnFrame(const webrtc::VideoFrame & frame)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void VideoTrackSink::OnFrame(const webrtc::VideoFrame& frame)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = frame.video_frame_buffer();
-		rtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = buffer->ToI420();
+        rtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = frame.video_frame_buffer();
+        rtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = buffer->ToI420();
 
-//		if (frame.rotation() != webrtc::kVideoRotation_0) {
-//			i420Buffer = webrtc::I420Buffer::Rotate(*i420Buffer, frame.rotation());
-//		}
+        //		if (frame.rotation() != webrtc::kVideoRotation_0) {
+        //			i420Buffer = webrtc::I420Buffer::Rotate(*i420Buffer, frame.rotation());
+        //		}
 
-		jint rotation = static_cast<jint>(frame.rotation());
-		jlong timestamp = frame.timestamp_us() * rtc::kNumNanosecsPerMicrosec;
+        jint rotation = frame.rotation();
+        jlong timestamp = frame.timestamp_us() * rtc::kNumNanosecsPerMicrosec;
 
-		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420Buffer);
-		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
+        JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420Buffer);
+        jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
 
-		env->CallVoidMethod(sink, javaClass->onFrame, jFrame);
-		ExceptionCheck(env);
-		env->DeleteLocalRef(jBuffer);
-		env->DeleteLocalRef(jFrame);
-	}
+        env->CallVoidMethod(sink, javaClass->onFrame, jFrame);
+        ExceptionCheck(env);
+        env->DeleteLocalRef(jBuffer);
+        env->DeleteLocalRef(jFrame);
+    }
 
-	VideoTrackSink::JavaVideoTrackSinkClass::JavaVideoTrackSinkClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG_VIDEO"VideoTrackSink");
+    VideoTrackSink::JavaVideoTrackSinkClass::JavaVideoTrackSinkClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG_VIDEO"VideoTrackSink");
 
-		onFrame = GetMethod(env, cls, "onVideoFrame", "(L" PKG_VIDEO "VideoFrame;)V");
-	}
+        onFrame = GetMethod(env, cls, "onVideoFrame", "(L" PKG_VIDEO "VideoFrame;)V");
+    }
 }

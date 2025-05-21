@@ -21,47 +21,44 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCRtcpParameters
 {
-	namespace RTCRtcpParameters
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtcpParameters & parameters)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtcpParametersClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::RtcpParameters& parameters)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtcpParametersClass>(env);
 
-			JavaLocalRef<jstring> cName = JavaString::toJava(env, parameters.cname);
-			jboolean reducedSize = static_cast<jboolean>(parameters.reduced_size);
+        JavaLocalRef<jstring> cName = JavaString::toJava(env, parameters.cname);
+        jboolean reducedSize = parameters.reduced_size;
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, cName.get(), reducedSize);
-			ExceptionCheck(env);
+        jobject object = env->NewObject(javaClass->cls, javaClass->ctor, cName.get(), reducedSize);
+        ExceptionCheck(env);
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+        return JavaLocalRef<jobject>(env, object);
+    }
 
-		webrtc::RtcpParameters toNative(JNIEnv * env, const JavaRef<jobject> & parameters)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtcpParametersClass>(env);
+    webrtc::RtcpParameters toNative(JNIEnv* env, const JavaRef<jobject>& parameters)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtcpParametersClass>(env);
 
-			JavaObject obj(env, parameters);
+        JavaObject obj(env, parameters);
 
-			JavaLocalRef<jstring> cName = obj.getString(javaClass->cName);
-			jboolean reducedSize = obj.getBoolean(javaClass->reducedSize);
+        JavaLocalRef<jstring> cName = obj.getString(javaClass->cName);
+        jboolean reducedSize = obj.getBoolean(javaClass->reducedSize);
 
-			webrtc::RtcpParameters params;
-			params.cname = JavaString::toNative(env, cName);
-			params.reduced_size = static_cast<bool>(reducedSize);
+        webrtc::RtcpParameters params;
+        params.cname = JavaString::toNative(env, cName);
+        params.reduced_size = static_cast<bool>(reducedSize);
 
-			return params;
-		}
+        return params;
+    }
 
-		JavaRTCRtcpParametersClass::JavaRTCRtcpParametersClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCRtcpParameters");
+    JavaRTCRtcpParametersClass::JavaRTCRtcpParametersClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCRtcpParameters");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "Z)V");
+        ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "Z)V");
 
-			cName = GetFieldID(env, cls, "cName", STRING_SIG);
-			reducedSize = GetFieldID(env, cls, "reducedSize", "Z");
-		}
-	}
+        cName = GetFieldID(env, cls, "cName", STRING_SIG);
+        reducedSize = GetFieldID(env, cls, "reducedSize", "Z");
+    }
 }

@@ -22,81 +22,84 @@
 
 namespace jni
 {
-	DesktopCapturer::DesktopCapturer(bool screenCapturer) :
-		focusSelectedSource(false)
-	{
-		auto options = webrtc::DesktopCaptureOptions::CreateDefault();
-		// Enable desktop effects.
-		options.set_disable_effects(false);
+    DesktopCapturer::DesktopCapturer(bool screenCapturer) :
+        focusSelectedSource(false)
+    {
+        auto options = webrtc::DesktopCaptureOptions::CreateDefault();
+        // Enable desktop effects.
+        options.set_disable_effects(false);
 
 #if defined(WEBRTC_WIN)
-		options.set_allow_directx_capturer(true);
-		options.set_allow_use_magnification_api(true);
+        options.set_allow_directx_capturer(true);
+        options.set_allow_use_magnification_api(true);
 #endif
 
-		if (screenCapturer) {
-			capturer.reset(new webrtc::DesktopAndCursorComposer(
-				webrtc::DesktopCapturer::CreateScreenCapturer(options),
-				options));
-		}
-		else {
-			capturer.reset(new webrtc::DesktopAndCursorComposer(
-				webrtc::DesktopCapturer::CreateWindowCapturer(options),
-				options));
-		}
-	}
+        if (screenCapturer)
+        {
+            capturer.reset(new webrtc::DesktopAndCursorComposer(
+                webrtc::DesktopCapturer::CreateScreenCapturer(options),
+                options));
+        }
+        else
+        {
+            capturer.reset(new webrtc::DesktopAndCursorComposer(
+                webrtc::DesktopCapturer::CreateWindowCapturer(options),
+                options));
+        }
+    }
 
-	DesktopCapturer::~DesktopCapturer()
-	{
-		capturer.reset();
-	}
+    DesktopCapturer::~DesktopCapturer()
+    {
+        capturer.reset();
+    }
 
-	void DesktopCapturer::Start(Callback * callback)
-	{
-		capturer->Start(callback);
+    void DesktopCapturer::Start(Callback* callback)
+    {
+        capturer->Start(callback);
 
-		if (focusSelectedSource) {
-			capturer->FocusOnSelectedSource();
-		}
-	}
+        if (focusSelectedSource)
+        {
+            capturer->FocusOnSelectedSource();
+        }
+    }
 
-	void DesktopCapturer::SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory)
-	{
-		capturer->SetSharedMemoryFactory(std::move(factory));
-	}
+    void DesktopCapturer::SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory)
+    {
+        capturer->SetSharedMemoryFactory(std::move(factory));
+    }
 
-	void DesktopCapturer::CaptureFrame()
-	{
-		capturer->CaptureFrame();
-	}
+    void DesktopCapturer::CaptureFrame()
+    {
+        capturer->CaptureFrame();
+    }
 
-	void DesktopCapturer::SetExcludedWindow(webrtc::WindowId window)
-	{
-		capturer->SetExcludedWindow(window);
-	}
+    void DesktopCapturer::SetExcludedWindow(webrtc::WindowId window)
+    {
+        capturer->SetExcludedWindow(window);
+    }
 
-	bool DesktopCapturer::GetSourceList(SourceList * sources)
-	{
-		return capturer->GetSourceList(sources);
-	}
+    bool DesktopCapturer::GetSourceList(SourceList* sources)
+    {
+        return capturer->GetSourceList(sources);
+    }
 
-	bool DesktopCapturer::SelectSource(SourceId id)
-	{
-		return capturer->SelectSource(id);
-	}
+    bool DesktopCapturer::SelectSource(SourceId id)
+    {
+        return capturer->SelectSource(id);
+    }
 
-	bool DesktopCapturer::FocusOnSelectedSource()
-	{
-		return capturer->FocusOnSelectedSource();
-	}
+    bool DesktopCapturer::FocusOnSelectedSource()
+    {
+        return capturer->FocusOnSelectedSource();
+    }
 
-	void DesktopCapturer::setFocusSelectedSource(bool focus)
-	{
-		this->focusSelectedSource = focus;
-	}
+    void DesktopCapturer::setFocusSelectedSource(bool focus)
+    {
+        this->focusSelectedSource = focus;
+    }
 
-	bool DesktopCapturer::IsOccluded(const webrtc::DesktopVector & pos)
-	{
-		return capturer->IsOccluded(pos);
-	}
+    bool DesktopCapturer::IsOccluded(const webrtc::DesktopVector& pos)
+    {
+        return capturer->IsOccluded(pos);
+    }
 }

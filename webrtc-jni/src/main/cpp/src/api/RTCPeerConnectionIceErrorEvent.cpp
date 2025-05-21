@@ -22,29 +22,27 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCPeerConnectionIceErrorEvent
 {
-	namespace RTCPeerConnectionIceErrorEvent
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const std::string & address, const int & port, const std::string & url, const int & error_code, const std::string & error_text)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCPeerConnectionIceErrorEventClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const std::string& address, const int& port, const std::string& url,
+                                 const int& error_code, const std::string& error_text)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCPeerConnectionIceErrorEventClass>(env);
 
-			jobject jEvent = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, address).get(),
-				Integer::create(env, port).get(),
-				JavaString::toJava(env, url).get(),
-				error_code,
-				JavaString::toJava(env, error_text).get());
+        jobject jEvent = env->NewObject(javaClass->cls, javaClass->ctor,
+                                        JavaString::toJava(env, address).get(),
+                                        Integer::create(env, port).get(),
+                                        JavaString::toJava(env, url).get(),
+                                        error_code,
+                                        JavaString::toJava(env, error_text).get());
 
-			return JavaLocalRef<jobject>(env, jEvent);
-		}
+        return JavaLocalRef<jobject>(env, jEvent);
+    }
 
-		JavaRTCPeerConnectionIceErrorEventClass::JavaRTCPeerConnectionIceErrorEventClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCPeerConnectionIceErrorEvent");
+    JavaRTCPeerConnectionIceErrorEventClass::JavaRTCPeerConnectionIceErrorEventClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCPeerConnectionIceErrorEvent");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG INTEGER_SIG STRING_SIG "I" STRING_SIG ")V");
-		}
-	}
+        ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG INTEGER_SIG STRING_SIG "I" STRING_SIG ")V");
+    }
 }

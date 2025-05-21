@@ -24,84 +24,90 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCRtpCodecParameters
 {
-	namespace RTCRtpCodecParameters
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpCodecParameters & parameters)
-		{
-			jint payloadType = static_cast<jint>(parameters.payload_type);
-			JavaLocalRef<jobject> mediaType = JavaEnums::toJava(env, parameters.kind);
-			JavaLocalRef<jstring> codecName = JavaString::toJava(env, parameters.name);
-			JavaLocalRef<jobject> clockRate = nullptr;
-			JavaLocalRef<jobject> channels = nullptr;
-			JavaHashMap paramMap(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::RtpCodecParameters& parameters)
+    {
+        jint payloadType = parameters.payload_type;
+        JavaLocalRef<jobject> mediaType = JavaEnums::toJava(env, parameters.kind);
+        JavaLocalRef<jstring> codecName = JavaString::toJava(env, parameters.name);
+        JavaLocalRef<jobject> clockRate = nullptr;
+        JavaLocalRef<jobject> channels = nullptr;
+        JavaHashMap paramMap(env);
 
-			for (const std::pair<std::string, std::string> & param : parameters.parameters) {
-				JavaLocalRef<jstring> key = JavaString::toJava(env, param.first);
-				JavaLocalRef<jstring> value = JavaString::toJava(env, param.second);
+        for (const std::pair<std::string, std::string>& param : parameters.parameters)
+        {
+            JavaLocalRef<jstring> key = JavaString::toJava(env, param.first);
+            JavaLocalRef<jstring> value = JavaString::toJava(env, param.second);
 
-				paramMap.put(key, value);
-			}
+            paramMap.put(key, value);
+        }
 
-			if (parameters.clock_rate.has_value()) {
-				clockRate = Integer::create(env, parameters.clock_rate.value());
-			}
-			if (parameters.num_channels.has_value()) {
-				channels = Integer::create(env, parameters.num_channels.value());
-			}
+        if (parameters.clock_rate.has_value())
+        {
+            clockRate = Integer::create(env, parameters.clock_rate.value());
+        }
+        if (parameters.num_channels.has_value())
+        {
+            channels = Integer::create(env, parameters.num_channels.value());
+        }
 
-			const auto javaClass = JavaClasses::get<JavaRTCRtpCodecParametersClass>(env);
+        const auto javaClass = JavaClasses::get<JavaRTCRtpCodecParametersClass>(env);
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, payloadType, mediaType.get(), codecName.get(), clockRate.get(), channels.get(), ((JavaLocalRef<jobject>)paramMap).get());
-			ExceptionCheck(env);
+        jobject object = env->NewObject(javaClass->cls, javaClass->ctor, payloadType, mediaType.get(), codecName.get(),
+                                        clockRate.get(), channels.get(),
+                                        static_cast<JavaLocalRef<jobject>>(paramMap).get());
+        ExceptionCheck(env);
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+        return JavaLocalRef<jobject>(env, object);
+    }
 
-		webrtc::RtpCodecParameters toNative(JNIEnv * env, const JavaRef<jobject> & parameters)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpCodecParametersClass>(env);
+    webrtc::RtpCodecParameters toNative(JNIEnv* env, const JavaRef<jobject>& parameters)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpCodecParametersClass>(env);
 
-			JavaObject obj(env, parameters);
+        JavaObject obj(env, parameters);
 
-			webrtc::RtpCodecParameters params;
-			params.payload_type = obj.getInt<int>(javaClass->payloadType);
-			params.kind = JavaEnums::toNative<cricket::MediaType>(env, obj.getObject(javaClass->mediaType));
-			params.name = JavaString::toNative(env, obj.getString(javaClass->codecName));
+        webrtc::RtpCodecParameters params;
+        params.payload_type = obj.getInt<int>(javaClass->payloadType);
+        params.kind = JavaEnums::toNative<cricket::MediaType>(env, obj.getObject(javaClass->mediaType));
+        params.name = JavaString::toNative(env, obj.getString(javaClass->codecName));
 
-			for (const auto & entry : JavaHashMap(env, obj.getObject(javaClass->parameters))) {
-				std::string key = JavaString::toNative(env, static_java_ref_cast<jstring>(env, entry.first));
-				std::string value = JavaString::toNative(env, static_java_ref_cast<jstring>(env, entry.second));
+        for (const auto& entry : JavaHashMap(env, obj.getObject(javaClass->parameters)))
+        {
+            std::string key = JavaString::toNative(env, static_java_ref_cast<jstring>(env, entry.first));
+            std::string value = JavaString::toNative(env, static_java_ref_cast<jstring>(env, entry.second));
 
-				params.parameters.emplace(key, value);
-			}
+            params.parameters.emplace(key, value);
+        }
 
-			auto clockRate = obj.getObject(javaClass->clockRate);
-			auto channels = obj.getObject(javaClass->channels);
+        auto clockRate = obj.getObject(javaClass->clockRate);
+        auto channels = obj.getObject(javaClass->channels);
 
-			if (clockRate.get()) {
-				params.clock_rate = Integer::getValue(env, clockRate);
-			}
-			if (channels.get()) {
-				params.num_channels = Integer::getValue(env, channels);
-			}
+        if (clockRate.get())
+        {
+            params.clock_rate = Integer::getValue(env, clockRate);
+        }
+        if (channels.get())
+        {
+            params.num_channels = Integer::getValue(env, channels);
+        }
 
-			return params;
-		}
+        return params;
+    }
 
-		JavaRTCRtpCodecParametersClass::JavaRTCRtpCodecParametersClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCRtpCodecParameters");
+    JavaRTCRtpCodecParametersClass::JavaRTCRtpCodecParametersClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCRtpCodecParameters");
 
-			ctor = GetMethod(env, cls, "<init>", "(IL" PKG_MEDIA "MediaType;" STRING_SIG INTEGER_SIG INTEGER_SIG MAP_SIG ")V");
+        ctor = GetMethod(env, cls, "<init>",
+                         "(IL" PKG_MEDIA "MediaType;" STRING_SIG INTEGER_SIG INTEGER_SIG MAP_SIG ")V");
 
-			payloadType = GetFieldID(env, cls, "payloadType", "I");
-			mediaType = GetFieldID(env, cls, "mediaType", "L" PKG_MEDIA "MediaType;");
-			codecName = GetFieldID(env, cls, "codecName", STRING_SIG);
-			clockRate = GetFieldID(env, cls, "clockRate", INTEGER_SIG);
-			channels = GetFieldID(env, cls, "channels", INTEGER_SIG);
-			parameters = GetFieldID(env, cls, "parameters", MAP_SIG);
-		}
-	}
+        payloadType = GetFieldID(env, cls, "payloadType", "I");
+        mediaType = GetFieldID(env, cls, "mediaType", "L" PKG_MEDIA "MediaType;");
+        codecName = GetFieldID(env, cls, "codecName", STRING_SIG);
+        clockRate = GetFieldID(env, cls, "clockRate", INTEGER_SIG);
+        channels = GetFieldID(env, cls, "channels", INTEGER_SIG);
+        parameters = GetFieldID(env, cls, "parameters", MAP_SIG);
+    }
 }

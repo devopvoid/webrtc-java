@@ -8,24 +8,24 @@
 #include "JavaUtils.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_ProcessingConfig_setProcessingConfig
-  (JNIEnv * env, jobject caller, jobject jstreamName, jobject jStreamConfig)
+(JNIEnv* env, jobject caller, jobject jstreamName, jobject jStreamConfig)
 {
-  webrtc::ProcessingConfig * pc = GetHandle<webrtc::ProcessingConfig>(env, caller);
-  CHECK_HANDLE(pc);
+    webrtc::ProcessingConfig* pc = GetHandle<webrtc::ProcessingConfig>(env, caller);
+    CHECK_HANDLE(pc);
 
-  auto stream_name = jni::JavaEnums::toNative<webrtc::ProcessingConfig::StreamName>(env, jstreamName);
-  auto config = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, jStreamConfig));
-  
-  pc->streams[stream_name] = config;
+    auto stream_name = jni::JavaEnums::toNative<webrtc::ProcessingConfig::StreamName>(env, jstreamName);
+    auto config = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, jStreamConfig));
+
+    pc->streams[stream_name] = config;
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_ProcessingConfig_getProcessingConfig
-  (JNIEnv * env, jobject caller, jobject jstreamName)
+(JNIEnv* env, jobject caller, jobject jstreamName)
 {
-  webrtc::ProcessingConfig * pc = GetHandle<webrtc::ProcessingConfig>(env, caller);
-  CHECK_HANDLEV(pc, nullptr);
-  
-  auto stream_name = jni::JavaEnums::toNative<webrtc::ProcessingConfig::StreamName>(env, jstreamName);
+    webrtc::ProcessingConfig* pc = GetHandle<webrtc::ProcessingConfig>(env, caller);
+    CHECK_HANDLEV(pc, nullptr);
 
-  return jni::AudioProcessingStreamConfig::toJava(env, pc->streams[stream_name]);
+    auto stream_name = jni::JavaEnums::toNative<webrtc::ProcessingConfig::StreamName>(env, jstreamName);
+
+    return jni::AudioProcessingStreamConfig::toJava(env, pc->streams[stream_name]);
 }

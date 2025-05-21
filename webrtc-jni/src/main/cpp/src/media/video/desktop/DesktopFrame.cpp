@@ -20,38 +20,37 @@
 #include "JavaRectangle.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::DesktopFrame
 {
-	namespace DesktopFrame
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::DesktopFrame * frame)
-		{
-			if (frame == nullptr) {
-				return nullptr;
-			}
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::DesktopFrame* frame)
+    {
+        if (frame == nullptr)
+        {
+            return nullptr;
+        }
 
-			const webrtc::DesktopRect & rect = frame->rect();
-			const webrtc::DesktopSize & size = frame->size();
+        const webrtc::DesktopRect& rect = frame->rect();
+        const webrtc::DesktopSize& size = frame->size();
 
-			const auto javaClass = JavaClasses::get<JavaDesktopFrameClass>(env);
+        const auto javaClass = JavaClasses::get<JavaDesktopFrameClass>(env);
 
-			jobject buffer = env->NewDirectByteBuffer(frame->data(), frame->stride() * frame->size().height());
+        jobject buffer = env->NewDirectByteBuffer(frame->data(), frame->stride() * frame->size().height());
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaRectangle::toJava(env, rect.left(), rect.top(), rect.width(), rect.height()).get(),
-				JavaDimension::toJava(env, size.width(), size.height()).get(),
-				static_cast<jfloat>(frame->scale_factor()),
-				static_cast<jint>(frame->stride()),
-				buffer);
+        jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
+                                        JavaRectangle::toJava(env, rect.left(), rect.top(), rect.width(), rect.height())
+                                        .get(),
+                                        JavaDimension::toJava(env, size.width(), size.height()).get(),
+                                        frame->scale_factor(),
+                                        static_cast<jint>(frame->stride()),
+                                        buffer);
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+        return JavaLocalRef<jobject>(env, object);
+    }
 
-		JavaDesktopFrameClass::JavaDesktopFrameClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_DESKTOP"DesktopFrame");
+    JavaDesktopFrameClass::JavaDesktopFrameClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG_DESKTOP"DesktopFrame");
 
-			ctor = GetMethod(env, cls, "<init>", "(Ljava/awt/Rectangle;Ljava/awt/Dimension;FI" BYTE_BUFFER_SIG ")V");
-		}
-	}
+        ctor = GetMethod(env, cls, "<init>", "(Ljava/awt/Rectangle;Ljava/awt/Dimension;FI" BYTE_BUFFER_SIG ")V");
+    }
 }

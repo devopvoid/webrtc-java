@@ -26,46 +26,49 @@
 #include <memory>
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_addLogSink
-(JNIEnv * env, jclass caller, jobject jseverity, jobject jsink)
+(JNIEnv* env, jclass caller, jobject jseverity, jobject jsink)
 {
-	try {
-		auto severity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
+    try
+    {
+        auto severity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
 
-		rtc::LogMessage::AddLogToStream(new jni::LogSink(env, jni::JavaGlobalRef<jobject>(env, jsink)), severity);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+        rtc::LogMessage::AddLogToStream(new jni::LogSink(env, jni::JavaGlobalRef<jobject>(env, jsink)), severity);
+    }
+    catch (...)
+    {
+        ThrowCxxJavaException(env);
+    }
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_log
-(JNIEnv * env, jclass caller, jobject jseverity, jstring jmessage)
+(JNIEnv* env, jclass caller, jobject jseverity, jstring jmessage)
 {
-	std::string message = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jmessage));
-	
-	auto severity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
+    std::string message = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jmessage));
 
-	RTC_LOG_V(severity) << message;
+    auto severity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
+
+    RTC_LOG_V(severity) << message;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logToDebug
-(JNIEnv * env, jclass caller, jobject jseverity)
+(JNIEnv* env, jclass caller, jobject jseverity)
 {
-	int rtcSeverity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
+    int rtcSeverity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
 
-	if (rtcSeverity >= rtc::LS_VERBOSE && rtcSeverity <= rtc::LS_NONE) {
-		rtc::LogMessage::LogToDebug(static_cast<rtc::LoggingSeverity>(rtcSeverity));
-	}
+    if (rtcSeverity >= rtc::LS_VERBOSE && rtcSeverity <= rtc::LS_NONE)
+    {
+        rtc::LogMessage::LogToDebug(static_cast<rtc::LoggingSeverity>(rtcSeverity));
+    }
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logThreads
-(JNIEnv * env, jclass caller, jboolean enable)
+(JNIEnv* env, jclass caller, jboolean enable)
 {
-	rtc::LogMessage::LogThreads(static_cast<bool>(enable));
+    rtc::LogMessage::LogThreads(static_cast<bool>(enable));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logTimestamps
-(JNIEnv * env, jclass caller, jboolean enable)
+(JNIEnv* env, jclass caller, jboolean enable)
 {
-	rtc::LogMessage::LogTimestamps(static_cast<bool>(enable));
+    rtc::LogMessage::LogTimestamps(static_cast<bool>(enable));
 }

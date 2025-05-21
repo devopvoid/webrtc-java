@@ -21,32 +21,32 @@
 
 namespace jni
 {
-	LogSink::LogSink(JNIEnv * env, const JavaGlobalRef<jobject> & javaSink) :
-		javaSink(javaSink),
-		javaClass(JavaClasses::get<JavaLogSinkClass>(env))
-	{
-	}
+    LogSink::LogSink(JNIEnv* env, const JavaGlobalRef<jobject>& javaSink) :
+        javaSink(javaSink),
+        javaClass(JavaClasses::get<JavaLogSinkClass>(env))
+    {
+    }
 
-	void LogSink::OnLogMessage(const std::string & message)
-	{
-	}
+    void LogSink::OnLogMessage(const std::string& message)
+    {
+    }
 
-	void LogSink::OnLogMessage(const std::string & message, rtc::LoggingSeverity severity)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void LogSink::OnLogMessage(const std::string& message, rtc::LoggingSeverity severity)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		JavaLocalRef<jobject> jSeverity = JavaEnums::toJava(env, severity);
-		JavaLocalRef<jstring> jMessage = JavaString::toJava(env, message);
+        JavaLocalRef<jobject> jSeverity = JavaEnums::toJava(env, severity);
+        JavaLocalRef<jstring> jMessage = JavaString::toJava(env, message);
 
-		env->CallVoidMethod(javaSink, javaClass->onLogMessage, jSeverity.get(), jMessage.get());
+        env->CallVoidMethod(javaSink, javaClass->onLogMessage, jSeverity.get(), jMessage.get());
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	LogSink::JavaLogSinkClass::JavaLogSinkClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG_LOG"LogSink");
+    LogSink::JavaLogSinkClass::JavaLogSinkClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG_LOG"LogSink");
 
-		onLogMessage = GetMethod(env, cls, "onLogMessage", "(L" PKG_LOG "Logging$Severity;" STRING_SIG ")V");
-	}
+        onLogMessage = GetMethod(env, cls, "onLogMessage", "(L" PKG_LOG "Logging$Severity;" STRING_SIG ")V");
+    }
 }

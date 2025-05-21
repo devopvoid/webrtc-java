@@ -19,7 +19,7 @@
 #include "media/video/desktop/DesktopCapturer.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_WindowCapturer_initialize
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	SetHandle(env, caller, new jni::DesktopCapturer(false));
+    SetHandle(env, caller, new jni::DesktopCapturer(false));
 }

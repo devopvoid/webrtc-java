@@ -18,22 +18,19 @@
 
 #include <windows.h>
 
-namespace jni
+namespace jni::avdev
 {
-	namespace avdev
-	{
-		WindowsPowerManagement::WindowsPowerManagement()
-		{
-		}
+    WindowsPowerManagement::WindowsPowerManagement()
+    {
+    }
 
-		void WindowsPowerManagement::enableUserActivity()
-		{
-			SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED | ES_DISPLAY_REQUIRED);
-		}
+    void WindowsPowerManagement::enableUserActivity()
+    {
+        SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED | ES_DISPLAY_REQUIRED);
+    }
 
-		void WindowsPowerManagement::disableUserActivity()
-        {
-            SetThreadExecutionState(ES_CONTINUOUS);
-        }
-	}
+    void WindowsPowerManagement::disableUserActivity()
+    {
+        SetThreadExecutionState(ES_CONTINUOUS);
+    }
 }

@@ -21,47 +21,44 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCRtpHeaderExtension
 {
-	namespace RTCRtpHeaderExtension
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpExtension & extension)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::RtpExtension& extension)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionClass>(env);
 
-			JavaLocalRef<jstring> uri = JavaString::toJava(env, extension.uri);
-			jint id = static_cast<jint>(extension.id);
-			jboolean encrypted = static_cast<jboolean>(extension.encrypt);
+        JavaLocalRef<jstring> uri = JavaString::toJava(env, extension.uri);
+        jint id = extension.id;
+        jboolean encrypted = extension.encrypt;
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get(), id, encrypted);
-			ExceptionCheck(env);
+        jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get(), id, encrypted);
+        ExceptionCheck(env);
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+        return JavaLocalRef<jobject>(env, object);
+    }
 
-		webrtc::RtpExtension toNative(JNIEnv * env, const JavaRef<jobject> & jExtension)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionClass>(env);
+    webrtc::RtpExtension toNative(JNIEnv* env, const JavaRef<jobject>& jExtension)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionClass>(env);
 
-			JavaObject obj(env, jExtension);
+        JavaObject obj(env, jExtension);
 
-			webrtc::RtpExtension extension;
-			extension.uri = JavaString::toNative(env, obj.getString(javaClass->uri));
-			extension.id = static_cast<int>(obj.getInt(javaClass->id));
-			extension.encrypt = static_cast<bool>(obj.getBoolean(javaClass->encrypted));
+        webrtc::RtpExtension extension;
+        extension.uri = JavaString::toNative(env, obj.getString(javaClass->uri));
+        extension.id = static_cast<int>(obj.getInt(javaClass->id));
+        extension.encrypt = static_cast<bool>(obj.getBoolean(javaClass->encrypted));
 
-			return extension;
-		}
+        return extension;
+    }
 
-		JavaRTCRtpHeaderExtensionClass::JavaRTCRtpHeaderExtensionClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCRtpHeaderExtensionParameters");
+    JavaRTCRtpHeaderExtensionClass::JavaRTCRtpHeaderExtensionClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCRtpHeaderExtensionParameters");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "IZ)V");
+        ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "IZ)V");
 
-			uri = GetFieldID(env, cls, "uri", STRING_SIG);
-			id = GetFieldID(env, cls, "id", "I");
-			encrypted = GetFieldID(env, cls, "encrypted", "Z");
-		}
-	}
+        uri = GetFieldID(env, cls, "uri", STRING_SIG);
+        id = GetFieldID(env, cls, "id", "I");
+        encrypted = GetFieldID(env, cls, "encrypted", "Z");
+    }
 }

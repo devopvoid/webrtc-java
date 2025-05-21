@@ -20,26 +20,27 @@
 
 namespace jni
 {
-	RawVideoFileSink::RawVideoFileSink(std::string fileName)
-	{
-		outputStream.open(fileName, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
-	}
+    RawVideoFileSink::RawVideoFileSink(std::string fileName)
+    {
+        outputStream.open(fileName, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
+    }
 
-	RawVideoFileSink::~RawVideoFileSink()
-	{
-		outputStream.flush();
-		outputStream.close();
-	}
+    RawVideoFileSink::~RawVideoFileSink()
+    {
+        outputStream.flush();
+        outputStream.close();
+    }
 
-	void RawVideoFileSink::OnFrame(const webrtc::VideoFrame & frame)
-	{
-		RTC_LOG(LS_INFO) << "VideoFrame: " << frame.width() << "x" << frame.height() << " timestamp: " << frame.timestamp_us();
+    void RawVideoFileSink::OnFrame(const webrtc::VideoFrame& frame)
+    {
+        RTC_LOG(LS_INFO) << "VideoFrame: " << frame.width() << "x" << frame.height() << " timestamp: " << frame.
+            timestamp_us();
 
-		//frame.video_frame_buffer()->ToI420();
-	}
+        //frame.video_frame_buffer()->ToI420();
+    }
 
-	void RawVideoFileSink::OnDiscardedFrame()
-	{
-		RTC_LOG(LS_INFO) << __FUNCTION__;
-	}
+    void RawVideoFileSink::OnDiscardedFrame()
+    {
+        RTC_LOG(LS_INFO) << __FUNCTION__;
+    }
 }

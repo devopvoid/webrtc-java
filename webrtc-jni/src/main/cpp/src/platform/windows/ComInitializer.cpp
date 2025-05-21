@@ -21,26 +21,28 @@
 
 namespace jni
 {
-	ComInitializer::ComInitializer() : initialized(false)
-	{
-		HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    ComInitializer::ComInitializer() : initialized(false)
+    {
+        HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
-		if (hr != RPC_E_CHANGED_MODE) {
-			THROW_IF_FAILED(hr, "Initialize COM failed");
+        if (hr != RPC_E_CHANGED_MODE)
+        {
+            THROW_IF_FAILED(hr, "Initialize COM failed");
 
-			initialized = true;
-		}
-	}
+            initialized = true;
+        }
+    }
 
-	ComInitializer::~ComInitializer()
-	{
-		if (initialized) {
-			CoUninitialize();
-		}
-	}
+    ComInitializer::~ComInitializer()
+    {
+        if (initialized)
+        {
+            CoUninitialize();
+        }
+    }
 
-	bool ComInitializer::isInitialized()
-	{
-		return initialized;
-	}
+    bool ComInitializer::isInitialized()
+    {
+        return initialized;
+    }
 }

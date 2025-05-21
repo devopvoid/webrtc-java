@@ -16,39 +16,38 @@
 
 #include "media/video/VideoDeviceManager.h"
 
-namespace jni
+namespace jni::avdev
 {
-	namespace avdev
-	{
-		VideoDeviceManager::VideoDeviceManager()
-		{
-		}
+    VideoDeviceManager::VideoDeviceManager()
+    {
+    }
 
-		VideoDevicePtr VideoDeviceManager::getDefaultVideoCaptureDevice()
-		{
-			if (getDefaultCaptureDevice() == nullptr && captureDevices.empty()) {
-				getVideoCaptureDevices();
-			}
+    VideoDevicePtr VideoDeviceManager::getDefaultVideoCaptureDevice()
+    {
+        if (getDefaultCaptureDevice() == nullptr && captureDevices.empty())
+        {
+            getVideoCaptureDevices();
+        }
 
-			if (getDefaultCaptureDevice() == nullptr && !captureDevices.empty()) {
-				setDefaultCaptureDevice(*captureDevices.devices().begin());
-			}
+        if (getDefaultCaptureDevice() == nullptr && !captureDevices.empty())
+        {
+            setDefaultCaptureDevice(*captureDevices.devices().begin());
+        }
 
-			return getDefaultCaptureDevice();
-		}
+        return getDefaultCaptureDevice();
+    }
 
-		void VideoDeviceManager::setDefaultCaptureDevice(VideoDevicePtr device)
-		{
-			std::unique_lock<std::mutex> mlock(mutex);
+    void VideoDeviceManager::setDefaultCaptureDevice(VideoDevicePtr device)
+    {
+        std::unique_lock<std::mutex> mlock(mutex);
 
-			defaultCaptureDevice = device;
-		}
+        defaultCaptureDevice = device;
+    }
 
-		VideoDevicePtr VideoDeviceManager::getDefaultCaptureDevice()
-		{
-			std::unique_lock<std::mutex> mlock(mutex);
+    VideoDevicePtr VideoDeviceManager::getDefaultCaptureDevice()
+    {
+        std::unique_lock<std::mutex> mlock(mutex);
 
-			return defaultCaptureDevice;
-		}
-	}
+        return defaultCaptureDevice;
+    }
 }

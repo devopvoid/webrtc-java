@@ -24,39 +24,39 @@
 
 namespace jni
 {
-	RTCDtlsTransportObserver::RTCDtlsTransportObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
-		observer(observer),
-		javaClass(JavaClasses::get<JavaRTCDtlsTransportObserverClass>(env))
-	{
-	}
+    RTCDtlsTransportObserver::RTCDtlsTransportObserver(JNIEnv* env, const JavaGlobalRef<jobject>& observer) :
+        observer(observer),
+        javaClass(JavaClasses::get<JavaRTCDtlsTransportObserverClass>(env))
+    {
+    }
 
-	void RTCDtlsTransportObserver::OnStateChange(webrtc::DtlsTransportInformation info)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void RTCDtlsTransportObserver::OnStateChange(webrtc::DtlsTransportInformation info)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		auto state = JavaEnums::toJava(env, info.state());
+        auto state = JavaEnums::toJava(env, info.state());
 
-		env->CallVoidMethod(observer, javaClass->onStateChange, state.get());
+        env->CallVoidMethod(observer, javaClass->onStateChange, state.get());
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	void RTCDtlsTransportObserver::OnError(webrtc::RTCError error)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void RTCDtlsTransportObserver::OnError(webrtc::RTCError error)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
+        JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
-		env->CallVoidMethod(observer, javaClass->onError, errorMessage.get());
+        env->CallVoidMethod(observer, javaClass->onError, errorMessage.get());
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	RTCDtlsTransportObserver::JavaRTCDtlsTransportObserverClass::JavaRTCDtlsTransportObserverClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG"RTCDtlsTransportObserver");
+    RTCDtlsTransportObserver::JavaRTCDtlsTransportObserverClass::JavaRTCDtlsTransportObserverClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG"RTCDtlsTransportObserver");
 
-		onStateChange = GetMethod(env, cls, "onStateChange", "(L" PKG "RTCDtlsTransportState;)V");
-		onError = GetMethod(env, cls, "onError", "(" STRING_SIG ")V");
-	}
+        onStateChange = GetMethod(env, cls, "onStateChange", "(L" PKG "RTCDtlsTransportState;)V");
+        onError = GetMethod(env, cls, "onError", "(" STRING_SIG ")V");
+    }
 }

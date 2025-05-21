@@ -23,54 +23,56 @@
 #include "common_audio/resampler/include/push_resampler.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_dispose
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
-	CHECK_HANDLE(resampler);
+    webrtc::PushResampler<int16_t>* resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
+    CHECK_HANDLE(resampler);
 
-	delete resampler;
+    delete resampler;
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+    SetHandle<std::nullptr_t>(env, caller, nullptr);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::PushResampler<int16_t> * resampler = new webrtc::PushResampler<int16_t>();
+    auto resampler = new webrtc::PushResampler<int16_t>();
 
-	SetHandle(env, caller, resampler);
+    SetHandle(env, caller, resampler);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resetInternal
 (JNIEnv* env, jobject caller, jint sourceRate, jint targetRate, jint channels)
 {
-	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
-	CHECK_HANDLE(resampler);
+    webrtc::PushResampler<int16_t>* resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
+    CHECK_HANDLE(resampler);
 
-	resampler->InitializeIfNeeded(sourceRate, targetRate, channels);
+    resampler->InitializeIfNeeded(sourceRate, targetRate, channels);
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampleInternal
-(JNIEnv * env, jobject caller, jbyteArray samplesIn, jint nSamplesIn, jbyteArray samplesOut, jint maxSamplesOut)
+(JNIEnv* env, jobject caller, jbyteArray samplesIn, jint nSamplesIn, jbyteArray samplesOut, jint maxSamplesOut)
 {
-	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
-	CHECK_HANDLEV(resampler, -1);
+    webrtc::PushResampler<int16_t>* resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
+    CHECK_HANDLEV(resampler, -1);
 
-	jboolean isDstCopy = JNI_FALSE;
+    jboolean isDstCopy = JNI_FALSE;
 
-	jbyte * srcPtr = env->GetByteArrayElements(samplesIn, nullptr);
-	jbyte * dstPtr = env->GetByteArrayElements(samplesOut, &isDstCopy);
+    jbyte* srcPtr = env->GetByteArrayElements(samplesIn, nullptr);
+    jbyte* dstPtr = env->GetByteArrayElements(samplesOut, &isDstCopy);
 
-	size_t result = resampler->Resample(reinterpret_cast<int16_t *>(srcPtr), nSamplesIn, reinterpret_cast<int16_t *>(dstPtr), maxSamplesOut);
+    size_t result = resampler->Resample(reinterpret_cast<int16_t*>(srcPtr), nSamplesIn,
+                                        reinterpret_cast<int16_t*>(dstPtr), maxSamplesOut);
 
-	if (isDstCopy == JNI_TRUE) {
-		jsize dstLength = env->GetArrayLength(samplesOut);
+    if (isDstCopy == JNI_TRUE)
+    {
+        jsize dstLength = env->GetArrayLength(samplesOut);
 
-		env->SetByteArrayRegion(samplesOut, 0, dstLength, dstPtr);
-	}
+        env->SetByteArrayRegion(samplesOut, 0, dstLength, dstPtr);
+    }
 
-	env->ReleaseByteArrayElements(samplesIn, srcPtr, JNI_ABORT);
-	env->ReleaseByteArrayElements(samplesOut, dstPtr, JNI_ABORT);
+    env->ReleaseByteArrayElements(samplesIn, srcPtr, JNI_ABORT);
+    env->ReleaseByteArrayElements(samplesOut, dstPtr, JNI_ABORT);
 
-	return static_cast<jint>(result);
+    return static_cast<jint>(result);
 }

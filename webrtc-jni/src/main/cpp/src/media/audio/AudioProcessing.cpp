@@ -22,34 +22,32 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::AudioProcessing
 {
-	namespace AudioProcessing
-	{
-		void updateStats(const webrtc::AudioProcessingStats & stats, JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaAudioProcessingClass>(env);
-			const auto javaStatsClass = JavaClasses::get<AudioProcessingStats::JavaAudioProcessingStatsClass>(env);
+    void updateStats(const webrtc::AudioProcessingStats& stats, JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaAudioProcessingClass>(env);
+        const auto javaStatsClass = JavaClasses::get<AudioProcessingStats::JavaAudioProcessingStatsClass>(env);
 
-			JavaObject obj(env, javaType);
-			JavaObject statsObj(env, obj.getObject(javaClass->stats));
-			
-			statsObj.setBoolean(javaStatsClass->voiceDetected, stats.voice_detected.value_or(false));
-			statsObj.setDouble(javaStatsClass->echoReturnLoss, stats.echo_return_loss.value_or(0));
-			statsObj.setDouble(javaStatsClass->echoReturnLossEnhancement, stats.echo_return_loss_enhancement.value_or(0));
-			statsObj.setDouble(javaStatsClass->divergentFilterFraction, stats.divergent_filter_fraction.value_or(0));
-			statsObj.setInt(javaStatsClass->delayMs, stats.delay_ms.value_or(0));
-			statsObj.setInt(javaStatsClass->delayMedianMs, stats.delay_median_ms.value_or(0));
-			statsObj.setInt(javaStatsClass->delayStandardDeviationMs, stats.delay_standard_deviation_ms.value_or(0));
-			statsObj.setDouble(javaStatsClass->residualEchoLikelihood, stats.residual_echo_likelihood.value_or(0));
-			statsObj.setDouble(javaStatsClass->residualEchoLikelihoodRecentMax, stats.residual_echo_likelihood_recent_max.value_or(0));
-		}
+        JavaObject obj(env, javaType);
+        JavaObject statsObj(env, obj.getObject(javaClass->stats));
 
-		JavaAudioProcessingClass::JavaAudioProcessingClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessing");
+        statsObj.setBoolean(javaStatsClass->voiceDetected, stats.voice_detected.value_or(false));
+        statsObj.setDouble(javaStatsClass->echoReturnLoss, stats.echo_return_loss.value_or(0));
+        statsObj.setDouble(javaStatsClass->echoReturnLossEnhancement, stats.echo_return_loss_enhancement.value_or(0));
+        statsObj.setDouble(javaStatsClass->divergentFilterFraction, stats.divergent_filter_fraction.value_or(0));
+        statsObj.setInt(javaStatsClass->delayMs, stats.delay_ms.value_or(0));
+        statsObj.setInt(javaStatsClass->delayMedianMs, stats.delay_median_ms.value_or(0));
+        statsObj.setInt(javaStatsClass->delayStandardDeviationMs, stats.delay_standard_deviation_ms.value_or(0));
+        statsObj.setDouble(javaStatsClass->residualEchoLikelihood, stats.residual_echo_likelihood.value_or(0));
+        statsObj.setDouble(javaStatsClass->residualEchoLikelihoodRecentMax,
+                           stats.residual_echo_likelihood_recent_max.value_or(0));
+    }
 
-			stats = GetFieldID(env, cls, "stats", "L" PKG_AUDIO "AudioProcessingStats;");
-		}
-	}
+    JavaAudioProcessingClass::JavaAudioProcessingClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG_AUDIO"AudioProcessing");
+
+        stats = GetFieldID(env, cls, "stats", "L" PKG_AUDIO "AudioProcessingStats;");
+    }
 }

@@ -20,38 +20,35 @@
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCDataChannelInit
 {
-	namespace RTCDataChannelInit
-	{
-		webrtc::DataChannelInit toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCDataChannelInitClass>(env);
+    webrtc::DataChannelInit toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCDataChannelInitClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			webrtc::DataChannelInit init;
-			init.ordered = obj.getBoolean(javaClass->ordered);
-			init.negotiated = obj.getBoolean(javaClass->negotiated);
-			init.maxRetransmitTime = obj.getInt(javaClass->maxPacketLifeTime);
-			init.maxRetransmits = obj.getInt(javaClass->maxRetransmits);
-			init.id = obj.getInt(javaClass->id);
-			init.protocol = JavaString::toNative(env, obj.getString(javaClass->protocol));
+        webrtc::DataChannelInit init;
+        init.ordered = obj.getBoolean(javaClass->ordered);
+        init.negotiated = obj.getBoolean(javaClass->negotiated);
+        init.maxRetransmitTime = obj.getInt(javaClass->maxPacketLifeTime);
+        init.maxRetransmits = obj.getInt(javaClass->maxRetransmits);
+        init.id = obj.getInt(javaClass->id);
+        init.protocol = JavaString::toNative(env, obj.getString(javaClass->protocol));
 
-			return init;
-		}
+        return init;
+    }
 
-		JavaRTCDataChannelInitClass::JavaRTCDataChannelInitClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCDataChannelInit");
+    JavaRTCDataChannelInitClass::JavaRTCDataChannelInitClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCDataChannelInit");
 
-			ordered = GetFieldID(env, cls, "ordered", "Z");
-			negotiated = GetFieldID(env, cls, "negotiated", "Z");
-			maxPacketLifeTime = GetFieldID(env, cls, "maxPacketLifeTime", "I");
-			maxRetransmits = GetFieldID(env, cls, "maxRetransmits", "I");
-			id = GetFieldID(env, cls, "id", "I");
-			protocol = GetFieldID(env, cls, "protocol", STRING_SIG);
-			priority = GetFieldID(env, cls, "priority", "L" PKG "RTCPriorityType;");
-		}
-	}
+        ordered = GetFieldID(env, cls, "ordered", "Z");
+        negotiated = GetFieldID(env, cls, "negotiated", "Z");
+        maxPacketLifeTime = GetFieldID(env, cls, "maxPacketLifeTime", "I");
+        maxRetransmits = GetFieldID(env, cls, "maxRetransmits", "I");
+        id = GetFieldID(env, cls, "id", "I");
+        protocol = GetFieldID(env, cls, "protocol", STRING_SIG);
+        priority = GetFieldID(env, cls, "priority", "L" PKG "RTCPriorityType;");
+    }
 }

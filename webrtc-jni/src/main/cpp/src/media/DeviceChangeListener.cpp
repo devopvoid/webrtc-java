@@ -24,53 +24,59 @@
 
 namespace jni
 {
-	DeviceChangeListener::DeviceChangeListener(JNIEnv * env, const JavaGlobalRef<jobject> & listener) :
-		listener(listener),
-		javaClass(JavaClasses::get<JavaDeviceChangeListenerClass>(env))
-	{
-	}
+    DeviceChangeListener::DeviceChangeListener(JNIEnv* env, const JavaGlobalRef<jobject>& listener) :
+        listener(listener),
+        javaClass(JavaClasses::get<JavaDeviceChangeListenerClass>(env))
+    {
+    }
 
-	void DeviceChangeListener::deviceConnected(avdev::DevicePtr device)
-	{
-		JNIEnv * env = AttachCurrentThread();
-		JavaLocalRef<jobject> jdevice = nullptr;
+    void DeviceChangeListener::deviceConnected(avdev::DevicePtr device)
+    {
+        JNIEnv* env = AttachCurrentThread();
+        JavaLocalRef<jobject> jdevice = nullptr;
 
-		if (dynamic_cast<jni::avdev::AudioDevice *>(device.get())) {
-			jdevice = AudioDevice::toJavaAudioDevice(env, device);
-		}
-		else if (dynamic_cast<jni::avdev::VideoDevice *>(device.get())) {
-			const auto dev = dynamic_cast<jni::avdev::VideoDevice*>(device.get());
-			jdevice = VideoDevice::toJavaVideoDevice(env, *dev);
-		}
+        if (dynamic_cast<avdev::AudioDevice*>(device.get()))
+        {
+            jdevice = AudioDevice::toJavaAudioDevice(env, device);
+        }
+        else if (dynamic_cast<avdev::VideoDevice*>(device.get()))
+        {
+            const auto dev = dynamic_cast<avdev::VideoDevice*>(device.get());
+            jdevice = VideoDevice::toJavaVideoDevice(env, *dev);
+        }
 
-		if (jdevice) {
-			env->CallVoidMethod(listener, javaClass->deviceConnected, jdevice.get());
-		}
-	}
+        if (jdevice)
+        {
+            env->CallVoidMethod(listener, javaClass->deviceConnected, jdevice.get());
+        }
+    }
 
-	void DeviceChangeListener::deviceDisconnected(avdev::DevicePtr device)
-	{
-		JNIEnv * env = AttachCurrentThread();
-		JavaLocalRef<jobject> jdevice = nullptr;
+    void DeviceChangeListener::deviceDisconnected(avdev::DevicePtr device)
+    {
+        JNIEnv* env = AttachCurrentThread();
+        JavaLocalRef<jobject> jdevice = nullptr;
 
-		if (dynamic_cast<jni::avdev::AudioDevice *>(device.get())) {
-			jdevice = AudioDevice::toJavaAudioDevice(env, device);
-		}
-		else if (dynamic_cast<jni::avdev::VideoDevice *>(device.get())) {
-			const auto dev = dynamic_cast<jni::avdev::VideoDevice *>(device.get());
-			jdevice = VideoDevice::toJavaVideoDevice(env, *dev);
-		}
+        if (dynamic_cast<avdev::AudioDevice*>(device.get()))
+        {
+            jdevice = AudioDevice::toJavaAudioDevice(env, device);
+        }
+        else if (dynamic_cast<avdev::VideoDevice*>(device.get()))
+        {
+            const auto dev = dynamic_cast<avdev::VideoDevice*>(device.get());
+            jdevice = VideoDevice::toJavaVideoDevice(env, *dev);
+        }
 
-		if (jdevice) {
-			env->CallVoidMethod(listener, javaClass->deviceDisconnected, jdevice.get());
-		}
-	}
+        if (jdevice)
+        {
+            env->CallVoidMethod(listener, javaClass->deviceDisconnected, jdevice.get());
+        }
+    }
 
-	DeviceChangeListener::JavaDeviceChangeListenerClass::JavaDeviceChangeListenerClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG_MEDIA"DeviceChangeListener");
+    DeviceChangeListener::JavaDeviceChangeListenerClass::JavaDeviceChangeListenerClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG_MEDIA"DeviceChangeListener");
 
-		deviceConnected = GetMethod(env, cls, "deviceConnected", "(L" PKG_MEDIA "Device;)V");
-		deviceDisconnected = GetMethod(env, cls, "deviceDisconnected", "(L" PKG_MEDIA "Device;)V");
-	}
+        deviceConnected = GetMethod(env, cls, "deviceConnected", "(L" PKG_MEDIA "Device;)V");
+        deviceDisconnected = GetMethod(env, cls, "deviceDisconnected", "(L" PKG_MEDIA "Device;)V");
+    }
 }

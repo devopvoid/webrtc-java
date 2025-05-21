@@ -26,64 +26,65 @@
 #include "api/dtls_transport_interface.h"
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getIceTransport
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLEV(transport, nullptr);
+    webrtc::DtlsTransportInterface* transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+    CHECK_HANDLEV(transport, nullptr);
 
-	auto iceTransport = transport->ice_transport();
+    auto iceTransport = transport->ice_transport();
 
-	return jni::JavaFactories::create(env, iceTransport.get()).release();
+    return jni::JavaFactories::create(env, iceTransport.get()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getState
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLEV(transport, nullptr);
+    webrtc::DtlsTransportInterface* transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+    CHECK_HANDLEV(transport, nullptr);
 
-	auto info = transport->Information();
+    auto info = transport->Information();
 
-	return jni::JavaEnums::toJava(env, info.state()).release();
+    return jni::JavaEnums::toJava(env, info.state()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getRemoteCertificates
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLEV(transport, nullptr);
+    webrtc::DtlsTransportInterface* transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+    CHECK_HANDLEV(transport, nullptr);
 
-	auto info = transport->Information();
-	auto certChain = info.remote_ssl_certificates();
+    auto info = transport->Information();
+    auto certChain = info.remote_ssl_certificates();
 
-	size_t count = certChain->GetSize();
+    size_t count = certChain->GetSize();
 
-	jni::JavaArrayList certificates(env, count);
+    jni::JavaArrayList certificates(env, count);
 
-	for (size_t i = 0; i < count; i++) {
-		const rtc::SSLCertificate & certificate = certChain->Get(i);
-		const rtc::RTCCertificatePEM pem("", certificate.ToPEMString());
+    for (size_t i = 0; i < count; i++)
+    {
+        const rtc::SSLCertificate& certificate = certChain->Get(i);
+        const rtc::RTCCertificatePEM pem("", certificate.ToPEMString());
 
-		certificates.add(jni::RTCCertificatePEM::toJava(env, pem));
-	}
+        certificates.add(jni::RTCCertificatePEM::toJava(env, pem));
+    }
 
-	return certificates.listObject().release();
+    return certificates.listObject().release();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
-(JNIEnv * env, jobject caller, jobject observer)
+(JNIEnv* env, jobject caller, jobject observer)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLE(transport);
+    webrtc::DtlsTransportInterface* transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+    CHECK_HANDLE(transport);
 
-	transport->RegisterObserver(new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer)));
+    transport->RegisterObserver(new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer)));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserver
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLE(transport);
+    webrtc::DtlsTransportInterface* transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+    CHECK_HANDLE(transport);
 
-	transport->UnregisterObserver();
+    transport->UnregisterObserver();
 }

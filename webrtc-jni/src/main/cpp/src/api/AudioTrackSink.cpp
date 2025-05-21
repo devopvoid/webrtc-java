@@ -20,31 +20,31 @@
 
 namespace jni
 {
-	AudioTrackSink::AudioTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink) :
-		sink(sink),
-		javaClass(JavaClasses::get<JavaAudioTrackSinkClass>(env))
-	{
-	}
+    AudioTrackSink::AudioTrackSink(JNIEnv* env, const JavaGlobalRef<jobject>& sink) :
+        sink(sink),
+        javaClass(JavaClasses::get<JavaAudioTrackSinkClass>(env))
+    {
+    }
 
-	void AudioTrackSink::OnData(const void * data, int bitsPerSample, int sampleRate, size_t channels, size_t frames)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void AudioTrackSink::OnData(const void* data, int bitsPerSample, int sampleRate, size_t channels, size_t frames)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		const jbyte * buffer = static_cast<const jbyte *>(data);
-		jsize dataSize = static_cast<jsize>(frames * channels * (bitsPerSample / 8));
+        auto buffer = static_cast<const jbyte*>(data);
+        jsize dataSize = static_cast<jsize>(frames * channels * (bitsPerSample / 8));
 
-		jbyteArray dataArray = env->NewByteArray(dataSize);
-		env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
+        jbyteArray dataArray = env->NewByteArray(dataSize);
+        env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
 
-		env->CallVoidMethod(sink, javaClass->onData, dataArray, bitsPerSample, sampleRate, channels, frames);
-		ExceptionCheck(env);
-		env->DeleteLocalRef(dataArray);
-	}
+        env->CallVoidMethod(sink, javaClass->onData, dataArray, bitsPerSample, sampleRate, channels, frames);
+        ExceptionCheck(env);
+        env->DeleteLocalRef(dataArray);
+    }
 
-	AudioTrackSink::JavaAudioTrackSinkClass::JavaAudioTrackSinkClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG_AUDIO"AudioTrackSink");
+    AudioTrackSink::JavaAudioTrackSinkClass::JavaAudioTrackSinkClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG_AUDIO"AudioTrackSink");
 
-		onData = GetMethod(env, cls, "onData", "([BIIII)V");
-	}
+        onData = GetMethod(env, cls, "onData", "([BIIII)V");
+    }
 }

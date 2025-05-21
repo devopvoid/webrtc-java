@@ -20,47 +20,50 @@
 
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_convertInternal
-(JNIEnv * env, jobject caller, jbyteArray src, jint nSrcSamples, jbyteArray dst, jint nDstSamples)
+(JNIEnv* env, jobject caller, jbyteArray src, jint nSrcSamples, jbyteArray dst, jint nDstSamples)
 {
-	jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
-	CHECK_HANDLE(converter);
+    jni::AudioConverter* converter = GetHandle<jni::AudioConverter>(env, caller);
+    CHECK_HANDLE(converter);
 
-	jboolean isDstCopy = JNI_FALSE;
+    jboolean isDstCopy = JNI_FALSE;
 
-	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
-	jbyte * dstPtr = env->GetByteArrayElements(dst, &isDstCopy);
+    jbyte* srcPtr = env->GetByteArrayElements(src, nullptr);
+    jbyte* dstPtr = env->GetByteArrayElements(dst, &isDstCopy);
 
-	converter->convert(reinterpret_cast<const int16_t *>(srcPtr), nSrcSamples, reinterpret_cast<int16_t *>(dstPtr), nDstSamples);
+    converter->convert(reinterpret_cast<const int16_t*>(srcPtr), nSrcSamples, reinterpret_cast<int16_t*>(dstPtr),
+                       nDstSamples);
 
-	if (isDstCopy == JNI_TRUE) {
-		jsize dstLength = env->GetArrayLength(dst);
+    if (isDstCopy == JNI_TRUE)
+    {
+        jsize dstLength = env->GetArrayLength(dst);
 
-		env->SetByteArrayRegion(dst, 0, dstLength, dstPtr);
-	}
+        env->SetByteArrayRegion(dst, 0, dstLength, dstPtr);
+    }
 
-	env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseByteArrayElements(dst, dstPtr, JNI_ABORT);
+    env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
+    env->ReleaseByteArrayElements(dst, dstPtr, JNI_ABORT);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_dispose
-(JNIEnv * env, jobject caller)
+(JNIEnv* env, jobject caller)
 {
-	jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
-	CHECK_HANDLE(converter);
+    jni::AudioConverter* converter = GetHandle<jni::AudioConverter>(env, caller);
+    CHECK_HANDLE(converter);
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+    SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-	delete converter;
+    delete converter;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_initialize
-(JNIEnv * env, jobject caller, jint srcSampleRate, jint srcChannels, jint dstSampleRate, jint dstChannels)
+(JNIEnv* env, jobject caller, jint srcSampleRate, jint srcChannels, jint dstSampleRate, jint dstChannels)
 {
-	// 10 ms frames
-	size_t srcFrames = srcSampleRate / 100;
-	size_t dstFrames = dstSampleRate / 100;
+    // 10 ms frames
+    size_t srcFrames = srcSampleRate / 100;
+    size_t dstFrames = dstSampleRate / 100;
 
-	jni::AudioConverter * converter = jni::AudioConverter::create(srcFrames, srcChannels, dstFrames, dstChannels).release();
+    jni::AudioConverter* converter = jni::AudioConverter::create(srcFrames, srcChannels, dstFrames, dstChannels).
+        release();
 
-	SetHandle(env, caller, converter);
+    SetHandle(env, caller, converter);
 }

@@ -21,27 +21,24 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCRtpHeaderExtensionCapability
 {
-	namespace RTCRtpHeaderExtensionCapability
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpHeaderExtensionCapability & capability)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionCapabilityClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::RtpHeaderExtensionCapability& capability)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionCapabilityClass>(env);
 
-			JavaLocalRef<jstring> uri = JavaString::toJava(env, capability.uri);
+        JavaLocalRef<jstring> uri = JavaString::toJava(env, capability.uri);
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get());
-			ExceptionCheck(env);
+        jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get());
+        ExceptionCheck(env);
 
-			return JavaLocalRef<jobject>(env, object);
-		}
+        return JavaLocalRef<jobject>(env, object);
+    }
 
-		JavaRTCRtpHeaderExtensionCapabilityClass::JavaRTCRtpHeaderExtensionCapabilityClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCRtpHeaderExtensionCapability");
+    JavaRTCRtpHeaderExtensionCapabilityClass::JavaRTCRtpHeaderExtensionCapabilityClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCRtpHeaderExtensionCapability");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG ")V");
-		}
-	}
+        ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG ")V");
+    }
 }

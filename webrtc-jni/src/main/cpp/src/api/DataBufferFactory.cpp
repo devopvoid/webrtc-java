@@ -20,19 +20,20 @@
 
 namespace jni
 {
-	DataBufferFactory::DataBufferFactory(JNIEnv * env, const char * className) :
-		JavaFactory(env, className, "(" BYTE_BUFFER_SIG "Z)V")
-	{
-	}
+    DataBufferFactory::DataBufferFactory(JNIEnv* env, const char* className) :
+        JavaFactory(env, className, "(" BYTE_BUFFER_SIG "Z)V")
+    {
+    }
 
-	JavaLocalRef<jobject> DataBufferFactory::create(JNIEnv * env, const webrtc::DataBuffer * dataBuffer) const
-	{
-		jobject directBuffer = env->NewDirectByteBuffer(const_cast<char *>(dataBuffer->data.data<char>()), dataBuffer->data.size());
-		const jboolean isBinary = static_cast<jboolean>(dataBuffer->binary);
+    JavaLocalRef<jobject> DataBufferFactory::create(JNIEnv* env, const webrtc::DataBuffer* dataBuffer) const
+    {
+        jobject directBuffer = env->NewDirectByteBuffer(const_cast<char*>(dataBuffer->data.data<char>()),
+                                                        dataBuffer->data.size());
+        const jboolean isBinary = dataBuffer->binary;
 
-		jobject object = env->NewObject(javaClass, javaCtor, directBuffer, isBinary);
-		ExceptionCheck(env);
+        jobject object = env->NewObject(javaClass, javaCtor, directBuffer, isBinary);
+        ExceptionCheck(env);
 
-		return JavaLocalRef<jobject>(env, object);
-	}
+        return JavaLocalRef<jobject>(env, object);
+    }
 }

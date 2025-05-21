@@ -22,40 +22,37 @@
 #include "Exception.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::RTCAnswerOptions
 {
-	namespace RTCAnswerOptions
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::PeerConnectionInterface::RTCOfferAnswerOptions & nativeType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCAnswerOptionsClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::PeerConnectionInterface::RTCOfferAnswerOptions& nativeType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCAnswerOptionsClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor);
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor);
 
-			env->SetBooleanField(obj, javaClass->vad, nativeType.voice_activity_detection);
+        env->SetBooleanField(obj, javaClass->vad, nativeType.voice_activity_detection);
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+        return JavaLocalRef<jobject>(env, obj);
+    }
 
-		webrtc::PeerConnectionInterface::RTCOfferAnswerOptions toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCAnswerOptionsClass>(env);
+    webrtc::PeerConnectionInterface::RTCOfferAnswerOptions toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaRTCAnswerOptionsClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
-			options.voice_activity_detection = obj.getBoolean(javaClass->vad);
+        webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
+        options.voice_activity_detection = obj.getBoolean(javaClass->vad);
 
-			return options;
-		}
+        return options;
+    }
 
-		JavaRTCAnswerOptionsClass::JavaRTCAnswerOptionsClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG"RTCAnswerOptions");
+    JavaRTCAnswerOptionsClass::JavaRTCAnswerOptionsClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG"RTCAnswerOptions");
 
-			ctor = GetMethod(env, cls, "<init>", "()V");
+        ctor = GetMethod(env, cls, "<init>", "()V");
 
-			vad = GetFieldID(env, cls, "voiceActivityDetection", "Z");
-		}
-	}
+        vad = GetFieldID(env, cls, "voiceActivityDetection", "Z");
+    }
 }

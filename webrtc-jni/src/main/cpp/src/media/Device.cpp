@@ -21,61 +21,61 @@
 
 namespace jni
 {
-	namespace avdev
-	{
-		Device::Device(std::string name, std::string descriptor) :
-			name(name),
-			descriptor(descriptor)
-		{
-		}
+    namespace avdev
+    {
+        Device::Device(std::string name, std::string descriptor) :
+            name(name),
+            descriptor(descriptor)
+        {
+        }
 
-		bool Device::operator==(const Device & other)
-		{
-			return name == other.name && descriptor == other.descriptor;
-		}
+        bool Device::operator==(const Device& other)
+        {
+            return name == other.name && descriptor == other.descriptor;
+        }
 
-		bool Device::operator!=(const Device & other)
-		{
-			return !(*this == other);
-		}
+        bool Device::operator!=(const Device& other)
+        {
+            return !(*this == other);
+        }
 
-		bool Device::operator<(const Device & other)
-		{
-			return name < other.name;
-		}
+        bool Device::operator<(const Device& other)
+        {
+            return name < other.name;
+        }
 
-		std::string Device::getDescriptor() const
-		{
-			return descriptor;
-		}
+        std::string Device::getDescriptor() const
+        {
+            return descriptor;
+        }
 
-		std::string Device::getName() const
-		{
-			return name;
-		}
-	}
+        std::string Device::getName() const
+        {
+            return name;
+        }
+    }
 
-	namespace Device
-	{
-		JavaLocalRef<jobject> toJavaDevice(JNIEnv * env, avdev::DevicePtr device)
-		{
-			const auto javaClass = JavaClasses::get<JavaDeviceClass>(env);
+    namespace Device
+    {
+        JavaLocalRef<jobject> toJavaDevice(JNIEnv* env, avdev::DevicePtr device)
+        {
+            const auto javaClass = JavaClasses::get<JavaDeviceClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, device->getName()).get(),
-				JavaString::toJava(env, device->getDescriptor()).get());
+            jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                         JavaString::toJava(env, device->getName()).get(),
+                                         JavaString::toJava(env, device->getDescriptor()).get());
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+            return JavaLocalRef<jobject>(env, obj);
+        }
 
-		JavaDeviceClass::JavaDeviceClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_AUDIO"Device");
+        JavaDeviceClass::JavaDeviceClass(JNIEnv* env)
+        {
+            cls = FindClass(env, PKG_AUDIO"Device");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG ")V");
+            ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG ")V");
 
-			name = GetFieldID(env, cls, "name", STRING_SIG);
-			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
-		}
-	}
+            name = GetFieldID(env, cls, "name", STRING_SIG);
+            descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+        }
+    }
 }

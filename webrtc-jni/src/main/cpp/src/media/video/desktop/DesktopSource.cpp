@@ -20,42 +20,39 @@
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
 
-namespace jni
+namespace jni::DesktopSource
 {
-	namespace DesktopSource
-	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::DesktopCapturer::Source & source)
-		{
-			const auto javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
+    JavaLocalRef<jobject> toJava(JNIEnv* env, const webrtc::DesktopCapturer::Source& source)
+    {
+        const auto javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, source.title).get(),
-				static_cast<jlong>(source.id));
+        jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                     JavaString::toJava(env, source.title).get(),
+                                     static_cast<jlong>(source.id));
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+        return JavaLocalRef<jobject>(env, obj);
+    }
 
-		webrtc::DesktopCapturer::Source toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
+    webrtc::DesktopCapturer::Source toNative(JNIEnv* env, const JavaRef<jobject>& javaType)
+    {
+        const auto javaClass = JavaClasses::get<JavaDesktopSourceClass>(env);
 
-			JavaObject obj(env, javaType);
+        JavaObject obj(env, javaType);
 
-			auto source = webrtc::DesktopCapturer::Source();
-			source.id = static_cast<webrtc::DesktopCapturer::SourceId>(obj.getLong(javaClass->id));
-			source.title = JavaString::toNative(env, obj.getString(javaClass->title));
+        auto source = webrtc::DesktopCapturer::Source();
+        source.id = obj.getLong(javaClass->id);
+        source.title = JavaString::toNative(env, obj.getString(javaClass->title));
 
-			return source;
-		}
+        return source;
+    }
 
-		JavaDesktopSourceClass::JavaDesktopSourceClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_DESKTOP"DesktopSource");
+    JavaDesktopSourceClass::JavaDesktopSourceClass(JNIEnv* env)
+    {
+        cls = FindClass(env, PKG_DESKTOP"DesktopSource");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "J)V");
+        ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "J)V");
 
-			id = GetFieldID(env, cls, "id", "J");
-			title = GetFieldID(env, cls, "title", STRING_SIG);
-		}
-	}
+        id = GetFieldID(env, cls, "id", "J");
+        title = GetFieldID(env, cls, "title", STRING_SIG);
+    }
 }

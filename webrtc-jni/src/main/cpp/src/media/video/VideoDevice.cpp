@@ -22,47 +22,47 @@
 
 namespace jni
 {
-	namespace avdev
-	{
-		VideoDevice::VideoDevice(std::string name, std::string descriptor) :
-			Device(name, descriptor)
-		{
-		}
-	}
+    namespace avdev
+    {
+        VideoDevice::VideoDevice(std::string name, std::string descriptor) :
+            Device(name, descriptor)
+        {
+        }
+    }
 
-	namespace VideoDevice
-	{
-		JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv * env, const avdev::VideoDevice & device)
-		{
-			const auto javaClass = JavaClasses::get<JavaVideoDeviceClass>(env);
+    namespace VideoDevice
+    {
+        JavaLocalRef<jobject> toJavaVideoDevice(JNIEnv* env, const avdev::VideoDevice& device)
+        {
+            const auto javaClass = JavaClasses::get<JavaVideoDeviceClass>(env);
 
-			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, device.getName()).get(),
-				JavaString::toJava(env, device.getDescriptor()).get());
+            jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
+                                         JavaString::toJava(env, device.getName()).get(),
+                                         JavaString::toJava(env, device.getDescriptor()).get());
 
-			return JavaLocalRef<jobject>(env, obj);
-		}
+            return JavaLocalRef<jobject>(env, obj);
+        }
 
-		avdev::VideoDevice toNativeVideoDevice(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			const auto javaClass = JavaClasses::get<JavaVideoDeviceClass>(env);
+        avdev::VideoDevice toNativeVideoDevice(JNIEnv* env, const JavaRef<jobject>& javaType)
+        {
+            const auto javaClass = JavaClasses::get<JavaVideoDeviceClass>(env);
 
-			JavaObject obj(env, javaType);
+            JavaObject obj(env, javaType);
 
-			return avdev::VideoDevice(
-				JavaString::toNative(env, obj.getString(javaClass->name)),
-				JavaString::toNative(env, obj.getString(javaClass->descriptor))
-			);
-		}
+            return avdev::VideoDevice(
+                JavaString::toNative(env, obj.getString(javaClass->name)),
+                JavaString::toNative(env, obj.getString(javaClass->descriptor))
+            );
+        }
 
-		JavaVideoDeviceClass::JavaVideoDeviceClass(JNIEnv * env)
-		{
-			cls = FindClass(env, PKG_VIDEO"VideoDevice");
+        JavaVideoDeviceClass::JavaVideoDeviceClass(JNIEnv* env)
+        {
+            cls = FindClass(env, PKG_VIDEO"VideoDevice");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG ")V");
+            ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG STRING_SIG ")V");
 
-			name = GetFieldID(env, cls, "name", STRING_SIG);
-			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
-		}
-	}
+            name = GetFieldID(env, cls, "name", STRING_SIG);
+            descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+        }
+    }
 }

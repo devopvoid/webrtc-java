@@ -18,11 +18,11 @@
 
 namespace jni
 {
-	std::string RTCErrorToString(const webrtc::RTCError & error)
-	{
-		std::string type(ToString(error.type()));
-		std::string message = error.message();
+    std::string RTCErrorToString(const webrtc::RTCError& error)
+    {
+        std::string type(ToString(error.type()));
+        std::string message = error.message();
 
-		return "[" + type + "] " + message;
-	}
+        return "[" + type + "] " + message;
+    }
 }

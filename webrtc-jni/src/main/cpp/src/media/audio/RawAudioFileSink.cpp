@@ -20,33 +20,33 @@
 
 namespace jni
 {
-	RawAudioFileSink::RawAudioFileSink(std::string fileName)
-	{
-		outputStream.open(fileName, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
-	}
+    RawAudioFileSink::RawAudioFileSink(std::string fileName)
+    {
+        outputStream.open(fileName, std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
+    }
 
-	RawAudioFileSink::~RawAudioFileSink()
-	{
-		outputStream.flush();
-		outputStream.close();
-	}
+    RawAudioFileSink::~RawAudioFileSink()
+    {
+        outputStream.flush();
+        outputStream.close();
+    }
 
-	int32_t RawAudioFileSink::RecordedDataIsAvailable(
-		const void * audioSamples,
-		const size_t nSamples,
-		const size_t nBytesPerSample,
-		const size_t nChannels,
-		const uint32_t samplesPerSec,
-		const uint32_t totalDelayMS,
-		const int32_t clockDrift,
-		const uint32_t currentMicLevel,
-		const bool keyPressed,
-		uint32_t & newMicLevel)
-	{
-		size_t audioSamplesSize = nSamples * nBytesPerSample;
+    int32_t RawAudioFileSink::RecordedDataIsAvailable(
+        const void* audioSamples,
+        const size_t nSamples,
+        const size_t nBytesPerSample,
+        const size_t nChannels,
+        const uint32_t samplesPerSec,
+        const uint32_t totalDelayMS,
+        const int32_t clockDrift,
+        const uint32_t currentMicLevel,
+        const bool keyPressed,
+        uint32_t& newMicLevel)
+    {
+        size_t audioSamplesSize = nSamples * nBytesPerSample;
 
-		outputStream.write(static_cast<const char *>(audioSamples), audioSamplesSize);
+        outputStream.write(static_cast<const char*>(audioSamples), audioSamplesSize);
 
-		return 0;
-	}
+        return 0;
+    }
 }

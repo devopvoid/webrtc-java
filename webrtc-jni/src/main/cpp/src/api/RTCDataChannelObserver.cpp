@@ -21,38 +21,38 @@
 
 namespace jni
 {
-	RTCDataChannelObserver::RTCDataChannelObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
-		observer(observer),
-		bufferFactory(std::make_unique<DataBufferFactory>(env, PKG"RTCDataChannelBuffer")),
-		javaClass(JavaClasses::get<JavaRTCDataChannelObserverClass>(env))
-	{
-	}
+    RTCDataChannelObserver::RTCDataChannelObserver(JNIEnv* env, const JavaGlobalRef<jobject>& observer) :
+        observer(observer),
+        bufferFactory(std::make_unique<DataBufferFactory>(env, PKG"RTCDataChannelBuffer")),
+        javaClass(JavaClasses::get<JavaRTCDataChannelObserverClass>(env))
+    {
+    }
 
-	void RTCDataChannelObserver::OnStateChange()
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void RTCDataChannelObserver::OnStateChange()
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		env->CallVoidMethod(observer, javaClass->onStateChange);
+        env->CallVoidMethod(observer, javaClass->onStateChange);
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	void RTCDataChannelObserver::OnMessage(const webrtc::DataBuffer & buffer)
-	{
-		JNIEnv * env = AttachCurrentThread();
+    void RTCDataChannelObserver::OnMessage(const webrtc::DataBuffer& buffer)
+    {
+        JNIEnv* env = AttachCurrentThread();
 
-		JavaLocalRef<jobject> jBuffer = bufferFactory->create(env, &buffer);
+        JavaLocalRef<jobject> jBuffer = bufferFactory->create(env, &buffer);
 
-		env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.release());
+        env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.release());
 
-		ExceptionCheck(env);
-	}
+        ExceptionCheck(env);
+    }
 
-	RTCDataChannelObserver::JavaRTCDataChannelObserverClass::JavaRTCDataChannelObserverClass(JNIEnv * env)
-	{
-		jclass cls = FindClass(env, PKG"RTCDataChannelObserver");
+    RTCDataChannelObserver::JavaRTCDataChannelObserverClass::JavaRTCDataChannelObserverClass(JNIEnv* env)
+    {
+        jclass cls = FindClass(env, PKG"RTCDataChannelObserver");
 
-		onStateChange = GetMethod(env, cls, "onStateChange", "()V");
-		onMessage = GetMethod(env, cls, "onMessage", "(L" PKG "RTCDataChannelBuffer;)V");
-	}
+        onStateChange = GetMethod(env, cls, "onStateChange", "()V");
+        onMessage = GetMethod(env, cls, "onMessage", "(L" PKG "RTCDataChannelBuffer;)V");
+    }
 }
