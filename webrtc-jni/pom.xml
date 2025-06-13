@@ -12,24 +12,18 @@
 	<packaging>pom</packaging>
 
 	<properties>
-		<webrtc.branch>branch-heads/4844</webrtc.branch>
+		<webrtc.branch>branch-heads/6998</webrtc.branch>
 		<webrtc.src.dir>${user.home}/webrtc</webrtc.src.dir>
 		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
 		<cmake.toolchain.file />
+		<cmake.clang />
 	</properties>
 
 	<build>
 		<finalName>webrtc-java-${project.version}</finalName>
 
 		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-deploy-plugin</artifactId>
-				<configuration>
-					<skip>true</skip>
-				</configuration>
-			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
@@ -96,6 +90,9 @@
 									"${cmake.options}"
 								</option>
 								<option>
+									"${cmake.clang}"
+								</option>
+								<option>
 									-DWEBRTC_TOOLCHAIN_FILE=${cmake.toolchain.file}
 								</option>
 								<option>
@@ -145,6 +142,12 @@
 			<properties>
 				<cmake.options>-Ax64</cmake.options>
 				<cmake.config>${cmake.build.type}</cmake.config>
+			</properties>
+		</profile>
+		<profile>
+			<id>windows-clang</id>
+			<properties>
+				<cmake.clang>-T ClangCL</cmake.clang>
 			</properties>
 		</profile>
 		<profile>

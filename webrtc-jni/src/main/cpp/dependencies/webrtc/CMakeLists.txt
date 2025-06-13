@@ -122,6 +122,8 @@ set(WEBRTC_BUILD out/${TARGET_CPU})
 set(WEBRTC_LIB_PATH ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${WEBRTC_LIB})
 set(WEBRTC_LIB_PATH_INSTALLED ${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB})
 
+set(WEBRTC_CLANG "true")
+
 file(TO_CMAKE_PATH "${WEBRTC_DIR}" WEBRTC_DIR)
 file(TO_CMAKE_PATH "${WEBRTC_INSTALL_DIR}" WEBRTC_INSTALL_DIR)
 file(TO_CMAKE_PATH "${WEBRTC_LIB_PATH}" WEBRTC_LIB_PATH)
@@ -151,8 +153,11 @@ target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 
 if(APPLE)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
-	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
+	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
+	# Due to branch 6998 (m134) build with gcc. Linking webrtc built with clang causes errors.
+	set(WEBRTC_CLANG "false")
+
 	# Find DBus
 	find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
 	pkg_check_modules(DBUS REQUIRED dbus-1)
@@ -161,7 +166,7 @@ elseif(LINUX)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
 	target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
 elseif(WIN32)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN)
+	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
 	target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
 endif()
 
@@ -237,7 +242,7 @@ if (PATCHES)
 endif()
 
 message(STATUS "WebRTC: generate")
-set(COMPILE_ARGS "is_debug=false target_cpu=\"${TARGET_CPU}\" treat_warnings_as_errors=false rtc_build_examples=false rtc_include_tests=false use_rtti=true use_custom_libcxx=false symbol_level=0 rtc_use_h264=true")
+set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" is_clang=${WEBRTC_CLANG} is_debug=false is_component_build=false treat_warnings_as_errors=false rtc_build_tools=false rtc_use_perfetto=false rtc_use_pipewire=false rtc_enable_protobuf=false rtc_build_examples=false rtc_include_tests=false use_rtti=true rtc_use_h264=true use_custom_libcxx=false symbol_level=0")
 execute_command(
 	COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
 	WORKING_DIRECTORY "${WEBRTC_SRC}"
@@ -259,6 +264,7 @@ install(
 	DESTINATION "${WEBRTC_INSTALL_DIR}/include"
 	FILES_MATCHING
 		PATTERN "*.h"
+		PATTERN "*.inc"
 		REGEX /src/base/ EXCLUDE
 		REGEX /src/build/ EXCLUDE
 		REGEX /src/build_overrides/ EXCLUDE

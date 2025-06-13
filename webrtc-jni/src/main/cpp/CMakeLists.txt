@@ -25,6 +25,10 @@ elseif(WIN32)
 	set(SOURCE_TARGET windows)
 endif()
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL Clang AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /showFilenames")
+endif()
+
 add_subdirectory(dependencies/webrtc)
 add_subdirectory(dependencies/jni-voithos)
 
@@ -65,7 +69,7 @@ target_include_directories(${PROJECT_NAME}
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
-	CXX_STANDARD 17
+	CXX_STANDARD 20
 	CXX_STANDARD_REQUIRED ON
 	CXX_EXTENSIONS OFF
 )
@@ -75,11 +79,11 @@ target_link_libraries(${PROJECT_NAME} webrtc)
 
 if(APPLE)
 	set_source_files_properties(${SOURCES} PROPERTIES COMPILE_FLAGS "-x objective-c++")
-	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreAudio")
+	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreAudio" "-framework IOKit")
 elseif(LINUX)
 	target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++ pulse udev)
 elseif(WIN32)
-	target_link_libraries(${PROJECT_NAME} mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib)
+	target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
 endif()
 
 install(TARGETS ${PROJECT_NAME}

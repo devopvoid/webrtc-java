@@ -41,6 +41,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_desktop_DesktopCapturer
+	 * Method:    setMaxFrameRate
+	 * Signature: (I)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setMaxFrameRate
+	(JNIEnv*, jobject, jint);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_desktop_DesktopCapturer
 	 * Method:    start
 	 * Signature: (Ldev/onvoid/webrtc/media/video/desktop/DesktopCaptureCallback;)V
 	 */

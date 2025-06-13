@@ -60,7 +60,7 @@ namespace jni
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCStats & stats);
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCStatsMemberInterface & member);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::Attribute & attribute);
 	}
 }
 

@@ -59,7 +59,20 @@ namespace jni
 		std::set<VideoDevicePtr> AVFVideoDeviceManager::getVideoCaptureDevices()
 		{
 			if (captureDevices.empty()) {
-				NSArray * devices = [AVCaptureDevice devicesWithMediaType: AVMediaTypeVideo];
+                AVCaptureDeviceDiscoverySession * discoverySession = [AVCaptureDeviceDiscoverySession
+                    discoverySessionWithDeviceTypes:@[
+                        AVCaptureDeviceTypeBuiltInWideAngleCamera,
+                        AVCaptureDeviceTypeDeskViewCamera,
+                    #if (MAC_OS_X_VERSION_MIN_REQUIRED >= 140000)
+                        AVCaptureDeviceTypeExternal
+                    #else
+                        AVCaptureDeviceTypeExternalUnknown
+                    #endif
+                    ]
+                    mediaType: AVMediaTypeVideo
+                    position: AVCaptureDevicePositionUnspecified];
+
+				NSArray<AVCaptureDevice *> * devices = discoverySession.devices;
 
 				for (AVCaptureDevice * device in devices) {
 					insertDevice(device, false);

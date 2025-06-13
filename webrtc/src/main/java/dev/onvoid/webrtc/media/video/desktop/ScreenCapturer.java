@@ -16,12 +16,23 @@
 
 package dev.onvoid.webrtc.media.video.desktop;
 
+/**
+ * A screen capture implementation of the DesktopCapturer. This class provides functionality to capture screen content.
+ *
+ * @author Alex Andres
+ */
 public class ScreenCapturer extends DesktopCapturer {
 
+	/**
+	 * Creates a new ScreenCapturer instance and initializes the components required for screen capturing.
+	 */
 	public ScreenCapturer() {
 		initialize();
 	}
 
+	/**
+	 * Initializes the native components required for screen capturing.
+	 */
 	private native void initialize();
 
 }

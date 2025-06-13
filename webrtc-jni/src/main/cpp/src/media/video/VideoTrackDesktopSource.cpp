@@ -75,7 +75,7 @@ namespace jni
 
 		captureThread = rtc::Thread::Create();
 		captureThread->Start();
-		captureThread->PostTask(RTC_FROM_HERE, [&] { capture(); });
+		captureThread->PostTask([&] { capture(); });
 	}
 
 	void VideoTrackDesktopSource::stop()
@@ -99,7 +99,7 @@ namespace jni
 		return true;
 	}
 
-	absl::optional<bool> VideoTrackDesktopSource::needs_denoising() const {
+	std::optional<bool> VideoTrackDesktopSource::needs_denoising() const {
 		return false;
 	}
 
@@ -241,7 +241,6 @@ namespace jni
 
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
-		options.set_allow_use_magnification_api(true);
 #endif
 
 		std::unique_ptr<webrtc::DesktopCapturer> capturer;

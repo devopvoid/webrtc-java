@@ -22,13 +22,14 @@
 
 #include <jni.h>
 
-#include "rtc_base/constructor_magic.h"
-
 namespace jni
 {
 	class AudioConverter
 	{
 		public:
+			AudioConverter(const AudioConverter&) = delete;
+			AudioConverter& operator=(const AudioConverter&) = delete;
+
 			static std::unique_ptr<AudioConverter> create(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels);
 			
 			virtual ~AudioConverter() = default;
@@ -50,9 +51,6 @@ namespace jni
 			const size_t srcChannels;
 			const size_t dstFrames;
 			const size_t dstChannels;
-
-		private:
-			RTC_DISALLOW_COPY_AND_ASSIGN(AudioConverter);
 	};
 }
 

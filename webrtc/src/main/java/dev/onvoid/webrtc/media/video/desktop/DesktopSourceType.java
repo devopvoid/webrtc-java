@@ -16,10 +16,18 @@
 
 package dev.onvoid.webrtc.media.video.desktop;
 
+/**
+ * Represents the type of desktop source that can be captured for video.
+ * Used in desktop capture functionality to distinguish between different source types.
+ *
+ * @author Alex Andres
+ */
 public enum DesktopSourceType {
 
+	/** Represents a screen/monitor desktop source. Used when capturing the entire screen or a specific monitor. */
 	SCREEN,
 
+	/** Represents a window desktop source. Used when capturing a specific application window. */
 	WINDOW;
 
 }

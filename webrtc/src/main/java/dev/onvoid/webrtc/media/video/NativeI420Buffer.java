@@ -94,7 +94,7 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 
 	@Override
 	public I420Buffer toI420() {
-		retain();
+//		retain();
 		
 	    return this;
 	}
@@ -159,13 +159,13 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 			dataU.position(cropX / 2 + cropY / 2 * buffer.getStrideU());
 			dataV.position(cropX / 2 + cropY / 2 * buffer.getStrideV());
 
-			buffer.retain();
+//			buffer.retain();
 
 			return wrap(scaleWidth, scaleHeight, dataY.slice(), buffer.getStrideY(), dataU.slice(),
 					buffer.getStrideU(), dataV.slice(), buffer.getStrideV());
 		}
 
-		buffer.retain();
+//		buffer.retain();
 
 		I420Buffer newBuffer = allocate(scaleWidth, scaleHeight);
 
@@ -174,7 +174,7 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 				newBuffer.getDataY(), newBuffer.getStrideY(), newBuffer.getDataU(), newBuffer.getStrideU(),
 				newBuffer.getDataV(), newBuffer.getStrideV(), scaleWidth, scaleHeight);
 
-		buffer.release();
+//		buffer.release();
 
 		return newBuffer;
 	}
