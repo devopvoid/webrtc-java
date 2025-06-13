@@ -79,10 +79,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_addTrack
 	CHECK_HANDLE(track);
 
 	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track)) {
-		stream->AddTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
+		stream->AddTrack(webrtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
 	}
 	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track)) {
-		stream->AddTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
+		stream->AddTrack(webrtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
 	}
 }
 
@@ -96,10 +96,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_removeTrack
 	CHECK_HANDLE(track);
 
 	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track)) {
-		stream->RemoveTrack(rtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
+		stream->RemoveTrack(webrtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
 	}
 	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track)) {
-		stream->RemoveTrack(rtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
+		stream->RemoveTrack(webrtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
 	}
 }
 

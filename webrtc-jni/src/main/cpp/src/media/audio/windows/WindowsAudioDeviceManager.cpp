@@ -82,7 +82,7 @@ namespace jni
 				throw jni::Exception("Create TaskQueueFactory failed");
 			}
 
-			rtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
+			webrtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
 				webrtc::AudioDeviceModule::kPlatformDefaultAudio, taskQueueFactory.get());
 
 			if (!audioModule) {

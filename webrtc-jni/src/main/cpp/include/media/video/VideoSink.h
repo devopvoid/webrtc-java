@@ -22,7 +22,7 @@
 
 namespace jni
 {
-	class VideoSink : public rtc::VideoSinkInterface<webrtc::VideoFrame>
+	class VideoSink : public webrtc::VideoSinkInterface<webrtc::VideoFrame>
 	{
 		public:
 			virtual ~VideoSink() {};

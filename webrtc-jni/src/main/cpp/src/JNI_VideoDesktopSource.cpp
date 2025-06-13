@@ -108,7 +108,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_dis
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_initialize
 (JNIEnv * env, jobject caller)
 {
-	rtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDesktopSource>();
+	webrtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDesktopSource>();
 
 	SetHandle(env, caller, videoSource.release());
 }

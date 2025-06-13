@@ -42,7 +42,7 @@ namespace jni
 				jfieldID residualEchoDetector;
 		};
 
-		cricket::AudioOptions toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		webrtc::AudioOptions toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
 	}
 }
 
