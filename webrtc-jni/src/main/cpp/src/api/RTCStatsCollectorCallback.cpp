@@ -27,7 +27,7 @@ namespace jni
 	{
 	}
 
-	void RTCStatsCollectorCallback::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport> & report)
+	void RTCStatsCollectorCallback::OnStatsDelivered(const webrtc::scoped_refptr<const webrtc::RTCStatsReport> & report)
 	{
 		JNIEnv * env = AttachCurrentThread();
 

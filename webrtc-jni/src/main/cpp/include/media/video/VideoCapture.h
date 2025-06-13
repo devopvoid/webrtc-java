@@ -35,7 +35,7 @@ namespace jni
 
 			void setDevice(const avdev::DevicePtr & device);
 			void setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability);
-			void setVideoSink(std::unique_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink);
+			void setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink);
 			void start();
 			void stop();
 			void destroy();
@@ -43,9 +43,9 @@ namespace jni
 		private:
 			avdev::DevicePtr device;
 			webrtc::VideoCaptureCapability capability;
-			std::unique_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink;
+			std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink;
 
-			rtc::scoped_refptr<webrtc::VideoCaptureModule> captureModule;
+			webrtc::scoped_refptr<webrtc::VideoCaptureModule> captureModule;
 	};
 }
 

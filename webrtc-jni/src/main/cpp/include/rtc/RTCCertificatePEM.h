@@ -40,8 +40,8 @@ namespace jni
 				jfieldID certificate;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::RTCCertificatePEM & certificate);
-		rtc::RTCCertificatePEM toNative(JNIEnv * env, const JavaRef<jobject> & certificate);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCCertificatePEM & certificate);
+		webrtc::RTCCertificatePEM toNative(JNIEnv * env, const JavaRef<jobject> & certificate);
 	}
 }
 

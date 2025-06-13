@@ -28,7 +28,7 @@
 
 namespace jni
 {
-	class VideoTrackSink : public rtc::VideoSinkInterface<webrtc::VideoFrame>
+	class VideoTrackSink : public webrtc::VideoSinkInterface<webrtc::VideoFrame>
 	{
 		public:
 			VideoTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink);

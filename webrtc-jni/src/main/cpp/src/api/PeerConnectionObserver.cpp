@@ -57,7 +57,7 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
-	void PeerConnectionObserver::OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver)
+	void PeerConnectionObserver::OnTrack(webrtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver)
 	{
 		JNIEnv * env = AttachCurrentThread();
 
@@ -68,7 +68,7 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
-	void PeerConnectionObserver::OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver, const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>> & streams)
+	void PeerConnectionObserver::OnAddTrack(webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver, const std::vector<webrtc::scoped_refptr<webrtc::MediaStreamInterface>> & streams)
 	{
 		JNIEnv * env = AttachCurrentThread();
 
@@ -88,7 +88,7 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
-	void PeerConnectionObserver::OnRemoveTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver)
+	void PeerConnectionObserver::OnRemoveTrack(webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver)
 	{
 		JNIEnv * env = AttachCurrentThread();
 
@@ -99,7 +99,7 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
-	void PeerConnectionObserver::OnDataChannel(rtc::scoped_refptr<webrtc::DataChannelInterface> channel)
+	void PeerConnectionObserver::OnDataChannel(webrtc::scoped_refptr<webrtc::DataChannelInterface> channel)
 	{
 		JNIEnv * env = AttachCurrentThread();
 
@@ -163,7 +163,7 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
-	void PeerConnectionObserver::OnIceCandidatesRemoved(const std::vector<cricket::Candidate> & candidates)
+	void PeerConnectionObserver::OnIceCandidatesRemoved(const std::vector<webrtc::Candidate> & candidates)
 	{
 		JNIEnv * env = AttachCurrentThread();
 

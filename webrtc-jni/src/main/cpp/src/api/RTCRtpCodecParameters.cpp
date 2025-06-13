@@ -67,7 +67,7 @@ namespace jni
 
 			webrtc::RtpCodecParameters params;
 			params.payload_type = obj.getInt<int>(javaClass->payloadType);
-			params.kind = JavaEnums::toNative<cricket::MediaType>(env, obj.getObject(javaClass->mediaType));
+			params.kind = JavaEnums::toNative<webrtc::MediaType>(env, obj.getObject(javaClass->mediaType));
 			params.name = JavaString::toNative(env, obj.getString(javaClass->codecName));
 
 			for (const auto & entry : JavaHashMap(env, obj.getObject(javaClass->parameters))) {

@@ -57,9 +57,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		: nullptr;
 
 	try {
-		auto networkThread = rtc::Thread::CreateWithSocketServer();
-		auto signalingThread = rtc::Thread::Create();
-		auto workerThread = rtc::Thread::Create();
+		auto networkThread = webrtc::Thread::CreateWithSocketServer();
+		auto signalingThread = webrtc::Thread::Create();
+		auto workerThread = webrtc::Thread::Create();
 
 		if (!networkThread->Start()) {
 			throw jni::Exception("Start network thread failed");
@@ -74,8 +74,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		webrtc::AudioProcessing * processing = (audioProcessing != nullptr)
 			? GetHandle<webrtc::AudioProcessing>(env, audioProcessing)
 			: nullptr;
-		rtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
-		rtc::scoped_refptr<webrtc::AudioDeviceModule> adm(audioDevModule);
+		webrtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
+		webrtc::scoped_refptr<webrtc::AudioDeviceModule> adm(audioDevModule);
 
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
@@ -118,9 +118,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
 	CHECK_HANDLE(factory);
 
-	rtc::Thread * networkThread = GetHandle<rtc::Thread>(env, caller, "networkThreadHandle");
-	rtc::Thread * signalingThread = GetHandle<rtc::Thread>(env, caller, "signalingThreadHandle");
-	rtc::Thread * workerThread = GetHandle<rtc::Thread>(env, caller, "workerThreadHandle");
+	webrtc::Thread * networkThread = GetHandle<webrtc::Thread>(env, caller, "networkThreadHandle");
+	webrtc::Thread * signalingThread = GetHandle<webrtc::Thread>(env, caller, "signalingThreadHandle");
+	webrtc::Thread * workerThread = GetHandle<webrtc::Thread>(env, caller, "workerThreadHandle");
 
 	webrtc::RefCountReleaseStatus status = factory->Release();
 
@@ -164,7 +164,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 
 	auto audioOptions = jni::AudioOptions::toNative(env, jni::JavaLocalRef<jobject>(env, jAudioOptions));
 
-	rtc::scoped_refptr<webrtc::AudioSourceInterface> audioSource = factory->CreateAudioSource(audioOptions);
+	webrtc::scoped_refptr<webrtc::AudioSourceInterface> audioSource = factory->CreateAudioSource(audioOptions);
 
 	if (audioSource == nullptr) {
 		env->Throw(jni::JavaError(env, "Create audio-track source failed"));
@@ -194,7 +194,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 
 	std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
 
-	rtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
+	webrtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
 
 	return jni::JavaFactories::create(env, audioTrack.release()).release();
 }
@@ -219,8 +219,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 
 	std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
 
-	rtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(
-		rtc::scoped_refptr<webrtc::VideoTrackSourceInterface>(source), label);
+	webrtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(
+		webrtc::scoped_refptr<webrtc::VideoTrackSourceInterface>(source), label);
 
 	return jni::JavaFactories::create(env, videoTrack.release()).release();
 }
@@ -272,7 +272,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpRec
 	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
 	CHECK_HANDLEV(factory, nullptr);
 
-	auto type = jni::JavaEnums::toNative<cricket::MediaType>(env, mediaType);
+	auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);
 	auto capabilities = factory->GetRtpReceiverCapabilities(type);
 
 	return jni::RTCRtpCapabilities::toJava(env, capabilities).release();
@@ -284,7 +284,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpSen
 	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
 	CHECK_HANDLEV(factory, nullptr);
 
-	auto type = jni::JavaEnums::toNative<cricket::MediaType>(env, mediaType);
+	auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);
 	auto capabilities = factory->GetRtpSenderCapabilities(type);
 
 	return jni::RTCRtpCapabilities::toJava(env, capabilities).release();

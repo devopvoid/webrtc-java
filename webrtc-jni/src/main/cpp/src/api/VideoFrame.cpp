@@ -36,7 +36,7 @@ namespace jni
 			return webrtc::VideoFrame::Builder()
 				//.set_video_frame_buffer(buffer)
 				//.set_timestamp_rtp(timestamp_rtp)
-				.set_timestamp_ms(timestamp_ns / rtc::kNumNanosecsPerMillisec)
+				.set_timestamp_ms(timestamp_ns / webrtc::kNumNanosecsPerMillisec)
 				.set_rotation(static_cast<webrtc::VideoRotation>(rotation))
 				.build();
 		}
@@ -44,7 +44,7 @@ namespace jni
 
 	namespace I420Buffer
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::scoped_refptr<webrtc::I420BufferInterface> & buffer)
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<webrtc::I420BufferInterface> & buffer)
 		{
 			const auto javaClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
 

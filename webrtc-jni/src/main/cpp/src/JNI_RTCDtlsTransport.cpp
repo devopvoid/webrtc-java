@@ -61,8 +61,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getRemoteCerti
 	jni::JavaArrayList certificates(env, count);
 
 	for (size_t i = 0; i < count; i++) {
-		const rtc::SSLCertificate & certificate = certChain->Get(i);
-		const rtc::RTCCertificatePEM pem("", certificate.ToPEMString());
+		const webrtc::SSLCertificate & certificate = certChain->Get(i);
+		const webrtc::RTCCertificatePEM pem("", certificate.ToPEMString());
 
 		certificates.add(jni::RTCCertificatePEM::toJava(env, pem));
 	}

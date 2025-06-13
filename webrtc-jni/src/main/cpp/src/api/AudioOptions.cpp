@@ -24,13 +24,13 @@ namespace jni
 {
 	namespace AudioOptions
 	{
-		cricket::AudioOptions toNative(JNIEnv * env, const JavaRef<jobject>& javaType)
+		webrtc::AudioOptions toNative(JNIEnv * env, const JavaRef<jobject>& javaType)
 		{
 			const auto javaClass = JavaClasses::get<JavaAudioOptionsClass>(env);
 
 			JavaObject obj(env, javaType);
 
-			auto options = cricket::AudioOptions();
+			auto options = webrtc::AudioOptions();
 			options.echo_cancellation = obj.getBoolean(javaClass->echoCancellation);
 			options.auto_gain_control = obj.getBoolean(javaClass->autoGainControl);
 			options.noise_suppression = obj.getBoolean(javaClass->noiseSuppression);

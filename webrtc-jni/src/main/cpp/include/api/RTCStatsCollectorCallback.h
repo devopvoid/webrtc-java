@@ -33,7 +33,7 @@ namespace jni
 			RTCStatsCollectorCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback);
 			~RTCStatsCollectorCallback() = default;
 
-			void OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport> & report) override;
+			void OnStatsDelivered(const webrtc::scoped_refptr<const webrtc::RTCStatsReport> & report) override;
 
 		private:
 			class JavaRTCStatsCollectorCallbackClass : public JavaClass
