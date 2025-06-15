@@ -18,13 +18,17 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_TRACK_DESKTOP_SOURCE_H_
 
 #include "api/video/i420_buffer.h"
-#include "media/base/adapted_video_track_source.h"
+#include "api/video/video_frame.h"
+#include "api/video/video_sink_interface.h"
+#include "media/base/video_adapter.h"
+#include "media/base/video_broadcaster.h"
+#include "pc/video_track_source.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/thread.h"
 
 namespace jni
 {
-	class VideoTrackDesktopSource : public rtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback
+	class VideoTrackDesktopSource : public webrtc::VideoTrackSource, public webrtc::DesktopCapturer::Callback
 	{
 		public:
 			VideoTrackDesktopSource();
@@ -39,6 +43,13 @@ namespace jni
 			void stop();
 			void terminate();
 
+			// VideoSourceInterface implementation.
+			void AddOrUpdateSink(webrtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const webrtc::VideoSinkWants & wants) override;
+			void RemoveSink(webrtc::VideoSinkInterface<webrtc::VideoFrame> * sink) override;
+
+			// VideoTrackSource implementation.
+			webrtc::VideoSourceInterface<webrtc::VideoFrame>* source() override;
+
 			// AdaptedVideoTrackSource implementation.
 			virtual bool is_screencast() const override;
 			virtual std::optional<bool> needs_denoising() const override;
@@ -51,6 +62,7 @@ namespace jni
 		private:
 			void capture();
 			void process(std::unique_ptr<webrtc::DesktopFrame> & frame);
+			void updateVideoAdapter();
 
 		private:
 			uint16_t frameRate;
@@ -58,6 +70,9 @@ namespace jni
 			bool focusSelectedSource;
 
 			webrtc::DesktopSize maxFrameSize;
+
+			webrtc::VideoBroadcaster broadcaster;
+			webrtc::VideoAdapter videoAdapter;
 
 			webrtc::MediaSourceInterface::SourceState sourceState;
 

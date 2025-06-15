@@ -33,7 +33,7 @@
 namespace jni
 {
 	VideoTrackDesktopSource::VideoTrackDesktopSource() :
-		AdaptedVideoTrackSource(),
+		VideoTrackSource(/*remote=*/false),
 		frameRate(20),
 		isCapturing(false),
 		focusSelectedSource(true),
@@ -88,6 +88,37 @@ namespace jni
 		}
 	}
 
+	void VideoTrackDesktopSource::AddOrUpdateSink(webrtc::VideoSinkInterface<webrtc::VideoFrame>* sink, const webrtc::VideoSinkWants& wants)
+	{
+		printf("AddOrUpdateSink() %p - %d, %d, %d\n", sink, wants.max_pixel_count, wants.max_framerate_fps, wants.is_active);
+		fflush(stdout);
+
+		if (wants.is_active) {
+			broadcaster.AddOrUpdateSink(sink, wants);
+
+			updateVideoAdapter();
+		}
+	}
+
+	void VideoTrackDesktopSource::RemoveSink(webrtc::VideoSinkInterface<webrtc::VideoFrame>* sink)
+	{
+		broadcaster.RemoveSink(sink);
+
+		updateVideoAdapter();
+	}
+
+	void VideoTrackDesktopSource::updateVideoAdapter()
+	{
+		webrtc::VideoSinkWants wants = broadcaster.wants();
+
+		//videoAdapter.OnOutputFormatRequest(std::make_pair(capability.width, capability.height), wants.max_pixel_count, wants.max_framerate_fps);
+	}
+
+	webrtc::VideoSourceInterface<webrtc::VideoFrame>* VideoTrackDesktopSource::source()
+	{
+		return this;
+	}
+
 	void VideoTrackDesktopSource::terminate()
 	{
 		// Notify the track that we are permanently done.
@@ -124,6 +155,10 @@ namespace jni
 			return;
 		}
 
+		if (!broadcaster.frame_wanted()) {
+			return;
+		}
+
 		int width = frame->size().width();
 		int height = frame->size().height();
 
@@ -149,18 +184,18 @@ namespace jni
 		int width = frame->size().width();
 		int height = frame->size().height();
 		
-		int adapted_width;
-		int adapted_height;
+		int adapted_width = width;
+		int adapted_height = height;
 
 		int crop_x = 0;
 		int crop_y = 0;
 		int crop_w = width;
 		int crop_h = height;
 
-		if (!AdaptFrame(width, height, time, &adapted_width, &adapted_height, &crop_w, &crop_h, &crop_x, &crop_y)) {
-			// Drop frame in order to respect frame rate constraint.
-			return;
-		}
+		//if (!AdaptFrame(width, height, time, &adapted_width, &adapted_height, &crop_w, &crop_h, &crop_x, &crop_y)) {
+		//	// Drop frame in order to respect frame rate constraint.
+		//	return;
+		//}
 
 #if defined(WEBRTC_WIN)
 		// Crop black window borders.
@@ -216,18 +251,22 @@ namespace jni
 
 				scaled_buffer->ScaleFrom(*buffer);
 
-				OnFrame(webrtc::VideoFrame::Builder()
+				broadcaster.OnFrame(webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(scaled_buffer)
 					.set_rotation(webrtc::kVideoRotation_0)
 					.set_timestamp_us(time)
 					.build());
 			}
 			else {
+				printf("Frame size : % dx % d\n", width, height);
+				fflush(stdout);
+
 				// No adaptations needed, just return the frame as is.
-				OnFrame(webrtc::VideoFrame::Builder()
+				broadcaster.OnFrame(webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(buffer)
 					.set_rotation(webrtc::kVideoRotation_0)
 					.set_timestamp_us(time)
+					.set_timestamp_rtp(0)
 					.build());
 			}
 		}
