@@ -122,7 +122,7 @@ namespace jni
 				return Long::create(env, attribute.get<int64_t>());
 			}
 			else if (attribute.holds_alternative<uint64_t>()) {
-				return JavaBigInteger::toJava(env, std::to_string(attribute.get<uint64_t>()));
+				return JavaBigInteger::toJava(env, rtc::ToString(attribute.get<uint64_t>()));
 			}
 			else if (attribute.holds_alternative<double>()) {
 				return Double::create(env, attribute.get<double>());
@@ -148,7 +148,7 @@ namespace jni
 				std::vector<std::string> r;
 
 				std::transform(v.begin(), v.end(), std::back_inserter(r),
-					[](uint64_t n) { return std::to_string(n); });
+					[](uint64_t n) { return rtc::ToString(n); });
 
 				return jni::static_java_ref_cast<jobject>(env, JavaBigInteger::createArray(env, r));
 			}
@@ -165,7 +165,7 @@ namespace jni
 
 				for (const auto & item : map) {
 					memberMap.put(jni::static_java_ref_cast<jobject>(env, JavaString::toJava(env, item.first)),
-						JavaBigInteger::toJava(env, std::to_string(item.second)));
+						JavaBigInteger::toJava(env, rtc::ToString(item.second)));
 				}
 
 				return jni::static_java_ref_cast<jobject>(env, memberMap);

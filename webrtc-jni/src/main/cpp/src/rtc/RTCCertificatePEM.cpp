@@ -27,7 +27,7 @@ namespace jni
 {
 	namespace RTCCertificatePEM
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCCertificatePEM & certificate)
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::RTCCertificatePEM & certificate)
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCCertificatePEMClass>(env);
 
@@ -40,13 +40,13 @@ namespace jni
 			return JavaLocalRef<jobject>(env, obj);
 		}
 
-		webrtc::RTCCertificatePEM toNative(JNIEnv * env, const JavaRef<jobject> & certificate)
+		rtc::RTCCertificatePEM toNative(JNIEnv * env, const JavaRef<jobject> & certificate)
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCCertificatePEMClass>(env);
 
 			JavaObject obj(env, certificate);
 
-			return webrtc::RTCCertificatePEM(
+			return rtc::RTCCertificatePEM(
 				JavaString::toNative(env, obj.getString(javaClass->privateKey)),
 				JavaString::toNative(env, obj.getString(javaClass->certificate))
 			);

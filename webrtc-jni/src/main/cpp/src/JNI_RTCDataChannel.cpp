@@ -171,7 +171,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendDirectBuffer
 	if (address != NULL) {
 		jlong bufferLength = env->GetDirectBufferCapacity(jBuffer);
 
-		webrtc::CopyOnWriteBuffer data(address, static_cast<size_t>(bufferLength));
+		rtc::CopyOnWriteBuffer data(address, static_cast<size_t>(bufferLength));
 
 		channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)));
 	}
@@ -189,7 +189,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBuffer
 	int8_t * arrayPtr = env->GetByteArrayElements(jBufferArray, nullptr);
 	size_t arrayLength = env->GetArrayLength(jBufferArray);
 
-	webrtc::CopyOnWriteBuffer data(arrayPtr, arrayLength);
+	rtc::CopyOnWriteBuffer data(arrayPtr, arrayLength);
 
 	env->ReleaseByteArrayElements(jBufferArray, arrayPtr, JNI_ABORT);
 	

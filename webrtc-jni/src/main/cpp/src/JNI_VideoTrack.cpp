@@ -34,7 +34,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInt
 
 	auto sink = new jni::VideoTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
 
-	track->AddOrUpdateSink(sink, webrtc::VideoSinkWants());
+	track->AddOrUpdateSink(sink, rtc::VideoSinkWants());
 
 	return reinterpret_cast<jlong>(sink);
 }
@@ -45,7 +45,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_removeSinkI
 	webrtc::VideoTrackInterface * track = GetHandle<webrtc::VideoTrackInterface>(env, caller);
 	CHECK_HANDLE(track);
 
-	auto sink = reinterpret_cast<webrtc::VideoSinkInterface<webrtc::VideoFrame> *>(sinkHandle);
+	auto sink = reinterpret_cast<rtc::VideoSinkInterface<webrtc::VideoFrame> *>(sinkHandle);
 	
 	if (sink != nullptr) {
 		track->RemoveSink(sink);

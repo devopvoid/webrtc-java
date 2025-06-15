@@ -80,7 +80,7 @@ namespace jni
 			configuration.rtcp_mux_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::RtcpMuxPolicy>(env, mp);
 			
 			for (auto & item : JavaIterable(env, cr)) {
-				auto certificate = webrtc::RTCCertificate::FromPEM(jni::RTCCertificatePEM::toNative(env, item));
+				auto certificate = rtc::RTCCertificate::FromPEM(jni::RTCCertificatePEM::toNative(env, item));
 
 				RTC_CHECK(certificate != nullptr) << "Supplied certificate is malformed";
 

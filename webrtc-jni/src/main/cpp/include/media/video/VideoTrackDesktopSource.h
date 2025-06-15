@@ -18,14 +18,13 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_TRACK_DESKTOP_SOURCE_H_
 
 #include "api/video/i420_buffer.h"
-#include "api/video/video_sink_interface.h"
 #include "media/base/adapted_video_track_source.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/thread.h"
 
 namespace jni
 {
-	class VideoTrackDesktopSource : public webrtc::AdaptedVideoTrackSource, public webrtc::VideoSinkInterface<webrtc::VideoFrame>, public webrtc::DesktopCapturer::Callback
+	class VideoTrackDesktopSource : public rtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback
 	{
 		public:
 			VideoTrackDesktopSource();
@@ -39,9 +38,6 @@ namespace jni
 			void start();
 			void stop();
 			void terminate();
-
-			// VideoSinkInterface implementation.
-			void OnFrame(const webrtc::VideoFrame & frame) override;
 
 			// AdaptedVideoTrackSource implementation.
 			virtual bool is_screencast() const override;
@@ -70,9 +66,9 @@ namespace jni
 
 			std::unique_ptr<webrtc::DesktopFrame> lastFrame;
 
-			std::unique_ptr<webrtc::Thread> captureThread;
+			std::unique_ptr<rtc::Thread> captureThread;
 
-			webrtc::scoped_refptr<webrtc::I420Buffer> buffer;
+			rtc::scoped_refptr<webrtc::I420Buffer> buffer;
 	};
 }
 

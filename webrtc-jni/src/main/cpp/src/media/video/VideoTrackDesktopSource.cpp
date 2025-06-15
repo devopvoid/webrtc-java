@@ -73,7 +73,7 @@ namespace jni
 	{
 		isCapturing = true;
 
-		captureThread = webrtc::Thread::Create();
+		captureThread = rtc::Thread::Create();
 		captureThread->Start();
 		captureThread->PostTask([&] { capture(); });
 	}
@@ -111,10 +111,6 @@ namespace jni
 		return false;
 	}
 
-	void VideoTrackDesktopSource::OnFrame(const webrtc::VideoFrame& frame) {
-		AdaptedVideoTrackSource::OnFrame(frame);
-	}
-
 	void VideoTrackDesktopSource::OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame)
 	{
 		if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
@@ -148,7 +144,7 @@ namespace jni
 
 	void VideoTrackDesktopSource::process(std::unique_ptr<webrtc::DesktopFrame> & frame)
 	{
-		int64_t time = webrtc::TimeMicros();
+		int64_t time = rtc::TimeMicros();
 
 		int width = frame->size().width();
 		int height = frame->size().height();
@@ -181,7 +177,9 @@ namespace jni
 		}
 #endif
 
-		webrtc::scoped_refptr<webrtc::I420Buffer> buffer = webrtc::I420Buffer::Create(crop_w, crop_h);
+		if (!buffer || buffer->width() != crop_w || buffer->height() != crop_h) {
+			buffer = webrtc::I420Buffer::Create(crop_w, crop_h);
+		}
 
 		const int conversionResult = libyuv::ConvertToI420(
 			frame->data(),
@@ -214,7 +212,7 @@ namespace jni
 
 			if (adapted_width != width || adapted_height != height) {
 				// Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
-				webrtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
+				rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
 
 				scaled_buffer->ScaleFrom(*buffer);
 
@@ -225,15 +223,12 @@ namespace jni
 					.build());
 			}
 			else {
-				webrtc::VideoFrame captureFrame = webrtc::VideoFrame::Builder()
+				// No adaptations needed, just return the frame as is.
+				OnFrame(webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(buffer)
 					.set_rotation(webrtc::kVideoRotation_0)
 					.set_timestamp_us(time)
-					.set_timestamp_rtp(0)
-					.build();
-
-				// No adaptations needed, just return the frame as is.
-				OnFrame(captureFrame);
+					.build());
 			}
 		}
 	}

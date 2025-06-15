@@ -27,7 +27,7 @@
 
 namespace jni
 {
-	class LogSink : public webrtc::LogSink
+	class LogSink : public rtc::LogSink
 	{
 		public:
 			explicit LogSink(JNIEnv * env, const JavaGlobalRef<jobject> & javaSink);
@@ -35,7 +35,7 @@ namespace jni
 
 			// LogSink implementation.
 			void OnLogMessage(const std::string & message) override;
-			void OnLogMessage(const std::string & message, webrtc::LoggingSeverity severity) override;
+			void OnLogMessage(const std::string & message, rtc::LoggingSeverity severity) override;
 
 		private:
 			class JavaLogSinkClass : public JavaClass

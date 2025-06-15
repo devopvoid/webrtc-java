@@ -36,16 +36,16 @@ namespace jni
 			// PeerConnectionObserver implementation.
 			void OnConnectionChange(webrtc::PeerConnectionInterface::PeerConnectionState state) override;
 			void OnSignalingChange(webrtc::PeerConnectionInterface::SignalingState state) override;
-			void OnTrack(webrtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver) override;
-			void OnAddTrack(webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver, const std::vector<webrtc::scoped_refptr<webrtc::MediaStreamInterface>> & streams) override;
-			void OnRemoveTrack(webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) override;
-			void OnDataChannel(webrtc::scoped_refptr<webrtc::DataChannelInterface> channel) override;
+			void OnTrack(rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver) override;
+			void OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver, const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>> & streams) override;
+			void OnRemoveTrack(rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver) override;
+			void OnDataChannel(rtc::scoped_refptr<webrtc::DataChannelInterface> channel) override;
 			void OnRenegotiationNeeded() override;
 			void OnIceConnectionChange(webrtc::PeerConnectionInterface::IceConnectionState state) override;
 			void OnIceGatheringChange(webrtc::PeerConnectionInterface::IceGatheringState state) override;
 			void OnIceCandidate(const webrtc::IceCandidateInterface * candidate) override;
 			void OnIceCandidateError(const std::string & address, int port, const std::string & url, int error_code, const std::string & error_text) override;
-			void OnIceCandidatesRemoved(const std::vector<webrtc::Candidate> & candidates) override;
+			void OnIceCandidatesRemoved(const std::vector<cricket::Candidate> & candidates) override;
 			void OnIceConnectionReceivingChange(bool receiving) override;
 
 		private:

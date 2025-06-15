@@ -43,7 +43,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getSender
 	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
 	CHECK_HANDLEV(transceiver, nullptr);
 
-	webrtc::scoped_refptr<webrtc::RtpSenderInterface> sender = transceiver->sender();
+	rtc::scoped_refptr<webrtc::RtpSenderInterface> sender = transceiver->sender();
 
 	return jni::JavaFactories::create(env, sender.get()).release();
 }
@@ -54,7 +54,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getReceiver
 	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
 	CHECK_HANDLEV(transceiver, nullptr);
 
-	webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver = transceiver->receiver();
+	rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver = transceiver->receiver();
 
 	return jni::JavaFactories::create(env, receiver.get()).release();
 }

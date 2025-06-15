@@ -31,7 +31,7 @@ namespace jni
 	{
 	}
 
-	void LogSink::OnLogMessage(const std::string & message, webrtc::LoggingSeverity severity)
+	void LogSink::OnLogMessage(const std::string & message, rtc::LoggingSeverity severity)
 	{
 		JNIEnv * env = AttachCurrentThread();
 

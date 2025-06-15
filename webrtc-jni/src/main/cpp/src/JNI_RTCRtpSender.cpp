@@ -31,7 +31,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTrack
 	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
 	CHECK_HANDLEV(sender, nullptr);
 
-	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = sender->track();
+	rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = sender->track();
 
 	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track.get())) {
 		return jni::JavaFactories::create(env, t).release();

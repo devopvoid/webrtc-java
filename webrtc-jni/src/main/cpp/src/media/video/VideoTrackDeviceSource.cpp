@@ -152,14 +152,14 @@ namespace jni
 		captureModule = nullptr;
 	}
 
-	void VideoTrackDeviceSource::AddOrUpdateSink(webrtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const webrtc::VideoSinkWants & wants)
+	void VideoTrackDeviceSource::AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const rtc::VideoSinkWants & wants)
 	{
 		broadcaster.AddOrUpdateSink(sink, wants);
 
 		updateVideoAdapter();
 	}
 
-	void VideoTrackDeviceSource::RemoveSink(webrtc::VideoSinkInterface<webrtc::VideoFrame> * sink)
+	void VideoTrackDeviceSource::RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink)
 	{
 		broadcaster.RemoveSink(sink);
 
@@ -177,7 +177,7 @@ namespace jni
 
 	void VideoTrackDeviceSource::updateVideoAdapter()
 	{
-		webrtc::VideoSinkWants wants = broadcaster.wants();
+		rtc::VideoSinkWants wants = broadcaster.wants();
 
 		videoAdapter.OnOutputFormatRequest(std::make_pair(capability.width, capability.height), wants.max_pixel_count, wants.max_framerate_fps);
 	}
@@ -197,7 +197,7 @@ namespace jni
 
 		if (outHeight != frame.height() || outWidth != frame.width()) {
 			// Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
-			webrtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(outWidth, outHeight);
+			rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(outWidth, outHeight);
 
 			scaled_buffer->ScaleFrom(*frame.video_frame_buffer()->ToI420());
 			
@@ -214,7 +214,7 @@ namespace jni
 		}
 	}
 
-	webrtc::VideoSourceInterface<webrtc::VideoFrame> * VideoTrackDeviceSource::source()
+	rtc::VideoSourceInterface<webrtc::VideoFrame> * VideoTrackDeviceSource::source()
 	{
 		return this;
 	}

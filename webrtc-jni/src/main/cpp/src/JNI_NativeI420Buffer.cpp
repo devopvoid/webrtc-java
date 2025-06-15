@@ -24,7 +24,7 @@
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_allocate
 (JNIEnv * env, jclass caller, jint width, jint height)
 {
-	webrtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = webrtc::I420Buffer::Create(width, height);
+	rtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = webrtc::I420Buffer::Create(width, height);
 
 	jni::JavaLocalRef<jobject> jBuffer = jni::I420Buffer::toJava(env, i420Buffer);
 

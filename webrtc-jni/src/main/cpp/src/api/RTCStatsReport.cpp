@@ -25,7 +25,7 @@ namespace jni
 {
 	namespace RTCStatsReport
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<const webrtc::RTCStatsReport> & report)
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::scoped_refptr<const webrtc::RTCStatsReport> & report)
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCStatsReportClass>(env);
 

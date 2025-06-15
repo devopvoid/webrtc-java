@@ -198,7 +198,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispos
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
 (JNIEnv * env, jobject caller)
 {
-	webrtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::BuiltinAudioProcessingBuilder().Build(webrtc::CreateEnvironment());
+	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::BuiltinAudioProcessingBuilder().Build(webrtc::CreateEnvironment());
 
 	if (!apm) {
 		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));

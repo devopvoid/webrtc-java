@@ -52,7 +52,7 @@ namespace jni
 			const std::shared_ptr<JavaDesktopCaptureCallbackClass> javaClass;
 			const std::shared_ptr<JavaVideoFrameClass> javaFrameClass;
 
-			webrtc::scoped_refptr<webrtc::I420Buffer> i420Buffer;
+			rtc::scoped_refptr<webrtc::I420Buffer> i420Buffer;
 	};
 }
 
