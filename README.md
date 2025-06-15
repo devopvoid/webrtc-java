@@ -57,7 +57,7 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   </tr>
 </table>
 
-The native libraries were built with WebRTC branch M137/7151.
+The native libraries were built with WebRTC branch M134/6998.
 
 ### Build Notes
 
