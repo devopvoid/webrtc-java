@@ -44,13 +44,15 @@ namespace jni
 			void terminate();
 
 			// VideoSourceInterface implementation.
-			void AddOrUpdateSink(webrtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const webrtc::VideoSinkWants & wants) override;
-			void RemoveSink(webrtc::VideoSinkInterface<webrtc::VideoFrame> * sink) override;
+			void AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const rtc::VideoSinkWants & wants) override;
+			void RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame> * sink) override;
 
 			// VideoTrackSource implementation.
-			webrtc::VideoSourceInterface<webrtc::VideoFrame>* source() override;
+			rtc::VideoSourceInterface<webrtc::VideoFrame>* source() override;
 
-			// AdaptedVideoTrackSource implementation.
+			// VideoTrackSourceInterface implementation.
+			bool GetStats(webrtc::VideoTrackSourceInterface::Stats * stats) override;
+			void ProcessConstraints(const webrtc::VideoTrackSourceConstraints & constraints) override;
 			virtual bool is_screencast() const override;
 			virtual std::optional<bool> needs_denoising() const override;
 			SourceState state() const override;
@@ -58,6 +60,10 @@ namespace jni
 
 			// DesktopCapturer::Callback implementation.
 			void OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame) override;
+
+		protected:
+			bool AdaptFrame(int width, int height, int64_t time_us, int* out_width, int* out_height, int* crop_width, int* crop_height, int* crop_x, int* crop_y);
+			void OnFrameDropped();
 
 		private:
 			void capture();
@@ -71,8 +77,8 @@ namespace jni
 
 			webrtc::DesktopSize maxFrameSize;
 
-			webrtc::VideoBroadcaster broadcaster;
-			webrtc::VideoAdapter videoAdapter;
+			rtc::VideoBroadcaster broadcaster;
+			cricket::VideoAdapter videoAdapter;
 
 			webrtc::MediaSourceInterface::SourceState sourceState;
 
@@ -84,6 +90,9 @@ namespace jni
 			std::unique_ptr<rtc::Thread> captureThread;
 
 			rtc::scoped_refptr<webrtc::I420Buffer> buffer;
+
+			webrtc::Mutex statsMutex;
+			std::optional<Stats> stats RTC_GUARDED_BY(statsMutex);
 	};
 }
 

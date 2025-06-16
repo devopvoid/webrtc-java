@@ -88,11 +88,8 @@ namespace jni
 		}
 	}
 
-	void VideoTrackDesktopSource::AddOrUpdateSink(webrtc::VideoSinkInterface<webrtc::VideoFrame>* sink, const webrtc::VideoSinkWants& wants)
+	void VideoTrackDesktopSource::AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink, const rtc::VideoSinkWants& wants)
 	{
-		printf("AddOrUpdateSink() %p - %d, %d, %d\n", sink, wants.max_pixel_count, wants.max_framerate_fps, wants.is_active);
-		fflush(stdout);
-
 		if (wants.is_active) {
 			broadcaster.AddOrUpdateSink(sink, wants);
 
@@ -100,7 +97,7 @@ namespace jni
 		}
 	}
 
-	void VideoTrackDesktopSource::RemoveSink(webrtc::VideoSinkInterface<webrtc::VideoFrame>* sink)
+	void VideoTrackDesktopSource::RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink)
 	{
 		broadcaster.RemoveSink(sink);
 
@@ -109,12 +106,15 @@ namespace jni
 
 	void VideoTrackDesktopSource::updateVideoAdapter()
 	{
-		webrtc::VideoSinkWants wants = broadcaster.wants();
-
-		//videoAdapter.OnOutputFormatRequest(std::make_pair(capability.width, capability.height), wants.max_pixel_count, wants.max_framerate_fps);
+		videoAdapter.OnSinkWants(broadcaster.wants());
 	}
 
-	webrtc::VideoSourceInterface<webrtc::VideoFrame>* VideoTrackDesktopSource::source()
+	void VideoTrackDesktopSource::OnFrameDropped()
+	{
+		broadcaster.OnDiscardedFrame();
+	}
+
+	rtc::VideoSourceInterface<webrtc::VideoFrame>* VideoTrackDesktopSource::source()
 	{
 		return this;
 	}
@@ -126,20 +126,64 @@ namespace jni
 		FireOnChanged();
 	}
 
-	bool VideoTrackDesktopSource::is_screencast() const {
+	bool VideoTrackDesktopSource::GetStats(webrtc::VideoTrackSourceInterface::Stats * stats)
+	{
+		webrtc::MutexLock lock(&statsMutex);
+
+		if (!stats) {
+			return false;
+		}
+
+		*stats = *stats;
+
 		return true;
 	}
 
-	std::optional<bool> VideoTrackDesktopSource::needs_denoising() const {
+	void VideoTrackDesktopSource::ProcessConstraints(const webrtc::VideoTrackSourceConstraints & constraints)
+	{
+		broadcaster.ProcessConstraints(constraints);
+	}
+
+	bool VideoTrackDesktopSource::is_screencast() const
+	{
+		return true;
+	}
+
+	std::optional<bool> VideoTrackDesktopSource::needs_denoising() const
+	{
 		return false;
 	}
 
-	webrtc::MediaSourceInterface::SourceState VideoTrackDesktopSource::state() const {
+	webrtc::MediaSourceInterface::SourceState VideoTrackDesktopSource::state() const
+	{
 		return sourceState;
 	}
 
-	bool VideoTrackDesktopSource::remote() const {
+	bool VideoTrackDesktopSource::remote() const
+	{
 		return false;
+	}
+
+	bool VideoTrackDesktopSource::AdaptFrame(int width, int height, int64_t time_us, int* out_width, int* out_height, int* crop_width, int* crop_height, int* crop_x, int* crop_y)
+	{
+		{
+			webrtc::MutexLock lock(&statsMutex);
+			stats = Stats{ width, height };
+		}
+
+		if (!broadcaster.frame_wanted()) {
+			return false;
+		}
+
+		if (!videoAdapter.AdaptFrameResolution(width, height, time_us * rtc::kNumNanosecsPerMicrosec, crop_width, crop_height, out_width, out_height)) {
+			broadcaster.OnDiscardedFrame();
+			return false;
+		}
+
+		*crop_x = (width - *crop_width) / 2;
+		*crop_y = (height - *crop_height) / 2;
+		
+		return true;
 	}
 
 	void VideoTrackDesktopSource::OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame)
@@ -152,10 +196,6 @@ namespace jni
 				stop();
 			}
 			
-			return;
-		}
-
-		if (!broadcaster.frame_wanted()) {
 			return;
 		}
 
@@ -192,10 +232,10 @@ namespace jni
 		int crop_w = width;
 		int crop_h = height;
 
-		//if (!AdaptFrame(width, height, time, &adapted_width, &adapted_height, &crop_w, &crop_h, &crop_x, &crop_y)) {
-		//	// Drop frame in order to respect frame rate constraint.
-		//	return;
-		//}
+		if (!AdaptFrame(width, height, time, &adapted_width, &adapted_height, &crop_w, &crop_h, &crop_x, &crop_y)) {
+			// Drop frame in order to respect frame rate constraint.
+			return;
+		}
 
 #if defined(WEBRTC_WIN)
 		// Crop black window borders.
@@ -258,9 +298,6 @@ namespace jni
 					.build());
 			}
 			else {
-				printf("Frame size : % dx % d\n", width, height);
-				fflush(stdout);
-
 				// No adaptations needed, just return the frame as is.
 				broadcaster.OnFrame(webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(buffer)
