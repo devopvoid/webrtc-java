@@ -33,7 +33,7 @@
 namespace jni
 {
 	VideoTrackDesktopSource::VideoTrackDesktopSource() :
-		AdaptedVideoTrackSource(),
+		VideoTrackSource(/*remote=*/false),
 		frameRate(20),
 		isCapturing(false),
 		focusSelectedSource(true),
@@ -88,6 +88,37 @@ namespace jni
 		}
 	}
 
+	void VideoTrackDesktopSource::AddOrUpdateSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink, const rtc::VideoSinkWants& wants)
+	{
+		if (wants.is_active) {
+			broadcaster.AddOrUpdateSink(sink, wants);
+
+			updateVideoAdapter();
+		}
+	}
+
+	void VideoTrackDesktopSource::RemoveSink(rtc::VideoSinkInterface<webrtc::VideoFrame>* sink)
+	{
+		broadcaster.RemoveSink(sink);
+
+		updateVideoAdapter();
+	}
+
+	void VideoTrackDesktopSource::updateVideoAdapter()
+	{
+		videoAdapter.OnSinkWants(broadcaster.wants());
+	}
+
+	void VideoTrackDesktopSource::OnFrameDropped()
+	{
+		broadcaster.OnDiscardedFrame();
+	}
+
+	rtc::VideoSourceInterface<webrtc::VideoFrame>* VideoTrackDesktopSource::source()
+	{
+		return this;
+	}
+
 	void VideoTrackDesktopSource::terminate()
 	{
 		// Notify the track that we are permanently done.
@@ -95,20 +126,64 @@ namespace jni
 		FireOnChanged();
 	}
 
-	bool VideoTrackDesktopSource::is_screencast() const {
+	bool VideoTrackDesktopSource::GetStats(webrtc::VideoTrackSourceInterface::Stats * stats)
+	{
+		webrtc::MutexLock lock(&statsMutex);
+
+		if (!stats) {
+			return false;
+		}
+
+		*stats = *stats;
+
 		return true;
 	}
 
-	std::optional<bool> VideoTrackDesktopSource::needs_denoising() const {
+	void VideoTrackDesktopSource::ProcessConstraints(const webrtc::VideoTrackSourceConstraints & constraints)
+	{
+		broadcaster.ProcessConstraints(constraints);
+	}
+
+	bool VideoTrackDesktopSource::is_screencast() const
+	{
+		return true;
+	}
+
+	std::optional<bool> VideoTrackDesktopSource::needs_denoising() const
+	{
 		return false;
 	}
 
-	webrtc::MediaSourceInterface::SourceState VideoTrackDesktopSource::state() const {
+	webrtc::MediaSourceInterface::SourceState VideoTrackDesktopSource::state() const
+	{
 		return sourceState;
 	}
 
-	bool VideoTrackDesktopSource::remote() const {
+	bool VideoTrackDesktopSource::remote() const
+	{
 		return false;
+	}
+
+	bool VideoTrackDesktopSource::AdaptFrame(int width, int height, int64_t time_us, int* out_width, int* out_height, int* crop_width, int* crop_height, int* crop_x, int* crop_y)
+	{
+		{
+			webrtc::MutexLock lock(&statsMutex);
+			stats = Stats{ width, height };
+		}
+
+		if (!broadcaster.frame_wanted()) {
+			return false;
+		}
+
+		if (!videoAdapter.AdaptFrameResolution(width, height, time_us * rtc::kNumNanosecsPerMicrosec, crop_width, crop_height, out_width, out_height)) {
+			broadcaster.OnDiscardedFrame();
+			return false;
+		}
+
+		*crop_x = (width - *crop_width) / 2;
+		*crop_y = (height - *crop_height) / 2;
+		
+		return true;
 	}
 
 	void VideoTrackDesktopSource::OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame)
@@ -149,8 +224,8 @@ namespace jni
 		int width = frame->size().width();
 		int height = frame->size().height();
 		
-		int adapted_width;
-		int adapted_height;
+		int adapted_width = width;
+		int adapted_height = height;
 
 		int crop_x = 0;
 		int crop_y = 0;
@@ -216,7 +291,7 @@ namespace jni
 
 				scaled_buffer->ScaleFrom(*buffer);
 
-				OnFrame(webrtc::VideoFrame::Builder()
+				broadcaster.OnFrame(webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(scaled_buffer)
 					.set_rotation(webrtc::kVideoRotation_0)
 					.set_timestamp_us(time)
@@ -224,10 +299,11 @@ namespace jni
 			}
 			else {
 				// No adaptations needed, just return the frame as is.
-				OnFrame(webrtc::VideoFrame::Builder()
+				broadcaster.OnFrame(webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(buffer)
 					.set_rotation(webrtc::kVideoRotation_0)
 					.set_timestamp_us(time)
+					.set_timestamp_rtp(0)
 					.build());
 			}
 		}
