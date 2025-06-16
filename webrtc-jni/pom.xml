@@ -146,6 +146,12 @@
 		</profile>
 		<profile>
 			<id>windows-clang</id>
+			<activation>
+				<os>
+					<family>windows</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
 			<properties>
 				<cmake.clang>-T ClangCL</cmake.clang>
 			</properties>
