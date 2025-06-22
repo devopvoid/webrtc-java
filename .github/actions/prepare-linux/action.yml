@@ -33,10 +33,8 @@ runs:
         sudo apt-get update
         sudo apt-get install -y pulseaudio libpulse-dev libasound2-dev libdbus-1-dev libudev-dev libv4l-dev libx11-dev libxcomposite-dev libxrandr-dev libxfixes-dev binutils cmake git locales lsb-release ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
 
-        # More recent LLVM and Clang.
-        wget https://apt.llvm.org/llvm.sh
-        chmod +x llvm.sh
-        sudo ./llvm.sh ${{ matrix.llvm }} all
+        # Chromium Clang to be used with the clang toolchain file
+        curl -s https://raw.githubusercontent.com/chromium/chromium/main/tools/clang/scripts/update.py | python3 - --output-dir=/opt/clang
 
         # Required for testing
         #pulseaudio --start
