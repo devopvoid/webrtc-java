@@ -27,7 +27,7 @@ namespace jni
 	{
 		webrtc::VideoFrame toNative(JNIEnv * env, const JavaRef<jobject> & javaFrame)
 		{
-			const std::shared_ptr<JavaVideoFrameClass> javaClass = JavaClasses::get<JavaVideoFrameClass>(env);
+			const auto javaClass = JavaClasses::get<JavaVideoFrameClass>(env);
 			JavaObject obj(env, javaFrame);
 
 			int rotation = obj.getInt(javaClass->rotation);

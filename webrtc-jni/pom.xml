@@ -154,6 +154,7 @@
 			</activation>
 			<properties>
 				<cmake.clang>-T ClangCL</cmake.clang>
+				<cmake.toolchain.file>toolchain/x86_64-windows-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>
@@ -165,7 +166,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>toolchain/x86_64-linux-gnu.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>toolchain/x86_64-linux-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>

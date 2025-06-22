@@ -14,41 +14,36 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_DESKTOP_CAPTURER_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_DESKTOP_CAPTURER_H_
+#ifndef JNI_WEBRTC_MEDIA_DESKTOP_CAPTURER_H_
+#define JNI_WEBRTC_MEDIA_DESKTOP_CAPTURER_H_
 
 #if defined(WEBRTC_WIN)
 #include "platform/windows/ComInitializer.h"
 #endif
 
 #include "modules/desktop_capture/desktop_capturer.h"
-#include "modules/desktop_capture/desktop_and_cursor_composer.h"
 
 #include <jni.h>
 #include <memory>
 
 namespace jni
 {
-	class DesktopCapturer
+	class DesktopCapturer : public webrtc::DesktopCapturer
 	{
 		public:
-			DesktopCapturer(webrtc::DesktopCapturer * capturer);
-			~DesktopCapturer();
-
-			DesktopCapturer(const DesktopCapturer &) = delete;
-            DesktopCapturer & operator=(const DesktopCapturer &) = delete;
+			explicit DesktopCapturer(bool screenCapturer);
+			~DesktopCapturer() override;
 
 			// webrtc::DesktopCapturer implementations.
-			void Start(webrtc::DesktopCapturer::Callback * callback);
-			void SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory);
-			void SetMaxFrameRate(uint32_t max_frame_rate);
-			void CaptureFrame();
-			void SetExcludedWindow(webrtc::WindowId window);
-			bool GetSourceList(webrtc::DesktopCapturer::SourceList * sources);
-			bool SelectSource(webrtc::DesktopCapturer::SourceId id);
-			bool FocusOnSelectedSource();
+			void Start(Callback * callback) override;
+			void SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory) override;
+			void CaptureFrame() override;
+			void SetExcludedWindow(webrtc::WindowId window) override;
+			bool GetSourceList(SourceList * sources) override;
+			bool SelectSource(SourceId id) override;
+			bool FocusOnSelectedSource() override;
 			void setFocusSelectedSource(bool focus);
-			bool IsOccluded(const webrtc::DesktopVector & pos);
+			bool IsOccluded(const webrtc::DesktopVector & pos) override;
 
 		protected:
 			std::unique_ptr<webrtc::DesktopCapturer> capturer;

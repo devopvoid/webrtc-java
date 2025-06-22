@@ -18,24 +18,8 @@
 #include "JavaUtils.h"
 #include "media/video/desktop/DesktopCapturer.h"
 
-#include "modules/desktop_capture/desktop_capturer.h"
-#include "modules/desktop_capture/desktop_capture_options.h"
-#include "modules/desktop_capture/desktop_and_cursor_composer.h"
-
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_ScreenCapturer_initialize
 (JNIEnv * env, jobject caller)
 {
-	auto options = webrtc::DesktopCaptureOptions::CreateDefault();
-	// Enable desktop effects.
-	options.set_disable_effects(false);
-
-#if defined(WEBRTC_WIN)
-	options.set_allow_directx_capturer(true);
-#endif
-
-    auto capturer = new webrtc::DesktopAndCursorComposer(
-        webrtc::DesktopCapturer::CreateScreenCapturer(options),
-        options);
-
-	SetHandle(env, caller, new jni::DesktopCapturer(capturer));
+    SetHandle(env, caller, new jni::DesktopCapturer(true));
 }

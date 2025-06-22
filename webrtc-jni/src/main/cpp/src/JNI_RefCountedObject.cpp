@@ -34,7 +34,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_release
 	webrtc::RefCountInterface * ref = GetHandle<webrtc::RefCountInterface>(env, caller);
 	CHECK_HANDLE(ref);
 
-	const webrtc::RefCountReleaseStatus status = ref->Release();
+	const auto status = ref->Release();
 
 	if (status == webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		SetHandle<std::nullptr_t>(env, caller, nullptr);

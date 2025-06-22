@@ -26,49 +26,49 @@ namespace jni
 {
 	class VideoTrackDesktopSource : public rtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback
 	{
-	public:
-		VideoTrackDesktopSource();
-		~VideoTrackDesktopSource();
+        public:
+            VideoTrackDesktopSource();
+            ~VideoTrackDesktopSource();
 
-		void setSourceId(webrtc::DesktopCapturer::SourceId source, bool isWindow);
-		void setFrameRate(const uint16_t frameRate);
-		void setMaxFrameSize(webrtc::DesktopSize size);
-		void setFocusSelectedSource(bool focus);
+            void setSourceId(webrtc::DesktopCapturer::SourceId source, bool isWindow);
+            void setFrameRate(const uint16_t frameRate);
+            void setMaxFrameSize(webrtc::DesktopSize size);
+            void setFocusSelectedSource(bool focus);
 
-		void start();
-		void stop();
-		void terminate();
+            void start();
+            void stop();
+            void terminate();
 
-		// AdaptedVideoTrackSource implementation.
-		virtual bool is_screencast() const override;
-		virtual std::optional<bool> needs_denoising() const override;
-		SourceState state() const override;
-		bool remote() const override;
+            // AdaptedVideoTrackSource implementation.
+            virtual bool is_screencast() const override;
+            virtual std::optional<bool> needs_denoising() const override;
+            SourceState state() const override;
+            bool remote() const override;
 
-		// DesktopCapturer::Callback implementation.
-		void OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame) override;
+            // DesktopCapturer::Callback implementation.
+            void OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame) override;
 
-	private:
-		void capture();
-		void process(std::unique_ptr<webrtc::DesktopFrame>& frame);
+        private:
+            void capture();
+            void process(std::unique_ptr<webrtc::DesktopFrame>& frame);
 
-	private:
-		uint16_t frameRate;
-		bool isCapturing;
-		bool focusSelectedSource;
+        private:
+            uint16_t frameRate;
+            bool isCapturing;
+            bool focusSelectedSource;
 
-		webrtc::DesktopSize maxFrameSize;
+            webrtc::DesktopSize maxFrameSize;
 
-		webrtc::MediaSourceInterface::SourceState sourceState;
+            webrtc::MediaSourceInterface::SourceState sourceState;
 
-		webrtc::DesktopCapturer::SourceId sourceId;
-		bool sourceIsWindow;
+            webrtc::DesktopCapturer::SourceId sourceId;
+            bool sourceIsWindow;
 
-		std::unique_ptr<webrtc::DesktopFrame> lastFrame;
+            std::unique_ptr<webrtc::DesktopFrame> lastFrame;
 
-		std::unique_ptr<rtc::Thread> captureThread;
+            std::unique_ptr<rtc::Thread> captureThread;
 
-		rtc::scoped_refptr<webrtc::I420Buffer> buffer;
+            rtc::scoped_refptr<webrtc::I420Buffer> buffer;
 	};
 }
 
