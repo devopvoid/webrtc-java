@@ -80,16 +80,4 @@ target_include_directories(${PROJECT_NAME}
 		include/jni/${JNI_PLATFORM}
 )
 
-# Inherit libc++ include paths from webrtc
-target_include_directories(${PROJECT_NAME}
-	PUBLIC
-		${TARGET_LIBCPP_BUILDTOOLS_INC_DIR}
-		${TARGET_LIBCPP_INC_DIR}
-		${TARGET_LIBCPP_ABI_INC_DIR}
-)
-
-if(LINUX)
-	target_compile_options(${PROJECT_NAME} PUBLIC -stdlib=libc++)
-endif()
-
 target_link_libraries(${PROJECT_NAME} PRIVATE webrtc)

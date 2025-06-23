@@ -151,12 +151,12 @@ else()
 	set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
 endif()
 
-#if(LINUX)
+if(LINUX OR WIN32)
 	target_include_directories(${PROJECT_NAME} PUBLIC ${TARGET_LIBCPP_BUILDTOOLS_INC_DIR})
 	target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TARGET_LIBCPP_INC_DIR} ${TARGET_LIBCPP_ABI_INC_DIR})
 
 	target_link_directories(${PROJECT_NAME} PUBLIC "${TARGET_LIB_DIR}")
-#endif()
+endif()
 
 target_include_directories(${PROJECT_NAME}
 	PUBLIC
