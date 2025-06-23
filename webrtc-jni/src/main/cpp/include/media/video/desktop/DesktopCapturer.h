@@ -28,22 +28,23 @@
 
 namespace jni
 {
-	class DesktopCapturer : public webrtc::DesktopCapturer
+	class DesktopCapturer
 	{
 		public:
 			explicit DesktopCapturer(bool screenCapturer);
-			~DesktopCapturer() override;
+			~DesktopCapturer();
 
 			// webrtc::DesktopCapturer implementations.
-			void Start(Callback * callback) override;
-			void SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory) override;
-			void CaptureFrame() override;
-			void SetExcludedWindow(webrtc::WindowId window) override;
-			bool GetSourceList(SourceList * sources) override;
-			bool SelectSource(SourceId id) override;
-			bool FocusOnSelectedSource() override;
+			void Start(webrtc::DesktopCapturer::Callback * callback);
+			void SetMaxFrameRate(uint32_t max_frame_rate);
+			void SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory);
+			void CaptureFrame();
+			void SetExcludedWindow(webrtc::WindowId window);
+			bool GetSourceList(webrtc::DesktopCapturer::SourceList * sources);
+			bool SelectSource(webrtc::DesktopCapturer::SourceId id);
+			bool FocusOnSelectedSource();
 			void setFocusSelectedSource(bool focus);
-			bool IsOccluded(const webrtc::DesktopVector & pos) override;
+			bool IsOccluded(const webrtc::DesktopVector & pos);
 
 		protected:
 			std::unique_ptr<webrtc::DesktopCapturer> capturer;

@@ -34,9 +34,8 @@ namespace jni
 #endif
 
 		if (screenCapturer) {
-			capturer.reset(new webrtc::DesktopAndCursorComposer(
-				webrtc::DesktopCapturer::CreateScreenCapturer(options),
-				options));
+			capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(
+				webrtc::DesktopCapturer::CreateScreenCapturer(options), options);
 		}
 		else {
 			capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(
@@ -49,13 +48,18 @@ namespace jni
 		capturer.reset();
 	}
 
-	void DesktopCapturer::Start(Callback * callback)
+	void DesktopCapturer::Start(webrtc::DesktopCapturer::Callback * callback)
 	{
 		capturer->Start(callback);
 
 		if (focusSelectedSource) {
 			capturer->FocusOnSelectedSource();
 		}
+	}
+
+	void DesktopCapturer::SetMaxFrameRate(uint32_t max_frame_rate)
+	{
+		capturer->SetMaxFrameRate(max_frame_rate);
 	}
 
 	void DesktopCapturer::SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory)
@@ -73,12 +77,12 @@ namespace jni
 		capturer->SetExcludedWindow(window);
 	}
 
-	bool DesktopCapturer::GetSourceList(SourceList * sources)
+	bool DesktopCapturer::GetSourceList(webrtc::DesktopCapturer::SourceList * sources)
 	{
 		return capturer->GetSourceList(sources);
 	}
 
-	bool DesktopCapturer::SelectSource(SourceId id)
+	bool DesktopCapturer::SelectSource(webrtc::DesktopCapturer::SourceId id)
 	{
 		return capturer->SelectSource(id);
 	}
