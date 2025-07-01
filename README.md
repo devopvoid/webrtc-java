@@ -40,8 +40,8 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
   <tr align="center">
     <th>Linux</th>
     <td>✔</td>
-    <td>-</td>
-    <td>-</td>
+    <td>✔ armeabi-v7a</td>
+    <td>✔ arm64-v8a</td>
   </tr>
   <tr align="center">
     <th>macOS</th>

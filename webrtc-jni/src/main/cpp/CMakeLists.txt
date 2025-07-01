@@ -81,9 +81,15 @@ if(APPLE)
 	set_source_files_properties(${SOURCES} PROPERTIES COMPILE_FLAGS "-x objective-c++")
 	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreMedia" "-framework CoreAudio" "-framework IOKit")
 elseif(LINUX)
-	target_link_libraries(${PROJECT_NAME} -static-libgcc -static-libstdc++ pulse udev)
+	if(NOT TARGET_CPU MATCHES "^arm")
+    	set(CXX_LIBS "-static-libgcc -stdlib=libc++ -lc++ -lc++abi")
+	else()
+		set(CXX_LIBS "-static-libgcc")
+	endif()
+
+	target_link_libraries(${PROJECT_NAME} ${CXX_LIBS} pulse udev)
 elseif(WIN32)
-	target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
+	target_link_libraries(${PROJECT_NAME} c++.lib msvcprt.lib dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
 endif()
 
 install(TARGETS ${PROJECT_NAME}

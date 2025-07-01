@@ -79,3 +79,7 @@ target_include_directories(${PROJECT_NAME}
 		include/jni
 		include/jni/${JNI_PLATFORM}
 )
+
+if(LINUX OR WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE webrtc)
+endif()

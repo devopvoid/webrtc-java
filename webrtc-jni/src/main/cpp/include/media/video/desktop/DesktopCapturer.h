@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_DESKTOP_CAPTURER_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_DESKTOP_CAPTURER_H_
+#ifndef JNI_WEBRTC_MEDIA_DESKTOP_CAPTURER_H_
+#define JNI_WEBRTC_MEDIA_DESKTOP_CAPTURER_H_
 
 #if defined(WEBRTC_WIN)
 #include "platform/windows/ComInitializer.h"
 #endif
 
 #include "modules/desktop_capture/desktop_capturer.h"
-#include "modules/desktop_capture/desktop_and_cursor_composer.h"
 
 #include <jni.h>
 #include <memory>
@@ -32,16 +31,13 @@ namespace jni
 	class DesktopCapturer
 	{
 		public:
-			DesktopCapturer(webrtc::DesktopCapturer * capturer);
+			explicit DesktopCapturer(bool screenCapturer);
 			~DesktopCapturer();
-
-			DesktopCapturer(const DesktopCapturer &) = delete;
-            DesktopCapturer & operator=(const DesktopCapturer &) = delete;
 
 			// webrtc::DesktopCapturer implementations.
 			void Start(webrtc::DesktopCapturer::Callback * callback);
-			void SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory);
 			void SetMaxFrameRate(uint32_t max_frame_rate);
+			void SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory);
 			void CaptureFrame();
 			void SetExcludedWindow(webrtc::WindowId window);
 			bool GetSourceList(webrtc::DesktopCapturer::SourceList * sources);

@@ -16,6 +16,7 @@
 #include "JavaThreadEnv.h"
 #include "JavaWrappedException.h"
 
+#include <exception>
 #include <ios>
 
 bool ExceptionCheck(JNIEnv * env)
