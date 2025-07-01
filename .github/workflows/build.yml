@@ -52,6 +52,10 @@ jobs:
       fail-fast: false
       matrix:
         platform:
+          - name: linux_arm
+            runs-on: ubuntu-22.04
+          - name: linux_arm64
+            runs-on: ubuntu-22.04
           - name: linux_x86-64
             runs-on: ubuntu-22.04
         java: [17]

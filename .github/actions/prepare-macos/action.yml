@@ -7,7 +7,6 @@ runs:
   steps:
     - name: Install required packages
       run: |
-        brew install ninja
         # Required for macos-13
         pip install setuptools
         # Required for macos-14

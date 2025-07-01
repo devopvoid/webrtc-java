@@ -178,7 +178,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>toolchain/aarch32-linux-gnu.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>toolchain/aarch32-linux-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>
@@ -190,7 +190,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>toolchain/aarch64-linux-gnu.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>toolchain/aarch64-linux-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 	</profiles>
