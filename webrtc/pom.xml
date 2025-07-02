@@ -10,6 +10,8 @@
 
 	<artifactId>webrtc-java</artifactId>
 
+	<name>webrtc-java</name>
+
 	<build>
 		<plugins>
 			<plugin>
