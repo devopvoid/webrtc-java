@@ -57,10 +57,18 @@ runs:
         gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
     - name: Build
-      run: mvn package -DskipTests
+      run: |
+        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
+          mvn package -DskipTests -Plinux-aarch32
+        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
+          mvn package -DskipTests -Plinux-aarch64
+        else
+          mvn package -DskipTests
+        fi
       shell: bash
 
     - name: Test
+      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' }}
       run: mvn -B jar:jar surefire:test
       shell: bash
 
@@ -69,5 +77,12 @@ runs:
         MAVEN_USERNAME: ${{ inputs.maven-username }}
         MAVEN_TOKEN: ${{ inputs.maven-password }}
         MAVEN_GPG_PASSPHRASE: ${{ inputs.maven-gpg-passphrase }}
-      run: mvn deploy -Prelease -DskipTests
+      run: |
+        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
+          mvn deploy -DskipTests -Prelease -Plinux-aarch32
+        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
+          mvn deploy -DskipTests -Prelease -Plinux-aarch64
+        else
+          mvn deploy -DskipTests -Prelease
+        fi
       shell: bash

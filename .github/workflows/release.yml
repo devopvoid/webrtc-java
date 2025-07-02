@@ -20,6 +20,12 @@ jobs:
   prepare-release:
     runs-on: ubuntu-22.04
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - run: |
+          git config --global user.name "${{ github.actor }}"
+          git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+
       - id: prepare
         name: Prepare release build
         uses: ./.github/actions/prepare-linux
@@ -35,15 +41,13 @@ jobs:
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-      - name: Checkout code
+      - name: Update development version
         uses: actions/checkout@v4
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_TOKEN: ${{ secrets.MAVEN_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
       - run: |
-          git config --global user.name "${{ github.actor }}"
-          git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
           mvn release:prepare -DskipTests -DpushChanges=false -DdevelopmentVersion=${{ github.event.inputs.developmentVersion }}
           git push
           git push --tags
@@ -94,6 +98,10 @@ jobs:
       fail-fast: false
       matrix:
         platform:
+          - name: linux_arm
+            runs-on: ubuntu-22.04
+          - name: linux_arm64
+            runs-on: ubuntu-22.04
           - name: linux_x86-64
             runs-on: ubuntu-22.04
         java: [17]
@@ -117,6 +125,7 @@ jobs:
         uses: ./.github/actions/prepare-linux
 
       - name: Create Release # Create the release only once on Linux
+        if: ${{ matrix.platform.name == 'linux_x86-64' }}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
