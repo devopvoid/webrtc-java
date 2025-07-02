@@ -1,5 +1,5 @@
-[![](https://github.com/devopvoid/webrtc-java/actions/workflows/build.yml/badge.svg)](https://github.com/devopvoid/webrtc-java/actions/workflows/build.yml)
-[![](https://img.shields.io/maven-central/v/dev.onvoid.webrtc/webrtc-java.svg?label=Maven%20Central&logo=apache-maven)](https://search.maven.org/search?q=g:%22dev.onvoid.webrtc%22%20AND%20a:%22webrtc-java%22)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/devopvoid/webrtc-java/build.yml?label=Build&logo=github)](https://github.com/devopvoid/webrtc-java/actions)
+[![Maven Central](https://img.shields.io/maven-central/v/dev.onvoid.webrtc/webrtc-java?label=Maven%20Central&logo=apache-maven)](https://search.maven.org/artifact/dev.onvoid.webrtc/webrtc-java)
 
 ## webrtc-java
 
