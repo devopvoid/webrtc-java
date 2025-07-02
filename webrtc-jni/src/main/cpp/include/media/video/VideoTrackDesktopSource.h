@@ -24,7 +24,7 @@
 
 namespace jni
 {
-	class VideoTrackDesktopSource : public rtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback
+	class VideoTrackDesktopSource : public webrtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback
 	{
         public:
             VideoTrackDesktopSource();
@@ -66,9 +66,9 @@ namespace jni
 
             std::unique_ptr<webrtc::DesktopFrame> lastFrame;
 
-            std::unique_ptr<rtc::Thread> captureThread;
+            std::unique_ptr<webrtc::Thread> captureThread;
 
-            rtc::scoped_refptr<webrtc::I420Buffer> buffer;
+            webrtc::scoped_refptr<webrtc::I420Buffer> buffer;
 	};
 }
 

@@ -93,9 +93,9 @@ namespace jni
 		}
 
 		jint rotation = static_cast<jint>(webrtc::kVideoRotation_0);
-		jlong timestamp = rtc::TimeMicros() * rtc::kNumNanosecsPerMicrosec;
+		jlong timestamp = webrtc::TimeMicros() * webrtc::kNumNanosecsPerMicrosec;
 
-		rtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
+		webrtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
 		i420BufferCopy->AddRef();
 
 		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);

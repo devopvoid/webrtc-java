@@ -23,6 +23,7 @@
 #include "JavaRef.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "WebRTCContext.h"
 
 #include "media/audio/AudioProcessing.h"
 #include "media/audio/AudioProcessingConfig.h"
@@ -30,7 +31,6 @@
 #include "api/audio/audio_frame.h"
 #include "api/audio/audio_processing.h"
 #include "api/audio/builtin_audio_processing_builder.h"
-#include "api/environment/environment_factory.h"
 #include "api/scoped_refptr.h"
 #include "modules/audio_processing/include/audio_processing.h"
 #include "rtc_base/logging.h"
@@ -198,7 +198,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispos
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
 (JNIEnv * env, jobject caller)
 {
-	rtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::BuiltinAudioProcessingBuilder().Build(webrtc::CreateEnvironment());
+	jni::WebRTCContext * context = static_cast<jni::WebRTCContext*>(javaContext);
+
+	webrtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::BuiltinAudioProcessingBuilder().Build(context->webrtcEnv);
 
 	if (!apm) {
 		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));

@@ -18,11 +18,12 @@
 #include "media/audio/windows/WindowsAudioDeviceManager.h"
 #include "platform/windows/MFInitializer.h"
 #include "platform/windows/WinUtils.h"
+#include "WebRTCContext.h"
 
 #include "Functiondiscoverykeys_devpkey.h"
 
+#include "api/audio/create_audio_device_module.h"
 #include "api/scoped_refptr.h"
-#include "api/task_queue/default_task_queue_factory.h"
 #include "modules/audio_device/include/audio_device.h"
 #include "rtc_base/logging.h"
 
@@ -76,14 +77,10 @@ namespace jni
 
 		void WindowsAudioDeviceManager::enumerateDevices(EDataFlow dataFlow)
 		{
-			std::unique_ptr<webrtc::TaskQueueFactory> taskQueueFactory = webrtc::CreateDefaultTaskQueueFactory();
+			jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 
-			if (!taskQueueFactory) {
-				throw jni::Exception("Create TaskQueueFactory failed");
-			}
-
-			rtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
-				webrtc::AudioDeviceModule::kPlatformDefaultAudio, taskQueueFactory.get());
+			webrtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::CreateAudioDeviceModule(
+				context->webrtcEnv, webrtc::AudioDeviceModule::kPlatformDefaultAudio);
 
 			if (!audioModule) {
 				throw jni::Exception("Create AudioDeviceModule failed");

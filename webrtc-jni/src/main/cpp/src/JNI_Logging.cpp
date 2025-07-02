@@ -29,9 +29,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_addLogSink
 (JNIEnv * env, jclass caller, jobject jseverity, jobject jsink)
 {
 	try {
-		auto severity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
+		auto severity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
 
-		rtc::LogMessage::AddLogToStream(new jni::LogSink(env, jni::JavaGlobalRef<jobject>(env, jsink)), severity);
+		webrtc::LogMessage::AddLogToStream(new jni::LogSink(env, jni::JavaGlobalRef<jobject>(env, jsink)), severity);
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -43,7 +43,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_log
 {
 	std::string message = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jmessage));
 	
-	auto severity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
+	auto severity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
 
 	RTC_LOG_V(severity) << message;
 }
@@ -51,21 +51,21 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_log
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logToDebug
 (JNIEnv * env, jclass caller, jobject jseverity)
 {
-	int rtcSeverity = jni::JavaEnums::toNative<rtc::LoggingSeverity>(env, jseverity);
+	int rtcSeverity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
 
-	if (rtcSeverity >= rtc::LS_VERBOSE && rtcSeverity <= rtc::LS_NONE) {
-		rtc::LogMessage::LogToDebug(static_cast<rtc::LoggingSeverity>(rtcSeverity));
+	if (rtcSeverity >= webrtc::LS_VERBOSE && rtcSeverity <= webrtc::LS_NONE) {
+		webrtc::LogMessage::LogToDebug(static_cast<webrtc::LoggingSeverity>(rtcSeverity));
 	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logThreads
 (JNIEnv * env, jclass caller, jboolean enable)
 {
-	rtc::LogMessage::LogThreads(static_cast<bool>(enable));
+	webrtc::LogMessage::LogThreads(static_cast<bool>(enable));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logTimestamps
 (JNIEnv * env, jclass caller, jboolean enable)
 {
-	rtc::LogMessage::LogTimestamps(static_cast<bool>(enable));
+	webrtc::LogMessage::LogTimestamps(static_cast<bool>(enable));
 }

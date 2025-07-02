@@ -24,7 +24,7 @@
 #include "modules/video_capture/video_capture_factory.h"
 #include "third_party/libyuv/include/libyuv/video_common.h"
 #include "rtc_base/logging.h"
-#include "system_wrappers/include/sleep.h"
+#include "rtc_base/thread.h"
 
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
@@ -73,7 +73,7 @@ namespace jni
 	{
 		isCapturing = true;
 
-		captureThread = rtc::Thread::Create();
+		captureThread = webrtc::Thread::Create();
 		captureThread->Start();
 		captureThread->PostTask([&] { capture(); });
 	}
@@ -144,7 +144,7 @@ namespace jni
 
 	void VideoTrackDesktopSource::process(std::unique_ptr<webrtc::DesktopFrame>& frame)
 	{
-		int64_t time = rtc::TimeMicros();
+		int64_t time = webrtc::TimeMicros();
 
 		int width = frame->size().width();
 		int height = frame->size().height();
@@ -212,7 +212,7 @@ namespace jni
 
 			if (adapted_width != width || adapted_height != height) {
 				// Video adapter has requested a down-scale. Allocate a new buffer and return scaled version.
-				rtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
+				webrtc::scoped_refptr<webrtc::I420Buffer> scaled_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
 
 				scaled_buffer->ScaleFrom(*buffer);
 
@@ -274,7 +274,7 @@ namespace jni
 		while (isCapturing) {
 			capturer->CaptureFrame();
 
-			webrtc::SleepMs(msPerFrame);
+			webrtc::Thread::SleepMs(msPerFrame);
 		}
 	}
 }

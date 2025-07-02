@@ -25,6 +25,7 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
+#include "api/environment/environment_factory.h"
 #include "api/peer_connection_interface.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/ssl_adapter.h"
@@ -52,6 +53,7 @@ namespace jni
 {
 	WebRTCContext::WebRTCContext(JavaVM * vm) :
 		JavaContext(vm),
+		webrtcEnv(webrtc::CreateEnvironment()),
 		audioDevManager(nullptr),
 		videoDevManager(nullptr),
 		powerManagement(nullptr)
@@ -60,12 +62,12 @@ namespace jni
 
 	void WebRTCContext::initialize(JNIEnv * env)
 	{
-		if (!rtc::InitializeSSL()) {
+		if (!webrtc::InitializeSSL()) {
 			throw Exception("Initialize SSL failed");
 		}
 		
-		JavaEnums::add<rtc::LoggingSeverity>(env, PKG_LOG"Logging$Severity");
-		JavaEnums::add<cricket::MediaType>(env, PKG_MEDIA"MediaType");
+		JavaEnums::add<webrtc::LoggingSeverity>(env, PKG_LOG"Logging$Severity");
+		JavaEnums::add<webrtc::MediaType>(env, PKG_MEDIA"MediaType");
 		JavaEnums::add<webrtc::DataChannelInterface::DataState>(env, PKG"RTCDataChannelState");
 		JavaEnums::add<webrtc::DesktopCapturer::Result>(env, PKG_DESKTOP"DesktopCapturer$Result");
 		JavaEnums::add<webrtc::DtlsTransportState>(env, PKG"RTCDtlsTransportState");
@@ -118,7 +120,7 @@ namespace jni
 
 	void WebRTCContext::destroy(JNIEnv * env)
 	{
-		if (!rtc::CleanupSSL()) {
+		if (!webrtc::CleanupSSL()) {
 			env->Throw(jni::JavaError(env, "Cleanup SSL failed"));
 		}
 

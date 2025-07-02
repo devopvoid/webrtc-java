@@ -66,7 +66,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampl
 	webrtc::InterleavedView<const int16_t> src(src16Ptr, srcSamplesPerChannel, channels);
 	webrtc::InterleavedView<int16_t> dst(dst16Ptr, dstSamplesPerChannel, channels);
 
-	size_t result = resampler->Resample(src, dst);
+	resampler->Resample(src, dst);
 
 	if (isDstCopy == JNI_TRUE) {
 		jsize dstLength = env->GetArrayLength(samplesOut);
@@ -77,5 +77,5 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampl
 	env->ReleaseByteArrayElements(samplesIn, srcPtr, JNI_ABORT);
 	env->ReleaseByteArrayElements(samplesOut, dstPtr, JNI_ABORT);
 
-	return static_cast<jint>(result);
+	return static_cast<jint>(dstSamplesPerChannel);
 }

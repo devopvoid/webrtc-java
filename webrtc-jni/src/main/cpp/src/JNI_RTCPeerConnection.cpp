@@ -119,7 +119,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrack
 
 	std::vector<std::string> streamIDs = jni::JavaList::toStringVector(env, jni::JavaLocalRef<jobject>(env, jStreamIds));
 
-	auto result = pc->AddTrack(rtc::scoped_refptr<webrtc::MediaStreamTrackInterface>(track), streamIDs);
+	auto result = pc->AddTrack(webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface>(track), streamIDs);
 
 	if (result.ok()) {
 		auto sender = result.MoveValue();
@@ -146,7 +146,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_removeTrack
 	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, jSender);
 	CHECK_HANDLE(sender);
 
-	auto result = pc->RemoveTrackOrError(rtc::scoped_refptr<webrtc::RtpSenderInterface>(sender));
+	auto result = pc->RemoveTrackOrError(webrtc::scoped_refptr<webrtc::RtpSenderInterface>(sender));
 
 	if (!result.ok()) {
 		env->Throw(jni::JavaRuntimeException(env, "Remove track (RTCRtpSender) failed: %s %s",
@@ -168,15 +168,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceive
 	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
 	CHECK_HANDLEV(track, nullptr);
 
-	webrtc::RTCErrorOr<rtc::scoped_refptr<webrtc::RtpTransceiverInterface>> result;
+	webrtc::RTCErrorOr<webrtc::scoped_refptr<webrtc::RtpTransceiverInterface>> result;
 
 	if (jTransceiverInit != nullptr) {
 		auto init = jni::RTCRtpTransceiverInit::toNative(env, jni::JavaLocalRef<jobject>(env, jTransceiverInit));
 
-		result = pc->AddTransceiver(rtc::scoped_refptr<webrtc::MediaStreamTrackInterface>(track), init);
+		result = pc->AddTransceiver(webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface>(track), init);
 	}
 	else {
-		result = pc->AddTransceiver(rtc::scoped_refptr<webrtc::MediaStreamTrackInterface>(track));
+		result = pc->AddTransceiver(webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface>(track));
 	}
 
 	if (result.ok()) {
@@ -245,7 +245,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_createOffer
 
 	try {
 		auto options = jni::RTCOfferOptions::toNative(env, jni::JavaLocalRef<jobject>(env, jOptions));
-		auto observer = new rtc::RefCountedObject<jni::CreateSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+		auto observer = new webrtc::RefCountedObject<jni::CreateSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jObserver));
 
 		pc->CreateOffer(observer, options);
 	}
@@ -271,7 +271,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_createAnswer
 
 	try {
 		auto options = jni::RTCAnswerOptions::toNative(env, jni::JavaLocalRef<jobject>(env, jOptions));
-		auto observer = new rtc::RefCountedObject<jni::CreateSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+		auto observer = new webrtc::RefCountedObject<jni::CreateSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jObserver));
 
 		pc->CreateAnswer(observer, options);
 	}
@@ -375,7 +375,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setLocalDescript
 
 	try {
 		auto desc = jni::RTCSessionDescription::toNative(env, jni::JavaLocalRef<jobject>(env, jSessionDesc));
-		auto observer = new rtc::RefCountedObject<jni::SetSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jobserver));
+		auto observer = new webrtc::RefCountedObject<jni::SetSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jobserver));
 
 		pc->SetLocalDescription(observer, desc.release());
 	}
@@ -401,7 +401,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setRemoteDescrip
 
 	try {
 		auto desc = jni::RTCSessionDescription::toNative(env, jni::JavaLocalRef<jobject>(env, jSessionDesc));
-		auto observer = new rtc::RefCountedObject<jni::SetSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jobserver));
+		auto observer = new webrtc::RefCountedObject<jni::SetSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jobserver));
 
 		pc->SetRemoteDescription(observer, desc.release());
 	}
@@ -442,7 +442,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_removeIceCandida
 	CHECK_HANDLE(pc);
 
 	try {
-		auto candidates = jni::JavaArray::toNativeVector<cricket::Candidate>(env,
+		auto candidates = jni::JavaArray::toNativeVector<webrtc::Candidate>(env,
 			jni::static_java_ref_cast<jobjectArray>(env, jni::JavaLocalRef<jobject>(env, jCandidates)),
 			&jni::RTCIceCandidate::toNativeCricket);
 
@@ -531,7 +531,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getStats__Ldev_o
 		return;
 	}
 
-	auto callback = new rtc::RefCountedObject<jni::RTCStatsCollectorCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
+	auto callback = new webrtc::RefCountedObject<jni::RTCStatsCollectorCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
 
 	pc->GetStats(callback);
 }
@@ -554,9 +554,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getStats__Ldev_o
 	webrtc::RtpReceiverInterface * receiver = GetHandle<webrtc::RtpReceiverInterface>(env, jreceiver);
 	CHECK_HANDLE(receiver);
 
-	auto callback = new rtc::RefCountedObject<jni::RTCStatsCollectorCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
+	auto callback = new webrtc::RefCountedObject<jni::RTCStatsCollectorCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
 
-	pc->GetStats(rtc::scoped_refptr<webrtc::RtpReceiverInterface>(receiver), rtc::scoped_refptr<webrtc::RTCStatsCollectorCallback>(callback));
+	pc->GetStats(webrtc::scoped_refptr<webrtc::RtpReceiverInterface>(receiver), webrtc::scoped_refptr<webrtc::RTCStatsCollectorCallback>(callback));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getStats__Ldev_onvoid_webrtc_RTCRtpSender_2Ldev_onvoid_webrtc_RTCStatsCollectorCallback_2
@@ -577,9 +577,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getStats__Ldev_o
 	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, jsender);
 	CHECK_HANDLE(sender);
 
-	auto callback = new rtc::RefCountedObject<jni::RTCStatsCollectorCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
+	auto callback = new webrtc::RefCountedObject<jni::RTCStatsCollectorCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
 
-	pc->GetStats(rtc::scoped_refptr<webrtc::RtpSenderInterface>(sender), rtc::scoped_refptr<webrtc::RTCStatsCollectorCallback>(callback));
+	pc->GetStats(webrtc::scoped_refptr<webrtc::RtpSenderInterface>(sender), webrtc::scoped_refptr<webrtc::RTCStatsCollectorCallback>(callback));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_restartIce

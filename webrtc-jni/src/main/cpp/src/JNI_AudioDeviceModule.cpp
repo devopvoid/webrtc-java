@@ -23,12 +23,13 @@
 #include "JavaRef.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "WebRTCContext.h"
+#include "api/audio/create_audio_device_module.h"
 #include "media/audio/AudioDevice.h"
 #include "media/audio/AudioTransportSink.h"
 #include "media/audio/AudioTransportSource.h"
 
 #include "api/scoped_refptr.h"
-#include "api/task_queue/default_task_queue_factory.h"
 #include "modules/audio_device/include/audio_device.h"
 #include "rtc_base/logging.h"
 
@@ -472,17 +473,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_disp
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_initialize
 (JNIEnv * env, jobject caller, jobject jAudioLayer)
 {
-	std::unique_ptr<webrtc::TaskQueueFactory> taskQueueFactory = webrtc::CreateDefaultTaskQueueFactory();
-
-	if (!taskQueueFactory) {
-		env->Throw(jni::JavaError(env, "Create TaskQueueFactory failed"));
-		return;
-	}
-
+	jni::WebRTCContext * context = static_cast<jni::WebRTCContext*>(javaContext);
 	auto audioLayer = jni::JavaEnums::toNative<webrtc::AudioDeviceModule::AudioLayer>(env, jAudioLayer);
 
-	rtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::AudioDeviceModule::Create(
-		audioLayer, taskQueueFactory.release());
+	webrtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::CreateAudioDeviceModule(context->webrtcEnv, audioLayer);
 
 	if (!audioModule) {
 		env->Throw(jni::JavaError(env, "Create AudioDeviceModule failed"));
