@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.13)
 project(webrtc)
 
+if(LINUX)
+	# Used for Linux sysroot installation
+	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+endif()
+
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.hxx
 "template<class T> class pseudo{}\n")
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.cxx
@@ -80,6 +85,27 @@ function(execute_command)
 	print("${COMMAND_ERROR}")
 endfunction()
 
+function(sysroot_install)
+	message(STATUS "Installing sysroot")
+
+    if(EXISTS "${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB}")
+        set(SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/linux/sysroot")
+    else()
+        set(SCRIPT_PATH "${WEBRTC_SRC_DIR}/src/build/linux/sysroot_scripts")
+    endif()
+
+	execute_process(
+		COMMAND ${Python3_EXECUTABLE} install-sysroot.py --arch=${TARGET_CPU}
+		WORKING_DIRECTORY "${SCRIPT_PATH}"
+		OUTPUT_VARIABLE COMMAND_OUTPUT
+		ERROR_VARIABLE COMMAND_ERROR
+	)
+
+    print("Sysroot script path: ${SCRIPT_PATH}")
+	print("${COMMAND_OUTPUT}")
+    print("${COMMAND_ERROR}")
+endfunction()
+
 file(TO_CMAKE_PATH "${WEBRTC_SRC_DIR}" WEBRTC_SRC_DIR)
 
 set(WEBRTC_DIR ${WEBRTC_SRC_DIR})
@@ -146,6 +172,11 @@ endif()
 
 if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
 	message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
+
+	if(LINUX)
+		sysroot_install()
+	endif()
+
 	return()
 endif()
 
@@ -183,6 +214,10 @@ execute_command(
 	COMMAND gclient sync
 	WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
+
+if(LINUX)
+	sysroot_install()
+endif()
 
 file(GLOB PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/${SOURCE_TARGET}/*.patch")
 
