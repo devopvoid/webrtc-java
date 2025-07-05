@@ -162,6 +162,10 @@ if(APPLE)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
 	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
+    # Find DBus
+    find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
+    pkg_check_modules(DBUS REQUIRED dbus-1)
+
 	target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
 	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
 	target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
