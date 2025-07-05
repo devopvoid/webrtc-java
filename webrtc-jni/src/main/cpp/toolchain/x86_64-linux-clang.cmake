@@ -11,4 +11,16 @@ foreach(LINKER SHARED_LINKER)
     set(CMAKE_${LINKER}_FLAGS "-fuse-ld=lld -Wl,-s -v -Wl,--verbose")
 endforeach()
 
+file(GLOB LINUX_SYSROOT "/opt/sysroot/debian*amd64*")
+if(NOT LINUX_SYSROOT)
+    message(FATAL_ERROR "No debian amd64 sysroot found in /opt/sysroot/")
+endif()
+
+set(CMAKE_SYSROOT ${LINUX_SYSROOT})
+
+# Make sure CMake finds libraries and headers in the sysroot
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
 set(TARGET_CPU				"x64")

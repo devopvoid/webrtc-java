@@ -1,11 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 project(webrtc)
 
-if(LINUX)
-	# Used for Linux sysroot installation
-	find_package(Python3 REQUIRED COMPONENTS Interpreter)
-endif()
-
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.hxx
 "template<class T> class pseudo{}\n")
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.cxx
@@ -85,60 +80,6 @@ function(execute_command)
 	print("${COMMAND_ERROR}")
 endfunction()
 
-function(sysroot_install)
-	message(STATUS "Installing sysroot")
-
-    if(EXISTS "${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB}")
-        set(SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/linux/sysroot")
-    else()
-        set(SCRIPT_PATH "${WEBRTC_SRC_DIR}/src/build/linux/sysroot_scripts")
-    endif()
-
-	execute_process(
-		COMMAND ${Python3_EXECUTABLE} install-sysroot.py --arch=${TARGET_CPU}
-		WORKING_DIRECTORY "${SCRIPT_PATH}"
-		OUTPUT_VARIABLE COMMAND_OUTPUT
-		ERROR_VARIABLE COMMAND_ERROR
-	)
-
-    print("Sysroot script path: ${SCRIPT_PATH}")
-	print("${COMMAND_OUTPUT}")
-    print("${COMMAND_ERROR}")
-endfunction()
-
-function(sysroot_link)
-	message(STATUS "Retrieving libm.so from sysroot")
-
-    set(SYSROOT_ARCH "amd64")
-
-    if(${TARGET_CPU} STREQUAL "x64")
-        set(SYSROOT_ARCH "amd64")
-    elseif(${TARGET_CPU} STREQUAL "arm")
-        set(SYSROOT_ARCH "armhf")
-    elseif(${TARGET_CPU} STREQUAL "arm64")
-        set(SYSROOT_ARCH "arm64")
-    endif()
-
-    if(EXISTS "${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB}")
-        set(SYSROOT_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
-    else()
-        set(SYSROOT_PATH "${WEBRTC_SRC_DIR}/src/build")
-    endif()
-
-	execute_process(
-		COMMAND find "${SYSROOT_PATH}/linux/debian_bullseye_${SYSROOT_ARCH}-sysroot" -iname libm-*.so
-		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
-		OUTPUT_VARIABLE COMMAND_OUTPUT
-		ERROR_VARIABLE COMMAND_ERROR
-	)
-
-	string(STRIP ${COMMAND_OUTPUT} LIBM_PATH)
-
-	message(STATUS "Linking libm.so from: ${LIBM_PATH}")
-
-	target_link_libraries(${PROJECT_NAME} "${LIBM_PATH}")
-endfunction()
-
 file(TO_CMAKE_PATH "${WEBRTC_SRC_DIR}" WEBRTC_SRC_DIR)
 
 set(WEBRTC_DIR ${WEBRTC_SRC_DIR})
@@ -195,10 +136,6 @@ if(APPLE)
 	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
 	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
-	# Find DBus
-	find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
-	pkg_check_modules(DBUS REQUIRED dbus-1)
-
 	target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
 	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
 	target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
@@ -209,12 +146,6 @@ endif()
 
 if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
 	message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
-
-	if(LINUX)
-		sysroot_install()
-		sysroot_link()
-	endif()
-
 	return()
 endif()
 
@@ -252,10 +183,6 @@ execute_command(
 	COMMAND gclient sync
 	WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
-
-if(LINUX)
-	sysroot_install()
-endif()
 
 file(GLOB PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/${SOURCE_TARGET}/*.patch")
 
@@ -315,8 +242,6 @@ execute_command(
 )
 
 if(LINUX)
-	sysroot_link()
-
     if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
         # Collect lib++ objects
         file(GLOB_RECURSE LibCPP_OBJS
