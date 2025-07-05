@@ -40,15 +40,19 @@ runs:
         wget https://commondatastorage.googleapis.com/chromium-browser-clang/Linux_x64/clang-llvmorg-20-init-9764-gb81d8e90-72.tar.xz
         sudo tar -xvf clang-llvmorg-20-init-9764-gb81d8e90-72.tar.xz -C /opt/clang
         
-        sudo mkdir /opt/sysroot
-        python3 webrtc-jni/src/main/cpp/dependencies/webrtc/linux/sysroot/install-sysroot.py --arch=amd64
-        sudo mv webrtc-jni/src/main/cpp/dependencies/webrtc/linux/debian* /opt/sysroot/
-
         # Required for testing
         #pulseaudio --start
         sudo apt-get install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
         systemctl --user daemon-reload
         systemctl --user --now enable pipewire{,-pulse}.{socket,service}
+      shell: bash
+
+    - name: Install required packages for x86-64
+      if: matrix.platform.name == 'linux_x86-64'
+      run: |
+        sudo mkdir /opt/sysroot
+        python3 webrtc-jni/src/main/cpp/dependencies/webrtc/linux/sysroot/install-sysroot.py --arch=amd64
+        sudo mv webrtc-jni/src/main/cpp/dependencies/webrtc/linux/debian* /opt/sysroot/
       shell: bash
 
     - name: Install required packages for arm
