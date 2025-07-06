@@ -30,8 +30,8 @@ runs:
 
     - name: Install required packages
       run: |
-        sudo apt-get update
-        sudo apt-get install -y libdbus-1-dev binutils cmake git locales lsb-release ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
+        sudo apt update
+        sudo apt install -y binutils cmake git locales lsb-release ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
 
         # Chromium Clang to be used with the clang toolchain file
         #curl -s https://raw.githubusercontent.com/chromium/chromium/main/tools/clang/scripts/update.py | python3 - --output-dir=/opt/clang
@@ -42,7 +42,7 @@ runs:
         
         # Required for testing
         #pulseaudio --start
-        sudo apt-get install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
+        sudo apt install -y pipewire pipewire-pulse gstreamer1.0-pipewire libspa-0.2-bluetooth libspa-0.2-jack pipewire-audio-client-libraries
         systemctl --user daemon-reload
         systemctl --user --now enable pipewire{,-pulse}.{socket,service}
       shell: bash
@@ -60,20 +60,6 @@ runs:
       run: |
         sudo apt install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
         
-        sudo dpkg --add-architecture armhf
-
-        sudo rm /etc/apt/sources.list
-
-        sudo tee -a /etc/apt/sources.list > /dev/null <<EOT
-        deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-        deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-        deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-        EOT
-
-        sudo apt-get update
-
-        sudo apt install -y libdbus-1-dev:armhf
-
         sudo mkdir /opt/sysroot
         python3 webrtc-jni/src/main/cpp/dependencies/webrtc/linux/sysroot/install-sysroot.py --arch=armhf
         sudo mv webrtc-jni/src/main/cpp/dependencies/webrtc/linux/debian* /opt/sysroot/
@@ -83,21 +69,7 @@ runs:
       if: matrix.platform.name == 'linux_arm64'
       run: |
         sudo apt install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-        sudo dpkg --add-architecture arm64
-
-        sudo rm /etc/apt/sources.list
-
-        sudo tee -a /etc/apt/sources.list > /dev/null <<EOT
-        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-        deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-        EOT
-
-        sudo apt-get update
-
-        sudo apt install -y libdbus-1-dev:arm64
-
+        
         sudo mkdir /opt/sysroot
         python3 webrtc-jni/src/main/cpp/dependencies/webrtc/linux/sysroot/install-sysroot.py --arch=arm64
         sudo mv webrtc-jni/src/main/cpp/dependencies/webrtc/linux/debian* /opt/sysroot/

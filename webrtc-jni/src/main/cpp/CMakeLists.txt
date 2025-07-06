@@ -12,6 +12,7 @@ if(UNIX AND NOT APPLE)
     if(DEFERRED_SYSROOT)
         # Configure sysroot for all subsequent operations
         set(CMAKE_SYSROOT ${DEFERRED_SYSROOT})
+        set(CMAKE_FIND_ROOT_PATH ${DEFERRED_SYSROOT})
         # Restrict library and header searches to sysroot only
         set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
         set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
