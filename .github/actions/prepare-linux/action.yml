@@ -53,9 +53,6 @@ runs:
         sudo mkdir /opt/sysroot
         python3 webrtc-jni/src/main/cpp/dependencies/webrtc/linux/sysroot/install-sysroot.py --arch=amd64
         sudo mv webrtc-jni/src/main/cpp/dependencies/webrtc/linux/debian* /opt/sysroot/
-        
-        # Install libc++ packages in the sysroot
-        sudo apt install --root=/opt/sysroot/debian_bullseye_amd64-sysroot libc++-dev libc++abi-dev
       shell: bash
 
     - name: Install required packages for arm
