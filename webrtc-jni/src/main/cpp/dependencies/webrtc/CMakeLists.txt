@@ -15,7 +15,7 @@ add_library(${PROJECT_NAME} STATIC pseudo.cxx pseudo.hxx)
 
 set(CUSTOM_LIBCXX false)
 
-if((LINUX AND NOT TARGET_CPU MATCHES "^arm") OR WIN32)
+if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
     set(CUSTOM_LIBCXX true)
 endif()
 
@@ -143,7 +143,7 @@ else()
     set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
 endif()
 
-if((LINUX AND NOT TARGET_CPU MATCHES "^arm") OR WIN32)
+if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
     target_include_directories(${PROJECT_NAME} PUBLIC ${TARGET_LIBCPP_BUILDTOOLS_INC_DIR})
     target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TARGET_LIBCPP_INC_DIR} ${TARGET_LIBCPP_ABI_INC_DIR})
 
@@ -318,32 +318,6 @@ if(LINUX)
             DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++abi"
         )
     endif()
-elseif(WIN32)
-    # Collect lib++ objects
-    file(GLOB_RECURSE LibCPP_OBJS
-        ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/buildtools/third_party/libc++/libc++/*.obj
-    )
-
-    # Create static libraries
-    execute_command(
-        COMMAND ${CMAKE_LINKER} /LIB /OUT:${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/c++.lib ${LibCPP_OBJS}
-    )
-
-    # Install libc++ headers and libraries
-    install(
-        FILES
-            "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/c++.lib"
-        DESTINATION
-            "${WEBRTC_INSTALL_DIR}/lib"
-    )
-    install(
-        DIRECTORY "${WEBRTC_SRC}/third_party/libc++/src/include"
-        DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++"
-    )
-    install(
-        DIRECTORY "${WEBRTC_SRC}/buildtools/third_party/libc++/"
-        DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++"
-    )
 endif()
 
 install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")

@@ -7,17 +7,17 @@ endif()
 
 project(webrtc-java)
 
-# Apply the sysroot configuration for the actual build
-if(DEFERRED_SYSROOT)
-    # Configure sysroot for all subsequent operations
-    set(CMAKE_SYSROOT ${DEFERRED_SYSROOT})
-    # Restrict library and header searches to sysroot only
-    set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-    set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-    set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-endif()
-
 if(UNIX AND NOT APPLE)
+    # Apply the sysroot configuration for the actual build
+    if(DEFERRED_SYSROOT)
+        # Configure sysroot for all subsequent operations
+        set(CMAKE_SYSROOT ${DEFERRED_SYSROOT})
+        # Restrict library and header searches to sysroot only
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+    endif()
+
     set(LINUX TRUE)
 endif()
 
@@ -99,7 +99,7 @@ elseif(LINUX)
 
     target_link_libraries(${PROJECT_NAME} ${CXX_LIBS} pulse udev)
 elseif(WIN32)
-    target_link_libraries(${PROJECT_NAME} c++.lib msvcprt.lib dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
+    target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
 endif()
 
 install(TARGETS ${PROJECT_NAME}
