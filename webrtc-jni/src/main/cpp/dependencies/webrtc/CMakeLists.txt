@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.13)
 project(webrtc)
 
 if(LINUX)
-	# Used for Linux sysroot installation
-	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    # Used for Linux sysroot installation
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
 endif()
 
 FILE(WRITE ${CMAKE_CURRENT_BINARY_DIR}/pseudo.hxx
@@ -15,78 +15,78 @@ add_library(${PROJECT_NAME} STATIC pseudo.cxx pseudo.hxx)
 
 set(CUSTOM_LIBCXX false)
 
-if((LINUX AND NOT TARGET_CPU MATCHES "^arm") OR WIN32)
+if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
     set(CUSTOM_LIBCXX true)
 endif()
 
 if(NOT DEFINED TARGET_CPU)
-	if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-		set(TARGET_CPU "x86")
-	elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-		set(TARGET_CPU "x64")
-	endif()
+    if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        set(TARGET_CPU "x86")
+    elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(TARGET_CPU "x64")
+    endif()
 
-	if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm.*$")
-		set(TARGET_CPU "${CMAKE_SYSTEM_PROCESSOR}")
-	endif()
+    if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm.*$")
+        set(TARGET_CPU "${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
 endif()
 
 if(NOT DEFINED WEBRTC_BRANCH)
-	set(WEBRTC_BRANCH "master")
+    set(WEBRTC_BRANCH "master")
 endif()
 
 if(NOT DEFINED WEBRTC_SRC_DIR)
-	if(DEFINED ENV{CTEST_REAL_HOME})
-		set(WEBRTC_SRC_DIR "$ENV{CTEST_REAL_HOME}")
-	else()
-		set(WEBRTC_SRC_DIR "$ENV{HOME}")
-	endif()
+    if(DEFINED ENV{CTEST_REAL_HOME})
+        set(WEBRTC_SRC_DIR "$ENV{CTEST_REAL_HOME}")
+    else()
+        set(WEBRTC_SRC_DIR "$ENV{HOME}")
+    endif()
 
-	if(NOT WEBRTC_SRC_DIR AND WIN32)
-		file(TO_CMAKE_PATH "$ENV{USERPROFILE}" WEBRTC_SRC_DIR)
-	endif()
+    if(NOT WEBRTC_SRC_DIR AND WIN32)
+        file(TO_CMAKE_PATH "$ENV{USERPROFILE}" WEBRTC_SRC_DIR)
+    endif()
 endif()
 
 if(NOT DEFINED WEBRTC_INSTALL_DIR)
-	set(WEBRTC_INSTALL_DIR "${WEBRTC_SRC_DIR}/build")
+    set(WEBRTC_INSTALL_DIR "${WEBRTC_SRC_DIR}/build")
 endif()
 
 if(WIN32)
-	set(ENV{DEPOT_TOOLS_WIN_TOOLCHAIN} 0)
-	set(SHELLCOMMAND cmd /c )
-	set(WEBRTC_LIB webrtc.lib)
-	set(PATH_SEP ";")
+    set(ENV{DEPOT_TOOLS_WIN_TOOLCHAIN} 0)
+    set(SHELLCOMMAND cmd /c )
+    set(WEBRTC_LIB webrtc.lib)
+    set(PATH_SEP ";")
 elseif(UNIX)
-	set(WEBRTC_LIB libwebrtc.a)
-	set(PATH_SEP ":")
+    set(WEBRTC_LIB libwebrtc.a)
+    set(PATH_SEP ":")
 endif()
 
 function(print text)
-	string(STRIP "${text}" text)
-	string(REGEX REPLACE "\n$" "" text "${text}")
-	string(LENGTH "${text}" TEXT_LENGTH)
+    string(STRIP "${text}" text)
+    string(REGEX REPLACE "\n$" "" text "${text}")
+    string(LENGTH "${text}" TEXT_LENGTH)
 
-	if(TEXT_LENGTH GREATER 0)
-		message("${text}")
-	endif()
+    if(TEXT_LENGTH GREATER 0)
+        message("${text}")
+    endif()
 endfunction()
 
 function(execute_command)
-	cmake_parse_arguments(CMD_ARGS "" "WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(CMD_ARGS "" "WORKING_DIRECTORY" "COMMAND" ${ARGN})
 
-	execute_process(
-		COMMAND ${SHELLCOMMAND} ${CMD_ARGS_COMMAND}
-		WORKING_DIRECTORY "${CMD_ARGS_WORKING_DIRECTORY}"
-		OUTPUT_VARIABLE COMMAND_OUTPUT
-		ERROR_VARIABLE COMMAND_ERROR
-	)
+    execute_process(
+        COMMAND ${SHELLCOMMAND} ${CMD_ARGS_COMMAND}
+        WORKING_DIRECTORY "${CMD_ARGS_WORKING_DIRECTORY}"
+        OUTPUT_VARIABLE COMMAND_OUTPUT
+        ERROR_VARIABLE COMMAND_ERROR
+    )
 
-	print("${COMMAND_OUTPUT}")
-	print("${COMMAND_ERROR}")
+    print("${COMMAND_OUTPUT}")
+    print("${COMMAND_ERROR}")
 endfunction()
 
 function(sysroot_install)
-	message(STATUS "Installing sysroot")
+    message(STATUS "Installing sysroot")
 
     if(EXISTS "${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB}")
         set(SCRIPT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/linux/sysroot")
@@ -94,49 +94,16 @@ function(sysroot_install)
         set(SCRIPT_PATH "${WEBRTC_SRC_DIR}/src/build/linux/sysroot_scripts")
     endif()
 
-	execute_process(
-		COMMAND ${Python3_EXECUTABLE} install-sysroot.py --arch=${TARGET_CPU}
-		WORKING_DIRECTORY "${SCRIPT_PATH}"
-		OUTPUT_VARIABLE COMMAND_OUTPUT
-		ERROR_VARIABLE COMMAND_ERROR
-	)
+    execute_process(
+        COMMAND ${Python3_EXECUTABLE} install-sysroot.py --arch=${TARGET_CPU}
+        WORKING_DIRECTORY "${SCRIPT_PATH}"
+        OUTPUT_VARIABLE COMMAND_OUTPUT
+        ERROR_VARIABLE COMMAND_ERROR
+    )
 
     print("Sysroot script path: ${SCRIPT_PATH}")
-	print("${COMMAND_OUTPUT}")
+    print("${COMMAND_OUTPUT}")
     print("${COMMAND_ERROR}")
-endfunction()
-
-function(sysroot_link)
-	message(STATUS "Retrieving libm.so from sysroot")
-
-    set(SYSROOT_ARCH "amd64")
-
-    if(${TARGET_CPU} STREQUAL "x64")
-        set(SYSROOT_ARCH "amd64")
-    elseif(${TARGET_CPU} STREQUAL "arm")
-        set(SYSROOT_ARCH "armhf")
-    elseif(${TARGET_CPU} STREQUAL "arm64")
-        set(SYSROOT_ARCH "arm64")
-    endif()
-
-    if(EXISTS "${WEBRTC_INSTALL_DIR}/lib/${WEBRTC_LIB}")
-        set(SYSROOT_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
-    else()
-        set(SYSROOT_PATH "${WEBRTC_SRC_DIR}/src/build")
-    endif()
-
-	execute_process(
-		COMMAND find "${SYSROOT_PATH}/linux/debian_bullseye_${SYSROOT_ARCH}-sysroot" -iname libm-*.so
-		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
-		OUTPUT_VARIABLE COMMAND_OUTPUT
-		ERROR_VARIABLE COMMAND_ERROR
-	)
-
-	string(STRIP ${COMMAND_OUTPUT} LIBM_PATH)
-
-	message(STATUS "Linking libm.so from: ${LIBM_PATH}")
-
-	target_link_libraries(${PROJECT_NAME} "${LIBM_PATH}")
 endfunction()
 
 file(TO_CMAKE_PATH "${WEBRTC_SRC_DIR}" WEBRTC_SRC_DIR)
@@ -161,70 +128,69 @@ message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
 
 
 if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
-	set(TARGET_INC_DIR ${WEBRTC_INSTALL_DIR}/include)
-	set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH_INSTALLED})
-	set(TARGET_LIB_DIR ${WEBRTC_INSTALL_DIR}/lib)
-	set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/)
-	set(TARGET_LIBCPP_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/include)
-	set(TARGET_LIBCPP_ABI_INC_DIR ${TARGET_INC_DIR}/third_party/libc++abi/include)
+    set(TARGET_INC_DIR ${WEBRTC_INSTALL_DIR}/include)
+    set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH_INSTALLED})
+    set(TARGET_LIB_DIR ${WEBRTC_INSTALL_DIR}/lib)
+    set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/)
+    set(TARGET_LIBCPP_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/include)
+    set(TARGET_LIBCPP_ABI_INC_DIR ${TARGET_INC_DIR}/third_party/libc++abi/include)
 else()
-	set(TARGET_INC_DIR ${WEBRTC_SRC})
-	set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH})
-	set(TARGET_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj)
-	set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${WEBRTC_SRC}/buildtools/third_party/libc++/)
-	set(TARGET_LIBCPP_INC_DIR ${WEBRTC_SRC}/third_party/libc++/src/include)
-	set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
+    set(TARGET_INC_DIR ${WEBRTC_SRC})
+    set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH})
+    set(TARGET_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj)
+    set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${WEBRTC_SRC}/buildtools/third_party/libc++/)
+    set(TARGET_LIBCPP_INC_DIR ${WEBRTC_SRC}/third_party/libc++/src/include)
+    set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
 endif()
 
-if((LINUX AND NOT TARGET_CPU MATCHES "^arm") OR WIN32)
-	target_include_directories(${PROJECT_NAME} PUBLIC ${TARGET_LIBCPP_BUILDTOOLS_INC_DIR})
-	target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TARGET_LIBCPP_INC_DIR} ${TARGET_LIBCPP_ABI_INC_DIR})
+if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
+    target_include_directories(${PROJECT_NAME} PUBLIC ${TARGET_LIBCPP_BUILDTOOLS_INC_DIR})
+    target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TARGET_LIBCPP_INC_DIR} ${TARGET_LIBCPP_ABI_INC_DIR})
 
-	target_link_directories(${PROJECT_NAME} PUBLIC "${TARGET_LIB_DIR}")
+    target_link_directories(${PROJECT_NAME} PUBLIC "${TARGET_LIB_DIR}")
 endif()
 
 target_include_directories(${PROJECT_NAME}
-	PUBLIC
-		${TARGET_INC_DIR}
-		${TARGET_INC_DIR}/third_party/abseil-cpp
-		${TARGET_INC_DIR}/third_party/libyuv/include
+    PUBLIC
+        ${TARGET_INC_DIR}
+        ${TARGET_INC_DIR}/third_party/abseil-cpp
+        ${TARGET_INC_DIR}/third_party/libyuv/include
 )
 target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 
 if(APPLE)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
-	target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
+    target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
-	# Find DBus
-	find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
-	pkg_check_modules(DBUS REQUIRED dbus-1)
+    # Find DBus
+    find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
+    pkg_check_modules(DBUS REQUIRED dbus-1)
 
-	target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
-	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
-	target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
+    target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
 elseif(WIN32)
-	target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
-	target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
+    target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
 endif()
 
 if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
-	message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
+    message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
 
-	if(LINUX)
-		sysroot_install()
-		sysroot_link()
-	endif()
+    if(LINUX)
+        sysroot_install()
+    endif()
 
-	return()
+    return()
 endif()
 
 if(NOT EXISTS "${WEBRTC_SRC_DIR}/depot_tools")
-	message(STATUS "WebRTC: fetch depot tools")
-	file(MAKE_DIRECTORY ${WEBRTC_SRC_DIR})
-	execute_command(
-		COMMAND git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
-		WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
-	)
+    message(STATUS "WebRTC: fetch depot tools")
+    file(MAKE_DIRECTORY ${WEBRTC_SRC_DIR})
+    execute_command(
+        COMMAND git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+        WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
+    )
 endif()
 
 set(ENV{PATH} "${WEBRTC_SRC_DIR}/depot_tools${PATH_SEP}$ENV{PATH}")
@@ -233,49 +199,49 @@ file(MAKE_DIRECTORY ${WEBRTC_DIR})
 
 message(STATUS "WebRTC: fetch")
 execute_command(
-	COMMAND fetch --nohooks webrtc
-	WORKING_DIRECTORY "${WEBRTC_DIR}"
+    COMMAND fetch --nohooks webrtc
+    WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
 
 message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
 execute_command(
-	COMMAND git checkout .
-	WORKING_DIRECTORY "${WEBRTC_SRC}"
+    COMMAND git checkout .
+    WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
 execute_command(
-	COMMAND git checkout ${WEBRTC_BRANCH}
-	WORKING_DIRECTORY "${WEBRTC_SRC}"
+    COMMAND git checkout ${WEBRTC_BRANCH}
+    WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
 
 message(STATUS "WebRTC: sync")
 execute_command(
-	COMMAND gclient sync
-	WORKING_DIRECTORY "${WEBRTC_DIR}"
+    COMMAND gclient sync
+    WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
 
 if(LINUX)
-	sysroot_install()
+    sysroot_install()
 endif()
 
 file(GLOB PATCHES "${CMAKE_CURRENT_LIST_DIR}/patches/${SOURCE_TARGET}/*.patch")
 
 if (PATCHES)
-	message(STATUS "WebRTC: patch")
+    message(STATUS "WebRTC: patch")
 
-	foreach(PATCH ${PATCHES})
-		message(STATUS "Applying ${PATCH}")
+    foreach(PATCH ${PATCHES})
+        message(STATUS "Applying ${PATCH}")
 
-		execute_process(
-			COMMAND patch -p0 --forward
-			WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
-			INPUT_FILE "${PATCH}"
-			OUTPUT_VARIABLE OUTPUT
-			RESULT_VARIABLE RESULT)
+        execute_process(
+            COMMAND patch -p0 --forward
+            WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
+            INPUT_FILE "${PATCH}"
+            OUTPUT_VARIABLE OUTPUT
+            RESULT_VARIABLE RESULT)
 
-		if (RESULT EQUAL 0)
-			message(STATUS "Patch applied: ${PATCH}")
-		endif()
-	endforeach(PATCH)
+        if (RESULT EQUAL 0)
+            message(STATUS "Patch applied: ${PATCH}")
+        endif()
+    endforeach(PATCH)
 endif()
 
 message(STATUS "WebRTC: generate")
@@ -296,27 +262,25 @@ rtc_use_h264=true \
 symbol_level=0")
 
 if(LINUX)
-	if(${TARGET_CPU} STREQUAL "arm")
-		set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
-	elseif(${TARGET_CPU} STREQUAL "arm64")
-		set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm64\"")
-	endif()
+    if(${TARGET_CPU} STREQUAL "arm")
+        set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
+    elseif(${TARGET_CPU} STREQUAL "arm64")
+        set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm64\"")
+    endif()
 endif()
 
 execute_command(
-	COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
-	WORKING_DIRECTORY "${WEBRTC_SRC}"
+    COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
+    WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
 
 message(STATUS "WebRTC: compile")
 execute_command(
-	COMMAND ninja -C "${WEBRTC_BUILD}"
-	WORKING_DIRECTORY "${WEBRTC_SRC}"
+    COMMAND ninja -C "${WEBRTC_BUILD}"
+    WORKING_DIRECTORY "${WEBRTC_SRC}"
 )
 
 if(LINUX)
-	sysroot_link()
-
     if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
         # Collect lib++ objects
         file(GLOB_RECURSE LibCPP_OBJS
@@ -354,71 +318,45 @@ if(LINUX)
             DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++abi"
         )
     endif()
-elseif(WIN32)
-	# Collect lib++ objects
-	file(GLOB_RECURSE LibCPP_OBJS
-		${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/buildtools/third_party/libc++/libc++/*.obj
-	)
-
-	# Create static libraries
-	execute_command(
-		COMMAND ${CMAKE_LINKER} /LIB /OUT:${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/c++.lib ${LibCPP_OBJS}
-	)
-
-	# Install libc++ headers and libraries
-	install(
-		FILES
-			"${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/c++.lib"
-		DESTINATION
-			"${WEBRTC_INSTALL_DIR}/lib"
-	)
-	install(
-		DIRECTORY "${WEBRTC_SRC}/third_party/libc++/src/include"
-		DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++"
-	)
-	install(
-		DIRECTORY "${WEBRTC_SRC}/buildtools/third_party/libc++/"
-		DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++"
-	)
 endif()
 
 install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")
 install(
-	DIRECTORY "${WEBRTC_SRC}/"
-	DESTINATION "${WEBRTC_INSTALL_DIR}/include"
-	FILES_MATCHING
-		PATTERN "*.h"
-		PATTERN "*.inc"
-		REGEX /src/base/ EXCLUDE
-		REGEX /src/build/ EXCLUDE
-		REGEX /src/build_overrides/ EXCLUDE
-		REGEX /src/buildtools/ EXCLUDE
-		REGEX /src/data/ EXCLUDE
-		REGEX /src/docs/ EXCLUDE
-		REGEX /src/examples/ EXCLUDE
-		REGEX /src/out/ EXCLUDE
-		REGEX /src/resources/ EXCLUDE
-		REGEX /src/sdk/ EXCLUDE
-		REGEX /src/stats/ EXCLUDE
-		REGEX /src/style-guide/ EXCLUDE
-		REGEX /src/test/ EXCLUDE
-		REGEX /src/testing/ EXCLUDE
-		REGEX "/src/third_party/(a[c-z].*|[b-k]|l[a-h|k-z].*|lib[a-x].*|[m-z])" EXCLUDE
-		REGEX /src/tools/ EXCLUDE
-		REGEX /src/tools_webrtc/ EXCLUDE
-		REGEX /test/ EXCLUDE
+    DIRECTORY "${WEBRTC_SRC}/"
+    DESTINATION "${WEBRTC_INSTALL_DIR}/include"
+    FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.inc"
+        REGEX /src/base/ EXCLUDE
+        REGEX /src/build/ EXCLUDE
+        REGEX /src/build_overrides/ EXCLUDE
+        REGEX /src/buildtools/ EXCLUDE
+        REGEX /src/data/ EXCLUDE
+        REGEX /src/docs/ EXCLUDE
+        REGEX /src/examples/ EXCLUDE
+        REGEX /src/out/ EXCLUDE
+        REGEX /src/resources/ EXCLUDE
+        REGEX /src/sdk/ EXCLUDE
+        REGEX /src/stats/ EXCLUDE
+        REGEX /src/style-guide/ EXCLUDE
+        REGEX /src/test/ EXCLUDE
+        REGEX /src/testing/ EXCLUDE
+        REGEX "/src/third_party/(a[c-z].*|[b-k]|l[a-h|k-z].*|lib[a-x].*|[m-z])" EXCLUDE
+        REGEX /src/tools/ EXCLUDE
+        REGEX /src/tools_webrtc/ EXCLUDE
+        REGEX /test/ EXCLUDE
 )
 # Delete empty directories
 install(CODE "
-	file(GLOB_RECURSE headers LIST_DIRECTORIES true ${WEBRTC_INSTALL_DIR}/include/!*)
+    file(GLOB_RECURSE headers LIST_DIRECTORIES true ${WEBRTC_INSTALL_DIR}/include/!*)
 
-	foreach(path \${headers})
-		file(GLOB result \"\${path}/*\")
-		list(LENGTH result file_count)
+    foreach(path \${headers})
+        file(GLOB result \"\${path}/*\")
+        list(LENGTH result file_count)
 
-		if(file_count EQUAL 0)
-			# DIR is empty
-			file(REMOVE_RECURSE \${path})
-		endif()
-	endforeach()
+        if(file_count EQUAL 0)
+            # DIR is empty
+            file(REMOVE_RECURSE \${path})
+        endif()
+    endforeach()
 ")

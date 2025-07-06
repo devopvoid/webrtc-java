@@ -83,6 +83,7 @@
 							<goal>generate</goal>
 						</goals>
 						<configuration>
+							<downloadBinaries>false</downloadBinaries>
 							<sourcePath>src/main/cpp</sourcePath>
 							<targetPath>${project.build.directory}/${platform.classifier}</targetPath>
 							<options>
@@ -120,6 +121,7 @@
 							<goal>compile</goal>
 						</goals>
 						<configuration>
+							<downloadBinaries>false</downloadBinaries>
 							<config>${cmake.config}</config>
 							<target>install</target>
 							<projectDirectory>${project.build.directory}/${platform.classifier}</projectDirectory>
