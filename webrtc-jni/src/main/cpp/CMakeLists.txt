@@ -13,6 +13,11 @@ if(UNIX AND NOT APPLE)
         # Configure sysroot for all subsequent operations
         set(CMAKE_SYSROOT ${DEFERRED_SYSROOT})
         set(CMAKE_FIND_ROOT_PATH ${DEFERRED_SYSROOT})
+
+        # Set pkg-config environment
+        set(ENV{PKG_CONFIG_SYSROOT_DIR} "${DEFERRED_SYSROOT}")
+        set(ENV{PKG_CONFIG_PATH} "${DEFERRED_SYSROOT}/usr/lib/pkgconfig:${DEFERRED_SYSROOT}/usr/share/pkgconfig")
+
         # Restrict library and header searches to sysroot only
         set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
         set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
