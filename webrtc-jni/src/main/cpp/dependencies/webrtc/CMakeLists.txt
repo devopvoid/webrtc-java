@@ -261,7 +261,9 @@ use_rtti=true \
 rtc_use_h264=true \
 symbol_level=0")
 
-if(LINUX)
+if(APPLE)
+    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
+elseif(LINUX)
     if(${TARGET_CPU} STREQUAL "arm")
         set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
     elseif(${TARGET_CPU} STREQUAL "arm64")

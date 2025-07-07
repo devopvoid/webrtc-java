@@ -52,13 +52,15 @@ runs:
           mvn package -DskipTests -Plinux-aarch32
         elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
           mvn package -DskipTests -Plinux-aarch64
+        elif [ "${{ inputs.platform-name }}" == "macos_x86-64" ]; then
+          mvn package -DskipTests -Pmacos-cross-x86_64
         else
           mvn package -DskipTests
         fi
       shell: bash
 
     - name: Test
-      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' }}
+      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' && inputs.platform-name != 'macos_x86-64' }}
       run: mvn -B jar:jar surefire:test
       shell: bash
 
@@ -71,6 +73,8 @@ runs:
           mvn deploy -DskipTests -Plinux-aarch32
         elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
           mvn deploy -DskipTests -Plinux-aarch64
+        elif [ "${{ inputs.platform-name }}" == "macos_x86-64" ]; then
+          mvn deploy -DskipTests -Pmacos-cross-x86_64
         else
           mvn deploy -DskipTests
         fi
