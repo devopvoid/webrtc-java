@@ -16,11 +16,67 @@ on:
   workflow_dispatch:
 
 env:
-  WEBRTC_CACHE_BRANCH: 7204
+  WEBRTC_CACHE_BRANCH: 6998
   WEBRTC_CHECKOUT_FOLDER: webrtc
   WEBRTC_INSTALL_FOLDER: webrtc/build
 
 jobs:
+  build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: windows_x86_64
+            runs-on: windows-2022
+        java: [17]
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: prepare
+        name: Prepare build
+        uses: ./.github/actions/prepare-windows
+
+      - id: maven-build
+        name: Maven build
+        uses: ./.github/actions/build
+        with:
+          java-version: ${{ matrix.java }}
+          platform-name: ${{ matrix.platform.name }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
+
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: linux_arm
+            runs-on: ubuntu-22.04
+          - name: linux_arm64
+            runs-on: ubuntu-22.04
+          - name: linux_x86-64
+            runs-on: ubuntu-22.04
+        java: [17]
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - id: prepare
+        name: Prepare build
+        uses: ./.github/actions/prepare-linux
+
+      - id: maven-build
+        name: Maven build
+        uses: ./.github/actions/build
+        with:
+          java-version: ${{ matrix.java }}
+          platform-name: ${{ matrix.platform.name }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
+
   build-macos:
     strategy:
       fail-fast: false
@@ -29,7 +85,7 @@ jobs:
           - name: macos_x86-64
             runs-on: macos-13
           - name: macos_arm64
-            runs-on: macos-15
+            runs-on: macos-14
         java: [17]
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
