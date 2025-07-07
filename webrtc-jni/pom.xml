@@ -5,14 +5,14 @@
 	<parent>
 		<groupId>dev.onvoid.webrtc</groupId>
 		<artifactId>webrtc-java-parent</artifactId>
-		<version>0.11.0-SNAPSHOT</version>
+		<version>0.12.0-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>webrtc-java-jni</artifactId>
 	<packaging>pom</packaging>
 
 	<properties>
-		<webrtc.branch>branch-heads/7204</webrtc.branch>
+		<webrtc.branch>branch-heads/6998</webrtc.branch>
 		<webrtc.src.dir>${user.home}/webrtc</webrtc.src.dir>
 		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
@@ -83,6 +83,7 @@
 							<goal>generate</goal>
 						</goals>
 						<configuration>
+							<downloadBinaries>false</downloadBinaries>
 							<sourcePath>src/main/cpp</sourcePath>
 							<targetPath>${project.build.directory}/${platform.classifier}</targetPath>
 							<options>
@@ -120,6 +121,7 @@
 							<goal>compile</goal>
 						</goals>
 						<configuration>
+							<downloadBinaries>false</downloadBinaries>
 							<config>${cmake.config}</config>
 							<target>install</target>
 							<projectDirectory>${project.build.directory}/${platform.classifier}</projectDirectory>
