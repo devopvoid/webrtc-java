@@ -37,9 +37,10 @@ runs:
         key: maven-${{ inputs.platform-name }}-${{ hashFiles('**/pom.xml') }}
         restore-keys: maven-${{ inputs.platform-name }}-
 
-    - name: Set up JDK ${{ inputs.java-version }}
+    - name: Set up JDK
       uses: actions/setup-java@v4
       with:
+        architecture: 'x64'
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
         server-id: central
@@ -47,31 +48,16 @@ runs:
         server-password: MAVEN_TOKEN
 
     - name: Build
-      run: |
-        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
-          mvn package -DskipTests -Plinux-aarch32
-        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
-          mvn package -DskipTests -Plinux-aarch64
-        else
-          mvn package -DskipTests
-        fi
+      run: arch -x86_64 mvn package -DskipTests -Pmacos-cross-x86_64
       shell: bash
 
     - name: Test
-      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' }}
-      run: mvn -B jar:jar surefire:test
+      run: arch -x86_64 mvn -B jar:jar surefire:test -Pmacos-cross-x86_64
       shell: bash
 
     - name: Deploy
       env:
         MAVEN_USERNAME: ${{ inputs.maven-username }}
         MAVEN_TOKEN: ${{ inputs.maven-password }}
-      run: |
-        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
-          mvn deploy -DskipTests -Plinux-aarch32
-        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
-          mvn deploy -DskipTests -Plinux-aarch64
-        else
-          mvn deploy -DskipTests
-        fi
+      run: arch -x86_64 mvn deploy -DskipTests -Pmacos-cross-x86_64
       shell: bash

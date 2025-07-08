@@ -271,8 +271,6 @@ elseif(LINUX)
     endif()
 endif()
 
-message(STATUS "CMAKE_OSX_DEPLOYMENT_TARGET: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
-
 execute_command(
     COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
     WORKING_DIRECTORY "${WEBRTC_SRC}"
