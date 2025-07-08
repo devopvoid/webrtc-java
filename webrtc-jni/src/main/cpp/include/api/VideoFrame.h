@@ -34,7 +34,7 @@ namespace jni
 
 	namespace I420Buffer
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::scoped_refptr<webrtc::I420BufferInterface> & buffer);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<webrtc::I420BufferInterface> & buffer);
 	}
 
 	class JavaVideoFrameClass : public JavaClass

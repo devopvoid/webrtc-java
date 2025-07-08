@@ -45,7 +45,7 @@ namespace jni
 		this->capability = capability;
 	}
 
-	void VideoCapture::setVideoSink(std::unique_ptr<rtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
+	void VideoCapture::setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
 	{
 		this->sink = std::move(sink);
 	}

@@ -18,6 +18,7 @@
 #define JNI_WEBRTC_CONTEXT_H_
 
 #include "JavaContext.h"
+#include "api/environment/environment.h"
 #include "media/audio/AudioDeviceManager.h"
 #include "media/video/VideoDeviceManager.h"
 #include "media/video/desktop/PowerManagement.h"
@@ -41,6 +42,8 @@ namespace jni
 			avdev::AudioDeviceManager * getAudioDeviceManager();
 			avdev::VideoDeviceManager * getVideoDeviceManager();
 			avdev::PowerManagement * getPowerManagement();
+
+			const webrtc::Environment webrtcEnv;
 
 		private:
 			void initializeAudioManager();

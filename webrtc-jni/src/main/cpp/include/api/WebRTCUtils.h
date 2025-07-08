@@ -28,7 +28,7 @@
 namespace jni
 {
 	template <class T>
-	JavaLocalRef<jobjectArray> createObjectArray(JNIEnv * env, const std::vector<rtc::scoped_refptr<T>> & vector)
+	JavaLocalRef<jobjectArray> createObjectArray(JNIEnv * env, const std::vector<webrtc::scoped_refptr<T>> & vector)
 	{
 		jsize vectorSize = static_cast<jsize>(vector.size());
 

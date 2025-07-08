@@ -37,7 +37,7 @@ namespace jni
 				jmethodID ctor;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const rtc::scoped_refptr<const webrtc::RTCStatsReport> & report);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<const webrtc::RTCStatsReport> & report);
 	}
 }
 

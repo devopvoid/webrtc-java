@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  create:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       developmentVersion:
@@ -12,7 +9,7 @@ on:
         default: "X.Y.Z-SNAPSHOT"
 
 env:
-  WEBRTC_CACHE_BRANCH: 6998
+  WEBRTC_CACHE_BRANCH: 7204
   WEBRTC_CHECKOUT_FOLDER: webrtc
   WEBRTC_INSTALL_FOLDER: webrtc/build
 
@@ -153,7 +150,7 @@ jobs:
       matrix:
         platform:
           - name: macos_x86-64
-            runs-on: macos-13
+            runs-on: macos-14
           - name: macos_arm64
             runs-on: macos-14
         java: [17]

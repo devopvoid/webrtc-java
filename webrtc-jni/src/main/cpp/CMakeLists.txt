@@ -76,6 +76,9 @@ list(APPEND SOURCES
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
+# Introduced since WebRTC branch 7204 and Clang 20.
+target_compile_options(${PROJECT_NAME} PRIVATE -Wno-nullability-completeness)
+
 target_include_directories(${PROJECT_NAME}
     PRIVATE
         include

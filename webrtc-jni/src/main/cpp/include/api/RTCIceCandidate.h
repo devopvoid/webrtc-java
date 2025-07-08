@@ -43,9 +43,9 @@ namespace jni
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::IceCandidateInterface * candidate);
-		JavaLocalRef<jobject> toJavaCricket(JNIEnv * env, const cricket::Candidate & candidate);
+		JavaLocalRef<jobject> toJavaCricket(JNIEnv * env, const webrtc::Candidate & candidate);
 		std::unique_ptr<webrtc::IceCandidateInterface> toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
-		cricket::Candidate toNativeCricket(JNIEnv * env, const JavaRef<jobject> & javaType);
+		webrtc::Candidate toNativeCricket(JNIEnv * env, const JavaRef<jobject> & javaType);
 	};
 }
 
