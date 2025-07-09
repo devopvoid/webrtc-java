@@ -159,6 +159,11 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 
 if(APPLE)
+    target_include_directories(${PROJECT_NAME}
+        PUBLIC
+            ${TARGET_INC_DIR}/sdk/objc
+            ${TARGET_INC_DIR}/sdk/objc/base
+    )
     target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
     target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
@@ -262,7 +267,7 @@ rtc_use_h264=true \
 symbol_level=0")
 
 if(APPLE)
-    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
+    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\" rtc_enable_objc_symbol_export=true rtc_enable_symbol_export=true")
 elseif(LINUX)
     if(${TARGET_CPU} STREQUAL "arm")
         set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
@@ -277,10 +282,23 @@ execute_command(
 )
 
 message(STATUS "WebRTC: compile")
-execute_command(
-    COMMAND ninja -C "${WEBRTC_BUILD}"
-    WORKING_DIRECTORY "${WEBRTC_SRC}"
-)
+if(APPLE)
+    execute_command(
+        COMMAND ninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc sdk:mac_framework_objc
+        WORKING_DIRECTORY "${WEBRTC_SRC}"
+    )
+
+    file(GLOB_RECURSE SDK_OBJC_FILES ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/*.o)
+
+    execute_command(
+        COMMAND ${CMAKE_AR} rc ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/libwebrtc.a ${SDK_OBJC_FILES}
+    )
+else()
+    execute_command(
+        COMMAND ninja -C "${WEBRTC_BUILD}"
+        WORKING_DIRECTORY "${WEBRTC_SRC}"
+    )
+endif()
 
 if(LINUX)
     if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
@@ -348,6 +366,14 @@ install(
         REGEX /src/tools_webrtc/ EXCLUDE
         REGEX /test/ EXCLUDE
 )
+if(APPLE)
+    install(
+        DIRECTORY "${WEBRTC_SRC}/src/sdk/"
+        DESTINATION "${WEBRTC_INSTALL_DIR}/include"
+        FILES_MATCHING
+            PATTERN "*.h"
+    )
+endif()
 # Delete empty directories
 install(CODE "
     file(GLOB_RECURSE headers LIST_DIRECTORIES true ${WEBRTC_INSTALL_DIR}/include/!*)
