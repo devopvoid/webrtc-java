@@ -28,7 +28,7 @@ namespace jni {
 using JNIVideoCaptureMac = jni::VideoCaptureMac;
 
 @interface VideoCaptureDelegateMac : NSObject <RTC_OBJC_TYPE (RTCVideoCapturerDelegate)>
-- (instancetype)initWithCppHandler:(JNIVideoCaptureMac *)handler;
+- (instancetype)initWithHandler:(JNIVideoCaptureMac *)handler;
 @end
 
 #endif

@@ -14,30 +14,34 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_MAC_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_MAC_H_
-
 #include "media/video/VideoCaptureBase.h"
-
-#include "sdk/objc/components/capturer/RTCCameraVideoCapturer.h"
-#include "sdk/objc/native/api/video_capturer.h"
 
 namespace jni
 {
-	class VideoCaptureMac : public VideoCaptureBase
+	VideoCaptureBase::VideoCaptureBase()
 	{
-		public:
-			VideoCaptureMac();
+		capability.width = static_cast<int32_t>(1280);
+		capability.height = static_cast<int32_t>(720);
+		capability.maxFPS = static_cast<int32_t>(30);
+	}
 
-            void start() override;
-			void stop() override;
-			void destroy() override;
+	VideoCaptureBase::~VideoCaptureBase()
+	{
+		destroy();
+	}
 
-			void OnFrame(const webrtc::VideoFrame & frame);
+	void VideoCaptureBase::setDevice(const avdev::DevicePtr & device)
+	{
+		this->device = device;
+	}
 
-		private:
-            RTCCameraVideoCapturer * cameraVideoCapturer;
-	};
+	void VideoCaptureBase::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
+	{
+		this->capability = capability;
+	}
+
+	void VideoCaptureBase::setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
+	{
+		this->sink = std::move(sink);
+	}
 }
-
-#endif

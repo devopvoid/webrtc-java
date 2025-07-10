@@ -10,7 +10,7 @@
     webrtc::TimestampAligner timestamp_aligner;
 }
 
-- (instancetype)initWithCppHandler:(JNIVideoCaptureMac *)handler {
+- (instancetype)initWithHandler:(JNIVideoCaptureMac *)handler {
     if (self = [super init]) {
         jniHandler = handler;
     }
@@ -26,7 +26,7 @@
     jniHandler->OnFrame(webrtc::VideoFrame::Builder()
                                  .set_video_frame_buffer(buffer)
                                  .set_rotation(webrtc::kVideoRotation_0)
-                                 .set_timestamp_us(0)
+                                 .set_timestamp_us(translated_timestamp_us)
                                  .build());
 }
 @end
