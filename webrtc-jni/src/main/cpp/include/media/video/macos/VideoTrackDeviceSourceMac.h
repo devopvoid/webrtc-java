@@ -24,10 +24,8 @@
 #include "sdk/objc/base/RTCVideoCapturer.h"
 #include "sdk/objc/base/RTCMacros.h"
 #include "sdk/objc/components/capturer/RTCCameraVideoCapturer.h"
-#include "sdk/objc/native/api/video_capturer.h"
 
 #include "media/video/VideoTrackDeviceSourceBase.h"
-#include "media/video/VideoDevice.h"
 
 @interface VideoTrackDeviceSourceCallback
     : NSObject <RTC_OBJC_TYPE (RTCVideoCapturerDelegate)>

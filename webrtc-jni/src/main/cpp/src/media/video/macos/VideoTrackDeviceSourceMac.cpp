@@ -17,7 +17,11 @@
 #include "media/video/macos/VideoTrackDeviceSourceMac.h"
 #include "Exception.h"
 
-#import "base/RTCLogging.h"
+#include "api/video/i420_buffer.h"
+
+#include "base/RTCLogging.h"
+#include "sdk/objc/components/video_frame_buffer/RTCCVPixelBuffer.h"
+#include "sdk/objc/native/src/objc_frame_buffer.h"
 
 @interface VideoTrackDeviceSourceCallback ()
 @property(nonatomic) jni::VideoTrackDeviceSourceMac * videoTrackSource;
@@ -168,7 +172,58 @@ namespace jni
 	}
 
     void VideoTrackDeviceSourceMac::OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame) {
-        printf("VideoTrackDeviceSourceMac::OnCapturedFrame\n");
+        printf("VideoTrackDeviceSourceMac::OnCapturedFrame: %lld\n", frame.timeStampNs);
         fflush(NULL);
+
+        const int64_t timestamp_us = frame.timeStampNs / webrtc::kNumNanosecsPerMicrosec;
+        //const int64_t translated_timestamp_us = timestamp_aligner.TranslateTimestamp(timestamp_us, webrtc::TimeMicros());
+
+        int adapted_width;
+        int adapted_height;
+        int crop_width;
+        int crop_height;
+        int crop_x;
+        int crop_y;
+
+        if (!AdaptFrame(frame.width, frame.height,
+                timestamp_us,
+                &adapted_width, &adapted_height,
+                &crop_width, &crop_height, &crop_x, &crop_y)) {
+            return;
+        }
+/*
+        webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer;
+
+        if (adapted_width == frame.width && adapted_height == frame.height) {
+            // No adaption - optimized path.
+            buffer = webrtc::make_ref_counted<webrtc::ObjCFrameBuffer>(frame.buffer);
+        }
+        else if ([frame.buffer isKindOfClass:[RTC_OBJC_TYPE(RTCCVPixelBuffer) class]]) {
+            // Adapted CVPixelBuffer frame.
+            RTC_OBJC_TYPE(RTCCVPixelBuffer) *rtcPixelBuffer = (RTC_OBJC_TYPE(RTCCVPixelBuffer) *)frame.buffer;
+            buffer = webrtc::make_ref_counted<webrtc::ObjCFrameBuffer>([[RTC_OBJC_TYPE(RTCCVPixelBuffer) alloc]
+                    initWithPixelBuffer:rtcPixelBuffer.pixelBuffer
+                    adaptedWidth:adapted_width
+                    adaptedHeight:adapted_height
+                    cropWidth:crop_width
+                    cropHeight:crop_height
+                    cropX:crop_x + rtcPixelBuffer.cropX
+                    cropY:crop_y + rtcPixelBuffer.cropY]);
+        }
+        else {
+            // Adapted I420 frame.
+            // TODO(magjed): Optimize this I420 path.
+            webrtc::scoped_refptr<webrtc::I420Buffer> i420_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
+            buffer = webrtc::make_ref_counted<webrtc::ObjCFrameBuffer>(frame.buffer);
+            i420_buffer->CropAndScaleFrom(*buffer->ToI420(), crop_x, crop_y, crop_width, crop_height);
+            buffer = i420_buffer;
+        }
+
+        OnFrame(webrtc::VideoFrame::Builder()
+                .set_video_frame_buffer(buffer)
+                .set_rotation(webrtc::kVideoRotation_0)
+                .set_timestamp_us(translated_timestamp_us)
+                .build());
+*/
     }
 }
