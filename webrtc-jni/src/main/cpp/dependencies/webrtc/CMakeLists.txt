@@ -267,7 +267,7 @@ rtc_use_h264=true \
 symbol_level=0")
 
 if(APPLE)
-    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\" rtc_enable_objc_symbol_export=true rtc_enable_symbol_export=true")
+#    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
 elseif(LINUX)
     if(${TARGET_CPU} STREQUAL "arm")
         set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
@@ -284,7 +284,7 @@ execute_command(
 message(STATUS "WebRTC: compile")
 if(APPLE)
     execute_command(
-        COMMAND ninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc sdk:mac_framework_objc
+        COMMAND ninja -C "${WEBRTC_BUILD}" :default sdk:native_api sdk:videocapture_objc
         WORKING_DIRECTORY "${WEBRTC_SRC}"
     )
 

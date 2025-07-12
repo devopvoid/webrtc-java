@@ -28,6 +28,7 @@ namespace jni
 	{
 		public:
 			VideoCaptureMac();
+			~VideoCaptureMac();
 
             void start() override;
 			void stop() override;

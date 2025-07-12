@@ -24,26 +24,14 @@ namespace jni
 {
 	VideoTrackDeviceSource::VideoTrackDeviceSource() :
 		VideoTrackSource(/*remote=*/false),
+		VideoTrackDeviceSourceBase(),
 		captureModule(nullptr)
 	{
-		capability.width = static_cast<int32_t>(1280);
-		capability.height = static_cast<int32_t>(720);
-		capability.maxFPS = static_cast<int32_t>(30);
 	}
 
 	VideoTrackDeviceSource::~VideoTrackDeviceSource()
 	{
 		destroy();
-	}
-
-	void VideoTrackDeviceSource::setVideoDevice(const avdev::VideoDevicePtr & device)
-	{
-		this->device = device;
-	}
-
-	void VideoTrackDeviceSource::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
-	{
-		this->capability = capability;
 	}
 
 	void VideoTrackDeviceSource::start()

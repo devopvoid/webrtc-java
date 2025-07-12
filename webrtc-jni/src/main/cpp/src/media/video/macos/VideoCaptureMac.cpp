@@ -27,6 +27,11 @@ namespace jni
 	{
 	}
 
+	VideoCaptureMac::~VideoCaptureMac()
+    {
+        destroy();
+    }
+
 	void VideoCaptureMac::start()
 	{
 		if (!device) {
@@ -45,12 +50,16 @@ namespace jni
         for (AVCaptureDevice * avDevice in captureDeviceDiscoverySession.devices) {
             if ([avDevice.localizedName isEqualToString:[NSString stringWithUTF8String:device->getName().c_str()]]) {
                 captureDevice = avDevice;
+                break;
             }
         }
 
         if (!captureDevice) {
             throw new Exception("No video capture devices available");
         }
+
+        VideoCaptureDelegateMac * delegate = [[VideoCaptureDelegateMac alloc] initWithHandler:(VideoCaptureMac*)this];
+        cameraVideoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:delegate];
 
         AVCaptureDeviceFormat * selectedFormat = nullptr;
         int currentDiff = INT_MAX;
@@ -74,9 +83,6 @@ namespace jni
         if (!selectedFormat) {
             selectedFormat = captureDevice.activeFormat;
         }
-
-        VideoCaptureDelegateMac * delegate = [[VideoCaptureDelegateMac alloc] initWithHandler:(VideoCaptureMac*)this];
-        cameraVideoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:delegate];
 
 		if (!cameraVideoCapturer) {
 		    std::string deviceName = captureDevice.localizedName.UTF8String;
@@ -105,12 +111,12 @@ namespace jni
 
 	void VideoCaptureMac::destroy()
 	{
-		if (!cameraVideoCapturer) {
-			return;
-		}
+        if (!cameraVideoCapturer) {
+            return;
+        }
 
-		[cameraVideoCapturer stopCapture];
-		cameraVideoCapturer = nullptr;
+        [cameraVideoCapturer stopCapture];
+        cameraVideoCapturer = nullptr;
 	}
 
     void VideoCaptureMac::OnFrame(const webrtc::VideoFrame & frame)

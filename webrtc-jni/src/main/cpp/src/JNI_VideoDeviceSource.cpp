@@ -18,6 +18,11 @@
 #include "api/VideoTrackSink.h"
 #include "media/video/VideoDevice.h"
 #include "media/video/VideoTrackDeviceSource.h"
+
+#ifdef __APPLE__
+#include "media/video/macos/VideoTrackDeviceSourceMac.h"
+#endif
+
 #include "JavaRef.h"
 #include "JavaObject.h"
 #include "JavaString.h"
@@ -31,7 +36,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setV
 		return;
 	}
 
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+	jni::VideoTrackDeviceSourceBase * videoSource = GetHandle<jni::VideoTrackDeviceSourceBase>(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
@@ -42,7 +47,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setV
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureCapability
 (JNIEnv * env, jobject caller, jobject jcapability)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+	jni::VideoTrackDeviceSourceBase * videoSource = GetHandle<jni::VideoTrackDeviceSourceBase>(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	if (!jcapability) {
@@ -65,7 +70,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setV
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_start
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+    printf("VideoDeviceSource::start\n");
+    fflush(NULL);
+
+	jni::VideoTrackDeviceSourceBase * videoSource = GetHandle<jni::VideoTrackDeviceSourceBase>(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	try {
@@ -79,7 +87,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_star
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_stop
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+	jni::VideoTrackDeviceSourceBase * videoSource = GetHandle<jni::VideoTrackDeviceSourceBase>(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	try {
@@ -93,24 +101,31 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_stop
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+	jni::VideoTrackDeviceSourceBase * videoSource = GetHandle<jni::VideoTrackDeviceSourceBase>(env, caller);
 	CHECK_HANDLE(videoSource);
 
-	webrtc::RefCountReleaseStatus status = videoSource->Release();
+//	webrtc::RefCountReleaseStatus status = videoSource->Release();
 
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-	}
+//	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+//		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+//	}
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+//	SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-	videoSource = nullptr;
+//	videoSource = nullptr;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_initialize
 (JNIEnv * env, jobject caller)
 {
-	webrtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDeviceSource>();
+#ifdef __APPLE__
+//@autoreleasepool {
+    webrtc::scoped_refptr<jni::VideoTrackDeviceSourceMac> videoSource_ = webrtc::make_ref_counted<jni::VideoTrackDeviceSourceMac>();
+    SetHandle(env, caller, videoSource_.release());
+//}
+#else
+    webrtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDeviceSource>();
+    SetHandle(env, caller, videoSource.release());
+#endif
 
-	SetHandle(env, caller, videoSource.release());
 }

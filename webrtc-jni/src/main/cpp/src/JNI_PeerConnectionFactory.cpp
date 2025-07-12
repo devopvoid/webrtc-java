@@ -58,8 +58,13 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 
 	try {
 		auto networkThread = webrtc::Thread::CreateWithSocketServer();
+		networkThread->SetName("webrtc_jni_network_thread", nullptr);
+
 		auto signalingThread = webrtc::Thread::Create();
+		signalingThread->SetName("webrtc_jni_signaling_thread", nullptr);
+
 		auto workerThread = webrtc::Thread::Create();
+		workerThread->SetName("webrtc_jni_worker_thread", nullptr);
 
 		if (!networkThread->Start()) {
 			throw jni::Exception("Start network thread failed");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Alex Andres
+ * Copyright 2019 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,28 @@
  * limitations under the License.
  */
 
-#include "media/video/VideoCaptureBase.h"
+#include "media/video/VideoTrackDeviceSourceBase.h"
 
 namespace jni
 {
-	VideoCaptureBase::VideoCaptureBase()
+	VideoTrackDeviceSourceBase::VideoTrackDeviceSourceBase()
 	{
 		capability.width = static_cast<int32_t>(1280);
 		capability.height = static_cast<int32_t>(720);
 		capability.maxFPS = static_cast<int32_t>(30);
 	}
 
-	VideoCaptureBase::~VideoCaptureBase()
+	VideoTrackDeviceSourceBase::~VideoTrackDeviceSourceBase()
 	{
 	}
 
-	void VideoCaptureBase::setDevice(const avdev::DevicePtr & device)
+	void VideoTrackDeviceSourceBase::setVideoDevice(const avdev::VideoDevicePtr & device)
 	{
 		this->device = device;
 	}
 
-	void VideoCaptureBase::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
+	void VideoTrackDeviceSourceBase::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
 	{
 		this->capability = capability;
-	}
-
-	void VideoCaptureBase::setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
-	{
-		this->sink = std::move(sink);
 	}
 }

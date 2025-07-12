@@ -27,6 +27,11 @@ namespace jni
 	{
 	}
 
+	VideoCapture::~VideoCapture()
+    {
+        destroy();
+    }
+
 	void VideoCapture::start()
 	{
 		if (!device) {
