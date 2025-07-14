@@ -267,7 +267,7 @@ rtc_use_h264=true \
 symbol_level=0")
 
 if(APPLE)
-#    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
+    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
 elseif(LINUX)
     if(${TARGET_CPU} STREQUAL "arm")
         set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
@@ -356,7 +356,7 @@ install(
         REGEX /src/examples/ EXCLUDE
         REGEX /src/out/ EXCLUDE
         REGEX /src/resources/ EXCLUDE
-        REGEX /src/sdk/ EXCLUDE
+        REGEX /src/sdk/android/ EXCLUDE
         REGEX /src/stats/ EXCLUDE
         REGEX /src/style-guide/ EXCLUDE
         REGEX /src/test/ EXCLUDE
@@ -366,14 +366,7 @@ install(
         REGEX /src/tools_webrtc/ EXCLUDE
         REGEX /test/ EXCLUDE
 )
-if(APPLE)
-    install(
-        DIRECTORY "${WEBRTC_SRC}/src/sdk/"
-        DESTINATION "${WEBRTC_INSTALL_DIR}/include"
-        FILES_MATCHING
-            PATTERN "*.h"
-    )
-endif()
+
 # Delete empty directories
 install(CODE "
     file(GLOB_RECURSE headers LIST_DIRECTORIES true ${WEBRTC_INSTALL_DIR}/include/!*)
