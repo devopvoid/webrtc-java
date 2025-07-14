@@ -15,10 +15,28 @@
  */
 
 #include "media/video/macos/VideoCaptureMac.h"
-#include "media/video/macos/VideoCaptureDelegateMac.h"
 #include "Exception.h"
 
-#import "base/RTCLogging.h"
+#include "base/RTCLogging.h"
+#include "sdk/objc/components/video_frame_buffer/RTCCVPixelBuffer.h"
+#include "sdk/objc/native/src/objc_frame_buffer.h"
+
+
+@interface VideoCaptureCallback ()
+@property(nonatomic) jni::VideoCaptureMac * videoCapturer;
+@end
+
+@implementation VideoCaptureCallback
+
+@synthesize videoCapturer = _videoCapturer;
+
+- (void)capturer:(RTC_OBJC_TYPE(RTCVideoCapturer) *)capturer
+    didCaptureVideoFrame:(RTC_OBJC_TYPE(RTCVideoFrame) *)frame {
+  _videoCapturer->OnCapturedFrame(frame);
+}
+
+@end
+
 
 namespace jni
 {
@@ -42,7 +60,11 @@ namespace jni
 
 		AVCaptureDeviceDiscoverySession * captureDeviceDiscoverySession = [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:@[
                     AVCaptureDeviceTypeBuiltInWideAngleCamera,
+#if (MAC_OS_X_VERSION_MIN_REQUIRED >= 140000)
+                    AVCaptureDeviceTypeExternal
+#else
                     AVCaptureDeviceTypeExternalUnknown
+#endif
                 ]
                 mediaType:AVMediaTypeVideo
                 position:AVCaptureDevicePositionUnspecified];
@@ -58,8 +80,10 @@ namespace jni
             throw new Exception("No video capture devices available");
         }
 
-        VideoCaptureDelegateMac * delegate = [[VideoCaptureDelegateMac alloc] initWithHandler:(VideoCaptureMac*)this];
-        cameraVideoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:delegate];
+        VideoCaptureCallback * callback = [[VideoCaptureCallback alloc] init];
+        callback.videoCapturer = this;
+
+        cameraVideoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:callback];
 
         AVCaptureDeviceFormat * selectedFormat = nullptr;
         int currentDiff = INT_MAX;
@@ -119,10 +143,20 @@ namespace jni
         cameraVideoCapturer = nullptr;
 	}
 
-    void VideoCaptureMac::OnFrame(const webrtc::VideoFrame & frame)
-    {
-        if (sink) {
-            sink->OnFrame(frame);
+    void VideoCaptureMac::OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame) {
+        if (!sink) {
+            return;
         }
+
+        const int64_t timestamp_us = frame.timeStampNs / webrtc::kNumNanosecsPerMicrosec;
+        const int64_t translated_timestamp_us = timestamp_aligner.TranslateTimestamp(timestamp_us, webrtc::TimeMicros());
+
+        webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = webrtc::make_ref_counted<webrtc::ObjCFrameBuffer>(frame.buffer);
+
+        sink->OnFrame(webrtc::VideoFrame::Builder()
+                .set_video_frame_buffer(buffer)
+                .set_rotation(webrtc::kVideoRotation_0)
+                .set_timestamp_us(translated_timestamp_us)
+                .build());
     }
 }

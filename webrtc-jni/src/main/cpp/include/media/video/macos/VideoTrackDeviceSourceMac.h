@@ -27,9 +27,11 @@
 
 #include "media/video/VideoTrackDeviceSourceBase.h"
 
+
 @interface VideoTrackDeviceSourceCallback
     : NSObject <RTC_OBJC_TYPE (RTCVideoCapturerDelegate)>
 @end
+
 
 namespace jni
 {
@@ -57,7 +59,7 @@ namespace jni
 		private:
             webrtc::TimestampAligner timestamp_aligner;
 
-            RTC_OBJC_TYPE(RTCCameraVideoCapturer) * cameraVideoCapturer;
+            RTCCameraVideoCapturer * cameraVideoCapturer;
 	};
 }
 

@@ -19,8 +19,17 @@
 
 #include "media/video/VideoCaptureBase.h"
 
+#include "rtc_base/timestamp_aligner.h"
+
+#include "sdk/objc/base/RTCVideoCapturer.h"
+#include "sdk/objc/base/RTCMacros.h"
 #include "sdk/objc/components/capturer/RTCCameraVideoCapturer.h"
-#include "sdk/objc/native/api/video_capturer.h"
+
+
+@interface VideoCaptureCallback
+    : NSObject <RTC_OBJC_TYPE (RTCVideoCapturerDelegate)>
+@end
+
 
 namespace jni
 {
@@ -34,9 +43,10 @@ namespace jni
 			void stop() override;
 			void destroy() override;
 
-			void OnFrame(const webrtc::VideoFrame & frame);
+			void OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame);
 
 		private:
+            webrtc::TimestampAligner timestamp_aligner;
             RTCCameraVideoCapturer * cameraVideoCapturer;
 	};
 }

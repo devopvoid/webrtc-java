@@ -23,6 +23,7 @@
 #include "sdk/objc/components/video_frame_buffer/RTCCVPixelBuffer.h"
 #include "sdk/objc/native/src/objc_frame_buffer.h"
 
+
 @interface VideoTrackDeviceSourceCallback ()
 @property(nonatomic) jni::VideoTrackDeviceSourceMac * videoTrackSource;
 @end
@@ -46,24 +47,16 @@ namespace jni
         VideoTrackDeviceSourceBase(),
 		cameraVideoCapturer(nullptr)
 	{
-		printf("VideoTrackDeviceSourceMac::VideoTrackDeviceSourceMac\n");
-		fflush(NULL);
 	}
 
 	VideoTrackDeviceSourceMac::~VideoTrackDeviceSourceMac()
 	{
-		printf("VideoTrackDeviceSourceMac::~VideoTrackDeviceSourceMac()\n");
-    	fflush(NULL);
-
 		destroy();
 	}
 
 	void VideoTrackDeviceSourceMac::start()
 	{
-	    printf("VideoTrackDeviceSourceMac::start\n");
-	    fflush(NULL);
-
-        AVCaptureDevice * captureDevice = nullptr;
+	    AVCaptureDevice * captureDevice = nullptr;
 
         AVCaptureDeviceDiscoverySession * captureDeviceDiscoverySession = [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:@[
                 AVCaptureDeviceTypeBuiltInWideAngleCamera,
@@ -92,13 +85,10 @@ namespace jni
             throw new Exception("No video capture devices available");
         }
 
-        std::string deviceName = captureDevice.localizedName.UTF8String;
-        printf("VideoTrackDeviceSourceMac::start: %s\n", deviceName.c_str());
-        fflush(NULL);
-
         VideoTrackDeviceSourceCallback * callback = [[VideoTrackDeviceSourceCallback alloc] init];
-        cameraVideoCapturer = [[RTCCameraVideoCapturer alloc] init];
-        cameraVideoCapturer.delegate = callback;
+        callback.videoTrackSource = this;
+
+        cameraVideoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:callback];
 
         AVCaptureDeviceFormat * selectedFormat = nullptr;
         int currentDiff = INT_MAX;
@@ -172,11 +162,8 @@ namespace jni
 	}
 
     void VideoTrackDeviceSourceMac::OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame) {
-        printf("VideoTrackDeviceSourceMac::OnCapturedFrame: %lld\n", frame.timeStampNs);
-        fflush(NULL);
-
         const int64_t timestamp_us = frame.timeStampNs / webrtc::kNumNanosecsPerMicrosec;
-        //const int64_t translated_timestamp_us = timestamp_aligner.TranslateTimestamp(timestamp_us, webrtc::TimeMicros());
+        const int64_t translated_timestamp_us = timestamp_aligner.TranslateTimestamp(timestamp_us, webrtc::TimeMicros());
 
         int adapted_width;
         int adapted_height;
@@ -191,7 +178,7 @@ namespace jni
                 &crop_width, &crop_height, &crop_x, &crop_y)) {
             return;
         }
-/*
+
         webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer;
 
         if (adapted_width == frame.width && adapted_height == frame.height) {
@@ -212,7 +199,6 @@ namespace jni
         }
         else {
             // Adapted I420 frame.
-            // TODO(magjed): Optimize this I420 path.
             webrtc::scoped_refptr<webrtc::I420Buffer> i420_buffer = webrtc::I420Buffer::Create(adapted_width, adapted_height);
             buffer = webrtc::make_ref_counted<webrtc::ObjCFrameBuffer>(frame.buffer);
             i420_buffer->CropAndScaleFrom(*buffer->ToI420(), crop_x, crop_y, crop_width, crop_height);
@@ -224,6 +210,5 @@ namespace jni
                 .set_rotation(webrtc::kVideoRotation_0)
                 .set_timestamp_us(translated_timestamp_us)
                 .build());
-*/
     }
 }
