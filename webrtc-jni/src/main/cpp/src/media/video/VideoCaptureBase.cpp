@@ -14,29 +14,33 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_H_
-
 #include "media/video/VideoCaptureBase.h"
-
-#include "modules/video_capture/video_capture.h"
-#include "modules/video_capture/video_capture_defines.h"
 
 namespace jni
 {
-	class VideoCapture : public VideoCaptureBase
+	VideoCaptureBase::VideoCaptureBase()
 	{
-		public:
-			VideoCapture();
-			~VideoCapture();
+		capability.width = static_cast<int32_t>(1280);
+		capability.height = static_cast<int32_t>(720);
+		capability.maxFPS = static_cast<int32_t>(30);
+	}
 
-            void start() override;
-			void stop() override;
-			void destroy() override;
+	VideoCaptureBase::~VideoCaptureBase()
+	{
+	}
 
-		private:
-			webrtc::scoped_refptr<webrtc::VideoCaptureModule> captureModule;
-	};
+	void VideoCaptureBase::setDevice(const avdev::DevicePtr & device)
+	{
+		this->device = device;
+	}
+
+	void VideoCaptureBase::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
+	{
+		this->capability = capability;
+	}
+
+	void VideoCaptureBase::setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
+	{
+		this->sink = std::move(sink);
+	}
 }
-
-#endif

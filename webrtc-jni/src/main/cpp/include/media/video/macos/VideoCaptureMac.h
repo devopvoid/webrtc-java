@@ -14,28 +14,40 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_H_
+#ifndef JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_MAC_H_
+#define JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_MAC_H_
 
 #include "media/video/VideoCaptureBase.h"
 
-#include "modules/video_capture/video_capture.h"
-#include "modules/video_capture/video_capture_defines.h"
+#include "rtc_base/timestamp_aligner.h"
+
+#include "sdk/objc/base/RTCVideoCapturer.h"
+#include "sdk/objc/base/RTCMacros.h"
+#include "sdk/objc/components/capturer/RTCCameraVideoCapturer.h"
+
+
+@interface VideoCaptureCallback
+    : NSObject <RTC_OBJC_TYPE (RTCVideoCapturerDelegate)>
+@end
+
 
 namespace jni
 {
-	class VideoCapture : public VideoCaptureBase
+	class VideoCaptureMac : public VideoCaptureBase
 	{
 		public:
-			VideoCapture();
-			~VideoCapture();
+			VideoCaptureMac();
+			~VideoCaptureMac();
 
             void start() override;
 			void stop() override;
 			void destroy() override;
 
+			void OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame);
+
 		private:
-			webrtc::scoped_refptr<webrtc::VideoCaptureModule> captureModule;
+            webrtc::TimestampAligner timestamp_aligner;
+            RTCCameraVideoCapturer * cameraVideoCapturer;
 	};
 }
 

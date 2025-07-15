@@ -17,38 +17,20 @@
 #include "media/video/VideoCapture.h"
 #include "Exception.h"
 
-#include "api/video/i420_buffer.h"
+#include "rtc_base/logging.h"
 #include "modules/video_capture/video_capture_factory.h"
 
 namespace jni
 {
-	VideoCapture::VideoCapture() :
+	VideoCapture::VideoCapture() : VideoCaptureBase(),
 		captureModule(nullptr)
 	{
-		capability.width = static_cast<int32_t>(1280);
-		capability.height = static_cast<int32_t>(720);
-		capability.maxFPS = static_cast<int32_t>(30);
 	}
 
 	VideoCapture::~VideoCapture()
-	{
-		destroy();
-	}
-
-	void VideoCapture::setDevice(const avdev::DevicePtr & device)
-	{
-		this->device = device;
-	}
-
-	void VideoCapture::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
-	{
-		this->capability = capability;
-	}
-
-	void VideoCapture::setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink)
-	{
-		this->sink = std::move(sink);
-	}
+    {
+        destroy();
+    }
 
 	void VideoCapture::start()
 	{

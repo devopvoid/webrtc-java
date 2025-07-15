@@ -159,6 +159,11 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
 
 if(APPLE)
+    target_include_directories(${PROJECT_NAME}
+        PUBLIC
+            ${TARGET_INC_DIR}/sdk/objc
+            ${TARGET_INC_DIR}/sdk/objc/base
+    )
     target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
     target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
@@ -277,10 +282,23 @@ execute_command(
 )
 
 message(STATUS "WebRTC: compile")
-execute_command(
-    COMMAND ninja -C "${WEBRTC_BUILD}"
-    WORKING_DIRECTORY "${WEBRTC_SRC}"
-)
+if(APPLE)
+    execute_command(
+        COMMAND ninja -C "${WEBRTC_BUILD}" :default sdk:native_api sdk:videocapture_objc
+        WORKING_DIRECTORY "${WEBRTC_SRC}"
+    )
+
+    file(GLOB_RECURSE SDK_OBJC_FILES ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/*.o)
+
+    execute_command(
+        COMMAND ${CMAKE_AR} rc ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/libwebrtc.a ${SDK_OBJC_FILES}
+    )
+else()
+    execute_command(
+        COMMAND ninja -C "${WEBRTC_BUILD}"
+        WORKING_DIRECTORY "${WEBRTC_SRC}"
+    )
+endif()
 
 if(LINUX)
     if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
@@ -338,7 +356,7 @@ install(
         REGEX /src/examples/ EXCLUDE
         REGEX /src/out/ EXCLUDE
         REGEX /src/resources/ EXCLUDE
-        REGEX /src/sdk/ EXCLUDE
+        REGEX /src/sdk/android/ EXCLUDE
         REGEX /src/stats/ EXCLUDE
         REGEX /src/style-guide/ EXCLUDE
         REGEX /src/test/ EXCLUDE
@@ -348,6 +366,7 @@ install(
         REGEX /src/tools_webrtc/ EXCLUDE
         REGEX /test/ EXCLUDE
 )
+
 # Delete empty directories
 install(CODE "
     file(GLOB_RECURSE headers LIST_DIRECTORIES true ${WEBRTC_INSTALL_DIR}/include/!*)

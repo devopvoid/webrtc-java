@@ -43,11 +43,7 @@ namespace jni
 		}
 
 		webrtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
-		i420BufferCopy->AddRef();
-
-//		if (frame.rotation() != webrtc::kVideoRotation_0) {
-//			i420Buffer = webrtc::I420Buffer::Rotate(*i420Buffer, frame.rotation());
-//		}
+        i420BufferCopy->AddRef();
 
 		jint rotation = static_cast<jint>(frame.rotation());
 		jlong timestamp = frame.timestamp_us() * webrtc::kNumNanosecsPerMicrosec;

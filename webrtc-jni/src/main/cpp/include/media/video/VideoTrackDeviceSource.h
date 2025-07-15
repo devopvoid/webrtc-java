@@ -26,21 +26,20 @@
 #include "modules/video_capture/video_capture.h"
 #include "modules/video_capture/video_capture_defines.h"
 
+#include "media/video/VideoTrackDeviceSourceBase.h"
 #include "media/video/VideoDevice.h"
 
 namespace jni
 {
-	class VideoTrackDeviceSource : public webrtc::VideoTrackSource, public webrtc::VideoSinkInterface<webrtc::VideoFrame>
+	class VideoTrackDeviceSource : public webrtc::VideoTrackSource, public webrtc::VideoSinkInterface<webrtc::VideoFrame>, public VideoTrackDeviceSourceBase
 	{
 		public:
 			VideoTrackDeviceSource();
 			~VideoTrackDeviceSource();
 
-			void setVideoDevice(const avdev::VideoDevicePtr & device);
-			void setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability);
-
-			void start();
-			void stop();
+            // VideoTrackDeviceSourceBase implementation.
+            void start() override;
+            void stop() override;
 
 			// VideoSourceInterface implementation.
 			void AddOrUpdateSink(webrtc::VideoSinkInterface<webrtc::VideoFrame> * sink, const webrtc::VideoSinkWants & wants) override;
@@ -58,9 +57,6 @@ namespace jni
 			void destroy();
 
 		private:
-			avdev::VideoDevicePtr device;
-			webrtc::VideoCaptureCapability capability;
-
 			webrtc::scoped_refptr<webrtc::VideoCaptureModule> captureModule;
 			webrtc::VideoBroadcaster broadcaster;
 			webrtc::VideoAdapter videoAdapter;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Alex Andres
+ * Copyright 2019 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,30 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_CAPTURE_H_
+#ifndef JNI_WEBRTC_MEDIA_VIDEO_TRACK_DEVICE_SOURCE_BASE_H_
+#define JNI_WEBRTC_MEDIA_VIDEO_TRACK_DEVICE_SOURCE_BASE_H_
 
-#include "media/video/VideoCaptureBase.h"
-
-#include "modules/video_capture/video_capture.h"
 #include "modules/video_capture/video_capture_defines.h"
+
+#include "media/video/VideoDevice.h"
 
 namespace jni
 {
-	class VideoCapture : public VideoCaptureBase
+	class VideoTrackDeviceSourceBase
 	{
 		public:
-			VideoCapture();
-			~VideoCapture();
+			VideoTrackDeviceSourceBase();
+			~VideoTrackDeviceSourceBase();
 
-            void start() override;
-			void stop() override;
-			void destroy() override;
+			void setVideoDevice(const avdev::VideoDevicePtr & device);
+			void setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability);
 
-		private:
-			webrtc::scoped_refptr<webrtc::VideoCaptureModule> captureModule;
+			virtual void start() = 0;
+			virtual void stop() = 0;
+
+		protected:
+			avdev::VideoDevicePtr device;
+			webrtc::VideoCaptureCapability capability;
 	};
 }
 
