@@ -173,9 +173,22 @@ jobs:
         name: Prepare release build
         uses: ./.github/actions/prepare-macos
 
-      - id: maven-build
-        name: Maven build
+      - id: maven-build-arm64
+        name: Maven build - Apple Silicon
+        if: matrix.platform.name == 'macos_arm64'
         uses: ./.github/actions/release
+        with:
+          java-version: ${{ matrix.java }}
+          platform-name: ${{ matrix.platform.name }}
+          maven-username: ${{ secrets.MAVEN_USERNAME }}
+          maven-password: ${{ secrets.MAVEN_TOKEN }}
+          maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+      - id: maven-build-x86_64
+        name: Maven build - Intel
+        if: matrix.platform.name == 'macos_x86-64'
+        uses: ./.github/actions/release-macos-x86_64
         with:
           java-version: ${{ matrix.java }}
           platform-name: ${{ matrix.platform.name }}
