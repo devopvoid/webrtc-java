@@ -39,8 +39,6 @@ public final class VideoBufferConverter {
 				dst,
 				i420.getWidth(), i420.getHeight(),
 				fourCC.value());
-		
-//		i420.release();
 	}
 	
 	public static void convertFromI420(VideoFrameBuffer src, ByteBuffer dst, FourCC fourCC) throws Exception {
@@ -63,7 +61,7 @@ public final class VideoBufferConverter {
 					fourCC.value());
 		}
 		else {
-			byte[] arrayBuffer = null;
+			byte[] arrayBuffer;
 
 			if (dst.hasArray()) {
 				arrayBuffer = dst.array();
@@ -81,8 +79,6 @@ public final class VideoBufferConverter {
 					i420.getWidth(), i420.getHeight(),
 					fourCC.value());
 		}
-		
-//		i420.release();
 	}
 
 	private native static void I420toByteArray(

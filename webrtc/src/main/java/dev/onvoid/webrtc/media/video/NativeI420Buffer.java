@@ -94,8 +94,6 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 
 	@Override
 	public I420Buffer toI420() {
-//		retain();
-		
 	    return this;
 	}
 
@@ -113,9 +111,24 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 	}
 
 	/**
+	 * Creates a copy of this I420 buffer. This method performs a deep copy of all data in the buffer.
+	 *
+	 * @return A new NativeI420Buffer instance with the same dimensions and data as this buffer.
+	 */
+	public NativeI420Buffer copy() {
+		return copy(width, height, dataY.slice(), strideY, dataU.slice(), strideU, dataV.slice(), strideV);
+	}
+
+	/**
 	 * Allocates an empty I420Buffer suitable for an image of the given dimensions.
 	 */
 	public static native NativeI420Buffer allocate(int width, int height);
+
+	/**
+	 * Creates a copy of an I420 buffer with the given dimensions and data.
+	 */
+	private static native NativeI420Buffer copy(int width, int height, ByteBuffer dataY, int strideY, ByteBuffer dataU,
+												int strideU, ByteBuffer dataV, int strideV);
 
 	/**
 	 * Wraps existing ByteBuffers into NativeI420Buffer object without copying the
@@ -159,13 +172,9 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 			dataU.position(cropX / 2 + cropY / 2 * buffer.getStrideU());
 			dataV.position(cropX / 2 + cropY / 2 * buffer.getStrideV());
 
-//			buffer.retain();
-
 			return wrap(scaleWidth, scaleHeight, dataY.slice(), buffer.getStrideY(), dataU.slice(),
 					buffer.getStrideU(), dataV.slice(), buffer.getStrideV());
 		}
-
-//		buffer.retain();
 
 		I420Buffer newBuffer = allocate(scaleWidth, scaleHeight);
 
@@ -173,8 +182,6 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 				buffer.getDataV(), buffer.getStrideV(), cropX, cropY, cropWidth, cropHeight,
 				newBuffer.getDataY(), newBuffer.getStrideY(), newBuffer.getDataU(), newBuffer.getStrideU(),
 				newBuffer.getDataV(), newBuffer.getStrideV(), scaleWidth, scaleHeight);
-
-//		buffer.release();
 
 		return newBuffer;
 	}

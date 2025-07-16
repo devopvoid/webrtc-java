@@ -39,7 +39,7 @@ public interface VideoFrameBuffer extends RefCounted {
 	I420Buffer toI420();
 
 	/**
-	 * Crops a region defined by |cropx|, |cropY|, |cropWidth| and |cropHeight|.
+	 * Crops a region defined by |cropX|, |cropY|, |cropWidth| and |cropHeight|.
 	 * Scales it to size |scaleWidth| x |scaleHeight|.
 	 */
 	VideoFrameBuffer cropAndScale(int cropX, int cropY, int cropWidth,

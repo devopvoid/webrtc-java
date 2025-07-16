@@ -18,9 +18,9 @@ package dev.onvoid.webrtc.internal;
 
 /**
  * Interface for ref counted objects in WebRTC. These objects have significant
- * resources that need to be freed when they are no longer in use. Each objects
+ * resources that need to be freed when they are no longer in use. Each object
  * starts with ref count of one when created. If a reference is passed as a
- * parameter to a method, the caller has ownesrship of the object by default -
+ * parameter to a method, the caller has ownership of the object by default -
  * calling release is not necessary unless retain is called.
  */
 public interface RefCounted {

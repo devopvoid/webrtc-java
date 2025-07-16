@@ -18,21 +18,20 @@ package dev.onvoid.webrtc.media.video;
 
 import dev.onvoid.webrtc.internal.RefCounted;
 
+/**
+ * Represents a video frame with an associated frame buffer and metadata.
+ * This class implements reference counting to manage memory for video frames.
+ * Video frames contain buffer data along with rotation and timestamp information.
+ */
 public class VideoFrame implements RefCounted {
 	
-	/**
-	 * The underlying frame buffer.
-	 */
+	/** The underlying frame buffer. */
 	public final VideoFrameBuffer buffer;
 
-	/**
-	 * Rotation of the frame in degrees.
-	 */
+	/** Rotation of the frame in degrees. */
 	public final int rotation;
 
-	/**
-	 * Timestamp of the frame in nano seconds.
-	 */
+	/** Timestamp of the frame in nanoseconds. */
 	public final long timestampNs;
 
 
@@ -47,6 +46,17 @@ public class VideoFrame implements RefCounted {
 		this.buffer = buffer;
 		this.rotation = rotation;
 		this.timestampNs = timestampNs;
+	}
+
+	/**
+	 * Creates a deep copy of this VideoFrame. The new frame will have its own copy of the buffer data.
+	 *
+	 * @return A new VideoFrame with a copy of the buffer data.
+	 */
+	public VideoFrame copy() {
+		NativeI420Buffer nativeBuffer = (NativeI420Buffer) buffer;
+
+		return new VideoFrame(nativeBuffer.copy(), rotation, timestampNs);
 	}
 
 	@Override
