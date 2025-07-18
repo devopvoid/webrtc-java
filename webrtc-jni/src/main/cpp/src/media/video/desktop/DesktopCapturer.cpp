@@ -29,6 +29,9 @@ namespace jni
 		// Enable desktop effects.
 		options.set_disable_effects(false);
 
+#if defined(WEBRTC_MAC)
+		options.set_allow_iosurface(true);
+#endif
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
 #endif
@@ -69,6 +72,10 @@ namespace jni
 
 	void DesktopCapturer::CaptureFrame()
 	{
+#if defined(WEBRTC_MAC)
+		CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
+#endif
+
 		capturer->CaptureFrame();
 	}
 

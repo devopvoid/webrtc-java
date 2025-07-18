@@ -20,7 +20,7 @@
 #include "api/video/i420_buffer.h"
 #include "media/base/adapted_video_track_source.h"
 #include "modules/desktop_capture/desktop_capturer.h"
-#include "rtc_base/thread.h"
+#include "rtc_base/platform_thread.h"
 
 namespace jni
 {
@@ -66,7 +66,7 @@ namespace jni
 
             std::unique_ptr<webrtc::DesktopFrame> lastFrame;
 
-            std::unique_ptr<webrtc::Thread> captureThread;
+            webrtc::PlatformThread captureThread;
 
             webrtc::scoped_refptr<webrtc::I420Buffer> buffer;
 	};

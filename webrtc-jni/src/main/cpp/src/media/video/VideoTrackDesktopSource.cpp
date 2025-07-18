@@ -71,20 +71,23 @@ namespace jni
 
 	void VideoTrackDesktopSource::start()
 	{
-		isCapturing = true;
+		if (captureThread.empty()) {
+			isCapturing = true;
 
-		captureThread = webrtc::Thread::Create();
-		captureThread->Start();
-		captureThread->PostTask([&] { capture(); });
+			captureThread = webrtc::PlatformThread::SpawnJoinable(
+				[&] {
+					capture();
+				},
+				"VideoTrackDesktopThread",
+				webrtc::ThreadAttributes().SetPriority(webrtc::ThreadPriority::kHigh));
+		}
 	}
 
 	void VideoTrackDesktopSource::stop()
 	{
-		if (isCapturing) {
+		if (!captureThread.empty()) {
 			isCapturing = false;
-
-			captureThread->Stop();
-			captureThread.reset();
+			captureThread.Finalize();
 		}
 	}
 
@@ -239,6 +242,9 @@ namespace jni
 		// Enable desktop effects.
 		options.set_disable_effects(false);
 
+#if defined(WEBRTC_MAC)
+		options.set_allow_iosurface(true);
+#endif
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
 #endif
@@ -272,9 +278,14 @@ namespace jni
 		int msPerFrame = 1000 / frameRate;
 
 		while (isCapturing) {
+#if defined(WEBRTC_MAC)
+			CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
+#endif
 			capturer->CaptureFrame();
 
 			webrtc::Thread::SleepMs(msPerFrame);
 		}
+
+		capturer.reset();
 	}
 }
