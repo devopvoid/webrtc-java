@@ -172,10 +172,10 @@ elseif(LINUX)
     pkg_check_modules(DBUS REQUIRED dbus-1)
 
     target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
-    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX WEBRTC_USE_H264)
     target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
 elseif(WIN32)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN WEBRTC_USE_H264 NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
     target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
 endif()
 
@@ -264,6 +264,7 @@ rtc_build_examples=false \
 rtc_include_tests=false \
 use_rtti=true \
 rtc_use_h264=true \
+ffmpeg_branding=\"Chrome\" \
 symbol_level=0")
 
 if(APPLE)
