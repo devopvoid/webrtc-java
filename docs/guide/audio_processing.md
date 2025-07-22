@@ -13,9 +13,53 @@ The `AudioProcessing` class offers several audio processing features:
 
 These features are particularly useful for VoIP applications, video conferencing, and other real-time communication systems.
 
-## Basic Usage
+## Two Approaches to Audio Processing
 
-Here's a basic example of how to use `AudioProcessing`:
+There are two main approaches to using audio processing in the library:
+
+1. **Automatic Processing with PeerConnectionFactory**: Set a configured `AudioProcessing` instance to the `PeerConnectionFactory`. This is the recommended approach for most applications.
+2. **Manual Processing**: Create an `AudioProcessing` instance and manually process audio streams. This gives you more control but requires more work.
+
+### Automatic Processing with PeerConnectionFactory
+
+The simplest way to use audio processing is to set a configured `AudioProcessing` instance to the `PeerConnectionFactory`:
+
+```java
+import dev.onvoid.webrtc.PeerConnectionFactory;
+import dev.onvoid.webrtc.media.audio.AudioProcessing;
+import dev.onvoid.webrtc.media.audio.AudioProcessingConfig;
+import dev.onvoid.webrtc.media.audio.NoiseSuppression;
+
+// Create and configure an AudioProcessing instance
+AudioProcessing audioProcessing = new AudioProcessing();
+AudioProcessingConfig config = new AudioProcessingConfig();
+
+// Enable echo cancellation
+config.echoCanceller.enabled = true;
+
+// Enable noise suppression
+config.noiseSuppression.enabled = true;
+config.noiseSuppression.level = NoiseSuppression.Level.MODERATE;
+
+// Apply the configuration
+audioProcessing.applyConfig(config);
+
+// Create a PeerConnectionFactory with the configured AudioProcessing
+PeerConnectionFactory factory = new PeerConnectionFactory(audioProcessing);
+
+// Now all audio processing will be handled automatically by the WebRTC framework
+// ...
+
+// Don't forget to dispose when done
+factory.dispose();
+audioProcessing.dispose();
+```
+
+With this approach, the WebRTC framework automatically applies the audio processing to all audio streams. You don't need to manually process audio data - the WebRTC framework handles it internally based on your configuration.
+
+### Manual Processing
+
+For more control, you can manually process audio streams:
 
 ```java
 import dev.onvoid.webrtc.media.audio.AudioProcessing;
