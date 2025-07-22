@@ -1,8 +1,4 @@
-# WebRTC Java - Audio Device Selection Example
-
-This README explains how to set up a WebRTC peer connection with audio device selection capabilities.
-
-## Overview
+# Audio Device Selection
 
 This guide focuses on setting up a peer connection with audio device selection capabilities, which allows you to choose specific microphones and speakers for your WebRTC connection.
 
@@ -122,4 +118,8 @@ MediaDevices.addDeviceChangeListener(event -> {
 
 ---
 
-This example demonstrates how to set up a WebRTC peer connection with audio device selection capabilities. For more information, refer to the [webrtc-java documentation](https://github.com/devopvoid/webrtc-java).
+## Conclusion
+
+This guide has walked you through the process of implementing audio device selection in your WebRTC application.
+By implementing these capabilities, your application can provide users with greater control over their audio experience, accommodating different hardware setups and preferences.
+For more advanced audio processing options, consider exploring the audio processing APIs available in this documentation.

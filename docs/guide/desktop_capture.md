@@ -1,8 +1,4 @@
-# WebRTC Java - Desktop Video Track Selection Guide
-
-This README explains how to set up a WebRTC peer connection with desktop video capture capabilities.
-
-## Overview
+# Desktop Video Track
 
 This guide focuses on setting up a peer connection with desktop video capture capabilities, which allows you to capture and stream content from your screens or application windows in your WebRTC connection.
 
@@ -19,7 +15,7 @@ To enable desktop video capture, you need to:
 
 The library provides classes to list available screens and windows:
 
-<pre>
+```java
 import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 import dev.onvoid.webrtc.media.video.desktop.ScreenCapturer;
 import dev.onvoid.webrtc.media.video.desktop.WindowCapturer;
@@ -27,7 +23,7 @@ import java.util.List;
 
 // Get available screens
 ScreenCapturer screenCapturer = new ScreenCapturer();
-List&lt;DesktopSource&gt; screens = screenCapturer.getDesktopSources();
+List<DesktopSource> screens = screenCapturer.getDesktopSources();
 System.out.println("Available screens:");
 for (DesktopSource screen : screens) {
     System.out.printf("  Screen: %s (ID: %d)%n", screen.title, screen.id);
@@ -35,7 +31,7 @@ for (DesktopSource screen : screens) {
 
 // Get available windows
 WindowCapturer windowCapturer = new WindowCapturer();
-List&lt;DesktopSource&gt; windows = windowCapturer.getDesktopSources();
+List<DesktopSource> windows = windowCapturer.getDesktopSources();
 System.out.println("Available windows:");
 for (DesktopSource window : windows) {
     System.out.printf("  Window: %s (ID: %d)%n", window.title, window.id);
@@ -44,13 +40,13 @@ for (DesktopSource window : windows) {
 // Clean up the capturers after use
 screenCapturer.dispose();
 windowCapturer.dispose();
-</pre>
+```
 
 ### Creating and Configuring a VideoDesktopSource
 
 The `VideoDesktopSource` class allows you to capture video from a desktop source:
 
-<pre>
+```java
 import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 
 // Create a desktop video source
@@ -71,13 +67,13 @@ videoSource.setSourceId(windowId, true);
 
 // Start capturing
 videoSource.start();
-</pre>
+```
 
 ### Creating a Video Track with the Desktop Source
 
 Once you have configured your desktop video source, you can create a video track:
 
-<pre>
+```java
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
@@ -86,13 +82,13 @@ PeerConnectionFactory factory = new PeerConnectionFactory();
 
 // Create a video track with the desktop source
 VideoTrack videoTrack = factory.createVideoTrack("video0", videoSource);
-</pre>
+```
 
 ### Adding the Track to a Peer Connection
 
 Add the video track to your peer connection:
 
-<pre>
+```java
 import java.util.ArrayList;
 import java.util.List;
 import dev.onvoid.webrtc.RTCPeerConnection;
@@ -101,79 +97,76 @@ import dev.onvoid.webrtc.RTCPeerConnection;
 RTCPeerConnection peerConnection = factory.createPeerConnection(config, observer);
 
 // Add the track to the peer connection
-List&lt;String&gt; streamIds = new ArrayList&lt;&gt;();
+List<String> streamIds = new ArrayList<>();
 streamIds.add("stream1");
 peerConnection.addTrack(videoTrack, streamIds);
-</pre>
+```
 
 ## Additional Features
 
 The `VideoDesktopSource` provides additional methods for controlling the desktop capture:
 
-### Capture Control
-
-<pre>
-// Start capturing
-videoSource.start();
-
-// Stop capturing
-videoSource.stop();
-
-// Check if capturing is active
-boolean isCapturing = videoSource.isRunning();
-</pre>
-
 ### Source Selection
 
 You can change the capture source at runtime:
 
-<pre>
+```java
 // Switch to a different screen
 videoSource.setSourceId(newScreenId, false);
 
 // Switch to a window
 videoSource.setSourceId(windowId, true);
-</pre>
+```
 
 ### Capture Configuration
 
 You can adjust capture settings:
 
-<pre>
+```java
 // Change frame rate
 videoSource.setFrameRate(15);  // Set to 15 fps
 
 // Change maximum resolution
 videoSource.setMaxFrameSize(1280, 720);  // Set to 720p
-</pre>
+```
 
 ### Resource Management
 
 Always properly dispose of resources when done:
 
-<pre>
+```java
 // Dispose of resources when done
 videoSource.stop();
 videoSource.dispose();
-</pre>
+```
 
 ### Handling Source Changes
 
 If desktop sources might change during your application's lifecycle (e.g., new windows opening or screens connecting), you should periodically refresh the source list:
 
-<pre>
+```java
 // Refresh the list of available sources
 ScreenCapturer screenCapturer = new ScreenCapturer();
-List&lt;DesktopSource&gt; updatedScreens = screenCapturer.getDesktopSources();
+List<DesktopSource> updatedScreens = screenCapturer.getDesktopSources();
 
 WindowCapturer windowCapturer = new WindowCapturer();
-List&lt;DesktopSource&gt; updatedWindows = windowCapturer.getDesktopSources();
+List<DesktopSource> updatedWindows = windowCapturer.getDesktopSources();
 
 // Clean up
 screenCapturer.dispose();
 windowCapturer.dispose();
-</pre>
+```
 
 ---
 
-This example demonstrates how to set up a WebRTC peer connection with desktop video capture capabilities. For more information, refer to the [webrtc-java documentation](https://github.com/devopvoid/webrtc-java).
+## Conclusion
+
+This guide has demonstrated how to set up a WebRTC peer connection with desktop video capture capabilities.
+When implementing desktop capture in your application, remember to:
+
+- Always dispose of resources properly to prevent memory leaks
+- Periodically refresh source lists to handle dynamic changes in available screens and windows
+- Consider the performance implications of higher resolutions and frame rates
+- Handle potential permission requirements on different operating systems
+
+Desktop capture is particularly useful for screen sharing applications, remote assistance tools, collaborative workspaces, and educational platforms where visual content sharing is essential.

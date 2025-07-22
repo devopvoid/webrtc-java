@@ -73,7 +73,7 @@
 							<id>default-compile</id>
 							<configuration>
 								<release>9</release>
-								<!-- No excludes: compile everything to ensure module-info contains right entries -->
+								<!-- No excludes: compile everything to ensure module-info contains the right entries -->
 							</configuration>
 						</execution>
 						<execution>
@@ -82,14 +82,14 @@
 								<goal>compile</goal>
 							</goals>
 							<configuration>
-								<!-- Recompile everything for target VM except the module-info.java -->
+								<!-- Recompile everything for the target VM except the module-info.java -->
 								<excludes>
 									<exclude>module-info.java</exclude>
 								</excludes>
 							</configuration>
 						</execution>
 					</executions>
-					<!-- Defaults for compile and testCompile -->
+					<!-- Defaults for compiler and testCompile -->
 					<configuration>
 						<release>8</release><!-- compatibility expectations -->
 						<!-- Only required when haven't configured the maven-toolchains-plugin -->
