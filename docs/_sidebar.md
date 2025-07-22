@@ -6,6 +6,7 @@
     - [Overview](guide/overview.md)
     - [Media Devices](guide/media_devices.md)
     - [Audio Device Selection](guide/audio_devices.md)
+    - [Audio Processing](guide/audio_processing.md)
     - [Bitrate and Framerate Constraints](guide/constraints.md)
     - [Desktop Capture](guide/desktop_capture.md)
     - [Data Channels](guide/data_channels.md)
