@@ -12,6 +12,8 @@ Cameras and microphones play a key role in WebRTC. In a more complex application
 
 The `MediaDevices` class provides methods to query all available media devices connected to the system.
 
+> Query devices on worker threads, not on UI or render threads.
+
 ### Audio Capture Devices (Microphones)
 
 To get a list of all available microphones:
@@ -175,5 +177,6 @@ When implementing media device handling in your applications, consider these bes
 - Provide users with the ability to select from available devices
 - Implement hotplug listeners to dynamically update available devices
 - Remember to unregister device listeners when they're no longer needed
+- Query devices on worker threads, not on UI or render threads.
 
 You can use the code examples in this guide as a starting point for applications that need to work with media devices in WebRTC scenarios like video conferencing, live streaming, or media recording.
