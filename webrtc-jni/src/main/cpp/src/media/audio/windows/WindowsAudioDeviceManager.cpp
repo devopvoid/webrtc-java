@@ -59,6 +59,10 @@ namespace jni
 
 		std::set<AudioDevicePtr> WindowsAudioDeviceManager::getAudioCaptureDevices()
 		{
+			if (!comInitializer.isInitialized()) {
+				throw jni::Exception("Invalid COM thread model change (MTA->STA)");
+			}
+
 			if (captureDevices.empty()) {
 				enumerateDevices(eCapture);
 			}
@@ -68,6 +72,10 @@ namespace jni
 
 		std::set<AudioDevicePtr> WindowsAudioDeviceManager::getAudioPlaybackDevices()
 		{
+			if (!comInitializer.isInitialized()) {
+				throw jni::Exception("Invalid COM thread model change (MTA->STA)");
+			}
+
 			if (playbackDevices.empty()) {
 				enumerateDevices(eRender);
 			}
