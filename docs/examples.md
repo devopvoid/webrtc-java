@@ -55,12 +55,13 @@ This example is particularly useful for applications that need to implement scre
 
 ## Running the Examples
 
-To run these examples, you need to include the `webrtc-examples` module in your project. You can then execute the main method of each example class.
+To run these examples, you need to navigate into the directory `webrtc-java/webrtc-example` in the project.
+You can then execute the main method of each example class.
 
 For example, to run the `CodecListExample`:
 
 ```bash
-mvn exec:java -Dexec.mainClass="dev.onvoid.webrtc.examples.CodecListExample"
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.CodecListExample"
 ```
 
 Note that these examples focus on setting up the local components for WebRTC communication. In a real application, you would need to establish a connection with a remote peer through a signaling channel (e.g., WebSocket).
