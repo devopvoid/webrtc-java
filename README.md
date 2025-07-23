@@ -20,7 +20,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 
 ## Getting Started
 
-For more detailed examples and guides, check out the [quickstart guide](quickstart.md) and the specific examples in the project repository.
+For more detailed examples and guides, check out the [quickstart guide](https://jrtc.dev/#/quickstart) and the specific examples in the project repository.
 
 ## License
 
