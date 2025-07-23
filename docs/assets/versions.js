@@ -1,0 +1,4 @@
+window.PROJECT_VARS = {
+    VERSION: '0.12.0',
+    VERSION_SNAPSHOT: '0.13.0-SNAPSHOT'
+};

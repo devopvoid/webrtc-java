@@ -1,0 +1,139 @@
+:root {
+    --theme-color: #6366f1;
+}
+
+/* Custom button styles for coverpage */
+.cover .buttons {
+    margin-top: 40px;
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap; /* Ensure buttons wrap on small screens */
+}
+
+.cover .buttons a {
+    display: inline-block;
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: 500;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    margin: 5px; /* Add margin for when buttons wrap */
+    background-color: transparent; /* Outlined button */
+    color: var(--theme-color); /* Text color matches border for outlined style */
+    border: 1px solid var(--theme-color);
+}
+
+.cover .buttons a:hover {
+    background-color: rgba(99, 102, 241, 0.1); /* Light background on hover */
+    border-color: #5253d4;
+    color: #5253d4;
+}
+
+.cover .buttons a:active {
+    background-color: rgba(99, 102, 241, 0.2); /* Slightly darker background when active */
+    border-color: #4338ca;
+    color: #4338ca;
+}
+
+.cover .buttons a span {
+    display: inline-block; /* Ensure the span behaves properly */
+}
+
+/* Feature list styles */
+.cover .features-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 30px auto;
+    max-width: 700px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-gap: 6px;
+}
+
+.cover .feature-list-item {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 8px 12px;
+}
+
+.cover .feature-icon {
+    margin-right: 15px;
+    font-size: 28px;
+    color: var(--theme-color);
+    flex-shrink: 0;
+}
+
+.cover .feature-text {
+    font-size: 16px;
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Media queries for responsive design */
+@media screen and (max-width: 768px) {
+    .cover .buttons {
+        gap: 15px;
+    }
+
+    .cover .buttons a {
+        padding: 9px 18px;
+        font-size: 0.95rem;
+    }
+
+    .cover .features-list {
+        max-width: 90%;
+        grid-gap: 5px;
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .cover .feature-list-item {
+        padding: 6px 10px;
+    }
+
+    .cover .feature-icon {
+        font-size: 24px;
+        margin-right: 10px;
+    }
+
+    .cover .feature-text {
+        font-size: 15px;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .cover .buttons {
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .cover .buttons a {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+        width: 80%;
+        max-width: 200px;
+        text-align: center;
+    }
+
+    .cover .features-list {
+        max-width: 95%;
+        grid-gap: 4px;
+        grid-template-columns: 1fr;
+    }
+
+    .cover .feature-list-item {
+        padding: 5px 8px;
+    }
+
+    .cover .feature-icon {
+        font-size: 20px;
+        margin-right: 8px;
+    }
+
+    .cover .feature-text {
+        font-size: 14px;
+    }
+}
