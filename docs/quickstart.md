@@ -42,7 +42,7 @@ Add the following dependency to your `pom.xml`:
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
-    <version>0.12.0</version>
+    <version>{{VERSION}}</version>
 </dependency>
 ```
 
@@ -54,7 +54,7 @@ If you want to use the latest development version, you can use a SNAPSHOT releas
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java</artifactId>
-    <version>0.13.0-SNAPSHOT</version>
+    <version>{{VERSION_SNAPSHOT}}</version>
 </dependency>
 ```
 
@@ -81,18 +81,18 @@ To use SNAPSHOT versions, you need to add the following repository configuration
 Add the following to your `build.gradle`:
 
 ```gradle
-implementation "dev.onvoid.webrtc:webrtc-java:0.12.0"
+implementation "dev.onvoid.webrtc:webrtc-java:{{VERSION}}"
 ```
 
 For specific platforms, add the appropriate classifier:
 
 ```gradle
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.12.0", classifier: "windows-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.12.0", classifier: "macos-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.12.0", classifier: "macos-aarch64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.12.0", classifier: "linux-x86_64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.12.0", classifier: "linux-aarch64"
-implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "0.12.0", classifier: "linux-aarch32"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{VERSION}}", classifier: "windows-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{VERSION}}", classifier: "macos-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{VERSION}}", classifier: "macos-aarch64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{VERSION}}", classifier: "linux-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{VERSION}}", classifier: "linux-aarch64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{VERSION}}", classifier: "linux-aarch32"
 ```
 
 ## Basic Setup

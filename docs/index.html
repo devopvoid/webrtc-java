@@ -12,6 +12,7 @@
 </head>
 <body>
     <div id="app"></div>
+    <script src="assets/versions.js"></script>
     <script>
         window.$docsify = {
             name: 'webrtc-java',
@@ -23,7 +24,7 @@
             auto2top: true,
             autoHeader: false,
             subMaxLevel: 2,
-            homepage: 'https://raw.githubusercontent.com/devopvoid/webrtc-java/master/README.md',
+            homepage: 'https://raw.githubusercontent.com/devopvoid/webrtc-java/examples/README.md',
             alias: {
                 '.*?/changelog': 'https://raw.githubusercontent.com/devopvoid/webrtc-java/master/CHANGELOG',
             },
@@ -38,7 +39,19 @@
                 buttonText: 'Copy',
                 errorText: 'Error',
                 successText: 'Copied'
-            }
+            },
+            plugins: [
+                function(hook, vm) {
+                    hook.beforeEach(function(content) {
+                        let result = content;
+                        for (const [key, value] of Object.entries(window.PROJECT_VARS)) {
+                            const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+                            result = result.replace(regex, value);
+                        }
+                        return result;
+                    });
+                }
+            ]
         }
     </script>
     <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
