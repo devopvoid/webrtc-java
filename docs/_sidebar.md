@@ -1,6 +1,7 @@
 - Getting started
     - [Overview](README.md)
     - [Quick start](quickstart.md)
+    - [Examples](examples.md)
 
 - Guide
     - [Overview](guide/overview.md)
