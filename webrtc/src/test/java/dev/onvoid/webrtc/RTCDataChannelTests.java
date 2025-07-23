@@ -16,18 +16,24 @@
 
 package dev.onvoid.webrtc;
 
+import static java.util.Objects.nonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.Arrays;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 class RTCDataChannelTests extends TestBase {
 
 	@Test
 	void textMessage() throws Exception {
-		TestPeerConnection caller = new TestPeerConnection(factory);
-		TestPeerConnection callee = new TestPeerConnection(factory);
+		DataPeerConnection caller = new DataPeerConnection(factory);
+		DataPeerConnection callee = new DataPeerConnection(factory);
 
 		caller.setRemotePeerConnection(callee);
 		callee.setRemotePeerConnection(caller);
@@ -45,11 +51,95 @@ class RTCDataChannelTests extends TestBase {
 
 		Thread.sleep(500);
 
-		assertEquals(Arrays.asList("Hello world"), callee.getReceivedTexts());
-		assertEquals(Arrays.asList("Hi :)"), caller.getReceivedTexts());
+		assertEquals(Collections.singletonList("Hello world"), callee.getReceivedTexts());
+		assertEquals(Collections.singletonList("Hi :)"), caller.getReceivedTexts());
 
 		caller.close();
 		callee.close();
 	}
 
+
+
+	private static class DataPeerConnection extends TestPeerConnection {
+
+		private final List<String> receivedTexts = new ArrayList<>();
+
+		private final RTCDataChannel localDataChannel;
+
+		private RTCDataChannel remoteDataChannel;
+
+
+		DataPeerConnection(PeerConnectionFactory factory) {
+			super(factory);
+
+			localDataChannel = getPeerConnection().createDataChannel("dc", new RTCDataChannelInit());
+		}
+
+		@Override
+		public void onDataChannel(RTCDataChannel dataChannel) {
+			remoteDataChannel = dataChannel;
+			remoteDataChannel.registerObserver(new RTCDataChannelObserver() {
+
+				@Override
+				public void onBufferedAmountChange(long previousAmount) { }
+
+				@Override
+				public void onStateChange() { }
+
+				@Override
+				public void onMessage(RTCDataChannelBuffer buffer) {
+					try {
+						decodeMessage(buffer);
+					}
+					catch (Exception e) {
+						Assertions.fail(e);
+					}
+				}
+			});
+		}
+
+		List<String> getReceivedTexts() {
+			return receivedTexts;
+		}
+
+		void sendTextMessage(String message) throws Exception {
+			ByteBuffer data = ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8));
+			RTCDataChannelBuffer buffer = new RTCDataChannelBuffer(data, false);
+
+			localDataChannel.send(buffer);
+		}
+
+		private void decodeMessage(RTCDataChannelBuffer buffer) {
+			ByteBuffer byteBuffer = buffer.data;
+			byte[] payload;
+
+			if (byteBuffer.hasArray()) {
+				payload = byteBuffer.array();
+			}
+			else {
+				payload = new byte[byteBuffer.limit()];
+
+				byteBuffer.get(payload);
+			}
+
+			String text = new String(payload, StandardCharsets.UTF_8);
+
+			receivedTexts.add(text);
+		}
+
+		void close() {
+			if (nonNull(localDataChannel)) {
+				localDataChannel.unregisterObserver();
+				localDataChannel.close();
+				localDataChannel.dispose();
+			}
+			if (nonNull(remoteDataChannel)) {
+				remoteDataChannel.unregisterObserver();
+				remoteDataChannel.close();
+				remoteDataChannel.dispose();
+			}
+
+			super.close();
+		}
+	}
 }

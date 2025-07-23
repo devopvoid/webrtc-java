@@ -22,10 +22,10 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 
 For more detailed information, check out the documentation:
 
-- **[Quickstart](https://jrtc.dev/#/quickstart)** - Get up and running quickly with webrtc-java
-- **[Guides](https://jrtc.dev/#/guide/overview)** - Comprehensive documentation on using the library
-- **[Examples](https://jrtc.dev/#/examples)** - Sample code demonstrating various features
-- **[Build Notes](https://jrtc.dev/#/build)** - Instructions for building the library from source
+- [Quickstart](https://jrtc.dev/#/quickstart) - Get up and running quickly with webrtc-java
+- [Guides](https://jrtc.dev/#/guide/overview) - Comprehensive documentation on using the library
+- [Examples](https://jrtc.dev/#/examples) - Sample code demonstrating various features
+- [Build Notes](https://jrtc.dev/#/build) - Instructions for building the library from source
 
 ## License
 

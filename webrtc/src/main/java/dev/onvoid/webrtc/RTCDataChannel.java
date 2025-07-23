@@ -21,7 +21,7 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import java.nio.ByteBuffer;
 
 /**
- * Represents a bi-directional data channel between two peers. An RTCDataChannel
+ * Represents a bidirectional data channel between two peers. An RTCDataChannel
  * is created via a factory method on an {@link RTCPeerConnection}.
  *
  * @author Alex Andres

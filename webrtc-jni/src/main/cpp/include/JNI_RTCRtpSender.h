@@ -55,6 +55,14 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setStreams
 	(JNIEnv *, jobject, jobject);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpSender
+	 * Method:    getDtmfSender
+	 * Signature: ()Ldev/onvoid/webrtc/RTCDtmfSender;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
+	(JNIEnv *, jobject);
+
 #ifdef __cplusplus
 }
 #endif

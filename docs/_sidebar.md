@@ -11,6 +11,7 @@
     - [Bitrate and Framerate Constraints](guide/constraints.md)
     - [Desktop Capture](guide/desktop_capture.md)
     - [Data Channels](guide/data_channels.md)
+    - [DTMF Sender](guide/dtmf_sender.md)
     - [RTC Stats](guide/rtc_stats.md)
     - [Logging](guide/logging.md)
 

@@ -102,4 +102,14 @@ public class RTCRtpSender extends NativeObject {
 	 */
 	public native void setStreams(List<String> streamIds);
 
+	/**
+	 * Returns the RTCDtmfSender associated with this RTCRtpSender. The RTCDtmfSender
+	 * enables the transmission of DTMF (Dual-Tone Multi-Frequency) tones over the
+	 * RTCPeerConnection.
+	 *
+	 * @return The DTMF sender object associated with this RTP sender, or null if DTMF
+	 *         is not supported for the media type of the associated track.
+	 */
+	public native RTCDtmfSender getDtmfSender();
+
 }
