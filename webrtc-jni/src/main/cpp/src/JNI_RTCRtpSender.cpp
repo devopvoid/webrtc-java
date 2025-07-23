@@ -16,13 +16,14 @@
 
 #include "JNI_RTCRtpSender.h"
 #include "api/RTCRtpSendParameters.h"
-#include <api/WebRTCUtils.h>
+#include "api/WebRTCUtils.h"
 #include "JavaFactories.h"
 #include "JavaList.h"
 #include "JavaRef.h"
 #include "JavaRuntimeException.h"
 #include "JavaUtils.h"
 
+#include "api/RTCDtmfSender.h"
 #include "api/rtp_sender_interface.h"
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTrack
@@ -101,4 +102,22 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setStreams
 	std::vector<std::string> streamIDs = jni::JavaList::toStringVector(env, jni::JavaLocalRef<jobject>(env, streamIdList));
 
 	sender->SetStreams(streamIDs);
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
+(JNIEnv * env, jobject caller)
+{
+	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	CHECK_HANDLEV(sender, nullptr);
+
+	auto dtmfSender = sender->GetDtmfSender();
+	if (!dtmfSender) {
+		return nullptr;
+	}
+
+	auto jDtmfSender = jni::RTCDtmfSender::toJava(env);
+
+	SetHandle(env, jDtmfSender, dtmfSender.get());
+
+	return jDtmfSender.release();
 }

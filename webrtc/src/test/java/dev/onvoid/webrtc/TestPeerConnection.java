@@ -18,24 +18,15 @@ package dev.onvoid.webrtc;
 
 import static java.util.Objects.nonNull;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
-
-import org.junit.jupiter.api.Assertions;
 
 /**
  * Convenience test class implementing the basic {@link RTCPeerConnection}
- * functionality to establish a connection to a remote peer and send text
- * messages via the {@link RTCDataChannel}.
+ * functionality to establish a connection to a remote peer.
  *
  * @author Alex Andres
  */
 class TestPeerConnection implements PeerConnectionObserver {
-
-	private final List<String> receivedTexts;
 
 	private final CountDownLatch connectedLatch;
 
@@ -43,46 +34,19 @@ class TestPeerConnection implements PeerConnectionObserver {
 
 	private RTCPeerConnection remotePeerConnection;
 
-	private RTCDataChannel localDataChannel;
-
-	private RTCDataChannel remoteDataChannel;
-
 
 	TestPeerConnection(PeerConnectionFactory factory) {
 		RTCConfiguration config = new RTCConfiguration();
 
 		localPeerConnection = factory.createPeerConnection(config, this);
-		localDataChannel = localPeerConnection.createDataChannel("dc", new RTCDataChannelInit());
-		receivedTexts = new ArrayList<>();
+		localPeerConnection.createDataChannel("dummy", new RTCDataChannelInit());
+
 		connectedLatch = new CountDownLatch(1);
 	}
 
 	@Override
 	public void onIceCandidate(RTCIceCandidate candidate) {
 		remotePeerConnection.addIceCandidate(candidate);
-	}
-
-	@Override
-	public void onDataChannel(RTCDataChannel dataChannel) {
-		remoteDataChannel = dataChannel;
-		remoteDataChannel.registerObserver(new RTCDataChannelObserver() {
-
-			@Override
-			public void onBufferedAmountChange(long previousAmount) { }
-
-			@Override
-			public void onStateChange() { }
-
-			@Override
-			public void onMessage(RTCDataChannelBuffer buffer) {
-				try {
-					decodeMessage(buffer);
-				}
-				catch (Exception e) {
-					Assertions.fail(e);
-				}
-			}
-		});
 	}
 
 	@Override
@@ -135,56 +99,14 @@ class TestPeerConnection implements PeerConnectionObserver {
 		setObserver.get();
 	}
 
-	void sendTextMessage(String message) throws Exception {
-		ByteBuffer data = ByteBuffer.wrap(message.getBytes(StandardCharsets.UTF_8));
-		RTCDataChannelBuffer buffer = new RTCDataChannelBuffer(data, false);
-
-		localDataChannel.send(buffer);
-	}
-
 	RTCPeerConnection getPeerConnection() {
 		return localPeerConnection;
 	}
 
-	List<String> getReceivedTexts() {
-		return receivedTexts;
-	}
-
 	void close() {
-		if (nonNull(localDataChannel)) {
-			localDataChannel.unregisterObserver();
-			localDataChannel.close();
-			localDataChannel.dispose();
-			localDataChannel = null;
-		}
-		if (nonNull(remoteDataChannel)) {
-			remoteDataChannel.unregisterObserver();
-			remoteDataChannel.close();
-			remoteDataChannel.dispose();
-			remoteDataChannel = null;
-		}
 		if (nonNull(localPeerConnection)) {
 			localPeerConnection.close();
 			localPeerConnection = null;
 		}
 	}
-
-	private void decodeMessage(RTCDataChannelBuffer buffer) {
-		ByteBuffer byteBuffer = buffer.data;
-		byte[] payload;
-
-		if (byteBuffer.hasArray()) {
-			payload = byteBuffer.array();
-		}
-		else {
-			payload = new byte[byteBuffer.limit()];
-
-			byteBuffer.get(payload);
-		}
-
-		String text = new String(payload, StandardCharsets.UTF_8);
-
-		receivedTexts.add(text);
-	}
-
 }

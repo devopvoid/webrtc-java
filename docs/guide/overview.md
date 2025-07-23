@@ -9,6 +9,7 @@ This section provides detailed guides for various features of the webrtc-java li
 - [Audio Processing](guide/audio_processing.md) - Voice processing components
 - [Bitrate and Framerate Constraints](guide/constraints.md) - Controlling media quality
 - [Desktop Capture](guide/desktop_capture.md) - Capturing and sharing screens and windows
+- [DTMF Sender](guide/dtmf_sender.md) - Sending DTMF tones in a call
 
 ## Data Communication
 
