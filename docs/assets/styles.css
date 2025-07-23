@@ -1,5 +1,12 @@
 :root {
-    --theme-color: #4f46e5;
+    --theme-color: #0284c7;
+    --theme-secondary-color: #14b8a6;
+
+    --theme-hover-color: #0ea5e9;
+}
+
+.cover img {
+    width: 300px;
 }
 
 /* Custom button styles for coverpage */
@@ -26,15 +33,12 @@
 }
 
 .cover .buttons a:hover {
-    background-color: rgba(99, 102, 241, 0.1); /* Light background on hover */
-    border-color: #5253d4;
-    color: #5253d4;
+    background-color: #e0f2fe; /* Light background on hover */
+    border-color: var(--theme-hover-color);
 }
 
 .cover .buttons a:active {
     background-color: rgba(99, 102, 241, 0.2); /* Slightly darker background when active */
-    border-color: #4338ca;
-    color: #4338ca;
 }
 
 .cover .buttons a span {
@@ -43,6 +47,8 @@
 
 /* Feature list styles */
 .cover .features-list {
+    background: #f0f9ffaa;
+    border-radius: 4px;
     list-style-type: none;
     padding: 0;
     margin: 30px auto;
@@ -62,7 +68,7 @@
 .cover .feature-icon {
     margin-right: 15px;
     font-size: 28px;
-    color: var(--theme-color);
+    color: var(--theme-secondary-color);
     flex-shrink: 0;
 }
 
@@ -135,5 +141,71 @@
 
     .cover .feature-text {
         font-size: 14px;
+    }
+}
+
+/* Additional styles for the sidebar */
+.sidebar .app-name-link img {
+    max-width: 50%;
+}
+.sidebar-nav > ul > li > p strong {
+    font-size: 15px;
+}
+
+/* Sidebar Toggle */
+.sidebar-toggle {
+    cursor: pointer;
+}
+
+body .sidebar-toggle {
+    background: transparent;
+    top: 1.5rem;
+    left: calc(300px + 1.5rem);
+    cursor: pointer;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    transition: left 0.25s ease-out;
+}
+
+body .sidebar-toggle span {
+    background-color: var(--theme-color);
+    height: 0.2rem;
+    width: 1.5rem;
+    position: absolute;
+    left: 0;
+    margin: 0;
+    transform-origin: 0;
+    border-radius: 1px;
+}
+
+body.close .sidebar-toggle {
+    transition: left 0.25s ease-out;
+    width: 1.5rem;
+    height: 1.5rem;
+    left: 1.5rem;
+}
+
+body.close .sidebar-toggle span {
+    transform-origin: center;
+}
+
+body .sidebar-toggle span:nth-child(1) {
+    top: 0;
+}
+body .sidebar-toggle span:nth-child(2) {
+    top: 0.5rem;
+}
+body .sidebar-toggle span:nth-child(3) {
+    top: 1rem;
+}
+
+@media screen and (max-width: 768px) {
+    body .sidebar-toggle {
+        left: 1rem;
+    }
+
+    body.close .sidebar-toggle {
+        left: calc(300px + 1.5rem);
     }
 }

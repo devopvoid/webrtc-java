@@ -1,4 +1,8 @@
-# webrtc-java
+<img alt="webrtc-java" src="/assets/images/logo.png">
+
+<h1>
+  <span>webrtc-java</span>
+</h1>
 
 > Connecting the Java world through WebRTC
 
