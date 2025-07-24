@@ -164,7 +164,7 @@ if(APPLE)
             ${TARGET_INC_DIR}/sdk/objc
             ${TARGET_INC_DIR}/sdk/objc/base
     )
-    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX WEBRTC_USE_H264)
     target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
     # Find DBus
@@ -285,7 +285,7 @@ execute_command(
 message(STATUS "WebRTC: compile")
 if(APPLE)
     execute_command(
-        COMMAND ninja -C "${WEBRTC_BUILD}" :default sdk:native_api sdk:videocapture_objc
+        COMMAND ninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc
         WORKING_DIRECTORY "${WEBRTC_SRC}"
     )
 

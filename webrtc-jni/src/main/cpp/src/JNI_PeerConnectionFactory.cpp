@@ -32,22 +32,29 @@
 #include "api/create_peerconnection_factory.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
+
+#ifdef __APPLE__
+#include "sdk/objc/components/video_codec/RTCDefaultVideoDecoderFactory.h"
+#include "sdk/objc/components/video_codec/RTCDefaultVideoEncoderFactory.h"
+#include "sdk/objc/native/api/video_decoder_factory.h"
+#include "sdk/objc/native/api/video_encoder_factory.h"
+#else
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/builtin_video_encoder_factory.h"
-
-#include "api/video_codecs/video_decoder_factory.h"
-#include "api/video_codecs/video_decoder_factory_template.h"
 #include "api/video_codecs/video_decoder_factory_template_dav1d_adapter.h"
 #include "api/video_codecs/video_decoder_factory_template_libvpx_vp8_adapter.h"
 #include "api/video_codecs/video_decoder_factory_template_libvpx_vp9_adapter.h"
 #include "api/video_codecs/video_decoder_factory_template_open_h264_adapter.h"
-#include "api/video_codecs/video_encoder.h"
-#include "api/video_codecs/video_encoder_factory.h"
-#include "api/video_codecs/video_encoder_factory_template.h"
 #include "api/video_codecs/video_encoder_factory_template_libaom_av1_adapter.h"
 #include "api/video_codecs/video_encoder_factory_template_libvpx_vp8_adapter.h"
 #include "api/video_codecs/video_encoder_factory_template_libvpx_vp9_adapter.h"
 #include "api/video_codecs/video_encoder_factory_template_open_h264_adapter.h"
+#endif
+
+#include "api/video_codecs/video_decoder_factory.h"
+#include "api/video_codecs/video_decoder_factory_template.h"
+#include "api/video_codecs/video_encoder_factory.h"
+#include "api/video_codecs/video_encoder_factory_template.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 (JNIEnv * env, jobject caller, jobject audioModule, jobject audioProcessing)
@@ -89,6 +96,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			adm,
 			webrtc::CreateBuiltinAudioEncoderFactory(),
 			webrtc::CreateBuiltinAudioDecoderFactory(),
+#ifdef __APPLE__
+			webrtc::ObjCToNativeVideoEncoderFactory([[RTC_OBJC_TYPE(RTCDefaultVideoEncoderFactory) alloc] init]),
+			webrtc::ObjCToNativeVideoDecoderFactory([[RTC_OBJC_TYPE(RTCDefaultVideoDecoderFactory) alloc] init]),
+#else
 			std::make_unique<webrtc::VideoEncoderFactoryTemplate<
 				webrtc::LibvpxVp8EncoderTemplateAdapter,
 				webrtc::LibvpxVp9EncoderTemplateAdapter,
@@ -99,6 +110,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 				webrtc::LibvpxVp9DecoderTemplateAdapter,
 				webrtc::OpenH264DecoderTemplateAdapter,
 				webrtc::Dav1dDecoderTemplateAdapter>>(),
+#endif
 			nullptr,
 			apm);
 
