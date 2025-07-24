@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - "**.cpp"
       - "**.h"
@@ -11,7 +11,7 @@ on:
 
   pull_request:
     branches:
-      - master
+      - main
 
   workflow_dispatch:
 
