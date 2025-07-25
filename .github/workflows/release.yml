@@ -52,6 +52,20 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
       - run: |
           mvn release:prepare -DskipTests -DpushChanges=false -DdevelopmentVersion=${{ github.event.inputs.developmentVersion }}
+          
+          # Get the release version from the release.properties file
+          RELEASE_VERSION=$(grep "project.rel.dev.onvoid.webrtc\\\:webrtc-java=" release.properties | cut -d'=' -f2)
+          echo "Extracted release version from release.properties: $RELEASE_VERSION"
+          
+          # Update versions.js file
+          echo "Updating versions.js with release version: $RELEASE_VERSION and development version: ${{ github.event.inputs.developmentVersion }}"
+          sed -i "s/VERSION: '.*'/VERSION: '$RELEASE_VERSION'/g" docs/assets/versions.js
+          sed -i "s/VERSION_SNAPSHOT: '.*'/VERSION_SNAPSHOT: '${{ github.event.inputs.developmentVersion }}'/g" docs/assets/versions.js
+          
+          # Add the updated file to the existing commit
+          git add docs/assets/versions.js
+          git commit --amend --no-edit
+          
           git push
           git push --tags
 
