@@ -9,6 +9,7 @@
     - [Audio Device Selection](guide/audio_devices.md)
     - [Audio Processing](guide/audio_processing.md)
     - [Bitrate and Framerate Constraints](guide/constraints.md)
+    - [Camera Capture](guide/camera_capture.md)
     - [Desktop Capture](guide/desktop_capture.md)
     - [Data Channels](guide/data_channels.md)
     - [DTMF Sender](guide/dtmf_sender.md)
