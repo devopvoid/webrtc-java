@@ -1,5 +1,19 @@
-## [0.12.0]() (2025-07-18)
+## [0.13.0]() (2025-07-25)
+### Bug Fixes
+- macOS screen capturing only the first frame
+- Crash in `MediaDevices` by validating COM initialization in audio device management
 
+### Feature
+- Enable H.264 support for Linux, macOS and Windows
+- Added RTCDtmfSender implementation for sending DTMF tones
+
+### Documentation
+- Comprehensive guide and examples are now available @ https://jrtc.dev
+
+### Refactoring
+- Moved `master` branch to `main`
+
+## [0.12.0]() (2025-07-18)
 ### Bug Fixes
 - Maven release action for macOS platforms
 
@@ -30,7 +44,6 @@
 - Added missing _libX_ libraries to be installed in GH actions
 
 ## [0.9.0]() (2025-01-02)
-
 ### Bug Fixes
 - Fixed NPE in MediaDevices when no audio device is connected
 - Fixed crashs with jdk version > 17
@@ -44,7 +57,6 @@
 - Added Linux ARM architectures for cross compilation
 
 ## [0.8.0]() (2023-10-14)
-
 ### Enhancement
 - Link libm from sysroot to increase GLIBC (<= 2.18) compatibility #108
 - Initialized configs to be used with GraalVM
@@ -54,7 +66,6 @@
 - Dropped demo code. New demo will be in a new repository.
 
 ## [0.7.0]() (2022-11-14)
-
 ### API changes
 - Set native branch to 4844 (Milestone 99)
 
@@ -79,7 +90,6 @@
 - A new demo app will follow soon
 
 ## [0.6.0]() (2022-01-17)
-
 ### API changes
 - Moved to WebRTC branch 4692 (M97) ([29a6e3b](https://github.com/devopvoid/webrtc-java/commit/29a6e3b))
 
@@ -93,7 +103,6 @@
 -  Fixed camera device selection for a video track on Unix systems #30 ([8b0fb4f](https://github.com/devopvoid/webrtc-java/commit/8b0fb4f))
 
 ## [0.5.0]() (2021-11-25)
-
 ### Enhancement
 - Improved audio processing by basic channel up-mixing to avoid additional audio converter ([e665a4a](https://github.com/devopvoid/webrtc-java/commit/e665a4a))
 - AudioConverter implementation for remixing and resampling ([3182d06](https://github.com/devopvoid/webrtc-java/commit/3182d06))
@@ -108,7 +117,6 @@
 - Fixed basic channel up-mixing in AudioProcessing ([4717db1](https://github.com/devopvoid/webrtc-java/commit/4717db1))
 
 ## [0.4.0]() (2021-11-21)
-
 ### API changes
 - Switch to WebRTC branch M95/4638 ([9173836](https://github.com/devopvoid/webrtc-java/commit/9173836))
 - Audio/VideoSource renamed to Audio/VideoTrackSource ([68a61b9](https://github.com/devopvoid/webrtc-java/commit/68a61b9))
@@ -129,7 +137,6 @@
 - Fixed JavaFX demo crash ([89896fd](https://github.com/devopvoid/webrtc-java/commit/89896fd))
 
 ## [0.3.0]() (2021-08-19)
-
 ### API changes
 - Switch to WebRTC branch M92/4515 ([bb3bbfe](https://github.com/devopvoid/webrtc-java/commit/bb3bbfe))
 
@@ -154,7 +161,6 @@
 - Removed usage of webrtc::VideoType::kNV12 ([32a8ff9](https://github.com/devopvoid/webrtc-java/commit/32a8ff9))
 
 ## [0.2.0]() (2020-02-25)
-
 ### API changes
 - Switch to WebRTC branch M80/3987 ([5a7bba5](https://github.com/devopvoid/webrtc-java/commit/5a7bba5))
 
@@ -179,6 +185,5 @@
 - Refactor bloated project structure ([ff4da53](https://github.com/devopvoid/webrtc-java/commit/ff4da53))
 
 ## [0.1.0](https://github.com/devopvoid/webrtc-java/tree/v0.1.0) (2019-12-22)
-
 ### Project
 - Initial commit ([178b458](https://github.com/devopvoid/webrtc-java/commit/178b458))
