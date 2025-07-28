@@ -54,17 +54,19 @@
                 }
             ]
         }
-
-        window.$docsify = {
-            gtag: 'G-S2MZXXP01X',
-        };
     </script>
     <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
     <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
     <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-gradle.min.js"></script>
-    <script src="//cdn.jsdelivr.net/npm/docsify/dist/plugins/gtag.min.js"></script>
     <script src="//unpkg.com/docsify-pagination/dist/docsify-pagination.min.js"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-S2MZXXP01X"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-S2MZXXP01X');
+    </script>
 </body>
 </html>
