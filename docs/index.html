@@ -7,12 +7,12 @@
     <meta name="description" content="Java native interface implementation based on the free, open WebRTC project. The goal of this project is to enable development of RTC applications for desktop platforms running Java.">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
     <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="assets/styles.css" />
     <script defer src="https://cloud.umami.is/script.js" data-website-id="126654a9-5f07-4b57-ad7e-023eda3980ff"></script>
 </head>
 <body>
     <div id="app"></div>
+
     <script src="assets/versions.js"></script>
     <script>
         window.$docsify = {
@@ -52,7 +52,18 @@
                         }
                         return result;
                     });
-                }
+                },
+                function pageFooter(hook, vm) {
+                    var footer = [
+                        '<footer>',
+                            '<a href="#/privacy_policy" target="_blank">Privacy Policy</a>',
+                        '</footer>',
+                    ].join('');
+
+                    hook.afterEach(function (html) {
+                        return html + footer;
+                    });
+                },
             ]
         }
     </script>

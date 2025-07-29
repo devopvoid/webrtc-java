@@ -79,6 +79,10 @@
     margin: 0;
 }
 
+footer {
+    justify-self: center;
+}
+
 /* Media queries for responsive design */
 @media screen and (max-width: 768px) {
     .cover img {
