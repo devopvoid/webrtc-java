@@ -4,7 +4,7 @@
 
 **Responsible entity:**  
 JRTC.dev  
-Email: [privacy@jrtc.dev](mailto:privacy@jrtc.dev)
+Email: [contact@jrtc.dev](mailto:contact@jrtc.dev)
 
 ---
 
@@ -46,7 +46,7 @@ You also have the right to lodge a complaint with a **data protection authority*
 ## 4. Contact
 
 If you have any questions or concerns regarding this privacy policy or your personal data, please contact us at:  
-[privacy@jrtc.dev](mailto:privacy@jrtc.dev)
+[contact@jrtc.dev](mailto:contact@jrtc.dev)
 
 ---
 
