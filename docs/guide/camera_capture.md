@@ -226,7 +226,7 @@ public class MyPeerConnectionObserver implements PeerConnectionObserver {
 }
 ```
 
-### Processing Video Frames
+## Processing Video Frames
 
 When processing video frames, consider these important points:
 
@@ -243,7 +243,7 @@ When processing video frames, consider these important points:
    - Using a frame queue with a dedicated processing thread
    - Skipping frames if processing can't keep up with the frame rate
 
-#### Converting VideoFrame to BufferedImage
+### Converting VideoFrame to BufferedImage
 
 To display or process video frames in Java applications, you often need to convert the `VideoFrame` to a `BufferedImage`. Here's how to do it:
 
@@ -294,7 +294,7 @@ This conversion process works as follows:
 
 4. The resulting BufferedImage can be used for display in Swing/JavaFX components or for further image processing.
 
-#### Scaling Video Frames
+### Scaling Video Frames
 
 Sometimes you may need to resize video frames to a different resolution, either to reduce processing requirements or to fit a specific display area. The `VideoFrameBuffer` interface provides a `cropAndScale` method that can be used for both cropping and scaling operations:
 
