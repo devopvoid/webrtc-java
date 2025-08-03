@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Java - Browser Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        /* Top navigation bar */
+        .navbar {
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .navbar h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        
+        #status {
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        /* Main content area */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Participant list sidebar */
+        .participants-sidebar {
+            width: 250px;
+            background-color: #f5f5f5;
+            border-right: 1px solid #ddd;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        .participants-sidebar h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        
+        #participantsList {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        #participantsList li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        /* Content area */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        /* Video container */
+        .video-container {
+            display: none; /* Hidden by default, shown when connection is active */
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 800px;
+            text-align: center;
+        }
+        
+        video {
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            border: 1px solid #ccc;
+            background-color: #f0f0f0;
+        }
+        
+        /* Controls */
+        .controls {
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top navigation bar with status -->
+    <div class="navbar">
+        <h1>WebRTC Java - Browser Demo</h1>
+        <div id="status">Not connected</div>
+    </div>
+    
+    <!-- Main content container -->
+    <div class="main-container">
+        <!-- Participant list sidebar -->
+        <div class="participants-sidebar">
+            <h2>Participants</h2>
+            <ul id="participantsList">
+                <!-- Participants will be added here dynamically -->
+            </ul>
+        </div>
+        
+        <!-- Content area -->
+        <div class="content-area">
+            <!-- Video container (hidden by default) -->
+            <div class="video-container" id="videoContainer">
+                <video id="remoteVideo" autoplay playsinline></video>
+            </div>
+            
+            <!-- Controls -->
+            <div class="controls">
+                <button id="stopButton" disabled>Stop Connection</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
+
