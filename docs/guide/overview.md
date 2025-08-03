@@ -7,6 +7,7 @@ This section provides detailed guides for various features of the webrtc-java li
 - [Media Devices](guide/media_devices.md) - Working with audio and video devices
 - [Audio Device Selection](guide/audio_devices.md) - Selecting and configuring audio devices
 - [Audio Processing](guide/audio_processing.md) - Voice processing components
+- [Custom Audio Source](guide/custom_audio_source.md) - Using custom audio sources with WebRTC
 - [Bitrate and Framerate Constraints](guide/constraints.md) - Controlling media quality
 - [Camera Capture](guide/camera_capture.md) - Capturing video from cameras
 - [Desktop Capture](guide/desktop_capture.md) - Capturing and sharing screens and windows
