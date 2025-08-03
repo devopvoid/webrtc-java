@@ -98,19 +98,23 @@ namespace jni
 		FireOnChanged();
 	}
 
-	bool VideoTrackDesktopSource::is_screencast() const {
+	bool VideoTrackDesktopSource::is_screencast() const
+	{
 		return true;
 	}
 
-	std::optional<bool> VideoTrackDesktopSource::needs_denoising() const {
+	std::optional<bool> VideoTrackDesktopSource::needs_denoising() const
+	{
 		return false;
 	}
 
-	webrtc::MediaSourceInterface::SourceState VideoTrackDesktopSource::state() const {
+	webrtc::MediaSourceInterface::SourceState VideoTrackDesktopSource::state() const
+	{
 		return sourceState;
 	}
 
-	bool VideoTrackDesktopSource::remote() const {
+	bool VideoTrackDesktopSource::remote() const
+	{
 		return false;
 	}
 
