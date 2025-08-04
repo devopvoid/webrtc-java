@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import dev.onvoid.webrtc.media.SyncClock;
+
 /**
  * Custom implementation of an audio source for WebRTC that allows pushing audio data
  * from external sources directly to the WebRTC audio pipeline.
@@ -31,6 +33,17 @@ public class CustomAudioSource extends AudioTrackSource {
 		super();
 
 		initialize();
+	}
+
+	/**
+	 * Constructs a new CustomAudioSource instance with a specified SyncClock.
+	 *
+	 * @param clock The SyncClock to use for timing and synchronization.
+	 */
+	public CustomAudioSource(SyncClock clock) {
+		super();
+
+		initializeWithClock(clock);
 	}
 
 	/**
@@ -56,5 +69,12 @@ public class CustomAudioSource extends AudioTrackSource {
 	 * Initializes the native resources required by this audio source.
 	 */
 	private native void initialize();
+
+	/**
+	 * Initializes the native resources required by this audio source with a specified SyncClock.
+	 *
+	 * @param clock The SyncClock to use for timing and synchronization.
+	 */
+	private native void initializeWithClock(SyncClock clock);
 
 }

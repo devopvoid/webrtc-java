@@ -17,6 +17,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_CustomVideoSource
+	 * Method:    initializeWithClock
+	 * Signature: (Ldev/onvoid/webrtc/media/SyncClock;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_initializeWithClock
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_CustomVideoSource
 	 * Method:    dispose
 	 * Signature: ()V
 	 */

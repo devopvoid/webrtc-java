@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.MediaSource;
+import dev.onvoid.webrtc.media.SyncClock;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -96,6 +97,57 @@ class CustomVideoSourceTest extends TestBase {
         testVideoFrame(640, 480);  // VGA
         testVideoFrame(1280, 720); // HD
         testVideoFrame(1920, 1080); // Full HD
+    }
+    
+    @Test
+    void constructWithSyncClock() {
+        // Create a SyncClock.
+        SyncClock clock = new SyncClock();
+        
+        // Create a CustomVideoSource with the clock.
+        CustomVideoSource sourceWithClock = new CustomVideoSource(clock);
+        
+        // Verify the source is created correctly.
+        assertEquals(MediaSource.State.LIVE, sourceWithClock.getState());
+        
+        // Test basic functionality.
+        VideoTrack videoTrack = factory.createVideoTrack("videoTrack", sourceWithClock);
+        
+        final AtomicBoolean frameReceived = new AtomicBoolean(false);
+        final AtomicInteger receivedWidth = new AtomicInteger(0);
+        final AtomicInteger receivedHeight = new AtomicInteger(0);
+        
+        VideoTrackSink testSink = new VideoTrackSink() {
+            @Override
+            public void onVideoFrame(VideoFrame frame) {
+                frameReceived.set(true);
+                receivedWidth.set(frame.buffer.getWidth());
+                receivedHeight.set(frame.buffer.getHeight());
+            }
+        };
+        
+        videoTrack.addSink(testSink);
+        
+        // Create a test frame.
+        int width = 640;
+        int height = 480;
+        NativeI420Buffer buffer = NativeI420Buffer.allocate(width, height);
+        VideoFrame frame = new VideoFrame(buffer, System.nanoTime());
+        
+        // Push the frame to the source.
+        sourceWithClock.pushFrame(frame);
+        
+        // Verify that our sink received the frame with correct parameters.
+        assertTrue(frameReceived.get(), "Video frame was not received by the sink");
+        assertEquals(width, receivedWidth.get(), "Frame width doesn't match");
+        assertEquals(height, receivedHeight.get(), "Frame height doesn't match");
+        
+        // Clean up.
+        frame.release();
+        videoTrack.removeSink(testSink);
+        videoTrack.dispose();
+        sourceWithClock.dispose();
+        clock.dispose();
     }
 
     private void testVideoFrame(int width, int height) {

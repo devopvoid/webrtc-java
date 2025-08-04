@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.MediaSource;
+import dev.onvoid.webrtc.media.SyncClock;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,6 +89,43 @@ class CustomAudioSourceTest extends TestBase {
         testAudioFormat(16, 16000, 1, 160); // 16-bit, 16kHz, mono, 10ms
         testAudioFormat(16, 44100, 2, 441); // 16-bit, 44.1kHz, stereo, 10ms
         testAudioFormat(16, 48000, 2, 480); // 16-bit, 48kHz, stereo, 10ms
+    }
+    
+    @Test
+    void constructWithSyncClock() {
+        // Create a SyncClock.
+        SyncClock clock = new SyncClock();
+        
+        // Create a CustomAudioSource with the clock.
+        CustomAudioSource sourceWithClock = new CustomAudioSource(clock);
+        
+        // Verify the source is created correctly.
+        assertEquals(MediaSource.State.LIVE, sourceWithClock.getState());
+        
+        // Test basic functionality.
+        AudioTrack audioTrack = factory.createAudioTrack("audioTrack", sourceWithClock);
+        
+        final AtomicBoolean dataReceived = new AtomicBoolean(false);
+        AudioTrackSink testSink = (data, bits, rate, chans, frames) -> {
+            dataReceived.set(true);
+        };
+        
+        audioTrack.addSink(testSink);
+        
+        // Create a buffer with test audio data.
+        byte[] audioData = new byte[480 * 2 * 2]; // 10ms of 48kHz stereo 16-bit audio
+        
+        // Push audio data.
+        sourceWithClock.pushAudio(audioData, 16, 48000, 2, 480);
+        
+        // Verify that our sink received the data.
+        assertTrue(dataReceived.get(), "Audio data was not received by the sink");
+        
+        // Clean up
+        audioTrack.removeSink(testSink);
+        audioTrack.dispose();
+        sourceWithClock.dispose();
+        clock.dispose();
     }
 
     private void testAudioFormat(int bitsPerSample, int sampleRate, int channels, int frameCount) {

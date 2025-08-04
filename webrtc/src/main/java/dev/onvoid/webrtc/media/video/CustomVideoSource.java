@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.media.video;
 
+import dev.onvoid.webrtc.media.SyncClock;
+
 /**
  * Custom implementation of a video source for WebRTC that allows pushing video frames
  * from external sources directly to the WebRTC video pipeline.
@@ -31,6 +33,17 @@ public class CustomVideoSource extends VideoTrackSource {
 		super();
 
 		initialize();
+	}
+
+	/**
+	 * Constructs a new CustomVideoSource instance with a specified SyncClock.
+	 *
+	 * @param clock The SyncClock to use for timing and synchronization.
+	 */
+	public CustomVideoSource(SyncClock clock) {
+		super();
+
+		initializeWithClock(clock);
 	}
 
 	/**
@@ -51,5 +64,12 @@ public class CustomVideoSource extends VideoTrackSource {
 	 * Initializes the native resources required by this video source.
 	 */
 	private native void initialize();
+
+	/**
+	 * Initializes the native resources required by this video source with a specified SyncClock.
+	 *
+	 * @param clock The SyncClock to use for timing and synchronization.
+	 */
+	private native void initializeWithClock(SyncClock clock);
 
 }

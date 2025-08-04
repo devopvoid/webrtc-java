@@ -17,6 +17,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_CustomAudioSource
+	 * Method:    initializeWithClock
+	 * Signature: (Ldev/onvoid/webrtc/media/SyncClock;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_initializeWithClock
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_CustomAudioSource
 	 * Method:    dispose
 	 * Signature: ()V
 	 */
