@@ -22,6 +22,7 @@ import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
@@ -51,6 +52,12 @@ public class MediaManager {
 
     /** The audio generator responsible for creating and pushing audio frames to the custom audio source. */
     private AudioGenerator audioGenerator;
+
+    /** The custom video source for generating video frames. */
+    private CustomVideoSource customVideoSource;
+
+    /** The video generator responsible for creating and pushing video frames to the custom video source. */
+    private VideoGenerator videoGenerator;
 
 
     /**
@@ -91,6 +98,35 @@ public class MediaManager {
         }
 
         createVideoTrack(peerConnectionManager);
+
+        // Add tracks to the peer connection.
+        List<String> streamIds = List.of("stream0");
+
+        peerConnectionManager.addTrack(getAudioTrack(), streamIds);
+        peerConnectionManager.addTrack(getVideoTrack(), streamIds);
+    }
+
+    /**
+     * Creates and initializes tracks with options for both custom audio and video sources.
+     *
+     * @param peerConnectionManager The peer connection manager to use for creating tracks.
+     * @param useCustomAudio        Whether to use a custom audio source that can push frames.
+     * @param useCustomVideo        Whether to use a custom video source that can push frames.
+     */
+    public void createTracks(PeerConnectionManager peerConnectionManager, boolean useCustomAudio, boolean useCustomVideo) {
+        if (useCustomAudio) {
+            createCustomAudioTrack(peerConnectionManager);
+        }
+        else {
+            createAudioTrack(peerConnectionManager);
+        }
+
+        if (useCustomVideo) {
+            createCustomVideoTrack(peerConnectionManager);
+        }
+        else {
+            createVideoTrack(peerConnectionManager);
+        }
 
         // Add tracks to the peer connection.
         List<String> streamIds = List.of("stream0");
@@ -141,6 +177,24 @@ public class MediaManager {
         videoTrack = peerConnectionManager.createVideoTrack(videoSource, "video0");
 
         LOG.info("Video track created");
+    }
+
+    /**
+     * Creates a video track with a custom video source that can push video frames.
+     * Also starts the video generator thread that pushes video frames at regular intervals.
+     *
+     * @param peerConnectionManager The peer connection manager to use for creating the track.
+     */
+    public void createCustomVideoTrack(PeerConnectionManager peerConnectionManager) {
+        customVideoSource = new CustomVideoSource();
+
+        videoTrack = peerConnectionManager.createVideoTrack(customVideoSource, "video0");
+
+        // Start the video generator.
+        videoGenerator = new VideoGenerator(customVideoSource);
+        videoGenerator.start();
+
+        LOG.info("Custom video track created with video generator");
     }
 
     /**
@@ -197,6 +251,12 @@ public class MediaManager {
             audioGenerator = null;
         }
 
+        // Stop the video generator if it's running.
+        if (videoGenerator != null) {
+            videoGenerator.stop();
+            videoGenerator = null;
+        }
+
         if (audioTrack != null) {
             audioTrack.dispose();
             audioTrack = null;
@@ -208,6 +268,7 @@ public class MediaManager {
         }
 
         customAudioSource = null;
+        customVideoSource = null;
 
         LOG.info("Media resources disposed");
     }

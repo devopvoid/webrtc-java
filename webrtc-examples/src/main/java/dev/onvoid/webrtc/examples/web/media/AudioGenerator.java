@@ -100,7 +100,7 @@ public class AudioGenerator {
                 byte[] audioData = new byte[DEFAULT_FRAME_COUNT * DEFAULT_CHANNELS * bytesPerSample];
 
                 // Generate a pleasant sine wave at 440 Hz (A4 note).
-                double amplitude = 0.2; // 30% of maximum to avoid being too loud
+                double amplitude = 0.2; // 30% of the maximum to avoid being too loud
                 double frequency = 440.0; // A4 note (440 Hz)
                 double radiansPerSample = 2.0 * Math.PI * frequency / DEFAULT_SAMPLE_RATE;
 

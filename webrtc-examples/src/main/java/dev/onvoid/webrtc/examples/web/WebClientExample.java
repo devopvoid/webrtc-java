@@ -76,7 +76,7 @@ public class WebClientExample {
         peerConnectionManager = new PeerConnectionManager();
 
         mediaManager = new MediaManager();
-        mediaManager.createTracks(peerConnectionManager, true);
+        mediaManager.createTracks(peerConnectionManager, true, true);
 
         setupCallbacks();
 
