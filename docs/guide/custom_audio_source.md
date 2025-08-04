@@ -176,6 +176,9 @@ When you're done with the custom audio source, make sure to clean up resources:
 // Dispose of the audio track
 audioTrack.dispose();
 
+// Dispose of the audio source to prevent memory leaks
+audioSource.dispose();
+
 // If you're using a scheduled executor for pushing audio
 audioStreamer.stop();
 ```

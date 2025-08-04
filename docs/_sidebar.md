@@ -12,6 +12,7 @@
     - [Bitrate and Framerate Constraints](guide/constraints.md)
     - [Camera Capture](guide/camera_capture.md)
     - [Desktop Capture](guide/desktop_capture.md)
+    - [Custom Video Source](guide/custom_video_source.md)
     - [Data Channels](guide/data_channels.md)
     - [DTMF Sender](guide/dtmf_sender.md)
     - [RTC Stats](guide/rtc_stats.md)
