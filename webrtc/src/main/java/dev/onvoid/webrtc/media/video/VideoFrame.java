@@ -19,12 +19,16 @@ package dev.onvoid.webrtc.media.video;
 import dev.onvoid.webrtc.internal.RefCounted;
 
 /**
- * Represents a video frame with an associated frame buffer and metadata.
- * This class implements reference counting to manage memory for video frames.
- * Video frames contain buffer data along with rotation and timestamp information.
+ * Represents a video frame with an underlying buffer, rotation information, and timestamp.
+ * <p>
+ * A VideoFrame holds reference to its buffer data and implements the RefCounted
+ * interface to manage the lifecycle of native resources through reference counting.
+ * The frame includes a timestamp in nanoseconds for synchronization purposes.
+ *
+ * @author Alex Andres
  */
 public class VideoFrame implements RefCounted {
-	
+
 	/** The underlying frame buffer. */
 	public final VideoFrameBuffer buffer;
 
@@ -35,7 +39,28 @@ public class VideoFrame implements RefCounted {
 	public final long timestampNs;
 
 
-	private VideoFrame(VideoFrameBuffer buffer, int rotation, long timestampNs) {
+	/**
+	 * Creates a new VideoFrame with the specified buffer, rotation and timestamp.
+	 *
+	 * @param buffer      The video frame buffer containing the actual frame data.
+	 * @param timestampNs The timestamp of the frame in nanoseconds.
+	 *
+	 * @throws IllegalArgumentException If buffer is null.
+	 */
+	public VideoFrame(VideoFrameBuffer buffer, long timestampNs) {
+		this(buffer, 0, timestampNs);
+	}
+
+	/**
+	 * Creates a new VideoFrame with the specified buffer, rotation and timestamp.
+	 *
+	 * @param buffer      The video frame buffer containing the actual frame data.
+	 * @param rotation    The rotation of the frame in degrees (must be a multiple of 90).
+	 * @param timestampNs The timestamp of the frame in nanoseconds.
+	 *
+	 * @throws IllegalArgumentException If buffer is null or rotation is not a multiple of 90.
+	 */
+	public VideoFrame(VideoFrameBuffer buffer, int rotation, long timestampNs) {
 		if (buffer == null) {
 			throw new IllegalArgumentException("VideoFrameBuffer must not be null");
 		}

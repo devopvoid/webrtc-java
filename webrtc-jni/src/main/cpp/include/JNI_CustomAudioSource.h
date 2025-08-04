@@ -17,6 +17,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_CustomAudioSource
+	 * Method:    dispose
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_dispose
+	(JNIEnv*, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_CustomAudioSource
 	 * Method:    pushAudio
 	 * Signature: ([BIIII)V
 	 */

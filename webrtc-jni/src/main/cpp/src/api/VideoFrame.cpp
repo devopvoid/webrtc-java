@@ -19,6 +19,7 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
+#include "api/video/i420_buffer.h"
 #include "rtc_base/time_utils.h"
 
 namespace jni
@@ -32,9 +33,39 @@ namespace jni
 
 			int rotation = obj.getInt(javaClass->rotation);
 			int64_t timestamp_ns = obj.getLong(javaClass->timestampNs);
+			JavaLocalRef<jobject> jBuffer = obj.getObject(javaClass->buffer);
+			
+			/*
+			// Get the I420Buffer properties
+			const auto i420Class = JavaClasses::get<JavaNativeI420BufferClass>(env);
+			JavaObject bufferObj(env, jBuffer);
+			
+			int width = bufferObj.getInt(i420Class->width);
+			int height = bufferObj.getInt(i420Class->height);
+			
+			JavaLocalRef<jobject> dataY = bufferObj.getObject(i420Class->dataY);
+			JavaLocalRef<jobject> dataU = bufferObj.getObject(i420Class->dataU);
+			JavaLocalRef<jobject> dataV = bufferObj.getObject(i420Class->dataV);
+			
+			int strideY = bufferObj.getInt(i420Class->strideY);
+			int strideU = bufferObj.getInt(i420Class->strideU);
+			int strideV = bufferObj.getInt(i420Class->strideV);
+			
+			// Get the direct buffer addresses
+			const uint8_t * y_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataY.get()));
+			const uint8_t * u_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataU.get()));
+			const uint8_t * v_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataV.get()));
+			
+			// Create a native I420Buffer
+			webrtc::scoped_refptr<webrtc::I420Buffer> buffer = webrtc::I420Buffer::Copy(
+				width, height, y_data, strideY, u_data, strideU, v_data, strideV);
+			*/
+
+			webrtc::I420BufferInterface * i420Buffer = GetHandle<webrtc::I420BufferInterface>(env, jBuffer);
+			webrtc::scoped_refptr<webrtc::I420BufferInterface> buffer(i420Buffer);
 
 			return webrtc::VideoFrame::Builder()
-				//.set_video_frame_buffer(buffer)
+				.set_video_frame_buffer(buffer)
 				//.set_timestamp_rtp(timestamp_rtp)
 				.set_timestamp_ms(timestamp_ns / webrtc::kNumNanosecsPerMillisec)
 				.set_rotation(static_cast<webrtc::VideoRotation>(rotation))

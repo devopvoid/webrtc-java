@@ -46,6 +46,13 @@ public class CustomAudioSource extends AudioTrackSource {
 								 int sampleRate, int channels, int frameCount);
 
 	/**
+	 * Disposes of any native resources held by this audio source.
+	 * This method should be called when the audio source is no longer needed
+	 * to prevent memory leaks.
+	 */
+	public native void dispose();
+
+	/**
 	 * Initializes the native resources required by this audio source.
 	 */
 	private native void initialize();

@@ -19,6 +19,8 @@
 
 #include "media/audio/CustomAudioSource.h"
 
+#include "rtc_base/logging.h"
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_initialize
 (JNIEnv * env, jobject caller)
 {
@@ -26,6 +28,23 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_init
     webrtc::scoped_refptr<jni::CustomAudioSource> source = webrtc::make_ref_counted<jni::CustomAudioSource>(sync_clock);
 
     SetHandle(env, caller, source.release());
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_dispose
+(JNIEnv * env, jobject caller)
+{
+    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
+    CHECK_HANDLE(source);
+
+	webrtc::RefCountReleaseStatus status = source->Release();
+
+	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+	}
+
+	SetHandle<std::nullptr_t>(env, caller, nullptr);
+
+	source = nullptr;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_pushAudio
