@@ -23,6 +23,22 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I420toDirectBuffer
 	(JNIEnv *, jclass, jobject, jint, jobject, jint, jobject, jint, jobject, jint, jint, jint);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_VideoBufferConverter
+	 * Method:    byteArrayToI420
+	 * Signature: ([BIILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;II)V
+	 */
+	 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_byteArrayToI420
+	 (JNIEnv *, jclass, jbyteArray, jint, jint, jobject, jint, jobject, jint, jobject, jint, jint);
+
+	 /*
+	  * Class:     dev_onvoid_webrtc_media_video_VideoBufferConverter
+	  * Method:    directBufferToI420
+	  * Signature: (Ljava/nio/ByteBuffer;IILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;II)V
+	  */
+	 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_directBufferToI420
+	 (JNIEnv *, jclass, jobject, jint, jint, jobject, jint, jobject, jint, jobject, jint, jint);
+
 #ifdef __cplusplus
 }
 #endif
