@@ -41,14 +41,14 @@ public class RTCRtpCodecCapability {
 	/**
 	 * The codec clock rate expressed in Hertz.
 	 */
-	private final int clockRate;
+	private final Integer clockRate;
 
 	/**
 	 * When present, indicates the number of audio channels (mono=1, stereo=2).
 	 * <p>
 	 * Unused for video codecs.
 	 */
-	private final int channels;
+	private final Integer channels;
 
 	/**
 	 * The "format specific parameters" from the "a=fmtp" line in the SDP
@@ -70,7 +70,7 @@ public class RTCRtpCodecCapability {
 	 * @param sdpFmtp   The "a=fmtp" parameters in the SDP.
 	 */
 	public RTCRtpCodecCapability(MediaType mediaType, String name,
-			int clockRate, int channels, Map<String, String> sdpFmtp) {
+			Integer clockRate, Integer channels, Map<String, String> sdpFmtp) {
 		this.mediaType = mediaType;
 		this.name = name;
 		this.clockRate = clockRate;

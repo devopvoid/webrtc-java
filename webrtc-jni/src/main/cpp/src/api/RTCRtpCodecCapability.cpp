@@ -18,6 +18,7 @@
 #include "JavaEnums.h"
 #include "JavaHashMap.h"
 #include "JavaObject.h"
+#include "JavaPrimitive.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
@@ -30,8 +31,8 @@ namespace jni
 		{
 			JavaLocalRef<jobject> mediaType = JavaEnums::toJava(env, capability.kind);
 			JavaLocalRef<jstring> codecName = JavaString::toJava(env, capability.name);
-			jint clockRate = static_cast<jint>(capability.clock_rate.value_or(0));
-			jint channels = static_cast<jint>(capability.num_channels.value_or(0));
+			JavaLocalRef<jobject> clockRate = nullptr;
+			JavaLocalRef<jobject> channels = nullptr;
 
 			JavaHashMap paramMap(env);
 
@@ -42,12 +43,19 @@ namespace jni
 				paramMap.put(key, value);
 			}
 
+			if (capability.clock_rate.has_value()) {
+				clockRate = Integer::create(env, capability.clock_rate.value());
+			}
+			if (capability.num_channels.has_value()) {
+				channels = Integer::create(env, capability.num_channels.value());
+			}
+
 			const auto javaClass = JavaClasses::get<JavaRTCRtpCodecCapabilityClass>(env);
 
 			JavaLocalRef<jobject> fmtMap = paramMap;
 
 			jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
-				mediaType.get(), codecName.get(), clockRate, channels, fmtMap.get());
+				mediaType.get(), codecName.get(), clockRate.get(), channels.get(), fmtMap.get());
 
 			ExceptionCheck(env);
 
@@ -64,14 +72,22 @@ namespace jni
 
 			codecCapability.kind = JavaEnums::toNative<webrtc::MediaType>(env, obj.getObject(javaClass->mediaType));
 			codecCapability.name = JavaString::toNative(env, obj.getString(javaClass->name));
-			codecCapability.clock_rate = obj.getInt<int>(javaClass->clockRate);
-			codecCapability.num_channels = obj.getInt<int>(javaClass->channels);
 
 			for (const auto & entry : JavaHashMap(env, obj.getObject(javaClass->sdpFmtp))) {
 				std::string key = JavaString::toNative(env, static_java_ref_cast<jstring>(env, entry.first));
 				std::string value = JavaString::toNative(env, static_java_ref_cast<jstring>(env, entry.second));
 
 				codecCapability.parameters.emplace(key, value);
+			}
+
+			auto clockRate = obj.getObject(javaClass->clockRate);
+			auto channels = obj.getObject(javaClass->channels);
+
+			if (clockRate.get()) {
+				codecCapability.clock_rate = Integer::getValue(env, clockRate);
+			}
+			if (channels.get()) {
+				codecCapability.num_channels = Integer::getValue(env, channels);
 			}
 
 			return codecCapability;
@@ -81,12 +97,12 @@ namespace jni
 		{
 			cls = FindClass(env, PKG"RTCRtpCodecCapability");
 
-			ctor = GetMethod(env, cls, "<init>", "(L" PKG_MEDIA "MediaType;" STRING_SIG "II" MAP_SIG ")V");
+			ctor = GetMethod(env, cls, "<init>", "(L" PKG_MEDIA "MediaType;" STRING_SIG INTEGER_SIG INTEGER_SIG MAP_SIG ")V");
 
 			mediaType = GetFieldID(env, cls, "mediaType", "L" PKG_MEDIA "MediaType;");
 			name = GetFieldID(env, cls, "name", STRING_SIG);
-			clockRate = GetFieldID(env, cls, "clockRate", "I");
-			channels = GetFieldID(env, cls, "channels", "I");
+			clockRate = GetFieldID(env, cls, "clockRate", INTEGER_SIG);
+			channels = GetFieldID(env, cls, "channels", INTEGER_SIG);
 			sdpFmtp = GetFieldID(env, cls, "sdpFmtp", MAP_SIG);
 		}
 	}

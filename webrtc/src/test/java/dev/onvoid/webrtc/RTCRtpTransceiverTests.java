@@ -55,7 +55,7 @@ class RTCRtpTransceiverTests extends TestBase {
 				new RTCRtpTransceiverInit());
 
 		audioTransceiver.setCodecPreferences(audioPreferences);
-//		videoTransceiver.setCodecPreferences(videoPreferences);
+		videoTransceiver.setCodecPreferences(videoPreferences);
 	}
 
 }
