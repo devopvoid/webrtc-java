@@ -165,6 +165,9 @@ public class WhepExample {
         if (track instanceof VideoTrack vTrack) {
             vTrack.addSink(videoFrame -> {
                 System.out.println("Received video frame: " + videoFrame);
+
+                // IMPORTANT: Always release the frame when done to prevent memory leaks
+                videoFrame.release();
             });
         }
     }
