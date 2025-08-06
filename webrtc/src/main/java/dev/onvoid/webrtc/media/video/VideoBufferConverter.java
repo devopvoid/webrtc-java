@@ -48,6 +48,9 @@ public final class VideoBufferConverter {
 		if (dst == null) {
 			throw new NullPointerException("Destination buffer must not be null");
 		}
+		if (dst.isReadOnly()) {
+			throw new IllegalArgumentException("Destination buffer must not be read-only");
+		}
 		
 		I420Buffer i420 = src.toI420();
 		
@@ -81,6 +84,61 @@ public final class VideoBufferConverter {
 		}
 	}
 
+	public static void convertToI420(byte[] src, I420Buffer dst, FourCC fourCC) throws Exception {
+		if (src == null) {
+			throw new NullPointerException("Source buffer must not be null");
+		}
+		if (dst == null) {
+			throw new NullPointerException("Destination buffer must not be null");
+		}
+
+		byteArrayToI420(
+				src,
+				dst.getWidth(), dst.getHeight(),
+				dst.getDataY(), dst.getStrideY(),
+				dst.getDataU(), dst.getStrideU(),
+				dst.getDataV(), dst.getStrideV(),
+				fourCC.value());
+	}
+
+	public static void convertToI420(ByteBuffer src, I420Buffer dst, FourCC fourCC) throws Exception {
+		if (src == null) {
+			throw new NullPointerException("Source buffer must not be null");
+		}
+		if (dst == null) {
+			throw new NullPointerException("Destination buffer must not be null");
+		}
+
+		if (src.isDirect()) {
+			directBufferToI420(
+					src,
+					dst.getWidth(), dst.getHeight(),
+					dst.getDataY(), dst.getStrideY(),
+					dst.getDataU(), dst.getStrideU(),
+					dst.getDataV(), dst.getStrideV(),
+					fourCC.value());
+		}
+		else {
+			byte[] arrayBuffer;
+
+			if (src.hasArray()) {
+				arrayBuffer = src.array();
+			}
+			else {
+				arrayBuffer = new byte[src.remaining()];
+				src.get(arrayBuffer);
+			}
+
+			byteArrayToI420(
+					arrayBuffer,
+					dst.getWidth(), dst.getHeight(),
+					dst.getDataY(), dst.getStrideY(),
+					dst.getDataU(), dst.getStrideU(),
+					dst.getDataV(), dst.getStrideV(),
+					fourCC.value());
+		}
+	}
+
 	private native static void I420toByteArray(
 			ByteBuffer srcY, int srcStrideY,
 			ByteBuffer srcU, int srcStrideU,
@@ -95,6 +153,22 @@ public final class VideoBufferConverter {
 			ByteBuffer srcV, int srcStrideV,
 			ByteBuffer dst,
 			int width, int height,
+			int fourCC) throws Exception;
+
+	private native static void byteArrayToI420(
+			byte[] src,
+			int width, int height,
+			ByteBuffer dstY, int dstStrideY,
+			ByteBuffer dstU, int dstStrideU,
+			ByteBuffer dstV, int dstStrideV,
+			int fourCC) throws Exception;
+
+	private native static void directBufferToI420(
+			ByteBuffer src,
+			int width, int height,
+			ByteBuffer dstY, int dstStrideY,
+			ByteBuffer dstU, int dstStrideU,
+			ByteBuffer dstV, int dstStrideV,
 			int fourCC) throws Exception;
 
 }
