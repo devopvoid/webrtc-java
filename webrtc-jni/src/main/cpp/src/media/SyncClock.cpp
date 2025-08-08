@@ -37,7 +37,6 @@ namespace jni
 
     webrtc::NtpTime SyncClock::GetNtpTime() const
     {
-        int64_t ntp_time_ms = webrtc::Clock::GetRealTimeClock()->CurrentNtpInMilliseconds();
-        return webrtc::NtpTime(ntp_time_ms);
+        return webrtc::Clock::GetRealTimeClock()->CurrentNtpTime();
     }
 }
