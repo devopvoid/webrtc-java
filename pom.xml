@@ -345,6 +345,12 @@
 				<platform.module>webrtc.macos.aarch64</platform.module>
 			</properties>
 		</profile>
+		<profile>
+			<id>with-media-extension</id>
+			<modules>
+				<module>webrtc-java-media</module>
+			</modules>
+		</profile>
 	</profiles>
 
 	<reporting>
