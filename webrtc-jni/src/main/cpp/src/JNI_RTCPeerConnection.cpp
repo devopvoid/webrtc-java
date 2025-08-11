@@ -605,6 +605,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 		auto observer = GetHandle<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
 
 		if (observer) {
+		    SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
 			delete observer;
 		}
 	}

@@ -269,12 +269,10 @@ namespace jni
 			void deleteGlobalRef()
 			{
 				if (this->obj != nullptr) {
-					JNIEnv * env = nullptr;
-
-					if (env) {
+					JNIEnv * env = AttachCurrentThread();
+					if (env != nullptr) {
 						env->DeleteGlobalRef(this->obj);
 					}
-
 					this->obj = nullptr;
 				}
 			}
