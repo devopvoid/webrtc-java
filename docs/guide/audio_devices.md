@@ -70,6 +70,23 @@ PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
 ```
 
 
+## Disabling Audio
+
+If you want to completely disable audio processing in your WebRTC application, you can create an AudioDeviceModule with the `kDummyAudio` layer:
+
+```java
+import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
+import dev.onvoid.webrtc.media.audio.AudioLayer;
+
+// Create an AudioDeviceModule with dummy audio (no real audio processing)
+AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+
+// Pass it to the PeerConnectionFactory
+PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
+```
+
+This is useful for applications that only need video functionality, when you want to implement your own custom audio handling, or for headless modes where neither audio nor video is required. Using the dummy audio layer is particularly valuable in server-side or automated testing environments where no physical audio devices are available.
+
 ## Additional Features
 
 The `AudioDeviceModule` provides additional methods for controlling audio:
