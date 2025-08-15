@@ -122,15 +122,15 @@ public class NativeLoader {
 	}
 
 	private static String getOSFamily() {
-		String osName = System.getProperty("os.name");
+		String osName = System.getProperty("os.name").toLowerCase();
 
-		if (osName.equals("Mac OS X")) {
+		if (osName.startsWith("mac os")) {
 			return "macos";
 		}
-		if (osName.equals("Linux")) {
+		if (osName.startsWith("linux")) {
 			return "linux";
 		}
-		if (osName.startsWith("Windows")) {
+		if (osName.startsWith("windows")) {
 			return "windows";
 		}
 
@@ -138,16 +138,19 @@ public class NativeLoader {
 	}
 
 	private static String getOSArch() {
-		String osArch = System.getProperty("os.arch");
+		String osArch = System.getProperty("os.arch").toLowerCase();
 
-		if (osArch.equals("x86_64") || osArch.equals("amd64")) {
-			return "x86_64";
-		}
-		if (osArch.equals("aarch32") || osArch.equals("arm")) {
-			return "aarch32";
-		}
-		if (osArch.equals("aarch64") || osArch.equals("arm64")) {
-			return "aarch64";
+		switch (osArch) {
+			case "x86_64":
+			case "x86-64":
+			case "amd64":
+				return "x86_64";
+			case "aarch32":
+			case "arm":
+				return "aarch32";
+			case "aarch64":
+			case "arm64":
+				return "aarch64";
 		}
 
 		throw new RuntimeException("Unsupported CPU architecture: " + osArch);
