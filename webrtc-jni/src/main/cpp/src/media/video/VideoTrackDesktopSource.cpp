@@ -124,8 +124,7 @@ namespace jni
 			if (result == webrtc::DesktopCapturer::Result::ERROR_PERMANENT) {
 				RTC_LOG(LS_ERROR) << "Permanent error capturing desktop frame. Stopping track.";
 
-				terminate();
-				stop();
+                isCapturing = false;
 			}
 
 			return;
