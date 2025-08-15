@@ -51,7 +51,9 @@ public class NativeLoader {
 			return;
 		}
 
-		String libFileName = System.mapLibraryName(libName);
+		String osFamily = getOSFamily();
+		String osArch = getOSArch();
+		String libFileName = System.mapLibraryName(libName + "-" + osFamily + "-" + osArch);
 		String tempName = removeExtension(libFileName);
 		String ext = getExtension(libFileName);
 
@@ -117,6 +119,41 @@ public class NativeLoader {
 		}
 
 		return extSeparator;
+	}
+
+	private static String getOSFamily() {
+		String osName = System.getProperty("os.name").toLowerCase();
+
+		if (osName.startsWith("mac os")) {
+			return "macos";
+		}
+		if (osName.startsWith("linux")) {
+			return "linux";
+		}
+		if (osName.startsWith("windows")) {
+			return "windows";
+		}
+
+		throw new RuntimeException("Unsupported operating system: " + osName);
+	}
+
+	private static String getOSArch() {
+		String osArch = System.getProperty("os.arch").toLowerCase();
+
+		switch (osArch) {
+			case "x86_64":
+			case "x86-64":
+			case "amd64":
+				return "x86_64";
+			case "aarch32":
+			case "arm":
+				return "aarch32";
+			case "aarch64":
+			case "arm64":
+				return "aarch64";
+		}
+
+		throw new RuntimeException("Unsupported CPU architecture: " + osArch);
 	}
 
 }
