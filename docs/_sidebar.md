@@ -16,6 +16,7 @@
     - [Data Channels](guide/data_channels.md)
     - [DTMF Sender](guide/dtmf_sender.md)
     - [RTC Stats](guide/rtc_stats.md)
+    - [Send-only and Receive-only](guide/send_receive_direction.md)
     - [Logging](guide/logging.md)
 
 - [**Build Notes**](build.md)

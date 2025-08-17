@@ -13,6 +13,7 @@ This section provides detailed guides for various features of the webrtc-java li
 - [Desktop Capture](guide/desktop_capture.md) - Capturing and sharing screens and windows
 - [Custom Video Source](guide/custom_video_source.md) - Using custom video sources with WebRTC
 - [DTMF Sender](guide/dtmf_sender.md) - Sending DTMF tones in a call
+- [Send-only and Receive-only](guide/send_receive_direction.md) - Configure transceiver directions (send-only, receive-only or inactive)
 
 ## Data Communication
 
