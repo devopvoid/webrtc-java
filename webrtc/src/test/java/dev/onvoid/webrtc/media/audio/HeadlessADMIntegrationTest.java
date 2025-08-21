@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Collections;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import dev.onvoid.webrtc.*;
@@ -34,8 +32,8 @@ public class HeadlessADMIntegrationTest {
 
         // Latches and flags for coordination.
         CountDownLatch connectedLatch = new CountDownLatch(1);
-        AtomicInteger receivedFrames = new AtomicInteger(0);
-        AtomicBoolean sinkAdded = new AtomicBoolean(false);
+        CountDownLatch sinkAddedLatch = new CountDownLatch(1);
+        CountDownLatch sinkFramesLatch = new CountDownLatch(10);
 
         final AtomicReference<RTCPeerConnection> senderPcRef = new AtomicReference<>();
         final AtomicReference<RTCPeerConnection> receiverPcRef = new AtomicReference<>();
@@ -65,13 +63,12 @@ public class HeadlessADMIntegrationTest {
                     AudioTrack audioTrack = (AudioTrack) track;
                     AudioTrackSink sink = (data, bitsPerSample, sampleRate, channels, frames) -> {
                         if (frames > 0) {
-                            receivedFrames.addAndGet(frames);
+                            sinkFramesLatch.countDown();
                         }
                     };
                     audioTrack.addSink(sink);
-                    sinkAdded.set(true);
 
-
+                    sinkAddedLatch.countDown();
                 }
             }
         };
@@ -137,18 +134,20 @@ public class HeadlessADMIntegrationTest {
         final int frameCount = 480; // 10ms @ 48kHz
         byte[] silence = new byte[frameCount * channels * (bitsPerSample / 8)];
 
-        // Give a small grace period for onTrack to fire and sink to be added.
-        for (int i = 0; i < 10 && !sinkAdded.get(); i++) {
-            Thread.sleep(50);
-        }
+        // Wait for onTrack to fire and sink to be added before sending.
+        assertTrue(sinkAddedLatch.await(5, TimeUnit.SECONDS),
+                "Audio sink was not added in time");
 
-        for (int i = 0; i < 50; i++) { // ~500ms of audio
+        for (int i = 0; i < 10; i++) { // ~100ms of audio
             customSource.pushAudio(silence, bitsPerSample, sampleRate, channels, frameCount);
             Thread.sleep(10);
         }
 
         // Validate that we received audio frames on the remote track sink.
-        assertTrue(receivedFrames.get() > 0, "No audio frames received on remote AudioTrack sink");
+        assertTrue(sinkFramesLatch.await(1, TimeUnit.SECONDS),
+                "No audio frames received on remote AudioTrack sink");
+
+        receiverAdm.stopPlayout();
 
         // Cleanup.
         senderPc.close();
@@ -157,11 +156,10 @@ public class HeadlessADMIntegrationTest {
 //		receiverTrack.dispose();
         customSource.dispose();
 
-		receiverAdm.stopPlayout();
-		receiverAdm.dispose();
-
 		receiverFactory.dispose();
 		senderFactory.dispose();
+
+        receiverAdm.dispose();
     }
 
 
@@ -186,7 +184,10 @@ public class HeadlessADMIntegrationTest {
         }
 
         RTCSessionDescription get() throws Exception {
-            latch.await(10, TimeUnit.SECONDS);
+            boolean completed = latch.await(10, TimeUnit.SECONDS);
+            if (!completed) {
+                throw new TimeoutException("CreateSessionDescription timed out");
+            }
             if (error != null) {
                 throw new IllegalStateException("CreateSessionDescription failed: " + error);
             }
@@ -214,7 +215,10 @@ public class HeadlessADMIntegrationTest {
         }
 
         void get() throws Exception {
-            latch.await(10, TimeUnit.SECONDS);
+            boolean completed = latch.await(10, TimeUnit.SECONDS);
+            if (!completed) {
+                throw new TimeoutException("SetSessionDescription timed out");
+            }
             if (error != null) {
                 throw new IllegalStateException("SetSessionDescription failed: " + error);
             }
