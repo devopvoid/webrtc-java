@@ -11,8 +11,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import dev.onvoid.webrtc.*;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.parallel.Execution;
@@ -22,50 +20,16 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 @Execution(ExecutionMode.SAME_THREAD)
 public class HeadlessADMIntegrationTest {
 
-    private PeerConnectionFactory senderFactory;
-    private PeerConnectionFactory receiverFactory;
-    private AudioDeviceModule receiverAdm;
-
-
-    @BeforeEach
-    void setup() {
-        receiverAdm = new HeadlessAudioDeviceModule();
-		senderFactory = new PeerConnectionFactory();
-        receiverFactory = new PeerConnectionFactory(receiverAdm);
-
-		// Ensure the playout pipeline is started (headless output).
-		try {
-			receiverAdm.initPlayout();
-			receiverAdm.startPlayout();
-		}
-		catch (Throwable ignored) {
-			// This is covered by the HeadlessAudioDeviceModuleTest.
-		}
-    }
-
-    @AfterEach
-    void tearDown() {
-        try {
-            if (receiverAdm != null) {
-                try {
-                    receiverAdm.stopPlayout();
-                }
-                catch (Throwable ignored) {}
-                receiverAdm.dispose();
-            }
-        }
-        finally {
-            if (receiverFactory != null) {
-                receiverFactory.dispose();
-            }
-            if (senderFactory != null) {
-                senderFactory.dispose();
-            }
-        }
-    }
-
     @Test
     void audioReceivedOnSink() throws Exception {
+		AudioDeviceModule receiverAdm = new HeadlessAudioDeviceModule();
+		PeerConnectionFactory senderFactory = new PeerConnectionFactory();
+		PeerConnectionFactory receiverFactory = new PeerConnectionFactory(receiverAdm);
+
+		// Ensure the playout pipeline is started (headless output).
+		receiverAdm.initPlayout();
+		receiverAdm.startPlayout();
+
         RTCConfiguration cfg = new RTCConfiguration();
 
         // Latches and flags for coordination.
@@ -163,7 +127,8 @@ public class HeadlessADMIntegrationTest {
         setRemoteAnswerObs.get();
 
         // Wait for connection established, but also ensure sink was installed.
-        assertTrue(connectedLatch.await(10, TimeUnit.SECONDS), "Peer connection did not reach CONNECTED state in time");
+        assertTrue(connectedLatch.await(10, TimeUnit.SECONDS),
+				"Peer connection did not reach CONNECTED state in time");
 
         // Push a few frames of audio data via CustomAudioSource.
         final int bitsPerSample = 16;
@@ -191,6 +156,12 @@ public class HeadlessADMIntegrationTest {
 //		senderTrack.dispose();
 //		receiverTrack.dispose();
         customSource.dispose();
+
+		receiverAdm.stopPlayout();
+		receiverAdm.dispose();
+
+		receiverFactory.dispose();
+		senderFactory.dispose();
     }
 
 
