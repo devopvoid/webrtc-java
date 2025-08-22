@@ -38,24 +38,23 @@
 
 namespace jni
 {
-    // A playout-only, "discard" AudioDeviceModule that drives the render pipeline
-    // by pulling 10 ms PCM chunks from AudioTransport and discarding them.
-    // - No capture implementation.
-    // - No real devices touched.
+    // A headless AudioDeviceModule that drives the render pipeline by pulling
+    // 10 ms PCM chunks from AudioTransport and discarding them, and simulates
+    // a microphone by pulling 10 ms PCM chunks from the registered AudioTransport
+    // and feeding them into the WebRTC capture pipeline.
     class HeadlessAudioDeviceModule : public webrtc::AudioDeviceModule
     {
         public:
             static webrtc::scoped_refptr<HeadlessAudioDeviceModule> Create(
                     const webrtc::Environment & env,
                     int sample_rate_hz = 48000,
-                    size_t channels = 1,
-                    int bits_per_sample = 16)
+                    size_t channels = 1)
             {
                 return webrtc::make_ref_counted<HeadlessAudioDeviceModule>(
-                        env, sample_rate_hz, channels, bits_per_sample);
+                        env, sample_rate_hz, channels);
             }
 
-            HeadlessAudioDeviceModule(const webrtc::Environment & env, int sample_rate_hz, size_t channels, int bits_per_sample);
+            HeadlessAudioDeviceModule(const webrtc::Environment & env, int sample_rate_hz, size_t channels);
             ~HeadlessAudioDeviceModule() override;
 
             // ----- AudioDeviceModule interface -----
@@ -149,25 +148,33 @@ namespace jni
 
         private:
             bool PlayThreadProcess();
+            bool CaptureThreadProcess();
 
             // State
             bool initialized_ = false;
             bool playout_initialized_ = false;
+            bool recording_initialized_ = false;
             bool playing_ = false;
+            bool recording_ = false;
 
             // Format
             int sample_rate_hz_ = 48000;
             size_t channels_ = 1;
 
             webrtc::BufferT<int16_t> play_buffer_;
+            webrtc::BufferT<int16_t> record_buffer_;
 
             size_t playoutFramesIn10MS_;
+            size_t recordingFramesIn10MS_;
             int64_t lastCallPlayoutMillis_;
+            int64_t lastCallRecordMillis_;
 
             mutable webrtc::Mutex mutex_;
             std::unique_ptr<webrtc::AudioDeviceBuffer> audio_device_buffer_ RTC_GUARDED_BY(mutex_);
+            webrtc::AudioTransport * audio_callback_;
 
             webrtc::PlatformThread render_thread_;
+            webrtc::PlatformThread capture_thread_;
     };
 }
 

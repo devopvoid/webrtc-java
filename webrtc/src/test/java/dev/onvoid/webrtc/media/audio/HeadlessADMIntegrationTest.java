@@ -20,13 +20,17 @@ public class HeadlessADMIntegrationTest {
 
     @Test
     void audioReceivedOnSink() throws Exception {
-        AudioDeviceModuleBase receiverAdm = new HeadlessAudioDeviceModule();
-		PeerConnectionFactory senderFactory = new PeerConnectionFactory();
-		PeerConnectionFactory receiverFactory = new PeerConnectionFactory(receiverAdm);
+        HeadlessAudioDeviceModule senderAdm = new HeadlessAudioDeviceModule();
+        HeadlessAudioDeviceModule receiverAdm = new HeadlessAudioDeviceModule();
+        PeerConnectionFactory senderFactory = new PeerConnectionFactory(senderAdm);
+        PeerConnectionFactory receiverFactory = new PeerConnectionFactory(receiverAdm);
 
-		// Ensure the playout pipeline is started (headless output).
-		receiverAdm.initPlayout();
-		receiverAdm.startPlayout();
+        // Ensure the playout pipeline is started (headless output).
+        receiverAdm.initPlayout();
+        receiverAdm.startPlayout();
+
+        senderAdm.initRecording();
+        senderAdm.startRecording();
 
         RTCConfiguration cfg = new RTCConfiguration();
 
@@ -148,6 +152,7 @@ public class HeadlessADMIntegrationTest {
                 "No audio frames received on remote AudioTrack sink");
 
         receiverAdm.stopPlayout();
+        senderAdm.stopRecording();
 
         // Cleanup.
         senderPc.close();
@@ -156,9 +161,10 @@ public class HeadlessADMIntegrationTest {
 //		receiverTrack.dispose();
         customSource.dispose();
 
-		receiverFactory.dispose();
-		senderFactory.dispose();
+        receiverFactory.dispose();
+        senderFactory.dispose();
 
+        senderAdm.dispose();
         receiverAdm.dispose();
     }
 
