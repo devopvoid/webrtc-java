@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
@@ -66,6 +67,10 @@ class RTCDtmfSenderTests extends TestBase {
 
         void waitUntilCompleted() throws InterruptedException {
             completedLatch.await();
+        }
+
+        boolean awaitCompletion() throws InterruptedException {
+            return completedLatch.await(1, TimeUnit.SECONDS);
         }
     }
 
@@ -124,28 +129,29 @@ class RTCDtmfSenderTests extends TestBase {
     }
 
     @Test
-    void getTones() {
-        dtmfSender.insertDtmf("123", 100, 70);
-        assertEquals("123", dtmfSender.tones());
+    void getTones() throws InterruptedException {
+        insertTones(Arrays.asList("1", "2", "3"), 100, 70);
     }
 
     @Test
-    void getDuration() {
+    void getDuration() throws InterruptedException {
         assertEquals(100, dtmfSender.duration()); // Default value
 
-        assertTrue(dtmfSender.insertDtmf("123", 120, 70));
+        insertTones(Arrays.asList("1", "2", "3"), 120, 70);
         assertEquals(120, dtmfSender.duration());
-        assertTrue(dtmfSender.insertDtmf("456", 170, 70));
+
+        insertTones(Arrays.asList("4", "5", "6"), 170, 70);
         assertEquals(170, dtmfSender.duration());
     }
 
     @Test
-    void getInterToneGap() {
+    void getInterToneGap() throws InterruptedException {
         assertEquals(50, dtmfSender.interToneGap()); // Default value
 
-        assertTrue(dtmfSender.insertDtmf("123", 100, 70));
+        insertTones(Arrays.asList("1", "2", "3"), 100, 70);
         assertEquals(70, dtmfSender.interToneGap());
-        assertTrue(dtmfSender.insertDtmf("456", 100, 60));
+
+        insertTones(Arrays.asList("4", "5", "6"), 100, 60);
         assertEquals(60, dtmfSender.interToneGap());
     }
 
@@ -166,5 +172,26 @@ class RTCDtmfSenderTests extends TestBase {
         Thread.sleep(500);
 
         assertEquals(Arrays.asList("1", "2", "3", null), observer.getTones()); // No new events
+    }
+
+    private void insertTones(List<String> tones, int duration, int interToneGap) throws InterruptedException {
+        TestDtmfSenderObserver observer = new TestDtmfSenderObserver();
+
+        dtmfSender.registerObserver(observer);
+        assertTrue(dtmfSender.insertDtmf(String.join("", tones), duration, interToneGap));
+
+        // Wait until the DTMF sequence completes (observer receives null/empty tone).
+        assertTrue(observer.awaitCompletion(),
+                "Timed out waiting for DTMF sequence to complete");
+
+        // All tones should have been delivered to the observer in order, followed by null.
+        List<String> expectedTones = new ArrayList<>(tones);
+        expectedTones.add(null);
+        assertEquals(expectedTones, observer.getTones());
+
+        // After completion, the internal tone buffer should be empty.
+        assertNull(dtmfSender.tones());
+
+        dtmfSender.unregisterObserver();
     }
 }
