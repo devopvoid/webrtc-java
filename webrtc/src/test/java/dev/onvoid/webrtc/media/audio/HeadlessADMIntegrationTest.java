@@ -20,7 +20,7 @@ public class HeadlessADMIntegrationTest {
 
     @Test
     void audioReceivedOnSink() throws Exception {
-		AudioDeviceModule receiverAdm = new HeadlessAudioDeviceModule();
+        AudioDeviceModuleBase receiverAdm = new HeadlessAudioDeviceModule();
 		PeerConnectionFactory senderFactory = new PeerConnectionFactory();
 		PeerConnectionFactory receiverFactory = new PeerConnectionFactory(receiverAdm);
 

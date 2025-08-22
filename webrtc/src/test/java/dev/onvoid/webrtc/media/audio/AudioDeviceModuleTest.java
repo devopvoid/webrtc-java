@@ -1,9 +1,5 @@
 package dev.onvoid.webrtc.media.audio;
 
-import dev.onvoid.webrtc.media.MediaDevices;
-
-import java.util.List;
-
 import org.junit.jupiter.api.*;
 
 class AudioDeviceModuleTest {
@@ -23,12 +19,6 @@ class AudioDeviceModuleTest {
 
 	@Test
 	void setAudioSink() {
-		List<AudioDevice> devices = MediaDevices.getAudioCaptureDevices();
-
-		if (devices.isEmpty()) {
-			return;
-		}
-
 		AudioSink sink = new AudioSink() {
 
 			@Override
@@ -39,19 +29,11 @@ class AudioDeviceModuleTest {
 			}
 		};
 
-		//module.setRecordingDevice(devices.get(0));
 		module.setAudioSink(sink);
-		//module.initRecording();
 	}
 
 	@Test
 	void setAudioSource() {
-		List<AudioDevice> devices = MediaDevices.getAudioRenderDevices();
-
-		if (devices.isEmpty()) {
-			return;
-		}
-
 		AudioSource source = new AudioSource() {
 
 			@Override
@@ -61,8 +43,6 @@ class AudioDeviceModuleTest {
 			}
 		};
 
-		//module.setPlayoutDevice(devices.get(0));
 		module.setAudioSource(source);
-		//module.initPlayout();
 	}
 }

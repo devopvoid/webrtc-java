@@ -22,14 +22,12 @@ package dev.onvoid.webrtc.media.audio;
  *
  * @author Alex Andres
  */
-public class HeadlessAudioDeviceModule extends AudioDeviceModule {
+public class HeadlessAudioDeviceModule extends AudioDeviceModuleBase {
 
 	/**
 	 * Constructs a HeadlessAudioDeviceModule.
 	 */
 	public HeadlessAudioDeviceModule() {
-		super();
-
 		initialize();
 	}
 

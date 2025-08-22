@@ -20,7 +20,7 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.internal.NativeLoader;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
-import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
+import dev.onvoid.webrtc.media.audio.AudioDeviceModuleBase;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioProcessing;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
@@ -80,7 +80,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 *
 	 * @param audioModule The custom audio device module.
 	 */
-	public PeerConnectionFactory(AudioDeviceModule audioModule) {
+	public PeerConnectionFactory(AudioDeviceModuleBase audioModule) {
 		initialize(audioModule, null);
 	}
 
@@ -91,7 +91,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * @param audioModule     The custom audio device module.
 	 * @param audioProcessing The custom audio processing module.
 	 */
-	public PeerConnectionFactory(AudioDeviceModule audioModule,
+	public PeerConnectionFactory(AudioDeviceModuleBase audioModule,
 			AudioProcessing audioProcessing) {
 		initialize(audioModule, audioProcessing);
 	}
@@ -169,7 +169,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	@Override
 	public native void dispose();
 
-	private native void initialize(AudioDeviceModule audioModule,
+	private native void initialize(AudioDeviceModuleBase audioModule,
 			AudioProcessing audioProcessing);
 
 }
