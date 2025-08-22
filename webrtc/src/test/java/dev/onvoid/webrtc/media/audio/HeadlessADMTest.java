@@ -34,6 +34,12 @@ public class HeadlessADMTest {
             catch (Throwable ignored) {
                 // Ignore any exceptions during stopPlayout, as it may not be initialized.
             }
+            try {
+                adm.stopRecording();
+            }
+            catch (Throwable ignored) {
+                // Ignore any exceptions during stopRecording, as it may not be initialized.
+            }
             adm.dispose();
             adm = null;
         }
@@ -47,6 +53,13 @@ public class HeadlessADMTest {
     }
 
     @Test
+    void getRecordingDevices_returnsAtLeastOneDevice() {
+        List<AudioDevice> devices = adm.getRecordingDevices();
+        assertNotNull(devices, "Recording devices list should not be null");
+        assertFalse(devices.isEmpty(), "Headless module should expose at least one dummy recording device");
+    }
+
+    @Test
     void startStopPlayout_afterInit_doesNotThrow() {
         assertDoesNotThrow(() -> {
             adm.initPlayout();
@@ -56,8 +69,22 @@ public class HeadlessADMTest {
     }
 
     @Test
+    void startStopRecording_afterInit_doesNotThrow() {
+        assertDoesNotThrow(() -> {
+            adm.initRecording();
+            adm.startRecording();
+            adm.stopRecording();
+        });
+    }
+
+    @Test
     void startPlayout_withoutInit_throwsException() {
         assertThrows(Error.class, () -> adm.startPlayout());
+    }
+
+    @Test
+    void startRecording_withoutInit_throwsException() {
+        assertThrows(Error.class, () -> adm.startRecording());
     }
 
 	@Test
