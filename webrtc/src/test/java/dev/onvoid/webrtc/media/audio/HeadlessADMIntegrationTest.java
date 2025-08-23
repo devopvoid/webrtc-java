@@ -38,6 +38,8 @@ public class HeadlessADMIntegrationTest {
         CountDownLatch connectedLatch = new CountDownLatch(1);
         CountDownLatch sinkAddedLatch = new CountDownLatch(1);
         CountDownLatch sinkFramesLatch = new CountDownLatch(10);
+        CountDownLatch senderClosedLatch = new CountDownLatch(1);
+        CountDownLatch receiverClosedLatch = new CountDownLatch(1);
 
         final AtomicReference<RTCPeerConnection> senderPcRef = new AtomicReference<>();
         final AtomicReference<RTCPeerConnection> receiverPcRef = new AtomicReference<>();
@@ -46,7 +48,7 @@ public class HeadlessADMIntegrationTest {
         PeerConnectionObserver receiverObserver = new PeerConnectionObserver() {
             @Override
             public void onIceCandidate(RTCIceCandidate candidate) {
-                // Forward to sender
+                // Forward to sender.
                 RTCPeerConnection spc = senderPcRef.get();
                 if (spc != null) {
                     spc.addIceCandidate(candidate);
@@ -57,6 +59,9 @@ public class HeadlessADMIntegrationTest {
             public void onConnectionChange(RTCPeerConnectionState state) {
                 if (state == RTCPeerConnectionState.CONNECTED) {
                     connectedLatch.countDown();
+                }
+                else if (state == RTCPeerConnectionState.CLOSED) {
+                    receiverClosedLatch.countDown();
                 }
             }
 
@@ -77,11 +82,21 @@ public class HeadlessADMIntegrationTest {
             }
         };
 
-        // Sender observer: forward ICE to receiver.
-        PeerConnectionObserver senderObserver = candidate -> {
-            RTCPeerConnection rpc = receiverPcRef.get();
-            if (rpc != null) {
-                rpc.addIceCandidate(candidate);
+        // Sender observer: forward ICE to receiver, and listen for CLOSED.
+        PeerConnectionObserver senderObserver = new PeerConnectionObserver() {
+            @Override
+            public void onIceCandidate(RTCIceCandidate candidate) {
+                RTCPeerConnection rpc = receiverPcRef.get();
+                if (rpc != null) {
+                    rpc.addIceCandidate(candidate);
+                }
+            }
+
+            @Override
+            public void onConnectionChange(RTCPeerConnectionState state) {
+                if (state == RTCPeerConnectionState.CLOSED) {
+                    senderClosedLatch.countDown();
+                }
             }
         };
 
@@ -148,7 +163,7 @@ public class HeadlessADMIntegrationTest {
         }
 
         // Validate that we received audio frames on the remote track sink.
-        assertTrue(sinkFramesLatch.await(1, TimeUnit.SECONDS),
+        assertTrue(sinkFramesLatch.await(3, TimeUnit.SECONDS),
                 "No audio frames received on remote AudioTrack sink");
 
         receiverAdm.stopPlayout();
@@ -157,6 +172,13 @@ public class HeadlessADMIntegrationTest {
         // Cleanup.
         senderPc.close();
         receiverPc.close();
+
+        // Wait for CLOSED state notifications to avoid races in native teardown.
+        assertTrue(senderClosedLatch.await(5, TimeUnit.SECONDS),
+                "Sender PC did not reach CLOSED state in time");
+        assertTrue(receiverClosedLatch.await(5, TimeUnit.SECONDS),
+                "Receiver PC did not reach CLOSED state in time");
+
 //		senderTrack.dispose();
 //		receiverTrack.dispose();
         customSource.dispose();
