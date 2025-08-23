@@ -18,7 +18,8 @@ package dev.onvoid.webrtc.media.audio;
 
 /**
  * Convenience AudioDeviceModule that uses the dummy audio layer. This avoids touching
- * real OS audio devices while still enabling playout pull via the WebRTC pipeline.
+ * real OS audio devices while still enabling the push and pull of audio via the WebRTC
+ * pipeline.
  *
  * @author Alex Andres
  */
