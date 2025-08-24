@@ -20,17 +20,15 @@ public class HeadlessADMIntegrationTest {
 
     @Test
     void audioReceivedOnSink() throws Exception {
-        HeadlessAudioDeviceModule senderAdm = new HeadlessAudioDeviceModule();
-        HeadlessAudioDeviceModule receiverAdm = new HeadlessAudioDeviceModule();
-        PeerConnectionFactory senderFactory = new PeerConnectionFactory(senderAdm);
-        PeerConnectionFactory receiverFactory = new PeerConnectionFactory(receiverAdm);
+        HeadlessAudioDeviceModule adm = new HeadlessAudioDeviceModule();
+        PeerConnectionFactory factory = new PeerConnectionFactory(adm);
 
         // Ensure the playout pipeline is started (headless output).
-        receiverAdm.initPlayout();
-        receiverAdm.startPlayout();
+        adm.initPlayout();
+        adm.startPlayout();
 
-        senderAdm.initRecording();
-        senderAdm.startRecording();
+        adm.initRecording();
+        adm.startRecording();
 
         RTCConfiguration cfg = new RTCConfiguration();
 
@@ -100,21 +98,21 @@ public class HeadlessADMIntegrationTest {
             }
         };
 
-        RTCPeerConnection senderPc = senderFactory.createPeerConnection(cfg, senderObserver);
-        RTCPeerConnection receiverPc = receiverFactory.createPeerConnection(cfg, receiverObserver);
+        RTCPeerConnection senderPc = factory.createPeerConnection(cfg, senderObserver);
+        RTCPeerConnection receiverPc = factory.createPeerConnection(cfg, receiverObserver);
         senderPcRef.set(senderPc);
         receiverPcRef.set(receiverPc);
 
         // Add an explicit receive-only audio transceiver on the receiver side.
-        AudioTrackSource rxSource = receiverFactory.createAudioSource(new AudioOptions());
-        AudioTrack receiverTrack = receiverFactory.createAudioTrack("rx-audio", rxSource);
+        AudioTrackSource rxSource = factory.createAudioSource(new AudioOptions());
+        AudioTrack receiverTrack = factory.createAudioTrack("rx-audio", rxSource);
         RTCRtpTransceiverInit recvOnlyInit = new RTCRtpTransceiverInit();
         recvOnlyInit.direction = RTCRtpTransceiverDirection.RECV_ONLY;
         receiverPc.addTransceiver(receiverTrack, recvOnlyInit);
 
         // Create sender audio from CustomAudioSource and add to PC.
         CustomAudioSource customSource = new CustomAudioSource();
-        AudioTrack senderTrack = senderFactory.createAudioTrack("audio0", customSource);
+        AudioTrack senderTrack = factory.createAudioTrack("audio0", customSource);
         senderPc.addTrack(senderTrack, Collections.singletonList("stream0"));
 
         // SDP offer/answer exchange.
@@ -166,8 +164,8 @@ public class HeadlessADMIntegrationTest {
         assertTrue(sinkFramesLatch.await(3, TimeUnit.SECONDS),
                 "No audio frames received on remote AudioTrack sink");
 
-        receiverAdm.stopPlayout();
-        senderAdm.stopRecording();
+        adm.stopPlayout();
+        adm.stopRecording();
 
         // Cleanup.
         senderPc.close();
@@ -183,11 +181,9 @@ public class HeadlessADMIntegrationTest {
 //		receiverTrack.dispose();
         customSource.dispose();
 
-        receiverFactory.dispose();
-        senderFactory.dispose();
+        factory.dispose();
 
-        senderAdm.dispose();
-        receiverAdm.dispose();
+        adm.dispose();
     }
 
 
