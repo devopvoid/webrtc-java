@@ -5,20 +5,25 @@
 
 - Guide
     - [Overview](guide/overview.md)
-    - [Media Devices](guide/media_devices.md)
-    - [Audio Device Selection](guide/audio_devices.md)
-    - [Audio Processing](guide/audio_processing.md)
-    - [Custom Audio Source](guide/custom_audio_source.md)
-    - [Headless Audio](guide/headless_audio_device_module.md)
-    - [Bitrate and Framerate Constraints](guide/constraints.md)
-    - [Camera Capture](guide/camera_capture.md)
-    - [Desktop Capture](guide/desktop_capture.md)
-    - [Custom Video Source](guide/custom_video_source.md)
-    - [Data Channels](guide/data_channels.md)
-    - [DTMF Sender](guide/dtmf_sender.md)
-    - [RTC Stats](guide/rtc_stats.md)
-    - [Send-only and Receive-only](guide/send_receive_direction.md)
-    - [Logging](guide/logging.md)
+    - Media Basics
+        - [Media Devices](guide/media_devices.md)
+        - [Bitrate and Framerate Constraints](guide/constraints.md)
+        - [Send-only and Receive-only](guide/send_receive_direction.md)
+    - Audio
+        - [Audio Device Selection](guide/audio_devices.md)
+        - [Audio Processing](guide/audio_processing.md)
+        - [Custom Audio Source](guide/custom_audio_source.md)
+        - [Headless Audio](guide/headless_audio_device_module.md)
+        - [DTMF Sender](guide/dtmf_sender.md)
+    - Video
+        - [Camera Capture](guide/camera_capture.md)
+        - [Desktop Capture](guide/desktop_capture.md)
+        - [Custom Video Source](guide/custom_video_source.md)
+    - Data
+        - [Data Channels](guide/data_channels.md)
+    - Monitoring and Debugging
+        - [RTC Stats](guide/rtc_stats.md)
+        - [Logging](guide/logging.md)
 
 - [**Build Notes**](build.md)
 - [**Changelog**](changelog.md)
