@@ -9,6 +9,7 @@
     - [Audio Device Selection](guide/audio_devices.md)
     - [Audio Processing](guide/audio_processing.md)
     - [Custom Audio Source](guide/custom_audio_source.md)
+    - [Headless Audio](guide/headless_audio_device_module.md)
     - [Bitrate and Framerate Constraints](guide/constraints.md)
     - [Camera Capture](guide/camera_capture.md)
     - [Desktop Capture](guide/desktop_capture.md)

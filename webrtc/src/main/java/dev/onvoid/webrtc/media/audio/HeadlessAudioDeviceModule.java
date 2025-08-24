@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Alex Andres
+ * Copyright 2025 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,27 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.internal;
+package dev.onvoid.webrtc.media.audio;
 
 /**
- * Allows disposing the native object bound to the Java object and free native
- * resources.
+ * Convenience AudioDeviceModule that uses the dummy audio layer. This avoids touching
+ * real OS audio devices while still enabling the push and pull of audio via the WebRTC
+ * pipeline.
  *
  * @author Alex Andres
  */
-public abstract class DisposableNativeObject extends NativeObject {
+public class HeadlessAudioDeviceModule extends AudioDeviceModuleBase {
 
 	/**
-	 * Invoke native object destructors and free native resources.
+	 * Constructs a HeadlessAudioDeviceModule.
 	 */
-	public abstract void dispose();
+	public HeadlessAudioDeviceModule() {
+		initialize();
+	}
+
+	/**
+	 * Initializes the native audio resources. Called during construction of the module.
+	 */
+	private native void initialize();
 
 }
