@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Alex Andres
+ * Copyright 2025 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_API_RTC_CONFIGURATION_H_
-#define JNI_WEBRTC_API_RTC_CONFIGURATION_H_
+#ifndef JNI_WEBRTC_API_PORT_ALLOCATOR_CONFIG_H_
+#define JNI_WEBRTC_API_PORT_ALLOCATOR_CONFIG_H_
 
 #include "JavaClass.h"
 #include "JavaRef.h"
@@ -26,25 +26,21 @@
 
 namespace jni
 {
-	namespace RTCConfiguration
+	namespace PortAllocatorConfig
 	{
-		class JavaRTCConfigurationClass : public JavaClass
+		class JavaPortAllocatorConfigClass : public JavaClass
 		{
 			public:
-				explicit JavaRTCConfigurationClass(JNIEnv * env);
+				explicit JavaPortAllocatorConfigClass(JNIEnv * env);
 
 				jclass cls;
 				jmethodID ctor;
-				jfieldID iceServers;
-				jfieldID iceTransportPolicy;
-				jfieldID bundlePolicy;
-				jfieldID rtcpMuxPolicy;
-				jfieldID certificates;
-				jfieldID portAllocatorConfig;
+				jfieldID minPort;
+				jfieldID maxPort;
+				jfieldID flags;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::PeerConnectionInterface::RTCConfiguration & config);
-		webrtc::PeerConnectionInterface::RTCConfiguration toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::PeerConnectionInterface::PortAllocatorConfig & cfg);
 	}
 }
 
