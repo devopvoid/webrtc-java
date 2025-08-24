@@ -21,6 +21,8 @@
         - [Custom Video Source](guide/custom_video_source.md)
     - Data
         - [Data Channels](guide/data_channels.md)
+    - Networking and ICE
+        - [Port Allocator Config](guide/port_allocator_config.md)
     - Monitoring and Debugging
         - [RTC Stats](guide/rtc_stats.md)
         - [Logging](guide/logging.md)
