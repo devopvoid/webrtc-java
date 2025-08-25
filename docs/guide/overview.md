@@ -38,6 +38,7 @@ This section provides detailed guides for various features of the webrtc-java li
 ## Utilities
 
 - [Audio Converter](guide/audio_converter.md) - Resample and remix 10 ms PCM frames between different rates and channel layouts
+- [Power Management](guide/power_management.md) - Prevent the display from sleeping during desktop capture or presentations
 - [Voice Activity Detector](guide/voice_activity_detector.md) - Detect speech activity in PCM audio streams
 
 ## Additional Resources
