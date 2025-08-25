@@ -27,6 +27,7 @@
         - [RTC Stats](guide/rtc_stats.md)
         - [Logging](guide/logging.md)
     - Utilities
+        - [Audio Converter](guide/audio_converter.md)
         - [Voice Activity Detector](guide/voice_activity_detector.md)
 
 - [**Build Notes**](build.md)
