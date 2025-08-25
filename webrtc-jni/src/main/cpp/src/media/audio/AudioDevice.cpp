@@ -19,6 +19,7 @@
 #include "JavaClasses.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
+#include "JavaEnums.h"
 
 namespace jni
 {
@@ -27,6 +28,7 @@ namespace jni
 		AudioDevice::AudioDevice(std::string name, std::string descriptor) :
 			Device(name, descriptor)
 		{
+		    audioDeviceDirectionType = AudioDeviceDirectionType::adtUnknown;
 		}
 	}
 
@@ -39,6 +41,21 @@ namespace jni
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
+
+            jclass cls = env->GetObjectClass(obj);
+            jmethodID setTransportMethod = env->GetMethodID(cls, "setDeviceTransport", "(L" PKG_MEDIA "DeviceTransport;)V");
+            env->CallVoidMethod(obj, setTransportMethod, JavaEnums::toJava(env, device->getDeviceTransport()).release());
+
+            jmethodID setFormFactorMethod = env->GetMethodID(cls, "setDeviceFormFactor", "(L" PKG_MEDIA "DeviceFormFactor;)V");
+            env->CallVoidMethod(obj, setFormFactorMethod, JavaEnums::toJava(env, device->getDeviceFormFactor()).release());
+
+            auto audioDevice = dynamic_cast<jni::avdev::AudioDevice *>(device.get());//std::static_pointer_cast<avdev::AudioDevice>(device);
+            auto type = JavaEnums::toJava(env, audioDevice->audioDeviceDirectionType).release();
+            jfieldID audioDeviceDirectionTypeField = env -> GetFieldID(cls, "audioDeviceDirectionType", "L" PKG_MEDIA "AudioDeviceDirectionType;");
+            // почему-то не работает установка значения напрямую только через сеттер, хотя в том же RTCConfiguration.cpp это используется
+            // env->SetObjectField(cls, audioDeviceDirectionTypeField, type.get());
+            jmethodID setAudioDeviceDirectionTypeMethod = env->GetMethodID(cls, "setAudioDeviceDirectionType", "(L" PKG_MEDIA "AudioDeviceDirectionType;)V");
+            env->CallVoidMethod(obj, setAudioDeviceDirectionTypeMethod, type);
 
 			return JavaLocalRef<jobject>(env, obj);
 		}

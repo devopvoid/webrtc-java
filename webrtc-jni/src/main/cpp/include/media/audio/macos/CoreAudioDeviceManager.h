@@ -47,6 +47,9 @@ namespace jni
 				bool insertAudioDevice(const AudioDevicePtr & device, const AudioObjectPropertyScope & scope);
 				int getChannelCount(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope);
 				AudioDeviceID getDefaultDeviceID(const AudioObjectPropertyScope & scope);
+				DeviceFormFactor getActualFormFactor(const unsigned int sourceID);
+                DeviceTransport getActualTransport(const unsigned int transportType);
+                void fillAdditionalTypes(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope, AudioDevicePtr device);
 
 				static OSStatus deviceListenerProc(AudioObjectID objectID, UInt32 numberAddresses, const AudioObjectPropertyAddress addresses[], void * clientData);
 		};

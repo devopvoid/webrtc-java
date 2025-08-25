@@ -18,6 +18,7 @@
 #include "JavaClasses.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
+#include "JavaEnums.h"
 
 namespace jni
 {
@@ -27,6 +28,8 @@ namespace jni
 			name(name),
 			descriptor(descriptor)
 		{
+		    deviceTransport = DeviceTransport::trUnknown;
+            deviceFormFactor = DeviceFormFactor::ffUnknown;
 		}
 
 		bool Device::operator==(const Device & other)
@@ -53,6 +56,24 @@ namespace jni
 		{
 			return name;
 		}
+
+		DeviceTransport Device::getDeviceTransport()
+		{
+		    return deviceTransport;
+		}
+
+        DeviceFormFactor Device::getDeviceFormFactor()
+        {
+            return deviceFormFactor;
+        }
+
+        void Device::setDeviceTransport(DeviceTransport newDeviceTransport) {
+            deviceTransport = newDeviceTransport;
+        }
+
+        void Device::setDeviceFormFactor(DeviceFormFactor newDeviceFormFactor) {
+           deviceFormFactor = newDeviceFormFactor;
+        }
 	}
 
 	namespace Device
@@ -64,6 +85,13 @@ namespace jni
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
+
+            jclass cls = env->GetObjectClass(obj);
+            jmethodID setTransportMethod = env->GetMethodID(cls, "setDeviceTransport", "(L" PKG_MEDIA "DeviceTransport;)V");
+            env->CallVoidMethod(obj, setTransportMethod, JavaEnums::toJava(env, device->getDeviceTransport()).release());
+
+            jmethodID setFormFactorMethod = env->GetMethodID(cls, "setDeviceFormFactor", "(L" PKG_MEDIA "DeviceFormFactor;)V");
+            env->CallVoidMethod(obj, setFormFactorMethod, JavaEnums::toJava(env, device->getDeviceFormFactor()).release());
 
 			return JavaLocalRef<jobject>(env, obj);
 		}

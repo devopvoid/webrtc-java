@@ -102,4 +102,34 @@ inline std::string RoleToStr(ERole role)
 	}
 }
 
+inline std::string FormFactorToStr(EndpointFormFactor formFactor)
+{
+	switch (formFactor) {
+		case RemoteNetworkDevice:
+			return "RemoteNetworkDevice";
+		case Speakers:
+			return "Speakers";
+		case Headphones:
+			return "Headphones";
+        case Microphone:
+            return "Microphone";
+        case Headset:
+            return "Headset";
+        case Handset:
+            return "Handset";
+        case UnknownDigitalPassthrough:
+            return "UnknownDigitalPassthrough";
+        case SPDIF:
+            return "SPDIF";
+        case DigitalAudioDisplayDevice:
+            return "DigitalAudioDisplayDevice";
+        case UnknownFormFactor:
+            return "UnknownFormFactor";
+        case EndpointFormFactor_enum_count:
+            return "EndpointFormFactor_enum_count";
+		default:
+			return "Unknown Form Factor";
+	}
+}
+
 #endif
