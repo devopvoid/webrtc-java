@@ -38,6 +38,8 @@ This section provides detailed guides for various features of the webrtc-java li
 ## Utilities
 
 - [Audio Converter](guide/audio_converter.md) - Resample and remix 10 ms PCM frames between different rates and channel layouts
+- [Audio Recorder](guide/utilities/audio_recorder.md) - Capture microphone input and receive 10 ms PCM frames via an AudioSink
+- [Audio Player](guide/utilities/audio_player.md) - Play PCM audio to an output device by supplying frames via an AudioSource
 - [Video Buffer Converter](guide/utilities/video_buffer_converter.md) - Convert between I420 and common FourCC pixel formats (e.g., RGBA, NV12)
 - [Video Capture](guide/video_capturer.md) - Control a camera device, configure capabilities, and deliver frames to a sink
 - [Screen Capture](guide/screen_capturer.md) - Enumerate and capture full desktop screens/monitors

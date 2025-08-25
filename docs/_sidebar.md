@@ -28,6 +28,8 @@
         - [Logging](guide/logging.md)
     - Utilities
         - [Audio Converter](guide/audio_converter.md)
+        - [Audio Recorder](guide/utilities/audio_recorder.md)
+        - [Audio Player](guide/utilities/audio_player.md)
         - [Video Buffer Converter](guide/utilities/video_buffer_converter.md)
         - [Video Capture](guide/video_capturer.md)
         - [Screen Capture](guide/screen_capturer.md)

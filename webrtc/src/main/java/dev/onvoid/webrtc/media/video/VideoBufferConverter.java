@@ -43,7 +43,8 @@ public final class VideoBufferConverter {
 	 * @throws NullPointerException if {@code src} or {@code dst} is {@code null}.
 	 * @throws Exception            if the native conversion fails.
 	 */
-	public static void convertFromI420(VideoFrameBuffer src, byte[] dst, FourCC fourCC) throws Exception {
+	public static void convertFromI420(VideoFrameBuffer src, byte[] dst, FourCC fourCC)
+			throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");
 		}
@@ -76,7 +77,8 @@ public final class VideoBufferConverter {
 	 * @throws IllegalArgumentException if {@code dst} is read-only.
 	 * @throws Exception                if the native conversion fails.
 	 */
-	public static void convertFromI420(VideoFrameBuffer src, ByteBuffer dst, FourCC fourCC) throws Exception {
+	public static void convertFromI420(VideoFrameBuffer src, ByteBuffer dst, FourCC fourCC)
+			throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");
 		}
@@ -130,7 +132,8 @@ public final class VideoBufferConverter {
 	 * @throws NullPointerException if {@code src} or {@code dst} is {@code null}.
 	 * @throws Exception            if the native conversion fails.
 	 */
-	public static void convertToI420(byte[] src, I420Buffer dst, FourCC fourCC) throws Exception {
+	public static void convertToI420(byte[] src, I420Buffer dst, FourCC fourCC)
+			throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");
 		}
@@ -160,7 +163,8 @@ public final class VideoBufferConverter {
 	 * @throws NullPointerException if {@code src} or {@code dst} is {@code null}.
 	 * @throws Exception            if the native conversion fails.
 	 */
-	public static void convertToI420(ByteBuffer src, I420Buffer dst, FourCC fourCC) throws Exception {
+	public static void convertToI420(ByteBuffer src, I420Buffer dst, FourCC fourCC)
+			throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");
 		}
