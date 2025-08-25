@@ -139,7 +139,9 @@ namespace jni
 			if (!pa_threaded_mainloop_in_thread(mainloop))
 				pa_threaded_mainloop_unlock(mainloop);
 
-			return std::make_shared<AudioDevice>(defaultCaptureDescName, defaultCaptureName);
+            AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultCaptureDescName, defaultCaptureName);
+			defaultDevice->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+			return defaultDevice;
 		}
 
 		std::set<AudioDevicePtr> PulseAudioDeviceManager::getAudioCaptureDevices()
@@ -174,7 +176,9 @@ namespace jni
 			if (!pa_threaded_mainloop_in_thread(mainloop))
 				pa_threaded_mainloop_unlock(mainloop);
 
-			return std::make_shared<AudioDevice>(defaultPlaybackDescName, defaultPlaybackName);
+            AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultPlaybackDescName, defaultPlaybackName);
+            defaultDevice->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+            return defaultDevice;
 		}
 
 		std::set<AudioDevicePtr> PulseAudioDeviceManager::getAudioPlaybackDevices()
@@ -213,7 +217,7 @@ namespace jni
 			}
 
 			if (info->monitor_of_sink == PA_INVALID_INDEX) {
-				engine->insertDevice(engine->captureDevices, info->description, info->name, info->index, false);
+				engine->insertDevice(engine->captureDevices, info->proplist, info->description, info->name, info->index, false, true);
 			}
 		}
 
@@ -226,7 +230,7 @@ namespace jni
 				return;
 			}
 
-			engine->insertDevice(engine->captureDevices, info->description, info->name, info->index, true);
+			engine->insertDevice(engine->captureDevices, info->proplist, info->description, info->name, info->index, true, true);
 		}
 
 		void PulseAudioDeviceManager::getSinkInfoCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata)
@@ -250,7 +254,7 @@ namespace jni
 				return;
 			}
 
-			engine->insertDevice(engine->playbackDevices, info->description, info->name, info->index, false);
+			engine->insertDevice(engine->playbackDevices, info->proplist, info->description, info->name, info->index, false, false);
 		}
 
 		void PulseAudioDeviceManager::newSinkCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata)
@@ -262,14 +266,20 @@ namespace jni
 				return;
 			}
 
-			engine->insertDevice(engine->playbackDevices, info->description, info->name, info->index, true);
+			engine->insertDevice(engine->playbackDevices, info->proplist, info->description, info->name, info->index, true, false);
 		}
 
-		void PulseAudioDeviceManager::insertDevice(DeviceList<AudioDevicePtr> & devices, const char * name, const char * desc, uint32_t index, bool notify)
+		void PulseAudioDeviceManager::insertDevice(DeviceList<AudioDevicePtr> & devices, pa_proplist * proplist, const char * name, const char * desc, uint32_t index, bool notify, bool isCapture)
 		{
 			auto device = std::make_shared<AudioDevice>(name, desc);
 
 			if (devices.insertDevice(device)) {
+			    if (isCapture) {
+                    device->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+                } else {
+                    device->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+                }
+                fillAdditionalTypes(device, proplist);
 				deviceMap[index] = device;
 			}
 			if (notify) {
@@ -277,7 +287,7 @@ namespace jni
 			}
 		}
 
-		void PulseAudioDeviceManager::removeDevice(DeviceList<AudioDevicePtr> & devices, uint32_t index)
+		void PulseAudioDeviceManager::removeDevice(DeviceList<AudioDevicePtr> & devices, uint32_t index, bool isCapture)
 		{
 			auto it = deviceMap.find(index);
 			if (it == deviceMap.end()) {
@@ -285,6 +295,12 @@ namespace jni
 			}
 
 			if (devices.removeDevice(it->second)) {
+			    if (isCapture) {
+			        it->second->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+			    } else {
+			        it->second->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+			    }
+
 				notifyDeviceDisconnected(it->second);
 				deviceMap.erase(it);
 			}
@@ -317,7 +333,7 @@ namespace jni
 					op = pa_context_get_source_info_by_index(ctx, idx, newSourceCallback, engine);
 				}
 				if (operation == PA_SUBSCRIPTION_EVENT_REMOVE) {
-					engine->removeDevice(engine->captureDevices, idx);
+					engine->removeDevice(engine->captureDevices, idx, true);
 				}
 			}
 			if (facility == PA_SUBSCRIPTION_EVENT_SINK) {
@@ -325,7 +341,7 @@ namespace jni
 					op = pa_context_get_sink_info_by_index(ctx, idx, newSinkCallback, engine);
 				}
 				if (operation == PA_SUBSCRIPTION_EVENT_REMOVE) {
-					engine->removeDevice(engine->playbackDevices, idx);
+					engine->removeDevice(engine->playbackDevices, idx, false);
 				}
 			}
 
@@ -334,5 +350,58 @@ namespace jni
 			}
 		}
 
+        void PulseAudioDeviceManager::fillAdditionalTypes(AudioDevicePtr device, pa_proplist * proplist) {
+            // all property values see here https://docs.rs/libpulse-sys/latest/libpulse_sys/proplist/
+            const char *formFactor;
+            formFactor = pa_proplist_gets(proplist, PA_PROP_DEVICE_FORM_FACTOR);
+            std::string formFactorStr = "";
+            if (formFactor) {
+                formFactorStr = std::string(formFactor);
+            }
+
+            const char *deviceTransport;
+            deviceTransport = pa_proplist_gets(proplist, PA_PROP_DEVICE_BUS);
+            std::string deviceTransportStr = "";
+            if (deviceTransport) {
+                deviceTransportStr = std::string(deviceTransport);
+            }
+
+            const char *propHDMI;
+            propHDMI = pa_proplist_gets(proplist, PA_PROP_DEVICE_BUS_PATH);
+            if (propHDMI && std::string(propHDMI).find("_hdmi") != std::string::npos) {
+                deviceTransportStr = "hdmi";
+            }
+
+
+            device->setDeviceFormFactor(getActualFormFactor(formFactorStr));
+            device->setDeviceTransport(getActualTransport(deviceTransportStr));
+        }
+
+        DeviceFormFactor PulseAudioDeviceManager::getActualFormFactor(std::string formFactor) {
+            if (formFactor == "speaker") {
+                return DeviceFormFactor::ffSpeaker;
+            } else  if (formFactor == "microphone") {
+                return DeviceFormFactor::ffMicrophone;
+            } else  if (formFactor == "headset") {
+                return DeviceFormFactor::ffHeadset;
+            } else  if (formFactor == "headphone") {
+                return DeviceFormFactor::ffHeadphone;
+            } else {
+                return DeviceFormFactor::ffUnknown;
+            }
+//            return DeviceFormFactor::ffUnknown;
+        }
+
+        DeviceTransport PulseAudioDeviceManager::getActualTransport(std::string transport) {
+            if (transport == "usb") {
+                return DeviceTransport::trUsb;
+            } else if (transport == "bluetooth") {
+                return DeviceTransport::trWireless;
+            } else if (transport == "hdmi") {
+                return DeviceTransport::trHdmi;
+            } else {
+                return DeviceTransport::trUnknown;
+            }
+        }
 	}
 }

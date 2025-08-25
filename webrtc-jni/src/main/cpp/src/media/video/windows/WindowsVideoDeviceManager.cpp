@@ -87,6 +87,8 @@ namespace jni
 			uint32_t deviceCount = info->NumberOfDevices();
 
 			if (deviceCount > 0) {
+			    // fix duplicated item when device reconect to port. The comparator does not always work correctly.
+			    captureDevices.clearDevices();
 				const uint32_t size = webrtc::kVideoCaptureDeviceNameLength;
 
 				for (uint32_t i = 0; i < deviceCount; ++i) {
