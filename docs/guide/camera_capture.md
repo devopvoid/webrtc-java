@@ -114,43 +114,6 @@ videoSource.stop();
 videoSource.dispose();
 ```
 
-### Handling Device Changes
-
-If cameras might change during your application's lifecycle (e.g., cameras connecting or disconnecting), you should implement a device change listener:
-
-```java
-import dev.onvoid.webrtc.media.Device;
-import dev.onvoid.webrtc.media.DeviceChangeListener;
-import dev.onvoid.webrtc.media.MediaDevices;
-import dev.onvoid.webrtc.media.video.VideoDevice;
-
-// Create a device change listener
-DeviceChangeListener listener = new DeviceChangeListener() {
-    @Override
-    public void deviceConnected(Device device) {
-        if (device instanceof VideoDevice) {
-            System.out.println("Camera connected: " + device.getName());
-            // You might want to update your UI or offer the new camera as an option
-        }
-    }
-
-    @Override
-    public void deviceDisconnected(Device device) {
-        if (device instanceof VideoDevice) {
-            System.out.println("Camera disconnected: " + device.getName());
-            // Handle the case where the current camera was disconnected
-        }
-    }
-};
-
-// Register the listener
-MediaDevices.addDeviceChangeListener(listener);
-
-// ... later, when you're done listening for events
-// Unregister the listener
-MediaDevices.removeDeviceChangeListener(listener);
-```
-
 ## Receiving Video Frames
 
 Once you have set up your camera video source and peer connection, you'll likely want to receive and process the video frames. This section explains how to receive both local and remote video frames.
@@ -243,56 +206,11 @@ When processing video frames, consider these important points:
    - Using a frame queue with a dedicated processing thread
    - Skipping frames if processing can't keep up with the frame rate
 
-### Converting VideoFrame to BufferedImage
+### Converting VideoFrame to other pixel formats
 
-To display or process video frames in Java applications, you often need to convert the `VideoFrame` to a `BufferedImage`. Here's how to do it:
+For converting I420 frames to UI-friendly pixel formats (e.g., RGBA) and other pixel format conversions, use the `VideoBufferConverter` utility.
 
-```java
-import dev.onvoid.webrtc.media.FourCC;
-import dev.onvoid.webrtc.media.video.VideoBufferConverter;
-import dev.onvoid.webrtc.media.video.VideoFrame;
-import dev.onvoid.webrtc.media.video.VideoFrameBuffer;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
-
-public void onVideoFrame(VideoFrame frame) {
-    try {
-        // Get frame dimensions
-        VideoFrameBuffer frameBuffer = frame.buffer;
-        int frameWidth = frameBuffer.getWidth();
-        int frameHeight = frameBuffer.getHeight();
-        
-        // Create a BufferedImage with ABGR format (compatible with RGBA conversion)
-        BufferedImage image = new BufferedImage(frameWidth, frameHeight, BufferedImage.TYPE_4BYTE_ABGR);
-        
-        // Get the underlying byte array from the BufferedImage
-        byte[] imageBuffer = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-        
-        // Convert the frame buffer from I420 format to RGBA format
-        VideoBufferConverter.convertFromI420(frameBuffer, imageBuffer, FourCC.RGBA);
-        
-        // Now you can use the BufferedImage for display or further processing
-        // For example, you could display it in a Swing component:
-        // myJLabel.setIcon(new ImageIcon(image));
-        
-    } catch (Exception e) {
-        e.printStackTrace();
-    } finally {
-        // Always release the frame when done
-        frame.release();
-    }
-}
-```
-
-This conversion process works as follows:
-
-1. Create a `BufferedImage` with the same dimensions as the video frame, using `BufferedImage.TYPE_4BYTE_ABGR` format which is compatible with the RGBA format we'll convert to.
-
-2. Get the underlying byte array from the BufferedImage using `((DataBufferByte) image.getRaster().getDataBuffer()).getData()`.
-
-3. Use `VideoBufferConverter.convertFromI420()` to convert the frame buffer from I420 format (which is the internal format used by WebRTC) to RGBA format, storing the result directly in the BufferedImage's byte array.
-
-4. The resulting BufferedImage can be used for display in Swing/JavaFX components or for further image processing.
+- See: [Video Buffer Converter](guide/utilities/video_buffer_converter.md)
 
 ### Scaling Video Frames
 
