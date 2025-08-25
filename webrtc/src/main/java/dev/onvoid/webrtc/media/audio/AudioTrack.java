@@ -45,8 +45,7 @@ public class AudioTrack extends MediaStreamTrack {
 	}
 
 	/**
-	 * Adds an AudioSink to the track. A track can have any number of
-	 * AudioSinks.
+	 * Adds an AudioSink to the track. A track can have any number of AudioSinks.
 	 *
 	 * @param sink The audio sink that will receive audio data from the track.
 	 */

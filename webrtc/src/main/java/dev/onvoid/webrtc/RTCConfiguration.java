@@ -58,6 +58,12 @@ public class RTCConfiguration {
 	 */
 	public List<RTCCertificatePEM> certificates;
 
+	/**
+	 * Port allocator configuration for controlling candidate port ranges and
+	 * transport behavior.
+	 */
+	public PortAllocatorConfig portAllocatorConfig;
+
 
 	/**
 	 * Creates an instance of RTCConfiguration.
@@ -68,6 +74,7 @@ public class RTCConfiguration {
 		bundlePolicy = RTCBundlePolicy.BALANCED;
 		rtcpMuxPolicy = RTCRtcpMuxPolicy.REQUIRE;
 		certificates = new ArrayList<>();
+		portAllocatorConfig = new PortAllocatorConfig();
 	}
 
 }

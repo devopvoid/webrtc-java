@@ -16,12 +16,33 @@
 
 package dev.onvoid.webrtc.media.video;
 
-import dev.onvoid.webrtc.media.FourCC;
-
 import java.nio.ByteBuffer;
 
+import dev.onvoid.webrtc.media.FourCC;
+
+/**
+ * Utility methods to convert between I420 video frame buffers and other pixel
+ * formats represented by a FourCC. Delegates actual conversion work to native
+ * methods for performance.
+ *
+ * @author Alex Andres
+ */
 public final class VideoBufferConverter {
 
+	/**
+	 * Convert an arbitrary {@link VideoFrameBuffer} to the specified pixel format
+	 * (given by {@code fourCC}) and write the result into a destination byte array.
+	 * <p>
+	 * The source buffer is first converted (if necessary) to an intermediate
+	 * I420 layout via {@link VideoFrameBuffer#toI420()} and then transformed.
+	 *
+	 * @param src    Source video frame buffer (will be converted to I420 if not already).
+	 * @param dst    Destination byte array expected to be large enough to hold the converted frame.
+	 * @param fourCC Target FourCC format identifier.
+	 *
+	 * @throws NullPointerException if {@code src} or {@code dst} is {@code null}.
+	 * @throws Exception            if the native conversion fails.
+	 */
 	public static void convertFromI420(VideoFrameBuffer src, byte[] dst, FourCC fourCC) throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");
@@ -40,7 +61,21 @@ public final class VideoBufferConverter {
 				i420.getWidth(), i420.getHeight(),
 				fourCC.value());
 	}
-	
+
+	/**
+	 * Convert an arbitrary {@link VideoFrameBuffer} to the specified pixel format
+	 * and write the result into a {@link ByteBuffer}. If the destination buffer
+	 * is a direct buffer, a native direct path is used; otherwise its backing
+	 * array (or a temporary array) is employed.
+	 *
+	 * @param src    Source video frame buffer.
+	 * @param dst    Writable destination {@link ByteBuffer}. Must not be read-only.
+	 * @param fourCC Target FourCC format identifier.
+	 *
+	 * @throws NullPointerException     if {@code src} or {@code dst} is {@code null}.
+	 * @throws IllegalArgumentException if {@code dst} is read-only.
+	 * @throws Exception                if the native conversion fails.
+	 */
 	public static void convertFromI420(VideoFrameBuffer src, ByteBuffer dst, FourCC fourCC) throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");
@@ -84,6 +119,17 @@ public final class VideoBufferConverter {
 		}
 	}
 
+	/**
+	 * Convert a source frame stored in a byte array (encoded in the format indicated
+	 * by {@code fourCC}) to I420 and write the planes into the provided {@link I420Buffer}.
+	 *
+	 * @param src    Source pixel data in the specified FourCC format.
+	 * @param dst    Destination I420 buffer (pre-allocated).
+	 * @param fourCC FourCC describing the layout of {@code src}.
+	 *
+	 * @throws NullPointerException if {@code src} or {@code dst} is {@code null}.
+	 * @throws Exception            if the native conversion fails.
+	 */
 	public static void convertToI420(byte[] src, I420Buffer dst, FourCC fourCC) throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");
@@ -101,6 +147,19 @@ public final class VideoBufferConverter {
 				fourCC.value());
 	}
 
+	/**
+	 * Convert a source frame stored in a {@link ByteBuffer} (encoded in the format
+	 * specified by {@code fourCC}) to I420 and write the result into the provided
+	 * {@link I420Buffer}. Uses a direct native path for direct buffers; otherwise
+	 * reads from the backing or a temporary array.
+	 *
+	 * @param src    Source pixel data buffer.
+	 * @param dst    Destination I420 buffer (pre-allocated).
+	 * @param fourCC FourCC describing the layout of {@code src}.
+	 *
+	 * @throws NullPointerException if {@code src} or {@code dst} is {@code null}.
+	 * @throws Exception            if the native conversion fails.
+	 */
 	public static void convertToI420(ByteBuffer src, I420Buffer dst, FourCC fourCC) throws Exception {
 		if (src == null) {
 			throw new NullPointerException("Source buffer must not be null");

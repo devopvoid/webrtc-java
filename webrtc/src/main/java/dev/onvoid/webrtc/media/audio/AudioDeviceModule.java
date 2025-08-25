@@ -16,142 +16,35 @@
 
 package dev.onvoid.webrtc.media.audio;
 
-import static java.util.Objects.nonNull;
-import static java.util.Objects.requireNonNull;
+/**
+ * Audio device module that handles audio I/O operations. Extends the base functionality
+ * provided by AudioDeviceModuleBase.
+ *
+ * @author Alex Andres
+ */
+public class AudioDeviceModule extends AudioDeviceModuleBase {
 
-import dev.onvoid.webrtc.internal.DisposableNativeObject;
-import dev.onvoid.webrtc.internal.NativeLoader;
+    /**
+     * Constructs a new AudioDeviceModule with the platform default audio layer.
+     */
+    public AudioDeviceModule() {
+        initialize(AudioLayer.kPlatformDefaultAudio);
+    }
 
-import java.util.AbstractMap.SimpleEntry;
-import java.util.List;
-import java.util.Map;
+    /**
+     * Constructs a new AudioDeviceModule with the specified audio layer.
+     *
+     * @param audioLayer The audio layer to use for this device module.
+     */
+    public AudioDeviceModule(AudioLayer audioLayer) {
+        initialize(audioLayer);
+    }
 
-public class AudioDeviceModule extends DisposableNativeObject {
-
-	static {
-		try {
-			NativeLoader.loadLibrary("webrtc-java");
-		}
-		catch (Exception e) {
-			throw new RuntimeException("Load library 'webrtc-java' failed", e);
-		}
-	}
-
-
-	private Map.Entry<AudioSink, Long> sinkEntry;
-
-	private Map.Entry<AudioSource, Long> sourceEntry;
-
-
-	public AudioDeviceModule() {
-		initialize(AudioLayer.kPlatformDefaultAudio);
-	}
-
-	public AudioDeviceModule(AudioLayer audioLayer) {
-		initialize(audioLayer);
-	}
-
-	@Override
-	public void dispose() {
-		if (nonNull(sinkEntry)) {
-			removeSinkInternal(sinkEntry.getValue());
-		}
-		if (nonNull(sourceEntry)) {
-			removeSourceInternal(sourceEntry.getValue());
-		}
-
-		sinkEntry = null;
-		sourceEntry = null;
-
-		disposeInternal();
-	}
-
-	public void setAudioSink(AudioSink sink) {
-		requireNonNull(sink);
-
-		if (nonNull(sinkEntry)) {
-			if (sink.equals(sinkEntry.getKey())) {
-				return;
-			}
-
-			removeSinkInternal(sinkEntry.getValue());
-		}
-
-		final long nativeSink = addSinkInternal(sink);
-
-		sinkEntry = new SimpleEntry<>(sink, nativeSink);
-	}
-
-	public void setAudioSource(AudioSource source) {
-		requireNonNull(source);
-
-		if (nonNull(sourceEntry)) {
-			if (source.equals(sourceEntry.getKey())) {
-				return;
-			}
-
-			removeSourceInternal(sourceEntry.getValue());
-		}
-
-		final long nativeSource = addSourceInternal(source);
-
-		sourceEntry = new SimpleEntry<>(source, nativeSource);
-	}
-
-	public native void initPlayout();
-
-	public native void stopPlayout();
-
-	public native void startPlayout();
-
-	public native void initRecording();
-
-	public native void stopRecording();
-
-	public native void startRecording();
-
-	public native List<AudioDevice> getPlayoutDevices();
-
-	public native List<AudioDevice> getRecordingDevices();
-
-	public native void setPlayoutDevice(AudioDevice device);
-
-	public native void setRecordingDevice(AudioDevice device);
-
-	public native boolean isSpeakerMuted();
-
-	public native boolean isMicrophoneMuted();
-
-	public native int getSpeakerVolume();
-
-	public native int getMaxSpeakerVolume();
-
-	public native int getMinSpeakerVolume();
-
-	public native int getMicrophoneVolume();
-
-	public native int getMaxMicrophoneVolume();
-
-	public native int getMinMicrophoneVolume();
-
-	public native void setSpeakerVolume(int volume);
-
-	public native void setSpeakerMute(boolean mute);
-
-	public native void setMicrophoneVolume(int volume);
-
-	public native void setMicrophoneMute(boolean mute);
-
-	private native void initialize(AudioLayer audioLayer);
-
-	private native void disposeInternal();
-
-	private native long addSinkInternal(AudioSink sink);
-
-	private native void removeSinkInternal(long sinkHandle);
-
-	private native long addSourceInternal(AudioSource source);
-
-	private native void removeSourceInternal(long sourceHandle);
+    /**
+     * Initializes the native audio device with the specified audio layer.
+     *
+     * @param audioLayer The audio layer to initialize.
+     */
+    private native void initialize(AudioLayer audioLayer);
 
 }

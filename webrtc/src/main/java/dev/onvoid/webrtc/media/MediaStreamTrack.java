@@ -20,9 +20,9 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
  * The MediaStreamTrack represents media of a single type that originates from
- * one media source, e.g. video produced by a web camera.
+ * one media source, e.g., video produced by a web camera.
  *
- * @link https://www.w3.org/TR/mediacapture-streams/#mediastreamtrack
+ * @link <a href="https://www.w3.org/TR/mediacapture-streams/#mediastreamtrack">...</a>
  *
  * @author Alex Andres
  */
@@ -100,7 +100,7 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 
 	/**
 	 * When a MediaStreamTrack is created, the application must generate an
-	 * identifier string, and must initialize the object's id attribute to that
+	 * identifier string. It must initialize the object's id attribute to that
 	 * string, unless the object is created as part of a special purpose
 	 * algorithm that specifies how the stream id must be initialized.
 	 *
@@ -119,7 +119,7 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 * Controls the enabled state for the media track. A disabled track will
 	 * produce silence (if audio) or black frames (if video). After a
 	 * MediaStreamTrack has ended, its enabled attribute still changes value
-	 * when set; it just doesn't do anything wit that new value.
+	 * when set; it just doesn't do anything with that new value.
 	 *
 	 * @param enable The new value.
 	 */

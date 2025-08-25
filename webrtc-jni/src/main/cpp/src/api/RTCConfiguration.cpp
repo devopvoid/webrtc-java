@@ -16,6 +16,7 @@
 
 #include "api/RTCConfiguration.h"
 #include "api/RTCIceServer.h"
+#include "api/PortAllocatorConfig.h"
 #include "rtc/RTCCertificatePEM.h"
 #include "JavaArrayList.h"
 #include "JavaClasses.h"
@@ -56,6 +57,9 @@ namespace jni
 			env->SetObjectField(config, javaClass->rtcpMuxPolicy, rtcpMuxPolicy.get());
 			env->SetObjectField(config, javaClass->certificates, certificateList.listObject());
 
+			auto pac = jni::PortAllocatorConfig::toJava(env, nativeType.port_allocator_config);
+			env->SetObjectField(config, javaClass->portAllocatorConfig, pac.get());
+
 			return JavaLocalRef<jobject>(env, config);
 		}
 
@@ -70,6 +74,7 @@ namespace jni
 			JavaLocalRef<jobject> bp = obj.getObject(javaClass->bundlePolicy);
 			JavaLocalRef<jobject> mp = obj.getObject(javaClass->rtcpMuxPolicy);
 			JavaLocalRef<jobject> cr = obj.getObject(javaClass->certificates);
+			JavaLocalRef<jobject> pac = obj.getObject(javaClass->portAllocatorConfig);
 
 			webrtc::PeerConnectionInterface::RTCConfiguration configuration;
 
@@ -89,6 +94,15 @@ namespace jni
 				}
 			}
 
+			if (pac.get() != nullptr) {
+				const auto pacJavaClass = JavaClasses::get<PortAllocatorConfig::JavaPortAllocatorConfigClass>(env);
+				JavaObject pacObj(env, pac);
+
+				configuration.port_allocator_config.min_port = pacObj.getInt(pacJavaClass->minPort);
+				configuration.port_allocator_config.max_port = pacObj.getInt(pacJavaClass->maxPort);
+				configuration.port_allocator_config.flags = pacObj.getInt(pacJavaClass->flags);
+			}
+
 			return configuration;
 		}
 
@@ -103,6 +117,7 @@ namespace jni
 			bundlePolicy = GetFieldID(env, cls, "bundlePolicy", "L" PKG "RTCBundlePolicy;");
 			rtcpMuxPolicy = GetFieldID(env, cls, "rtcpMuxPolicy", "L" PKG "RTCRtcpMuxPolicy;");
 			certificates = GetFieldID(env, cls, "certificates", LIST_SIG);
+			portAllocatorConfig = GetFieldID(env, cls, "portAllocatorConfig", "L" PKG "PortAllocatorConfig;");
 		}
 	}
 }

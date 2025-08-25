@@ -16,18 +16,12 @@
 
 #include "JNI_AudioDeviceModule.h"
 #include "Exception.h"
-#include "JavaArrayList.h"
 #include "JavaEnums.h"
 #include "JavaError.h"
-#include "JavaObject.h"
 #include "JavaRef.h"
-#include "JavaString.h"
 #include "JavaUtils.h"
 #include "WebRTCContext.h"
 #include "api/audio/create_audio_device_module.h"
-#include "media/audio/AudioDevice.h"
-#include "media/audio/AudioTransportSink.h"
-#include "media/audio/AudioTransportSource.h"
 
 #include "api/scoped_refptr.h"
 #include "modules/audio_device/include/audio_device.h"

@@ -111,6 +111,9 @@
 								<option>
 									-DCMAKE_INSTALL_PREFIX=${project.build.directory}/lib
 								</option>
+								<option>
+									-DOUTPUT_NAME_SUFFIX=${platform.classifier}
+								</option>
 							</options>
 						</configuration>
 					</execution>

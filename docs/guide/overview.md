@@ -2,26 +2,48 @@
 
 This section provides detailed guides for various features of the webrtc-java library.
 
-## Media Guides
+## Media Basics
 
 - [Media Devices](guide/media_devices.md) - Working with audio and video devices
+- [Bitrate and Framerate Constraints](guide/constraints.md) - Controlling media quality
+- [Send-only and Receive-only](guide/send_receive_direction.md) - Configure transceiver directions (send-only, receive-only or inactive)
+
+## Audio
+
 - [Audio Device Selection](guide/audio_devices.md) - Selecting and configuring audio devices
 - [Audio Processing](guide/audio_processing.md) - Voice processing components
 - [Custom Audio Source](guide/custom_audio_source.md) - Using custom audio sources with WebRTC
-- [Bitrate and Framerate Constraints](guide/constraints.md) - Controlling media quality
+- [Headless Audio](guide/headless_audio_device_module.md) - Playout pull without touching real OS audio devices
+- [DTMF Sender](guide/dtmf_sender.md) - Sending DTMF tones in a call
+
+## Video
+
 - [Camera Capture](guide/camera_capture.md) - Capturing video from cameras
 - [Desktop Capture](guide/desktop_capture.md) - Capturing and sharing screens and windows
 - [Custom Video Source](guide/custom_video_source.md) - Using custom video sources with WebRTC
-- [DTMF Sender](guide/dtmf_sender.md) - Sending DTMF tones in a call
 
 ## Data Communication
 
 - [Data Channels](guide/data_channels.md) - Sending and receiving arbitrary data between peers
 
+## Networking and ICE
+
+- [Port Allocator Config](guide/port_allocator_config.md) - Restrict ICE port ranges and control candidate gathering behavior
+
 ## Monitoring and Debugging
 
 - [RTC Stats](guide/rtc_stats.md) - Monitoring connection quality and performance
 - [Logging](guide/logging.md) - Configuring and using the logging system
+
+## Utilities
+
+- [Audio Converter](guide/audio_converter.md) - Resample and remix 10 ms PCM frames between different rates and channel layouts
+- [Video Buffer Converter](guide/utilities/video_buffer_converter.md) - Convert between I420 and common FourCC pixel formats (e.g., RGBA, NV12)
+- [Video Capture](guide/video_capturer.md) - Control a camera device, configure capabilities, and deliver frames to a sink
+- [Screen Capture](guide/screen_capturer.md) - Enumerate and capture full desktop screens/monitors
+- [Window Capture](guide/window_capturer.md) - Enumerate and capture individual application windows
+- [Voice Activity Detector](guide/voice_activity_detector.md) - Detect speech activity in PCM audio streams
+- [Power Management](guide/power_management.md) - Prevent the display from sleeping during desktop capture or presentations
 
 ## Additional Resources
 
