@@ -38,6 +38,7 @@ This section provides detailed guides for various features of the webrtc-java li
 ## Utilities
 
 - [Audio Converter](guide/audio_converter.md) - Resample and remix 10 ms PCM frames between different rates and channel layouts
+- [Video Capture](guide/video_capture.md) - Control a camera device, configure capabilities, and deliver frames to a sink
 - [Screen Capturer](guide/screen_capturer.md) - Enumerate and capture full desktop screens/monitors
 - [Window Capturer](guide/window_capturer.md) - Enumerate and capture individual application windows
 - [Voice Activity Detector](guide/voice_activity_detector.md) - Detect speech activity in PCM audio streams

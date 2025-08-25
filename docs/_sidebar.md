@@ -28,6 +28,7 @@
         - [Logging](guide/logging.md)
     - Utilities
         - [Audio Converter](guide/audio_converter.md)
+        - [Video Capture](guide/video_capture.md)
         - [Screen Capturer](guide/screen_capturer.md)
         - [Window Capturer](guide/window_capturer.md)
         - [Voice Activity Detector](guide/voice_activity_detector.md)
