@@ -28,8 +28,10 @@
         - [Logging](guide/logging.md)
     - Utilities
         - [Audio Converter](guide/audio_converter.md)
-        - [Power Management](guide/power_management.md)
+        - [Screen Capturer](guide/screen_capturer.md)
+        - [Window Capturer](guide/window_capturer.md)
         - [Voice Activity Detector](guide/voice_activity_detector.md)
+        - [Power Management](guide/power_management.md)
 
 - [**Build Notes**](build.md)
 - [**Changelog**](changelog.md)
