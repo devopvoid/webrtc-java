@@ -26,14 +26,18 @@ This section provides detailed guides for various features of the webrtc-java li
 
 - [Data Channels](guide/data_channels.md) - Sending and receiving arbitrary data between peers
 
+## Networking and ICE
+
+- [Port Allocator Config](guide/port_allocator_config.md) - Restrict ICE port ranges and control candidate gathering behavior
+
 ## Monitoring and Debugging
 
 - [RTC Stats](guide/rtc_stats.md) - Monitoring connection quality and performance
 - [Logging](guide/logging.md) - Configuring and using the logging system
 
-## Networking and ICE
+## Utilities
 
-- [Port Allocator Config](guide/port_allocator_config.md) - Restrict ICE port ranges and control candidate gathering behavior
+- [Voice Activity Detector](guide/voice_activity_detector.md) - Detect speech activity in PCM audio streams
 
 ## Additional Resources
 

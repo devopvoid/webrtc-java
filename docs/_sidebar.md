@@ -26,6 +26,8 @@
     - Monitoring and Debugging
         - [RTC Stats](guide/rtc_stats.md)
         - [Logging](guide/logging.md)
+    - Utilities
+        - [Voice Activity Detector](guide/voice_activity_detector.md)
 
 - [**Build Notes**](build.md)
 - [**Changelog**](changelog.md)
