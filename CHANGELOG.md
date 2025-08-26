@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Added the missing macOS camera capture functionality by @devopvoid
 
 ### Bug Fixes
+- Update actions/checkout to v5 and set ref to master by @hoary
 - Update actions/checkout to v5 and change ref from main to master by @hoary
 - Downgrade actions/checkout to v4 for compatibility by @hoary
 - Update actions/checkout to v5 and set ref to main by @hoary
@@ -73,6 +74,7 @@ All notable changes to this project will be documented in this file.
 - Update README for version 0.11.0 and clarify build notes by @devopvoid
 
 ### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
