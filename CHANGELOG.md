@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Added the missing macOS camera capture functionality by @devopvoid
 
 ### Bug Fixes
+- Update actions/checkout to v5 and set ref to main by @hoary
 - Update actions/checkout version to v5 and ensure fetch-depth is set by @hoary
 - Update changelog action version and template syntax by @hoary
 - Correct template variable syntax in changelog configuration by @hoary
@@ -70,6 +71,7 @@ All notable changes to this project will be documented in this file.
 - Update README for version 0.11.0 and clarify build notes by @devopvoid
 
 ### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Add custom video source and generator to the web example by @devopvoid
 - Update readme to 0.12.0 and update changelog by @devopvoid
 
@@ -87,6 +89,7 @@ All notable changes to this project will be documented in this file.
 
 ## New Contributors
 * @hoary made their first contribution
+* @github-actions[bot] made their first contribution
 * @maxkratz made their first contribution
 * @SnirDecartAI made their first contribution
 
