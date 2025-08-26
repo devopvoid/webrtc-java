@@ -4,54 +4,22 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-linux:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: linux_x86-64
-            runs-on: ubuntu-22.04
-    runs-on: ${{ matrix.platform.runs-on }}
+  changelog:
+    name: Generate changelog
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: "Configuration without Checkout"
-        id: without_checkout
-        uses: mikepenz/release-changelog-builder-action@develop
+      - name: Generate a changelog
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
         with:
-          configurationJson: |
-            {
-              "template": "#{{CHANGELOG}}\n\n<details>\n<summary>Uncategorized</summary>\n\n#{{UNCATEGORIZED}}\n</details>",
-              "categories": [
-                {
-                    "title": "## 🚀 Features",
-                    "labels": ["feature"]
-                },
-                {
-                    "title": "## 🐛 Fixes",
-                    "labels": ["fix"]
-                },
-                {
-                    "title": "## 🧪 Tests",
-                    "labels": ["test"]
-                },
-                {
-                    "title": "## 💬 Other",
-                    "labels": ["other"]
-                },
-                {
-                    "title": "## 📦 Dependencies",
-                    "labels": ["dependencies"]
-                }
-              ]
-            }
-          fromTag: "v0.13.0"
-          toTag: "HEAD"
+          config: cliff.toml
+          args: --verbose
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OUTPUT: CHANGELOG.md
 
-      - name: Echo Configuration without Checkout Changelog
-        env:
-          CHANGELOG: ${{ steps.without_checkout.outputs.changelog }}
-        run: echo "CHANGELOG"
+      - name: Print the changelog
+        run: cat "${{ steps.git-cliff.outputs.changelog }}"
