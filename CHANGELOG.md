@@ -79,10 +79,13 @@ All notable changes to this project will be documented in this file.
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
+- Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Add custom video source and generator to the web example by @devopvoid
 - Update readme to 0.12.0 and update changelog by @devopvoid
 
 ### Other
+- Prepare for next development iteration by @hoary
+- Prepare release v0.14.0 by @hoary
 - Remove PortAllocatorConfigIntegrationTest.java file by @hoary
 - Update all GitHub Actions setup-java to v5 by @maxkratz
 - Prepare for next development iteration by @devopvoid
