@@ -65,7 +65,7 @@ class PortAllocatorConfigIntegrationTest extends TestBase {
 		assertTrue(callee.awaitConnected(10, TimeUnit.SECONDS), "Callee failed to connect in time");
 
 		// Give ICE gathering a brief moment.
-		Thread.sleep(500);
+		Thread.sleep(2000);
 
 		// Basic expectations: Some candidates gathered on both sides.
 		assertFalse(caller.candidates.isEmpty(), "Caller gathered no ICE candidates");

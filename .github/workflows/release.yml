@@ -14,7 +14,51 @@ env:
   WEBRTC_INSTALL_FOLDER: webrtc/build
 
 jobs:
+  changelog:
+    name: Generate changelog
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.git-cliff.outputs.content }}
+      release_version: ${{ steps.git-cliff.outputs.version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Git config
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate changelog for the current build
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: .github/changelog/cliff-release.toml
+          args: -v -u --strip footer --bump --use-branch-tags
+
+      - name: Update CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: .github/changelog/cliff.toml
+          args: -v --bump --use-branch-tags
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: Commit CHANGELOG.md
+        run: |
+          git add CHANGELOG.md
+          git commit -m "chore(release): Update CHANGELOG.md for ${{ steps.git-cliff.outputs.version }}"
+          git push
+
   prepare-release:
+    name: Prepare release
+    needs: changelog
+    outputs:
+      release_body: ${{ needs.changelog.outputs.release_body }}
+      release_version: ${{ needs.changelog.outputs.release_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -71,6 +115,9 @@ jobs:
 
   build-windows:
     needs: prepare-release
+    outputs:
+      release_body: ${{ needs.prepare-release.outputs.release_body }}
+      release_version: ${{ needs.prepare-release.outputs.release_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -141,17 +188,6 @@ jobs:
         name: Prepare release build
         uses: ./.github/actions/prepare-linux
 
-      - name: Create Release # Create the release only once on Linux
-        if: ${{ matrix.platform.name == 'linux_x86-64' }}
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.tag-selector.outputs.tag }}
-          release_name: Release ${{ steps.tag-selector.outputs.tag }}
-          draft: false
-          prerelease: false
-
       - id: maven-build
         name: Maven build
         uses: ./.github/actions/release
@@ -216,3 +252,21 @@ jobs:
           maven-password: ${{ secrets.MAVEN_TOKEN }}
           maven-gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           maven-gpg-passphrase: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+  publish-release:
+    name: Publish GitHub release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${{ needs.build-windows.outputs.release_version }}"
+          body="${{ needs.build-windows.outputs.release_body }}"
+
+          gh release create $version -d -t "Release $version" -n "$body"
