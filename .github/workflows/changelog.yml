@@ -46,6 +46,7 @@ jobs:
                 }
               ]
             }
+          fromTag: "v0.13.0"
           toTag: "HEAD"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
