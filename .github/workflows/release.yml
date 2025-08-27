@@ -135,7 +135,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-tags: true
-          ref: master
 
       - name: Get tag from current branch
         id: tag-selector
@@ -180,7 +179,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-tags: true
-          ref: master
 
       - name: Get tag from current branch
         id: tag-selector
@@ -222,7 +220,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-tags: true
-          ref: master
 
       - name: Get tag from current branch
         id: tag-selector
