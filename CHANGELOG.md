@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.12.0] - 2025-08-26
+## [0.12.0] - 2025-08-27
 
 ### Features
 - Add changelog generation and release publishing workflow by @hoary
@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Added the missing macOS camera capture functionality by @devopvoid
 
 ### Bug Fixes
+- Remove ref specification for actions/checkout in release workflow by @hoary
 - Update actions/checkout to v5 and set ref to master by @hoary
 - Update actions/checkout to v5 and change ref from main to master by @hoary
 - Downgrade actions/checkout to v4 for compatibility by @hoary
@@ -80,10 +81,13 @@ All notable changes to this project will be documented in this file.
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
+- Update CHANGELOG.md for v0.12.0 by @github-actions[bot]
 - Add custom video source and generator to the web example by @devopvoid
 - Update readme to 0.12.0 and update changelog by @devopvoid
 
 ### Other
+- Prepare for next development iteration by @hoary
+- Prepare release v0.15.0 by @hoary
 - Prepare for next development iteration by @hoary
 - Prepare release v0.14.0 by @hoary
 - Remove PortAllocatorConfigIntegrationTest.java file by @hoary
