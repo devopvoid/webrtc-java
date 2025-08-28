@@ -70,7 +70,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
         with:
-          ref: master
+          ref: main
       - run: |
           git config --global user.name "${{ github.actor }}"
           git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
@@ -93,7 +93,7 @@ jobs:
       - name: Update development version
         uses: actions/checkout@v5
         with:
-          ref: master
+          ref: main
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_TOKEN: ${{ secrets.MAVEN_TOKEN }}
