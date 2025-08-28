@@ -43,10 +43,15 @@ class AudioProcessingTest {
 	@Test
 	void applyConfig() {
 		AudioProcessingConfig config = new AudioProcessingConfig();
+		config.pipeline.maximumInternalProcessingRate = 48000;
+		config.pipeline.multiChannelRender = false;
+		config.pipeline.multiChannelCapture = false;
+		config.pipeline.captureDownmixMethod = AudioProcessingConfig.Pipeline.DownmixMethod.AverageChannels;
+
 		config.echoCanceller.enabled = true;
 		config.echoCanceller.enforceHighPassFiltering = true;
 
-		config.gainControl.enabled = true;
+		config.gainControlDigital.enabled = true;
 
 		config.highPassFilter.enabled = true;
 

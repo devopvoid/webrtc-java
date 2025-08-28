@@ -34,15 +34,29 @@ namespace jni
 				explicit JavaAudioProcessingConfigClass(JNIEnv * env);
 
 				jclass cls;
+				jfieldID pipeline;
 				jfieldID echoCanceller;
-				jfieldID gainControl;
+				jfieldID gainControlDigital;
 				jfieldID highPassFilter;
 				jfieldID noiseSuppression;
 		};
 
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		webrtc::AudioProcessing::Config::Pipeline toPipeline(JNIEnv* env, const JavaLocalRef<jobject> & javaType);
 		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType);
 
+
+		class JavaPipelineClass : public JavaClass
+		{
+			public:
+				explicit JavaPipelineClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID maximumInternalProcessingRate;
+				jfieldID multiChannelRender;
+				jfieldID multiChannelCapture;
+				jfieldID captureDownmixMethod;
+		};
 
 		class JavaEchoCancellerClass : public JavaClass
 		{
@@ -54,10 +68,10 @@ namespace jni
 				jfieldID enforceHighPassFiltering;
 		};
 
-		class JavaGainControlClass : public JavaClass
+		class JavaGainControlDigitalClass : public JavaClass
 		{
 			public:
-				explicit JavaGainControlClass(JNIEnv * env);
+				explicit JavaGainControlDigitalClass(JNIEnv * env);
 
 				jclass cls;
 				jfieldID enabled;

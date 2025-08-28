@@ -127,18 +127,18 @@ Gain control adjusts the audio level automatically:
 
 ```java
 // Enable gain control
-config.gainControl.enabled = true;
+config.gainControlDigital.enabled = true;
 
 // Configure fixed digital gain (in dB)
-config.gainControl.fixedDigital.gainDb = 5.0f;
+config.gainControlDigital.fixedDigital.gainDb = 5.0f;
 
 // Or configure adaptive digital gain
-config.gainControl.adaptiveDigital.enabled = true;
-config.gainControl.adaptiveDigital.headroomDb = 3.0f;
-config.gainControl.adaptiveDigital.maxGainDb = 30.0f;
-config.gainControl.adaptiveDigital.initialGainDb = 8.0f;
-config.gainControl.adaptiveDigital.maxGainChangeDbPerSecond = 3.0f;
-config.gainControl.adaptiveDigital.maxOutputNoiseLevelDbfs = -50.0f;
+config.gainControlDigital.adaptiveDigital.enabled = true;
+config.gainControlDigital.adaptiveDigital.headroomDb = 3.0f;
+config.gainControlDigital.adaptiveDigital.maxGainDb = 30.0f;
+config.gainControlDigital.adaptiveDigital.initialGainDb = 8.0f;
+config.gainControlDigital.adaptiveDigital.maxGainChangeDbPerSecond = 3.0f;
+config.gainControlDigital.adaptiveDigital.maxOutputNoiseLevelDbfs = -50.0f;
 ```
 
 ### High-Pass Filter

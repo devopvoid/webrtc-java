@@ -41,9 +41,10 @@ namespace jni
 
 			webrtc::AudioProcessing::Config config;
 			
+			config.pipeline = toPipeline(env, obj.getObject(javaClass->pipeline));
 			config.echo_canceller.enabled = echoCanceller.getBoolean(javaEchoCancellerClass->enabled);
 			config.echo_canceller.enforce_high_pass_filtering = echoCanceller.getBoolean(javaEchoCancellerClass->enforceHighPassFiltering);
-			config.gain_controller2 = toGainController2(env, obj.getObject(javaClass->gainControl));
+			config.gain_controller2 = toGainController2(env, obj.getObject(javaClass->gainControlDigital));
 			config.high_pass_filter.enabled = highPassFilter.getBoolean(javaHighPassFilterClass->enabled);
 			config.noise_suppression.enabled = noiseSuppression.getBoolean(javaNoiseSuppressionClass->enabled);
 
@@ -56,9 +57,27 @@ namespace jni
 			return config;
 		}
 
+		webrtc::AudioProcessing::Config::Pipeline toPipeline(JNIEnv * env, const JavaLocalRef<jobject> & javaType)
+		{
+			const auto javaPipelineClass = JavaClasses::get<JavaPipelineClass>(env);
+
+			JavaObject jPipeline(env, javaType);
+
+			JavaLocalRef<jobject> downmixMethod = jPipeline.getObject(javaPipelineClass->captureDownmixMethod);
+
+			webrtc::AudioProcessing::Config::Pipeline pipeline;
+
+			pipeline.maximum_internal_processing_rate = jPipeline.getInt(javaPipelineClass->maximumInternalProcessingRate);
+			pipeline.multi_channel_render = jPipeline.getBoolean(javaPipelineClass->multiChannelRender);
+			pipeline.multi_channel_capture = jPipeline.getBoolean(javaPipelineClass->multiChannelCapture);
+			pipeline.capture_downmix_method = JavaEnums::toNative<webrtc::AudioProcessing::Config::Pipeline::DownmixMethod>(env, downmixMethod);
+
+			return pipeline;
+		}
+
 		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType)
 		{
-			const auto javaGainControlClass = JavaClasses::get<JavaGainControlClass>(env);
+			const auto javaGainControlClass = JavaClasses::get<JavaGainControlDigitalClass>(env);
 			const auto javaGainControlFixedDigitalClass = JavaClasses::get<JavaGainControlFixedDigitalClass>(env);
 			const auto javaGainControlAdaptiveDigitalClass = JavaClasses::get<JavaGainControlAdaptiveDigitalClass>(env);
 
@@ -84,10 +103,21 @@ namespace jni
 		{
 			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig");
 
+			pipeline = GetFieldID(env, cls, "pipeline", "L" PKG_AUDIO "AudioProcessingConfig$Pipeline;");
 			echoCanceller = GetFieldID(env, cls, "echoCanceller", "L" PKG_AUDIO "AudioProcessingConfig$EchoCanceller;");
-			gainControl = GetFieldID(env, cls, "gainControl", "L" PKG_AUDIO "AudioProcessingConfig$GainControl;");
+			gainControlDigital = GetFieldID(env, cls, "gainControlDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControlDigital;");
 			highPassFilter = GetFieldID(env, cls, "highPassFilter", "L" PKG_AUDIO "AudioProcessingConfig$HighPassFilter;");
 			noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "L" PKG_AUDIO "AudioProcessingConfig$NoiseSuppression;");
+		}
+
+		JavaPipelineClass::JavaPipelineClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$Pipeline");
+
+			maximumInternalProcessingRate = GetFieldID(env, cls, "maximumInternalProcessingRate", "I");
+			multiChannelRender = GetFieldID(env, cls, "multiChannelRender", "Z");
+			multiChannelCapture = GetFieldID(env, cls, "multiChannelCapture", "Z");
+			captureDownmixMethod = GetFieldID(env, cls, "captureDownmixMethod", "L" PKG_AUDIO "AudioProcessingConfig$Pipeline$DownmixMethod;");
 		}
 
 		JavaEchoCancellerClass::JavaEchoCancellerClass(JNIEnv* env)
@@ -98,25 +128,25 @@ namespace jni
 			enforceHighPassFiltering = GetFieldID(env, cls, "enforceHighPassFiltering", "Z");
 		}
 
-		JavaGainControlClass::JavaGainControlClass(JNIEnv* env)
+		JavaGainControlDigitalClass::JavaGainControlDigitalClass(JNIEnv* env)
 		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControl");
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControlDigital");
 
 			enabled = GetFieldID(env, cls, "enabled", "Z");
-			fixedDigital = GetFieldID(env, cls, "fixedDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControl$FixedDigital;");
-			adaptiveDigital = GetFieldID(env, cls, "adaptiveDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControl$AdaptiveDigital;");
+			fixedDigital = GetFieldID(env, cls, "fixedDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControlDigital$FixedDigital;");
+			adaptiveDigital = GetFieldID(env, cls, "adaptiveDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControlDigital$AdaptiveDigital;");
 		}
 
 		JavaGainControlFixedDigitalClass::JavaGainControlFixedDigitalClass(JNIEnv* env)
 		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControl$FixedDigital");
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControlDigital$FixedDigital");
 
 			gainDb = GetFieldID(env, cls, "gainDb", "F");
 		}
 
 		JavaGainControlAdaptiveDigitalClass::JavaGainControlAdaptiveDigitalClass(JNIEnv* env)
 		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControl$AdaptiveDigital");
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControlDigital$AdaptiveDigital");
 
 			enabled = GetFieldID(env, cls, "enabled", "Z");
 			headroomDb = GetFieldID(env, cls, "headroomDb", "F");

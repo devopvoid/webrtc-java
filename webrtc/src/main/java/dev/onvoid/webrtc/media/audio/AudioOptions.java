@@ -19,17 +19,17 @@ package dev.onvoid.webrtc.media.audio;
 /**
  * Audio options to control AudioTracks.
  *
- * @link https://www.w3.org/TR/mediacapture-streams/
+ * @link <a href="https://www.w3.org/TR/mediacapture-streams/">Media Capture and Streams</a>
  *
  * @author Alex Andres
  */
 public class AudioOptions {
 
 	/**
-	 * When one or more audio streams is being played in the processes of
+	 * When one or more audio streams are being played in the processes of
 	 * various microphones, it is often desirable to attempt to remove the sound
 	 * being played from the input signals recorded by the microphones. This is
-	 * referred to as echo cancellation. There are cases where it is not needed
+	 * referred to as echo cancellation. There are cases where it is unnecessary,
 	 * and it is desirable to turn it off so that no audio artifacts are
 	 * introduced. This allows applications to control this behavior.
 	 */
@@ -37,7 +37,7 @@ public class AudioOptions {
 
 	/**
 	 * Automatic gain control is often desirable on the input signal recorded by
-	 * the microphone. There are cases where it is not needed and it is
+	 * the microphone. There are cases where it is unnecessary, and it is
 	 * desirable to turn it off so that the audio is not altered. This allows
 	 * applications to control this behavior.
 	 */
@@ -45,7 +45,7 @@ public class AudioOptions {
 
 	/**
 	 * Noise suppression is often desirable on the input signal recorded by the
-	 * microphone. There are cases where it is not needed and it is desirable to
+	 * microphone. There are cases where it is unnecessary, and it is desirable to
 	 * turn it off so that the audio is not altered. This allows applications to
 	 * control this behavior.
 	 */
