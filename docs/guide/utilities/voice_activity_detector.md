@@ -101,4 +101,4 @@ finally {
 
 ## Related guides
 
-- [Audio Processing](guide/audio_processing.md)
+- [Audio Processing](guide/audio/audio_processing.md)

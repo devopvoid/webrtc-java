@@ -108,5 +108,5 @@ sc.dispose();
 
 ## Related guides
 
-- [Desktop Capture](guide/desktop_capture.md)
-- [Power Management](guide/power_management.md)
+- [Desktop Capture](guide/video/desktop_capture.md)
+- [Power Management](guide/utilities/power_management.md)

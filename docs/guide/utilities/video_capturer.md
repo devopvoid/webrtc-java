@@ -103,8 +103,8 @@ If you need pixel format conversion, see `VideoBufferConverter`.
 
 ## Related guides
 
-- [Camera Capture](guide/camera_capture.md)
-- [Custom Video Source](guide/custom_video_source.md)
-- [Screen Capturer](guide/screen_capturer.md)
-- [Window Capturer](guide/window_capturer.md)
-- [Power Management](guide/power_management.md)
+- [Camera Capture](guide/video/camera_capture.md)
+- [Custom Video Source](guide/video/custom_video_source.md)
+- [Screen Capturer](guide/utilities/screen_capturer.md)
+- [Window Capturer](guide/utilities/window_capturer.md)
+- [Power Management](guide/utilities/power_management.md)

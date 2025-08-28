@@ -8,7 +8,7 @@ API: `dev.onvoid.webrtc.media.audio.AudioRecorder`
 - You want a simple way to record microphone input without wiring a full PeerConnection.
 - You need raw 16‑bit PCM frames (10 ms) delivered to your code for analysis, file writing, or custom processing.
 
-See also: [Audio Device Selection](../audio_devices.md), [Audio Processing](../audio_processing.md), [Custom Audio Source](../custom_audio_source.md).
+See also: [Audio Device Selection](guide/audio/audio_devices.md), [Audio Processing](guide/audio/audio_processing.md), [Custom Audio Source](guide/audio/custom_audio_source.md).
 
 ## Key concepts
 - Device selection: Provide an `AudioDevice` representing the input device (microphone) before starting.
@@ -55,9 +55,9 @@ public class MicRecorderExample {
 - `nSamples` refers to the number of samples across all channels within the 10 ms frame. Example: 48 kHz stereo → (48000/100)×2 = 960×2 = 1920 samples.
 
 ## Tips
-- Apply echo cancellation, AGC, and noise suppression via the [Audio Processing](../audio_processing.md) guide if needed.
-- If you need to resample or remix, use the [Audio Converter](../audio_converter.md).
-- Device selection details and best practices are covered in [Audio Device Selection](../audio_devices.md).
+- Apply echo cancellation, AGC, and noise suppression via the [Audio Processing](guide/audio/audio_processing.md) guide if needed.
+- If you need to resample or remix, use the [Audio Converter](guide/utilities/audio_converter.md).
+- Device selection details and best practices are covered in [Audio Device Selection](guide/audio/audio_devices.md).
 
 ## API reference
 - `setAudioDevice(AudioDevice device)` – choose input device

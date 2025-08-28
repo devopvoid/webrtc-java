@@ -246,7 +246,7 @@ AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 AudioTrack audioTrack = factory.createAudioTrack("audio0", audioSource);
 ```
 
-> Audio devices can be specified via the `AudioDeviceModule`, see the guide on [Audio Devices](guide/audio_devices) for more details.
+> Audio devices can be specified via the `AudioDeviceModule`, see the guide on [Audio Devices](guide/audio/audio_devices) for more details.
 
 ### Adding Tracks to Peer Connection
 
@@ -284,9 +284,9 @@ factory.dispose();
 
 Now that you have a basic understanding of webrtc-java, you can explore more advanced features:
 
-- [Data Channels](guide/data_channels) - Learn more about data channels
-- [RTC Stats](guide/rtc_stats) - Monitor connection quality
-- [Desktop Capture](guide/desktop_capture) - Share screens and windows
-- [All Guides](guide) - Complete list of guides
+- [Data Channels](guide/data/data_channels) - Learn more about data channels
+- [RTC Stats](guide/monitoring/rtc_stats) - Monitor connection quality
+- [Desktop Capture](guide/video/desktop_capture) - Share screens and windows
+- [All Guides](guide/overview) - Complete list of guides
 
 For a complete API reference, check the [JavaDoc](https://javadoc.io/doc/dev.onvoid.webrtc/webrtc-java/latest/index.html).
