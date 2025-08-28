@@ -46,6 +46,27 @@ Add the following dependency to your `pom.xml`:
 </dependency>
 ```
 
+Note about native library classifiers:
+- The webrtc-java artifact will automatically add the dependency for the native library artifact matching the currently running operating system and architecture at runtime.
+- If you encounter issues loading the native library "webrtc-java", you can declare the platform-specific classifier explicitly. For example, for Windows 64-Bit:
+
+```xml
+<dependency>
+    <groupId>dev.onvoid.webrtc</groupId>
+    <artifactId>webrtc-java</artifactId>
+    <version>{{VERSION}}</version>
+    <classifier>windows-x86_64</classifier>
+</dependency>
+```
+
+Complete list of available classifiers:
+- windows-x86_64
+- macos-x86_64
+- macos-aarch64
+- linux-x86_64
+- linux-aarch64
+- linux-aarch32
+
 #### Using SNAPSHOT Versions
 
 If you want to use the latest development version, you can use a SNAPSHOT release:
