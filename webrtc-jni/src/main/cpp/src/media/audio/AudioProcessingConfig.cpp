@@ -33,18 +33,21 @@ namespace jni
 			const auto javaEchoCancellerClass = JavaClasses::get<JavaEchoCancellerClass>(env);
 			const auto javaHighPassFilterClass = JavaClasses::get<JavaHighPassFilterClass>(env);
 			const auto javaNoiseSuppressionClass = JavaClasses::get<JavaNoiseSuppressionClass>(env);
+			const auto javaGainControllerClass = JavaClasses::get<JavaGainControllerClass>(env);
 			
 			JavaObject obj(env, javaType);
 			JavaObject echoCanceller(env, obj.getObject(javaClass->echoCanceller));
 			JavaObject highPassFilter(env, obj.getObject(javaClass->highPassFilter));
 			JavaObject noiseSuppression(env, obj.getObject(javaClass->noiseSuppression));
+			JavaObject gainController(env, obj.getObject(javaClass->gainController));
 
 			webrtc::AudioProcessing::Config config;
 			
 			config.pipeline = toPipeline(env, obj.getObject(javaClass->pipeline));
 			config.echo_canceller.enabled = echoCanceller.getBoolean(javaEchoCancellerClass->enabled);
 			config.echo_canceller.enforce_high_pass_filtering = echoCanceller.getBoolean(javaEchoCancellerClass->enforceHighPassFiltering);
-			config.gain_controller2 = toGainController2(env, obj.getObject(javaClass->gainControlDigital));
+			config.gain_controller2 = toGainController2(env, obj.getObject(javaClass->gainControllerDigital));
+			config.gain_controller1 = toGainController1(env, obj.getObject(javaClass->gainController));
 			config.high_pass_filter.enabled = highPassFilter.getBoolean(javaHighPassFilterClass->enabled);
 			config.noise_suppression.enabled = noiseSuppression.getBoolean(javaNoiseSuppressionClass->enabled);
 
@@ -77,7 +80,7 @@ namespace jni
 
 		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType)
 		{
-			const auto javaGainControlClass = JavaClasses::get<JavaGainControlDigitalClass>(env);
+			const auto javaGainControlClass = JavaClasses::get<JavaGainControllerDigitalClass>(env);
 			const auto javaGainControlFixedDigitalClass = JavaClasses::get<JavaGainControlFixedDigitalClass>(env);
 			const auto javaGainControlAdaptiveDigitalClass = JavaClasses::get<JavaGainControlAdaptiveDigitalClass>(env);
 
@@ -99,13 +102,62 @@ namespace jni
 			return gainController;
 		}
 
+		webrtc::AudioProcessing::Config::GainController1 toGainController1(JNIEnv * env, const JavaLocalRef<jobject> & javaType)
+		{
+			const auto javaGainControllerClass = JavaClasses::get<JavaGainControllerClass>(env);
+			const auto javaAgc1AnalogClass = JavaClasses::get<JavaAgc1AnalogGainControllerClass>(env);
+			const auto javaAgc1ClipPredClass = JavaClasses::get<JavaAgc1ClippingPredictorClass>(env);
+
+			JavaObject jGc1(env, javaType);
+			webrtc::AudioProcessing::Config::GainController1 gc1;
+
+			if (javaType.get()) {
+				gc1.enabled = jGc1.getBoolean(javaGainControllerClass->enabled);
+				gc1.target_level_dbfs = jGc1.getInt(javaGainControllerClass->targetLevelDbfs);
+				gc1.compression_gain_db = jGc1.getInt(javaGainControllerClass->compressionGainDb);
+				gc1.enable_limiter = jGc1.getBoolean(javaGainControllerClass->enableLimiter);
+
+				JavaLocalRef<jobject> mode = jGc1.getObject(javaGainControllerClass->mode);
+				if (mode.get()) {
+					gc1.mode = JavaEnums::toNative<webrtc::AudioProcessing::Config::GainController1::Mode>(env, mode);
+				}
+
+				JavaObject jAgc(env, jGc1.getObject(javaGainControllerClass->analogGainController));
+
+					gc1.analog_gain_controller.enabled = jAgc.getBoolean(javaAgc1AnalogClass->enabled);
+					gc1.analog_gain_controller.startup_min_volume = jAgc.getInt(javaAgc1AnalogClass->startupMinVolume);
+					gc1.analog_gain_controller.clipped_level_min = jAgc.getInt(javaAgc1AnalogClass->clippedLevelMin);
+					gc1.analog_gain_controller.enable_digital_adaptive = jAgc.getBoolean(javaAgc1AnalogClass->enableDigitalAdaptive);
+					gc1.analog_gain_controller.clipped_level_step = jAgc.getInt(javaAgc1AnalogClass->clippedLevelStep);
+					gc1.analog_gain_controller.clipped_ratio_threshold = jAgc.getFloat(javaAgc1AnalogClass->clippedRatioThreshold);
+					gc1.analog_gain_controller.clipped_wait_frames = jAgc.getInt(javaAgc1AnalogClass->clippedWaitFrames);
+
+					JavaObject jPred(env, jAgc.getObject(javaAgc1AnalogClass->clippingPredictor));
+
+						gc1.analog_gain_controller.clipping_predictor.enabled = jPred.getBoolean(javaAgc1ClipPredClass->enabled);
+						JavaLocalRef<jobject> predMode = jPred.getObject(javaAgc1ClipPredClass->mode);
+						if (predMode.get()) {
+							gc1.analog_gain_controller.clipping_predictor.mode = JavaEnums::toNative<webrtc::AudioProcessing::Config::GainController1::AnalogGainController::ClippingPredictor::Mode>(env, predMode);
+						}
+						gc1.analog_gain_controller.clipping_predictor.window_length = jPred.getInt(javaAgc1ClipPredClass->windowLength);
+						gc1.analog_gain_controller.clipping_predictor.reference_window_length = jPred.getInt(javaAgc1ClipPredClass->referenceWindowLength);
+						gc1.analog_gain_controller.clipping_predictor.reference_window_delay = jPred.getInt(javaAgc1ClipPredClass->referenceWindowDelay);
+						gc1.analog_gain_controller.clipping_predictor.clipping_threshold = jPred.getFloat(javaAgc1ClipPredClass->clippingThreshold);
+						gc1.analog_gain_controller.clipping_predictor.crest_factor_margin = jPred.getFloat(javaAgc1ClipPredClass->crestFactorMargin);
+						gc1.analog_gain_controller.clipping_predictor.use_predicted_step = jPred.getBoolean(javaAgc1ClipPredClass->usePredictedStep);
+			}
+
+			return gc1;
+		}
+
 		JavaAudioProcessingConfigClass::JavaAudioProcessingConfigClass(JNIEnv * env)
 		{
 			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig");
 
 			pipeline = GetFieldID(env, cls, "pipeline", "L" PKG_AUDIO "AudioProcessingConfig$Pipeline;");
 			echoCanceller = GetFieldID(env, cls, "echoCanceller", "L" PKG_AUDIO "AudioProcessingConfig$EchoCanceller;");
-			gainControlDigital = GetFieldID(env, cls, "gainControlDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControlDigital;");
+			gainControllerDigital = GetFieldID(env, cls, "gainControllerDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControllerDigital;");
+			gainController = GetFieldID(env, cls, "gainController", "L" PKG_AUDIO "AudioProcessingConfig$GainController;");
 			highPassFilter = GetFieldID(env, cls, "highPassFilter", "L" PKG_AUDIO "AudioProcessingConfig$HighPassFilter;");
 			noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "L" PKG_AUDIO "AudioProcessingConfig$NoiseSuppression;");
 		}
@@ -128,25 +180,25 @@ namespace jni
 			enforceHighPassFiltering = GetFieldID(env, cls, "enforceHighPassFiltering", "Z");
 		}
 
-		JavaGainControlDigitalClass::JavaGainControlDigitalClass(JNIEnv* env)
+		JavaGainControllerDigitalClass::JavaGainControllerDigitalClass(JNIEnv* env)
 		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControlDigital");
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControllerDigital");
 
 			enabled = GetFieldID(env, cls, "enabled", "Z");
-			fixedDigital = GetFieldID(env, cls, "fixedDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControlDigital$FixedDigital;");
-			adaptiveDigital = GetFieldID(env, cls, "adaptiveDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControlDigital$AdaptiveDigital;");
+			fixedDigital = GetFieldID(env, cls, "fixedDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControllerDigital$FixedDigital;");
+			adaptiveDigital = GetFieldID(env, cls, "adaptiveDigital", "L" PKG_AUDIO "AudioProcessingConfig$GainControllerDigital$AdaptiveDigital;");
 		}
 
 		JavaGainControlFixedDigitalClass::JavaGainControlFixedDigitalClass(JNIEnv* env)
 		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControlDigital$FixedDigital");
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControllerDigital$FixedDigital");
 
 			gainDb = GetFieldID(env, cls, "gainDb", "F");
 		}
 
 		JavaGainControlAdaptiveDigitalClass::JavaGainControlAdaptiveDigitalClass(JNIEnv* env)
 		{
-			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControlDigital$AdaptiveDigital");
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainControllerDigital$AdaptiveDigital");
 
 			enabled = GetFieldID(env, cls, "enabled", "Z");
 			headroomDb = GetFieldID(env, cls, "headroomDb", "F");
@@ -161,6 +213,46 @@ namespace jni
 			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$HighPassFilter");
 
 			enabled = GetFieldID(env, cls, "enabled", "Z");
+		}
+
+		JavaGainControllerClass::JavaGainControllerClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainController");
+
+			enabled = GetFieldID(env, cls, "enabled", "Z");
+			targetLevelDbfs = GetFieldID(env, cls, "targetLevelDbfs", "I");
+			compressionGainDb = GetFieldID(env, cls, "compressionGainDb", "I");
+			enableLimiter = GetFieldID(env, cls, "enableLimiter", "Z");
+			mode = GetFieldID(env, cls, "mode", "L" PKG_AUDIO "AudioProcessingConfig$GainController$Mode;");
+			analogGainController = GetFieldID(env, cls, "analogGainController", "L" PKG_AUDIO "AudioProcessingConfig$GainController$AnalogGainController;");
+		}
+
+		JavaAgc1AnalogGainControllerClass::JavaAgc1AnalogGainControllerClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainController$AnalogGainController");
+
+			enabled = GetFieldID(env, cls, "enabled", "Z");
+			startupMinVolume = GetFieldID(env, cls, "startupMinVolume", "I");
+			clippedLevelMin = GetFieldID(env, cls, "clippedLevelMin", "I");
+			enableDigitalAdaptive = GetFieldID(env, cls, "enableDigitalAdaptive", "Z");
+			clippedLevelStep = GetFieldID(env, cls, "clippedLevelStep", "I");
+			clippedRatioThreshold = GetFieldID(env, cls, "clippedRatioThreshold", "F");
+			clippedWaitFrames = GetFieldID(env, cls, "clippedWaitFrames", "I");
+			clippingPredictor = GetFieldID(env, cls, "clippingPredictor", "L" PKG_AUDIO "AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor;");
+		}
+
+		JavaAgc1ClippingPredictorClass::JavaAgc1ClippingPredictorClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor");
+
+			enabled = GetFieldID(env, cls, "enabled", "Z");
+			mode = GetFieldID(env, cls, "mode", "L" PKG_AUDIO "AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor$Mode;");
+			windowLength = GetFieldID(env, cls, "windowLength", "I");
+			referenceWindowLength = GetFieldID(env, cls, "referenceWindowLength", "I");
+			referenceWindowDelay = GetFieldID(env, cls, "referenceWindowDelay", "I");
+			clippingThreshold = GetFieldID(env, cls, "clippingThreshold", "F");
+			crestFactorMargin = GetFieldID(env, cls, "crestFactorMargin", "F");
+			usePredictedStep = GetFieldID(env, cls, "usePredictedStep", "Z");
 		}
 
 		JavaNoiseSuppressionClass::JavaNoiseSuppressionClass(JNIEnv* env)

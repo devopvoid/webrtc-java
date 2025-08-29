@@ -36,16 +36,24 @@ public class AudioProcessingConfig {
      */
 	public final EchoCanceller echoCanceller = new EchoCanceller();
 
-    /**
-     * Digital gain control configuration for automatic volume adjustment.
-     * Includes both fixed and adaptive digital gain control settings.
-     */
-	public final GainControlDigital gainControlDigital = new GainControlDigital();
+	/**
+	 * Legacy Gain Controller 1 (AGC1) configuration. This is the classic AGC used
+	 * by WebRTC with optional limiter. If enabled, AGC1 will run alongside other
+	 * modules as configured. If not set, defaults are used by the native side.
+	 */
+	public final GainController gainController = new GainController();
 
     /**
-     * High-pass filter configuration for removing low-frequency components from the
-     * processed audio signal.
+     * Digital gain control configuration for automatic volume adjustment.
+	 * Automatic Gain Control (AGC) sub-module which replaces the Legacy Gain Controller 1
+	 * (AGC1). Includes both fixed and adaptive digital gain control settings.
      */
+	public final GainControllerDigital gainControllerDigital = new GainControllerDigital();
+
+	/**
+	 * High-pass filter configuration for removing low-frequency components from the
+	 * processed audio signal.
+	 */
 	public final HighPassFilter highPassFilter = new HighPassFilter();
 
     /**
@@ -125,7 +133,7 @@ public class AudioProcessingConfig {
 	 * Configuration for digital gain control in audio processing.
 	 * Provides settings for both fixed and adaptive digital gain control.
 	 */
-	public static class GainControlDigital {
+	public static class GainControllerDigital {
 
 		/**
 		 * Configuration for fixed digital gain control.
@@ -201,6 +209,174 @@ public class AudioProcessingConfig {
 		 */
 		public boolean enabled;
 
+	}
+
+
+	/**
+	 * Configuration for classic Gain Controller 1 (AGC1).
+	 * Provides simple controls commonly exposed for AGC1.
+	 */
+	public static class GainController {
+
+		/**
+		 * AGC1 mode selection.
+		 */
+		public enum Mode {
+			/**
+			 * Adjusts the analog microphone level using hardware/OS controls to reach the target.
+			 * Prefer this when the capture device gain can be modified without adding digital noise.
+			 * This will require the coupling between the OS mixer controls and AGC through the
+			 * stream_analog_level() functions.
+			 */
+			AdaptiveAnalog,
+
+			/**
+			 * Adjusts the signal level in the digital processing pipeline (software gain/compression).
+			 * Use when analog control is unavailable or insufficient.
+			 */
+			AdaptiveDigital,
+
+			/**
+			 * Applies a constant digital gain (non-adaptive). Suitable for stable, well-calibrated inputs.
+			 * This mode is preferred on embedded devices where the capture signal level is predictable so
+			 * that a known gain can be applied.
+			 */
+			FixedDigital
+		}
+
+		/**
+		 * Determines whether AGC1 is enabled.
+		 */
+		public boolean enabled;
+
+		/**
+		 * Target level in dBFS that AGC1 aims for. Common default is 3 dB.
+		 */
+		public int targetLevelDbfs = 3;
+
+		/**
+		 * Compression gain in dB. Common default is 9 dB.
+		 */
+		public int compressionGainDb = 9;
+
+		/**
+		 * Enables the limiter to avoid clipping at the output. Default true.
+		 */
+		public boolean enableLimiter = true;
+
+		/**
+		 * Selected mode. Default matches native default kAdaptiveAnalog.
+		 */
+		public Mode mode = Mode.AdaptiveAnalog;
+
+		/**
+		 * Analog gain controller sub-config.
+		 */
+		public final AnalogGainController analogGainController = new AnalogGainController();
+
+
+		public static class AnalogGainController {
+
+			/**
+			 * Enables the analog gain controller stage.
+			 * When false, the analog (and coupled digital adaptive) logic is skipped.
+			 */
+			public boolean enabled = true;
+
+			/**
+			 * Deprecated upstream (kept for compatibility). Historical lower bound for the
+			 * initial microphone volume. Has no effect in newer pipelines.
+			 */
+			public int startupMinVolume = 0; // deprecated upstream but retained for compatibility
+
+			/**
+			 * Minimum microphone level allowed after clipping mitigation logic adjusts gain.
+			 */
+			public int clippedLevelMin = 70;
+
+			/**
+			 * Enables the digital adaptive component that further refines gain after analog changes.
+			 */
+			public boolean enableDigitalAdaptive = true;
+
+			/**
+			 * Step size (in discrete volume units) to reduce the level when clipping is detected.
+			 */
+			public int clippedLevelStep = 15;
+
+			/**
+			 * Ratio threshold (0..1) of clipped samples in a window that triggers a gain reduction.
+			 */
+			public float clippedRatioThreshold = 0.1f;
+
+			/**
+			 * Number of frames to wait after a clipping event before applying another step change.
+			 */
+			public int clippedWaitFrames = 300;
+
+			/**
+			 * Predictor that anticipates clipping and adjusts gain preemptively.
+			 */
+			public static class ClippingPredictor {
+
+				/**
+				 * Available prediction modes describing how clipping is estimated.
+				 */
+				public enum Mode {
+					/** Reacts to observed clipping events only. */
+					ClippingEventPrediction,
+					/** Adapts step size based on predicted peak evolution. */
+					AdaptiveStepClippingPeakPrediction,
+					/** Uses a fixed step size for peak prediction adjustments. */
+					FixedStepClippingPeakPrediction
+				}
+
+				/**
+				 * Enables the clipping prediction feature.
+				 */
+				public boolean enabled = false;
+
+				/**
+				 * Prediction mode governing the algorithm behavior.
+				 */
+				public Mode mode = Mode.ClippingEventPrediction;
+
+				/**
+				 * Sliding window length (frames) used to analyze recent signal peaks.
+				 */
+				public int windowLength = 5;
+
+				/**
+				 * Length (frames) of the reference window for comparative peak analysis.
+				 */
+				public int referenceWindowLength = 5;
+
+				/**
+				 * Delay (frames) applied to the reference window to form a historical baseline.
+				 */
+				public int referenceWindowDelay = 5;
+
+				/**
+				 * Threshold (dBFS) above which samples are considered clipped; -1.0f means auto.
+				 */
+				public float clippingThreshold = -1.0f;
+
+				/**
+				 * Margin (dB) added to the estimated crest factor to decide preemptive gain changes.
+				 */
+				public float crestFactorMargin = 3.0f;
+
+				/**
+				 * When true, uses the predicted step size; otherwise a default/fixed step is used.
+				 */
+				public boolean usePredictedStep = true;
+			}
+
+			/**
+			 * Instance holding the clipping prediction configuration.
+			 */
+			public final ClippingPredictor clippingPredictor = new ClippingPredictor();
+		}
 	}
 
 

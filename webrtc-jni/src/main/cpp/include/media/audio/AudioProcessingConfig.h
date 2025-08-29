@@ -36,13 +36,15 @@ namespace jni
 				jclass cls;
 				jfieldID pipeline;
 				jfieldID echoCanceller;
-				jfieldID gainControlDigital;
+				jfieldID gainController;
+				jfieldID gainControllerDigital;
 				jfieldID highPassFilter;
 				jfieldID noiseSuppression;
 		};
 
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
 		webrtc::AudioProcessing::Config::Pipeline toPipeline(JNIEnv* env, const JavaLocalRef<jobject> & javaType);
+		webrtc::AudioProcessing::Config::GainController1 toGainController1(JNIEnv * env, const JavaLocalRef<jobject> & javaType);
 		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType);
 
 
@@ -68,10 +70,10 @@ namespace jni
 				jfieldID enforceHighPassFiltering;
 		};
 
-		class JavaGainControlDigitalClass : public JavaClass
+		class JavaGainControllerDigitalClass : public JavaClass
 		{
 			public:
-				explicit JavaGainControlDigitalClass(JNIEnv * env);
+				explicit JavaGainControllerDigitalClass(JNIEnv * env);
 
 				jclass cls;
 				jfieldID enabled;
@@ -100,6 +102,52 @@ namespace jni
 				jfieldID initialGainDb;
 				jfieldID maxGainChangeDbPerSecond;
 				jfieldID maxOutputNoiseLevelDbfs;
+		};
+
+		class JavaGainControllerClass : public JavaClass
+		{
+			public:
+				explicit JavaGainControllerClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID targetLevelDbfs;
+				jfieldID compressionGainDb;
+				jfieldID enableLimiter;
+				jfieldID mode;
+				jfieldID analogGainController;
+		};
+
+		class JavaAgc1AnalogGainControllerClass : public JavaClass
+		{
+			public:
+				explicit JavaAgc1AnalogGainControllerClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID startupMinVolume;
+				jfieldID clippedLevelMin;
+				jfieldID enableDigitalAdaptive;
+				jfieldID clippedLevelStep;
+				jfieldID clippedRatioThreshold;
+				jfieldID clippedWaitFrames;
+				jfieldID clippingPredictor;
+		};
+
+		class JavaAgc1ClippingPredictorClass : public JavaClass
+		{
+			public:
+				explicit JavaAgc1ClippingPredictorClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID mode;
+				jfieldID windowLength;
+				jfieldID referenceWindowLength;
+				jfieldID referenceWindowDelay;
+				jfieldID clippingThreshold;
+				jfieldID crestFactorMargin;
+				jfieldID usePredictedStep;
 		};
 
 		class JavaHighPassFilterClass : public JavaClass

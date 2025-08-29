@@ -123,22 +123,54 @@ config.noiseSuppression.level = NoiseSuppression.Level.MODERATE;
 
 ### Gain Control
 
-Gain control adjusts the audio level automatically:
+Gain control adjusts the audio level automatically. WebRTC provides two gain controllers:
+- GainController (AGC1, legacy/classic)
+- GainControllerDigital (newer digital AGC)
+
+In most applications you should enable only one of them at a time.
+
+#### Legacy Gain Controller (AGC1)
+AGC1 can operate in analog or digital modes and includes an optional limiter.
 
 ```java
-// Enable gain control
-config.gainControlDigital.enabled = true;
+// Enable the legacy AGC1
+config.gainController.enabled = true;
+
+// Select mode: AdaptiveAnalog, AdaptiveDigital, or FixedDigital
+config.gainController.mode = AudioProcessingConfig.GainController.Mode.AdaptiveAnalog;
+
+// Set the target level (in dBFS) and compression gain (in dB)
+config.gainController.targetLevelDbfs = 3;     // common default
+config.gainController.compressionGainDb = 9;   // common default
+
+// Enable the limiter to reduce clipping
+config.gainController.enableLimiter = true;
+
+// Optional: tune analog gain controller sub-settings
+config.gainController.analogGainController.enabled = true;
+config.gainController.analogGainController.enableDigitalAdaptive = true;
+// Clipping predictor (optional)
+config.gainController.analogGainController.clippingPredictor.enabled = false;
+```
+
+When using AdaptiveAnalog mode, integrate with your system microphone level if possible so AGC1 can adjust the hardware/OS capture volume. Use AdaptiveDigital if you cannot control device gain. FixedDigital applies a constant digital gain.
+
+#### Digital Gain Controller
+
+```java
+// Enable the newer digital AGC
+config.gainControllerDigital.enabled = true;
 
 // Configure fixed digital gain (in dB)
-config.gainControlDigital.fixedDigital.gainDb = 5.0f;
+config.gainControllerDigital.fixedDigital.gainDb = 5.0f;
 
 // Or configure adaptive digital gain
-config.gainControlDigital.adaptiveDigital.enabled = true;
-config.gainControlDigital.adaptiveDigital.headroomDb = 3.0f;
-config.gainControlDigital.adaptiveDigital.maxGainDb = 30.0f;
-config.gainControlDigital.adaptiveDigital.initialGainDb = 8.0f;
-config.gainControlDigital.adaptiveDigital.maxGainChangeDbPerSecond = 3.0f;
-config.gainControlDigital.adaptiveDigital.maxOutputNoiseLevelDbfs = -50.0f;
+config.gainControllerDigital.adaptiveDigital.enabled = true;
+config.gainControllerDigital.adaptiveDigital.headroomDb = 3.0f;
+config.gainControllerDigital.adaptiveDigital.maxGainDb = 30.0f;
+config.gainControllerDigital.adaptiveDigital.initialGainDb = 8.0f;
+config.gainControllerDigital.adaptiveDigital.maxGainChangeDbPerSecond = 3.0f;
+config.gainControllerDigital.adaptiveDigital.maxOutputNoiseLevelDbfs = -50.0f;
 ```
 
 ### High-Pass Filter
