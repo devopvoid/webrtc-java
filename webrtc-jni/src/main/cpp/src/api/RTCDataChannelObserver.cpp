@@ -48,11 +48,21 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
+	void RTCDataChannelObserver::OnBufferedAmountChange(uint64_t sent_data_size)
+	{
+		JNIEnv * env = AttachCurrentThread();
+
+		env->CallVoidMethod(observer, javaClass->onBufferedAmountChange, static_cast<jlong>(sent_data_size));
+
+		ExceptionCheck(env);
+	}
+
 	RTCDataChannelObserver::JavaRTCDataChannelObserverClass::JavaRTCDataChannelObserverClass(JNIEnv * env)
 	{
 		jclass cls = FindClass(env, PKG"RTCDataChannelObserver");
 
 		onStateChange = GetMethod(env, cls, "onStateChange", "()V");
 		onMessage = GetMethod(env, cls, "onMessage", "(L" PKG "RTCDataChannelBuffer;)V");
+		onBufferedAmountChange = GetMethod(env, cls, "onBufferedAmountChange", "(J)V");
 	}
 }

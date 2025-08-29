@@ -37,6 +37,7 @@ namespace jni
 			// DataChannelObserver implementation.
 			void OnStateChange() override;
 			void OnMessage(const webrtc::DataBuffer & buffer) override;
+			void OnBufferedAmountChange(uint64_t sent_data_size) override;
 
 		private:
 			class JavaRTCDataChannelObserverClass : public JavaClass
@@ -46,6 +47,7 @@ namespace jni
 
 					jmethodID onStateChange;
 					jmethodID onMessage;
+					jmethodID onBufferedAmountChange;
 			};
 
 		private:

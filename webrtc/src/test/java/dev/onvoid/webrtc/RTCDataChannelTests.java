@@ -18,17 +18,64 @@ package dev.onvoid.webrtc;
 
 import static java.util.Objects.nonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 class RTCDataChannelTests extends TestBase {
+
+	@Test
+	void bufferedAmountChangeCallback() throws Exception {
+		DataPeerConnection caller = new DataPeerConnection(factory);
+		DataPeerConnection callee = new DataPeerConnection(factory);
+
+		caller.setRemotePeerConnection(callee);
+		callee.setRemotePeerConnection(caller);
+
+		callee.setRemoteDescription(caller.createOffer());
+		caller.setRemoteDescription(callee.createAnswer());
+
+		caller.waitUntilConnected();
+		callee.waitUntilConnected();
+
+		// Prepare a latch-based observer to detect buffered amount change.
+		CountDownLatch latch = new CountDownLatch(1);
+
+		caller.getLocalDataChannel().registerObserver(new RTCDataChannelObserver() {
+			@Override
+			public void onBufferedAmountChange(long previousAmount) {
+				latch.countDown();
+			}
+
+			@Override
+			public void onStateChange() { }
+
+			@Override
+			public void onMessage(RTCDataChannelBuffer buffer) { }
+		});
+
+		// Send a large enough message to cause buffering (increase from 0).
+		byte[] big = new byte[64 * 1024]; // 64 KB
+		ByteBuffer data = ByteBuffer.wrap(big);
+		RTCDataChannelBuffer buffer = new RTCDataChannelBuffer(data, true);
+		caller.getLocalDataChannel().send(buffer);
+
+		// Wait for the callback to fire to avoid flakiness.
+		boolean signaled = latch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+
+		assertTrue(signaled, "onBufferedAmountChange should be called when sending data");
+
+		caller.close();
+		callee.close();
+	}
 
 	@Test
 	void textMessage() throws Exception {
@@ -96,6 +143,10 @@ class RTCDataChannelTests extends TestBase {
 					}
 				}
 			});
+		}
+
+		RTCDataChannel getLocalDataChannel() {
+			return localDataChannel;
 		}
 
 		List<String> getReceivedTexts() {
