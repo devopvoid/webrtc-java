@@ -67,7 +67,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAu
 
 	try {
 	    auto device = context->getAudioDeviceManager()->getDefaultAudioPlaybackDevice();
-
+	    device -> audioDeviceDirectionType = jni::avdev::AudioDeviceDirectionType::adtRender;
 		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
 	}
 	catch (...) {
@@ -84,7 +84,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAu
 
 	try {
 	    auto device = context->getAudioDeviceManager()->getDefaultAudioCaptureDevice();
-
+	    device -> audioDeviceDirectionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
 		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
 	}
 	catch (...) {
@@ -105,6 +105,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioRend
 		jni::JavaArrayList deviceList(env, devices.size());
 
 		for (const auto & device : devices) {
+		    device -> audioDeviceDirectionType = jni::avdev::AudioDeviceDirectionType::adtRender;
 			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
 		}
 
@@ -128,6 +129,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioCapt
 		jni::JavaArrayList deviceList(env, devices.size());
 
 		for (const auto & device : devices) {
+		    device -> audioDeviceDirectionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
 			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
 		}
 

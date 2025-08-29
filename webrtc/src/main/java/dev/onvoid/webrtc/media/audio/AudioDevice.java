@@ -16,12 +16,22 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import dev.onvoid.webrtc.media.AudioDeviceDirectionType;
 import dev.onvoid.webrtc.media.Device;
 
 public class AudioDevice extends Device {
 
+	private AudioDeviceDirectionType audioDeviceDirectionType;
 	protected AudioDevice(String name, String descriptor) {
 		super(name, descriptor);
+		audioDeviceDirectionType = AudioDeviceDirectionType.UNKNOWN;
 	}
 
+	public void setAudioDeviceDirectionType(AudioDeviceDirectionType newAudioDeviceDirectionType) {
+		this.audioDeviceDirectionType = newAudioDeviceDirectionType;
+	}
+
+	public AudioDeviceDirectionType getAudioDeviceDirectionType() {
+		return audioDeviceDirectionType;
+	}
 }
