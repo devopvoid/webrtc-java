@@ -40,6 +40,7 @@ namespace jni
 				jfieldID gainControllerDigital;
 				jfieldID highPassFilter;
 				jfieldID noiseSuppression;
+				jfieldID captureLevelAdjustment;
 		};
 
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
@@ -177,6 +178,28 @@ namespace jni
 				jclass cls;
 				jfieldID enabled;
 				jfieldID level;
+		};
+
+		class JavaCaptureLevelAdjustmentClass : public JavaClass
+		{
+			public:
+				explicit JavaCaptureLevelAdjustmentClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID preGainFactor;
+				jfieldID postGainFactor;
+				jfieldID analogMicGainEmulation;
+		};
+
+		class JavaAnalogMicGainEmulationClass : public JavaClass
+		{
+			public:
+				explicit JavaAnalogMicGainEmulationClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID initialLevel;
 		};
 	}
 }

@@ -62,6 +62,12 @@ public class AudioProcessingConfig {
      */
 	public final NoiseSuppression noiseSuppression = new NoiseSuppression();
 
+	/**
+	 * Capture level adjustment configuration to enable platform-driven capture
+	 * level corrections in the APM when available.
+	 */
+	public final CaptureLevelAdjustment captureLevelAdjustment = new CaptureLevelAdjustment();
+
 
     /**
      * Configures the audio processing pipeline settings.
@@ -395,6 +401,43 @@ public class AudioProcessingConfig {
 			 */
 			public final ClippingPredictor clippingPredictor = new ClippingPredictor();
 		}
+	}
+
+
+	/**
+	 * Configuration for capture level adjustment in audio processing. When enabled, the
+	 * audio processing module may apply platform-informed adjustments to the capture level
+	 * to improve overall gain staging.
+	 */
+	public static class CaptureLevelAdjustment {
+
+		/**
+		 * Indicates whether capture level adjustment is enabled.
+		 */
+		public boolean enabled;
+
+		/**
+		 * Scales the signal before any processing is done. Default 1.0.
+		 */
+		public float preGainFactor = 1.0f;
+
+		/**
+		 * Scales the signal after all processing is done. Default 1.0.
+		 */
+		public float postGainFactor = 1.0f;
+
+		/** Emulates analog mic gain behavior when enabled. */
+		public static class AnalogMicGainEmulation {
+			/** Enable the analog mic gain emulation. */
+			public boolean enabled = false;
+			/** Initial analog level [0..255]. Default 255. */
+			public int initialLevel = 255;
+		}
+
+		/**
+		 * Configuration for analog mic gain emulation.
+		 */
+		public final AnalogMicGainEmulation analogMicGainEmulation = new AnalogMicGainEmulation();
 	}
 
 

@@ -97,7 +97,7 @@ class AudioProcessingTest {
 	}
 
 	@Test
-	void gainController_defaults_areAsDocumented() {
+	void gainController_defaults() {
 		AudioProcessingConfig cfg = new AudioProcessingConfig();
 		AudioProcessingConfig.GainController gc = cfg.gainController;
 
@@ -130,7 +130,7 @@ class AudioProcessingTest {
 	}
 
 	@Test
-	void gainController_can_mutate_all_fields() {
+	void gainController_mutate_all_fields() {
 		AudioProcessingConfig cfg = new AudioProcessingConfig();
 		AudioProcessingConfig.GainController gc = cfg.gainController;
 
@@ -182,6 +182,41 @@ class AudioProcessingTest {
 		assertEquals(-3.5f, cp.clippingThreshold, 0.0001f);
 		assertEquals(1.25f, cp.crestFactorMargin, 0.0001f);
 		assertFalse(cp.usePredictedStep);
+	}
+
+	@Test
+	void captureLevelAdjustment_defaults() {
+		AudioProcessingConfig cfg = new AudioProcessingConfig();
+		AudioProcessingConfig.CaptureLevelAdjustment cla = cfg.captureLevelAdjustment;
+
+		assertFalse(cla.enabled, "CLA disabled by default");
+		assertEquals(1.0f, cla.preGainFactor, 0.0001f);
+		assertEquals(1.0f, cla.postGainFactor, 0.0001f);
+		AudioProcessingConfig.CaptureLevelAdjustment.AnalogMicGainEmulation ame = cla.analogMicGainEmulation;
+		assertFalse(ame.enabled, "AnalogMicGainEmulation disabled by default");
+		assertEquals(255, ame.initialLevel, "AnalogMicGainEmulation initialLevel default");
+	}
+
+	@Test
+	void captureLevelAdjustment_mutate_all_fields() {
+		AudioProcessingConfig cfg = new AudioProcessingConfig();
+		AudioProcessingConfig.CaptureLevelAdjustment cla = cfg.captureLevelAdjustment;
+
+		cla.enabled = true;
+		cla.preGainFactor = 0.75f;
+		cla.postGainFactor = 1.25f;
+		cla.analogMicGainEmulation.enabled = true;
+		cla.analogMicGainEmulation.initialLevel = 200;
+
+		// Should not throw and should be accepted by native ApplyConfig
+		audioProcessing.applyConfig(cfg);
+
+		// Validate mutations remain in Java object
+		assertTrue(cla.enabled);
+		assertEquals(0.75f, cla.preGainFactor, 0.0001f);
+		assertEquals(1.25f, cla.postGainFactor, 0.0001f);
+		assertTrue(cla.analogMicGainEmulation.enabled);
+		assertEquals(200, cla.analogMicGainEmulation.initialLevel);
 	}
 
 	@Test

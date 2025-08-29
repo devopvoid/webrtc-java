@@ -33,11 +33,15 @@ namespace jni
 			const auto javaEchoCancellerClass = JavaClasses::get<JavaEchoCancellerClass>(env);
 			const auto javaHighPassFilterClass = JavaClasses::get<JavaHighPassFilterClass>(env);
 			const auto javaNoiseSuppressionClass = JavaClasses::get<JavaNoiseSuppressionClass>(env);
+			const auto javaCaptureLevelAdjustmentClass = JavaClasses::get<JavaCaptureLevelAdjustmentClass>(env);
+			const auto javaAnalogMicGainEmulationClass = JavaClasses::get<JavaAnalogMicGainEmulationClass>(env);
 
 			JavaObject obj(env, javaType);
 			JavaObject echoCanceller(env, obj.getObject(javaClass->echoCanceller));
 			JavaObject highPassFilter(env, obj.getObject(javaClass->highPassFilter));
 			JavaObject noiseSuppression(env, obj.getObject(javaClass->noiseSuppression));
+			JavaObject captureLevelAdjustment(env, obj.getObject(javaClass->captureLevelAdjustment));
+			JavaObject analogMicGainEmulation(env, captureLevelAdjustment.getObject(javaCaptureLevelAdjustmentClass->analogMicGainEmulation));
 
 			webrtc::AudioProcessing::Config config;
 
@@ -46,6 +50,11 @@ namespace jni
 			config.high_pass_filter.enabled = highPassFilter.getBoolean(javaHighPassFilterClass->enabled);
 			config.noise_suppression.enabled = noiseSuppression.getBoolean(javaNoiseSuppressionClass->enabled);
 			config.echo_canceller.enforce_high_pass_filtering = echoCanceller.getBoolean(javaEchoCancellerClass->enforceHighPassFiltering);
+			config.capture_level_adjustment.enabled = captureLevelAdjustment.getBoolean(javaCaptureLevelAdjustmentClass->enabled);
+			config.capture_level_adjustment.pre_gain_factor = captureLevelAdjustment.getFloat(javaCaptureLevelAdjustmentClass->preGainFactor);
+			config.capture_level_adjustment.post_gain_factor = captureLevelAdjustment.getFloat(javaCaptureLevelAdjustmentClass->postGainFactor);
+			config.capture_level_adjustment.analog_mic_gain_emulation.enabled = analogMicGainEmulation.getBoolean(javaAnalogMicGainEmulationClass->enabled);
+			config.capture_level_adjustment.analog_mic_gain_emulation.initial_level = analogMicGainEmulation.getInt(javaAnalogMicGainEmulationClass->initialLevel);
 			config.gain_controller1 = toGainController1(env, obj.getObject(javaClass->gainController));
 			config.gain_controller2 = toGainController2(env, obj.getObject(javaClass->gainControllerDigital));
 
@@ -161,6 +170,7 @@ namespace jni
 			gainController = GetFieldID(env, cls, "gainController", "L" PKG_AUDIO "AudioProcessingConfig$GainController;");
 			highPassFilter = GetFieldID(env, cls, "highPassFilter", "L" PKG_AUDIO "AudioProcessingConfig$HighPassFilter;");
 			noiseSuppression = GetFieldID(env, cls, "noiseSuppression", "L" PKG_AUDIO "AudioProcessingConfig$NoiseSuppression;");
+			captureLevelAdjustment = GetFieldID(env, cls, "captureLevelAdjustment", "L" PKG_AUDIO "AudioProcessingConfig$CaptureLevelAdjustment;");
 		}
 
 		JavaPipelineClass::JavaPipelineClass(JNIEnv* env)
@@ -263,6 +273,24 @@ namespace jni
 
 			enabled = GetFieldID(env, cls, "enabled", "Z");
 			level = GetFieldID(env, cls, "level", "L" PKG_AUDIO "AudioProcessingConfig$NoiseSuppression$Level;");
+		}
+
+		JavaCaptureLevelAdjustmentClass::JavaCaptureLevelAdjustmentClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$CaptureLevelAdjustment");
+
+			enabled = GetFieldID(env, cls, "enabled", "Z");
+			preGainFactor = GetFieldID(env, cls, "preGainFactor", "F");
+			postGainFactor = GetFieldID(env, cls, "postGainFactor", "F");
+			analogMicGainEmulation = GetFieldID(env, cls, "analogMicGainEmulation", "L" PKG_AUDIO "AudioProcessingConfig$CaptureLevelAdjustment$AnalogMicGainEmulation;");
+		}
+
+		JavaAnalogMicGainEmulationClass::JavaAnalogMicGainEmulationClass(JNIEnv* env)
+		{
+			cls = FindClass(env, PKG_AUDIO"AudioProcessingConfig$CaptureLevelAdjustment$AnalogMicGainEmulation");
+
+			enabled = GetFieldID(env, cls, "enabled", "Z");
+			initialLevel = GetFieldID(env, cls, "initialLevel", "I");
 		}
 
 		JavaInputVolumeControllerClass::JavaInputVolumeControllerClass(JNIEnv* env)
