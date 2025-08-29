@@ -34,15 +34,32 @@ namespace jni
 				explicit JavaAudioProcessingConfigClass(JNIEnv * env);
 
 				jclass cls;
+				jfieldID pipeline;
 				jfieldID echoCanceller;
-				jfieldID gainControl;
+				jfieldID gainController;
+				jfieldID gainControllerDigital;
 				jfieldID highPassFilter;
 				jfieldID noiseSuppression;
+				jfieldID captureLevelAdjustment;
 		};
 
 		webrtc::AudioProcessing::Config toNative(JNIEnv * env, const JavaRef<jobject> & javaType);
+		webrtc::AudioProcessing::Config::Pipeline toPipeline(JNIEnv* env, const JavaLocalRef<jobject> & javaType);
+		webrtc::AudioProcessing::Config::GainController1 toGainController1(JNIEnv * env, const JavaLocalRef<jobject> & javaType);
 		webrtc::AudioProcessing::Config::GainController2 toGainController2(JNIEnv * env, const JavaLocalRef<jobject> & javaType);
 
+
+		class JavaPipelineClass : public JavaClass
+		{
+			public:
+				explicit JavaPipelineClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID maximumInternalProcessingRate;
+				jfieldID multiChannelRender;
+				jfieldID multiChannelCapture;
+				jfieldID captureDownmixMethod;
+		};
 
 		class JavaEchoCancellerClass : public JavaClass
 		{
@@ -54,15 +71,25 @@ namespace jni
 				jfieldID enforceHighPassFiltering;
 		};
 
-		class JavaGainControlClass : public JavaClass
+		class JavaGainControllerDigitalClass : public JavaClass
 		{
 			public:
-				explicit JavaGainControlClass(JNIEnv * env);
+				explicit JavaGainControllerDigitalClass(JNIEnv * env);
 
 				jclass cls;
 				jfieldID enabled;
+				jfieldID inputVolumeController;
 				jfieldID fixedDigital;
 				jfieldID adaptiveDigital;
+		};
+
+		class JavaInputVolumeControllerClass : public JavaClass
+		{
+			public:
+				explicit JavaInputVolumeControllerClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
 		};
 
 		class JavaGainControlFixedDigitalClass : public JavaClass
@@ -88,6 +115,52 @@ namespace jni
 				jfieldID maxOutputNoiseLevelDbfs;
 		};
 
+		class JavaGainControllerClass : public JavaClass
+		{
+			public:
+				explicit JavaGainControllerClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID targetLevelDbfs;
+				jfieldID compressionGainDb;
+				jfieldID enableLimiter;
+				jfieldID mode;
+				jfieldID analogGainController;
+		};
+
+		class JavaAgc1AnalogGainControllerClass : public JavaClass
+		{
+			public:
+				explicit JavaAgc1AnalogGainControllerClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID startupMinVolume;
+				jfieldID clippedLevelMin;
+				jfieldID enableDigitalAdaptive;
+				jfieldID clippedLevelStep;
+				jfieldID clippedRatioThreshold;
+				jfieldID clippedWaitFrames;
+				jfieldID clippingPredictor;
+		};
+
+		class JavaAgc1ClippingPredictorClass : public JavaClass
+		{
+			public:
+				explicit JavaAgc1ClippingPredictorClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID mode;
+				jfieldID windowLength;
+				jfieldID referenceWindowLength;
+				jfieldID referenceWindowDelay;
+				jfieldID clippingThreshold;
+				jfieldID crestFactorMargin;
+				jfieldID usePredictedStep;
+		};
+
 		class JavaHighPassFilterClass : public JavaClass
 		{
 			public:
@@ -105,6 +178,28 @@ namespace jni
 				jclass cls;
 				jfieldID enabled;
 				jfieldID level;
+		};
+
+		class JavaCaptureLevelAdjustmentClass : public JavaClass
+		{
+			public:
+				explicit JavaCaptureLevelAdjustmentClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID preGainFactor;
+				jfieldID postGainFactor;
+				jfieldID analogMicGainEmulation;
+		};
+
+		class JavaAnalogMicGainEmulationClass : public JavaClass
+		{
+			public:
+				explicit JavaAnalogMicGainEmulationClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
+				jfieldID initialLevel;
 		};
 	}
 }
