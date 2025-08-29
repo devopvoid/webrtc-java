@@ -54,6 +54,7 @@ class AudioProcessingTest {
 		config.echoCanceller.enforceHighPassFiltering = true;
 
 		config.gainControllerDigital.enabled = true;
+		config.gainControllerDigital.inputVolumeController.enabled = true;
 
 		config.highPassFilter.enabled = true;
 

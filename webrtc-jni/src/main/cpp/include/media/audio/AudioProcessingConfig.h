@@ -77,8 +77,18 @@ namespace jni
 
 				jclass cls;
 				jfieldID enabled;
+				jfieldID inputVolumeController;
 				jfieldID fixedDigital;
 				jfieldID adaptiveDigital;
+		};
+
+		class JavaInputVolumeControllerClass : public JavaClass
+		{
+			public:
+				explicit JavaInputVolumeControllerClass(JNIEnv * env);
+
+				jclass cls;
+				jfieldID enabled;
 		};
 
 		class JavaGainControlFixedDigitalClass : public JavaClass

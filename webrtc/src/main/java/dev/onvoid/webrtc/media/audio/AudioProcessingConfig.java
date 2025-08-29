@@ -136,6 +136,20 @@ public class AudioProcessingConfig {
 	public static class GainControllerDigital {
 
 		/**
+		 * Adjusts the input volume applied when the audio is captured.
+		 * This is a pre-amplifier stage before any digital gain control is applied.
+		 */
+		public static class InputVolumeController {
+
+			/**
+			 * Determines whether the input volume controller is enabled.
+			 * When true, the input volume will be automatically adjusted.
+			 */
+			public boolean enabled = false;
+
+		}
+
+		/**
 		 * Configuration for fixed digital gain control.
 		 * Applies a constant gain value to the audio signal.
 		 */
@@ -148,7 +162,6 @@ public class AudioProcessingConfig {
 			public float gainDb = 0.0f;
 
 		}
-
 
 		/**
 		 * Configuration for adaptive digital gain control.
@@ -203,6 +216,11 @@ public class AudioProcessingConfig {
 		 * Adaptive digital gain control settings.
 		 */
 		public final AdaptiveDigital adaptiveDigital = new AdaptiveDigital();
+
+		/**
+		 * Input volume controller settings.
+		 */
+		public final InputVolumeController inputVolumeController = new InputVolumeController();
 
 		/**
 		 * Determines whether digital gain control is enabled.
