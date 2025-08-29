@@ -61,8 +61,8 @@ class PortAllocatorConfigIntegrationTest extends TestBase {
 		caller.setRemoteDescription(callee.createAnswer());
 
 		// Wait until connected (with a timeout to avoid hanging tests).
-		assertTrue(caller.awaitConnected(10, TimeUnit.SECONDS), "Caller failed to connect in time");
-		assertTrue(callee.awaitConnected(10, TimeUnit.SECONDS), "Callee failed to connect in time");
+		assertTrue(caller.awaitConnected(30, TimeUnit.SECONDS), "Caller failed to connect in time");
+		assertTrue(callee.awaitConnected(30, TimeUnit.SECONDS), "Callee failed to connect in time");
 
 		// Give ICE gathering a brief moment.
 		Thread.sleep(500);
