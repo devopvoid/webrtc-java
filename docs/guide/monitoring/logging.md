@@ -131,7 +131,5 @@ Logging.addLogSink(Logging.Severity.VERBOSE, new Slf4jLogSink());
 
 This approach allows you to integrate WebRTC's native logging with your application's existing logging infrastructure.
 
----
-
 ## Conclusion
 By using the provided methods and custom log sinks, you can effectively capture, process, and manage log messages to aid in debugging and monitoring your application. Whether you choose to use the native logging capabilities or integrate with existing logging frameworks, the WebRTC logging system is designed to be adaptable to your needs.
