@@ -103,5 +103,5 @@ finally {
 ## Related guides
 
 - [Audio Processing](/guide/audio/audio-processing)
-- [Headless Audio](/guide/audio/headless-audio-device-module)
+- [Headless Audio](/guide/audio/headless-audio)
 - [Voice Activity Detector](/tools/audio/voice-activity-detector)

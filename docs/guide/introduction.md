@@ -9,7 +9,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 For more detailed information, check out the documentation:
 
 - [Get Started](/guide/get-started) - Get up and running quickly with webrtc-java
-- [Guides](/guide/guides) - Comprehensive documentation on using the library
+- [Guides](/guide/) - Comprehensive documentation on using the library
 - [Examples](/guide/examples) - Sample code demonstrating various features
 - [Build Notes](/guide/build) - Instructions for building the library from source
 

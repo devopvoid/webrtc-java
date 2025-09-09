@@ -72,7 +72,7 @@ This example is valuable for applications that need to establish WebRTC connecti
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.web.server.WebServer"
 ```
 
-And the browser client is reachable at this url: https://localhost:8443
+And the browser client is reachable at this url: `https://localhost:8443`
 
 
 ## Running the Examples

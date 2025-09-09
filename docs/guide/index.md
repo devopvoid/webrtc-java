@@ -6,14 +6,14 @@ This section provides detailed guides for various features of the webrtc-java li
 
 - [Media Devices](/guide/media/media-devices) - Working with audio and video devices
 - [Bitrate and Framerate Constraints](/guide/media/constraints) - Controlling media quality
-- [Send-only and Receive-only](/guide/media/send-receive-direction) - Configure transceiver directions (send-only, receive-only or inactive)
+- [Send-only and Receive-only](/guide/media/directionality) - Configure transceiver directions (send-only, receive-only or inactive)
 
 ## Audio
 
 - [Audio Device Selection](/guide/audio/audio-devices) - Selecting and configuring audio devices
 - [Audio Processing](/guide/audio/audio-processing) - Voice processing components
 - [Custom Audio Source](/guide/audio/custom-audio-source) - Using custom audio sources with WebRTC
-- [Headless Audio](/guide/audio/headless-audio-device-module) - Playout pull without touching real OS audio devices
+- [Headless Audio](/guide/audio/headless-audio) - Playout pull without touching real OS audio devices
 - [DTMF Sender](/guide/audio/dtmf-sender) - Sending DTMF tones in a call
 
 ## Video

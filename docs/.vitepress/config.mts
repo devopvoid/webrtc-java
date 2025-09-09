@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitepress'
 import { footer } from "./footer";
+import { head } from "./head";
 import { navbar } from "./nav";
 import { sidebar } from "./sidebar";
 import { PROJECT_VARS } from './versions'
@@ -9,8 +10,14 @@ export default defineConfig({
 	description: "Java native interface for WebRTC",
 	cleanUrls: true,
 
+	head: head,
+
 	themeConfig: {
-		logo: '/logo.png',
+		logo: {
+			light: '/logo.png',
+			dark: '/logo.png',
+			alt: 'logo'
+		},
 
 		externalLinkIcon: true,
 

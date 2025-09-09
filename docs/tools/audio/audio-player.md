@@ -8,7 +8,7 @@ API: `dev.onvoid.webrtc.media.audio.AudioPlayer`
 - You want to render raw PCM audio (generated or decoded by your app) to an OS output device.
 - You need a simple, high‑level start/stop wrapper around WebRTC’s audio playout.
 
-See also: [Audio Device Selection](/guide/audio/audio-devices), [Custom Audio Source](/guide/audio/custom-audio-source), [Headless Audio](/guide/audio/headless-audio-device-module).
+See also: [Audio Device Selection](/guide/audio/audio-devices), [Custom Audio Source](/guide/audio/custom-audio-source), [Headless Audio](/guide/audio/headless-audio).
 
 ## Key concepts
 - Device selection: Provide an `AudioDevice` representing the output device (speaker) before starting.
