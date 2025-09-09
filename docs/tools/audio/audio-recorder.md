@@ -1,6 +1,6 @@
 # Audio Recorder
 
-The AudioRecorder is a small helper that captures audio from a selected input device and forwards PCM frames to your implementation of AudioSink. It manages a native AudioDeviceModule internally and provides idempotent start/stop.
+The AudioRecorder is a small helper that captures audio from a selected input device and forwards PCM frames to your implementation of `AudioSink`. It manages a native `AudioDeviceModule` internally and provides idempotent start/stop.
 
 API: `dev.onvoid.webrtc.media.audio.AudioRecorder`
 

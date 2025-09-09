@@ -7,7 +7,7 @@ This guide focuses on setting up a peer connection with camera video capture cap
 To enable camera video capture, you need to:
 
 1. List available video devices (cameras)
-2. Create and configure a VideoDeviceSource
+2. Create and configure a `VideoDeviceSource`
 3. Create a video track with the camera source
 4. Add the track to your peer connection
 

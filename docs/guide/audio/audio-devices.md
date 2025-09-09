@@ -7,8 +7,8 @@ This guide focuses on setting up a peer connection with audio device selection c
 To enable audio device selection, you need to:
 
 1. List available audio devices
-2. Create and configure an AudioDeviceModule
-3. Pass the AudioDeviceModule to the PeerConnectionFactory
+2. Create and configure an `AudioDeviceModule`
+3. Pass the `AudioDeviceModule` to the `PeerConnectionFactory`
 
 ### Listing Available Audio Devices
 

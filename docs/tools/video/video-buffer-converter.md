@@ -45,7 +45,7 @@ Attempting to convert into undersized buffers will result in an error.
 
 ## Example: Convert VideoFrame to BufferedImage
 
-This example demonstrates converting a WebRTC VideoFrame to a Java BufferedImage using RGBA output.
+This example demonstrates converting a WebRTC `VideoFrame` to a Java `BufferedImage` using RGBA output.
 
 ```java
 import dev.onvoid.webrtc.media.FourCC;
@@ -87,8 +87,8 @@ public void onVideoFrame(VideoFrame frame) {
 ```
 
 How it works:
-1. Create a BufferedImage sized to the frame.
-2. Access its backing byte[] via DataBufferByte.
+1. Create a `BufferedImage` sized to the frame.
+2. Access its backing `byte[]` via `DataBufferByte`.
 3. Convert the VideoFrameBuffer from I420 to RGBA into the image buffer.
 
 Tip: If you have a direct NIO ByteBuffer (e.g., for native interop), use the ByteBuffer overload to keep a direct native path.
@@ -133,8 +133,8 @@ public void onImage(BufferedImage image) {
 ```
 
 ## Error handling and edge cases
-- All methods throw NullPointerException if src/dst is null; ensure proper checks.
-- ByteBuffer destinations must be writable (not read-only) for `convertFromI420`.
+- All methods throw `NullPointerException` if src/dst is null; ensure proper checks.
+- `ByteBuffer` destinations must be writable (not read-only) for `convertFromI420`.
 - Ensure the correct FourCC is used for the actual memory layout you pass/expect.
 - Beware of frame rotation metadata; conversions do not rotate pixels. Handle `VideoFrame.rotation` separately if your renderer requires upright images.
 

@@ -1,6 +1,6 @@
 # Audio Player
 
-The AudioPlayer is a small helper that plays audio using a selected output device by pulling frames from your implementation of AudioSource. It manages a native AudioDeviceModule internally and provides idempotent start/stop.
+The AudioPlayer is a small helper that plays audio using a selected output device by pulling frames from your implementation of `AudioSource`. It manages a native `AudioDeviceModule` internally and provides idempotent start/stop.
 
 API: `dev.onvoid.webrtc.media.audio.AudioPlayer`
 

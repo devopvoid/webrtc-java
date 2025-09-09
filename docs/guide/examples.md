@@ -7,7 +7,7 @@ This section provides an overview of the example applications included in the `w
 The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) demonstrates how to set up a peer connection with audio and video tracks to be able to send and receive media.
 
 **Key features demonstrated:**
-- Creating a PeerConnectionFactory
+- Creating a `PeerConnectionFactory`
 - Creating audio and video tracks
 - Setting up a peer connection
 - Adding tracks to the peer connection for sending media
@@ -32,7 +32,7 @@ This example is useful for applications that need to receive media streams from 
 The [`CodecListExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/CodecListExample.java) demonstrates how to list all supported codecs with the WebRTC peer-connection-factory.
 
 **Key features demonstrated:**
-- Creating a PeerConnectionFactory
+- Creating a `PeerConnectionFactory`
 - Getting the supported codecs for both sending and receiving audio and video
 - Displaying detailed information about each codec
 
@@ -43,10 +43,10 @@ This example is useful for understanding what codecs are available on the curren
 The [`DesktopVideoExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopVideoExample.java) demonstrates how to set up a peer connection with a desktop video source for screen or window capture.
 
 **Key features demonstrated:**
-- Creating a PeerConnectionFactory
+- Creating a `PeerConnectionFactory`
 - Getting available desktop sources (screens and windows)
-- Creating a VideoDesktopSource for capturing screen or window content
-- Configuring the VideoDesktopSource properties
+- Creating a `VideoDesktopSource` for capturing screen or window content
+- Configuring the `VideoDesktopSource` properties
 - Creating a video track with the desktop source
 - Setting up a peer connection
 
@@ -66,7 +66,9 @@ The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/we
 
 This example is valuable for applications that need to establish WebRTC connections between Java clients and web browsers, enabling cross-platform real-time communication with audio and video.
 
-**Note:** Before running the WebClientExample, you need to start the WebServer first. The WebServer provides the signaling service required for WebRTC connection establishment:
+::: info
+Before running the `WebClientExample`, you need to start the `WebServer` first. The `WebServer` provides the signaling service required for WebRTC connection establishment:
+:::
 
 ```bash
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.web.server.WebServer"

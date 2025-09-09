@@ -18,7 +18,7 @@ This is ideal for:
 
 ## Playout path
 
-Create the module and pass it to the PeerConnectionFactory. This ensures your peer connection stack uses a headless (dummy) audio backend.
+Create the module and pass it to the `PeerConnectionFactory`. This ensures your peer connection stack uses a headless (dummy) audio backend.
 
 ```java
 import dev.onvoid.webrtc.PeerConnectionFactory;
@@ -49,11 +49,11 @@ finally {
 }
 ```
 
-Notes:
+::: info
 - Calling startPlayout without a prior initPlayout will throw an error. Always call initPlayout first.
 - If you only need the audio pipeline to be ready when remote audio arrives, you may delay playout initialization until after creating your RTCPeerConnection.
+:::
 
----
 
 ## Recording path (capture)
 
@@ -85,13 +85,12 @@ adm.dispose();
 factory.dispose();
 ```
 
-Details:
+::: info
 - Initialization order matters: call `initRecording()` before `startRecording()`.
 - The module exposes one virtual recording device; selection calls succeed with index 0.
 - Stereo can be enabled/disabled via the standard ADM methods; by default 1 channel is used.
 - If no AudioTransport is registered (no source), silence is injected to keep timings consistent.
-
----
+:::
 
 ## When to use HeadlessAudioDeviceModule vs. dummy audio layer on AudioDeviceModule
 

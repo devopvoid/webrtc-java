@@ -273,7 +273,7 @@ dataChannel.dispose();
 
 ## Best Practices
 
-1. **Error Handling**: Always wrap `send` calls in try-catch blocks as they can throw exceptions if the buffer is full or the channel is not in the OPEN state.
+1. **Error Handling**: Always wrap `send` calls in try-catch blocks as they can throw exceptions if the buffer is full or the channel is not in the `OPEN` state.
 
 2. **Buffer Management**: Monitor the buffered amount to avoid overwhelming the channel. If `getBufferedAmount()` returns a large value, consider pausing sending until it decreases.
 

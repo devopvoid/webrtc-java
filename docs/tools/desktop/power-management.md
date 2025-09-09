@@ -6,10 +6,10 @@ API: `dev.onvoid.webrtc.media.video.desktop.PowerManagement`
 
 ## Overview
 
-- Purpose: Temporarily prevent the system from sleeping due to user idle.
-- Scope: Affects display sleep/idle behavior while enabled.
-- Cross‑platform: Implements native integrations for Windows, Linux, and macOS.
-- Responsibility: You must explicitly disable the assertion when you are done.
+- **Purpose**: Temporarily prevent the system from sleeping due to user idle.
+- **Scope**: Affects display sleep/idle behavior while enabled.
+- **Cross‑platform**: Implements native integrations for Windows, Linux, and macOS.
+- **Responsibility**: You must explicitly disable the assertion when you are done.
 
 Key methods:
 - `void enableUserActivity()` – Declare the user as active; prevents idle sleep.
@@ -44,9 +44,9 @@ finally {
 
 ## Platform notes
 
-- Windows: Uses native Windows power APIs to request that the display remain on while enabled.
-- Linux (Freedesktop environments): Uses DBus screensaver inhibition (e.g., org.freedesktop.ScreenSaver) where available.
-- macOS: Uses macOS power management assertions to prevent display sleep while enabled.
+- **Windows**: Uses native Windows power APIs to request that the display remain on while enabled.
+- **Linux** (Freedesktop environments): Uses DBus screensaver inhibition (e.g., org.freedesktop.ScreenSaver) where available.
+- **macOS**: Uses macOS power management assertions to prevent display sleep while enabled.
 
 Exact mechanisms are handled by the native layer; your Java code remains the same across platforms.
 

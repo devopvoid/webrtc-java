@@ -10,9 +10,9 @@ This guide explains how to configure WebRTC media to be receive-only or send-onl
 The examples build upon the RTCRtpTransceiver API, which is the recommended way to control directionality in modern WebRTC.
 
 Related API:
-- dev.onvoid.webrtc.RTCRtpTransceiver
-- dev.onvoid.webrtc.RTCRtpTransceiverInit
-- dev.onvoid.webrtc.RTCRtpTransceiverDirection
+- `dev.onvoid.webrtc.RTCRtpTransceiver`
+- `dev.onvoid.webrtc.RTCRtpTransceiverInit`
+- `dev.onvoid.webrtc.RTCRtpTransceiverDirection`
 
 References in the repository:
 - Tests: [RTCPeerConnectionTests.java](https://github.com/devopvoid/webrtc-java/blob/main/webrtc/src/test/java/dev/onvoid/webrtc/RTCPeerConnectionTests.java)
@@ -20,16 +20,16 @@ References in the repository:
 
 ## Concepts overview
 
-- SEND_RECV: Both sending and receiving are active (default when you add a track).
-- SEND_ONLY: Only sending is negotiated; you won’t receive media on this transceiver.
-- RECV_ONLY: Only receiving is negotiated; you won’t send media on this transceiver.
-- INACTIVE: Neither sending nor receiving on this transceiver.
+- `SEND_RECV`: Both sending and receiving are active (default when you add a track).
+- `SEND_ONLY`: Only sending is negotiated; you won’t receive media on this transceiver.
+- `RECV_ONLY`: Only receiving is negotiated; you won’t send media on this transceiver.
+- `INACTIVE`: Neither sending nor receiving on this transceiver.
 
 These map to the SDP attributes a=sendrecv, a=sendonly, a=recvonly, a=inactive.
 
 ## Receive-only example
 
-Use a transceiver with direction RECV_ONLY to indicate that you only want to receive media for a given kind (audio or video). You can optionally pass a dummy local track or omit sending entirely by not attaching a sending track.
+Use a transceiver with direction `RECV_ONLY` to indicate that you only want to receive media for a given kind (audio or video). You can optionally pass a dummy local track or omit sending entirely by not attaching a sending track.
 
 ```java
 import dev.onvoid.webrtc.*;
@@ -60,9 +60,10 @@ if (track instanceof dev.onvoid.webrtc.media.video.VideoTrack vTrack) {
 }
 ```
 
-Notes:
+::: info
 - This pattern is used in the WhepExample included in the repository.
 - When you create the offer, the SDP will contain a=recvonly for that m= section.
+:::
 
 ## Send-only example
 
@@ -118,20 +119,22 @@ pc.createOffer(opts, new CreateSessionDescriptionObserver() {
 });
 ```
 
-> Tip: You can also control sending without renegotiation by replacing the sender’s track or disabling it via MediaStreamTrack.setEnabled(false). However, the negotiated direction in SDP remains the same until you renegotiate.
+::: tip
+You can also control sending without renegotiation by replacing the sender’s track or disabling it via `MediaStreamTrack.setEnabled(false)`. However, the negotiated direction in SDP remains the same until you renegotiate.
+:::
 
 ## Common patterns and tips
 
-- If you only need to receive a stream from a server (e.g., WHEP), use RECV_ONLY and avoid capturing local devices. This simplifies permissions and reduces CPU usage.
-- To temporarily stop sending without renegotiation, you can disable the sender’s track: sender.getTrack().setEnabled(false).
-- Use INACTIVE when neither sending nor receiving should occur on a transceiver, but you want to keep it for future use.
+- If you only need to receive a stream from a server (e.g., WHEP), use `RECV_ONLY` and avoid capturing local devices. This simplifies permissions and reduces CPU usage.
+- To temporarily stop sending without renegotiation, you can disable the sender’s track: `sender.getTrack().setEnabled(false)`.
+- Use `INACTIVE` when neither sending nor receiving should occur on a transceiver, but you want to keep it for future use.
 - Direction changes typically require a new offer/answer exchange.
 
 ## Troubleshooting
 
-- No remote media arriving in RECV_ONLY mode:
+- No remote media arriving in `RECV_ONLY` mode:
   - Ensure the remote endpoint actually sends media on that m= section.
-  - Verify codecs overlap (see CodecListExample in examples).
+  - Verify codecs overlap (see `CodecListExample` in examples).
   - Check network/firewall and ICE connectivity.
 - Permissions prompts appear even in receive-only mode:
   - Avoid creating real capture devices if you don’t need to send. You can add a transceiver with a dummy track.

@@ -7,7 +7,7 @@ This guide focuses on setting up a peer connection with desktop video capture ca
 To enable desktop video capture, you need to:
 
 1. List available desktop sources (screens and windows)
-2. Create and configure a VideoDesktopSource
+2. Create and configure a `VideoDesktopSource`
 3. Create a video track with the desktop source
 4. Add the track to your peer connection
 
