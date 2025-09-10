@@ -28,8 +28,6 @@ namespace jni
 			name(name),
 			descriptor(descriptor)
 		{
-		    deviceTransport = DeviceTransport::trUnknown;
-            deviceFormFactor = DeviceFormFactor::ffUnknown;
 		}
 
 		bool Device::operator==(const Device & other)
@@ -66,14 +64,6 @@ namespace jni
         {
             return deviceFormFactor;
         }
-
-        void Device::setDeviceTransport(DeviceTransport newDeviceTransport) {
-            deviceTransport = newDeviceTransport;
-        }
-
-        void Device::setDeviceFormFactor(DeviceFormFactor newDeviceFormFactor) {
-           deviceFormFactor = newDeviceFormFactor;
-        }
 	}
 
 	namespace Device
@@ -86,12 +76,11 @@ namespace jni
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
 
-            jclass cls = env->GetObjectClass(obj);
-            jmethodID setTransportMethod = env->GetMethodID(cls, "setDeviceTransport", "(L" PKG_MEDIA "DeviceTransport;)V");
-            env->CallVoidMethod(obj, setTransportMethod, JavaEnums::toJava(env, device->getDeviceTransport()).release());
+            auto deviceTransport = JavaEnums::toJava(env, device->deviceTransport);
+            env->SetObjectField(obj, javaClass->deviceTransport, deviceTransport.get());
 
-            jmethodID setFormFactorMethod = env->GetMethodID(cls, "setDeviceFormFactor", "(L" PKG_MEDIA "DeviceFormFactor;)V");
-            env->CallVoidMethod(obj, setFormFactorMethod, JavaEnums::toJava(env, device->getDeviceFormFactor()).release());
+            auto deviceFormFactor = JavaEnums::toJava(env, device->deviceFormFactor);
+            env->SetObjectField(obj, javaClass->deviceFormFactor, deviceFormFactor.get());
 
 			return JavaLocalRef<jobject>(env, obj);
 		}
@@ -104,6 +93,8 @@ namespace jni
 
 			name = GetFieldID(env, cls, "name", STRING_SIG);
 			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+			deviceTransport = GetFieldID(env, cls, "deviceTransport", "L" PKG "DeviceTransport;");
+			deviceFormFactor = GetFieldID(env, cls, "deviceFormFactor", "L" PKG "DeviceFormFactor;");
 		}
 	}
 }

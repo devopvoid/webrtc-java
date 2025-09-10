@@ -468,7 +468,7 @@ namespace jni
                     return DeviceFormFactor::ffHeadset;
                 case Microphone:
                     return DeviceFormFactor::ffMicrophone;
-                case DigitalAudioDisplayDevice: // для адуио устройств - это должно быть hdmi устройство
+                case DigitalAudioDisplayDevice: // for audio devices this means hdmi
                     return DeviceFormFactor::ffUnknown;
                 default:
                     return DeviceFormFactor::ffUnknown;
@@ -476,7 +476,7 @@ namespace jni
 		}
 
 		DeviceTransport WindowsAudioDeviceManager::getActualTransport(EndpointFormFactor formFactor) {
-		    // пока для винды не понятно как достоверно определить транспорт аудио устройства. Только HDMI могу могу
+		    // for Windows, only HDMI can be reliably determined
 		    switch (formFactor) {
 		        case DigitalAudioDisplayDevice:
 		            return DeviceTransport::trHdmi;

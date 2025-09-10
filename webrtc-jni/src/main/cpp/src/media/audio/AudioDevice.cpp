@@ -28,7 +28,6 @@ namespace jni
 		AudioDevice::AudioDevice(std::string name, std::string descriptor) :
 			Device(name, descriptor)
 		{
-		    audioDeviceDirectionType = AudioDeviceDirectionType::adtUnknown;
 		}
 	}
 
@@ -42,20 +41,15 @@ namespace jni
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
 
-            jclass cls = env->GetObjectClass(obj);
-            jmethodID setTransportMethod = env->GetMethodID(cls, "setDeviceTransport", "(L" PKG_MEDIA "DeviceTransport;)V");
-            env->CallVoidMethod(obj, setTransportMethod, JavaEnums::toJava(env, device->getDeviceTransport()).release());
+            auto deviceTransport = JavaEnums::toJava(env, device->getDeviceTransport);
+            env->SetObjectField(obj, javaClass->deviceTransport, deviceTransport.get());
 
-            jmethodID setFormFactorMethod = env->GetMethodID(cls, "setDeviceFormFactor", "(L" PKG_MEDIA "DeviceFormFactor;)V");
-            env->CallVoidMethod(obj, setFormFactorMethod, JavaEnums::toJava(env, device->getDeviceFormFactor()).release());
+            auto deviceFormFactor = JavaEnums::toJava(env, device->getDeviceFormFactor);
+            env->SetObjectField(obj, javaClass->deviceFormFactor, deviceFormFactor.get());
 
-            auto audioDevice = dynamic_cast<jni::avdev::AudioDevice *>(device.get());//std::static_pointer_cast<avdev::AudioDevice>(device);
-            auto type = JavaEnums::toJava(env, audioDevice->audioDeviceDirectionType).release();
-            jfieldID audioDeviceDirectionTypeField = env -> GetFieldID(cls, "audioDeviceDirectionType", "L" PKG_MEDIA "AudioDeviceDirectionType;");
-            // почему-то не работает установка значения напрямую только через сеттер, хотя в том же RTCConfiguration.cpp это используется
-            // env->SetObjectField(cls, audioDeviceDirectionTypeField, type.get());
-            jmethodID setAudioDeviceDirectionTypeMethod = env->GetMethodID(cls, "setAudioDeviceDirectionType", "(L" PKG_MEDIA "AudioDeviceDirectionType;)V");
-            env->CallVoidMethod(obj, setAudioDeviceDirectionTypeMethod, type);
+            auto audioDevice = dynamic_cast<jni::avdev::AudioDevice *>(device.get());
+            auto directionType = JavaEnums::toJava(env, audioDevice->directionType);
+            env->SetObjectField(obj, javaClass->directionType, directionType.get());
 
 			return JavaLocalRef<jobject>(env, obj);
 		}
@@ -68,6 +62,7 @@ namespace jni
 
 			name = GetFieldID(env, cls, "name", STRING_SIG);
 			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+			directionType = GetFieldID(env, cls, "directionType", "L" PKG "AudioDeviceDirectionType;");
 		}
 	}
 }

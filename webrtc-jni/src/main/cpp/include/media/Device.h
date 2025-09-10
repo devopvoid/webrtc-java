@@ -29,7 +29,7 @@ namespace jni
 	namespace avdev
 	{
 	    /**
-	    DeviceTransport and DeviceFormFactor only foe audio devices.
+	    DeviceTransport and DeviceFormFactor only for audio devices.
 	    */
 	    enum class DeviceTransport {
             trUnknown,
@@ -59,8 +59,6 @@ namespace jni
 				std::string getDescriptor() const;
 				DeviceTransport getDeviceTransport();
                 DeviceFormFactor getDeviceFormFactor();
-                void setDeviceTransport(DeviceTransport deviceTransport);
-                void setDeviceFormFactor(DeviceFormFactor deviceFormFactor);
 
 			protected:
 				Device(std::string name, std::string descriptor);

@@ -378,30 +378,29 @@ namespace jni
         }
 
         DeviceFormFactor PulseAudioDeviceManager::getActualFormFactor(std::string formFactor) {
-            if (formFactor == "speaker") {
-                return DeviceFormFactor::ffSpeaker;
-            } else  if (formFactor == "microphone") {
-                return DeviceFormFactor::ffMicrophone;
-            } else  if (formFactor == "headset") {
-                return DeviceFormFactor::ffHeadset;
-            } else  if (formFactor == "headphone") {
-                return DeviceFormFactor::ffHeadphone;
-            } else {
-                return DeviceFormFactor::ffUnknown;
-            }
-//            return DeviceFormFactor::ffUnknown;
+            switch(formFactor) {
+                case "speaker":
+                    return DeviceFormFactor::ffSpeaker;
+                case "microphone":
+                    return DeviceFormFactor::ffMicrophone;
+                case "headset":
+                    return DeviceFormFactor::ffHeadset;
+                case "headphone":
+                    return DeviceFormFactor::ffHeadphone;
+                default:
+                    return DeviceFormFactor::ffUnknown;
         }
 
         DeviceTransport PulseAudioDeviceManager::getActualTransport(std::string transport) {
-            if (transport == "usb") {
-                return DeviceTransport::trUsb;
-            } else if (transport == "bluetooth") {
-                return DeviceTransport::trWireless;
-            } else if (transport == "hdmi") {
-                return DeviceTransport::trHdmi;
-            } else {
-                return DeviceTransport::trUnknown;
-            }
+            switch(transport) {
+                case "usb":
+                    return DeviceTransport::trUsb;
+                case "bluetooth":
+                    return DeviceTransport::trWireless;
+                case "hdmi":
+                    return DeviceTransport::trHdmi;
+                default:
+                    return DeviceTransport::trUnknown;
         }
 	}
 }

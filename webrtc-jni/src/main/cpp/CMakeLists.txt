@@ -50,6 +50,7 @@ add_subdirectory(dependencies/jni-voithos)
 
 file(GLOB SOURCES_ROOT "src/*.cpp")
 file(GLOB SOURCES_API "src/api/*.cpp")
+file(GLOB SOURCES_API_AUDIO "src/api/audio/*.cpp")
 file(GLOB SOURCES_MEDIA "src/media/*.cpp")
 file(GLOB SOURCES_MEDIA_AUDIO "src/media/audio/*.cpp")
 file(GLOB SOURCES_MEDIA_AUDIO_OS "src/media/audio/${SOURCE_TARGET}/*.cpp")
@@ -63,6 +64,7 @@ file(GLOB SOURCES_RTC "src/rtc/*.cpp")
 list(APPEND SOURCES
     ${SOURCES_ROOT}
     ${SOURCES_API}
+    ${SOURCES_API_AUDIO}
     ${SOURCES_MEDIA}
     ${SOURCES_MEDIA_AUDIO}
     ${SOURCES_MEDIA_AUDIO_OS}

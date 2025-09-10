@@ -49,14 +49,6 @@ public abstract class Device {
 		return deviceFormFactor;
 	}
 
-	public void setDeviceFormFactor(DeviceFormFactor deviceFormFactor) {
-		this.deviceFormFactor = deviceFormFactor;
-	}
-
-	public void setDeviceTransport(DeviceTransport deviceTransport) {
-		this.deviceTransport = deviceTransport;
-	}
-
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) {
@@ -80,6 +72,6 @@ public abstract class Device {
 	@Override
 	public String toString() {
 		return String.format("%s [name=%s, descriptor=%s, transport=%s, formFactor=%s]",
-				Device.class.getSimpleName(), name, descriptor, deviceTransport.toString(), deviceFormFactor.toString());
+				Device.class.getSimpleName(), name, descriptor, deviceTransport, deviceFormFactor);
 	}
 }

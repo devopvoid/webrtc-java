@@ -6,35 +6,27 @@ Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
 <+>UTF-8
 ===================================================================
 diff --git a/modules/audio_device/mac/audio_device_mac.cc b/modules/audio_device/mac/audio_device_mac.cc
---- a/modules/audio_device/mac/audio_device_mac.cc	(revision d75b9e9ff07ee42841b4e416629c9fbd4b058905)
-+++ b/modules/audio_device/mac/audio_device_mac.cc	(date 1696335540383)
-@@ -831,9 +831,11 @@
-
-   memset(name, 0, kAdmMaxDeviceNameSize);
-
--  if (guid != NULL) {
--    memset(guid, 0, kAdmMaxGuidSize);
--  }
-+  memset(guid, 0, kAdmMaxGuidSize);
-+  AudioDeviceID deviceIds[MaxNumberDevices];
-+  int numberDevices = GetNumberDevices(kAudioDevicePropertyScopeOutput, deviceIds, MaxNumberDevices);
-+  std::string deviceId = std::to_string(deviceIds[index]);
-+  deviceId.copy(guid, kAdmMaxGuidSize);
-
+--- a/modules/audio_device/mac/audio_device_mac.cc	(revision e4445e46a910eb407571ec0b0b8b7043562678cf)
++++ b/modules/audio_device/mac/audio_device_mac.cc	(date 1757498230183)
+@@ -834,6 +834,10 @@
+ 
+   if (guid != NULL) {
+     memset(guid, 0, kAdmMaxGuidSize);
++    AudioDeviceID deviceIds[MaxNumberDevices];
++    int numberDevices = GetNumberDevices(kAudioDevicePropertyScopeOutput, deviceIds, MaxNumberDevices);
++    std::string deviceId = std::to_string(deviceIds[index]);
++    deviceId.copy(guid, kAdmMaxGuidSize);
+   }
+ 
    return GetDeviceName(kAudioDevicePropertyScopeOutput, index,
-                        rtc::ArrayView<char>(name, kAdmMaxDeviceNameSize));
-@@ -850,9 +852,11 @@
-
-   memset(name, 0, kAdmMaxDeviceNameSize);
-
--  if (guid != NULL) {
--    memset(guid, 0, kAdmMaxGuidSize);
--  }
-+  memset(guid, 0, kAdmMaxGuidSize);
-+  AudioDeviceID deviceIds[MaxNumberDevices];
-+  int numberDevices = GetNumberDevices(kAudioDevicePropertyScopeInput, deviceIds, MaxNumberDevices);
-+  std::string deviceId = std::to_string(deviceIds[index]);
-+  deviceId.copy(guid, kAdmMaxGuidSize);
-
+@@ -853,6 +857,10 @@
+ 
+   if (guid != NULL) {
+     memset(guid, 0, kAdmMaxGuidSize);
++    AudioDeviceID deviceIds[MaxNumberDevices];
++    int numberDevices = GetNumberDevices(kAudioDevicePropertyScopeInput, deviceIds, MaxNumberDevices);
++    std::string deviceId = std::to_string(deviceIds[index]);
++    deviceId.copy(guid, kAdmMaxGuidSize);
+   }
+ 
    return GetDeviceName(kAudioDevicePropertyScopeInput, index,
-                        rtc::ArrayView<char>(name, kAdmMaxDeviceNameSize));
