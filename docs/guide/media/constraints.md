@@ -1,4 +1,4 @@
-# Bitrate and Framerate Constraints
+# Media Constraints
 
 This guide explains how to set bitrate and framerate constraints for MediaStreamTrack of RTCRtpSender. It covers:
 
@@ -109,9 +109,9 @@ if (parameters.encodings != null && !parameters.encodings.isEmpty()) {
 
 The `scaleResolutionDownBy` parameter specifies how much to scale down the video in each dimension. For example, a value of 2.0 means the video will be scaled down by a factor of 2 in both width and height, resulting in a video that is 1/4 the size of the original.
 
-> Note that these constraints are applied without requiring SDP renegotiation, making them suitable for dynamic adaptation to changing network conditions.
-
----
+::: info
+Note that these constraints are applied without requiring SDP renegotiation, making them suitable for dynamic adaptation to changing network conditions.
+:::
 
 ## Conclusion
 

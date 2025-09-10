@@ -2,7 +2,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/dev.onvoid.webrtc/webrtc-java?label=Maven%20Central&logo=apache-maven)](https://search.maven.org/artifact/dev.onvoid.webrtc/webrtc-java)
 
 <p align="center">
-  <img alt="webrtc-java" width="100px" src="https://jrtc.dev/assets/images/logo.png" />
+  <img alt="webrtc-java" width="100px" src="https://jrtc.dev/logo.png" />
   <h2 align="center">Connecting the Java world through WebRTC</h2>
 </p>
 
@@ -25,10 +25,10 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 
 For more detailed information, check out the documentation:
 
-- [Quickstart](https://jrtc.dev/#/quickstart) - Get up and running quickly with webrtc-java
-- [Guides](https://jrtc.dev/#/guide/overview) - Comprehensive documentation on using the library
-- [Examples](https://jrtc.dev/#/examples) - Sample code demonstrating various features
-- [Build Notes](https://jrtc.dev/#/build) - Instructions for building the library from source
+- [Quickstart](https://jrtc.dev/guide/get-started) - Get up and running quickly with webrtc-java
+- [Guides](https://jrtc.dev/guide/) - Comprehensive documentation on using the library
+- [Examples](https://jrtc.dev/guide/examples) - Sample code demonstrating various features
+- [Build Notes](https://jrtc.dev/guide/build) - Instructions for building the library from source
 
 ## License
 
