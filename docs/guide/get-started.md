@@ -5,11 +5,11 @@ This guide will help you get started with webrtc-java quickly. We'll cover insta
 ## Supported Platforms
 Maven Central artifacts contain native libraries that can be loaded on the following platforms:
 
-|           | x64     | arm           | arm64        |
-|-----------|---------|---------------|--------------|
-| Linux     | ✔       | ✔ armeabi-v7a | ✔ arm64-v8a  |
-| macOS     | ✔       | -             | ✔            |
-| Windows   | ✔       | -             | -            |
+|           | x64     | arm     | arm64   |
+|-----------|---------|---------|---------|
+| Linux     | ✔       | ✔       | ✔       |
+| macOS     | ✔       | -       | ✔       |
+| Windows   | ✔       | -       | -       |
 
 
 ## Installation
