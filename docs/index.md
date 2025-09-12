@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: What is webrtc-java?
       link: /guide/introduction
+    - theme: alt
+      text: Sponsor this project
+      link: https://buymeacoffee.com/devopvoid
   image:
     src: /logo.png
     alt: webrtc-java
