@@ -1,0 +1,32 @@
+Subject: [PATCH] patch for mac deviceId
+---
+Index: modules/audio_device/mac/audio_device_mac.cc
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/audio_device/mac/audio_device_mac.cc b/modules/audio_device/mac/audio_device_mac.cc
+--- a/modules/audio_device/mac/audio_device_mac.cc	(revision e4445e46a910eb407571ec0b0b8b7043562678cf)
++++ b/modules/audio_device/mac/audio_device_mac.cc	(date 1757498230183)
+@@ -834,6 +834,10 @@
+ 
+   if (guid != NULL) {
+     memset(guid, 0, kAdmMaxGuidSize);
++    AudioDeviceID deviceIds[MaxNumberDevices];
++    int numberDevices = GetNumberDevices(kAudioDevicePropertyScopeOutput, deviceIds, MaxNumberDevices);
++    std::string deviceId = std::to_string(deviceIds[index]);
++    deviceId.copy(guid, kAdmMaxGuidSize);
+   }
+ 
+   return GetDeviceName(kAudioDevicePropertyScopeOutput, index,
+@@ -853,6 +857,10 @@
+ 
+   if (guid != NULL) {
+     memset(guid, 0, kAdmMaxGuidSize);
++    AudioDeviceID deviceIds[MaxNumberDevices];
++    int numberDevices = GetNumberDevices(kAudioDevicePropertyScopeInput, deviceIds, MaxNumberDevices);
++    std::string deviceId = std::to_string(deviceIds[index]);
++    deviceId.copy(guid, kAdmMaxGuidSize);
+   }
+ 
+   return GetDeviceName(kAudioDevicePropertyScopeInput, index,

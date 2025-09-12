@@ -18,6 +18,7 @@
 #include "JavaClasses.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
+#include "JavaEnums.h"
 
 namespace jni
 {
@@ -53,6 +54,16 @@ namespace jni
 		{
 			return name;
 		}
+
+		DeviceTransport Device::getDeviceTransport()
+		{
+		    return deviceTransport;
+		}
+
+        DeviceFormFactor Device::getDeviceFormFactor()
+        {
+            return deviceFormFactor;
+        }
 	}
 
 	namespace Device
@@ -65,6 +76,12 @@ namespace jni
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
 
+            auto deviceTransport = JavaEnums::toJava(env, device->deviceTransport);
+            env->SetObjectField(obj, javaClass->deviceTransport, deviceTransport.get());
+
+            auto deviceFormFactor = JavaEnums::toJava(env, device->deviceFormFactor);
+            env->SetObjectField(obj, javaClass->deviceFormFactor, deviceFormFactor.get());
+
 			return JavaLocalRef<jobject>(env, obj);
 		}
 
@@ -76,6 +93,8 @@ namespace jni
 
 			name = GetFieldID(env, cls, "name", STRING_SIG);
 			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+			deviceTransport = GetFieldID(env, cls, "deviceTransport", "L" PKG "DeviceTransport;");
+			deviceFormFactor = GetFieldID(env, cls, "deviceFormFactor", "L" PKG "DeviceFormFactor;");
 		}
 	}
 }

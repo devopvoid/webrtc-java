@@ -237,14 +237,16 @@ if (PATCHES)
         message(STATUS "Applying ${PATCH}")
 
         execute_process(
-            COMMAND patch -p0 --forward
-            WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
+            COMMAND git apply
+            WORKING_DIRECTORY "${WEBRTC_SRC}"
             INPUT_FILE "${PATCH}"
             OUTPUT_VARIABLE OUTPUT
             RESULT_VARIABLE RESULT)
 
         if (RESULT EQUAL 0)
             message(STATUS "Patch applied: ${PATCH}")
+        else()
+            message(STATUS "Warning: Patch ${PATCH} not applied ....")
         endif()
     endforeach(PATCH)
 endif()

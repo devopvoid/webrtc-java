@@ -28,6 +28,24 @@ namespace jni
 {
 	namespace avdev
 	{
+	    /**
+	    DeviceTransport and DeviceFormFactor only for audio devices.
+	    */
+	    enum class DeviceTransport {
+            trUnknown,
+            trHdmi,
+            trUsb,
+            trWireless,
+        };
+
+        enum class DeviceFormFactor {
+            ffUnknown,
+            ffSpeaker,
+            ffMicrophone,
+            ffHeadset,
+            ffHeadphone
+        };
+
 		class Device
 		{
 			public:
@@ -39,6 +57,8 @@ namespace jni
 
 				std::string getName() const;
 				std::string getDescriptor() const;
+				DeviceTransport getDeviceTransport();
+                DeviceFormFactor getDeviceFormFactor();
 
 			protected:
 				Device(std::string name, std::string descriptor);
@@ -46,6 +66,8 @@ namespace jni
 			private:
 				const std::string name;
 				const std::string descriptor;
+				DeviceTransport deviceTransport;
+                DeviceFormFactor deviceFormFactor;
 		};
 
 
@@ -63,6 +85,8 @@ namespace jni
 				jmethodID ctor;
 				jfieldID name;
 				jfieldID descriptor;
+				jfieldID deviceTransport;
+                jfieldID deviceFormFactor;
 		};
 
 		JavaLocalRef<jobject> toJavaDevice(JNIEnv * env, avdev::DevicePtr device);
