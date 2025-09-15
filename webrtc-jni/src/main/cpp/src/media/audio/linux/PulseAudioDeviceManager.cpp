@@ -140,7 +140,7 @@ namespace jni
 				pa_threaded_mainloop_unlock(mainloop);
 
             AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultCaptureDescName, defaultCaptureName);
-			defaultDevice->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+			defaultDevice->directionType = AudioDeviceDirectionType::adtCapture;
 			return defaultDevice;
 		}
 
@@ -177,7 +177,7 @@ namespace jni
 				pa_threaded_mainloop_unlock(mainloop);
 
             AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultPlaybackDescName, defaultPlaybackName);
-            defaultDevice->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+            defaultDevice->directionType = AudioDeviceDirectionType::adtRender;
             return defaultDevice;
 		}
 
@@ -275,9 +275,9 @@ namespace jni
 
 			if (devices.insertDevice(device)) {
 			    if (isCapture) {
-                    device->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+                    device->directionType = AudioDeviceDirectionType::adtCapture;
                 } else {
-                    device->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+                    device->directionType = AudioDeviceDirectionType::adtRender;
                 }
                 fillAdditionalTypes(device, proplist);
 				deviceMap[index] = device;
@@ -296,9 +296,9 @@ namespace jni
 
 			if (devices.removeDevice(it->second)) {
 			    if (isCapture) {
-			        it->second->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+			        it->second->directionType = AudioDeviceDirectionType::adtCapture;
 			    } else {
-			        it->second->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+			        it->second->directionType = AudioDeviceDirectionType::adtRender;
 			    }
 
 				notifyDeviceDisconnected(it->second);
@@ -371,7 +371,6 @@ namespace jni
             if (propHDMI && std::string(propHDMI).find("_hdmi") != std::string::npos) {
                 deviceTransportStr = "hdmi";
             }
-
 
             device->setDeviceFormFactor(getActualFormFactor(formFactorStr));
             device->setDeviceTransport(getActualTransport(deviceTransportStr));

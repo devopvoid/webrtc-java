@@ -225,11 +225,11 @@ namespace jni
 				}
 
 				if (scope == kAudioObjectPropertyScopeInput) {
-				    found->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+				    found->directionType = AudioDeviceDirectionType::adtCapture;
 					setDefaultCaptureDevice(found);
 				}
 				else if (scope == kAudioObjectPropertyScopeOutput) {
-				    found->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+				    found->directionType = AudioDeviceDirectionType::adtRender;
 					setDefaultPlaybackDevice(found);
 				}
 			}
@@ -260,7 +260,7 @@ namespace jni
 					if (removed == def) {
 						onDefaultDeviceChanged(scope, captureDevices, def);
 					}
-					removed->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+					removed->directionType = AudioDeviceDirectionType::adtCapture;
 				}
 				else if (scope == kAudioObjectPropertyScopeOutput) {
 					AudioDevicePtr def = getDefaultAudioPlaybackDevice();
@@ -268,7 +268,7 @@ namespace jni
 					if (removed == def) {
 						onDefaultDeviceChanged(scope, playbackDevices, def);
 					}
-					removed->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+					removed->directionType = AudioDeviceDirectionType::adtRender;
 				}
 
 				notifyDeviceDisconnected(removed);
@@ -305,11 +305,11 @@ namespace jni
 			if (channels > 0) {
 				if (scope == kAudioObjectPropertyScopeOutput) {
 					device = std::make_shared<AudioDevice>(name, id);
-					device-> audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+					device-> directionType = AudioDeviceDirectionType::adtRender;
 				}
 				else if (scope == kAudioObjectPropertyScopeInput) {
 					device = std::make_shared<AudioDevice>(name, id);
-					device->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+					device->directionType = AudioDeviceDirectionType::adtCapture;
 				}
 				fillAdditionalTypes(deviceID, scope, device);
 			}
@@ -324,11 +324,11 @@ namespace jni
 			}
 
 			if (scope == kAudioObjectPropertyScopeOutput) {
-			    device->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+			    device->directionType = AudioDeviceDirectionType::adtRender;
 				return playbackDevices.insertDevice(device);
 			}
 			else if (scope == kAudioObjectPropertyScopeInput) {
-			    device->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+			    device->directionType = AudioDeviceDirectionType::adtCapture;
 				return captureDevices.insertDevice(device);
 			}
 

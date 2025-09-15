@@ -28,7 +28,7 @@ namespace jni
 	namespace avdev
 	{
 
-enum class AudioDeviceDirectionType {
+        enum class AudioDeviceDirectionType {
             adtUnknown,
             adtCapture,
             adtRender
@@ -54,6 +54,8 @@ enum class AudioDeviceDirectionType {
 				jmethodID ctor;
 				jfieldID name;
 				jfieldID descriptor;
+				jfieldID deviceTransport;
+                jfieldID deviceFormFactor;
 				jfieldID directionType;
 		};
 

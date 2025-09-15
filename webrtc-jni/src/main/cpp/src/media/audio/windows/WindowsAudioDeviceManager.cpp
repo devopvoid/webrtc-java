@@ -238,9 +238,9 @@ namespace jni
 
 			AudioDevicePtr device = std::make_shared<AudioDevice>(name, id);
 			if (dataFlow == eCapture) {
-                device->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+                device->directionType = AudioDeviceDirectionType::adtCapture;
             } else {
-                device->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+                device->directionType = AudioDeviceDirectionType::adtRender;
             }
 
 			fillAdditionalTypes(device);
@@ -299,13 +299,13 @@ namespace jni
 			}
 
 			if (dataFlow == eCapture) {
-                device->audioDeviceDirectionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
+                device->directionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
 
 				captureDevices.insertDevice(device);
 				return true;
 			}
 			else if (dataFlow == eRender) {
-			    device->audioDeviceDirectionType = jni::avdev::AudioDeviceDirectionType::adtRender;
+			    device->directionType = jni::avdev::AudioDeviceDirectionType::adtRender;
 
 				playbackDevices.insertDevice(device);
 				return true;
@@ -324,9 +324,9 @@ namespace jni
 
 			if (removed) {
 			    if (dataFlow == eCapture) {
-                    removed->audioDeviceDirectionType = AudioDeviceDirectionType::adtCapture;
+                    removed->directionType = AudioDeviceDirectionType::adtCapture;
                 } else {
-                    removed->audioDeviceDirectionType = AudioDeviceDirectionType::adtRender;
+                    removed->directionType = AudioDeviceDirectionType::adtRender;
                 }
 
 				notifyDeviceDisconnected(removed);
