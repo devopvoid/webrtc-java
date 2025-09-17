@@ -105,13 +105,13 @@ jobs:
           RELEASE_VERSION=$(grep "project.rel.dev.onvoid.webrtc\\\:webrtc-java=" release.properties | cut -d'=' -f2)
           echo "Extracted release version from release.properties: $RELEASE_VERSION"
           
-          # Update versions.js file
-          echo "Updating versions.js with release version: $RELEASE_VERSION and development version: ${{ github.event.inputs.developmentVersion }}"
-          sed -i "s/VERSION: '.*'/VERSION: '$RELEASE_VERSION'/g" docs/assets/versions.js
-          sed -i "s/VERSION_SNAPSHOT: '.*'/VERSION_SNAPSHOT: '${{ github.event.inputs.developmentVersion }}'/g" docs/assets/versions.js
+          # Update versions.ts file
+          echo "Updating versions.ts with release version: $RELEASE_VERSION and development version: ${{ github.event.inputs.developmentVersion }}"
+          sed -i "s/VERSION: '.*'/VERSION: '$RELEASE_VERSION'/g" docs/.vitepress/versions.ts
+          sed -i "s/VERSION_SNAPSHOT: '.*'/VERSION_SNAPSHOT: '${{ github.event.inputs.developmentVersion }}'/g" docs/.vitepress/versions.ts
           
           # Add the updated file to the existing commit
-          git add docs/assets/versions.js
+          git add docs/.vitepress/versions.ts
           git commit --amend --no-edit
           
           git push
