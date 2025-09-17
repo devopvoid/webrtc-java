@@ -99,8 +99,8 @@ Details:
 - Using a standard `AudioDeviceModule` with `AudioLayer.kDummyAudio` disables actual audio I/O; the audio pipeline is not started for playout and sinks will typically not receive audio frame callbacks. Use this only when you intentionally do not want any audio delivery (e.g., video‑only or fully custom audio).
 
 Related guides:
-- [Audio Device Selection](audio_devices.md)
-- [Custom Audio Source](custom_audio_source.md)
+- [Audio Device Selection](guide/audio/audio_devices.md)
+- [Custom Audio Source](guide/audio/custom_audio_source.md)
 
 ---
 

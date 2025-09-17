@@ -1,4 +1,4 @@
-# Port Allocator Configuration (ICE) <!-- {docsify-ignore-all} -->
+# Port Allocator Configuration (ICE)
 
 This guide explains how to configure the ICE port allocator using `dev.onvoid.webrtc.PortAllocatorConfig` and how to use it with `RTCConfiguration` when creating a peer connection.
 

@@ -18,6 +18,8 @@ package dev.onvoid.webrtc.media.audio;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import dev.onvoid.webrtc.media.audio.AudioProcessingConfig.NoiseSuppression;
 
@@ -43,10 +45,16 @@ class AudioProcessingTest {
 	@Test
 	void applyConfig() {
 		AudioProcessingConfig config = new AudioProcessingConfig();
+		config.pipeline.maximumInternalProcessingRate = 48000;
+		config.pipeline.multiChannelRender = false;
+		config.pipeline.multiChannelCapture = false;
+		config.pipeline.captureDownmixMethod = AudioProcessingConfig.Pipeline.DownmixMethod.AverageChannels;
+
 		config.echoCanceller.enabled = true;
 		config.echoCanceller.enforceHighPassFiltering = true;
 
-		config.gainControl.enabled = true;
+		config.gainControllerDigital.enabled = true;
+		config.gainControllerDigital.inputVolumeController.enabled = true;
 
 		config.highPassFilter.enabled = true;
 
@@ -54,6 +62,161 @@ class AudioProcessingTest {
 		config.noiseSuppression.level = NoiseSuppression.Level.HIGH;
 
 		audioProcessing.applyConfig(config);
+	}
+
+	@Test
+	void applyConfig_withGainController() {
+		AudioProcessingConfig config = new AudioProcessingConfig();
+		config.gainController.enabled = true;
+		config.gainController.mode = AudioProcessingConfig.GainController.Mode.AdaptiveDigital;
+		config.gainController.targetLevelDbfs = 6;
+		config.gainController.compressionGainDb = 10;
+		config.gainController.enableLimiter = true;
+
+		// Analog sub-config
+		AudioProcessingConfig.GainController.AnalogGainController agc = config.gainController.analogGainController;
+		agc.enabled = true;
+		agc.enableDigitalAdaptive = true;
+		agc.clippedLevelMin = 60;
+		agc.clippedLevelStep = 10;
+		agc.clippedRatioThreshold = 0.2f;
+		agc.clippedWaitFrames = 200;
+
+		// Clipping predictor sub-config
+		AudioProcessingConfig.GainController.AnalogGainController.ClippingPredictor cp = agc.clippingPredictor;
+		cp.enabled = true;
+		cp.mode = AudioProcessingConfig.GainController.AnalogGainController.ClippingPredictor.Mode.AdaptiveStepClippingPeakPrediction;
+		cp.windowLength = 6;
+		cp.referenceWindowLength = 6;
+		cp.referenceWindowDelay = 4;
+		cp.clippingThreshold = -2.0f;
+		cp.crestFactorMargin = 2.5f;
+		cp.usePredictedStep = true;
+
+		audioProcessing.applyConfig(config);
+	}
+
+	@Test
+	void gainController_defaults() {
+		AudioProcessingConfig cfg = new AudioProcessingConfig();
+		AudioProcessingConfig.GainController gc = cfg.gainController;
+
+		assertFalse(gc.enabled, "AGC1 should be disabled by default");
+		assertEquals(3, gc.targetLevelDbfs, "Default targetLevelDbfs");
+		assertEquals(9, gc.compressionGainDb, "Default compressionGainDb");
+		assertTrue(gc.enableLimiter, "Limiter enabled by default");
+		assertEquals(AudioProcessingConfig.GainController.Mode.AdaptiveAnalog, gc.mode,
+				"Default mode is AdaptiveAnalog");
+
+		AudioProcessingConfig.GainController.AnalogGainController agc = gc.analogGainController;
+		assertTrue(agc.enabled, "AnalogGainController enabled by default");
+		assertEquals(0, agc.startupMinVolume, "startupMinVolume default");
+		assertEquals(70, agc.clippedLevelMin, "clippedLevelMin default");
+		assertTrue(agc.enableDigitalAdaptive, "enableDigitalAdaptive default");
+		assertEquals(15, agc.clippedLevelStep, "clippedLevelStep default");
+		assertEquals(0.1f, agc.clippedRatioThreshold, 0.0001f,
+				"clippedRatioThreshold default");
+		assertEquals(300, agc.clippedWaitFrames, "clippedWaitFrames default");
+
+		AudioProcessingConfig.GainController.AnalogGainController.ClippingPredictor cp = agc.clippingPredictor;
+		assertFalse(cp.enabled, "ClippingPredictor disabled by default");
+		assertEquals(AudioProcessingConfig.GainController.AnalogGainController.ClippingPredictor.Mode.ClippingEventPrediction, cp.mode);
+		assertEquals(5, cp.windowLength);
+		assertEquals(5, cp.referenceWindowLength);
+		assertEquals(5, cp.referenceWindowDelay);
+		assertEquals(-1.0f, cp.clippingThreshold, 0.0001f);
+		assertEquals(3.0f, cp.crestFactorMargin, 0.0001f);
+		assertTrue(cp.usePredictedStep);
+	}
+
+	@Test
+	void gainController_mutate_all_fields() {
+		AudioProcessingConfig cfg = new AudioProcessingConfig();
+		AudioProcessingConfig.GainController gc = cfg.gainController;
+
+		gc.enabled = true;
+		gc.targetLevelDbfs = 6;
+		gc.compressionGainDb = 12;
+		gc.enableLimiter = false;
+		gc.mode = AudioProcessingConfig.GainController.Mode.AdaptiveDigital;
+
+		AudioProcessingConfig.GainController.AnalogGainController agc = gc.analogGainController;
+		agc.enabled = false;
+		agc.startupMinVolume = 7;
+		agc.clippedLevelMin = 50;
+		agc.enableDigitalAdaptive = false;
+		agc.clippedLevelStep = 10;
+		agc.clippedRatioThreshold = 0.25f;
+		agc.clippedWaitFrames = 123;
+
+		AudioProcessingConfig.GainController.AnalogGainController.ClippingPredictor cp = agc.clippingPredictor;
+		cp.enabled = true;
+		cp.mode = AudioProcessingConfig.GainController.AnalogGainController.ClippingPredictor.Mode.AdaptiveStepClippingPeakPrediction;
+		cp.windowLength = 9;
+		cp.referenceWindowLength = 8;
+		cp.referenceWindowDelay = 2;
+		cp.clippingThreshold = -3.5f;
+		cp.crestFactorMargin = 1.25f;
+		cp.usePredictedStep = false;
+
+		// Assertions reflect mutations
+		assertTrue(gc.enabled);
+		assertEquals(6, gc.targetLevelDbfs);
+		assertEquals(12, gc.compressionGainDb);
+		assertFalse(gc.enableLimiter);
+		assertEquals(AudioProcessingConfig.GainController.Mode.AdaptiveDigital, gc.mode);
+
+		assertFalse(agc.enabled);
+		assertEquals(7, agc.startupMinVolume);
+		assertEquals(50, agc.clippedLevelMin);
+		assertFalse(agc.enableDigitalAdaptive);
+		assertEquals(10, agc.clippedLevelStep);
+		assertEquals(0.25f, agc.clippedRatioThreshold, 0.0001f);
+		assertEquals(123, agc.clippedWaitFrames);
+
+		assertTrue(cp.enabled);
+		assertEquals(AudioProcessingConfig.GainController.AnalogGainController.ClippingPredictor.Mode.AdaptiveStepClippingPeakPrediction, cp.mode);
+		assertEquals(9, cp.windowLength);
+		assertEquals(8, cp.referenceWindowLength);
+		assertEquals(2, cp.referenceWindowDelay);
+		assertEquals(-3.5f, cp.clippingThreshold, 0.0001f);
+		assertEquals(1.25f, cp.crestFactorMargin, 0.0001f);
+		assertFalse(cp.usePredictedStep);
+	}
+
+	@Test
+	void captureLevelAdjustment_defaults() {
+		AudioProcessingConfig cfg = new AudioProcessingConfig();
+		AudioProcessingConfig.CaptureLevelAdjustment cla = cfg.captureLevelAdjustment;
+
+		assertFalse(cla.enabled, "CLA disabled by default");
+		assertEquals(1.0f, cla.preGainFactor, 0.0001f);
+		assertEquals(1.0f, cla.postGainFactor, 0.0001f);
+		AudioProcessingConfig.CaptureLevelAdjustment.AnalogMicGainEmulation ame = cla.analogMicGainEmulation;
+		assertFalse(ame.enabled, "AnalogMicGainEmulation disabled by default");
+		assertEquals(255, ame.initialLevel, "AnalogMicGainEmulation initialLevel default");
+	}
+
+	@Test
+	void captureLevelAdjustment_mutate_all_fields() {
+		AudioProcessingConfig cfg = new AudioProcessingConfig();
+		AudioProcessingConfig.CaptureLevelAdjustment cla = cfg.captureLevelAdjustment;
+
+		cla.enabled = true;
+		cla.preGainFactor = 0.75f;
+		cla.postGainFactor = 1.25f;
+		cla.analogMicGainEmulation.enabled = true;
+		cla.analogMicGainEmulation.initialLevel = 200;
+
+		// Should not throw and should be accepted by native ApplyConfig
+		audioProcessing.applyConfig(cfg);
+
+		// Validate mutations remain in Java object
+		assertTrue(cla.enabled);
+		assertEquals(0.75f, cla.preGainFactor, 0.0001f);
+		assertEquals(1.25f, cla.postGainFactor, 0.0001f);
+		assertTrue(cla.analogMicGainEmulation.enabled);
+		assertEquals(200, cla.analogMicGainEmulation.initialLevel);
 	}
 
 	@Test

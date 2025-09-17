@@ -9,7 +9,7 @@ API: `dev.onvoid.webrtc.media.video.VideoBufferConverter`
 - Preparing frames for encoders/decoders that require specific pixel formats.
 - Importing external pixel data (e.g., RGBA, NV12) into the WebRTC pipeline as I420.
 
-See also: [Video Capture](../video_capture.md), [Custom Video Source](../custom_video_source.md).
+See also: [Video Capture](guide/utilities/video_capturer.md), [Custom Video Source](guide/video/custom_video_source.md).
 
 ## Supported operations
 
@@ -139,7 +139,7 @@ public void onImage(BufferedImage image) {
 - Beware of frame rotation metadata; conversions do not rotate pixels. Handle `VideoFrame.rotation` separately if your renderer requires upright images.
 
 ## Related
-- [Video Capture](../video_capture.md)
-- [Custom Video Source](../custom_video_source.md)
-- [Screen Capturer](../screen_capturer.md)
-- [Window Capturer](../window_capturer.md)
+- [Video Capture](guide/utilities/video_capturer.md)
+- [Custom Video Source](guide/video/custom_video_source.md)
+- [Screen Capturer](guide/utilities/screen_capturer.md)
+- [Window Capturer](guide/utilities/window_capturer.md)

@@ -85,6 +85,9 @@ namespace jni
 		JavaEnums::add<webrtc::RtpTransceiverDirection>(env, PKG"RTCRtpTransceiverDirection");
 		JavaEnums::add<webrtc::SdpType>(env, PKG"RTCSdpType");
 		JavaEnums::add<webrtc::AudioDeviceModule::AudioLayer>(env, PKG_AUDIO"AudioLayer");
+		JavaEnums::add<webrtc::AudioProcessing::Config::GainController1::Mode>(env, PKG_AUDIO"AudioProcessingConfig$GainController$Mode");
+		JavaEnums::add<webrtc::AudioProcessing::Config::GainController1::AnalogGainController::ClippingPredictor::Mode>(env, PKG_AUDIO"AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor$Mode");
+		JavaEnums::add<webrtc::AudioProcessing::Config::Pipeline::DownmixMethod>(env, PKG_AUDIO"AudioProcessingConfig$Pipeline$DownmixMethod");
 		JavaEnums::add<webrtc::AudioProcessing::Config::NoiseSuppression::Level>(env, PKG_AUDIO"AudioProcessingConfig$NoiseSuppression$Level");
 		JavaEnums::add<jni::RTCStats::RTCStatsType>(env, PKG"RTCStatsType");
 		JavaEnums::add<jni::avdev::DeviceFormFactor>(env, PKG_MEDIA"DeviceFormFactor");

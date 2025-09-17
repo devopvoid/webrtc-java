@@ -57,5 +57,5 @@ Exact mechanisms are handled by the native layer; your Java code remains the sam
 
 ## Related guides
 
-- [Desktop Capture](guide/desktop_capture.md)
-- [Logging](guide/logging.md)
+- [Desktop Capture](guide/video/desktop_capture.md)
+- [Logging](guide/monitoring/logging.md)

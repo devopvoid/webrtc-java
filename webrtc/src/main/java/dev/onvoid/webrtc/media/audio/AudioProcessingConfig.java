@@ -24,77 +24,489 @@ package dev.onvoid.webrtc.media.audio;
  */
 public class AudioProcessingConfig {
 
+    /**
+     * Configuration for the audio processing pipeline, including settings for
+     * downmixing and processing rates.
+     */
+    public final Pipeline pipeline = new Pipeline();
+
+    /**
+     * Echo cancellation configuration to remove acoustic echo from capture signals.
+     * Controls whether echo cancellation is enabled and its filtering behavior.
+     */
 	public final EchoCanceller echoCanceller = new EchoCanceller();
 
-	public final GainControl gainControl = new GainControl();
+	/**
+	 * Legacy Gain Controller 1 (AGC1) configuration. This is the classic AGC used
+	 * by WebRTC with optional limiter. If enabled, AGC1 will run alongside other
+	 * modules as configured. If not set, defaults are used by the native side.
+	 */
+	public final GainController gainController = new GainController();
 
+    /**
+     * Digital gain control configuration for automatic volume adjustment.
+	 * Automatic Gain Control (AGC) sub-module which replaces the Legacy Gain Controller 1
+	 * (AGC1). Includes both fixed and adaptive digital gain control settings.
+     */
+	public final GainControllerDigital gainControllerDigital = new GainControllerDigital();
+
+	/**
+	 * High-pass filter configuration for removing low-frequency components from the
+	 * processed audio signal.
+	 */
 	public final HighPassFilter highPassFilter = new HighPassFilter();
 
+    /**
+     * Noise suppression configuration for reducing background noise in captured audio.
+     * Supports multiple suppression levels.
+     */
 	public final NoiseSuppression noiseSuppression = new NoiseSuppression();
 
+	/**
+	 * Capture level adjustment configuration to enable platform-driven capture
+	 * level corrections in the APM when available.
+	 */
+	public final CaptureLevelAdjustment captureLevelAdjustment = new CaptureLevelAdjustment();
 
 
+    /**
+     * Configures the audio processing pipeline settings.
+     */
+    public static class Pipeline {
+
+        /**
+         * Specifies the method to use when downmixing multiple audio channels.
+         * This determines how channels are combined when reducing the number of channels.
+         */
+        public enum DownmixMethod {
+            /** Average across channels. */
+            AverageChannels,
+            /** Use the first channel. */
+            UseFirstChannel
+        }
+
+        /**
+         * Maximum allowed processing rate used internally.
+         * May only be set to 32000 or 48000, and any differing values will be treated as 48000.
+         */
+        int maximumInternalProcessingRate = 48000;
+
+        /**
+         * When enabled, audio rendering can process multiple channels.
+         * Default is false.
+         */
+        boolean multiChannelRender = false;
+
+        /**
+         * When enabled, allows multi-channel processing of capture audio when AEC3 is active
+         * or a custom AEC is injected.
+         * Default is false.
+         */
+        boolean multiChannelCapture = false;
+
+        /**
+         * Determines how multiple capture channels are combined when a single-channel
+         * signal is required.
+         * Defaults to averaging all available channels.
+         */
+        DownmixMethod captureDownmixMethod = DownmixMethod.AverageChannels;
+    }
+
+
+	/**
+	 * Configuration for the echo cancellation module in audio processing.
+	 * Controls whether echo cancellation is enabled and its filtering behavior.
+	 */
 	public static class EchoCanceller {
 
+	    /**
+	     * Determines whether echo cancellation is enabled.
+	     * When true, acoustic echo will be removed from the capture signal.
+	     */
 		public boolean enabled;
 
-		public boolean enforceHighPassFiltering;
+	    /**
+	     * Controls whether to enforce high-pass filtering with echo cancellation.
+	     * When true, additional filtering is applied to improve echo cancellation.
+	     * Default is true.
+	     */
+		public boolean enforceHighPassFiltering = true;
 
 	}
 
-	public static class GainControl {
 
+	/**
+	 * Configuration for digital gain control in audio processing.
+	 * Provides settings for both fixed and adaptive digital gain control.
+	 */
+	public static class GainControllerDigital {
+
+		/**
+		 * Adjusts the input volume applied when the audio is captured.
+		 * This is a pre-amplifier stage before any digital gain control is applied.
+		 */
+		public static class InputVolumeController {
+
+			/**
+			 * Determines whether the input volume controller is enabled.
+			 * When true, the input volume will be automatically adjusted.
+			 */
+			public boolean enabled = false;
+
+		}
+
+		/**
+		 * Configuration for fixed digital gain control.
+		 * Applies a constant gain value to the audio signal.
+		 */
 		public static class FixedDigital {
 
+			/**
+			 * The fixed gain to apply to the audio signal in decibels.
+			 * The default value is 0.0 dB (no gain).
+			 */
 			public float gainDb = 0.0f;
 
 		}
 
+		/**
+		 * Configuration for adaptive digital gain control.
+		 * Automatically adjusts gain based on input signal characteristics.
+		 */
 		public static class AdaptiveDigital {
 
+			/**
+			 * Determines whether adaptive digital gain control is enabled.
+			 */
 			public boolean enabled;
 
+			/**
+			 * Headroom in decibels to maintain above the signal level.
+			 * The default value is 5.0 dB.
+			 */
 			public float headroomDb = 5.0f;
+
+			/**
+			 * Maximum gain in decibels that can be applied to the signal.
+			 * The default value is 50.0 dB.
+			 */
 			public float maxGainDb = 50.0f;
+
+			/**
+			 * Initial gain in decibels to apply when processing starts.
+			 * The default value is 15.0 dB.
+			 */
 			public float initialGainDb = 15.0f;
+
+			/**
+			 * The maximum rate at which gain can change, in decibels per second.
+			 * Controls how quickly the gain adapts to changing conditions.
+			 * The default value is 6.0 dB/s.
+			 */
 			public float maxGainChangeDbPerSecond = 6.0f;
+
+			/**
+			 * Maximum allowable noise level in the output, in decibels relative to full scale.
+			 * The default value is -50.0 dBFS.
+			 */
 			public float maxOutputNoiseLevelDbfs = -50.0f;
 
 		}
 
-
+		/**
+		 * Fixed digital gain control settings.
+		 */
 		public final FixedDigital fixedDigital = new FixedDigital();
 
+		/**
+		 * Adaptive digital gain control settings.
+		 */
 		public final AdaptiveDigital adaptiveDigital = new AdaptiveDigital();
 
+		/**
+		 * Input volume controller settings.
+		 */
+		public final InputVolumeController inputVolumeController = new InputVolumeController();
+
+		/**
+		 * Determines whether digital gain control is enabled.
+		 */
 		public boolean enabled;
 
 	}
 
+
+	/**
+	 * Configuration for classic Gain Controller 1 (AGC1).
+	 * Provides simple controls commonly exposed for AGC1.
+	 */
+	public static class GainController {
+
+		/**
+		 * AGC1 mode selection.
+		 */
+		public enum Mode {
+			/**
+			 * Adjusts the analog microphone level using hardware/OS controls to reach the target.
+			 * Prefer this when the capture device gain can be modified without adding digital noise.
+			 * This will require the coupling between the OS mixer controls and AGC through the
+			 * stream_analog_level() functions.
+			 */
+			AdaptiveAnalog,
+
+			/**
+			 * Adjusts the signal level in the digital processing pipeline (software gain/compression).
+			 * Use when analog control is unavailable or insufficient.
+			 */
+			AdaptiveDigital,
+
+			/**
+			 * Applies a constant digital gain (non-adaptive). Suitable for stable, well-calibrated inputs.
+			 * This mode is preferred on embedded devices where the capture signal level is predictable so
+			 * that a known gain can be applied.
+			 */
+			FixedDigital
+		}
+
+		/**
+		 * Determines whether AGC1 is enabled.
+		 */
+		public boolean enabled;
+
+		/**
+		 * Target level in dBFS that AGC1 aims for. Common default is 3 dB.
+		 */
+		public int targetLevelDbfs = 3;
+
+		/**
+		 * Compression gain in dB. Common default is 9 dB.
+		 */
+		public int compressionGainDb = 9;
+
+		/**
+		 * Enables the limiter to avoid clipping at the output. Default true.
+		 */
+		public boolean enableLimiter = true;
+
+		/**
+		 * Selected mode. Default matches native default kAdaptiveAnalog.
+		 */
+		public Mode mode = Mode.AdaptiveAnalog;
+
+		/**
+		 * Analog gain controller sub-config.
+		 */
+		public final AnalogGainController analogGainController = new AnalogGainController();
+
+
+		public static class AnalogGainController {
+
+			/**
+			 * Enables the analog gain controller stage.
+			 * When false, the analog (and coupled digital adaptive) logic is skipped.
+			 */
+			public boolean enabled = true;
+
+			/**
+			 * Deprecated upstream (kept for compatibility). Historical lower bound for the
+			 * initial microphone volume. Has no effect in newer pipelines.
+			 */
+			public int startupMinVolume = 0; // deprecated upstream but retained for compatibility
+
+			/**
+			 * Minimum microphone level allowed after clipping mitigation logic adjusts gain.
+			 */
+			public int clippedLevelMin = 70;
+
+			/**
+			 * Enables the digital adaptive component that further refines gain after analog changes.
+			 */
+			public boolean enableDigitalAdaptive = true;
+
+			/**
+			 * Step size (in discrete volume units) to reduce the level when clipping is detected.
+			 */
+			public int clippedLevelStep = 15;
+
+			/**
+			 * Ratio threshold (0..1) of clipped samples in a window that triggers a gain reduction.
+			 */
+			public float clippedRatioThreshold = 0.1f;
+
+			/**
+			 * Number of frames to wait after a clipping event before applying another step change.
+			 */
+			public int clippedWaitFrames = 300;
+
+			/**
+			 * Predictor that anticipates clipping and adjusts gain preemptively.
+			 */
+			public static class ClippingPredictor {
+
+				/**
+				 * Available prediction modes describing how clipping is estimated.
+				 */
+				public enum Mode {
+					/** Reacts to observed clipping events only. */
+					ClippingEventPrediction,
+					/** Adapts step size based on predicted peak evolution. */
+					AdaptiveStepClippingPeakPrediction,
+					/** Uses a fixed step size for peak prediction adjustments. */
+					FixedStepClippingPeakPrediction
+				}
+
+				/**
+				 * Enables the clipping prediction feature.
+				 */
+				public boolean enabled = false;
+
+				/**
+				 * Prediction mode governing the algorithm behavior.
+				 */
+				public Mode mode = Mode.ClippingEventPrediction;
+
+				/**
+				 * Sliding window length (frames) used to analyze recent signal peaks.
+				 */
+				public int windowLength = 5;
+
+				/**
+				 * Length (frames) of the reference window for comparative peak analysis.
+				 */
+				public int referenceWindowLength = 5;
+
+				/**
+				 * Delay (frames) applied to the reference window to form a historical baseline.
+				 */
+				public int referenceWindowDelay = 5;
+
+				/**
+				 * Threshold (dBFS) above which samples are considered clipped; -1.0f means auto.
+				 */
+				public float clippingThreshold = -1.0f;
+
+				/**
+				 * Margin (dB) added to the estimated crest factor to decide preemptive gain changes.
+				 */
+				public float crestFactorMargin = 3.0f;
+
+				/**
+				 * When true, uses the predicted step size; otherwise a default/fixed step is used.
+				 */
+				public boolean usePredictedStep = true;
+			}
+
+			/**
+			 * Instance holding the clipping prediction configuration.
+			 */
+			public final ClippingPredictor clippingPredictor = new ClippingPredictor();
+		}
+	}
+
+
+	/**
+	 * Configuration for capture level adjustment in audio processing. When enabled, the
+	 * audio processing module may apply platform-informed adjustments to the capture level
+	 * to improve overall gain staging.
+	 */
+	public static class CaptureLevelAdjustment {
+
+		/**
+		 * Indicates whether capture level adjustment is enabled.
+		 */
+		public boolean enabled;
+
+		/**
+		 * Scales the signal before any processing is done. Default 1.0.
+		 */
+		public float preGainFactor = 1.0f;
+
+		/**
+		 * Scales the signal after all processing is done. Default 1.0.
+		 */
+		public float postGainFactor = 1.0f;
+
+		/** Emulates analog mic gain behavior when enabled. */
+		public static class AnalogMicGainEmulation {
+			/** Enable the analog mic gain emulation. */
+			public boolean enabled = false;
+			/** Initial analog level [0..255]. Default 255. */
+			public int initialLevel = 255;
+		}
+
+		/**
+		 * Configuration for analog mic gain emulation.
+		 */
+		public final AnalogMicGainEmulation analogMicGainEmulation = new AnalogMicGainEmulation();
+	}
+
+
+	/**
+	 * Configuration for the high-pass filter in audio processing.
+	 */
 	public static class HighPassFilter {
 
+		/**
+		 * Determines whether the high-pass filter is enabled.
+		 * When true, low-frequency components will be filtered out of the audio signal.
+		 */
 		public boolean enabled;
+
+		/**
+		 * Controls whether the filter is applied across the full frequency band.
+		 * When true, the filter affects the entire frequency spectrum.
+		 * Default is true.
+		 */
+		public boolean applyInFullBand = true;
 
 	}
 
+
+	/**
+	 * Configuration for audio level estimation.
+	 * Provides settings to enable/disable the measurement of audio signal levels.
+	 */
 	public static class LevelEstimation {
 
+		/**
+		 * Determines whether audio level estimation is enabled.
+		 * When true, the audio processing module will calculate and report signal levels.
+		 */
 		public boolean enabled;
 
 	}
 
+
+	/**
+	 * Configuration for noise suppression in audio processing.
+	 */
 	public static class NoiseSuppression {
 
+		/**
+		 * Defines the available intensity levels for noise suppression.
+		 * Higher levels provide more aggressive noise reduction but may affect voice quality.
+		 */
 		public enum Level {
+			/** Minimal noise suppression, preserves most audio quality. */
 			LOW,
+			/** Balanced noise suppression with moderate effect on audio quality. */
 			MODERATE,
+			/** Strong noise suppression that may slightly affect voice quality. */
 			HIGH,
+			/** Maximum noise suppression that prioritizes noise removal over voice quality. */
 			VERY_HIGH
 		}
 
-
+		/**
+		 * Determines whether noise suppression is enabled.
+		 * When true, background noise will be reduced in the processed audio.
+		 */
 		public boolean enabled;
 
+		/**
+		 * Specifies the intensity level of noise suppression to apply.
+		 * Controls how aggressively noise is filtered from the audio signal.
+		 */
 		public Level level;
 
 	}
