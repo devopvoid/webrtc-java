@@ -54,8 +54,12 @@ namespace jni
 				static void getSinkCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata);
 				static void newSinkCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata);
 
-				void insertDevice(DeviceList<AudioDevicePtr> & devices, const char * name, const char * desc, uint32_t index, bool notify);
-				void removeDevice(DeviceList<AudioDevicePtr> & devices, uint32_t index);
+				void insertDevice(DeviceList<AudioDevicePtr> & devices, pa_proplist * proplist, const char * name, const char * desc, uint32_t index, bool notify, bool isCapture);
+				void removeDevice(DeviceList<AudioDevicePtr> & devices, uint32_t index, bool isCapture);
+
+				void fillAdditionalTypes(AudioDevicePtr device, pa_proplist * proplist);
+				DeviceFormFactor getActualFormFactor(std::string formFactor);
+                DeviceTransport getActualTransport(std::string transport);
 
 			private:
 				pa_threaded_mainloop * mainloop;

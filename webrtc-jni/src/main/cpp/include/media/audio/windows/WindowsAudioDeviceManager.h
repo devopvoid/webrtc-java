@@ -17,6 +17,7 @@
 #ifndef JNI_WEBRTC_MEDIA_MF_AUDIO_DEVICE_MANAGER_H_
 #define JNI_WEBRTC_MEDIA_MF_AUDIO_DEVICE_MANAGER_H_
 
+#include <initguid.h>
 #include "media/audio/AudioDeviceManager.h"
 #include "platform/windows/ComPtr.h"
 #include "platform/windows/ComInitializer.h"
@@ -46,7 +47,10 @@ namespace jni
 				AudioDevicePtr createDefaultAudioDevice(const EDataFlow & dataFlow);
 				AudioDevicePtr createAudioDevice(LPCWSTR deviceId, EDataFlow * dataFlow);
 				bool insertAudioDevice(AudioDevicePtr device, EDataFlow dataFlow);
-				void removeAudioDevice(DeviceList<AudioDevicePtr> & devices, std::string id);
+				void removeAudioDevice(DeviceList<AudioDevicePtr> & devices, std::string id, EDataFlow dataFlow);
+				DeviceFormFactor getActualFormFactor(EndpointFormFactor formFactor);
+				DeviceTransport getActualTransport(EndpointFormFactor formFactor);
+				void fillAdditionalTypes(AudioDevicePtr device);
 
 				// IMMNotificationClient implementation.
 				STDMETHOD_(ULONG, AddRef)();

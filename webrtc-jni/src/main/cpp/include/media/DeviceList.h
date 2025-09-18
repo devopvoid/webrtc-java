@@ -94,6 +94,13 @@ namespace jni
 				return devicesSet.empty();
 			}
 
+			void clearDevices()
+            {
+                std::unique_lock<std::mutex> mlock(mutex);
+                devicesSet.clear();
+                mlock.unlock();
+            }
+
 			std::set<T> devices()
 			{
 				std::unique_lock<std::mutex> mlock(mutex);

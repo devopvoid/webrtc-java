@@ -27,11 +27,19 @@ namespace jni
 {
 	namespace avdev
 	{
+
+        enum class AudioDeviceDirectionType {
+            adtUnknown,
+            adtCapture,
+            adtRender
+        };
+
 		class AudioDevice : public Device
 		{
 			public:
 				AudioDevice(std::string name, std::string descriptor);
 				virtual ~AudioDevice() {};
+				AudioDeviceDirectionType directionType;
 		};
 	}
 
@@ -46,6 +54,9 @@ namespace jni
 				jmethodID ctor;
 				jfieldID name;
 				jfieldID descriptor;
+				jfieldID deviceTransport;
+                jfieldID deviceFormFactor;
+				jfieldID directionType;
 		};
 
 		JavaLocalRef<jobject> toJavaAudioDevice(JNIEnv * env, avdev::DevicePtr device);

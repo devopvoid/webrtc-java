@@ -27,6 +27,8 @@
 #include "modules/audio_device/include/audio_device.h"
 #include "rtc_base/logging.h"
 
+#include <stdlib.h>
+
 namespace jni
 {
 	namespace avdev
@@ -112,26 +114,75 @@ namespace jni
 
 			if (enumCaptureDevices) {
 				int16_t deviceCount = audioModule->RecordingDevices();
+                // fix duplicated item when device reconect to port. The comparator does not always work correctly.
+                if (deviceCount > 0) {
+                    captureDevices.clearDevices();
+                }
 
 				for (int i = 0; i < deviceCount; ++i) {
 					if (audioModule->RecordingDeviceName(i, name, guid) == 0) {
 						AudioDevicePtr device = std::make_shared<AudioDevice>(name, guid);
 
-						insertAudioDevice(device, EDataFlow::eCapture);
+                        fillAdditionalTypes(device);
+
+                        insertAudioDevice(device, EDataFlow::eCapture);
 					}
 				}
 			}
 			if (enumRenderDevices) {
 				int16_t deviceCount = audioModule->PlayoutDevices();
 
+				// Fix duplicated item when device reconect to port. The comparator does not always work correctly.
+				if (deviceCount > 0) {
+                    playbackDevices.clearDevices();
+                }
+
 				for (int i = 0; i < deviceCount; ++i) {
 					if (audioModule->PlayoutDeviceName(i, name, guid) == 0) {
 						AudioDevicePtr device = std::make_shared<AudioDevice>(name, guid);
 
-						insertAudioDevice(device, EDataFlow::eRender);
+                        fillAdditionalTypes(device);
+
+                        insertAudioDevice(device, EDataFlow::eRender);
 					}
 				}
 			}
+		}
+
+		void WindowsAudioDeviceManager::fillAdditionalTypes(AudioDevicePtr device)
+		{
+		        MFInitializer initializer;
+                ComPtr<IMMDevice> pDevice;
+                ComPtr<IMMEndpoint> endpoint;
+                ComPtr<IPropertyStore> propertyStore;
+                HRESULT hr;
+                PROPVARIANT ff;
+                PropVariantInit(&ff);
+
+                // convert std::string to LPWSTR
+                wchar_t* wDeviceID=new wchar_t[4096];
+                size_t convertedChars = 0;
+                mbstowcs_s(&convertedChars, wDeviceID, device->getDescriptor().length() + 1, device->getDescriptor().c_str(), _TRUNCATE);
+
+                hr = deviceEnumerator->GetDevice(wDeviceID, &pDevice);
+                delete[] wDeviceID;
+
+                THROW_IF_FAILED(hr, "Audio Device Manager: Enumerator get device with ID: %S failed", device->getDescriptor().c_str());
+
+                hr = pDevice->QueryInterface(__uuidof(IMMEndpoint), (void**)&endpoint);
+                THROW_IF_FAILED(hr, "Audio Device Manager: Device get endpoint failed");
+
+                hr = pDevice->OpenPropertyStore(STGM_READ, &propertyStore);
+                THROW_IF_FAILED(hr, "Audio Device Manager: Device open property store failed");
+
+                hr = propertyStore->GetValue(PKEY_AudioEndpoint_FormFactor, &ff);
+                THROW_IF_FAILED(hr, "Audio Device Manager: PropertyStore get form factor property name failed");
+
+                EndpointFormFactor formFactor = static_cast<EndpointFormFactor>(ff.uintVal);
+                PropVariantClear(&ff);
+
+                device->setDeviceTransport(getActualTransport(formFactor));
+                device->setDeviceFormFactor(getActualFormFactor(formFactor));
 		}
 
 		void WindowsAudioDeviceManager::addDevice(LPCWSTR deviceId)
@@ -156,8 +207,8 @@ namespace jni
 
 			std::string id = WideStrToStr(deviceId);
 
-			removeAudioDevice(captureDevices, id);
-			removeAudioDevice(playbackDevices, id);
+			removeAudioDevice(captureDevices, id, eCapture);
+			removeAudioDevice(playbackDevices, id, eRender);
 		}
 
 		AudioDevicePtr WindowsAudioDeviceManager::createDefaultAudioDevice(const EDataFlow& dataFlow)
@@ -186,6 +237,13 @@ namespace jni
 			std::string name = WideStrToStr(pv.pwszVal);
 
 			AudioDevicePtr device = std::make_shared<AudioDevice>(name, id);
+			if (dataFlow == eCapture) {
+                device->directionType = AudioDeviceDirectionType::adtCapture;
+            } else {
+                device->directionType = AudioDeviceDirectionType::adtRender;
+            }
+
+			fillAdditionalTypes(device);
 
 			PropVariantClear(&pv);
 
@@ -223,6 +281,8 @@ namespace jni
 
 			AudioDevicePtr device = std::make_shared<AudioDevice>(name, id);
 
+            fillAdditionalTypes(device);
+
 			if (dataFlow != nullptr) {
 				*dataFlow = flow;
 			}
@@ -239,10 +299,14 @@ namespace jni
 			}
 
 			if (dataFlow == eCapture) {
+                device->directionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
+
 				captureDevices.insertDevice(device);
 				return true;
 			}
 			else if (dataFlow == eRender) {
+			    device->directionType = jni::avdev::AudioDeviceDirectionType::adtRender;
+
 				playbackDevices.insertDevice(device);
 				return true;
 			}
@@ -250,7 +314,7 @@ namespace jni
 			return false;
 		}
 
-		void WindowsAudioDeviceManager::removeAudioDevice(DeviceList<AudioDevicePtr> & devices, std::string id)
+		void WindowsAudioDeviceManager::removeAudioDevice(DeviceList<AudioDevicePtr> & devices, std::string id, EDataFlow dataFlow)
 		{
 			auto predicate = [id](const AudioDevicePtr & dev) {
 				return id == dev->getDescriptor();
@@ -259,6 +323,12 @@ namespace jni
 			AudioDevicePtr removed = devices.removeDevice(predicate);
 
 			if (removed) {
+			    if (dataFlow == eCapture) {
+                    removed->directionType = AudioDeviceDirectionType::adtCapture;
+                } else {
+                    removed->directionType = AudioDeviceDirectionType::adtRender;
+                }
+
 				notifyDeviceDisconnected(removed);
 			}
 		}
@@ -378,6 +448,41 @@ namespace jni
 		HRESULT WindowsAudioDeviceManager::OnPropertyValueChanged(LPCWSTR /*deviceId*/, const PROPERTYKEY /*key*/)
 		{
 			return S_OK;
+		}
+
+		DeviceFormFactor WindowsAudioDeviceManager::getActualFormFactor(EndpointFormFactor formFactor) {
+		    switch (formFactor) {
+                case RemoteNetworkDevice:
+                case UnknownDigitalPassthrough:
+                case EndpointFormFactor_enum_count:
+                case UnknownFormFactor:
+                case LineLevel:
+                case SPDIF:
+                    return DeviceFormFactor::ffUnknown;
+                case Speakers:
+                    return DeviceFormFactor::ffSpeaker;
+                case Headphones:
+                    return DeviceFormFactor::ffHeadphone;
+                case Headset:
+                case Handset:
+                    return DeviceFormFactor::ffHeadset;
+                case Microphone:
+                    return DeviceFormFactor::ffMicrophone;
+                case DigitalAudioDisplayDevice: // for audio devices this means hdmi
+                    return DeviceFormFactor::ffUnknown;
+                default:
+                    return DeviceFormFactor::ffUnknown;
+            }
+		}
+
+		DeviceTransport WindowsAudioDeviceManager::getActualTransport(EndpointFormFactor formFactor) {
+		    // for Windows, only HDMI can be reliably determined
+		    switch (formFactor) {
+		        case DigitalAudioDisplayDevice:
+		            return DeviceTransport::trHdmi;
+		        default:
+                    return DeviceTransport::trUnknown;
+		    }
 		}
 	}
 }

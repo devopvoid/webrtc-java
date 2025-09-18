@@ -18,6 +18,7 @@
 #include "JavaClasses.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
+#include "JavaEnums.h"
 
 namespace jni
 {
@@ -25,7 +26,9 @@ namespace jni
 	{
 		Device::Device(std::string name, std::string descriptor) :
 			name(name),
-			descriptor(descriptor)
+			descriptor(descriptor),
+			deviceTransport(DeviceTransport::trUnknown),
+			deviceFormFactor(DeviceFormFactor::ffUnknown)
 		{
 		}
 
@@ -53,6 +56,26 @@ namespace jni
 		{
 			return name;
 		}
+
+		DeviceTransport Device::getDeviceTransport()
+		{
+		    return deviceTransport;
+		}
+
+        DeviceFormFactor Device::getDeviceFormFactor()
+        {
+            return deviceFormFactor;
+        }
+
+        void Device::setDeviceTransport(DeviceTransport newDeviceTransport)
+        {
+            deviceTransport = newDeviceTransport;
+        }
+
+        void Device::setDeviceFormFactor(DeviceFormFactor newDeviceFormFactor)
+        {
+           deviceFormFactor = newDeviceFormFactor;
+        }
 	}
 
 	namespace Device
@@ -65,6 +88,12 @@ namespace jni
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
 
+            auto deviceTransport = JavaEnums::toJava(env, device->getDeviceTransport());
+            env->SetObjectField(obj, javaClass->deviceTransport, deviceTransport.get());
+
+            auto deviceFormFactor = JavaEnums::toJava(env, device->getDeviceFormFactor());
+            env->SetObjectField(obj, javaClass->deviceFormFactor, deviceFormFactor.get());
+
 			return JavaLocalRef<jobject>(env, obj);
 		}
 
@@ -76,6 +105,8 @@ namespace jni
 
 			name = GetFieldID(env, cls, "name", STRING_SIG);
 			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+			deviceTransport = GetFieldID(env, cls, "deviceTransport", "L" PKG_MEDIA "DeviceTransport;");
+			deviceFormFactor = GetFieldID(env, cls, "deviceFormFactor", "L" PKG_MEDIA "DeviceFormFactor;");
 		}
 	}
 }

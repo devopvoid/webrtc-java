@@ -121,6 +121,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBa
 	for (int i = 0; i < deviceCount; ++i) {
 		if (audioModule->PlayoutDeviceName(i, name, guid) == 0) {
 			auto device = std::make_shared<jni::avdev::AudioDevice>(name, guid);
+			device -> directionType = jni::avdev::AudioDeviceDirectionType::adtRender;
 
 			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
 		}
@@ -145,6 +146,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBa
 	for (int i = 0; i < deviceCount; ++i) {
 		if (audioModule->RecordingDeviceName(i, name, guid) == 0) {
 			auto device = std::make_shared<jni::avdev::AudioDevice>(name, guid);
+			device -> directionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
 
 			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
 		}

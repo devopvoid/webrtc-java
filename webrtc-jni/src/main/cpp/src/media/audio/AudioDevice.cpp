@@ -19,13 +19,15 @@
 #include "JavaClasses.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
+#include "JavaEnums.h"
 
 namespace jni
 {
 	namespace avdev
 	{
 		AudioDevice::AudioDevice(std::string name, std::string descriptor) :
-			Device(name, descriptor)
+			Device(name, descriptor),
+			directionType(AudioDeviceDirectionType::adtUnknown)
 		{
 		}
 	}
@@ -40,6 +42,16 @@ namespace jni
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
 
+            auto deviceTransport = JavaEnums::toJava(env, device->getDeviceTransport());
+            env->SetObjectField(obj, javaClass->deviceTransport, deviceTransport.get());
+
+            auto deviceFormFactor = JavaEnums::toJava(env, device->getDeviceFormFactor());
+            env->SetObjectField(obj, javaClass->deviceFormFactor, deviceFormFactor.get());
+
+            auto audioDevice = dynamic_cast<jni::avdev::AudioDevice *>(device.get());
+            auto directionType = JavaEnums::toJava(env, audioDevice->directionType);
+            env->SetObjectField(obj, javaClass->directionType, directionType.get());
+
 			return JavaLocalRef<jobject>(env, obj);
 		}
 
@@ -51,6 +63,9 @@ namespace jni
 
 			name = GetFieldID(env, cls, "name", STRING_SIG);
 			descriptor = GetFieldID(env, cls, "descriptor", STRING_SIG);
+			directionType = GetFieldID(env, cls, "directionType", "L" PKG_MEDIA "AudioDeviceDirectionType;");
+			deviceTransport = GetFieldID(env, cls, "deviceTransport", "L" PKG_MEDIA "DeviceTransport;");
+            deviceFormFactor = GetFieldID(env, cls, "deviceFormFactor", "L" PKG_MEDIA "DeviceFormFactor;");
 		}
 	}
 }

@@ -20,6 +20,7 @@
 #include "rtc_base/logging.h"
 
 #include <Foundation/Foundation.h>
+#include <IOKit/audio/IOAudioTypes.h>
 
 #if !defined(MAC_OS_VERSION_12_0) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_VERSION_12_0
     #define kAudioObjectPropertyElementMain kAudioObjectPropertyElementMaster
@@ -224,9 +225,11 @@ namespace jni
 				}
 
 				if (scope == kAudioObjectPropertyScopeInput) {
+				    found->directionType = AudioDeviceDirectionType::adtCapture;
 					setDefaultCaptureDevice(found);
 				}
 				else if (scope == kAudioObjectPropertyScopeOutput) {
+				    found->directionType = AudioDeviceDirectionType::adtRender;
 					setDefaultPlaybackDevice(found);
 				}
 			}
@@ -257,6 +260,7 @@ namespace jni
 					if (removed == def) {
 						onDefaultDeviceChanged(scope, captureDevices, def);
 					}
+					removed->directionType = AudioDeviceDirectionType::adtCapture;
 				}
 				else if (scope == kAudioObjectPropertyScopeOutput) {
 					AudioDevicePtr def = getDefaultAudioPlaybackDevice();
@@ -264,6 +268,7 @@ namespace jni
 					if (removed == def) {
 						onDefaultDeviceChanged(scope, playbackDevices, def);
 					}
+					removed->directionType = AudioDeviceDirectionType::adtRender;
 				}
 
 				notifyDeviceDisconnected(removed);
@@ -300,10 +305,13 @@ namespace jni
 			if (channels > 0) {
 				if (scope == kAudioObjectPropertyScopeOutput) {
 					device = std::make_shared<AudioDevice>(name, id);
+					device-> directionType = AudioDeviceDirectionType::adtRender;
 				}
 				else if (scope == kAudioObjectPropertyScopeInput) {
 					device = std::make_shared<AudioDevice>(name, id);
+					device->directionType = AudioDeviceDirectionType::adtCapture;
 				}
+				fillAdditionalTypes(deviceID, scope, device);
 			}
 
 			return device;
@@ -316,9 +324,11 @@ namespace jni
 			}
 
 			if (scope == kAudioObjectPropertyScopeOutput) {
+			    device->directionType = AudioDeviceDirectionType::adtRender;
 				return playbackDevices.insertDevice(device);
 			}
 			else if (scope == kAudioObjectPropertyScopeInput) {
+			    device->directionType = AudioDeviceDirectionType::adtCapture;
 				return captureDevices.insertDevice(device);
 			}
 
@@ -404,5 +414,67 @@ namespace jni
 
 			return noErr;
 		}
+
+		void CoreAudioDeviceManager::fillAdditionalTypes(const AudioDeviceID & deviceID, const AudioObjectPropertyScope & scope, AudioDevicePtr device) {
+		    // Get Transport Type
+            AudioObjectPropertyAddress address = {
+                kAudioDevicePropertyTransportType,
+                scope,
+                kAudioObjectPropertyElementMaster
+            };
+            unsigned int transportType = 0;
+            UInt32 size = 0;
+            size = sizeof(transportType);
+            OSStatus status = AudioObjectGetPropertyData(deviceID, &address, 0, nullptr, &size, &transportType);
+            // Get Transport Type -- end
+
+            address.mSelector = kAudioDevicePropertyDataSource;
+            UInt32 sourceCode = 0;
+            size = sizeof(UInt32);
+            status = AudioObjectGetPropertyData(deviceID, &address, 0, nullptr, &size, &sourceCode);
+
+            device->setDeviceTransport(getActualTransport(transportType));
+            device->setDeviceFormFactor(getActualFormFactor(sourceCode));
+		}
+
+		DeviceFormFactor CoreAudioDeviceManager::getActualFormFactor(const unsigned int sourceID) {
+		    switch(sourceID) {
+                case kIOAudioOutputPortSubTypeInternalSpeaker:
+                case kIOAudioOutputPortSubTypeExternalSpeaker:
+                    return  DeviceFormFactor::ffSpeaker;
+                case kIOAudioOutputPortSubTypeHeadphones:
+                    return  DeviceFormFactor::ffHeadphone;
+                case kIOAudioInputPortSubTypeInternalMicrophone:
+                case kIOAudioInputPortSubTypeExternalMicrophone:
+                    return DeviceFormFactor::ffMicrophone;
+                case kIOAudioInputPortSubTypeCD:
+                case kIOAudioOutputPortSubTypeSPDIF:
+                case kIOAudioOutputPortSubTypeLine:
+                    return DeviceFormFactor::ffUnknown;
+                default:
+                    return DeviceFormFactor::ffUnknown;
+            }
+        }
+
+        DeviceTransport CoreAudioDeviceManager::getActualTransport(const unsigned int transportType) {
+            switch(transportType) {
+               case kAudioDeviceTransportTypeUSB:
+                   return DeviceTransport::trUsb;
+               case kAudioDeviceTransportTypeBluetooth:
+                   return DeviceTransport::trWireless;
+               case kAudioDeviceTransportTypeHDMI:
+                   return DeviceTransport::trHdmi;
+               case kAudioDeviceTransportTypeFireWire:
+               case kAudioDeviceTransportTypeDisplayPort:
+               case kAudioDeviceTransportTypePCI:
+               case kAudioDeviceTransportTypeVirtual:
+               case kAudioDeviceTransportTypeAutoAggregate:
+               case kAudioDeviceTransportTypeBuiltIn:
+               case kAudioDeviceTransportTypeUnknown:
+                   return DeviceTransport::trUnknown;
+               default:
+                   return DeviceTransport::trUnknown;
+            }
+        }
 	}
 }
