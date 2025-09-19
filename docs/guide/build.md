@@ -22,7 +22,7 @@ On the first run, the WebRTC source tree will be loaded into the `/<user home>/w
 
 | Parameter          | Description                                            | Default Value               |
 | ------------------ | ------------------------------------------------------ |-----------------------------|
-| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/7204           |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/7339           |
 | webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user_home\>/webrtc       |
 | webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user_home\>/webrtc/build |
 
