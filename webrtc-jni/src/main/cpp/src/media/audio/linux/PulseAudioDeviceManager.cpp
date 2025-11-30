@@ -15,6 +15,7 @@
  */
 
 #include "media/audio/linux/PulseAudioDeviceManager.h"
+#include "media/audio/linux/PulseAudioLoader.h"
 #include "Exception.h"
 
 namespace jni
@@ -23,41 +24,49 @@ namespace jni
 	{
 		PulseAudioDeviceManager::PulseAudioDeviceManager()
 		{
-			mainloop = pa_threaded_mainloop_new();
+            // Try to load PulseAudio symbols dynamically
+            if (!PulseAudioLoader::instance().load()) {
+                throw Exception("PulseAudio: Library not found on system.");
+            }
+
+            // Use the loader instance for function calls
+            auto& pa = PulseAudioLoader::instance();
+
+			mainloop = pa.pa_threaded_mainloop_new();
 
 			if (mainloop == 0) {
 				throw Exception("PulseAudio: Could not create threaded mainloop");
 			}
 
-			if (pa_threaded_mainloop_start(mainloop) != 0) {
-				pa_threaded_mainloop_free(mainloop);
+			if (pa.pa_threaded_mainloop_start(mainloop) != 0) {
+				pa.pa_threaded_mainloop_free(mainloop);
 
 				throw Exception("PulseAudio: Could not start threaded mainloop");
 			}
 
-			pa_mainloop_api * mainloopApi = pa_threaded_mainloop_get_api(mainloop);
-			context = pa_context_new(mainloopApi, "MediaDevices");
+			pa_mainloop_api * mainloopApi = pa.pa_threaded_mainloop_get_api(mainloop);
+			context = pa.pa_context_new(mainloopApi, "MediaDevices");
 
 			if (!context) {
-				pa_threaded_mainloop_free(mainloop);
+				pa.pa_threaded_mainloop_free(mainloop);
 
 				throw Exception("PulseAudio: Could not create context");
 			}
 
-			pa_context_set_state_callback(context, stateCallback, mainloop);
-			pa_context_set_subscribe_callback(context, subscribeCallback, this);
+			pa.pa_context_set_state_callback(context, stateCallback, mainloop);
+			pa.pa_context_set_subscribe_callback(context, subscribeCallback, this);
 
-			pa_threaded_mainloop_lock(mainloop);
+			pa.pa_threaded_mainloop_lock(mainloop);
 
-			if (pa_context_connect(context, nullptr, PA_CONTEXT_NOFLAGS, nullptr) < 0) {
-				pa_context_unref(context);
-				pa_threaded_mainloop_free(mainloop);
+			if (pa.pa_context_connect(context, nullptr, PA_CONTEXT_NOFLAGS, nullptr) < 0) {
+				pa.pa_context_unref(context);
+				pa.pa_threaded_mainloop_free(mainloop);
 
 				throw Exception("PulseAudio: Could not connect to the context");
 			}
 
 			while (true) {
-				pa_context_state_t contextState = pa_context_get_state(context);
+				pa_context_state_t contextState = pa.pa_context_get_state(context);
 
 				if (contextState == PA_CONTEXT_FAILED || contextState == PA_CONTEXT_TERMINATED) {
 					dispose();
@@ -67,20 +76,20 @@ namespace jni
 					break;
 				}
 
-				pa_threaded_mainloop_wait(mainloop);
+				pa.pa_threaded_mainloop_wait(mainloop);
 			}
 
 			int mask = PA_SUBSCRIPTION_MASK_SINK | PA_SUBSCRIPTION_MASK_SOURCE;
 
 			pa_subscription_mask_t mask_t = static_cast<pa_subscription_mask_t>(mask);
-			pa_operation * op = pa_context_subscribe(context, mask_t, nullptr, nullptr);
+			pa_operation * op = pa.pa_context_subscribe(context, mask_t, nullptr, nullptr);
 
-			pa_threaded_mainloop_unlock(mainloop);
+			pa.pa_threaded_mainloop_unlock(mainloop);
 
 			if (!op) {
 				throw Exception("PulseAudio: Failed to subscribe context");
 			}
-			pa_operation_unref(op);
+			pa.pa_operation_unref(op);
 		}
 
 		PulseAudioDeviceManager::~PulseAudioDeviceManager()
@@ -94,17 +103,17 @@ namespace jni
 				return;
 			}
 
-			pa_threaded_mainloop_lock(mainloop);
+			pa.pa_threaded_mainloop_lock(mainloop);
 
 			if (context) {
-				pa_context_set_state_callback(context, nullptr, nullptr);
-				pa_context_disconnect(context);
-				pa_context_unref(context);
+				pa.pa_context_set_state_callback(context, nullptr, nullptr);
+				pa.pa_context_disconnect(context);
+				pa.pa_context_unref(context);
 				context = nullptr;
 			}
 
-			pa_threaded_mainloop_stop(mainloop);
-			pa_threaded_mainloop_free(mainloop);
+			pa.pa_threaded_mainloop_stop(mainloop);
+			pa.pa_threaded_mainloop_free(mainloop);
 
 			mainloop = nullptr;
 		}
@@ -114,30 +123,30 @@ namespace jni
 				throw Exception("PulseAudio: No operation to process");
 			}
 
-			while (pa_operation_get_state(op) == PA_OPERATION_RUNNING) {
-				pa_threaded_mainloop_wait(main_loop);
+			while (pa.pa_operation_get_state(op) == PA_OPERATION_RUNNING) {
+				pa.pa_threaded_mainloop_wait(main_loop);
 			}
 
-			pa_operation_unref(op);
+			pa.pa_operation_unref(op);
 		}
 
 		AudioDevicePtr PulseAudioDeviceManager::getDefaultAudioCaptureDevice()
 		{
-			if (!pa_threaded_mainloop_in_thread(mainloop))
-				pa_threaded_mainloop_lock(mainloop);
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
+				pa.pa_threaded_mainloop_lock(mainloop);
 
-			pa_operation * op = pa_context_get_server_info(context, serverInfoCallback, this);
+			pa_operation * op = pa.pa_context_get_server_info(context, serverInfoCallback, this);
 
-			if (!pa_threaded_mainloop_in_thread(mainloop))
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				iterate(mainloop, op);
 
-			op = pa_context_get_source_info_by_name(context, defaultCaptureName.c_str(), getSourceInfoCallback, this);
+			op = pa.pa_context_get_source_info_by_name(context, defaultCaptureName.c_str(), getSourceInfoCallback, this);
 
-			if (!pa_threaded_mainloop_in_thread(mainloop))
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				iterate(mainloop, op);
 
-			if (!pa_threaded_mainloop_in_thread(mainloop))
-				pa_threaded_mainloop_unlock(mainloop);
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
+				pa.pa_threaded_mainloop_unlock(mainloop);
 
             AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultCaptureDescName, defaultCaptureName);
 			defaultDevice->directionType = AudioDeviceDirectionType::adtCapture;
@@ -150,31 +159,31 @@ namespace jni
 				return captureDevices.devices();
 			}
 
-			pa_threaded_mainloop_lock(mainloop);
-			pa_operation * op = pa_context_get_source_info_list(context, getSourceCallback, this);
+			pa.pa_threaded_mainloop_lock(mainloop);
+			pa_operation * op = pa.pa_context_get_source_info_list(context, getSourceCallback, this);
 			iterate(mainloop, op);
-			pa_threaded_mainloop_unlock(mainloop);
+			pa.pa_threaded_mainloop_unlock(mainloop);
 
 			return captureDevices.devices();
 		}
 
 		AudioDevicePtr PulseAudioDeviceManager::getDefaultAudioPlaybackDevice()
 		{
-			if (!pa_threaded_mainloop_in_thread(mainloop))
-				pa_threaded_mainloop_lock(mainloop);
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
+				pa.pa_threaded_mainloop_lock(mainloop);
 
-			pa_operation * op = pa_context_get_server_info(context, serverInfoCallback, this);
+			pa_operation * op = pa.pa_context_get_server_info(context, serverInfoCallback, this);
 
-			if (!pa_threaded_mainloop_in_thread(mainloop))
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				iterate(mainloop, op);
 
-			op = pa_context_get_sink_info_by_name(context, defaultPlaybackName.c_str(), getSinkInfoCallback, this);
+			op = pa.pa_context_get_sink_info_by_name(context, defaultPlaybackName.c_str(), getSinkInfoCallback, this);
 
-			if (!pa_threaded_mainloop_in_thread(mainloop))
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				iterate(mainloop, op);
 
-			if (!pa_threaded_mainloop_in_thread(mainloop))
-				pa_threaded_mainloop_unlock(mainloop);
+			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
+				pa.pa_threaded_mainloop_unlock(mainloop);
 
             AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultPlaybackDescName, defaultPlaybackName);
             defaultDevice->directionType = AudioDeviceDirectionType::adtRender;
@@ -187,10 +196,10 @@ namespace jni
 				return playbackDevices.devices();
 			}
 
-			pa_threaded_mainloop_lock(mainloop);
-			pa_operation * op = pa_context_get_sink_info_list(context, getSinkCallback, this);
+			pa.pa_threaded_mainloop_lock(mainloop);
+			pa_operation * op = pa.pa_context_get_sink_info_list(context, getSinkCallback, this);
 			iterate(mainloop, op);
-			pa_threaded_mainloop_unlock(mainloop);
+			pa.pa_threaded_mainloop_unlock(mainloop);
 
 			return playbackDevices.devices();
 		}
@@ -200,7 +209,7 @@ namespace jni
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
 
 			if (last > 0) {
-				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 				return;
 			}
 
@@ -212,7 +221,7 @@ namespace jni
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
 
 			if (last) {
-				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 				return;
 			}
 
@@ -226,7 +235,7 @@ namespace jni
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
 
 			if (last) {
-				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 				return;
 			}
 
@@ -238,7 +247,7 @@ namespace jni
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
 
 			if (last > 0) {
-				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 				return;
 			}
 
@@ -250,7 +259,7 @@ namespace jni
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
 
 			if (last) {
-				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 				return;
 			}
 
@@ -262,7 +271,7 @@ namespace jni
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
 
 			if (last) {
-				pa_threaded_mainloop_signal(engine->mainloop, 0);
+				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 				return;
 			}
 
@@ -309,7 +318,7 @@ namespace jni
 		void PulseAudioDeviceManager::stateCallback(pa_context * ctx, void * userdata)
 		{
 			pa_threaded_mainloop * mainloop = static_cast<pa_threaded_mainloop *>(userdata);
-			pa_threaded_mainloop_signal(mainloop, 0);
+			pa.pa_threaded_mainloop_signal(mainloop, 0);
 		}
 
 		void PulseAudioDeviceManager::serverInfoCallback(pa_context * ctx, const pa_server_info * info, void * userdata)
@@ -318,7 +327,7 @@ namespace jni
 			engine->defaultCaptureName = info->default_source_name;
 			engine->defaultPlaybackName = info->default_sink_name;
 
-			pa_threaded_mainloop_signal(engine->mainloop, 0);
+			pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 		}
 
 		void PulseAudioDeviceManager::subscribeCallback(pa_context * ctx, pa_subscription_event_type_t type, uint32_t idx, void * userdata)
@@ -330,7 +339,7 @@ namespace jni
 
 			if (facility == PA_SUBSCRIPTION_EVENT_SOURCE) {
 				if (operation == PA_SUBSCRIPTION_EVENT_NEW) {
-					op = pa_context_get_source_info_by_index(ctx, idx, newSourceCallback, engine);
+					op = pa.pa_context_get_source_info_by_index(ctx, idx, newSourceCallback, engine);
 				}
 				if (operation == PA_SUBSCRIPTION_EVENT_REMOVE) {
 					engine->removeDevice(engine->captureDevices, idx, true);
@@ -338,7 +347,7 @@ namespace jni
 			}
 			if (facility == PA_SUBSCRIPTION_EVENT_SINK) {
 				if (operation == PA_SUBSCRIPTION_EVENT_NEW) {
-					op = pa_context_get_sink_info_by_index(ctx, idx, newSinkCallback, engine);
+					op = pa.pa_context_get_sink_info_by_index(ctx, idx, newSinkCallback, engine);
 				}
 				if (operation == PA_SUBSCRIPTION_EVENT_REMOVE) {
 					engine->removeDevice(engine->playbackDevices, idx, false);
@@ -346,28 +355,28 @@ namespace jni
 			}
 
 			if (op) {
-				pa_operation_unref(op);
+				pa.pa_operation_unref(op);
 			}
 		}
 
         void PulseAudioDeviceManager::fillAdditionalTypes(AudioDevicePtr device, pa_proplist * proplist) {
             // all property values see here https://docs.rs/libpulse-sys/latest/libpulse_sys/proplist/
             const char *formFactor;
-            formFactor = pa_proplist_gets(proplist, PA_PROP_DEVICE_FORM_FACTOR);
+            formFactor = pa.pa_proplist_gets(proplist, PA_PROP_DEVICE_FORM_FACTOR);
             std::string formFactorStr = "";
             if (formFactor) {
                 formFactorStr = std::string(formFactor);
             }
 
             const char *deviceTransport;
-            deviceTransport = pa_proplist_gets(proplist, PA_PROP_DEVICE_BUS);
+            deviceTransport = pa.pa_proplist_gets(proplist, PA_PROP_DEVICE_BUS);
             std::string deviceTransportStr = "";
             if (deviceTransport) {
                 deviceTransportStr = std::string(deviceTransport);
             }
 
             const char *propHDMI;
-            propHDMI = pa_proplist_gets(proplist, PA_PROP_DEVICE_BUS_PATH);
+            propHDMI = pa.pa_proplist_gets(proplist, PA_PROP_DEVICE_BUS_PATH);
             if (propHDMI && std::string(propHDMI).find("_hdmi") != std::string::npos) {
                 deviceTransportStr = "hdmi";
             }
