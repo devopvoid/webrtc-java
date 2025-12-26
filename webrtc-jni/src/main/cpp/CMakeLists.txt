@@ -79,7 +79,14 @@ list(APPEND SOURCES
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
 # Introduced since WebRTC branch 7204 and Clang 20.
-target_compile_options(${PROJECT_NAME} PRIVATE -Wno-nullability-completeness)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if(MSVC)
+        # clang-cl on Windows requires the /clang: prefix to avoid interpreting /W... as a warning level flag
+        target_compile_options(${PROJECT_NAME} PRIVATE /clang:-Wno-nullability-completeness)
+    else()
+        target_compile_options(${PROJECT_NAME} PRIVATE -Wno-nullability-completeness)
+    endif()
+endif()
 
 target_include_directories(${PROJECT_NAME}
     PRIVATE
