@@ -35,6 +35,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		JavaLocalRef<jobject> jSeverity = JavaEnums::toJava(env, severity);
 		JavaLocalRef<jstring> jMessage = JavaString::toJava(env, message);
 

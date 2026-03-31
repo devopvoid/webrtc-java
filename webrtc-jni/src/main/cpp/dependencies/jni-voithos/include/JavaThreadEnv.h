@@ -23,6 +23,7 @@ namespace jni
 		private:
 			JavaVM * vm;
 			JNIEnv * env;
+			bool attached;
 	};
 }
 
