@@ -172,7 +172,7 @@ elseif(LINUX)
     pkg_check_modules(DBUS REQUIRED dbus-1)
 
     target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
-    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX WEBRTC_USE_H264)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX WEBRTC_USE_H264 WEBRTC_USE_X11)
     target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
 elseif(WIN32)
     target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN WEBRTC_USE_H264 NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
