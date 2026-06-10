@@ -26,6 +26,7 @@ namespace jni
 
 			virtual ~JavaFactory()
 			{
+			    javaClass.release();
 			}
 
 			virtual JavaLocalRef<jobject> create(JNIEnv * env, const T * nativeObject) const
