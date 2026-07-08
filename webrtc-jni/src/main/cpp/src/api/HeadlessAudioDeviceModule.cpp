@@ -25,8 +25,8 @@ namespace jni
             channels_(channels ? channels : 1),
             playoutFramesIn10MS_(0),
             recordingFramesIn10MS_(0),
-            lastCallPlayoutMillis_(0),
-            lastCallRecordMillis_(0),
+            nextPlayoutMillis_(0),
+            nextRecordMillis_(0),
             audio_callback_(nullptr)
     {
         audio_device_buffer_ = std::make_unique<webrtc::AudioDeviceBuffer>(&env.task_queue_factory());
@@ -553,22 +553,35 @@ namespace jni
         int64_t currentTime = webrtc::TimeMillis();
         mutex_.Lock();
 
-        if (lastCallPlayoutMillis_ == 0 || currentTime - lastCallPlayoutMillis_ >= 10) {
+        // Seed the grid on the first tick.
+        if (nextPlayoutMillis_ == 0) {
+            nextPlayoutMillis_ = currentTime;
+        }
+
+        if (currentTime >= nextPlayoutMillis_) {
             mutex_.Unlock();
             audio_device_buffer_->RequestPlayoutData(playoutFramesIn10MS_);
             mutex_.Lock();
 
             audio_device_buffer_->GetPlayoutData(play_buffer_.data());
 
-            lastCallPlayoutMillis_ = currentTime;
+            // Advance the grid by a fixed 10 ms rather than re-anchoring to currentTime,
+            // so wake-up latency is corrected on the next tick instead of accumulating
+            // into the frame period (which otherwise pulls the effective rate below 100 Hz).
+            nextPlayoutMillis_ += 10;
+
+            // If we fell far behind (e.g. the thread was descheduled), resync to now
+            // instead of bursting frames to catch up.
+            if (nextPlayoutMillis_ < currentTime - 100) {
+                nextPlayoutMillis_ = currentTime;
+            }
         }
 
+        int64_t sleepMillis = nextPlayoutMillis_ - webrtc::TimeMillis();
         mutex_.Unlock();
 
-        int64_t deltaTimeMillis = webrtc::TimeMillis() - currentTime;
-
-        if (deltaTimeMillis < 10) {
-            webrtc::Thread::SleepMs(10 - deltaTimeMillis);
+        if (sleepMillis > 0) {
+            webrtc::Thread::SleepMs(sleepMillis);
         }
 
         return true;
@@ -588,7 +601,12 @@ namespace jni
         int64_t currentTime = webrtc::TimeMillis();
         mutex_.Lock();
 
-        if (lastCallRecordMillis_ == 0 || currentTime - lastCallRecordMillis_ >= 10) {
+        // Seed the grid on the first tick.
+        if (nextRecordMillis_ == 0) {
+            nextRecordMillis_ = currentTime;
+        }
+
+        if (currentTime >= nextRecordMillis_) {
             size_t nSamplesOut = 0;
             const size_t nBytesPerSample = sizeof(int16_t);
             const size_t nChannels = channels_;
@@ -617,7 +635,16 @@ namespace jni
                 audio_device_buffer_->SetRecordedBuffer(record_buffer_.data(), recordingFramesIn10MS_);
                 audio_device_buffer_->SetVQEData(/*play_delay_ms*/ 0, /*rec_delay_ms*/ 0);
 
-                lastCallRecordMillis_ = currentTime;
+                // Advance the grid by a fixed 10 ms rather than re-anchoring to currentTime,
+                // so wake-up latency is corrected on the next tick instead of accumulating
+                // into the frame period (which otherwise pulls the effective rate below 100 Hz).
+                nextRecordMillis_ += 10;
+
+                // If we fell far behind (e.g. the thread was descheduled), resync to now
+                // instead of bursting frames to catch up.
+                if (nextRecordMillis_ < currentTime - 100) {
+                    nextRecordMillis_ = currentTime;
+                }
 
                 mutex_.Unlock();
                 audio_device_buffer_->DeliverRecordedData();
@@ -625,11 +652,11 @@ namespace jni
             }
         }
 
+        int64_t sleepMillis = nextRecordMillis_ - webrtc::TimeMillis();
         mutex_.Unlock();
 
-        int64_t deltaTimeMillis = webrtc::TimeMillis() - currentTime;
-        if (deltaTimeMillis < 10) {
-            webrtc::Thread::SleepMs(10 - deltaTimeMillis);
+        if (sleepMillis > 0) {
+            webrtc::Thread::SleepMs(sleepMillis);
         }
 
         return true;
