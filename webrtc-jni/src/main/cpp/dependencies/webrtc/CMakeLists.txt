@@ -15,7 +15,11 @@ add_library(${PROJECT_NAME} STATIC pseudo.cxx pseudo.hxx)
 
 set(CUSTOM_LIBCXX false)
 
-if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
+if(LINUX)
+    # All Linux targets build against webrtc's bundled libc++. The arm
+    # sysroots' libstdc++ (Debian bullseye, GCC 10) predates the C++20
+    # library features newer webrtc branches use; the sysroot stays for the
+    # glibc floor only.
     set(CUSTOM_LIBCXX true)
 endif()
 
@@ -143,7 +147,7 @@ else()
     set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
 endif()
 
-if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
+if(LINUX)
     target_include_directories(${PROJECT_NAME} PUBLIC ${TARGET_LIBCPP_BUILDTOOLS_INC_DIR})
     target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TARGET_LIBCPP_INC_DIR} ${TARGET_LIBCPP_ABI_INC_DIR})
 
@@ -304,7 +308,15 @@ else()
 endif()
 
 if(LINUX)
-    if(LINUX AND NOT TARGET_CPU MATCHES "^arm")
+        # Ninja only schedules libc++/libc++abi for the target toolchain when
+        # a linked output needs them; a static archive only cross build never
+        # does, so the object globs below would come up empty and produce
+        # hollow archives. Request the archives explicitly.
+        execute_command(
+            COMMAND ninja -C "${WEBRTC_BUILD}" obj/buildtools/third_party/libc++/libc++.a obj/buildtools/third_party/libc++abi/libc++abi.a
+            WORKING_DIRECTORY "${WEBRTC_SRC}"
+        )
+
         # Collect lib++ objects
         file(GLOB_RECURSE LibCPP_OBJS
             ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/buildtools/third_party/libc++/libc++/*.o
@@ -340,7 +352,6 @@ if(LINUX)
             DIRECTORY "${WEBRTC_SRC}/third_party/libc++abi/src/include"
             DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++abi"
         )
-    endif()
 endif()
 
 install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")
