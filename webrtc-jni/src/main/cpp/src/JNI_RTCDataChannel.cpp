@@ -23,6 +23,7 @@
 #include "JavaUtils.h"
 
 #include "api/data_channel_interface.h"
+#include "rtc_base/logging.h"
 
 #include <memory>
 
@@ -192,11 +193,64 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBuffer
 	webrtc::CopyOnWriteBuffer data(arrayPtr, arrayLength);
 
 	env->ReleaseByteArrayElements(jBufferArray, arrayPtr, JNI_ABORT);
-	
+
 	try {
 		channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
+}
+
+// Completion handler shared by the async send paths. Queueing failures are
+// logged; on fatal errors WebRTC closes the channel, which the registered
+// data channel observer sees as a state change.
+static void logSendAsyncError(webrtc::RTCError error)
+{
+	if (!error.ok()) {
+		RTC_LOG(LS_WARNING) << "SendAsync failed: " << error.message();
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendDirectBufferAsync
+(JNIEnv * env, jobject caller, jobject jBuffer, jint position, jint length, jboolean isBinary)
+{
+	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	CHECK_HANDLE(channel);
+
+	uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(jBuffer));
+
+	if (address != NULL) {
+		jlong capacity = env->GetDirectBufferCapacity(jBuffer);
+
+		if (position < 0 || length < 0 || static_cast<jlong>(position) + length > capacity) {
+			env->Throw(jni::JavaError(env, "Buffer position/length out of bounds"));
+			return;
+		}
+
+		// The data is copied into the CopyOnWriteBuffer before this call
+		// returns, so the caller may reuse the direct buffer immediately.
+		webrtc::CopyOnWriteBuffer data(address + position, static_cast<size_t>(length));
+
+		channel->SendAsync(webrtc::DataBuffer(data, static_cast<bool>(isBinary)), &logSendAsyncError);
+	}
+	else {
+		env->Throw(jni::JavaError(env, "Non-direct buffer provided"));
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBufferAsync
+(JNIEnv * env, jobject caller, jbyteArray jBufferArray, jboolean isBinary)
+{
+	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	CHECK_HANDLE(channel);
+
+	int8_t * arrayPtr = env->GetByteArrayElements(jBufferArray, nullptr);
+	size_t arrayLength = env->GetArrayLength(jBufferArray);
+
+	webrtc::CopyOnWriteBuffer data(arrayPtr, arrayLength);
+
+	env->ReleaseByteArrayElements(jBufferArray, arrayPtr, JNI_ABORT);
+
+	channel->SendAsync(webrtc::DataBuffer(data, static_cast<bool>(isBinary)), &logSendAsyncError);
 }
