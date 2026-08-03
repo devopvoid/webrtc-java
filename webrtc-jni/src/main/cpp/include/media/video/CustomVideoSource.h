@@ -19,7 +19,7 @@
 
 #include "api/video/video_frame.h"
 #include "api/video/video_source_interface.h"
-#include "media/base/adapted_video_track_source.h"
+#include "api/video/adapted_video_track_source.h"
 #include "rtc_base/ref_counted_object.h"
 
 #include "media/SyncClock.h"
