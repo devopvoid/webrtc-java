@@ -131,6 +131,19 @@ message(STATUS "WebRTC use custom libcxx: ${CUSTOM_LIBCXX}")
 message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
 
 
+# The api/video utility classes (AdaptedVideoTrackSource, VideoAdapter,
+# VideoBroadcaster) fell out of the default build graph when they moved out
+# of media/base, so their objects no longer reach the monolithic archive.
+# On Linux and Windows the shared library link leaves their symbols
+# undefined and loading fails at runtime; they are built and linked
+# explicitly. The Apple archive is assembled from an object glob and only
+# needs them built.
+if(WIN32)
+    set(VIDEO_UTIL_LIB_NAMES adapted_video_track_source.lib video_adapter.lib video_broadcaster.lib)
+else()
+    set(VIDEO_UTIL_LIB_NAMES libadapted_video_track_source.a libvideo_adapter.a libvideo_broadcaster.a)
+endif()
+
 if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
     set(TARGET_INC_DIR ${WEBRTC_INSTALL_DIR}/include)
     set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH_INSTALLED})
@@ -138,6 +151,7 @@ if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
     set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/)
     set(TARGET_LIBCPP_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/include)
     set(TARGET_LIBCPP_ABI_INC_DIR ${TARGET_INC_DIR}/third_party/libc++abi/include)
+    set(VIDEO_UTIL_LIB_DIR ${WEBRTC_INSTALL_DIR}/lib)
 else()
     set(TARGET_INC_DIR ${WEBRTC_SRC})
     set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH})
@@ -145,6 +159,14 @@ else()
     set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${WEBRTC_SRC}/buildtools/third_party/libc++/)
     set(TARGET_LIBCPP_INC_DIR ${WEBRTC_SRC}/third_party/libc++/src/include)
     set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
+    set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video)
+endif()
+
+set(VIDEO_UTIL_LINK_LIBS "")
+if(NOT APPLE)
+    foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
+        list(APPEND VIDEO_UTIL_LINK_LIBS "${VIDEO_UTIL_LIB_DIR}/${VIDEO_UTIL_LIB}")
+    endforeach()
 endif()
 
 if(LINUX)
@@ -160,7 +182,7 @@ target_include_directories(${PROJECT_NAME}
         ${TARGET_INC_DIR}/third_party/abseil-cpp
         ${TARGET_INC_DIR}/third_party/libyuv/include
 )
-target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB})
+target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB} ${VIDEO_UTIL_LINK_LIBS})
 
 if(APPLE)
     target_include_directories(${PROJECT_NAME}
@@ -291,7 +313,7 @@ execute_command(
 message(STATUS "WebRTC: compile")
 if(APPLE)
     execute_command(
-        COMMAND ninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc
+        COMMAND ninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
         WORKING_DIRECTORY "${WEBRTC_SRC}"
     )
 
@@ -303,6 +325,14 @@ if(APPLE)
 else()
     execute_command(
         COMMAND ninja -C "${WEBRTC_BUILD}"
+        WORKING_DIRECTORY "${WEBRTC_SRC}"
+    )
+
+    # The api/video utility targets are not reachable from the default
+    # graph since their move out of media/base; build them explicitly so
+    # their symbols exist for the shared library link.
+    execute_command(
+        COMMAND ninja -C "${WEBRTC_BUILD}" api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
         WORKING_DIRECTORY "${WEBRTC_SRC}"
     )
 endif()
@@ -352,6 +382,15 @@ if(LINUX)
             DIRECTORY "${WEBRTC_SRC}/third_party/libc++abi/src/include"
             DESTINATION "${WEBRTC_INSTALL_DIR}/include/third_party/libc++abi"
         )
+endif()
+
+if(NOT APPLE)
+    foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
+        install(
+            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video/${VIDEO_UTIL_LIB}"
+            DESTINATION "${WEBRTC_INSTALL_DIR}/lib"
+        )
+    endforeach()
 endif()
 
 install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")
