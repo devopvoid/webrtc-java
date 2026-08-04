@@ -23,6 +23,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Derive the WebRTC cache branch from the pom
+      run: echo "WEBRTC_CACHE_BRANCH=$(sed -n 's|.*<webrtc.branch>branch-heads/\([^<]*\)</webrtc.branch>.*|\1|p' webrtc-jni/pom.xml)" >> "$GITHUB_ENV"
+      shell: bash
+
     - name: Set up WebRTC cache
       uses: actions/cache@v4
       with:
@@ -63,7 +67,7 @@ runs:
       shell: bash
 
     - name: Deploy
-      if: ${{ github.event_name != 'pull_request' }}
+      if: ${{ github.event_name != 'pull_request' && github.repository == 'devopvoid/webrtc-java' }}
       env:
         MAVEN_USERNAME: ${{ inputs.maven-username }}
         MAVEN_TOKEN: ${{ inputs.maven-password }}
