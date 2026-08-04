@@ -184,6 +184,12 @@ if(LINUX)
     # so every target compiling against them (the shim, jni-voithos) gets it.
     target_compile_definitions(${PROJECT_NAME} PUBLIC _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE)
 
+    # Clang discovers the GCC installation inside the cross sysroots and adds
+    # its libstdc++ headers to the implicit search path, which collide with
+    # the bundled libc++ (std::abort missing, ldiv_t unknown). Exclude the
+    # implicit C++ stdlib dirs so only the bundled headers serve C++.
+    target_compile_options(${PROJECT_NAME} PUBLIC -nostdinc++)
+
     target_link_directories(${PROJECT_NAME} PUBLIC "${TARGET_LIB_DIR}")
 endif()
 
