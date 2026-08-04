@@ -159,7 +159,13 @@ else()
     set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${WEBRTC_SRC}/buildtools/third_party/libc++/)
     set(TARGET_LIBCPP_INC_DIR ${WEBRTC_SRC}/third_party/libc++/src/include)
     set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
-    set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video)
+    if(WIN32)
+        set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video)
+    else()
+        # The flat re-archives; gn's originals are thin archives that break
+        # when copied away from their object files.
+        set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj)
+    endif()
 endif()
 
 set(VIDEO_UTIL_LINK_LIBS "")
@@ -347,6 +353,18 @@ if(LINUX)
             WORKING_DIRECTORY "${WEBRTC_SRC}"
         )
 
+        # gn emits thin archives whose members reference objects by relative
+        # path, so they break once copied to the install tree. Re-archive the
+        # api/video utility objects into regular archives, like libc++ below.
+        foreach(VIDEO_UTIL_TARGET adapted_video_track_source video_adapter video_broadcaster)
+            file(GLOB_RECURSE VIDEO_UTIL_OBJS
+                ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video/${VIDEO_UTIL_TARGET}/*.o
+            )
+            execute_command(
+                COMMAND ${CMAKE_AR} rcs ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/lib${VIDEO_UTIL_TARGET}.a ${VIDEO_UTIL_OBJS}
+            )
+        endforeach()
+
         # Collect lib++ objects
         file(GLOB_RECURSE LibCPP_OBJS
             ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/buildtools/third_party/libc++/libc++/*.o
@@ -384,7 +402,14 @@ if(LINUX)
         )
 endif()
 
-if(NOT APPLE)
+if(LINUX)
+    foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
+        install(
+            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${VIDEO_UTIL_LIB}"
+            DESTINATION "${WEBRTC_INSTALL_DIR}/lib"
+        )
+    endforeach()
+elseif(WIN32)
     foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
         install(
             FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video/${VIDEO_UTIL_LIB}"
