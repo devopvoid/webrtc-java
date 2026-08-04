@@ -29,7 +29,7 @@ namespace jni
             nextRecordMillis_(0),
             audio_callback_(nullptr)
     {
-        audio_device_buffer_ = std::make_unique<webrtc::AudioDeviceBuffer>(&env.task_queue_factory());
+        audio_device_buffer_ = std::make_unique<webrtc::AudioDeviceBuffer>(env);
     }
 
     HeadlessAudioDeviceModule::~HeadlessAudioDeviceModule()
