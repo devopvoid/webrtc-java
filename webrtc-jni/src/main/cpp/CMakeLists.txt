@@ -106,6 +106,13 @@ if(APPLE)
 elseif(LINUX)
     set(CXX_LIBS "-static-libgcc -stdlib=libc++ -lc++ -lc++abi")
 
+    # The bundled libc++ headers require the hardening mode to be chosen at
+    # configuration time since branch-heads/7977; the engine build sets it on
+    # the compiler command line, and compiling against the same headers the
+    # shim must too. Hardening modes are ABI compatible, so this only selects
+    # assertion behavior.
+    target_compile_definitions(${PROJECT_NAME} PRIVATE _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE)
+
     target_link_libraries(${PROJECT_NAME} ${CXX_LIBS} pulse udev)
 elseif(WIN32)
     target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
