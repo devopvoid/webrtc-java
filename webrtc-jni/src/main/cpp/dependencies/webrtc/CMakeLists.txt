@@ -179,6 +179,11 @@ if(LINUX)
     target_include_directories(${PROJECT_NAME} PUBLIC ${TARGET_LIBCPP_BUILDTOOLS_INC_DIR})
     target_include_directories(${PROJECT_NAME} SYSTEM PUBLIC ${TARGET_LIBCPP_INC_DIR} ${TARGET_LIBCPP_ABI_INC_DIR})
 
+    # The bundled libc++ requires the hardening mode chosen at configuration
+    # time since branch-heads/7977. It must travel with these include dirs,
+    # so every target compiling against them (the shim, jni-voithos) gets it.
+    target_compile_definitions(${PROJECT_NAME} PUBLIC _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE)
+
     target_link_directories(${PROJECT_NAME} PUBLIC "${TARGET_LIB_DIR}")
 endif()
 
