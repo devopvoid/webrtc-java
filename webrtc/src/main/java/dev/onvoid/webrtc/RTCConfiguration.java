@@ -29,6 +29,11 @@ import java.util.List;
 public class RTCConfiguration {
 
 	/**
+	 * Default maximum number of packets in the audio jitter buffer.
+	 */
+	public static final int kAudioJitterBufferMaxPackets = 200;
+
+	/**
 	 * A list of ICE server's describing servers available to be used by ICE,
 	 * such as STUN and TURN servers.
 	 */
@@ -64,6 +69,21 @@ public class RTCConfiguration {
 	 */
 	public PortAllocatorConfig portAllocatorConfig;
 
+	/**
+	 * The maximum number of packets that can be stored in the NetEq audio
+	 * jitter buffer. Can be reduced to lower tolerated audio latency.
+	 */
+	public int audioJitterBufferMaxPackets = kAudioJitterBufferMaxPackets;
+
+	/** Whether to use the NetEq "fast mode" which will accelerate audio quicker
+	 * 	if it falls behind.
+	 */
+	public boolean audioJitterBufferFastAccelerate;
+
+	/**
+	 * The minimum delay in milliseconds for the audio jitter buffer.
+	 */
+	public int audioJitterBufferMinDelayMs;
 
 	/**
 	 * Creates an instance of RTCConfiguration.

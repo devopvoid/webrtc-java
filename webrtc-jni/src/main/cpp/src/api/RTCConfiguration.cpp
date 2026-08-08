@@ -60,6 +60,10 @@ namespace jni
 			auto pac = jni::PortAllocatorConfig::toJava(env, nativeType.port_allocator_config);
 			env->SetObjectField(config, javaClass->portAllocatorConfig, pac.get());
 
+            env->SetIntField(config, javaClass->audioJitterBufferMaxPackets, nativeType.audio_jitter_buffer_max_packets);
+            env->SetBooleanField(config, javaClass->audioJitterBufferFastAccelerate, nativeType.audio_jitter_buffer_fast_accelerate);
+            env->SetIntField(config, javaClass->audioJitterBufferMinDelayMs, nativeType.audio_jitter_buffer_min_delay_ms);
+
 			return JavaLocalRef<jobject>(env, config);
 		}
 
@@ -83,7 +87,7 @@ namespace jni
 			configuration.type = JavaEnums::toNative<webrtc::PeerConnectionInterface::IceTransportsType>(env, tp);
 			configuration.bundle_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::BundlePolicy>(env, bp);
 			configuration.rtcp_mux_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::RtcpMuxPolicy>(env, mp);
-			
+
 			for (auto & item : JavaIterable(env, cr)) {
 				auto certificate = webrtc::RTCCertificate::FromPEM(jni::RTCCertificatePEM::toNative(env, item));
 
@@ -103,6 +107,10 @@ namespace jni
 				configuration.port_allocator_config.flags = pacObj.getInt(pacJavaClass->flags);
 			}
 
+            configuration.audio_jitter_buffer_fast_accelerate = obj.getBoolean(javaClass->audioJitterBufferFastAccelerate);
+            configuration.audio_jitter_buffer_max_packets = obj.getInt(javaClass->audioJitterBufferMaxPackets);
+            configuration.audio_jitter_buffer_min_delay_ms = obj.getInt(javaClass->audioJitterBufferMinDelayMs);
+
 			return configuration;
 		}
 
@@ -118,6 +126,9 @@ namespace jni
 			rtcpMuxPolicy = GetFieldID(env, cls, "rtcpMuxPolicy", "L" PKG "RTCRtcpMuxPolicy;");
 			certificates = GetFieldID(env, cls, "certificates", LIST_SIG);
 			portAllocatorConfig = GetFieldID(env, cls, "portAllocatorConfig", "L" PKG "PortAllocatorConfig;");
+			audioJitterBufferMaxPackets = GetFieldID(env, cls, "audioJitterBufferMaxPackets", "I");
+			audioJitterBufferFastAccelerate = GetFieldID(env, cls, "audioJitterBufferFastAccelerate", "Z");
+			audioJitterBufferMinDelayMs = GetFieldID(env, cls, "audioJitterBufferMinDelayMs", "I");
 		}
 	}
 }

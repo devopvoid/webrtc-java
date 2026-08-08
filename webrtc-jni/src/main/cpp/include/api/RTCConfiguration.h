@@ -41,6 +41,9 @@ namespace jni
 				jfieldID rtcpMuxPolicy;
 				jfieldID certificates;
 				jfieldID portAllocatorConfig;
+				jfieldID audioJitterBufferMaxPackets;
+				jfieldID audioJitterBufferFastAccelerate;
+				jfieldID audioJitterBufferMinDelayMs;
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::PeerConnectionInterface::RTCConfiguration & config);
