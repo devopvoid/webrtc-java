@@ -53,6 +53,7 @@ namespace jni
 
 			~JavaEnum()
 			{
+			    values.release();
 			}
 
 			JavaLocalRef<jobject> toJava(JNIEnv * env, const T & nativeType) const
