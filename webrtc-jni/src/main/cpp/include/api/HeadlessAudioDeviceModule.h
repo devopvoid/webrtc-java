@@ -166,8 +166,11 @@ namespace jni
 
             size_t playoutFramesIn10MS_;
             size_t recordingFramesIn10MS_;
-            int64_t lastCallPlayoutMillis_;
-            int64_t lastCallRecordMillis_;
+            // Absolute wall-clock deadline (ms) of the next 10 ms tick. Advanced by a
+            // fixed +10 each tick so scheduling/wake-up latency is corrected against the
+            // grid rather than accumulating into the frame period.
+            int64_t nextPlayoutMillis_;
+            int64_t nextRecordMillis_;
 
             mutable webrtc::Mutex mutex_;
             std::unique_ptr<webrtc::AudioDeviceBuffer> audio_device_buffer_ RTC_GUARDED_BY(mutex_);
