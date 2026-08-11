@@ -135,6 +135,22 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBuffer
 	(JNIEnv *, jobject, jbyteArray, jboolean);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCDataChannel
+	 * Method:    sendDirectBufferAsync
+	 * Signature: (Ljava/nio/ByteBuffer;IIZ)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendDirectBufferAsync
+	(JNIEnv *, jobject, jobject, jint, jint, jboolean);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCDataChannel
+	 * Method:    sendByteArrayBufferAsync
+	 * Signature: ([BZ)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBufferAsync
+	(JNIEnv *, jobject, jbyteArray, jboolean);
+
 #ifdef __cplusplus
 }
 #endif
