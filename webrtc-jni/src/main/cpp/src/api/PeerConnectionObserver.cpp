@@ -24,6 +24,7 @@
 #include "JavaEnums.h"
 #include "JavaFactories.h"
 #include "JavaRuntimeException.h"
+#include "JavaString.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
@@ -193,6 +194,27 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
+	void PeerConnectionObserver::OnIceSelectedCandidatePairChanged(const webrtc::CandidatePairChangeEvent & event)
+	{
+		JNIEnv * env = AttachCurrentThread();
+
+		const webrtc::Candidate & remote = event.selected_candidate_pair.remote_candidate();
+
+		std::string ip = remote.address().ipaddr().ToString();
+		int port = remote.address().port();
+
+		const auto typeName = remote.type_name();
+		std::string type(typeName.data(), typeName.size());
+
+		JavaLocalRef<jstring> jAddress = JavaString::toJava(env, ip);
+		JavaLocalRef<jstring> jType = JavaString::toJava(env, type);
+
+		env->CallVoidMethod(observer, javaClass->onSelectedCandidatePairChanged,
+			jAddress.get(), static_cast<jint>(port), jType.get());
+
+		ExceptionCheck(env);
+	}
+
 	PeerConnectionObserver::JavaPeerConnectionObserverClass::JavaPeerConnectionObserverClass(JNIEnv * env)
 	{
 		jclass cls = FindClass(env, PKG"PeerConnectionObserver");
@@ -210,5 +232,6 @@ namespace jni
 		onIceCandidateError = GetMethod(env, cls, "onIceCandidateError", "(L" PKG "RTCPeerConnectionIceErrorEvent;)V");
 		onIceCandidatesRemoved = GetMethod(env, cls, "onIceCandidatesRemoved", "([L" PKG "RTCIceCandidate;)V");
 		onIceConnectionReceivingChange = GetMethod(env, cls, "onIceConnectionReceivingChange", "(Z)V");
+		onSelectedCandidatePairChanged = GetMethod(env, cls, "onSelectedCandidatePairChanged", "(Ljava/lang/String;ILjava/lang/String;)V");
 	}
 }
