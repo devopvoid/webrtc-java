@@ -159,13 +159,9 @@ else()
     set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${WEBRTC_SRC}/buildtools/third_party/libc++/)
     set(TARGET_LIBCPP_INC_DIR ${WEBRTC_SRC}/third_party/libc++/src/include)
     set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
-    if(WIN32)
-        set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video)
-    else()
-        # The flat re-archives; gn's originals are thin archives that break
-        # when copied away from their object files.
-        set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj)
-    endif()
+    # The flat re-archives; gn's originals are thin archives that break
+    # when copied away from their object files.
+    set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj)
 endif()
 
 set(VIDEO_UTIL_LINK_LIBS "")
@@ -354,6 +350,22 @@ else()
     )
 endif()
 
+if(WIN32)
+    # gn emits these as thin archives on Windows as well (lld-link /lib),
+    # so the installed copies go hollow once the cache restores them
+    # without the object tree; a cold build never notices because the
+    # objects still sit beside the archives. Re-archive them in regular
+    # form with the toolchain librarian, mirroring the Linux path below.
+    foreach(VIDEO_UTIL_TARGET adapted_video_track_source video_adapter video_broadcaster)
+        file(GLOB_RECURSE VIDEO_UTIL_OBJS
+            ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video/${VIDEO_UTIL_TARGET}/*.obj
+        )
+        execute_command(
+            COMMAND ${WEBRTC_SRC}/third_party/llvm-build/Release+Asserts/bin/lld-link.exe /lib /OUT:${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${VIDEO_UTIL_TARGET}.lib ${VIDEO_UTIL_OBJS}
+        )
+    endforeach()
+endif()
+
 if(LINUX)
         # Ninja only schedules libc++/libc++abi for the target toolchain when
         # a linked output needs them; a static archive only cross build never
@@ -423,7 +435,7 @@ if(LINUX)
 elseif(WIN32)
     foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
         install(
-            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video/${VIDEO_UTIL_LIB}"
+            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${VIDEO_UTIL_LIB}"
             DESTINATION "${WEBRTC_INSTALL_DIR}/lib"
         )
     endforeach()
