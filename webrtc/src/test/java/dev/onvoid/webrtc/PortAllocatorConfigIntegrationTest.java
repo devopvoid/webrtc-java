@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -59,6 +60,11 @@ class PortAllocatorConfigIntegrationTest extends TestBase {
 		// Create an SDP offer /answer and set descriptions.
 		callee.setRemoteDescription(caller.createOffer());
 		caller.setRemoteDescription(callee.createAnswer());
+
+		// Both descriptions are applied now; deliver the candidates gathered
+		// during the exchange and forward directly from here on.
+		caller.flushCandidates();
+		callee.flushCandidates();
 
 		// Wait until connected (with a timeout to avoid hanging tests).
 		assertTrue(caller.awaitConnected(30, TimeUnit.SECONDS), "Caller failed to connect in time");
@@ -118,7 +124,9 @@ class PortAllocatorConfigIntegrationTest extends TestBase {
 		private final RTCPeerConnection pc;
 		private RTCPeerConnection remote;
 		private final CountDownLatch connected = new CountDownLatch(1);
-		final List<String> candidates = new ArrayList<>();
+		private final List<RTCIceCandidate> pendingCandidates = new ArrayList<>();
+		private boolean forwardDirectly;
+		final List<String> candidates = new CopyOnWriteArrayList<>();
 
 
 		AllocPeer(PeerConnectionFactory factory, RTCConfiguration cfg) {
@@ -165,12 +173,37 @@ class PortAllocatorConfigIntegrationTest extends TestBase {
 			pc.close();
 		}
 
+		/**
+		 * Delivers the candidates buffered during the offer/answer exchange
+		 * and switches to direct forwarding. Trickling starts inside
+		 * createOffer/createAnswer via setLocalDescription, so early
+		 * candidates would reach the remote peer before it has a remote
+		 * description; the native stack rejects such candidates and they
+		 * would be lost for good, leaving ICE without a candidate pair.
+		 */
+		void flushCandidates() {
+			List<RTCIceCandidate> buffered;
+			synchronized (this) {
+				forwardDirectly = true;
+				buffered = new ArrayList<>(pendingCandidates);
+				pendingCandidates.clear();
+			}
+			for (RTCIceCandidate candidate : buffered) {
+				remote.addIceCandidate(candidate);
+			}
+		}
+
 		@Override
 		public void onIceCandidate(RTCIceCandidate candidate) {
 			candidates.add(candidate.sdp);
-			if (remote != null) {
-				remote.addIceCandidate(candidate);
+
+			synchronized (this) {
+				if (!forwardDirectly) {
+					pendingCandidates.add(candidate);
+					return;
+				}
 			}
+			remote.addIceCandidate(candidate);
 		}
 
 		@Override
