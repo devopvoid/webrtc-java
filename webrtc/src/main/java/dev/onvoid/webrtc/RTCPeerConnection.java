@@ -246,13 +246,6 @@ public class RTCPeerConnection extends NativeObject {
 	public native void addIceCandidate(RTCIceCandidate candidate);
 
 	/**
-	 * Removes a group of remote ICE candidates from the ICE agent.
-	 *
-	 * @param candidates The ICE candidates to remove.
-	 */
-	public native void removeIceCandidates(RTCIceCandidate[] candidates);
-
-	/**
 	 * Returns the signaling state of the RTCPeerConnection.
 	 *
 	 * @return The current signaling state.

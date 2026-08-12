@@ -44,25 +44,6 @@ namespace jni
 			return JavaLocalRef<jobject>(env, jCandidate);
 		}
 
-		JavaLocalRef<jobject> toJavaCricket(JNIEnv * env, const webrtc::Candidate & candidate)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
-
-			std::string sdp = webrtc::SdpSerializeCandidate(candidate);
-
-			if (sdp.empty()) {
-				throw Exception("Got an empty ICE candidate");
-			}
-
-			jobject jCandidate = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, candidate.id()).get(),
-				candidate.component(),
-				JavaString::toJava(env, sdp).get(),
-				JavaString::toJava(env, candidate.url()).get());
-
-			return JavaLocalRef<jobject>(env, jCandidate);
-		}
-
 		std::unique_ptr<webrtc::IceCandidateInterface> toNative(JNIEnv * env, const JavaRef<jobject> & javaType)
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCIceCandidateClass>(env);
@@ -82,11 +63,6 @@ namespace jni
 			}
 
 			return std::unique_ptr<webrtc::IceCandidateInterface>(candidate);
-		}
-
-		webrtc::Candidate toNativeCricket(JNIEnv * env, const JavaRef<jobject> & javaType)
-		{
-			return toNative(env, javaType)->candidate();
 		}
 
 		JavaRTCIceCandidateClass::JavaRTCIceCandidateClass(JNIEnv * env)

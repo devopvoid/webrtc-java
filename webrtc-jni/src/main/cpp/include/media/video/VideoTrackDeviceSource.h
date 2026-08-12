@@ -21,8 +21,8 @@
 #include "api/video/video_frame.h"
 #include "api/video/video_sink_interface.h"
 #include "pc/video_track_source.h"
-#include "media/base/video_adapter.h"
-#include "media/base/video_broadcaster.h"
+#include "api/video/video_adapter.h"
+#include "api/video/video_broadcaster.h"
 #include "modules/video_capture/video_capture.h"
 #include "modules/video_capture/video_capture_defines.h"
 

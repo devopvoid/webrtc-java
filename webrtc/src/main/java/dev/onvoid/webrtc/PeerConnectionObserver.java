@@ -90,14 +90,6 @@ public interface PeerConnectionObserver {
 	}
 
 	/**
-	 * ICE candidates have been removed.
-	 *
-	 * @param candidates The removed ICE candidates.
-	 */
-	default void onIceCandidatesRemoved(RTCIceCandidate[] candidates) {
-	}
-
-	/**
 	 * Media is received on a new stream from the remote peer.
 	 *
 	 * @param stream The new media stream.

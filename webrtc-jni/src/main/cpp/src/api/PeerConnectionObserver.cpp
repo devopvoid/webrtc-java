@@ -164,27 +164,6 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
-	void PeerConnectionObserver::OnIceCandidatesRemoved(const std::vector<webrtc::Candidate> & candidates)
-	{
-		JNIEnv * env = AttachCurrentThread();
-
-		const auto eventClass = JavaClasses::get<RTCPeerConnectionIceErrorEvent::JavaRTCPeerConnectionIceErrorEventClass>(env);
-
-		try {
-			JavaLocalRef<jobjectArray> jCandidates = JavaArray::createObjectArray(env, candidates, eventClass->cls, &RTCIceCandidate::toJavaCricket);
-
-			env->CallVoidMethod(observer, javaClass->onIceCandidatesRemoved, jCandidates.get());
-		}
-		catch (const Exception & e) {
-			env->Throw(jni::JavaRuntimeException(env, e.what()));
-		}
-		catch (...) {
-			ThrowCxxJavaException(env);
-		}
-
-		ExceptionCheck(env);
-	}
-
 	void PeerConnectionObserver::OnIceConnectionReceivingChange(bool receiving)
 	{
 		JNIEnv * env = AttachCurrentThread();
@@ -230,7 +209,6 @@ namespace jni
 		onIceGatheringChange = GetMethod(env, cls, "onIceGatheringChange", "(L" PKG "RTCIceGatheringState;)V");
 		onIceCandidate = GetMethod(env, cls, "onIceCandidate", "(L" PKG "RTCIceCandidate;)V");
 		onIceCandidateError = GetMethod(env, cls, "onIceCandidateError", "(L" PKG "RTCPeerConnectionIceErrorEvent;)V");
-		onIceCandidatesRemoved = GetMethod(env, cls, "onIceCandidatesRemoved", "([L" PKG "RTCIceCandidate;)V");
 		onIceConnectionReceivingChange = GetMethod(env, cls, "onIceConnectionReceivingChange", "(Z)V");
 		onSelectedCandidatePairChanged = GetMethod(env, cls, "onSelectedCandidatePairChanged", "(Ljava/lang/String;ILjava/lang/String;)V");
 	}

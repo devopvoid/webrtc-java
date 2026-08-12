@@ -105,6 +105,14 @@ class RTCDtmfSenderTests extends TestBase {
 
         caller.waitUntilConnected();
         callee.waitUntilConnected();
+
+        // The connected peer connection state does not imply the audio send
+        // stream is up; DTMF insertability arrives asynchronously with it.
+        // Wait for it, bounded, so the tests assert behavior rather than the
+        // engine's internal activation ordering.
+        for (int i = 0; i < 100 && !dtmfSender.canInsertDtmf(); i++) {
+            Thread.sleep(50);
+        }
     }
 
     @AfterEach

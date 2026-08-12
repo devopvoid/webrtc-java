@@ -27,6 +27,7 @@
 #include "rtc_base/logging.h"
 #include "rtc_base/string_encode.h"
 
+#include <iterator>
 #include <map>
 #include <string>
 

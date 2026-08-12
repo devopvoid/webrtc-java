@@ -17,7 +17,7 @@
 #ifndef JNI_WEBRTC_MEDIA_VIDEO_TRACK_DEVICE_SOURCE_MAC_H_
 #define JNI_WEBRTC_MEDIA_VIDEO_TRACK_DEVICE_SOURCE_MAC_H_
 
-#include "media/base/adapted_video_track_source.h"
+#include "api/video/adapted_video_track_source.h"
 #include "modules/video_capture/video_capture_defines.h"
 #include "rtc_base/timestamp_aligner.h"
 

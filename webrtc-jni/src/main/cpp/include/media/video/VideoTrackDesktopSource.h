@@ -18,7 +18,7 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_TRACK_DESKTOP_SOURCE_H_
 
 #include "api/video/i420_buffer.h"
-#include "media/base/adapted_video_track_source.h"
+#include "api/video/adapted_video_track_source.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/platform_thread.h"
 

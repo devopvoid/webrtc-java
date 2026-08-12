@@ -30,7 +30,7 @@ namespace jni
 			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionClass>(env);
 
 			JavaLocalRef<jstring> uri = JavaString::toJava(env, extension.uri);
-			jint id = static_cast<jint>(extension.id);
+			jint id = static_cast<jint>(extension.id.value());
 			jboolean encrypted = static_cast<jboolean>(extension.encrypt);
 
 			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get(), id, encrypted);
@@ -47,7 +47,7 @@ namespace jni
 
 			webrtc::RtpExtension extension;
 			extension.uri = JavaString::toNative(env, obj.getString(javaClass->uri));
-			extension.id = static_cast<int>(obj.getInt(javaClass->id));
+			extension.id = webrtc::RtpHeaderExtensionId(obj.getInt(javaClass->id));
 			extension.encrypt = static_cast<bool>(obj.getBoolean(javaClass->encrypted));
 
 			return extension;
