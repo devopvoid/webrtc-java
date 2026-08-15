@@ -19,6 +19,7 @@
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "modules/desktop_capture/desktop_capture_options.h"
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
+#include "rtc_base/logging.h"
 
 namespace jni
 {
@@ -36,14 +37,22 @@ namespace jni
 		options.set_allow_directx_capturer(true);
 #endif
 
-		if (screenCapturer) {
-			capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(
-				webrtc::DesktopCapturer::CreateScreenCapturer(options), options);
+		std::unique_ptr<webrtc::DesktopCapturer> inner = screenCapturer
+			? webrtc::DesktopCapturer::CreateScreenCapturer(options)
+			: webrtc::DesktopCapturer::CreateWindowCapturer(options);
+
+		if (!inner) {
+			RTC_LOG(LS_ERROR) << (screenCapturer
+				? "DesktopCapturer: CreateScreenCapturer returned null. "
+				  "Possible causes: missing X11/XDAMAGE extension, Wayland "
+				  "session without PipeWire support, or snap confinement."
+				: "DesktopCapturer: CreateWindowCapturer returned null. "
+				  "Possible causes: missing X11/XFIXES extension or snap confinement.");
+			// Leave capturer as nullptr; callers check via GetSourceList returning false.
+			return;
 		}
-		else {
-			capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(
-				webrtc::DesktopCapturer::CreateWindowCapturer(options), options);
-		}
+
+		capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(std::move(inner), options);
 	}
 
 	DesktopCapturer::~DesktopCapturer()
@@ -53,6 +62,8 @@ namespace jni
 
 	void DesktopCapturer::Start(webrtc::DesktopCapturer::Callback * callback)
 	{
+		if (!capturer) return;
+
 		capturer->Start(callback);
 
 		if (focusSelectedSource) {
@@ -62,16 +73,20 @@ namespace jni
 
 	void DesktopCapturer::SetMaxFrameRate(uint32_t max_frame_rate)
 	{
+		if (!capturer) return;
 		capturer->SetMaxFrameRate(max_frame_rate);
 	}
 
 	void DesktopCapturer::SetSharedMemoryFactory(std::unique_ptr<webrtc::SharedMemoryFactory> factory)
 	{
+		if (!capturer) return;
 		capturer->SetSharedMemoryFactory(std::move(factory));
 	}
 
 	void DesktopCapturer::CaptureFrame()
 	{
+		if (!capturer) return;
+
 #if defined(WEBRTC_MAC)
 		CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
 #endif
@@ -81,21 +96,25 @@ namespace jni
 
 	void DesktopCapturer::SetExcludedWindow(webrtc::WindowId window)
 	{
+		if (!capturer) return;
 		capturer->SetExcludedWindow(window);
 	}
 
 	bool DesktopCapturer::GetSourceList(webrtc::DesktopCapturer::SourceList * sources)
 	{
+		if (!capturer) return false;
 		return capturer->GetSourceList(sources);
 	}
 
 	bool DesktopCapturer::SelectSource(webrtc::DesktopCapturer::SourceId id)
 	{
+		if (!capturer) return false;
 		return capturer->SelectSource(id);
 	}
 
 	bool DesktopCapturer::FocusOnSelectedSource()
 	{
+		if (!capturer) return false;
 		return capturer->FocusOnSelectedSource();
 	}
 
@@ -106,6 +125,7 @@ namespace jni
 
 	bool DesktopCapturer::IsOccluded(const webrtc::DesktopVector & pos)
 	{
+		if (!capturer) return false;
 		return capturer->IsOccluded(pos);
 	}
 }
