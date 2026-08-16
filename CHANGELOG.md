@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2026-08-16
+
+### Features
+- Bridge OnIceSelectedCandidatePairChanged to Java observers by @SendableMetatype in [#247](https://github.com/devopvoid/webrtc-java/pull/247)
+- Add asynchronous sendAsync to RTCDataChannel by @SendableMetatype in [#246](https://github.com/devopvoid/webrtc-java/pull/246)
+- Device transport and form factor types by @Stasyanych in [#203](https://github.com/devopvoid/webrtc-java/pull/203)
+- Add funding information to support development by @devopvoid
+- Add legacy AGC1 and update AGC2 in the AudioProcessingConfig by @devopvoid in [#205](https://github.com/devopvoid/webrtc-java/pull/205)
+
+### Bug Fixes
+- Honor the buffer window in every send path by @SendableMetatype in [#245](https://github.com/devopvoid/webrtc-java/pull/245)
+- Add OnBufferedAmountChange callback to RTCDataChannelObserver by @devopvoid in [#206](https://github.com/devopvoid/webrtc-java/pull/206)
+
+### Documentation
+- Add sponsorship link to index page by @devopvoid
+- Recreated using VitePress by @devopvoid in [#210](https://github.com/devopvoid/webrtc-java/pull/210)
+- Add notes on native library classifiers for webrtc-java by @devopvoid
+- Reorganize guide links by @devopvoid
+
+### Testing
+- Buffer trickled candidates until both descriptions are applied by @SendableMetatype in [#256](https://github.com/devopvoid/webrtc-java/pull/256)
+
+### Other
+- Update versions of dependencies and plugins by @devopvoid in [#257](https://github.com/devopvoid/webrtc-java/pull/257)
+- Fix/linux desktop capturer x11 abi by @Isacco-B in [#236](https://github.com/devopvoid/webrtc-java/pull/236)
+- Update WebRTC branch version from 7339 to 7977 (m152) by @SendableMetatype in [#249](https://github.com/devopvoid/webrtc-java/pull/249)
+- Derive the WebRTC cache branch from the pom and guard deploys by @SendableMetatype in [#248](https://github.com/devopvoid/webrtc-java/pull/248)
+- Fix headless ADM playout drift below 100 Hz by @jonathannaguin in [#244](https://github.com/devopvoid/webrtc-java/pull/244)
+- Bump org.eclipse.jetty:jetty-server in /webrtc-examples by @dependabot[bot] in [#255](https://github.com/devopvoid/webrtc-java/pull/255)
+- Bump com.fasterxml.jackson.core:jackson-databind by @dependabot[bot] in [#254](https://github.com/devopvoid/webrtc-java/pull/254)
+- Bump picomatch from 4.0.3 to 4.0.5 in /docs by @dependabot[bot] in [#253](https://github.com/devopvoid/webrtc-java/pull/253)
+- Merge pull request #241 by @Stasyanych in [#241](https://github.com/devopvoid/webrtc-java/pull/241)
+- Bump rollup from 4.50.0 to 4.59.0 in /docs by @dependabot[bot] in [#235](https://github.com/devopvoid/webrtc-java/pull/235)
+- Bump vite from 7.1.11 to 7.3.6 in /docs by @dependabot[bot] in [#252](https://github.com/devopvoid/webrtc-java/pull/252)
+- Merge pull request #231 by @westernbear in [#231](https://github.com/devopvoid/webrtc-java/pull/231)
+- Bump postcss from 8.5.6 to 8.5.26 in /docs by @dependabot[bot] in [#251](https://github.com/devopvoid/webrtc-java/pull/251)
+- Bump org.eclipse.jetty:jetty-util in /webrtc-examples by @dependabot[bot] in [#250](https://github.com/devopvoid/webrtc-java/pull/250)
+- Updates all checkout GitHub Actions to v6 by @maxkratz in [#226](https://github.com/devopvoid/webrtc-java/pull/226)
+- Bump mdast-util-to-hast from 13.2.0 to 13.2.1 in /docs by @dependabot[bot] in [#230](https://github.com/devopvoid/webrtc-java/pull/230)
+- Bump vite from 7.1.5 to 7.1.11 in /docs by @dependabot[bot] in [#218](https://github.com/devopvoid/webrtc-java/pull/218)
+- Update WebRTC branch version from 7204 to 7339 (m140) by @devopvoid
+- Bump vite from 7.1.4 to 7.1.5 in /docs by @dependabot[bot] in [#211](https://github.com/devopvoid/webrtc-java/pull/211)
+- Prepare for next development iteration by @devopvoid
+
+## New Contributors
+* @Isacco-B made their first contribution in [#236](https://github.com/devopvoid/webrtc-java/pull/236)
+* @SendableMetatype made their first contribution in [#249](https://github.com/devopvoid/webrtc-java/pull/249)
+* @jonathannaguin made their first contribution in [#244](https://github.com/devopvoid/webrtc-java/pull/244)
+* @dependabot[bot] made their first contribution in [#255](https://github.com/devopvoid/webrtc-java/pull/255)
+* @Stasyanych made their first contribution in [#241](https://github.com/devopvoid/webrtc-java/pull/241)
+* @westernbear made their first contribution in [#231](https://github.com/devopvoid/webrtc-java/pull/231)
+
 ## [0.14.0] - 2025-08-28
 
 ### Features
@@ -42,15 +94,18 @@ All notable changes to this project will be documented in this file.
 - Update CHANGELOG.md by @devopvoid
 
 ### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.14.0 by @github-actions[bot]
 - Add custom video source and generator to the web example by @devopvoid
 
 ### Other
+- Prepare release v0.14.0 by @devopvoid
 - Update release workflow to use main branch by @devopvoid
 - Update GitHub Actions workflows to use changelog generation by @devopvoid
 - Update all GitHub Actions setup-java to v5 by @maxkratz in [#200](https://github.com/devopvoid/webrtc-java/pull/200)
 - Prepare for next development iteration by @devopvoid
 
 ## New Contributors
+* @github-actions[bot] made their first contribution
 * @maxkratz made their first contribution in [#200](https://github.com/devopvoid/webrtc-java/pull/200)
 * @SnirDecartAI made their first contribution in [#194](https://github.com/devopvoid/webrtc-java/pull/194)
 
@@ -425,23 +480,23 @@ All notable changes to this project will be documented in this file.
 - Update README.md by @devopvoid
 - Update README.md by @devopvoid
 - Mac visibility compiler flags by @devopvoid
-- Removed unnecessary includes
+- Removed unnecessary includes by @lectureStudio
 - Fixed and improved CMake builds by @devopvoid
 - Updated JUnit version to 5.5.2 by @devopvoid
 - Improved test cases by @devopvoid
-- Fixed non-Windows build
-- Prepare for next development iteration
+- Fixed non-Windows build by @lectureStudio
+- Prepare for next development iteration by @lectureStudio
 
 
 ## [0.1.0] - 2019-12-22
 
 ### Other
-- Prepare release webrtc-java-0.1.0
-- Minor changes to the NOTICE and parent POM
+- Prepare release webrtc-java-0.1.0 by @lectureStudio
+- Minor changes to the NOTICE and parent POM by @lectureStudio
 - Initial commit by @devopvoid
 
 ## New Contributors
-* @ made their first contribution
+* @lectureStudio made their first contribution
 * @devopvoid made their first contribution
 
 
