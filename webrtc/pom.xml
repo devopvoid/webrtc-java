@@ -16,24 +16,6 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-antrun-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>attach-artifact</id>
-						<phase>package</phase>
-						<goals>
-							<goal>run</goal>
-						</goals>
-						<configuration>
-							<target>
-								<attachartifact file="../webrtc-jni/target/${project.name}-${project.version}-${platform.classifier}.jar" classifier="${platform.classifier}" />
-							</target>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<argLine>
@@ -47,6 +29,112 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!--
+			Default: attach the native library jar that webrtc-jni has just built for
+			the host platform. Active unless "natives.dir" is set, so local builds and
+			the per-platform CI builds behave as they always have.
+		-->
+		<profile>
+			<id>attach-native-host</id>
+			<activation>
+				<property>
+					<name>!natives.dir</name>
+				</property>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-antrun-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>attach-artifact</id>
+								<phase>package</phase>
+								<goals>
+									<goal>run</goal>
+								</goals>
+								<configuration>
+									<target>
+										<attachartifact file="../webrtc-jni/target/${project.name}-${project.version}-${platform.classifier}.jar" classifier="${platform.classifier}" />
+									</target>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!--
+			Release: attach the native library jars of all supported platforms, which
+			the release workflow has collected into "natives.dir" from the per-platform
+			build jobs. Maven Central publishes a version as one atomic bundle, hence
+			all classifiers must be attached to a single deployment.
+
+			Run with: mvn deploy -pl .,webrtc -Prelease -Dnatives.dir=/abs/path
+		-->
+		<profile>
+			<id>attach-natives-all</id>
+			<activation>
+				<property>
+					<name>natives.dir</name>
+				</property>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>build-helper-maven-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>attach-natives</id>
+								<phase>package</phase>
+								<goals>
+									<goal>attach-artifact</goal>
+								</goals>
+								<configuration>
+									<artifacts>
+										<artifact>
+											<file>${natives.dir}/${project.name}-${project.version}-windows-x86_64.jar</file>
+											<type>jar</type>
+											<classifier>windows-x86_64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.name}-${project.version}-linux-x86_64.jar</file>
+											<type>jar</type>
+											<classifier>linux-x86_64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.name}-${project.version}-linux-aarch64.jar</file>
+											<type>jar</type>
+											<classifier>linux-aarch64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.name}-${project.version}-linux-aarch32.jar</file>
+											<type>jar</type>
+											<classifier>linux-aarch32</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.name}-${project.version}-macos-x86_64.jar</file>
+											<type>jar</type>
+											<classifier>macos-x86_64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.name}-${project.version}-macos-aarch64.jar</file>
+											<type>jar</type>
+											<classifier>macos-aarch64</classifier>
+										</artifact>
+									</artifacts>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 
 	<dependencies>
 		<dependency>
