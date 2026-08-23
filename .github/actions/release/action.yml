@@ -63,4 +63,5 @@ runs:
         name: natives-${{ inputs.platform-name }}
         path: webrtc-jni/target/webrtc-java-*.jar
         if-no-files-found: error
-        retention-days: 1
+        retention-days: 7
+        overwrite: true
