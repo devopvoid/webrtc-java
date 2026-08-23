@@ -258,6 +258,12 @@ jobs:
   publish-central:
     name: Publish to Maven Central
     needs: [build-windows, build-linux, build-macos]
+    permissions:
+      contents: read
+      actions: read
+    env:
+      # Single source of truth for the platforms a release must contain.
+      CLASSIFIERS: "windows-x86_64 linux-x86_64 linux-aarch64 linux-aarch32 macos-x86_64 macos-aarch64"
     outputs:
       release_body: ${{ needs.build-windows.outputs.release_body }}
       release_version: ${{ needs.build-windows.outputs.release_version }}
@@ -309,20 +315,59 @@ jobs:
           path: natives
           merge-multiple: true
 
-      - name: Verify that every platform is present
+      # download-artifact covers the current run *and its earlier attempts*, so
+      # after "Re-run failed jobs" the jars built in attempt 1 are normally still
+      # there. Should any be missing anyway, fall back to the REST API, which is
+      # scoped to the run rather than to a single attempt.
+      - name: Recover missing native library jars from earlier attempts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           version="${{ steps.release-version.outputs.version }}"
-          status=0
+          missing=()
 
-          for classifier in windows-x86_64 linux-x86_64 linux-aarch64 \
-                            linux-aarch32 macos-x86_64 macos-aarch64; do
+          for classifier in $CLASSIFIERS; do
             if [ ! -f "natives/webrtc-java-$version-$classifier.jar" ]; then
-              echo "::error::Missing native library jar for $classifier"
-              status=1
+              missing+=("$classifier")
             fi
           done
 
-          exit $status
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "All platforms present, nothing to recover."
+            exit 0
+          fi
+
+          echo "Missing after download: ${missing[*]}"
+          echo "Retrying via the artifact list of run ${{ github.run_id }}."
+
+          mkdir -p recovered natives
+          gh run download "${{ github.run_id }}" --pattern 'natives-*' --dir recovered || true
+          find recovered -name '*.jar' -exec cp -n {} natives/ ';'
+          rm -rf recovered
+
+      # The build jobs run with fail-fast disabled, so a partial matrix result must
+      # not turn into an incomplete release: a published version is immutable, and
+      # the missing classifiers could not be added to it afterwards.
+      - name: Verify that every platform is present
+        run: |
+          version="${{ steps.release-version.outputs.version }}"
+          missing=()
+
+          for classifier in $CLASSIFIERS; do
+            if [ -f "natives/webrtc-java-$version-$classifier.jar" ]; then
+              echo "  ok       $classifier"
+            else
+              echo "  MISSING  $classifier"
+              missing+=("$classifier")
+            fi
+          done
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Incomplete native library set on attempt ${{ github.run_attempt }} (missing: ${missing[*]}). Nothing was published. Use \"Re-run failed jobs\": the rebuilt jars join the ones already built, they do not replace them."
+            exit 1
+          fi
+
+          echo "Complete set for version $version."
 
       # The webrtc module depends on its own native library jar for the host
       # platform. That dependency is normally installed by webrtc-jni, which is kept
@@ -359,14 +404,16 @@ jobs:
       - name: Summarize what would have been published
         if: ${{ inputs.dryRun }}
         run: |
+          version="${{ steps.release-version.outputs.version }}"
+
           {
-            echo "## Dry run — nothing was published"
+            echo "## Dry run -- nothing was published"
             echo
-            echo "Version: \`${{ steps.release-version.outputs.version }}\`"
+            echo "Version: \`$version\`"
             echo
             echo "Artifacts destined for the deployment bundle:"
             echo '```'
-            ls -1 webrtc/target/*.jar webrtc/target/*.asc natives/*.asc 2>/dev/null || true
+            find natives target webrtc/target -type f \( -name "*$version*.jar" -o -name "*$version*.pom" -o -name "*$version*.asc" \) | sort
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -377,10 +424,12 @@ jobs:
           name: deployment-bundle-dry-run
           path: |
             target/central-*/**
+            target/*.pom.asc
             webrtc/target/central-*/**
             webrtc/target/*.jar
+            webrtc/target/*.pom
             webrtc/target/*.asc
-            natives/*.asc
+            webrtc/target/gpg/**
           if-no-files-found: warn
           retention-days: 7
 
