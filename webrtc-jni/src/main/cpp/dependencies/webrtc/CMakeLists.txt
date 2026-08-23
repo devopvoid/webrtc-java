@@ -209,10 +209,24 @@ elseif(LINUX)
     # Find DBus
     find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
     pkg_check_modules(DBUS REQUIRED dbus-1)
+    # Wayland/PipeWire desktop capture: libwebrtc.a references gio, gbm and libdrm
+    # symbols directly (libpipewire, libEGL and libGL are dlopen'd at runtime, so
+    # they are NOT link dependencies). WEBRTC_USE_PIPEWIRE / WEBRTC_USE_GIO must
+    # match the gn build (rtc_use_pipewire=true) — DesktopCaptureOptions has
+    # members guarded by WEBRTC_USE_PIPEWIRE, so compiling the JNI wrapper without
+    # it would change the struct layout and crash (same ABI bug WEBRTC_USE_X11 fixed).
+    pkg_check_modules(GIO REQUIRED gio-2.0 gio-unix-2.0)
+    pkg_check_modules(GBM REQUIRED gbm)
+    pkg_check_modules(DRM REQUIRED libdrm)
 
-    target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS})
-    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX WEBRTC_USE_H264 WEBRTC_USE_X11)
-    target_link_libraries(${PROJECT_NAME} X11 Xfixes Xrandr Xcomposite dbus-1)
+    # GIO include dirs: with WEBRTC_USE_PIPEWIRE defined, desktop_capturer.h ->
+    # desktop_capture_metadata.h -> xdg_session_details.h includes <gio/gio.h>,
+    # so the JNI wrapper compile needs the glib headers too. (No pipewire headers
+    # are needed — nothing the JNI includes reaches them, and the runner has no
+    # libpipewire dev package.)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS} ${GIO_INCLUDE_DIRS})
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX WEBRTC_USE_H264 WEBRTC_USE_X11 WEBRTC_USE_PIPEWIRE WEBRTC_USE_GIO)
+    target_link_libraries(${PROJECT_NAME} X11 Xext Xfixes Xdamage Xtst Xrandr Xcomposite dbus-1 ${GIO_LIBRARIES} ${GBM_LIBRARIES} ${DRM_LIBRARIES})
 elseif(WIN32)
     target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN WEBRTC_USE_H264 NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
     target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
@@ -311,11 +325,29 @@ symbol_level=0")
 if(APPLE)
     set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
 elseif(LINUX)
+    # Build the PipeWire/xdg-desktop-portal capturer for Wayland sessions. The
+    # X11 capturer stays in as well; WebRTC picks PipeWire at runtime only when
+    # IsRunningUnderWayland() is true. rtc_link_pipewire stays false (default),
+    # so libpipewire is dlopen'd and X11-only systems gain no hard dependency.
+    string(REPLACE "rtc_use_pipewire=false" "rtc_use_pipewire=true" COMPILE_ARGS "${COMPILE_ARGS}")
+
     if(${TARGET_CPU} STREQUAL "arm")
         set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
     elseif(${TARGET_CPU} STREQUAL "arm64")
         set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm64\"")
     endif()
+endif()
+
+if(LINUX)
+    # The sysroot pkg-config environment exported for the JNI configure step
+    # (PKG_CONFIG_SYSROOT_DIR/PKG_CONFIG_PATH in cpp/CMakeLists.txt) must not
+    # leak into gn/ninja: Chromium's pkg-config wrapper applies the gn sysroot
+    # itself, so a leaked PKG_CONFIG_SYSROOT_DIR double-prefixes every include
+    # path (build/linux/<sysroot>/opt/sysroot/<sysroot>/usr/include/...) and
+    # the gio/pipewire headers of the portal capturer are not found. All
+    # pkg_check_modules() calls above have already run at this point.
+    unset(ENV{PKG_CONFIG_SYSROOT_DIR})
+    unset(ENV{PKG_CONFIG_PATH})
 endif()
 
 execute_command(

@@ -1,0 +1,16 @@
+--- a/modules/desktop_capture/linux/wayland/screencast_stream_utils.cc
++++ b/modules/desktop_capture/linux/wayland/screencast_stream_utils.cc
+@@ -113,5 +113,13 @@
+     if (render_device) {
+       auto modifiers = render_device->QueryDmaBufModifiers(format);
+ 
++      // Force SHM (shared-memory) buffers instead of DMA-BUF. On several
++      // GPU/driver combos under Wayland the compositor delivers every screen
++      // frame as a DMA-BUF flagged SPA_META_HEADER_FLAG_CORRUPTED, which WebRTC
++      // drops (see SharedScreenCastStreamPrivate::OnStreamProcess), leaving the
++      // screen share entirely empty. Clearing modifiers advertises SHM-only,
++      // and the CPU copy path always works.
++      modifiers.clear();
++
+       if (modifiers.size()) {
+         if (modifiers.size() == 1 && modifiers[0] == DRM_FORMAT_MOD_INVALID) {
