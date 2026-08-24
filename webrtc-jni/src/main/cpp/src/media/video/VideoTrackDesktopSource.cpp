@@ -251,6 +251,14 @@ namespace jni
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
 #endif
+#if defined(WEBRTC_USE_PIPEWIRE)
+		// Wayland: route capture through the PipeWire/xdg-desktop-portal backend.
+		// Only takes effect when IsRunningUnderWayland(); X11 sessions keep the
+		// X11 capturer. The portal delivers frames with the cursor already
+		// composited, so prefer it over DesktopAndCursorComposer's software cursor.
+		options.set_allow_pipewire(true);
+		options.set_prefer_cursor_embedded(true);
+#endif
 
 		std::unique_ptr<webrtc::DesktopCapturer> capturer;
 
