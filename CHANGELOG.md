@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.1] - 2026-08-24
+
+### Other
+- Add Wayland/PipeWire desktop capture support by @B077AS in [#261](https://github.com/devopvoid/webrtc-java/pull/261)
+- Improve release workflow reliability and artifact management by @devopvoid in [#260](https://github.com/devopvoid/webrtc-java/pull/260)
+- Refactor release workflows and setup for multi-platform deployment by @devopvoid in [#259](https://github.com/devopvoid/webrtc-java/pull/259)
+- Prepare for next development iteration by @devopvoid
+
+## New Contributors
+* @B077AS made their first contribution in [#261](https://github.com/devopvoid/webrtc-java/pull/261)
+
 ## [0.15.0] - 2026-08-16
 
 ### Features
@@ -24,7 +35,11 @@ All notable changes to this project will be documented in this file.
 ### Testing
 - Buffer trickled candidates until both descriptions are applied by @SendableMetatype in [#256](https://github.com/devopvoid/webrtc-java/pull/256)
 
+### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.15.0 by @github-actions[bot]
+
 ### Other
+- Prepare release v0.15.0 by @devopvoid
 - Update versions of dependencies and plugins by @devopvoid in [#257](https://github.com/devopvoid/webrtc-java/pull/257)
 - Fix/linux desktop capturer x11 abi by @Isacco-B in [#236](https://github.com/devopvoid/webrtc-java/pull/236)
 - Update WebRTC branch version from 7339 to 7977 (m152) by @SendableMetatype in [#249](https://github.com/devopvoid/webrtc-java/pull/249)
