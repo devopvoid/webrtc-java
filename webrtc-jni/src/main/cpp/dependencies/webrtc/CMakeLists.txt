@@ -228,7 +228,15 @@ elseif(LINUX)
     target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX WEBRTC_USE_H264 WEBRTC_USE_X11 WEBRTC_USE_PIPEWIRE WEBRTC_USE_GIO)
     target_link_libraries(${PROJECT_NAME} X11 Xext Xfixes Xdamage Xtst Xrandr Xcomposite dbus-1 ${GIO_LIBRARIES} ${GBM_LIBRARIES} ${DRM_LIBRARIES})
 elseif(WIN32)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN WEBRTC_USE_H264 NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG)
+    # RTC_ENABLE_WIN_WGC must match the gn build: webrtc.lib is compiled with gn's
+    # default rtc_enable_win_wgc=true (webrtc.gni: "rtc_enable_win_wgc = is_win"),
+    # and DesktopCaptureOptions has members guarded by that define. Compiling the
+    # JNI wrapper without it changes the class layout and size (64 vs 80 bytes as
+    # of branch-heads/7977) — the out-of-line CreateDefault()/copy constructor in
+    # the lib then overflow the wrapper's smaller stack slot and every member
+    # after the guarded block is read at wrong offsets, silently breaking desktop
+    # capture (same ABI bug WEBRTC_USE_X11 fixed on Linux).
+    target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_WIN WEBRTC_USE_H264 NOMINMAX WIN32_LEAN_AND_MEAN NDEBUG RTC_ENABLE_WIN_WGC)
     target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
 endif()
 

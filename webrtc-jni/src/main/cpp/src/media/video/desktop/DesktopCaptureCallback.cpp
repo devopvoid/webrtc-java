@@ -44,6 +44,11 @@ namespace jni
 		JNIEnv * env = AttachCurrentThread();
 
 		if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
+			// Propagate the failure to Java instead of silently dropping it —
+			// callers waiting for a frame otherwise have to rely on timeouts.
+			auto jerror = JavaEnums::toJava(env, result);
+			env->CallVoidMethod(callback, javaClass->onCaptureResult, jerror.get(), nullptr);
+			ExceptionCheck(env);
 			return;
 		}
 
@@ -83,7 +88,13 @@ namespace jni
 			i420Buffer->MutableDataU(), i420Buffer->StrideU(),
 			i420Buffer->MutableDataV(), i420Buffer->StrideV(),
 			crop_x, crop_y,
-			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, i420Buffer->height(), crop_w, crop_h,
+			// (src_width, src_height) must describe the FULL source frame, not the cropped
+			// output. Passing i420Buffer->height() (== crop_h) here made libyuv's internal
+			// bounds check (crop_y + crop_height <= src_height) fail with -1 whenever
+			// crop_y > 0 — i.e. for every maximized window, whose frame sits at
+			// top_left().y() == -border. Screen frames never hit this branch (exact stride,
+			// fullscreen == true), which is why only window capture appeared broken.
+			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, height, crop_w, crop_h,
 			libyuv::kRotate0,
 			libyuv::FOURCC_ARGB);
 
