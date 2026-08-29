@@ -194,7 +194,13 @@ namespace jni
 			buffer->MutableDataU(), buffer->StrideU(),
 			buffer->MutableDataV(), buffer->StrideV(),
 			crop_x, crop_y,
-			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, buffer->height(), crop_w, crop_h,
+			// (src_width, src_height) must describe the FULL source frame, not the cropped
+			// output. Passing buffer->height() (== crop_h) here made libyuv's internal
+			// bounds check (crop_y + crop_height <= src_height) fail with -1 whenever
+			// crop_y > 0 — i.e. for every maximized window, whose frame sits at
+			// top_left().y() == -border. Screen frames never hit this branch (exact stride,
+			// fullscreen == true), which is why only window capture appeared broken.
+			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, height, crop_w, crop_h,
 			libyuv::kRotate0,
 			libyuv::FOURCC_ARGB);
 
