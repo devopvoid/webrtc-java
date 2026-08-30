@@ -266,18 +266,27 @@ namespace jni
 		options.set_prefer_cursor_embedded(true);
 #endif
 
-		std::unique_ptr<webrtc::DesktopCapturer> capturer;
+		std::unique_ptr<webrtc::DesktopCapturer> inner;
 
-		if (sourceIsWindow) {
-			capturer.reset(new webrtc::DesktopAndCursorComposer(
-				webrtc::DesktopCapturer::CreateWindowCapturer(options),
-				options));
+#if defined(WEBRTC_USE_PIPEWIRE)
+		// Wayland: request "any screen content" so the xdg-desktop-portal picker
+		// offers both monitors and application windows in a single dialog (the
+		// same CaptureType::kAnyScreenContent Chromium uses for getDisplayMedia).
+		// CreateGenericCapturer returns null when not running under Wayland or
+		// when PipeWire is disallowed, in which case we fall back to the
+		// type-specific capturers below. The portal handles the actual source
+		// selection, so sourceIsWindow is irrelevant on this path.
+		inner = webrtc::DesktopCapturer::CreateGenericCapturer(options);
+#endif
+
+		if (!inner) {
+			inner = sourceIsWindow
+				? webrtc::DesktopCapturer::CreateWindowCapturer(options)
+				: webrtc::DesktopCapturer::CreateScreenCapturer(options);
 		}
-		else {
-			capturer.reset(new webrtc::DesktopAndCursorComposer(
-				webrtc::DesktopCapturer::CreateScreenCapturer(options),
-				options));
-		}
+
+		std::unique_ptr<webrtc::DesktopCapturer> capturer;
+		capturer.reset(new webrtc::DesktopAndCursorComposer(std::move(inner), options));
 
 		if (!capturer->SelectSource(sourceId)) {
 			terminate();
