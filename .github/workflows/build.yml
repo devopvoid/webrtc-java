@@ -48,6 +48,14 @@ jobs:
           maven-username: ${{ secrets.MAVEN_USERNAME }}
           maven-password: ${{ secrets.MAVEN_TOKEN }}
 
+      - name: Upload natives for native testing
+        if: matrix.platform.name == 'windows_arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: natives-${{ matrix.platform.name }}
+          path: webrtc-jni/target/webrtc-java-*.jar
+          if-no-files-found: error
+
   build-linux:
     strategy:
       fail-fast: false
@@ -126,11 +134,17 @@ jobs:
           maven-password: ${{ secrets.MAVEN_TOKEN }}
 
   test-natives:
-    needs: build-linux
+    needs: [build-windows, build-linux]
     strategy:
       fail-fast: false
       matrix:
         platform:
+          - name: windows_arm64
+            runs-on: windows-11-arm
+            classifier: windows-aarch64
+            profile: windows-aarch64
+            java-distribution: microsoft
+            java-architecture: aarch64
           - name: linux_arm64
             runs-on: ubuntu-22.04-arm
             classifier: linux-aarch64
