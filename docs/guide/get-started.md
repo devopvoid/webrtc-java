@@ -44,6 +44,7 @@ If you encounter issues loading the native library "webrtc-java", you can declar
 
 Complete list of available classifiers:
 - windows-x86_64
+- windows-aarch64
 - macos-x86_64
 - macos-aarch64
 - linux-x86_64
@@ -93,6 +94,7 @@ For specific platforms, add the appropriate classifier:
 
 ```groovy
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "windows-x86_64"
+implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "windows-aarch64"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "macos-x86_64"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "macos-aarch64"
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "linux-x86_64"
