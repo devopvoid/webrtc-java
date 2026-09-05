@@ -139,6 +139,8 @@ jobs:
         platform:
           - name: windows_x86_64
             runs-on: windows-2022
+          - name: windows_arm64
+            runs-on: windows-2022
         java: [17]
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
@@ -314,7 +316,7 @@ jobs:
           version="${{ steps.release-version.outputs.version }}"
           status=0
 
-          for classifier in windows-x86_64 linux-x86_64 linux-aarch64 \
+          for classifier in windows-x86_64 windows-aarch64 linux-x86_64 linux-aarch64 \
                             linux-aarch32 macos-x86_64 macos-aarch64; do
             if [ ! -f "natives/webrtc-java-$version-$classifier.jar" ]; then
               echo "::error::Missing native library jar for $classifier"
