@@ -70,7 +70,11 @@ class RTCDtmfSenderTests extends TestBase {
         }
 
         boolean awaitCompletion() throws InterruptedException {
-            return completedLatch.await(1, TimeUnit.SECONDS);
+            // The longest sequence in these tests needs 720 ms of tone time,
+            // and timer scheduling plus the callback add about 240 ms, which
+            // leaves one second almost no margin. The latch returns when the
+            // sequence completes, so a five second bound costs nothing on a pass.
+            return completedLatch.await(5, TimeUnit.SECONDS);
         }
     }
 
