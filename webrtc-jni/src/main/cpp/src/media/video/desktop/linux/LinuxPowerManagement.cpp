@@ -15,6 +15,7 @@
  */
 
 #include "media/video/desktop/linux/LinuxPowerManagement.h"
+#include "media/video/desktop/linux/DBusLoader.h"
 
 #include <cstdio>
 #include <dbus/dbus.h>
@@ -31,19 +32,26 @@ namespace jni
 
 		void LinuxPowerManagement::enableUserActivity()
 		{
-			DBusError error;
-			dbus_error_init(&error);
-
-			DBusConnection * dbusConnection = dbus_bus_get(DBUS_BUS_SESSION, &error);
-
-			if (dbus_error_is_set(&error)) {
-				// throw
-				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot connect to session bus: " << error.message;
-				dbus_error_free(&error);
+			if (!DBusLoader::instance().load()) {
+				RTC_LOG(LS_WARNING) << "[PowerManagement] libdbus not found on system";
 				return;
 			}
 
-			if (dbus_bus_name_has_owner(dbusConnection, BUS_SERVICE_NAME, NULL)) {
+			auto & dbus = DBusLoader::instance();
+
+			DBusError error;
+			dbus.dbus_error_init(&error);
+
+			DBusConnection * dbusConnection = dbus.dbus_bus_get(DBUS_BUS_SESSION, &error);
+
+			if (dbus.dbus_error_is_set(&error)) {
+				// throw
+				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot connect to session bus: " << error.message;
+				dbus.dbus_error_free(&error);
+				return;
+			}
+
+			if (dbus.dbus_bus_name_has_owner(dbusConnection, BUS_SERVICE_NAME, NULL)) {
 				RTC_LOG(LS_INFO) << "[PowerManagement] Found service: " << BUS_SERVICE_NAME;
 			}
 			else {
@@ -52,7 +60,7 @@ namespace jni
 				return;
 			}
 
-			DBusMessage * message = dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
+			DBusMessage * message = dbus.dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
 				"Inhibit");
 
 			if (message == nullptr) {
@@ -60,44 +68,51 @@ namespace jni
 				return;
 			}
 
-			dbus_message_append_args(message, DBUS_TYPE_STRING, &appName, DBUS_TYPE_STRING, &reason, DBUS_TYPE_INVALID);
+			dbus.dbus_message_append_args(message, DBUS_TYPE_STRING, &appName, DBUS_TYPE_STRING, &reason, DBUS_TYPE_INVALID);
 
-			DBusMessage * reply = dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
-			dbus_message_unref(message);
+			DBusMessage * reply = dbus.dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
+			dbus.dbus_message_unref(message);
 
-			if (dbus_error_is_set(&error)) {
-				dbus_error_free(&error);
-				dbus_connection_unref(dbusConnection);
+			if (dbus.dbus_error_is_set(&error)) {
+				dbus.dbus_error_free(&error);
+				dbus.dbus_connection_unref(dbusConnection);
 				// throw
 				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot retrieve cookie";
 				return;
 			}
 
 			DBusMessageIter reply_iter;
-			dbus_message_iter_init(reply, &reply_iter);
-			dbus_message_iter_get_basic(&reply_iter, &dbusCookie);
+			dbus.dbus_message_iter_init(reply, &reply_iter);
+			dbus.dbus_message_iter_get_basic(&reply_iter, &dbusCookie);
 
 			RTC_LOG(LS_INFO) << "[PowerManagement] Acquired screensaver inhibition cookie";
 
-			dbus_message_unref(reply);
-			dbus_connection_unref(dbusConnection);
+			dbus.dbus_message_unref(reply);
+			dbus.dbus_connection_unref(dbusConnection);
 		}
 
 		void LinuxPowerManagement::disableUserActivity()
         {
-			DBusError error;
-			dbus_error_init(&error);
-
-			DBusConnection * dbusConnection = dbus_bus_get(DBUS_BUS_SESSION, &error);
-
-			if (dbus_error_is_set(&error)) {
-				// throw
-				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot connect to session bus: " << error.message;
-				dbus_error_free(&error);
+			if (!DBusLoader::instance().load()) {
+				RTC_LOG(LS_WARNING) << "[PowerManagement] libdbus not found on system";
 				return;
 			}
 
-			DBusMessage * message = dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
+			auto & dbus = DBusLoader::instance();
+
+			DBusError error;
+			dbus.dbus_error_init(&error);
+
+			DBusConnection * dbusConnection = dbus.dbus_bus_get(DBUS_BUS_SESSION, &error);
+
+			if (dbus.dbus_error_is_set(&error)) {
+				// throw
+				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot connect to session bus: " << error.message;
+				dbus.dbus_error_free(&error);
+				return;
+			}
+
+			DBusMessage * message = dbus.dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
 				"UnInhibit");
 
 			if (message == nullptr) {
@@ -105,24 +120,24 @@ namespace jni
 				return;
 			}
 
-			dbus_message_append_args(message, DBUS_TYPE_UINT32, &dbusCookie, DBUS_TYPE_INVALID);
+			dbus.dbus_message_append_args(message, DBUS_TYPE_UINT32, &dbusCookie, DBUS_TYPE_INVALID);
 
-			DBusMessage * reply = dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
-			dbus_message_unref(message);
+			DBusMessage * reply = dbus.dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
+			dbus.dbus_message_unref(message);
 
-			if (dbus_error_is_set(&error)) {
+			if (dbus.dbus_error_is_set(&error)) {
 				// throw
 				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot release cookie";
 
-				dbus_error_free(&error);
-				dbus_connection_unref(dbusConnection);
+				dbus.dbus_error_free(&error);
+				dbus.dbus_connection_unref(dbusConnection);
 				return;
 			}
 
 			RTC_LOG(LS_INFO) << "[PowerManagement] Released screensaver inhibition cookie";
 
-			dbus_message_unref(reply);
-			dbus_connection_unref(dbusConnection);
+			dbus.dbus_message_unref(reply);
+			dbus.dbus_connection_unref(dbusConnection);
         }
 	}
 }
