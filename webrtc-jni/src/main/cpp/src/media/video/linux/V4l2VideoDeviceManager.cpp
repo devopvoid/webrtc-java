@@ -15,6 +15,7 @@
  */
 
 #include "media/video/linux/V4l2VideoDeviceManager.h"
+#include "media/video/linux/UdevLoader.h"
 #include "Exception.h"
 
 #include "rtc_base/logging.h"
@@ -36,7 +37,13 @@ namespace jni
 	{
 		V4l2VideoDeviceManager::V4l2VideoDeviceManager()
 		{
-			udev = udev_new();
+			if (!UdevLoader::instance().load()) {
+				throw Exception("V4l2: libudev not found on system.");
+			}
+
+			auto & lib = UdevLoader::instance();
+
+			udev = lib.udev_new();
 
 			if (!udev) {
 				throw Exception("V4l2: Create udev failed");
@@ -62,7 +69,7 @@ namespace jni
 				}
 			}
 
-			udev_unref(udev);
+			UdevLoader::instance().udev_unref(udev);
 		}
 
 		std::set<VideoDevicePtr> V4l2VideoDeviceManager::getVideoCaptureDevices()
@@ -71,30 +78,32 @@ namespace jni
 				return captureDevices.devices();
 			}
 
-			udev_enumerate * enumerate = udev_enumerate_new(udev);
-			udev_enumerate_add_match_subsystem(enumerate, UDEV_SUBSYSTEM);
-			udev_enumerate_scan_devices(enumerate);
+			auto & lib = UdevLoader::instance();
 
-			udev_list_entry * udev_devices = udev_enumerate_get_list_entry(enumerate);
+			udev_enumerate * enumerate = lib.udev_enumerate_new(udev);
+			lib.udev_enumerate_add_match_subsystem(enumerate, UDEV_SUBSYSTEM);
+			lib.udev_enumerate_scan_devices(enumerate);
+
+			udev_list_entry * udev_devices = lib.udev_enumerate_get_list_entry(enumerate);
 			udev_list_entry * dev_list_entry;
 			v4l2_capability vcap;
 
-			udev_list_entry_foreach(dev_list_entry, udev_devices) {
-				const char * path = udev_list_entry_get_name(dev_list_entry);
+			for (dev_list_entry = udev_devices; dev_list_entry != nullptr; dev_list_entry = lib.udev_list_entry_get_next(dev_list_entry)) {
+				const char * path = lib.udev_list_entry_get_name(dev_list_entry);
 
 				if (!path) {
 					RTC_LOG(LS_ERROR) << "V4l2: Failed to get device sys path";
 					continue;
 				}
 
-				udev_device * dev = udev_device_new_from_syspath(udev, path);
+				udev_device * dev = lib.udev_device_new_from_syspath(udev, path);
 
 				if (!dev) {
 					RTC_LOG(LS_ERROR) << "V4l2: Failed to get device from sys path: " << path;
 					continue;
 				}
 
-				const char * node = udev_device_get_devnode(dev);
+				const char * node = lib.udev_device_get_devnode(dev);
 				bool error = false;
 
 				int v4l2_fd = open(node, O_RDONLY);
@@ -126,10 +135,10 @@ namespace jni
 					addDevice(name, node);
 				}
 
-				udev_device_unref(dev);
+				lib.udev_device_unref(dev);
 			}
 
-			udev_enumerate_unref(enumerate);
+			lib.udev_enumerate_unref(enumerate);
 
 			return captureDevices.devices();
 		}
@@ -203,39 +212,41 @@ namespace jni
 
 		void V4l2VideoDeviceManager::run()
 		{
-			udev_monitor * mon = udev_monitor_new_from_netlink(udev, "udev");
+			auto & lib = UdevLoader::instance();
+
+			udev_monitor * mon = lib.udev_monitor_new_from_netlink(udev, "udev");
 
 			if (!mon) {
 				RTC_LOG(LS_ERROR) << "V4l2: Failed to init udev monitor";
 				return;
 			}
 
-			udev_monitor_filter_add_match_subsystem_devtype(mon, UDEV_SUBSYSTEM, NULL);
-			udev_monitor_enable_receiving(mon);
+			lib.udev_monitor_filter_add_match_subsystem_devtype(mon, UDEV_SUBSYSTEM, NULL);
+			lib.udev_monitor_enable_receiving(mon);
 
 			pollfd items[1];
-			items[0].fd = udev_monitor_get_fd(mon);
+			items[0].fd = lib.udev_monitor_get_fd(mon);
 			items[0].events = POLLIN;
 
 			while (running) {
 				while (poll(items, 1, -1) > 0) {
-					udev_device * dev = udev_monitor_receive_device(mon);
+					udev_device * dev = lib.udev_monitor_receive_device(mon);
 
 					if (!dev) {
 						RTC_LOG(LS_ERROR) << "V4l2: No device received from udev monitor";
 						continue;
 					}
 
-					const char * subsystem = udev_device_get_subsystem(dev);
+					const char * subsystem = lib.udev_device_get_subsystem(dev);
 
 					if (strcmp(subsystem, UDEV_SUBSYSTEM) != 0) {
-						udev_device_unref(dev);
+						lib.udev_device_unref(dev);
 						continue;
 					}
 
-					const char * action = udev_device_get_action(dev);
-					const char * node = udev_device_get_devnode(dev);
-					const char * name = udev_device_get_property_value(dev, "ID_V4L_PRODUCT");
+					const char * action = lib.udev_device_get_action(dev);
+					const char * node = lib.udev_device_get_devnode(dev);
+					const char * name = lib.udev_device_get_property_value(dev, "ID_V4L_PRODUCT");
 
 					if (strcmp(action, UDEV_ADD) == 0 && checkDevice(node)) {
 						addDevice(name, node);
@@ -244,11 +255,11 @@ namespace jni
 						removeDevice(name, node);
 					}
 
-					udev_device_unref(dev);
+					lib.udev_device_unref(dev);
 				}
 			}
 
-			udev_monitor_unref(mon);
+			lib.udev_monitor_unref(mon);
 		}
 
 		void V4l2VideoDeviceManager::addDevice(const std::string & name, const std::string & descriptor)

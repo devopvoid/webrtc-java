@@ -113,7 +113,7 @@ if(APPLE)
 elseif(LINUX)
     set(CXX_LIBS "-static-libgcc -stdlib=libc++ -lc++ -lc++abi")
 
-    target_link_libraries(${PROJECT_NAME} ${CXX_LIBS} udev)
+    target_link_libraries(${PROJECT_NAME} ${CXX_LIBS})
     target_link_libraries(${PROJECT_NAME} dl)
 elseif(WIN32)
     target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
