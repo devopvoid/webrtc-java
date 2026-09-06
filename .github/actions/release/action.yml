@@ -44,13 +44,15 @@ runs:
           mvn package -DskipTests -Plinux-aarch32
         elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
           mvn package -DskipTests -Plinux-aarch64
+        elif [ "${{ inputs.platform-name }}" == "windows_arm64" ]; then
+          mvn package -DskipTests -Pwindows-aarch64
         else
           mvn package -DskipTests
         fi
       shell: bash
 
     - name: Test
-      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' }}
+      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' && inputs.platform-name != 'windows_arm64' }}
       run: mvn -B jar:jar surefire:test
       shell: bash
 

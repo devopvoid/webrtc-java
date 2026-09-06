@@ -283,6 +283,13 @@
 			</properties>
 		</profile>
 		<profile>
+			<id>windows-aarch64</id>
+			<properties>
+				<platform.classifier>windows-aarch64</platform.classifier>
+				<platform.module>webrtc.windows.aarch64</platform.module>
+			</properties>
+		</profile>
+		<profile>
 			<id>linux-x86_64</id>
 			<activation>
 				<os>

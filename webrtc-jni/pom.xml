@@ -216,5 +216,13 @@
 				<cmake.toolchain.file>toolchain/x86_64-macos-cross.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
+		<profile>
+			<id>windows-aarch64</id>
+			<properties>
+				<cmake.options>-AARM64</cmake.options>
+				<cmake.config>${cmake.build.type}</cmake.config>
+				<cmake.toolchain.file>toolchain/aarch64-windows-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
 	</profiles>
 </project>

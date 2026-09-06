@@ -102,6 +102,11 @@
 											<classifier>windows-x86_64</classifier>
 										</artifact>
 										<artifact>
+											<file>${natives.dir}/${project.name}-${project.version}-windows-aarch64.jar</file>
+											<type>jar</type>
+											<classifier>windows-aarch64</classifier>
+										</artifact>
+										<artifact>
 											<file>${natives.dir}/${project.name}-${project.version}-linux-x86_64.jar</file>
 											<type>jar</type>
 											<classifier>linux-x86_64</classifier>
