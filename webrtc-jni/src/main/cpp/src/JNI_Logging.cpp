@@ -23,7 +23,38 @@
 
 #include "rtc_base/logging.h"
 
+#include <cstdio>
 #include <memory>
+#include <mutex>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+namespace
+{
+	// libwebrtc no longer lets LogMessage::LogToDebug change the severity of its
+	// own debug output after the logging configuration is initialized. A sink
+	// registered with AddLogToStream can be added and removed at any time, so
+	// logToDebug is implemented with one that writes where libwebrtc used to:
+	// the debugger output on Windows and stderr everywhere.
+	class DebugLogSink : public webrtc::LogSink
+	{
+		public:
+			void OnLogMessage(const std::string & message) override
+			{
+#ifdef _WIN32
+				OutputDebugStringA(message.c_str());
+#endif
+				fputs(message.c_str(), stderr);
+				fflush(stderr);
+			}
+	};
+
+	DebugLogSink debugLogSink;
+	bool debugLogSinkAttached = false;
+	std::mutex debugLogSinkMutex;
+}
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_addLogSink
 (JNIEnv * env, jclass caller, jobject jseverity, jobject jsink)
@@ -53,8 +84,22 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logToDebug
 {
 	int rtcSeverity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
 
-	if (rtcSeverity >= webrtc::LS_VERBOSE && rtcSeverity <= webrtc::LS_NONE) {
-		webrtc::LogMessage::LogToDebug(static_cast<webrtc::LoggingSeverity>(rtcSeverity));
+	if (rtcSeverity < webrtc::LS_VERBOSE || rtcSeverity > webrtc::LS_NONE) {
+		return;
+	}
+
+	auto severity = static_cast<webrtc::LoggingSeverity>(rtcSeverity);
+
+	std::lock_guard<std::mutex> lock(debugLogSinkMutex);
+
+	if (debugLogSinkAttached) {
+		webrtc::LogMessage::RemoveLogToStream(&debugLogSink);
+		debugLogSinkAttached = false;
+	}
+
+	if (severity != webrtc::LS_NONE) {
+		webrtc::LogMessage::AddLogToStream(&debugLogSink, severity);
+		debugLogSinkAttached = true;
 	}
 }
 

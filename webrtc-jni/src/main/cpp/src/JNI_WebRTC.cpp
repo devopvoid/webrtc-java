@@ -19,6 +19,8 @@
 #include "JavaUtils.h"
 #include "WebRTCContext.h"
 
+#include "rtc_base/logging.h"
+
 #include <jni.h>
 
 jni::JavaContext * javaContext = nullptr;
@@ -30,6 +32,16 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM * vm, void * reserved)
 	if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) {
 		return -1;
 	}
+
+	// libwebrtc initializes its logging configuration on the first log line,
+	// with everything from LS_INFO upwards written to stderr, and the
+	// configuration can be set only once. Initialize it here, before anything
+	// can log, so nothing is written unless the application asks for it through
+	// Logging.logToDebug or a log sink.
+	webrtc::LoggingConfig loggingConfig;
+	loggingConfig.set_min_severity(webrtc::LS_NONE);
+	loggingConfig.set_debug_severity(webrtc::LS_NONE);
+	webrtc::InitializeLogging(std::move(loggingConfig));
 
 	javaContext = new jni::WebRTCContext(vm);
 
