@@ -31,6 +31,9 @@ namespace jni
 		const jboolean isBinary = static_cast<jboolean>(dataBuffer->binary);
 
 		jobject object = env->NewObject(javaClass, javaCtor, directBuffer, isBinary);
+
+		env->DeleteLocalRef(directBuffer);
+
 		ExceptionCheck(env);
 
 		return JavaLocalRef<jobject>(env, object);

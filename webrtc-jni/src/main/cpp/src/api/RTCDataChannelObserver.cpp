@@ -43,7 +43,7 @@ namespace jni
 
 		JavaLocalRef<jobject> jBuffer = bufferFactory->create(env, &buffer);
 
-		env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.release());
+		env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.get());
 
 		ExceptionCheck(env);
 	}
