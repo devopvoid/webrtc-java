@@ -28,7 +28,9 @@
 #include "JavaRef.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "WebRTCContext.h"
 
+#include "api/audio/create_audio_device_module.h"
 #include "api/create_peerconnection_factory.h"
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
@@ -88,6 +90,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			: nullptr;
 		webrtc::scoped_refptr<webrtc::AudioProcessing> apm(processing);
 		webrtc::scoped_refptr<webrtc::AudioDeviceModule> adm(audioDevModule);
+
+		if (!adm) {
+			// Without a module, the factory would create the platform default itself
+			// and abort the process when it fails to initialize, which happens on
+			// hosts without an audio system. Create it here instead, the same way
+			// AudioDeviceModule does, so a failure becomes an exception that the
+			// application can handle, for example by passing a module created
+			// with AudioLayer.kDummyAudio.
+			jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+
+			adm = webrtc::CreateAudioDeviceModule(context->webrtcEnv, webrtc::AudioDeviceModule::kPlatformDefaultAudio);
+
+			if (!adm) {
+				throw jni::Exception("Create the default AudioDeviceModule failed");
+			}
+			if (adm->Init() != 0) {
+				throw jni::Exception("Initialize the default AudioDeviceModule failed. On a host without an audio system, pass an AudioDeviceModule created with AudioLayer.kDummyAudio.");
+			}
+		}
 
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
