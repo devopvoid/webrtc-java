@@ -25,6 +25,7 @@
 #include "third_party/libyuv/include/libyuv/video_common.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/thread.h"
+#include "rtc_base/time_utils.h"
 
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
@@ -301,15 +302,24 @@ namespace jni
 
 		sourceState = kLive;
 
-		int msPerFrame = 1000 / frameRate;
+		const int64_t msPerFrame = 1000 / frameRate;
 
 		while (isCapturing) {
+			const int64_t frameStart = webrtc::TimeMillis();
+
 #if defined(WEBRTC_MAC)
 			CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
 #endif
 			capturer->CaptureFrame();
 
-			webrtc::Thread::SleepMs(msPerFrame);
+			// CaptureFrame takes time of its own, up to a full display refresh
+			// with DXGI, so sleeping the whole interval afterwards halved the
+			// effective frame rate. Sleep only for what is left of the interval.
+			const int64_t elapsed = webrtc::TimeMillis() - frameStart;
+
+			if (elapsed < msPerFrame) {
+				webrtc::Thread::SleepMs(static_cast<int>(msPerFrame - elapsed));
+			}
 		}
 
 		capturer.reset();
