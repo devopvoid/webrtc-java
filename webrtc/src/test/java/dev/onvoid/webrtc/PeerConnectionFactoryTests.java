@@ -30,6 +30,20 @@ import org.junit.jupiter.api.Test;
 class PeerConnectionFactoryTests extends TestBase {
 
 	@Test
+	void createWithoutAudioDeviceModule() {
+		// Without a module the factory creates the platform default. On a host
+		// without an audio system that must fail with an exception, not abort
+		// the process.
+		try {
+			PeerConnectionFactory factory = new PeerConnectionFactory();
+			factory.dispose();
+		}
+		catch (Error e) {
+			assertTrue(e.getMessage().contains("AudioDeviceModule"), e.getMessage());
+		}
+	}
+
+	@Test
 	void createWithAudioDeviceModule() {
 		AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
 
