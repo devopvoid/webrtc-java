@@ -206,7 +206,7 @@ if(APPLE)
     target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_MAC WEBRTC_POSIX WEBRTC_USE_H264)
     target_link_libraries(${PROJECT_NAME} "-framework Foundation" "-framework AVFoundation" "-framework CoreGraphics" "-framework CoreAudio" "-framework CoreVideo" "-framework ScreenCaptureKit" "-framework AudioToolbox" "-framework IOSurface" "-framework ApplicationServices" "-framework AppKit")
 elseif(LINUX)
-    # Find DBus
+    # Find DBus (headers only: the JNI code opens libdbus at runtime)
     find_package(PkgConfig QUIET REQUIRED) # Include functions provided by PkgConfig module.
     pkg_check_modules(DBUS REQUIRED dbus-1)
     # Wayland/PipeWire desktop capture: libwebrtc.a references gio, gbm and libdrm
@@ -226,7 +226,7 @@ elseif(LINUX)
     # libpipewire dev package.)
     target_include_directories(${PROJECT_NAME} PUBLIC ${DBUS_INCLUDE_DIRS} ${GIO_INCLUDE_DIRS})
     target_compile_definitions(${PROJECT_NAME} PUBLIC WEBRTC_LINUX WEBRTC_POSIX WEBRTC_USE_H264 WEBRTC_USE_X11 WEBRTC_USE_PIPEWIRE WEBRTC_USE_GIO)
-    target_link_libraries(${PROJECT_NAME} X11 Xext Xfixes Xdamage Xtst Xrandr Xcomposite dbus-1 ${GIO_LIBRARIES} ${GBM_LIBRARIES} ${DRM_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} X11 Xext Xfixes Xdamage Xtst Xrandr Xcomposite ${GIO_LIBRARIES} ${GBM_LIBRARIES} ${DRM_LIBRARIES})
 elseif(WIN32)
     # RTC_ENABLE_WIN_WGC must match the gn build: webrtc.lib is compiled with gn's
     # default rtc_enable_win_wgc=true (webrtc.gni: "rtc_enable_win_wgc = is_win"),
