@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -46,35 +48,45 @@ class RTCDataChannelTests extends TestBase {
 		caller.waitUntilConnected();
 		callee.waitUntilConnected();
 
-		// Prepare a latch-based observer to detect buffered amount change.
+		byte[] big = new byte[64 * 1024];
+		AtomicLong drainedBytes = new AtomicLong();
 		CountDownLatch latch = new CountDownLatch(1);
+		CountDownLatch open = new CountDownLatch(1);
 
 		caller.getLocalDataChannel().registerObserver(new RTCDataChannelObserver() {
 			@Override
-			public void onBufferedAmountChange(long previousAmount) {
-				latch.countDown();
+			public void onBufferedAmountChange(long sentDataSize) {
+				if (drainedBytes.addAndGet(sentDataSize) >= big.length) {
+					latch.countDown();
+				}
 			}
 
 			@Override
-			public void onStateChange() { }
+			public void onStateChange() {
+				if (caller.getLocalDataChannel().getState() == RTCDataChannelState.OPEN) {
+					open.countDown();
+				}
+			}
 
 			@Override
 			public void onMessage(RTCDataChannelBuffer buffer) { }
 		});
 
-		// Send a large enough message to cause buffering (increase from 0).
-		byte[] big = new byte[64 * 1024]; // 64 KB
-		ByteBuffer data = ByteBuffer.wrap(big);
-		RTCDataChannelBuffer buffer = new RTCDataChannelBuffer(data, true);
-		caller.getLocalDataChannel().send(buffer);
+		try {
+			if (caller.getLocalDataChannel().getState() == RTCDataChannelState.OPEN) {
+				open.countDown();
+			}
+			assertTrue(open.await(5, TimeUnit.SECONDS), "Data channel did not open");
+			caller.getLocalDataChannel().send(new RTCDataChannelBuffer(ByteBuffer.wrap(big), true));
 
-		// Wait for the callback to fire to avoid flakiness.
-		boolean signaled = latch.await(5, java.util.concurrent.TimeUnit.SECONDS);
-
-		assertTrue(signaled, "onBufferedAmountChange should be called when sending data");
-
-		caller.close();
-		callee.close();
+			assertTrue(latch.await(5, TimeUnit.SECONDS), "Buffered amount did not drain");
+			assertEquals(big.length, drainedBytes.get());
+			assertEquals(0, caller.getLocalDataChannel().getBufferedAmount());
+		}
+		finally {
+			caller.close();
+			callee.close();
+		}
 	}
 
 	@Test
@@ -128,7 +140,7 @@ class RTCDataChannelTests extends TestBase {
 			remoteDataChannel.registerObserver(new RTCDataChannelObserver() {
 
 				@Override
-				public void onBufferedAmountChange(long previousAmount) { }
+				public void onBufferedAmountChange(long sentDataSize) { }
 
 				@Override
 				public void onStateChange() { }
