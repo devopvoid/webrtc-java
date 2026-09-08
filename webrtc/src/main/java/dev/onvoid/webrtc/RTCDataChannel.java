@@ -19,6 +19,7 @@ package dev.onvoid.webrtc;
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * Represents a bidirectional data channel between two peers. An RTCDataChannel
@@ -227,5 +228,44 @@ public class RTCDataChannel extends DisposableNativeObject {
 	private native void sendDirectBufferAsync(ByteBuffer buffer, int position, int length, boolean binary);
 
 	private native void sendByteArrayBufferAsync(byte[] buffer, boolean binary);
+
+	/**
+	 * Sends data asynchronously and reports the native send result. Success
+	 * means the local send operation accepted the message, not that the peer
+	 * received it. The readable buffer window is copied before this method
+	 * returns, without changing its position or limit.
+	 * <p>
+	 * The observer is called once when the operation completes or is discarded
+	 * during channel shutdown. It normally runs on the native network thread;
+	 * a discarded operation can report failure on the thread that destroys it.
+	 * The callback may run before this method returns. It must not block or
+	 * call other WebRTC methods synchronously. Dispatch further work to an
+	 * application executor. No callback is guaranteed during JVM shutdown.
+	 * <p>
+	 * Invalid arguments and failures preparing the native operation are thrown
+	 * on the calling thread. If preparation fails, the observer is not called.
+	 * Exceptions thrown by the observer are printed and cleared on its native
+	 * thread; they do not propagate to the sender.
+	 *
+	 * @param buffer The buffer to be queued for transmission.
+	 * @param observer The observer for this send operation.
+	 * @throws NullPointerException If the buffer, its data, or the observer is null.
+	 */
+	public void sendAsync(RTCDataChannelBuffer buffer, RTCDataChannelSendObserver observer) {
+		Objects.requireNonNull(observer, "observer");
+		ByteBuffer data = Objects.requireNonNull(buffer.data, "buffer.data");
+		if (data.isDirect()) {
+			sendDirectBufferAsyncWithObserver(data, data.position(), data.remaining(), buffer.binary, observer);
+		}
+		else {
+			sendByteArrayBufferAsyncWithObserver(copyWindow(data), buffer.binary, observer);
+		}
+	}
+
+	private native void sendDirectBufferAsyncWithObserver(ByteBuffer buffer, int position,
+			int length, boolean binary, RTCDataChannelSendObserver observer);
+
+	private native void sendByteArrayBufferAsyncWithObserver(byte[] buffer, boolean binary,
+			RTCDataChannelSendObserver observer);
 
 }
