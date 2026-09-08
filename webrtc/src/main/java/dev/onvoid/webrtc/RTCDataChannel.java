@@ -145,8 +145,7 @@ public class RTCDataChannel extends DisposableNativeObject {
 	/**
 	 * Sends data in the provided buffer to the remote peer. Only the bytes
 	 * between the buffer's position and limit are sent, for heap and direct
-	 * buffers alike. The buffer is read through a duplicate, so the caller's
-	 * position is left untouched.
+	 * buffers alike. The caller's position is left untouched.
 	 *
 	 * @param buffer The buffer to be queued for transmission.
 	 *
@@ -161,10 +160,7 @@ public class RTCDataChannel extends DisposableNativeObject {
 				sendDirectBuffer(data, buffer.binary);
 			}
 			else {
-				ByteBuffer window = ByteBuffer.allocateDirect(data.remaining());
-				window.put(data.duplicate());
-				window.flip();
-				sendDirectBuffer(window, buffer.binary);
+				sendDirectBuffer(data.slice(), buffer.binary);
 			}
 		}
 		else {
@@ -215,12 +211,7 @@ public class RTCDataChannel extends DisposableNativeObject {
 			sendDirectBufferAsync(data, data.position(), data.remaining(), buffer.binary);
 		}
 		else {
-			// The byte array path transmits whole arrays, so copy exactly
-			// the readable window, position to limit; a duplicate leaves
-			// the caller's position untouched.
-			byte[] window = new byte[data.remaining()];
-			data.duplicate().get(window);
-			sendByteArrayBufferAsync(window, buffer.binary);
+			sendByteArrayBufferAsync(copyWindow(data), buffer.binary);
 		}
 	}
 
