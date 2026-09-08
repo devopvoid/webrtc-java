@@ -261,6 +261,17 @@ endif()
 
 set(ENV{PATH} "${WEBRTC_SRC_DIR}/depot_tools${PATH_SEP}$ENV{PATH}")
 
+# Since depot_tools d4e95894 the fetch wrapper runs the hermetic Python that
+# only exists after the bootstrap, which fetch used to perform itself. The
+# Windows wrapper still bootstraps on its own.
+if(UNIX)
+    message(STATUS "WebRTC: bootstrap depot tools")
+    execute_command(
+        COMMAND ensure_bootstrap
+        WORKING_DIRECTORY "${WEBRTC_SRC_DIR}/depot_tools"
+    )
+endif()
+
 file(MAKE_DIRECTORY ${WEBRTC_DIR})
 
 message(STATUS "WebRTC: fetch")
