@@ -150,8 +150,8 @@ public class RTCDataChannel extends DisposableNativeObject {
 	 *
 	 * @param buffer The buffer to be queued for transmission.
 	 *
-	 * @throws Exception If queuing data is not possible because not enough
-	 *                   buffer space is available.
+	 * @throws Exception If the native channel rejects the send, for example
+	 *                   because it is not open or its send buffer is full.
 	 */
 	public void send(RTCDataChannelBuffer buffer) throws Exception {
 		ByteBuffer data = buffer.data;
