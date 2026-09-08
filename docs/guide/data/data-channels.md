@@ -180,6 +180,29 @@ try {
 }
 ```
 
+### Sending Data Asynchronously
+
+`send` queues the message on the calling thread. `sendAsync` hands the message to the native network thread instead and returns immediately, which suits senders that must not block. The readable window of the buffer is copied before the method returns, so the buffer can be reused right away.
+
+To learn whether the native send operation accepted the message, pass an `RTCDataChannelSendObserver`:
+
+```java
+dataChannel.sendAsync(binaryChannelBuffer, new RTCDataChannelSendObserver() {
+    @Override
+    public void onSuccess() {
+        // The local send operation accepted the message.
+    }
+
+    @Override
+    public void onFailure(String error) {
+        // For example "[INVALID_STATE] ..." when the channel is not open.
+        System.err.println("Send failed: " + error);
+    }
+});
+```
+
+The observer is called exactly once, normally on the native network thread, and with a failure if the operation is discarded while the channel shuts down. Success means the message was queued locally, not that the peer received it. Do not block in the callbacks or call other WebRTC methods from them synchronously; dispatch further work to an executor of your own. Without an observer, `sendAsync` logs failures and reports nothing to the caller.
+
 ### Receiving Data
 
 To receive data, implement the `onMessage` method in your `RTCDataChannelObserver`:
