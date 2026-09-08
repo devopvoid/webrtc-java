@@ -19,6 +19,7 @@
 #include "JavaEnums.h"
 #include "JavaError.h"
 #include "JavaRef.h"
+#include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
 
@@ -174,7 +175,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendDirectBuffer
 
 		webrtc::CopyOnWriteBuffer data(address, static_cast<size_t>(bufferLength));
 
-		channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)));
+		if (!channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)))) {
+			env->Throw(jni::JavaRuntimeException(env, "Data channel rejected the send"));
+		}
 	}
 	else {
 		env->Throw(jni::JavaError(env, "Non-direct buffer provided"));
@@ -195,7 +198,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBuffer
 	env->ReleaseByteArrayElements(jBufferArray, arrayPtr, JNI_ABORT);
 
 	try {
-		channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)));
+		if (!channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)))) {
+			env->Throw(jni::JavaRuntimeException(env, "Data channel rejected the send"));
+		}
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
