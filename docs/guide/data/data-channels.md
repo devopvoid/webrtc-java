@@ -80,10 +80,10 @@ import dev.onvoid.webrtc.RTCDataChannelState;
 
 dataChannel.registerObserver(new RTCDataChannelObserver() {
     @Override
-    public void onBufferedAmountChange(long previousAmount) {
-        // Called when the buffered amount changes
+    public void onBufferedAmountChange(long sentDataSize) {
+        // The callback reports a decrease, not the previous queue size.
         long currentAmount = dataChannel.getBufferedAmount();
-        System.out.println("Buffered amount changed from " + previousAmount + 
+        System.out.println("Buffered amount decreased by " + sentDataSize +
                            " to " + currentAmount + " bytes");
     }
 

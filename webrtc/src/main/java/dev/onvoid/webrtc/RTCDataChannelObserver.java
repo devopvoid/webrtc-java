@@ -24,11 +24,13 @@ package dev.onvoid.webrtc;
 public interface RTCDataChannelObserver {
 
 	/**
-	 * The RTCDataChannel's buffered amount has changed.
+	 * The RTCDataChannel's buffered amount has decreased. Notifications may
+	 * combine multiple changes. The reported value is a decrease in queued
+	 * bytes, not an absolute buffer size or an acknowledgment from the peer.
 	 *
-	 * @param previousAmount The previous buffer amount.
+	 * @param sentDataSize The number of bytes removed from the buffered amount.
 	 */
-	void onBufferedAmountChange(long previousAmount);
+	void onBufferedAmountChange(long sentDataSize);
 
 	/**
 	 * The RTCDataChannel's state has changed.
