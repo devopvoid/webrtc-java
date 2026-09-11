@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.15.1] - 2026-08-24
+## [0.16.0] - 2026-08-24
 
 ### Other
 - Add Wayland/PipeWire desktop capture support by @B077AS in [#261](https://github.com/devopvoid/webrtc-java/pull/261)
