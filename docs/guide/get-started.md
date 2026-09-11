@@ -7,9 +7,9 @@ Maven Central artifacts contain native libraries that can be loaded on the follo
 
 |           | x64     | arm     | arm64   |
 |-----------|---------|---------|---------|
-| Linux     | ✔       | ✔       | ✔       |
-| macOS     | ✔       | -       | ✔       |
-| Windows   | ✔       | -       | -       |
+| Linux     | ✔      | ✔      | ✔      |
+| macOS     | ✔      | -       | ✔      |
+| Windows   | ✔      | -       | ✔      |
 
 ::: info
 **Linux runtime dependencies**
