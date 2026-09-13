@@ -31,4 +31,17 @@ public abstract class NativeObject {
 	@SuppressWarnings("unused")
 	private long nativeHandle;
 
+
+	/**
+	 * Returns the native pointer bound to this object, so that subclasses
+	 * can implement identity-based {@code equals()}/{@code hashCode()}. A
+	 * value of {@code 0} means no native object is currently bound (e.g.
+	 * after disposal).
+	 *
+	 * @return the native handle value.
+	 */
+	protected final long getNativeHandle() {
+		return nativeHandle;
+	}
+
 }

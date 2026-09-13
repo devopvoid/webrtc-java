@@ -83,4 +83,30 @@ public class RTCDtlsTransport extends NativeObject {
 	 */
 	public native void unregisterObserver();
 
+	/**
+	 * Two RTCDtlsTransport instances are equal if they are bound to the same
+	 * native transport, e.g. when obtained from two separate calls to {@link
+	 * RTCRtpSender#getTransport()}/{@link RTCRtpReceiver#getTransport()}.
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof RTCDtlsTransport)) {
+			return false;
+		}
+
+		long handle = getNativeHandle();
+
+		return handle != 0 && handle == ((RTCDtlsTransport) obj).getNativeHandle();
+	}
+
+	@Override
+	public int hashCode() {
+		long handle = getNativeHandle();
+
+		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+	}
+
 }
