@@ -19,6 +19,7 @@
 
 #include "api/media_stream_interface.h"
 #include "rtc_base/ref_counted_object.h"
+#include "rtc_base/synchronization/mutex.h"
 
 #include "media/SyncClock.h"
 
@@ -50,9 +51,13 @@ namespace jni
             void SetAudioCaptureDelay(int64_t delay_us);
 
         private:
+            // Guards sinks_ and audio_capture_delay_us_ against concurrent
+            // AddSink()/RemoveSink() (called by WebRTC's own signaling/worker
+            // thread as tracks attach/detach) racing with PushAudioData() and
+            // SetAudioCaptureDelay() (called by the application's own threads).
+            webrtc::Mutex mutex_;
             std::vector<webrtc::AudioTrackSinkInterface*> sinks_;
             std::shared_ptr<SyncClock> clock_;
-            //webrtc::CriticalSection crit_;
             std::atomic<int64_t> total_samples_captured_;
             int64_t audio_capture_delay_us_;
     };
