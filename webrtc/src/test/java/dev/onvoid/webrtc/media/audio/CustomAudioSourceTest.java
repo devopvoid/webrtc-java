@@ -84,6 +84,37 @@ class CustomAudioSourceTest extends TestBase {
     }
 
     @Test
+    void concurrentAddRemoveSinkDoesNotCrash() throws InterruptedException {
+        // Regression test: AddSink()/RemoveSink() (called here from this thread,
+        // mirroring the internal thread WebRTC uses as tracks attach/detach) used
+        // to race unsynchronized with PushAudioData() (the application's capture
+        // thread) over the native sinks_ vector.
+        AudioTrack audioTrack = factory.createAudioTrack("audioTrack", customAudioSource);
+        AudioTrackSink sink = (data, bitsPerSample, sampleRate, channels, frames) -> { };
+
+        byte[] audioData = new byte[480 * 2 * 2]; // 10ms of 48kHz stereo 16-bit audio
+
+        AtomicBoolean running = new AtomicBoolean(true);
+
+        Thread pushThread = new Thread(() -> {
+            while (running.get()) {
+                customAudioSource.pushAudio(audioData, 16, 48000, 2, 480);
+            }
+        });
+        pushThread.start();
+
+        for (int i = 0; i < 5000; i++) {
+            audioTrack.addSink(sink);
+            audioTrack.removeSink(sink);
+        }
+
+        running.set(false);
+        pushThread.join(5000);
+
+        audioTrack.dispose();
+    }
+
+    @Test
     void pushAudioWithDifferentFormats() {
         testAudioFormat(8, 8000, 1, 80);    // 8-bit, 8kHz, mono, 10ms
         testAudioFormat(16, 16000, 1, 160); // 16-bit, 16kHz, mono, 10ms

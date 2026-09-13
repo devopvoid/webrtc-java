@@ -24,14 +24,14 @@ namespace jni
 
     void CustomAudioSource::AddSink(webrtc::AudioTrackSinkInterface * sink)
     {
-        //webrtc::CritScope lock(&crit_);
+        webrtc::MutexLock lock(&mutex_);
 
         sinks_.push_back(sink);
     }
 
     void CustomAudioSource::RemoveSink(webrtc::AudioTrackSinkInterface * sink)
     {
-        //webrtc::CritScope lock(&crit_);
+        webrtc::MutexLock lock(&mutex_);
 
         sinks_.erase(std::remove(sinks_.begin(), sinks_.end(), sink), sinks_.end());
     }
@@ -50,7 +50,7 @@ namespace jni
                                          int sample_rate, size_t number_of_channels,
                                          size_t number_of_frames)
     {
-        //webrtc::CritScope lock(&crit_);
+        webrtc::MutexLock lock(&mutex_);
 
         // Calculate absolute capture time
         int64_t timestamp_us = clock_->GetTimestampUs();
@@ -77,6 +77,8 @@ namespace jni
 
     void CustomAudioSource::SetAudioCaptureDelay(int64_t delay_us)
     {
+        webrtc::MutexLock lock(&mutex_);
+
         audio_capture_delay_us_ = delay_us;
     }
 }
