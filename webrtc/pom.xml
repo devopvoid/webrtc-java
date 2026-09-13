@@ -32,6 +32,53 @@
 
 	<profiles>
 		<!--
+			Opt-in JNI reference-discipline check: runs the same tests under
+			-Xcheck:jni, which validates every JNI call's local/global refs and
+			aborts the JVM with "FATAL ERROR in native method: ..." on a real
+			violation (e.g. a double-freed or already-deleted local ref):
+			exactly the class of bug JNI_*.cpp changes are prone to introducing.
+			Not part of the default test run: -Xcheck:jni also emits a
+			"WARNING in native method: JNI call made without checking
+			exceptions" for every native call in this codebase that doesn't
+			immediately check for a pending exception (thousands of them,
+			pre-existing, harmless on their own), which would drown out
+			everything else if left on by default.
+
+			The TCP forkNode is required, not optional: -Xcheck:jni writes its
+			diagnostics straight to the process's native stdout, which is the
+			same stream Surefire's default (pipe-based) fork communication
+			uses for its own protocol; without switching to TCP, that
+			corrupts the channel and the run fails with "Corrupted channel by
+			directly writing to native stream" instead of reporting test
+			results.
+
+			Run with: mvn -pl webrtc test -Pjni-check
+			Then check for real bugs with: grep "FATAL ERROR" -r target/surefire-reports
+		-->
+		<profile>
+			<id>jni-check</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory"/>
+							<argLine>
+								-Xcheck:jni
+								--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
+								--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
+								--add-opens webrtc.java/dev.onvoid.webrtc.media=ALL-UNNAMED
+								--add-opens webrtc.java/dev.onvoid.webrtc.media.audio=ALL-UNNAMED
+								--add-opens webrtc.java/dev.onvoid.webrtc.media.video=ALL-UNNAMED
+							</argLine>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!--
 			Default: attach the native library jar that webrtc-jni has just built for
 			the host platform. Active unless "natives.dir" is set, so local builds and
 			the per-platform CI builds behave as they always have.
