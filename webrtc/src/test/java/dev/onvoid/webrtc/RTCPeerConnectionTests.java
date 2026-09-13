@@ -394,4 +394,21 @@ class RTCPeerConnectionTests extends TestBase {
 		assertEquals(RTCIceGatheringState.NEW, peerConnection.getIceGatheringState());
 		assertEquals(RTCIceConnectionState.CLOSED, peerConnection.getIceConnectionState());
 	}
+
+	@Test
+	void closeManyConnectionsDoesNotCrash() {
+		// Regression guard: close() previously never released the native
+		// reference taken when the connection was created (pc->Release()
+		// was missing), leaking the native PeerConnectionInterface on every
+		// close(). A leak itself is not observable from Java, but repeating
+		// create/close guards against the fix (calling Release() on the raw
+		// pointer) crashing or corrupting memory.
+		for (int i = 0; i < 200; i++) {
+			RTCConfiguration config = new RTCConfiguration();
+			PeerConnectionObserver observer = candidate -> { };
+
+			RTCPeerConnection connection = factory.createPeerConnection(config, observer);
+			connection.close();
+		}
+	}
 }
