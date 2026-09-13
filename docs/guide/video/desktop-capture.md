@@ -92,6 +92,7 @@ Add the video track to your peer connection:
 import java.util.ArrayList;
 import java.util.List;
 import dev.onvoid.webrtc.RTCPeerConnection;
+import dev.onvoid.webrtc.RTCRtpSender;
 
 // Assuming you already have a configured RTCPeerConnection
 RTCPeerConnection peerConnection = factory.createPeerConnection(config, observer);
@@ -99,8 +100,14 @@ RTCPeerConnection peerConnection = factory.createPeerConnection(config, observer
 // Add the track to the peer connection
 List<String> streamIds = new ArrayList<>();
 streamIds.add("stream1");
-peerConnection.addTrack(videoTrack, streamIds);
+RTCRtpSender sender = peerConnection.addTrack(videoTrack, streamIds);
 ```
+
+::: info
+`addTrack` returns an `RTCRtpSender`. It is not owned by the peer connection, so dispose it
+yourself (`sender.dispose()`) once you no longer need it — typically together with the peer
+connection when the call ends.
+:::
 
 ## Additional Features
 

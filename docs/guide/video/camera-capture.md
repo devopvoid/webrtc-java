@@ -90,6 +90,7 @@ Add the video track to your peer connection:
 import java.util.ArrayList;
 import java.util.List;
 import dev.onvoid.webrtc.RTCPeerConnection;
+import dev.onvoid.webrtc.RTCRtpSender;
 
 // Assuming you already have a configured RTCPeerConnection
 RTCPeerConnection peerConnection = factory.createPeerConnection(config, observer);
@@ -97,8 +98,14 @@ RTCPeerConnection peerConnection = factory.createPeerConnection(config, observer
 // Add the track to the peer connection
 List<String> streamIds = new ArrayList<>();
 streamIds.add("stream1");
-peerConnection.addTrack(videoTrack, streamIds);
+RTCRtpSender sender = peerConnection.addTrack(videoTrack, streamIds);
 ```
+
+::: info
+`addTrack` returns an `RTCRtpSender`. It is not owned by the peer connection, so dispose it
+yourself (`sender.dispose()`) once you no longer need it — typically together with the peer
+connection when the call ends.
+:::
 
 ## Additional Features
 
@@ -161,6 +168,7 @@ To receive frames from a remote peer, you need to add a sink to the remote video
 
 ```java
 import dev.onvoid.webrtc.PeerConnectionObserver;
+import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.video.VideoTrack;
@@ -172,7 +180,8 @@ public class MyPeerConnectionObserver implements PeerConnectionObserver {
     
     @Override
     public void onTrack(RTCRtpTransceiver transceiver) {
-        MediaStreamTrack track = transceiver.getReceiver().getTrack();
+        RTCRtpReceiver receiver = transceiver.getReceiver();
+        MediaStreamTrack track = receiver.getTrack();
         String kind = track.getKind();
         
         if (kind.equals(MediaStreamTrack.VIDEO_TRACK_KIND)) {
@@ -180,6 +189,12 @@ public class MyPeerConnectionObserver implements PeerConnectionObserver {
             videoTrack.addSink(remoteVideoSink);
             System.out.println("Added sink to remote video track");
         }
+
+        // The receiver and transceiver are query results you own; dispose
+        // them once the track has been retrieved. The track itself is
+        // unaffected and keeps delivering frames to its sink.
+        receiver.dispose();
+        transceiver.dispose();
     }
     
     // Make sure to clean up when done
