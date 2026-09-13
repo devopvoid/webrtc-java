@@ -2,9 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.16.0] - 2026-08-24
+## [0.17.0] - 2026-09-13
+
+### Features
+- Expose asynchronous data channel send results by @SendableMetatype in [#281](https://github.com/devopvoid/webrtc-java/pull/281)
+- Add windows arm64 platform support by @SendableMetatype in [#266](https://github.com/devopvoid/webrtc-java/pull/266)
+- Offer both screens and windows in the Wayland portal picker by @B077AS in [#264](https://github.com/devopvoid/webrtc-java/pull/264)
+
+### Bug Fixes
+- Report rejected synchronous data channel sends by @SendableMetatype in [#278](https://github.com/devopvoid/webrtc-java/pull/278)
+- Throw instead of aborting when the default audio device module fails to initialize by @SendableMetatype in [#276](https://github.com/devopvoid/webrtc-java/pull/276)
+- Keep the desktop capture frame rate at the configured value by @SendableMetatype in [#274](https://github.com/devopvoid/webrtc-java/pull/274)
+- Keep libwebrtc quiet by default and make logToDebug work again by @SendableMetatype in [#273](https://github.com/devopvoid/webrtc-java/pull/273)
+- Delete the local references created for received data channel messages by @SendableMetatype in [#272](https://github.com/devopvoid/webrtc-java/pull/272)
+- Load libudev and libdbus at runtime instead of linking them by @SendableMetatype in [#271](https://github.com/devopvoid/webrtc-java/pull/271)
+
+### Documentation
+- Correct changelog v0.16.0 and supported os matrix by @devopvoid in [#282](https://github.com/devopvoid/webrtc-java/pull/282)
+- Correct data channel buffered amount semantics by @SendableMetatype in [#279](https://github.com/devopvoid/webrtc-java/pull/279)
+- List the Linux runtime dependencies of the native library by @SendableMetatype in [#275](https://github.com/devopvoid/webrtc-java/pull/275)
+
+### Performance
+- Avoid redundant data channel buffer copies by @SendableMetatype in [#280](https://github.com/devopvoid/webrtc-java/pull/280)
+
+### Testing
+- Give the DTMF completion wait more headroom by @SendableMetatype in [#268](https://github.com/devopvoid/webrtc-java/pull/268)
+
+### Miscellaneous Tasks
+- Test the windows arm64 natives on a native runner by @SendableMetatype in [#270](https://github.com/devopvoid/webrtc-java/pull/270)
+- Test cross compiled natives on native runners by @SendableMetatype in [#267](https://github.com/devopvoid/webrtc-java/pull/267)
 
 ### Other
+- Bootstrap depot_tools before fetching the WebRTC source by @SendableMetatype in [#277](https://github.com/devopvoid/webrtc-java/pull/277)
+- Suppress stdout for failed to attach threads on jvm shutdown by @SendableMetatype in [#269](https://github.com/devopvoid/webrtc-java/pull/269)
+- Fix/windows desktop capture by @B077AS in [#263](https://github.com/devopvoid/webrtc-java/pull/263)
+- Prepare for next development iteration by @devopvoid
+
+
+## [0.16.0] - 2026-08-24
+
+### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.15.1 by @github-actions[bot]
+
+### Other
+- Prepare release v0.16.0 by @devopvoid
 - Add Wayland/PipeWire desktop capture support by @B077AS in [#261](https://github.com/devopvoid/webrtc-java/pull/261)
 - Improve release workflow reliability and artifact management by @devopvoid in [#260](https://github.com/devopvoid/webrtc-java/pull/260)
 - Refactor release workflows and setup for multi-platform deployment by @devopvoid in [#259](https://github.com/devopvoid/webrtc-java/pull/259)
