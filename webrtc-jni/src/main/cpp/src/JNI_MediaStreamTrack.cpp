@@ -35,12 +35,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 
 	webrtc::RefCountReleaseStatus status = track->Release();
 
+	// Our reference is gone the moment Release() returns, regardless of
+	// whether it was the last one, so the handle must not be reused either
+	// way -- otherwise a retry would Release() a reference this object no
+	// longer owns.
+	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	track = nullptr;
+
 	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
-	}
-	else {
-		SetHandle<std::nullptr_t>(env, caller, nullptr);
-		track = nullptr;
 	}
 }
 
