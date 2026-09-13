@@ -87,6 +87,14 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferences
 	(JNIEnv *, jobject, jobject);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpTransceiver
+	 * Method:    dispose
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_dispose
+	(JNIEnv *, jobject);
+
 #ifdef __cplusplus
 }
 #endif

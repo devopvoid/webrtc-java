@@ -74,7 +74,11 @@ namespace jni
 			return;
 		}
 
-		auto jTransceiver = JavaFactories::create(env, transceiver.get());
+		// transceiver is passed by value, so this call owns one reference on
+		// it; transfer that reference into the Java wrapper, which disposes
+		// it, instead of releasing it right back when transceiver goes out
+		// of scope and leaving the wrapper's pointer unowned.
+		auto jTransceiver = JavaFactories::create(env, transceiver.release());
 
 		env->CallVoidMethod(observer, javaClass->onTrack, jTransceiver.get());
 
@@ -94,7 +98,11 @@ namespace jni
 		try {
 			streamArray = createObjectArray(env, streams);
 
-			auto jReceiver = JavaFactories::create(env, receiver.get());
+			// receiver is passed by value, so this call owns one reference on
+			// it; transfer that reference into the Java wrapper, which
+			// disposes it, instead of releasing it right back when receiver
+			// goes out of scope and leaving the wrapper's pointer unowned.
+			auto jReceiver = JavaFactories::create(env, receiver.release());
 
 			env->CallVoidMethod(observer, javaClass->onAddTrack, jReceiver.get(), streamArray.get());
 		}
@@ -113,7 +121,11 @@ namespace jni
 			return;
 		}
 
-		auto jReceiver = JavaFactories::create(env, receiver.get());
+		// receiver is passed by value, so this call owns one reference on
+		// it; transfer that reference into the Java wrapper, which disposes
+		// it, instead of releasing it right back when receiver goes out of
+		// scope and leaving the wrapper's pointer unowned.
+		auto jReceiver = JavaFactories::create(env, receiver.release());
 
 		env->CallVoidMethod(observer, javaClass->onRemoveTrack, jReceiver.get());
 

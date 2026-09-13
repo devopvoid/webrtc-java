@@ -1,5 +1,9 @@
 package dev.onvoid.webrtc;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
@@ -56,6 +60,38 @@ class RTCRtpTransceiverTests extends TestBase {
 
 		audioTransceiver.setCodecPreferences(audioPreferences);
 		videoTransceiver.setCodecPreferences(videoPreferences);
+	}
+
+	@Test
+	void senderAndReceiverAreIndependentlyDisposable() {
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+
+		RTCPeerConnection peerConnection = connection.getPeerConnection();
+		RTCRtpTransceiver transceiver = peerConnection.addTransceiver(audioTrack,
+				new RTCRtpTransceiverInit());
+
+		// getSender()/getReceiver() used to hand out Java wrappers backed by
+		// no owned native reference at all. Querying twice must yield
+		// independently disposable instances, and disposing one must not
+		// affect the other or the transceiver itself.
+		RTCRtpSender firstSender = transceiver.getSender();
+		RTCRtpSender secondSender = transceiver.getSender();
+		RTCRtpReceiver firstReceiver = transceiver.getReceiver();
+		RTCRtpReceiver secondReceiver = transceiver.getReceiver();
+
+		assertNotNull(firstSender);
+		assertNotNull(firstReceiver);
+
+		assertDoesNotThrow(firstSender::dispose);
+		assertDoesNotThrow(firstReceiver::dispose);
+
+		assertEquals(audioTrack.getId(), secondSender.getTrack().getId());
+		assertNotNull(secondReceiver.getParameters());
+
+		assertDoesNotThrow(secondSender::dispose);
+		assertDoesNotThrow(secondReceiver::dispose);
+		assertDoesNotThrow(transceiver::dispose);
 	}
 
 }

@@ -16,7 +16,7 @@
 
 package dev.onvoid.webrtc;
 
-import dev.onvoid.webrtc.internal.NativeObject;
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 import java.util.List;
 
@@ -26,7 +26,7 @@ import java.util.List;
  *
  * @author Alex Andres
  */
-public class RTCRtpTransceiver extends NativeObject {
+public class RTCRtpTransceiver extends DisposableNativeObject {
 
 	/**
 	 * Constructor to be used by the native api.
@@ -138,5 +138,45 @@ public class RTCRtpTransceiver extends NativeObject {
 	 */
 	public native void setCodecPreferences(
 			List<RTCRtpCodecCapability> preferences);
+
+	/**
+	 * Releases the native reference held by this RTCRtpTransceiver instance.
+	 * <p>
+	 * An RTCRtpTransceiver is not exclusively owned by this instance: the
+	 * underlying transceiver may be kept alive by its {@link
+	 * RTCPeerConnection} or by other RTCRtpTransceiver instances obtained via
+	 * separate calls to {@link RTCPeerConnection#getTransceivers()}.
+	 * Disposing this instance only drops the reference it holds and does not
+	 * affect the transceiver itself or any other instance referring to it.
+	 */
+	@Override
+	public native void dispose();
+
+	/**
+	 * Two RTCRtpTransceiver instances are equal if they are bound to the
+	 * same native transceiver, e.g. when obtained from two separate calls to
+	 * {@link RTCPeerConnection#getTransceivers()}. A disposed instance is
+	 * never equal to anything but itself.
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof RTCRtpTransceiver)) {
+			return false;
+		}
+
+		long handle = getNativeHandle();
+
+		return handle != 0 && handle == ((RTCRtpTransceiver) obj).getNativeHandle();
+	}
+
+	@Override
+	public int hashCode() {
+		long handle = getNativeHandle();
+
+		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+	}
 
 }

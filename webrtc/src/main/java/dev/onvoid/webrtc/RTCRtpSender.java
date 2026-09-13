@@ -18,7 +18,7 @@ package dev.onvoid.webrtc;
 
 import java.util.List;
 
-import dev.onvoid.webrtc.internal.NativeObject;
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
 /**
@@ -29,7 +29,7 @@ import dev.onvoid.webrtc.media.MediaStreamTrack;
  *
  * @author Alex Andres
  */
-public class RTCRtpSender extends NativeObject {
+public class RTCRtpSender extends DisposableNativeObject {
 
 	/**
 	 * Constructor to be used by the native api.
@@ -111,5 +111,46 @@ public class RTCRtpSender extends NativeObject {
 	 *         is not supported for the media type of the associated track.
 	 */
 	public native RTCDtmfSender getDtmfSender();
+
+	/**
+	 * Releases the native reference held by this RTCRtpSender instance.
+	 * <p>
+	 * An RTCRtpSender is not exclusively owned by this instance: the
+	 * underlying sender may be kept alive by its {@link RTCRtpTransceiver}
+	 * or by other RTCRtpSender instances obtained via separate calls to
+	 * {@link RTCPeerConnection#getSenders()} or {@link
+	 * RTCRtpTransceiver#getSender()}. Disposing this instance only drops the
+	 * reference it holds and does not affect the sender itself or any other
+	 * instance referring to it.
+	 */
+	@Override
+	public native void dispose();
+
+	/**
+	 * Two RTCRtpSender instances are equal if they are bound to the same
+	 * native sender, e.g. when obtained from two separate calls to {@link
+	 * RTCPeerConnection#getSenders()}. A disposed instance is never equal to
+	 * anything but itself.
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof RTCRtpSender)) {
+			return false;
+		}
+
+		long handle = getNativeHandle();
+
+		return handle != 0 && handle == ((RTCRtpSender) obj).getNativeHandle();
+	}
+
+	@Override
+	public int hashCode() {
+		long handle = getNativeHandle();
+
+		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+	}
 
 }

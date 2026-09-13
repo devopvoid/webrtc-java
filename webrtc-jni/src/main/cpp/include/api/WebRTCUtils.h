@@ -49,6 +49,33 @@ namespace jni
 		return objectArray;
 	}
 
+	// Same as createObjectArray, but transfers the reference each element of
+	// `vector` holds into the corresponding Java wrapper instead of letting
+	// it evaporate when `vector` goes out of scope. Use this when the Java
+	// wrapper type owns/releases its native reference (e.g. is disposable)
+	// and nothing else already guarantees the pointer outlives the call --
+	// callers of the returned array elements are then responsible for
+	// disposing them.
+	template <class T>
+	JavaLocalRef<jobjectArray> createOwningObjectArray(JNIEnv * env, std::vector<webrtc::scoped_refptr<T>> vector)
+	{
+		jsize vectorSize = static_cast<jsize>(vector.size());
+
+		JavaLocalRef<jobjectArray> objectArray = JavaFactories::createArray<T>(env, vectorSize);
+
+		if (objectArray.get() == nullptr) {
+			throw Exception("Create object array of type [%s] failed", typeid(T).name());
+		}
+
+		for (jsize i = 0; i < vectorSize; i++) {
+			JavaLocalRef<jobject> obj = JavaFactories::create(env, vector[i].release());
+
+			env->SetObjectArrayElement(objectArray, i, obj.get());
+		}
+
+		return objectArray;
+	}
+
 	std::string RTCErrorToString(const webrtc::RTCError & error);
 }
 

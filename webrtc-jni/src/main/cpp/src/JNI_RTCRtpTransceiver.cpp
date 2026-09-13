@@ -45,7 +45,10 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getSender
 
 	webrtc::scoped_refptr<webrtc::RtpSenderInterface> sender = transceiver->sender();
 
-	return jni::JavaFactories::create(env, sender.get()).release();
+	// Transfer the reference this local scoped_refptr holds into the Java
+	// wrapper, which owns and disposes it -- otherwise the wrapper would be
+	// left with a pointer nothing on the Java/JNI side keeps alive.
+	return jni::JavaFactories::create(env, sender.release()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getReceiver
@@ -56,7 +59,10 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getReceiver
 
 	webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver = transceiver->receiver();
 
-	return jni::JavaFactories::create(env, receiver.get()).release();
+	// Transfer the reference this local scoped_refptr holds into the Java
+	// wrapper, which owns and disposes it -- otherwise the wrapper would be
+	// left with a pointer nothing on the Java/JNI side keeps alive.
+	return jni::JavaFactories::create(env, receiver.release()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getDirection
@@ -150,4 +156,20 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferen
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_dispose
+(JNIEnv * env, jobject caller)
+{
+	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+	CHECK_HANDLE(transceiver);
+
+	// Unlike e.g. MediaStreamTrack, an RTCRtpTransceiver is not exclusively
+	// owned by one Java wrapper: the owning PeerConnection keeps its own
+	// reference, and other Java wrappers may have been obtained via separate
+	// getTransceivers() calls. Dropping our reference here is expected to
+	// leave others around, so it is not reported as an error.
+	transceiver->Release();
+
+	SetHandle<std::nullptr_t>(env, caller, nullptr);
 }

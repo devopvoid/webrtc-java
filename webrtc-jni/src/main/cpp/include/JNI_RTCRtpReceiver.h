@@ -47,6 +47,14 @@ extern "C" {
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getSynchronizationSources
 	(JNIEnv *, jobject);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpReceiver
+	 * Method:    dispose
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_dispose
+	(JNIEnv *, jobject);
+
 #ifdef __cplusplus
 }
 #endif
