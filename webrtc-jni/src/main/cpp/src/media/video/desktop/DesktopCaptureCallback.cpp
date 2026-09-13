@@ -43,6 +43,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
 			// Propagate the failure to Java instead of silently dropping it —
 			// callers waiting for a frame otherwise have to rely on timeouts.
@@ -115,7 +119,8 @@ namespace jni
 		env->CallVoidMethod(callback, javaClass->onCaptureResult, jresult.get(), jFrame);
 
 		ExceptionCheck(env);
-		env->DeleteLocalRef(jBuffer);
+		// jBuffer is a JavaLocalRef and deletes its own local reference on
+		// scope exit; deleting it again here would be a double free.
 		env->DeleteLocalRef(jFrame);
 	}
 
