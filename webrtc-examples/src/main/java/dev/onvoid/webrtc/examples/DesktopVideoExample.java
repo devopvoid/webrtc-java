@@ -32,6 +32,7 @@ import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
 import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.RTCSignalingState;
 import dev.onvoid.webrtc.media.MediaStream;
@@ -95,6 +96,7 @@ public class DesktopVideoExample {
 
         private final RTCPeerConnection peerConnection;
         private final VideoDesktopSource videoSource;
+        private final RTCRtpSender videoSender;
 
 
         public LocalPeer(PeerConnectionFactory factory) {
@@ -172,7 +174,7 @@ public class DesktopVideoExample {
             // Add the tracks to the peer connection.
             List<String> streamIds = new ArrayList<>();
             streamIds.add("stream1");
-            peerConnection.addTrack(videoTrack, streamIds);
+            videoSender = peerConnection.addTrack(videoTrack, streamIds);
 
             System.out.println("LocalPeer: Created with a desktop video track");
         }
@@ -185,6 +187,11 @@ public class DesktopVideoExample {
                 // Stop capturing before disposing.
                 videoSource.stop();
                 videoSource.dispose();
+            }
+            // RTCRtpSender is not owned by the peer connection; the
+            // application must dispose it once it is no longer needed.
+            if (videoSender != null) {
+                videoSender.dispose();
             }
             if (peerConnection != null) {
                 peerConnection.close();
@@ -234,18 +241,30 @@ public class DesktopVideoExample {
         @Override
         public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
             System.out.println("LocalPeer: Track added: " + receiver.getTrack().getKind());
+
+            // The receiver is a query result the application owns; dispose it
+            // once its track has been retrieved.
+            receiver.dispose();
         }
 
         @Override
         public void onRemoveTrack(RTCRtpReceiver receiver) {
             System.out.println("LocalPeer: Track removed: " + receiver.getTrack().getKind());
+
+            receiver.dispose();
         }
 
         @Override
         public void onTrack(RTCRtpTransceiver transceiver) {
-            MediaStreamTrack track = transceiver.getReceiver().getTrack();
+            RTCRtpReceiver receiver = transceiver.getReceiver();
+            MediaStreamTrack track = receiver.getTrack();
 
             System.out.println("LocalPeer: Transceiver track added: " + track.getKind());
+
+            // The receiver and transceiver are query results the application
+            // owns; dispose them once the track has been retrieved.
+            receiver.dispose();
+            transceiver.dispose();
         }
     }
 }

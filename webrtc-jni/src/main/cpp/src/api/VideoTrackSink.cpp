@@ -35,6 +35,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = frame.video_frame_buffer();
 		webrtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = buffer->ToI420();
 
@@ -53,7 +57,8 @@ namespace jni
 
 		env->CallVoidMethod(sink, javaClass->onFrame, jFrame);
 		ExceptionCheck(env);
-		env->DeleteLocalRef(jBuffer);
+		// jBuffer is a JavaLocalRef and deletes its own local reference on
+		// scope exit; deleting it again here would be a double free.
 		env->DeleteLocalRef(jFrame);
 	}
 

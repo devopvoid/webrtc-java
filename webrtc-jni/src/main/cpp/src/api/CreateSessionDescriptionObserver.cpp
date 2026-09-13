@@ -32,6 +32,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		JavaLocalRef<jobject> javaDesc = jni::RTCSessionDescription::toJava(env, desc);
 
 		env->CallVoidMethod(observer, javaClass->onSuccess, javaDesc.get());
@@ -42,6 +46,10 @@ namespace jni
 	void CreateSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
 	{
 		JNIEnv * env = AttachCurrentThread();
+
+		if (env == nullptr) {
+			return;
+		}
 
 		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 

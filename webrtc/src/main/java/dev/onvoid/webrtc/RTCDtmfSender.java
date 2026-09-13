@@ -36,6 +36,15 @@ import dev.onvoid.webrtc.internal.NativeObject;
  */
 public class RTCDtmfSender extends NativeObject {
 
+	/**
+	 * The native observer registered via {@link #registerObserver}. The
+	 * RTCDtmfSender does not take ownership of the Java observer, but it
+	 * owns the native observer wrapper; it is freed when replaced and when
+	 * {@link #unregisterObserver()} is called.
+	 */
+	@SuppressWarnings("unused")
+	private long observerHandle;
+
 	RTCDtmfSender() {
 		// Default constructor for native object instantiation.
 	}
@@ -141,5 +150,31 @@ public class RTCDtmfSender extends NativeObject {
 	 * If no observer is currently registered, this method has no effect.
 	 */
 	public native void unregisterObserver();
+
+	/**
+	 * Two RTCDtmfSender instances are equal if they are bound to the same
+	 * native sender, e.g. when obtained from two separate calls to {@link
+	 * RTCRtpSender#getDtmfSender()}.
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof RTCDtmfSender)) {
+			return false;
+		}
+
+		long handle = getNativeHandle();
+
+		return handle != 0 && handle == ((RTCDtmfSender) obj).getNativeHandle();
+	}
+
+	@Override
+	public int hashCode() {
+		long handle = getNativeHandle();
+
+		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+	}
 
 }

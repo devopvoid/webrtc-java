@@ -117,4 +117,36 @@ void SetHandle(JNIEnv * env, jobject obj, T * t)
 	SetHandle<T>(env, obj, "nativeHandle", t);
 }
 
+// Replaces the native observer stored in the `handleName` field on `obj`
+// with `observer`, deleting whatever was stored there before. Use this
+// together with ClearNativeObserver() wherever a Java object registers a
+// heap-allocated native observer against a "replace the previous one"
+// register() API, so the previous observer's lifetime can never be
+// forgotten and leaked -- as opposed to reimplementing the same
+// get-old/delete/store-new sequence by hand in each JNI_Foo.cpp.
+template<typename T>
+void ReplaceNativeObserver(JNIEnv * env, jobject obj, const std::string & handleName, T * observer)
+{
+	T * old = GetHandle<T>(env, obj, handleName);
+
+	delete old;
+
+	SetHandle(env, obj, handleName, observer);
+}
+
+// Deletes and clears the native observer stored in the `handleName` field
+// on `obj`, if any. Safe to call when no observer is currently registered
+// (e.g. from an unregisterObserver()/dispose() implementation that isn't
+// sure whether one was ever set).
+template<typename T>
+void ClearNativeObserver(JNIEnv * env, jobject obj, const std::string & handleName)
+{
+	T * observer = GetHandle<T>(env, obj, handleName);
+
+	if (observer) {
+		SetHandle<std::nullptr_t>(env, obj, handleName, nullptr);
+		delete observer;
+	}
+}
+
 #endif

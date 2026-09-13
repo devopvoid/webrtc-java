@@ -54,7 +54,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getSende
 	jni::JavaLocalRef<jobjectArray> objectArray;
 
 	try {
-		objectArray = jni::createObjectArray(env, pc->GetSenders());
+		objectArray = jni::createOwningObjectArray(env, pc->GetSenders());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -72,7 +72,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getRecei
 	jni::JavaLocalRef<jobjectArray> objectArray;
 
 	try {
-		objectArray = jni::createObjectArray(env, pc->GetReceivers());
+		objectArray = jni::createOwningObjectArray(env, pc->GetReceivers());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -90,7 +90,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getTrans
 	jni::JavaLocalRef<jobjectArray> objectArray;
 
 	try {
-		objectArray = jni::createObjectArray(env, pc->GetTransceivers());
+		objectArray = jni::createOwningObjectArray(env, pc->GetTransceivers());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -578,12 +578,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 
 		SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-		auto observer = GetHandle<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
+		ClearNativeObserver<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
 
-		if (observer) {
-		    SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
-			delete observer;
-		}
+		// Drop the owning reference taken when the PeerConnection was handed
+		// to Java in PeerConnectionFactory::createPeerConnection.
+		pc->Release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

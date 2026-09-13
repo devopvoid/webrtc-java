@@ -131,6 +131,63 @@ class RTCPeerConnectionTests extends TestBase {
 	}
 
 	@Test
+	void queriedRefsDisposeIndependently() {
+		// Regression guard: getSenders()/getReceivers()/getTransceivers()
+		// used to hand out Java wrappers backed by no owned native
+		// reference at all (relying entirely on WebRTC's internal
+		// bookkeeping to keep the pointer valid), which could dangle once a
+		// transceiver was stopped and the connection later renegotiated
+		// with m-line recycling, or a pending offer was rolled back. Each
+		// call now transfers a real, independent reference into the
+		// returned wrappers, so disposing one instance must not affect a
+		// separately queried instance of the same underlying sender,
+		// receiver, or transceiver.
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+
+		List<String> streamIds = new ArrayList<>();
+		streamIds.add("stream-0");
+
+		peerConnection.addTrack(audioTrack, streamIds);
+
+		RTCRtpSender[] firstSenders = peerConnection.getSenders();
+		RTCRtpSender[] secondSenders = peerConnection.getSenders();
+		RTCRtpReceiver[] firstReceivers = peerConnection.getReceivers();
+		RTCRtpReceiver[] secondReceivers = peerConnection.getReceivers();
+		RTCRtpTransceiver[] firstTransceivers = peerConnection.getTransceivers();
+		RTCRtpTransceiver[] secondTransceivers = peerConnection.getTransceivers();
+
+		assertEquals(1, firstSenders.length);
+		assertEquals(1, firstReceivers.length);
+		assertEquals(1, firstTransceivers.length);
+
+		// Independently queried wrappers around the same underlying object
+		// must compare equal and hash consistently.
+		assertEquals(firstSenders[0], secondSenders[0]);
+		assertEquals(firstSenders[0].hashCode(), secondSenders[0].hashCode());
+		assertEquals(firstReceivers[0], secondReceivers[0]);
+		assertEquals(firstTransceivers[0], secondTransceivers[0]);
+
+		assertDoesNotThrow(() -> firstSenders[0].dispose());
+		assertDoesNotThrow(() -> firstReceivers[0].dispose());
+		assertDoesNotThrow(() -> firstTransceivers[0].dispose());
+
+		// A disposed instance is never equal to anything but itself, even a
+		// previously-equal wrapper around the same (still-live) object.
+		assertNotEquals(firstSenders[0], secondSenders[0]);
+
+		// The second set of wrappers must remain fully usable after the
+		// first set was disposed.
+		assertNotNull(secondSenders[0].getTrack());
+		assertNotNull(secondTransceivers[0].getSender());
+		assertNotNull(secondTransceivers[0].getReceiver());
+
+		assertDoesNotThrow(() -> secondSenders[0].dispose());
+		assertDoesNotThrow(() -> secondReceivers[0].dispose());
+		assertDoesNotThrow(() -> secondTransceivers[0].dispose());
+	}
+
+	@Test
 	void removeTrack() {
 		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
 		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
@@ -393,5 +450,22 @@ class RTCPeerConnectionTests extends TestBase {
 		assertEquals(RTCSignalingState.CLOSED, peerConnection.getSignalingState());
 		assertEquals(RTCIceGatheringState.NEW, peerConnection.getIceGatheringState());
 		assertEquals(RTCIceConnectionState.CLOSED, peerConnection.getIceConnectionState());
+	}
+
+	@Test
+	void closeManyConnectionsDoesNotCrash() {
+		// Regression guard: close() previously never released the native
+		// reference taken when the connection was created (pc->Release()
+		// was missing), leaking the native PeerConnectionInterface on every
+		// close(). A leak itself is not observable from Java, but repeating
+		// create/close guards against the fix (calling Release() on the raw
+		// pointer) crashing or corrupting memory.
+		for (int i = 0; i < 200; i++) {
+			RTCConfiguration config = new RTCConfiguration();
+			PeerConnectionObserver observer = candidate -> { };
+
+			RTCPeerConnection connection = factory.createPeerConnection(config, observer);
+			connection.close();
+		}
 	}
 }

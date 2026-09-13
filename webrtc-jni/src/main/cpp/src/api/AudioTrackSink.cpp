@@ -30,6 +30,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		const jbyte * buffer = static_cast<const jbyte *>(data);
 		jsize dataSize = static_cast<jsize>(frames * channels * (bitsPerSample / 8));
 

@@ -139,7 +139,13 @@ When you're done with the DTMF sender, you should unregister any observers:
 dtmfSender.unregisterObserver();
 ```
 
-Note that you don't need to explicitly dispose of the DTMF sender, as it will be cleaned up when the associated RTP sender is disposed.
+`RTCDtmfSender` has no `dispose()` method of its own; it is tied to the native sender's lifetime.
+The `RTCRtpSender` it came from, however, is not owned by the peer connection, so make sure to
+dispose that once you're done with it:
+
+```java
+sender.dispose();
+```
 
 ## Best Practices
 

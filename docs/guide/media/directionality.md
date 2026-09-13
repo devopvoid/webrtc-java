@@ -50,7 +50,8 @@ init.direction = RTCRtpTransceiverDirection.RECV_ONLY;
 RTCRtpTransceiver transceiver = pc.addTransceiver(videoTrack, init);
 
 // Access the receiving track and attach a sink
-MediaStreamTrack track = transceiver.getReceiver().getTrack();
+RTCRtpReceiver receiver = transceiver.getReceiver();
+MediaStreamTrack track = receiver.getTrack();
 if (track instanceof dev.onvoid.webrtc.media.video.VideoTrack vTrack) {
     vTrack.addSink(frame -> {
         // Handle incoming frames
@@ -58,6 +59,12 @@ if (track instanceof dev.onvoid.webrtc.media.video.VideoTrack vTrack) {
         frame.release();
     });
 }
+
+// receiver and transceiver are not owned by the peer connection; dispose
+// them once the track has been retrieved. The track itself is unaffected
+// and keeps delivering frames to its sink.
+receiver.dispose();
+transceiver.dispose();
 ```
 
 ::: info
@@ -89,6 +96,10 @@ RTCRtpTransceiver transceiver = pc.addTransceiver(audioTrack, init);
 
 // Optionally verify
 assert transceiver.getDirection() == RTCRtpTransceiverDirection.SEND_ONLY;
+
+// transceiver is not owned by the peer connection; dispose it once you no
+// longer need this reference (e.g. together with the peer connection).
+transceiver.dispose();
 ```
 
 When you create the offer with this setup, the SDP will include a=sendonly for the audio m= section.

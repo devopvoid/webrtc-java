@@ -59,7 +59,7 @@ public class VideoCapture extends NativeObject {
 	 * @param device Non-null device descriptor to bind. Passing {@code null}
 	 *               is invalid and may raise a {@link NullPointerException}.
 	 *
-	 * @throws IllegalStateException if called after disposal.
+	 * @throws NullPointerException if called after disposal.
 	 */
 	public native void setVideoCaptureDevice(VideoDevice device);
 
@@ -73,7 +73,7 @@ public class VideoCapture extends NativeObject {
 	 * @param capability Desired capture capability (must be non-null).
 	 *
 	 * @throws IllegalArgumentException if unsupported or invalid.
-	 * @throws IllegalStateException    if called after disposal.
+	 * @throws NullPointerException     if called after disposal.
 	 */
 	public native void setVideoCaptureCapability(VideoCaptureCapability capability);
 
@@ -87,7 +87,7 @@ public class VideoCapture extends NativeObject {
 	 *
 	 * @param sink The consumer of captured frames.
 	 *
-	 * @throws IllegalStateException if called after disposal.
+	 * @throws NullPointerException if called after disposal.
 	 */
 	public native void setVideoSink(VideoTrackSink sink);
 
@@ -97,8 +97,8 @@ public class VideoCapture extends NativeObject {
 	 * Idempotency:
 	 * Calling start() while already started should be a no-op (implementation-dependent).
 	 *
-	 * @throws IllegalStateException if prerequisites (device/capability) are missing
-	 *                               or the instance is disposed.
+	 * @throws NullPointerException if the instance is disposed.
+	 * @throws IllegalStateException if prerequisites (device/capability) are missing.
 	 */
 	public native void start();
 
@@ -109,7 +109,7 @@ public class VideoCapture extends NativeObject {
 	 * <li>Drains or discards in-flight frames (implementation-dependent).</li>
 	 * <li>Safe to call multiple times (idempotent).</li>
 	 *
-	 * @throws IllegalStateException if the instance is disposed.
+	 * @throws NullPointerException if the instance is disposed.
 	 */
 	public native void stop();
 
@@ -118,8 +118,8 @@ public class VideoCapture extends NativeObject {
 	 * <p>
 	 * Lifecycle:
 	 * <li>Implicitly stops capture if currently running.</li>
-	 * <li>After disposal, further method calls (other than additional dispose attempts)
-	 *     are invalid and may throw {@link IllegalStateException}.</li>
+	 * <li>After disposal, any further method call, including another call to
+	 *     {@code dispose()} itself, throws {@link NullPointerException}.</li>
 	 * <p>
 	 * Best Practice:
 	 * Always invoke in a finally block or use a higher-level resource management

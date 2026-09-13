@@ -121,3 +121,19 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 
 	return jDtmfSender.release();
 }
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_dispose
+(JNIEnv * env, jobject caller)
+{
+	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	CHECK_HANDLE(sender);
+
+	// Unlike e.g. MediaStreamTrack, an RTCRtpSender is not exclusively owned
+	// by one Java wrapper: the owning RtpTransceiver keeps its own reference,
+	// and other Java wrappers may have been obtained via separate
+	// getSenders()/getSender() calls. Dropping our reference here is
+	// expected to leave others around, so it is not reported as an error.
+	sender->Release();
+
+	SetHandle<std::nullptr_t>(env, caller, nullptr);
+}

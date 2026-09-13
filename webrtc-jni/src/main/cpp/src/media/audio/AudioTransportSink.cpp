@@ -39,6 +39,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return 0;
+		}
+
 		const jbyte * buffer = static_cast<const jbyte *>(audioSamples);
 		jsize dataSize = static_cast<jsize>(nSamples * nBytesPerSample);
 

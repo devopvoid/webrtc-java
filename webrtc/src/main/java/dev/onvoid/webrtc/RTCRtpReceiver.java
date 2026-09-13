@@ -18,7 +18,7 @@ package dev.onvoid.webrtc;
 
 import java.util.List;
 
-import dev.onvoid.webrtc.internal.NativeObject;
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
 /**
@@ -27,7 +27,7 @@ import dev.onvoid.webrtc.media.MediaStreamTrack;
  *
  * @author Alex Andres
  */
-public class RTCRtpReceiver extends NativeObject {
+public class RTCRtpReceiver extends DisposableNativeObject {
 
 	/**
 	 * Constructor to be used by the native api.
@@ -82,5 +82,46 @@ public class RTCRtpReceiver extends NativeObject {
 	 * @return A list of synchronization sources in descending timestamp order.
 	 */
 	public native List<RTCRtpSynchronizationSource> getSynchronizationSources();
+
+	/**
+	 * Releases the native reference held by this RTCRtpReceiver instance.
+	 * <p>
+	 * An RTCRtpReceiver is not exclusively owned by this instance: the
+	 * underlying receiver may be kept alive by its {@link RTCRtpTransceiver}
+	 * or by other RTCRtpReceiver instances obtained via separate calls to
+	 * {@link RTCPeerConnection#getReceivers()} or {@link
+	 * RTCRtpTransceiver#getReceiver()}. Disposing this instance only drops
+	 * the reference it holds and does not affect the receiver itself or any
+	 * other instance referring to it.
+	 */
+	@Override
+	public native void dispose();
+
+	/**
+	 * Two RTCRtpReceiver instances are equal if they are bound to the same
+	 * native receiver, e.g. when obtained from two separate calls to {@link
+	 * RTCPeerConnection#getReceivers()}. A disposed instance is never equal
+	 * to anything but itself.
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof RTCRtpReceiver)) {
+			return false;
+		}
+
+		long handle = getNativeHandle();
+
+		return handle != 0 && handle == ((RTCRtpReceiver) obj).getNativeHandle();
+	}
+
+	@Override
+	public int hashCode() {
+		long handle = getNativeHandle();
+
+		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+	}
 
 }

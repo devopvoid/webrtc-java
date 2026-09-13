@@ -28,14 +28,19 @@ namespace jni
 		{
 			const auto javaClass = JavaClasses::get<JavaPortAllocatorConfigClass>(env);
 
-			jobject jpac = env->NewObject(javaClass->cls, javaClass->ctor);
+			JavaLocalRef<jobject> jpac(env, env->NewObject(javaClass->cls, javaClass->ctor));
 
-			JavaObject obj(env, JavaLocalRef<jobject>(env, jpac));
+			// Keep jpac alive for the whole function instead of wrapping the
+			// raw jobject in two separate JavaLocalRef instances: the first
+			// one's destructor would delete the local ref at the end of its
+			// full expression, leaving the second (returned) one wrapping an
+			// already-deleted reference.
+			JavaObject obj(env, jpac);
 			obj.setInt(javaClass->minPort, cfg.min_port);
 			obj.setInt(javaClass->maxPort, cfg.max_port);
 			obj.setInt(javaClass->flags, cfg.flags);
 
-			return JavaLocalRef<jobject>(env, jpac);
+			return jpac;
 		}
 
 		JavaPortAllocatorConfigClass::JavaPortAllocatorConfigClass(JNIEnv * env)

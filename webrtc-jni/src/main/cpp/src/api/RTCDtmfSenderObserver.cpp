@@ -32,6 +32,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		JavaLocalRef<jstring> jTone = JavaString::toJava(env, tone);
 		JavaLocalRef<jstring> jToneBuffer = JavaString::toJava(env, tone_buffer);
 

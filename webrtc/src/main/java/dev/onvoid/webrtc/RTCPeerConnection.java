@@ -330,4 +330,30 @@ public class RTCPeerConnection extends NativeObject {
 	 */
 	public native void close();
 
+	/**
+	 * Two RTCPeerConnection instances are equal if they are bound to the
+	 * same native connection. A closed instance is never equal to anything
+	 * but itself.
+	 */
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof RTCPeerConnection)) {
+			return false;
+		}
+
+		long handle = getNativeHandle();
+
+		return handle != 0 && handle == ((RTCPeerConnection) obj).getNativeHandle();
+	}
+
+	@Override
+	public int hashCode() {
+		long handle = getNativeHandle();
+
+		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+	}
+
 }

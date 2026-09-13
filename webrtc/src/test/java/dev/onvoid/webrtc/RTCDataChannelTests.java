@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc;
 
 import static java.util.Objects.nonNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -112,6 +114,111 @@ class RTCDataChannelTests extends TestBase {
 
 		assertEquals(Collections.singletonList("Hello world"), callee.getReceivedTexts());
 		assertEquals(Collections.singletonList("Hi :)"), caller.getReceivedTexts());
+
+		caller.close();
+		callee.close();
+	}
+
+	@Test
+	void replaceObserverStopsPreviousObserver() throws Exception {
+		TestPeerConnection caller = new TestPeerConnection(factory);
+		TestPeerConnection callee = new TestPeerConnection(factory);
+
+		caller.setRemotePeerConnection(callee);
+		callee.setRemotePeerConnection(caller);
+
+		RTCDataChannel channel = caller.getPeerConnection()
+				.createDataChannel("replace-observer", new RTCDataChannelInit());
+
+		callee.setRemoteDescription(caller.createOffer());
+		caller.setRemoteDescription(callee.createAnswer());
+
+		caller.waitUntilConnected();
+		callee.waitUntilConnected();
+
+		AtomicInteger firstObserverCalls = new AtomicInteger();
+		AtomicInteger secondObserverCalls = new AtomicInteger();
+
+		channel.registerObserver(new RTCDataChannelObserver() {
+			@Override
+			public void onStateChange() {
+				firstObserverCalls.incrementAndGet();
+			}
+
+			@Override
+			public void onMessage(RTCDataChannelBuffer buffer) { }
+
+			@Override
+			public void onBufferedAmountChange(long sentDataSize) { }
+		});
+
+		// Replacing the observer must unregister and free the previous
+		// native observer wrapper instead of leaking it and leaving it
+		// registered alongside the new one.
+		channel.registerObserver(new RTCDataChannelObserver() {
+			@Override
+			public void onStateChange() {
+				secondObserverCalls.incrementAndGet();
+			}
+
+			@Override
+			public void onMessage(RTCDataChannelBuffer buffer) { }
+
+			@Override
+			public void onBufferedAmountChange(long sentDataSize) { }
+		});
+
+		int firstCallsAfterReplace = firstObserverCalls.get();
+
+		channel.close();
+
+		long deadline = System.currentTimeMillis() + 2000;
+		while (secondObserverCalls.get() == 0 && System.currentTimeMillis() < deadline) {
+			Thread.sleep(20);
+		}
+
+		assertEquals(firstCallsAfterReplace, firstObserverCalls.get(),
+				"The replaced observer must not receive further events");
+		assertTrue(secondObserverCalls.get() > 0,
+				"The active observer must receive the close state change");
+
+		channel.dispose();
+		caller.close();
+		callee.close();
+	}
+
+	@Test
+	void disposeFreesStillRegisteredObserver() throws Exception {
+		TestPeerConnection caller = new TestPeerConnection(factory);
+		TestPeerConnection callee = new TestPeerConnection(factory);
+
+		caller.setRemotePeerConnection(callee);
+		callee.setRemotePeerConnection(caller);
+
+		RTCDataChannel channel = caller.getPeerConnection()
+				.createDataChannel("dispose-observer", new RTCDataChannelInit());
+
+		callee.setRemoteDescription(caller.createOffer());
+		caller.setRemoteDescription(callee.createAnswer());
+
+		caller.waitUntilConnected();
+		callee.waitUntilConnected();
+
+		channel.registerObserver(new RTCDataChannelObserver() {
+			@Override
+			public void onStateChange() { }
+
+			@Override
+			public void onMessage(RTCDataChannelBuffer buffer) { }
+
+			@Override
+			public void onBufferedAmountChange(long sentDataSize) { }
+		});
+
+		// dispose() must free the still-registered native observer itself
+		// instead of leaking it, without calling unregisterObserver() first.
+		channel.close();
+		assertDoesNotThrow(channel::dispose);
 
 		caller.close();
 		callee.close();

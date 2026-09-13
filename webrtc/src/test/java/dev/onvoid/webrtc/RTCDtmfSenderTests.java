@@ -186,6 +186,27 @@ class RTCDtmfSenderTests extends TestBase {
         assertEquals(Arrays.asList("1", "2", "3", null), observer.getTones()); // No new events
     }
 
+    @Test
+    void replaceObserverStopsPreviousObserver() throws InterruptedException {
+        TestDtmfSenderObserver first = new TestDtmfSenderObserver();
+        TestDtmfSenderObserver second = new TestDtmfSenderObserver();
+
+        dtmfSender.registerObserver(first);
+
+        // Replacing the observer must unregister and free the previous
+        // native observer wrapper instead of leaking it and leaving it
+        // registered alongside the new one.
+        dtmfSender.registerObserver(second);
+
+        assertTrue(dtmfSender.insertDtmf("1", 100, 70));
+        assertTrue(second.awaitCompletion(), "Timed out waiting for DTMF sequence to complete");
+
+        assertEquals(Arrays.asList("1", null), second.getTones());
+        assertTrue(first.getTones().isEmpty(), "The replaced observer must not receive events");
+
+        dtmfSender.unregisterObserver();
+    }
+
     private void insertTones(List<String> tones, int duration, int interToneGap) throws InterruptedException {
         TestDtmfSenderObserver observer = new TestDtmfSenderObserver();
 

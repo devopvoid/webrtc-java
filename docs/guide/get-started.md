@@ -274,12 +274,13 @@ Audio devices can be specified via the `AudioDeviceModule`, see the guide on [Au
 ```java
 import java.util.ArrayList;
 import java.util.List;
+import dev.onvoid.webrtc.RTCRtpSender;
 
 // Add tracks to the peer connection
 List<String> streamIds = new ArrayList<>();
 streamIds.add("stream1");
-peerConnection.addTrack(videoTrack, streamIds);
-peerConnection.addTrack(audioTrack, streamIds);
+RTCRtpSender videoSender = peerConnection.addTrack(videoTrack, streamIds);
+RTCRtpSender audioSender = peerConnection.addTrack(audioTrack, streamIds);
 ```
 
 ## Cleanup
@@ -287,6 +288,10 @@ peerConnection.addTrack(audioTrack, streamIds);
 Always properly dispose of resources when you're done:
 
 ```java
+// Dispose of senders (not owned by the peer connection)
+videoSender.dispose();
+audioSender.dispose();
+
 // Dispose of tracks
 videoTrack.dispose();
 audioTrack.dispose();

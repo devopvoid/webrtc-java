@@ -33,6 +33,11 @@ namespace jni
 	void DeviceChangeListener::deviceConnected(avdev::DevicePtr device)
 	{
 		JNIEnv * env = AttachCurrentThread();
+
+		if (env == nullptr) {
+			return;
+		}
+
 		JavaLocalRef<jobject> jdevice = nullptr;
 
 		if (dynamic_cast<jni::avdev::AudioDevice *>(device.get())) {
@@ -51,6 +56,11 @@ namespace jni
 	void DeviceChangeListener::deviceDisconnected(avdev::DevicePtr device)
 	{
 		JNIEnv * env = AttachCurrentThread();
+
+		if (env == nullptr) {
+			return;
+		}
+
 		JavaLocalRef<jobject> jdevice = nullptr;
 
 		if (dynamic_cast<jni::avdev::AudioDevice *>(device.get())) {

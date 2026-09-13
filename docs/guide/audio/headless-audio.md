@@ -73,7 +73,7 @@ PeerConnectionFactory factory = new PeerConnectionFactory(adm);
 // Use a custom or built-in AudioSource to provide audio frames
 CustomAudioSource source = new CustomAudioSource();
 AudioTrack senderTrack = factory.createAudioTrack("audio0", source);
-peerConnection.addTrack(senderTrack, Collections.singletonList("stream0"));
+RTCRtpSender sender = peerConnection.addTrack(senderTrack, Collections.singletonList("stream0"));
 
 // Push PCM frames into the CustomAudioSource (10 ms chunks work well)
 byte[] pcm = new byte[480 /* frames */ * 2 /* ch */ * 2 /* bytes */];
@@ -81,6 +81,9 @@ source.pushAudio(pcm, 16, 48000, 2, 480);
 
 // ... later, stop
 adm.stopRecording();
+// addTrack() returns an RTCRtpSender that is not owned by the peer
+// connection, so dispose it explicitly.
+sender.dispose();
 adm.dispose();
 factory.dispose();
 ```
