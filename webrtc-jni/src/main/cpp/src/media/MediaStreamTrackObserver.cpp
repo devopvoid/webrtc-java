@@ -35,6 +35,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		// Check state changes.
 
 		if (eventType == MediaStreamTrackEvent::mute) {

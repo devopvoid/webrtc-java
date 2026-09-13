@@ -31,6 +31,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		JavaLocalRef<jobject> javaReport = jni::RTCStatsReport::toJava(env, report);
 
 		env->CallVoidMethod(callback, javaClass->onStatsDelivered, javaReport.get());

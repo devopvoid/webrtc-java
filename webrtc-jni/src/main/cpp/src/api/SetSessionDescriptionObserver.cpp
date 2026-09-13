@@ -32,6 +32,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		env->CallVoidMethod(observer, javaClass->onSuccess);
 
 		ExceptionCheck(env);
@@ -40,6 +44,10 @@ namespace jni
 	void SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
 	{
 		JNIEnv * env = AttachCurrentThread();
+
+		if (env == nullptr) {
+			return;
+		}
 
 		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 

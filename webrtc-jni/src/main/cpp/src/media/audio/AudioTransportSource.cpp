@@ -40,6 +40,11 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			nSamplesOut = 0;
+			return 0;
+		}
+
 		*elapsed_time_ms = 0;
 		*ntp_time_ms = 0;
 

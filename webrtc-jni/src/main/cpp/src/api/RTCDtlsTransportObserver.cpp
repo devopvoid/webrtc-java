@@ -34,6 +34,10 @@ namespace jni
 	{
 		JNIEnv * env = AttachCurrentThread();
 
+		if (env == nullptr) {
+			return;
+		}
+
 		auto state = JavaEnums::toJava(env, info.state());
 
 		env->CallVoidMethod(observer, javaClass->onStateChange, state.get());
@@ -44,6 +48,10 @@ namespace jni
 	void RTCDtlsTransportObserver::OnError(webrtc::RTCError error)
 	{
 		JNIEnv * env = AttachCurrentThread();
+
+		if (env == nullptr) {
+			return;
+		}
 
 		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
