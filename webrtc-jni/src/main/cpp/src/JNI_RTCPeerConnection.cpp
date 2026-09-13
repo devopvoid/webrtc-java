@@ -578,12 +578,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 
 		SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-		auto observer = GetHandle<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
-
-		if (observer) {
-		    SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
-			delete observer;
-		}
+		ClearNativeObserver<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
 
 		// Drop the owning reference taken when the PeerConnection was handed
 		// to Java in PeerConnectionFactory::createPeerConnection.

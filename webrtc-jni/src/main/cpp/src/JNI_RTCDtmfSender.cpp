@@ -78,11 +78,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 	// it, otherwise it would leak along with its JNI global reference.
 	sender->UnregisterObserver();
 
-	auto oldObserver = GetHandle<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
-	delete oldObserver;
-
 	auto observer = new jni::RTCDtmfSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
-	SetHandle(env, caller, "observerHandle", observer);
+	ReplaceNativeObserver(env, caller, "observerHandle", observer);
 
 	sender->RegisterObserver(observer);
 }
@@ -95,10 +92,5 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver
 
 	sender->UnregisterObserver();
 
-	auto observer = GetHandle<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
-
-	if (observer) {
-		SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
-		delete observer;
-	}
+	ClearNativeObserver<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
 }

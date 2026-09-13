@@ -80,11 +80,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 	// it, otherwise it would leak along with its JNI global reference.
 	transport->UnregisterObserver();
 
-	auto oldObserver = GetHandle<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
-	delete oldObserver;
-
 	auto newObserver = new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer));
-	SetHandle(env, caller, "observerHandle", newObserver);
+	ReplaceNativeObserver(env, caller, "observerHandle", newObserver);
 
 	transport->RegisterObserver(newObserver);
 }
@@ -97,10 +94,5 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserve
 
 	transport->UnregisterObserver();
 
-	auto observer = GetHandle<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
-
-	if (observer) {
-		SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
-		delete observer;
-	}
+	ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
 }
