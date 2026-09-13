@@ -30,6 +30,16 @@ import java.util.Objects;
 public class RTCDataChannel extends DisposableNativeObject {
 
 	/**
+	 * The native observer registered via {@link #registerObserver}. The
+	 * RTCDataChannel does not take ownership of the Java observer, but it
+	 * owns the native observer wrapper; it is freed when replaced, when
+	 * {@link #unregisterObserver()} is called, and when this channel is
+	 * disposed.
+	 */
+	@SuppressWarnings("unused")
+	private long observerHandle;
+
+	/**
 	 * Used by the native api.
 	 */
 	private RTCDataChannel() {

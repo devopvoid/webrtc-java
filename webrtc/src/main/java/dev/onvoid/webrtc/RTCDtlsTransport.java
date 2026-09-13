@@ -37,6 +37,15 @@ import dev.onvoid.webrtc.internal.NativeObject;
 public class RTCDtlsTransport extends NativeObject {
 
 	/**
+	 * The native observer registered via {@link #registerObserver}. The
+	 * RTCDtlsTransport does not take ownership of the Java observer, but it
+	 * owns the native observer wrapper; it is freed when replaced and when
+	 * {@link #unregisterObserver()} is called.
+	 */
+	@SuppressWarnings("unused")
+	private long observerHandle;
+
+	/**
 	 * Returns the underlying transport that is used to send and receive
 	 * packets. The underlying transport may not be shared between multiple
 	 * active RTCDtlsTransport objects.

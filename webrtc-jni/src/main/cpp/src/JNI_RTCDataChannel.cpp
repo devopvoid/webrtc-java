@@ -35,7 +35,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
 	CHECK_HANDLE(channel);
 
-	channel->RegisterObserver(new jni::RTCDataChannelObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver)));
+	// Unregister and free a previously registered observer before replacing
+	// it, otherwise it would leak along with its JNI global reference.
+	channel->UnregisterObserver();
+
+	auto oldObserver = GetHandle<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
+	delete oldObserver;
+
+	auto observer = new jni::RTCDataChannelObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+	SetHandle(env, caller, "observerHandle", observer);
+
+	channel->RegisterObserver(observer);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_unregisterObserver
@@ -45,6 +55,13 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_unregisterObserver
 	CHECK_HANDLE(channel);
 
 	channel->UnregisterObserver();
+
+	auto observer = GetHandle<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
+
+	if (observer) {
+		SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
+		delete observer;
+	}
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getLabel
@@ -151,6 +168,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_dispose
 {
 	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
 	CHECK_HANDLE(channel);
+
+	channel->UnregisterObserver();
+
+	auto observer = GetHandle<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
+
+	if (observer) {
+		SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
+		delete observer;
+	}
 
 	webrtc::RefCountReleaseStatus status = channel->Release();
 

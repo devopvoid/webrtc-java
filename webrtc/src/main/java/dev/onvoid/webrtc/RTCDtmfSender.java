@@ -36,6 +36,15 @@ import dev.onvoid.webrtc.internal.NativeObject;
  */
 public class RTCDtmfSender extends NativeObject {
 
+	/**
+	 * The native observer registered via {@link #registerObserver}. The
+	 * RTCDtmfSender does not take ownership of the Java observer, but it
+	 * owns the native observer wrapper; it is freed when replaced and when
+	 * {@link #unregisterObserver()} is called.
+	 */
+	@SuppressWarnings("unused")
+	private long observerHandle;
+
 	RTCDtmfSender() {
 		// Default constructor for native object instantiation.
 	}
