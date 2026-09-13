@@ -28,6 +28,8 @@ import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
+import java.util.Map;
+
 /**
  * The PeerConnectionFactory is the main entry point for a WebRTC application.
  * It provides factory methods for {@link RTCPeerConnection} and audio/video
@@ -61,7 +63,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * Creates an instance of PeerConnectionFactory.
 	 */
 	public PeerConnectionFactory() {
-		this(null, null);
+		initialize(null, null, null);
 	}
 
 	/**
@@ -71,7 +73,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * @param audioProcessing The custom audio processing module.
 	 */
 	public PeerConnectionFactory(AudioProcessing audioProcessing) {
-		initialize(null, audioProcessing);
+		initialize(null, null, audioProcessing);
 	}
 
 	/**
@@ -81,7 +83,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * @param audioModule The custom audio device module.
 	 */
 	public PeerConnectionFactory(AudioDeviceModuleBase audioModule) {
-		initialize(audioModule, null);
+		initialize(null, audioModule, null);
 	}
 
 	/**
@@ -93,7 +95,62 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 */
 	public PeerConnectionFactory(AudioDeviceModuleBase audioModule,
 			AudioProcessing audioProcessing) {
-		initialize(audioModule, audioProcessing);
+		initialize(null, audioModule, audioProcessing);
+	}
+
+	/**
+	 * Creates an instance of PeerConnectionFactory with the provided field
+	 * trials, which allow enabling experimental WebRTC features.
+	 *
+	 * @param fieldTrials The field trials to set, e.g. {@code
+	 *                    {"WebRTC-Bar": "Enabled"}}. Keys and values must be
+	 *                    non-null and non-empty.
+	 */
+	public PeerConnectionFactory(Map<String, String> fieldTrials) {
+		initialize(fieldTrials, null, null);
+	}
+
+	/**
+	 * Creates an instance of PeerConnectionFactory with the provided field
+	 * trials and audio processing module.
+	 *
+	 * @param fieldTrials     The field trials to set, e.g. {@code
+	 *                        {"WebRTC-Bar": "Enabled"}}. Keys and values must
+	 *                        be non-null and non-empty.
+	 * @param audioProcessing The custom audio processing module.
+	 */
+	public PeerConnectionFactory(Map<String, String> fieldTrials,
+			AudioProcessing audioProcessing) {
+		initialize(fieldTrials, null, audioProcessing);
+	}
+
+	/**
+	 * Creates an instance of PeerConnectionFactory with the provided field
+	 * trials and audio device module.
+	 *
+	 * @param fieldTrials The field trials to set, e.g. {@code
+	 *                    {"WebRTC-Bar": "Enabled"}}. Keys and values must be
+	 *                    non-null and non-empty.
+	 * @param audioModule The custom audio device module.
+	 */
+	public PeerConnectionFactory(Map<String, String> fieldTrials,
+			AudioDeviceModuleBase audioModule) {
+		initialize(fieldTrials, audioModule, null);
+	}
+
+	/**
+	 * Creates an instance of PeerConnectionFactory with the provided field
+	 * trials and modules for audio devices and audio processing.
+	 *
+	 * @param fieldTrials     The field trials to set, e.g. {@code
+	 *                        {"WebRTC-Bar": "Enabled"}}. Keys and values must
+	 *                        be non-null and non-empty.
+	 * @param audioModule     The custom audio device module.
+	 * @param audioProcessing The custom audio processing module.
+	 */
+	public PeerConnectionFactory(Map<String, String> fieldTrials,
+			AudioDeviceModuleBase audioModule, AudioProcessing audioProcessing) {
+		initialize(fieldTrials, audioModule, audioProcessing);
 	}
 
 	/**
@@ -169,7 +226,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	@Override
 	public native void dispose();
 
-	private native void initialize(AudioDeviceModuleBase audioModule,
-			AudioProcessing audioProcessing);
+	private native void initialize(Map<String, String> fieldTrials,
+			AudioDeviceModuleBase audioModule, AudioProcessing audioProcessing);
 
 }

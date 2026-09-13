@@ -17,12 +17,14 @@
 #include "JNI_PeerConnectionFactory.h"
 #include "api/AudioOptions.h"
 #include "api/CreateSessionDescriptionObserver.h"
+#include "api/FieldTrialsView.h"
 #include "api/PeerConnectionObserver.h"
 #include "api/RTCConfiguration.h"
 #include "api/RTCRtpCapabilities.h"
 #include "JavaEnums.h"
 #include "JavaError.h"
 #include "JavaFactories.h"
+#include "JavaHashMap.h"
 #include "JavaNullPointerException.h"
 #include "JavaRuntimeException.h"
 #include "JavaRef.h"
@@ -58,14 +60,35 @@
 #include "api/video_codecs/video_encoder_factory.h"
 #include "api/video_codecs/video_encoder_factory_template.h"
 
+#include <map>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
-(JNIEnv * env, jobject caller, jobject audioModule, jobject audioProcessing)
+(JNIEnv * env, jobject caller, jobject jFieldTrials, jobject audioModule, jobject audioProcessing)
 {
 	webrtc::AudioDeviceModule * audioDevModule = (audioModule != nullptr)
 		? GetHandle<webrtc::AudioDeviceModule>(env, audioModule)
 		: nullptr;
 
 	try {
+		std::map<std::string, std::string> fieldTrialsMap;
+
+		if (jFieldTrials != nullptr) {
+			for (const auto & entry : jni::JavaHashMap(env, jni::JavaLocalRef<jobject>(env, jFieldTrials))) {
+				std::string key = jni::JavaString::toNative(env, jni::static_java_ref_cast<jstring>(env, entry.first));
+				std::string value = jni::JavaString::toNative(env, jni::static_java_ref_cast<jstring>(env, entry.second));
+
+				if (key.empty() || value.empty()) {
+					throw jni::Exception("Invalid field trial entry: key and value must not be empty");
+				}
+
+				fieldTrialsMap.emplace(std::move(key), std::move(value));
+			}
+		}
+
+		std::unique_ptr<webrtc::FieldTrialsView> fieldTrials = fieldTrialsMap.empty()
+			? nullptr
+			: std::make_unique<jni::FieldTrialsView>(std::move(fieldTrialsMap));
+
 		auto networkThread = webrtc::Thread::CreateWithSocketServer();
 		networkThread->SetName("webrtc_jni_network_thread", nullptr);
 
@@ -133,7 +156,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 				webrtc::Dav1dDecoderTemplateAdapter>>(),
 #endif
 			nullptr,
-			apm);
+			apm,
+			nullptr,
+			std::move(fieldTrials));
 
 		if (factory != nullptr) {
 			SetHandle(env, caller, factory.release());

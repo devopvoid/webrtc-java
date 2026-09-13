@@ -66,6 +66,13 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'Logging', link: '/monitoring/logging' },
 			],
 		},
+		{
+			text: 'Advanced',
+			collapsed: false,
+			items: [
+				{ text: 'Field Trials', link: '/advanced/field-trials' },
+			],
+		},
 	]
 }
 

@@ -25,6 +25,9 @@ import dev.onvoid.webrtc.media.audio.*;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
+import java.util.Collections;
+import java.util.Map;
+
 import org.junit.jupiter.api.Test;
 
 class PeerConnectionFactoryTests extends TestBase {
@@ -58,6 +61,33 @@ class PeerConnectionFactoryTests extends TestBase {
 
 		PeerConnectionFactory factory = new PeerConnectionFactory(audioDevModule, audioProcessing);
 		factory.dispose();
+	}
+
+	@Test
+	void createWithFieldTrials() {
+		AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		Map<String, String> fieldTrials = Collections.singletonMap("WebRTC-Bar", "Enabled");
+
+		PeerConnectionFactory factory = new PeerConnectionFactory(fieldTrials, audioDevModule);
+		factory.dispose();
+	}
+
+	@Test
+	void createWithEmptyFieldTrials() {
+		AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+
+		PeerConnectionFactory factory = new PeerConnectionFactory(Collections.emptyMap(), audioDevModule);
+		factory.dispose();
+	}
+
+	@Test
+	void createWithInvalidFieldTrials() {
+		AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		Map<String, String> fieldTrials = Collections.singletonMap("WebRTC-Bar", "");
+
+		assertThrows(Error.class, () -> {
+			new PeerConnectionFactory(fieldTrials, audioDevModule);
+		});
 	}
 
 	@Test
