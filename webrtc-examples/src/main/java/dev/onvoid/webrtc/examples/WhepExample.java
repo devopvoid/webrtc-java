@@ -161,7 +161,8 @@ public class WhepExample {
         RTCRtpTransceiver transceiver = peerConnection.addTransceiver(videoTrack, transceiverInit);
 
         // Set up a sink to handle incoming video frames.
-        MediaStreamTrack track = transceiver.getReceiver().getTrack();
+        RTCRtpReceiver receiver = transceiver.getReceiver();
+        MediaStreamTrack track = receiver.getTrack();
         if (track instanceof VideoTrack vTrack) {
             vTrack.addSink(videoFrame -> {
                 System.out.println("Received video frame: " + videoFrame);
@@ -170,6 +171,12 @@ public class WhepExample {
                 videoFrame.release();
             });
         }
+
+        // The receiver and transceiver are query results this example owns;
+        // dispose them once the track has been retrieved. The track itself
+        // is unaffected and keeps delivering frames to its sink.
+        receiver.dispose();
+        transceiver.dispose();
     }
 
     private void createOffer() {
@@ -314,6 +321,10 @@ public class WhepExample {
         @Override
         public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
             System.out.println("Track added.");
+
+            // The receiver is a query result the application owns; dispose it
+            // once it is no longer needed.
+            receiver.dispose();
         }
     }
 }

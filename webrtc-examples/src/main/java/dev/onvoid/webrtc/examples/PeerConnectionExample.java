@@ -32,6 +32,7 @@ import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
 import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.RTCSignalingState;
 import dev.onvoid.webrtc.media.MediaStream;
@@ -99,6 +100,8 @@ public class PeerConnectionExample {
         private final RTCPeerConnection peerConnection;
         private final AudioTrack audioTrack;
         private final VideoTrack videoTrack;
+        private final RTCRtpSender audioSender;
+        private final RTCRtpSender videoSender;
         private final AudioFrameLogger audioFrameLogger = new AudioFrameLogger();
         private final VideoFrameLogger videoFrameLogger = new VideoFrameLogger();
 
@@ -130,8 +133,8 @@ public class PeerConnectionExample {
             // Add the tracks to the peer connection.
             List<String> streamIds = new ArrayList<>();
             streamIds.add("stream1");
-            peerConnection.addTrack(audioTrack, streamIds);
-            peerConnection.addTrack(videoTrack, streamIds);
+            audioSender = peerConnection.addTrack(audioTrack, streamIds);
+            videoSender = peerConnection.addTrack(videoTrack, streamIds);
 
             System.out.println("LocalPeer: Created with audio and video tracks");
         }
@@ -145,6 +148,14 @@ public class PeerConnectionExample {
             }
             if (videoTrack != null) {
                 videoTrack.removeSink(videoFrameLogger);
+            }
+            // RTCRtpSender instances are not owned by the peer connection; the
+            // application must dispose them once they are no longer needed.
+            if (audioSender != null) {
+                audioSender.dispose();
+            }
+            if (videoSender != null) {
+                videoSender.dispose();
             }
             if (peerConnection != null) {
                 peerConnection.close();
@@ -194,16 +205,23 @@ public class PeerConnectionExample {
         @Override
         public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
             System.out.println("LocalPeer: Track added: " + receiver.getTrack().getKind());
+
+            // The receiver is a query result the application owns; dispose it
+            // once its track has been retrieved.
+            receiver.dispose();
         }
 
         @Override
         public void onRemoveTrack(RTCRtpReceiver receiver) {
             System.out.println("LocalPeer: Track removed: " + receiver.getTrack().getKind());
+
+            receiver.dispose();
         }
 
         @Override
         public void onTrack(RTCRtpTransceiver transceiver) {
-            MediaStreamTrack track = transceiver.getReceiver().getTrack();
+            RTCRtpReceiver receiver = transceiver.getReceiver();
+            MediaStreamTrack track = receiver.getTrack();
             String kind = track.getKind();
 
             if (kind.equals(MediaStreamTrack.AUDIO_TRACK_KIND)) {
@@ -216,6 +234,12 @@ public class PeerConnectionExample {
             }
 
             System.out.println("LocalPeer: Transceiver track added: " + kind);
+
+            // The receiver and transceiver are query results the application
+            // owns; dispose them once the track has been retrieved. The track
+            // itself is unaffected and keeps delivering frames to its sink.
+            receiver.dispose();
+            transceiver.dispose();
         }
     }
 
