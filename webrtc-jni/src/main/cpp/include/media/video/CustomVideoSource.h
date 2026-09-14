@@ -24,6 +24,7 @@
 
 #include "media/SyncClock.h"
 
+#include <atomic>
 #include <memory>
 
 namespace jni
@@ -43,7 +44,7 @@ namespace jni
 
         private:
             std::shared_ptr<SyncClock> clock_;
-            uint16_t frame_id_;
+            std::atomic<uint16_t> frame_id_;
     };
 }
 #endif
