@@ -98,6 +98,7 @@ public class PeerConnectionExample {
     private static class LocalPeer implements PeerConnectionObserver {
 
         private final RTCPeerConnection peerConnection;
+        private final AudioTrackSource audioSource;
         private final AudioTrack audioTrack;
         private final VideoTrack videoTrack;
         private final RTCRtpSender audioSender;
@@ -124,7 +125,7 @@ public class PeerConnectionExample {
             audioOptions.autoGainControl = true;
             audioOptions.noiseSuppression = true;
 
-            AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
+            audioSource = factory.createAudioSource(audioOptions);
             audioTrack = factory.createAudioTrack("audio0", audioSource);
 
             VideoDeviceSource videoSource = new VideoDeviceSource();
@@ -159,6 +160,11 @@ public class PeerConnectionExample {
             }
             if (peerConnection != null) {
                 peerConnection.close();
+            }
+            // AudioTrackSource is ref-counted and not owned by the audio
+            // track; the application must dispose it once no longer needed.
+            if (audioSource != null) {
+                audioSource.dispose();
             }
         }
 

@@ -298,6 +298,7 @@ audioTrack.dispose();
 
 // Dispose of sources
 videoSource.dispose();
+audioSource.dispose();
 
 // Close peer connection and release resources
 peerConnection.close();
