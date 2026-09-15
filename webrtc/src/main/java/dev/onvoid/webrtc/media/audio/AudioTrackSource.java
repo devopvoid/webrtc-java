@@ -29,4 +29,11 @@ public class AudioTrackSource extends MediaSource {
 
 	}
 
+	/**
+	 * Disposes of the native resources held by this audio source.
+	 * This method should be called when the audio source is no longer needed
+	 * to prevent memory leaks.
+	 */
+	public native void dispose();
+
 }

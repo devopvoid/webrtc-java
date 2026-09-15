@@ -69,6 +69,7 @@ public class PeerConnectionManager implements PeerConnectionSignalingHandler {
     private final PeerConnectionFactory factory;
     private final RTCPeerConnection peerConnection;
     private final List<RTCRtpSender> senders = new ArrayList<>();
+    private final List<AudioTrackSource> audioSources = new ArrayList<>();
 
     private Consumer<RTCSessionDescription> onLocalDescriptionCreated;
     private Consumer<RTCIceCandidate> onIceCandidateGenerated;
@@ -120,6 +121,10 @@ public class PeerConnectionManager implements PeerConnectionSignalingHandler {
     public AudioTrack createAudioTrack(AudioOptions options, String label) {
         AudioTrackSource audioSource = factory.createAudioSource(options);
 
+        // Keep the source around so it can be disposed in close(); it is
+        // ref-counted and not owned by the audio track.
+        audioSources.add(audioSource);
+
         return factory.createAudioTrack(label, audioSource);
     }
 
@@ -155,6 +160,11 @@ public class PeerConnectionManager implements PeerConnectionSignalingHandler {
             sender.dispose();
         }
         senders.clear();
+
+        for (AudioTrackSource audioSource : audioSources) {
+            audioSource.dispose();
+        }
+        audioSources.clear();
 
         if (peerConnection != null) {
             peerConnection.close();

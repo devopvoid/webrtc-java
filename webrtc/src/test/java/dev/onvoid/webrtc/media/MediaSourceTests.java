@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,21 @@ class MediaSourceTests extends TestBase {
 		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
 
 		assertEquals(MediaSource.State.LIVE, audioSource.getState());
+
+		audioSource.dispose();
+	}
+
+	@Test
+	void audioSourceDisposeAfterTrackDispose() {
+		// Regression test: AudioTrackSource used to have no dispose(), so the
+		// native AudioSourceInterface reference obtained from
+		// createAudioSource() could never be released by the application.
+		AudioOptions audioOptions = new AudioOptions();
+		AudioTrackSource audioSource = factory.createAudioSource(audioOptions);
+		AudioTrack audioTrack = factory.createAudioTrack("audio0", audioSource);
+
+		audioTrack.dispose();
+		audioSource.dispose();
 	}
 
 }
