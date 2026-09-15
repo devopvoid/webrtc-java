@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 2026-09-15
+
+### Features
+- Allow setting custom WebRTC field trials on PeerConnectionFactory by @devopvoid in [#284](https://github.com/devopvoid/webrtc-java/pull/284)
+
+### Bug Fixes
+- Make CustomVideoSource's frame_id_ counter thread-safe by @devopvoid in [#286](https://github.com/devopvoid/webrtc-java/pull/286)
+- Synchronize CustomAudioSource's sinks_ against AddSink/RemoveSink by @devopvoid in [#285](https://github.com/devopvoid/webrtc-java/pull/285)
+- JNI memory-safety and thread-safety bugs in the native bridge by @devopvoid in [#283](https://github.com/devopvoid/webrtc-java/pull/283)
+
+### Other
+- Prepare for next development iteration by @devopvoid
+
+
 ## [0.17.0] - 2026-09-13
 
 ### Features
@@ -29,10 +43,12 @@ All notable changes to this project will be documented in this file.
 - Give the DTMF completion wait more headroom by @SendableMetatype in [#268](https://github.com/devopvoid/webrtc-java/pull/268)
 
 ### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.17.0 by @github-actions[bot]
 - Test the windows arm64 natives on a native runner by @SendableMetatype in [#270](https://github.com/devopvoid/webrtc-java/pull/270)
 - Test cross compiled natives on native runners by @SendableMetatype in [#267](https://github.com/devopvoid/webrtc-java/pull/267)
 
 ### Other
+- Prepare release v0.17.0 by @devopvoid
 - Bootstrap depot_tools before fetching the WebRTC source by @SendableMetatype in [#277](https://github.com/devopvoid/webrtc-java/pull/277)
 - Suppress stdout for failed to attach threads on jvm shutdown by @SendableMetatype in [#269](https://github.com/devopvoid/webrtc-java/pull/269)
 - Fix/windows desktop capture by @B077AS in [#263](https://github.com/devopvoid/webrtc-java/pull/263)
