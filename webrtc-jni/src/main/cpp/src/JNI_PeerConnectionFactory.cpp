@@ -61,7 +61,9 @@
 #include "api/video_codecs/video_encoder_factory_template.h"
 
 #include "api/ProxyAudioDeviceModule.h"
+#include "media/audio/CustomAudioSource.h"
 
+#include "api/media_stream_interface.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/thread.h"
 
@@ -307,6 +309,34 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 	return jni::JavaFactories::create(env, audioTrack.release()).release();
 }
 
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFedAudioTrack
+(JNIEnv * env, jobject caller, jobject jTrack)
+{
+	if (jTrack == nullptr) {
+		return JNI_FALSE;
+	}
+
+	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
+
+	if (track == nullptr || track->kind() != webrtc::MediaStreamTrackInterface::kAudioKind) {
+		return JNI_FALSE;
+	}
+
+	webrtc::AudioSourceInterface * source = static_cast<webrtc::AudioTrackInterface *>(track)->GetSource();
+
+	if (source == nullptr) {
+		return JNI_FALSE;
+	}
+
+	// A remote source hands the track's sinks the audio it decodes, and a
+	// CustomAudioSource hands them the audio the application pushes. Either way
+	// a sender of that track is fed through the track rather than by the audio
+	// device module.
+	bool sinkFed = source->remote() || dynamic_cast<jni::CustomAudioSource *>(source) != nullptr;
+
+	return sinkFed ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVideoTrack
 (JNIEnv * env, jobject caller, jstring jlabel, jobject jsource)
 {
@@ -333,7 +363,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 	return jni::JavaFactories::create(env, videoTrack.release()).release();
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnection
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnectionInternal
 (JNIEnv * env, jobject caller, jobject jConfig, jobject jobserver)
 {
 	if (jConfig == nullptr) {

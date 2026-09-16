@@ -216,6 +216,108 @@ class PeerConnectionFactoryTests extends TestBase {
 	}
 
 	@Test
+	void sinkFedTrackAddedToDeviceAudioFactoryIsRejected() {
+		// A track whose audio is pushed rather than captured, here one backed by
+		// a CustomAudioSource but equally one forwarded from a remote peer, may
+		// not become a sender of a factory that sends device-captured audio.
+		AudioDeviceModule deviceModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		AudioDeviceModule customModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory deviceFactory = new PeerConnectionFactory(deviceModule);
+		PeerConnectionFactory customFactory = new PeerConnectionFactory(customModule);
+		CustomAudioSource customSource = new CustomAudioSource();
+
+		try {
+			AudioTrackSource deviceSource = deviceFactory.createAudioSource(new AudioOptions());
+			AudioTrack deviceTrack = deviceFactory.createAudioTrack("deviceTrack", deviceSource);
+			AudioTrack customTrack = customFactory.createAudioTrack("customTrack", customSource);
+
+			RTCPeerConnection peerConnection = deviceFactory.createPeerConnection(
+					new RTCConfiguration(), candidate -> { });
+
+			// The device-captured track is what this factory sends.
+			RTCRtpSender sender = peerConnection.addTrack(deviceTrack,
+					Collections.singletonList("stream0"));
+
+			assertNotNull(sender);
+
+			IllegalStateException e = assertThrows(IllegalStateException.class, () -> {
+				peerConnection.addTrack(customTrack, Collections.singletonList("stream1"));
+			});
+			assertTrue(e.getMessage().contains("AudioDeviceModule"), e.getMessage());
+
+			// A transceiver that sends is rejected for the same reason.
+			RTCRtpTransceiverInit sendRecv = new RTCRtpTransceiverInit();
+
+			assertThrows(IllegalStateException.class, () -> {
+				peerConnection.addTransceiver(customTrack, sendRecv);
+			});
+
+			// A receive-only transceiver never sends the track, so it is allowed.
+			RTCRtpTransceiverInit recvOnly = new RTCRtpTransceiverInit();
+			recvOnly.direction = RTCRtpTransceiverDirection.RECV_ONLY;
+
+			RTCRtpTransceiver transceiver = peerConnection.addTransceiver(customTrack, recvOnly);
+
+			assertNotNull(transceiver);
+
+			transceiver.dispose();
+			sender.dispose();
+			peerConnection.close();
+			deviceTrack.dispose();
+			customTrack.dispose();
+			deviceSource.dispose();
+		}
+		finally {
+			customSource.dispose();
+			customFactory.dispose();
+			deviceFactory.dispose();
+			customModule.dispose();
+			deviceModule.dispose();
+		}
+	}
+
+	@Test
+	void sinkFedTrackAddedFirstCommitsFactoryToPushedAudio() {
+		// Adding a track whose audio is pushed settles the question for the
+		// factory that owns the connection, even though that factory did not
+		// create the track. A forwarded remote track reaches a factory this way.
+		AudioDeviceModule receivingModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		AudioDeviceModule sendingModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory receivingFactory = new PeerConnectionFactory(receivingModule);
+		PeerConnectionFactory sendingFactory = new PeerConnectionFactory(sendingModule);
+		CustomAudioSource customSource = new CustomAudioSource();
+
+		try {
+			AudioTrack customTrack = sendingFactory.createAudioTrack("customTrack", customSource);
+
+			RTCPeerConnection peerConnection = receivingFactory.createPeerConnection(
+					new RTCConfiguration(), candidate -> { });
+
+			RTCRtpSender sender = peerConnection.addTrack(customTrack,
+					Collections.singletonList("stream0"));
+
+			assertNotNull(sender);
+
+			// The receiving factory now sends pushed audio, so its own device
+			// capture is off limits.
+			assertThrows(IllegalStateException.class, () -> {
+				receivingFactory.createAudioSource(new AudioOptions());
+			});
+
+			sender.dispose();
+			peerConnection.close();
+			customTrack.dispose();
+		}
+		finally {
+			customSource.dispose();
+			sendingFactory.dispose();
+			receivingFactory.dispose();
+			sendingModule.dispose();
+			receivingModule.dispose();
+		}
+	}
+
+	@Test
 	void customAudioTrackNullParamsDoNotCommitFactory() {
 		AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
 		PeerConnectionFactory audioFactory = new PeerConnectionFactory(audioModule);

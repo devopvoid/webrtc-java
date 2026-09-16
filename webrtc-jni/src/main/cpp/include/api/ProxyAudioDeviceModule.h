@@ -45,6 +45,12 @@ namespace jni
 	// from the wrapped module (from a recording the application started through
 	// the Java AudioDeviceModule, which holds the wrapped module directly) is
 	// dropped before it reaches WebRTC. Playout is never affected.
+	//
+	// Capture starts disabled and is enabled only once the application asks for
+	// device-captured audio, which it can only do through
+	// PeerConnectionFactory.createAudioSource(). A factory that sends nothing
+	// but sink-fed audio therefore never opens the recording device, and one
+	// that sends no audio at all never opens it either.
 	class ProxyAudioDeviceModule : public webrtc::AudioDeviceModule
 	{
 		public:

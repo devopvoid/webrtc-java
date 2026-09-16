@@ -32,7 +32,7 @@ namespace jni
 
 	ProxyAudioDeviceModule::ProxyAudioDeviceModule(webrtc::scoped_refptr<webrtc::AudioDeviceModule> delegate) :
 			delegate_(std::move(delegate)),
-			captureEnabled_(true),
+			captureEnabled_(false),
 			gate_(captureEnabled_),
 			gateRegistered_(false)
 	{
@@ -55,12 +55,14 @@ namespace jni
 	{
 		captureEnabled_.store(enabled, std::memory_order_release);
 
+		RTC_LOG(LS_INFO) << "ProxyAudioDeviceModule: device capture " << (enabled ? "enabled" : "disabled");
+
 		if (!enabled && delegate_->Recording()) {
 			// A recording that is already running was started by the application
 			// through the Java AudioDeviceModule, which holds the wrapped module
 			// and does not pass through this proxy. Leave it running; its frames
-			// are dropped below instead. WebRTC cannot have started it, because a
-			// factory only reaches this point before it owns any send stream.
+			// are dropped instead. WebRTC cannot have started it, because it only
+			// starts a recording while capture is enabled.
 			RTC_LOG(LS_INFO) << "ProxyAudioDeviceModule: dropping recorded audio, send streams are sink-fed";
 		}
 	}

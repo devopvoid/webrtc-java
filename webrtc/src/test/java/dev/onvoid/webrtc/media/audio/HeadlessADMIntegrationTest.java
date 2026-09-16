@@ -39,10 +39,17 @@ public class HeadlessADMIntegrationTest {
         HeadlessAudioDeviceModule adm = new HeadlessAudioDeviceModule();
         PeerConnectionFactory factory = new PeerConnectionFactory(adm);
 
-        // Ensure the playout pipeline is started (headless output).
+        // Playout starts before either peer connection exists, which is the
+        // order the guide gives. WebRTC hands the module its audio transport
+        // only when it builds its voice engine, which happens later, when the
+        // first peer connection is created. The module's render thread is what
+        // pulls the receive side of both connections, so if it stopped pulling
+        // over that ordering, no remote audio would reach a sink below.
         adm.initPlayout();
         adm.startPlayout();
 
+        // Recording is a state on the module and feeds nothing, so it must
+        // neither deliver audio nor keep remote audio from arriving.
         adm.initRecording();
         adm.startRecording();
 

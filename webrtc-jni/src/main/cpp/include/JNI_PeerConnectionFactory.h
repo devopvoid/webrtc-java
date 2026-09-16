@@ -33,6 +33,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
+	 * Method:    isSinkFedAudioTrack
+	 * Signature: (Ldev/onvoid/webrtc/media/MediaStreamTrack;)Z
+	 */
+	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFedAudioTrack
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    createVideoTrack
 	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/video/VideoTrackSource;)Ldev/onvoid/webrtc/media/video/VideoTrack;
 	 */
@@ -41,10 +49,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    createPeerConnection
+	 * Method:    createPeerConnectionInternal
 	 * Signature: (Ldev/onvoid/webrtc/RTCConfiguration;Ldev/onvoid/webrtc/PeerConnectionObserver;)Ldev/onvoid/webrtc/RTCPeerConnection;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnection
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnectionInternal
 	(JNIEnv *, jobject, jobject, jobject);
 
 	/*

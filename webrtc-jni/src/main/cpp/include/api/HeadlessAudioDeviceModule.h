@@ -39,9 +39,12 @@
 namespace jni
 {
     // A headless AudioDeviceModule that drives the render pipeline by pulling
-    // 10 ms PCM chunks from AudioTransport and discarding them, and simulates
-    // a microphone by pulling 10 ms PCM chunks from the registered AudioTransport
-    // and feeding them into the WebRTC capture pipeline.
+    // 10 ms PCM chunks from AudioTransport and discarding them.
+    //
+    // It has no capture path. Recording is a state this module reports and
+    // nothing more, so that the recording lifecycle of the AudioDeviceModule
+    // interface still works. There is no device to capture from, and audio a
+    // headless application wants to send goes through a CustomAudioSource.
     class HeadlessAudioDeviceModule : public webrtc::AudioDeviceModule
     {
         public:
@@ -148,7 +151,6 @@ namespace jni
 
         private:
             bool PlayThreadProcess();
-            bool CaptureThreadProcess();
 
             // State
             bool initialized_ = false;
@@ -162,22 +164,18 @@ namespace jni
             size_t channels_ = 1;
 
             webrtc::BufferT<int16_t> play_buffer_;
-            webrtc::BufferT<int16_t> record_buffer_;
 
             size_t playoutFramesIn10MS_;
-            size_t recordingFramesIn10MS_;
             // Absolute wall-clock deadline (ms) of the next 10 ms tick. Advanced by a
             // fixed +10 each tick so scheduling/wake-up latency is corrected against the
             // grid rather than accumulating into the frame period.
             int64_t nextPlayoutMillis_;
-            int64_t nextRecordMillis_;
 
             mutable webrtc::Mutex mutex_;
             std::unique_ptr<webrtc::AudioDeviceBuffer> audio_device_buffer_ RTC_GUARDED_BY(mutex_);
             webrtc::AudioTransport * audio_callback_;
 
             webrtc::PlatformThread render_thread_;
-            webrtc::PlatformThread capture_thread_;
     };
 }
 
