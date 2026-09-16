@@ -154,6 +154,96 @@ class PeerConnectionFactoryTests extends TestBase {
 	}
 
 	@Test
+	void customAudioSourceAfterDeviceAudioSourceIsRejected() {
+		// WebRTC feeds device-captured audio into every audio sender of a
+		// factory. A CustomAudioSource track would be fed twice, which aborts
+		// the process inside WebRTC, so the factory must refuse it up front.
+		AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory audioFactory = new PeerConnectionFactory(audioModule);
+		CustomAudioSource customSource = new CustomAudioSource();
+
+		try {
+			AudioTrackSource deviceSource = audioFactory.createAudioSource(new AudioOptions());
+
+			IllegalStateException e = assertThrows(IllegalStateException.class, () -> {
+				audioFactory.createAudioTrack("customTrack", customSource);
+			});
+			assertTrue(e.getMessage().contains("CustomAudioSource"), e.getMessage());
+
+			// The device path stays usable.
+			AudioTrack deviceTrack = audioFactory.createAudioTrack("deviceTrack", deviceSource);
+			assertNotNull(deviceTrack);
+
+			deviceTrack.dispose();
+			deviceSource.dispose();
+		}
+		finally {
+			customSource.dispose();
+			audioFactory.dispose();
+			audioModule.dispose();
+		}
+	}
+
+	@Test
+	void deviceAudioSourceAfterCustomAudioSourceIsRejected() {
+		AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory audioFactory = new PeerConnectionFactory(audioModule);
+		CustomAudioSource customSource = new CustomAudioSource();
+		CustomAudioSource otherCustomSource = new CustomAudioSource();
+
+		try {
+			AudioTrack customTrack = audioFactory.createAudioTrack("customTrack", customSource);
+			assertNotNull(customTrack);
+
+			IllegalStateException e = assertThrows(IllegalStateException.class, () -> {
+				audioFactory.createAudioSource(new AudioOptions());
+			});
+			assertTrue(e.getMessage().contains("AudioDeviceModule"), e.getMessage());
+
+			// Any number of custom sources may share the factory.
+			AudioTrack otherCustomTrack = audioFactory.createAudioTrack("otherCustomTrack", otherCustomSource);
+			assertNotNull(otherCustomTrack);
+
+			otherCustomTrack.dispose();
+			customTrack.dispose();
+		}
+		finally {
+			otherCustomSource.dispose();
+			customSource.dispose();
+			audioFactory.dispose();
+			audioModule.dispose();
+		}
+	}
+
+	@Test
+	void customAudioTrackNullParamsDoNotCommitFactory() {
+		AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory audioFactory = new PeerConnectionFactory(audioModule);
+		CustomAudioSource customSource = new CustomAudioSource();
+
+		try {
+			assertThrows(NullPointerException.class, () -> {
+				audioFactory.createAudioTrack(null, customSource);
+			});
+			assertThrows(NullPointerException.class, () -> {
+				audioFactory.createAudioSource(null);
+			});
+
+			// The rejected custom-track call must not have committed the factory
+			// to pushed audio, so a device-captured source is still allowed.
+			AudioTrackSource deviceSource = audioFactory.createAudioSource(new AudioOptions());
+			assertNotNull(deviceSource);
+
+			deviceSource.dispose();
+		}
+		finally {
+			customSource.dispose();
+			audioFactory.dispose();
+			audioModule.dispose();
+		}
+	}
+
+	@Test
 	void createVideoTrackNullParams() {
 		assertThrows(NullPointerException.class, () -> {
 			factory.createVideoTrack(null, null);

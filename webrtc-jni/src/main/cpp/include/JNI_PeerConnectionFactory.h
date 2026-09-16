@@ -9,19 +9,27 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    createAudioSource
+	 * Method:    createAudioSourceInternal
 	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioOptions;)Ldev/onvoid/webrtc/media/audio/AudioTrackSource;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSource
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSourceInternal
 	(JNIEnv *, jobject, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    createAudioTrack
+	 * Method:    createAudioTrackInternal
 	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/audio/AudioTrackSource;)Ldev/onvoid/webrtc/media/audio/AudioTrack;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrack
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrackInternal
 	(JNIEnv *, jobject, jstring, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
+	 * Method:    setDeviceCaptureEnabled
+	 * Signature: (Z)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCaptureEnabled
+	(JNIEnv *, jobject, jboolean);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory

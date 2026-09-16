@@ -120,7 +120,10 @@ public class HeadlessADMIntegrationTest {
         receiverPcRef.set(receiverPc);
 
         // Add an explicit receive-only audio transceiver on the receiver side.
-        AudioTrackSource rxSource = factory.createAudioSource(new AudioOptions());
+        // Its track never sends, so the source kind does not matter; a custom
+        // source keeps this factory on pushed audio, which is what the sender
+        // below uses. A factory sends audio from only one kind of input.
+        CustomAudioSource rxSource = new CustomAudioSource();
         AudioTrack receiverTrack = factory.createAudioTrack("rx-audio", rxSource);
         RTCRtpTransceiverInit recvOnlyInit = new RTCRtpTransceiverInit();
         recvOnlyInit.direction = RTCRtpTransceiverDirection.RECV_ONLY;
@@ -171,7 +174,13 @@ public class HeadlessADMIntegrationTest {
         assertTrue(sinkAddedLatch.await(5, TimeUnit.SECONDS),
                 "Audio sink was not added in time");
 
-        for (int i = 0; i < 10; i++) { // ~100ms of audio
+        // The module's recording is running, so its capture thread delivers
+        // frames at 100 Hz while this thread pushes at the same rate. The
+        // factory must keep the captured frames away from the send stream;
+        // otherwise both threads enter AudioSendStream::SendAudioData and
+        // WebRTC aborts the process (issue #217). Two seconds give the race
+        // ample opportunity to show up.
+        for (int i = 0; i < 200; i++) {
             customSource.pushAudio(silence, bitsPerSample, sampleRate, channels, frameCount);
             Thread.sleep(10);
         }
@@ -196,6 +205,7 @@ public class HeadlessADMIntegrationTest {
 //		senderTrack.dispose();
 //		receiverTrack.dispose();
         customSource.dispose();
+        rxSource.dispose();
 
         factory.dispose();
 
