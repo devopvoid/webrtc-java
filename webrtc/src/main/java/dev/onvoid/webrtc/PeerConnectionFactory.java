@@ -25,15 +25,33 @@ import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioProcessing;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.VideoTrackSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The PeerConnectionFactory is the main entry point for a WebRTC application.
  * It provides factory methods for {@link RTCPeerConnection} and audio/video
  * {@link MediaStreamTrack}s.
+ * <p>
+ * A factory sends audio from exactly one kind of input. Either its
+ * {@link AudioDeviceModuleBase audio device module} captures the audio, which
+ * is what tracks created from {@link #createAudioSource(AudioOptions)} send,
+ * or the audio is pushed into the senders, which is what a
+ * {@link CustomAudioSource} and a track forwarded from a remote peer do.
+ * WebRTC feeds device-captured audio into every audio sender of a factory, so
+ * a sender that is fed both ways hits a race inside WebRTC that aborts the
+ * process. The factory therefore commits to the kind that is used first and
+ * rejects the other with an {@link IllegalStateException}. Applications that
+ * need both create a second factory.
+ * <p>
+ * The recording device is opened only once
+ * {@link #createAudioSource(AudioOptions)} is called, since that is the only
+ * way to send device-captured audio. A factory that sends pushed audio, or no
+ * audio at all, never opens it. Playout of received audio is never affected.
  *
  * @author Alex Andres
  */
@@ -48,6 +66,19 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 		}
 	}
 
+	/**
+	 * The kind of input that provides the audio this factory sends.
+	 */
+	private enum AudioInputMode {
+
+		/** The audio device module captures the audio. */
+		DEVICE,
+
+		/** The application pushes the audio through a {@link CustomAudioSource}. */
+		CUSTOM
+
+	}
+
 
 	@SuppressWarnings("unused")
 	private long networkThreadHandle;
@@ -57,6 +88,15 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 
 	@SuppressWarnings("unused")
 	private long workerThreadHandle;
+
+	@SuppressWarnings("unused")
+	private long audioModuleHandle;
+
+	/** Guards {@link #audioInputMode}. */
+	private final Object audioInputLock = new Object();
+
+	/** Set the first time either kind of audio input is used; never reset. */
+	private AudioInputMode audioInputMode;
 
 
 	/**
@@ -154,27 +194,113 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	}
 
 	/**
-	 * Creates an {@link AudioTrackSource}. The audio source may be used by one
-	 * or more {@link AudioTrack}s.
+	 * Creates an {@link AudioTrackSource} whose audio is captured by this
+	 * factory's audio device module. The audio source may be used by one or
+	 * more {@link AudioTrack}s.
+	 * <p>
+	 * Calling this commits the factory to device-captured audio and lets it open
+	 * the recording device; see the class description.
 	 *
 	 * @param options Audio options to control the audio processing.
 	 *
 	 * @return The created audio source.
+	 *
+	 * @throws IllegalStateException If this factory already sends audio from a
+	 *                               {@link CustomAudioSource}.
 	 */
-	public native AudioTrackSource createAudioSource(AudioOptions options);
+	public AudioTrackSource createAudioSource(AudioOptions options) {
+		Objects.requireNonNull(options, "AudioOptions is null");
+
+		requireAudioInputMode(AudioInputMode.DEVICE);
+
+		return createAudioSourceInternal(options);
+	}
 
 	/**
 	 * Creates an new {@link AudioTrack}. The audio track can be added to the
 	 * {@link RTCPeerConnection} using the {@link RTCPeerConnection#addTrack
 	 * addTrack} or {@link RTCPeerConnection#addTransceiver addTransceiver}
 	 * methods.
+	 * <p>
+	 * Passing a {@link CustomAudioSource} commits the factory to pushed audio;
+	 * see the class description.
 	 *
 	 * @param label  The identifier string of the audio track.
 	 * @param source The audio source that provides audio data.
 	 *
 	 * @return The created audio track.
+	 *
+	 * @throws IllegalStateException If the source is a {@link CustomAudioSource}
+	 *                               and this factory already sends audio
+	 *                               captured by its audio device module.
 	 */
-	public native AudioTrack createAudioTrack(String label, AudioTrackSource source);
+	public AudioTrack createAudioTrack(String label, AudioTrackSource source) {
+		Objects.requireNonNull(label, "Audio track label is null");
+		Objects.requireNonNull(source, "AudioTrackSource is null");
+
+		if (source instanceof CustomAudioSource) {
+			requireAudioInputMode(AudioInputMode.CUSTOM);
+		}
+
+		return createAudioTrackInternal(label, source);
+	}
+
+	/**
+	 * Commits this factory to the given kind of audio input, or verifies that
+	 * it is already committed to it. Committing to {@link AudioInputMode#CUSTOM}
+	 * switches off capture from the audio device module.
+	 *
+	 * @param mode The kind of audio input about to be used.
+	 *
+	 * @throws IllegalStateException If the factory is committed to the other
+	 *                               kind.
+	 */
+	private void requireAudioInputMode(AudioInputMode mode) {
+		synchronized (audioInputLock) {
+			if (audioInputMode == mode) {
+				return;
+			}
+			if (audioInputMode == AudioInputMode.CUSTOM) {
+				throw new IllegalStateException("This PeerConnectionFactory already sends audio pushed through a "
+						+ "CustomAudioSource. WebRTC feeds the audio captured by a factory's AudioDeviceModule into "
+						+ "every audio sender of that factory, so device-captured and custom audio sources cannot be "
+						+ "combined in one factory. Create a separate PeerConnectionFactory for device-captured audio.");
+			}
+			if (audioInputMode == AudioInputMode.DEVICE) {
+				throw new IllegalStateException("This PeerConnectionFactory already sends audio captured by its "
+						+ "AudioDeviceModule. WebRTC feeds that audio into every audio sender of the factory, so "
+						+ "device-captured and custom audio sources cannot be combined in one factory. Create a "
+						+ "separate PeerConnectionFactory for CustomAudioSource tracks.");
+			}
+
+			// The recording device stays closed until the application asks for
+			// device-captured audio, which is what keeps captured frames away
+			// from senders fed by a custom source or by a forwarded remote track.
+			setDeviceCaptureEnabled(mode == AudioInputMode.DEVICE);
+
+			audioInputMode = mode;
+		}
+	}
+
+	/**
+	 * Commits this factory to pushed audio if the given track is an audio track
+	 * whose audio is pushed into its sender rather than captured by the audio
+	 * device module. Tracks backed by a {@link CustomAudioSource} and tracks
+	 * received from a remote peer and forwarded on are of that kind. Called
+	 * before a track becomes a sender of one of this factory's peer
+	 * connections; any other track is ignored.
+	 *
+	 * @param track The track about to be sent, may be {@code null}.
+	 *
+	 * @throws IllegalStateException If the track is of that kind and this
+	 *                               factory already sends audio captured by its
+	 *                               audio device module.
+	 */
+	void commitAudioInput(MediaStreamTrack track) {
+		if (track != null && isSinkFedAudioTrack(track)) {
+			requireAudioInputMode(AudioInputMode.CUSTOM);
+		}
+	}
 
 	/**
 	 * Creates a new {@link VideoTrack}. The video track can be added to the
@@ -198,8 +324,19 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 *
 	 * @return The created peer connection.
 	 */
-	public native RTCPeerConnection createPeerConnection(
-			RTCConfiguration config, PeerConnectionObserver observer);
+	public RTCPeerConnection createPeerConnection(RTCConfiguration config,
+			PeerConnectionObserver observer) {
+		RTCPeerConnection peerConnection = createPeerConnectionInternal(config,
+				observer);
+
+		if (peerConnection != null) {
+			// The connection reports back which kind of audio its senders are
+			// about to send, so this factory can reject a mix of both kinds.
+			peerConnection.setFactory(this);
+		}
+
+		return peerConnection;
+	}
 
 	/**
 	 * Returns the capabilities of the system for receiving media of the given
@@ -228,5 +365,33 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 
 	private native void initialize(Map<String, String> fieldTrials,
 			AudioDeviceModuleBase audioModule, AudioProcessing audioProcessing);
+
+	private native AudioTrackSource createAudioSourceInternal(AudioOptions options);
+
+	private native AudioTrack createAudioTrackInternal(String label, AudioTrackSource source);
+
+	private native RTCPeerConnection createPeerConnectionInternal(
+			RTCConfiguration config, PeerConnectionObserver observer);
+
+	/**
+	 * Returns whether the given track is an audio track whose audio reaches a
+	 * sender through the track's sinks instead of through the audio device
+	 * module. That is the case for a {@link CustomAudioSource} and for a track
+	 * received from a remote peer.
+	 *
+	 * @param track The track to classify, must not be {@code null}.
+	 *
+	 * @return True if the track is audio and its source feeds sinks.
+	 */
+	private native boolean isSinkFedAudioTrack(MediaStreamTrack track);
+
+	/**
+	 * Enables or disables the capture path of the audio device module WebRTC
+	 * uses for this factory. While disabled, WebRTC cannot start a recording
+	 * and recorded audio never reaches the factory's audio senders.
+	 *
+	 * @param enabled Whether device-captured audio may reach the audio senders.
+	 */
+	private native void setDeviceCaptureEnabled(boolean enabled);
 
 }

@@ -16,6 +16,9 @@
 
 package dev.onvoid.webrtc;
 
+import static java.util.Objects.isNull;
+import static java.util.Objects.nonNull;
+
 import dev.onvoid.webrtc.internal.NativeObject;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
@@ -37,12 +40,28 @@ public class RTCPeerConnection extends NativeObject {
 	@SuppressWarnings("unused")
 	private long observerHandle;
 
+	/**
+	 * The factory that created this connection. Set right after construction;
+	 * null only if a connection was obtained some other way.
+	 */
+	private PeerConnectionFactory factory;
+
 
 	/**
 	 * Constructor used by the native api.
 	 */
 	private RTCPeerConnection() {
 
+	}
+
+	/**
+	 * Sets the factory that created this connection, so that tracks added to it
+	 * can be reported back to that factory.
+	 *
+	 * @param factory The creating factory.
+	 */
+	void setFactory(PeerConnectionFactory factory) {
+		this.factory = factory;
 	}
 
 	/**
@@ -81,9 +100,21 @@ public class RTCPeerConnection extends NativeObject {
 	 *                  to.
 	 *
 	 * @return The RTCRtpSender which will be used to transmit the media data.
+	 *
+	 * @throws IllegalStateException If the track is an audio track that pushes
+	 *                               its audio, for example one received from a
+	 *                               remote peer, while the creating factory
+	 *                               already sends audio captured by its audio
+	 *                               device module. See {@link
+	 *                               PeerConnectionFactory} for why a factory
+	 *                               sends only one kind of audio input.
 	 */
-	public native RTCRtpSender addTrack(MediaStreamTrack track,
-			List<String> streamIds);
+	public RTCRtpSender addTrack(MediaStreamTrack track,
+			List<String> streamIds) {
+		commitAudioInput(track);
+
+		return addTrackInternal(track, streamIds);
+	}
 
 	/**
 	 * Stops sending media from sender. The RTCRtpSender will still appear in
@@ -107,9 +138,41 @@ public class RTCPeerConnection extends NativeObject {
 	 *
 	 * @return The RTCRtpTransceiver which will be used to transmit and receive
 	 * the media data.
+	 *
+	 * @throws IllegalStateException If the transceiver sends and the track is an
+	 *                               audio track that pushes its audio, for
+	 *                               example one received from a remote peer,
+	 *                               while the creating factory already sends
+	 *                               audio captured by its audio device module.
+	 *                               See {@link PeerConnectionFactory} for why a
+	 *                               factory sends only one kind of audio input.
 	 */
-	public native RTCRtpTransceiver addTransceiver(MediaStreamTrack track,
-			RTCRtpTransceiverInit init);
+	public RTCRtpTransceiver addTransceiver(MediaStreamTrack track,
+			RTCRtpTransceiverInit init) {
+		// A transceiver that only receives never sends the track's audio. Its
+		// direction can be changed later through RTCRtpTransceiver.setDirection,
+		// which is not covered here.
+		if (isNull(init) || isNull(init.direction)
+				|| init.direction == RTCRtpTransceiverDirection.SEND_RECV
+				|| init.direction == RTCRtpTransceiverDirection.SEND_ONLY) {
+			commitAudioInput(track);
+		}
+
+		return addTransceiverInternal(track, init);
+	}
+
+	/**
+	 * Reports a track that is about to be sent to the factory that created this
+	 * connection, which rejects a track whose audio is pushed while the factory
+	 * already sends audio captured by its audio device module.
+	 *
+	 * @param track The track about to be sent, may be {@code null}.
+	 */
+	private void commitAudioInput(MediaStreamTrack track) {
+		if (nonNull(factory)) {
+			factory.commitAudioInput(track);
+		}
+	}
 
 	/**
 	 * Creates a new RTCDataChannel object with the given label. The
@@ -355,5 +418,11 @@ public class RTCPeerConnection extends NativeObject {
 
 		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
 	}
+
+	private native RTCRtpSender addTrackInternal(MediaStreamTrack track,
+			List<String> streamIds);
+
+	private native RTCRtpTransceiver addTransceiverInternal(
+			MediaStreamTrack track, RTCRtpTransceiverInit init);
 
 }

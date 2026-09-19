@@ -9,19 +9,35 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    createAudioSource
+	 * Method:    createAudioSourceInternal
 	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioOptions;)Ldev/onvoid/webrtc/media/audio/AudioTrackSource;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSource
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSourceInternal
 	(JNIEnv *, jobject, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    createAudioTrack
+	 * Method:    createAudioTrackInternal
 	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/audio/AudioTrackSource;)Ldev/onvoid/webrtc/media/audio/AudioTrack;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrack
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrackInternal
 	(JNIEnv *, jobject, jstring, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
+	 * Method:    setDeviceCaptureEnabled
+	 * Signature: (Z)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCaptureEnabled
+	(JNIEnv *, jobject, jboolean);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
+	 * Method:    isSinkFedAudioTrack
+	 * Signature: (Ldev/onvoid/webrtc/media/MediaStreamTrack;)Z
+	 */
+	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFedAudioTrack
+	(JNIEnv *, jobject, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
@@ -33,10 +49,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    createPeerConnection
+	 * Method:    createPeerConnectionInternal
 	 * Signature: (Ldev/onvoid/webrtc/RTCConfiguration;Ldev/onvoid/webrtc/PeerConnectionObserver;)Ldev/onvoid/webrtc/RTCPeerConnection;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnection
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnectionInternal
 	(JNIEnv *, jobject, jobject, jobject);
 
 	/*

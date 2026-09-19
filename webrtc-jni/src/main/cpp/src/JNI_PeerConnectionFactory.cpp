@@ -60,6 +60,13 @@
 #include "api/video_codecs/video_encoder_factory.h"
 #include "api/video_codecs/video_encoder_factory_template.h"
 
+#include "api/ProxyAudioDeviceModule.h"
+#include "media/audio/CustomAudioSource.h"
+
+#include "api/media_stream_interface.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/thread.h"
+
 #include <map>
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
@@ -133,11 +140,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			}
 		}
 
+		// Hand WebRTC a proxy of the module so the device capture path can be
+		// switched off once this factory sends audio from sink-fed sources. See
+		// ProxyAudioDeviceModule for why both paths must never feed the same
+		// send stream.
+		auto proxy = jni::ProxyAudioDeviceModule::Create(adm);
+
 		auto factory = webrtc::CreatePeerConnectionFactory(
 			networkThread.get(),
 			workerThread.get(),
 			signalingThread.get(),
-			adm,
+			proxy,
 			webrtc::CreateBuiltinAudioEncoderFactory(),
 			webrtc::CreateBuiltinAudioDecoderFactory(),
 #ifdef __APPLE__
@@ -165,6 +178,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			SetHandle(env, caller, "networkThreadHandle", networkThread.release());
 			SetHandle(env, caller, "signalingThreadHandle", signalingThread.release());
 			SetHandle(env, caller, "workerThreadHandle", workerThread.release());
+			SetHandle(env, caller, "audioModuleHandle", proxy.release());
 		}
 		else {
 			throw jni::Exception("Create PeerConnectionFactory failed");
@@ -184,6 +198,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 	webrtc::Thread * networkThread = GetHandle<webrtc::Thread>(env, caller, "networkThreadHandle");
 	webrtc::Thread * signalingThread = GetHandle<webrtc::Thread>(env, caller, "signalingThreadHandle");
 	webrtc::Thread * workerThread = GetHandle<webrtc::Thread>(env, caller, "workerThreadHandle");
+	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
 
 	webrtc::RefCountReleaseStatus status = factory->Release();
 
@@ -208,13 +223,45 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 			workerThread->Stop();
 			delete workerThread;
 		}
+		if (audioModule) {
+			// The factory dropped its reference above; this releases the last one
+			// and, with it, the proxy's reference on the wrapped module.
+			webrtc::RefCountReleaseStatus admStatus = audioModule->Release();
+
+			if (admStatus != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+				RTC_LOG(LS_WARNING) << "ProxyAudioDeviceModule was not deleted. A reference is still around somewhere.";
+			}
+
+			SetHandle<std::nullptr_t>(env, caller, "audioModuleHandle", nullptr);
+		}
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSource
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCaptureEnabled
+(JNIEnv * env, jobject caller, jboolean enabled)
+{
+	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
+	CHECK_HANDLE(audioModule);
+
+	webrtc::Thread * workerThread = GetHandle<webrtc::Thread>(env, caller, "workerThreadHandle");
+	CHECK_HANDLE(workerThread);
+
+	try {
+		// AudioState starts and stops the module's recording on the worker thread.
+		// Switching the capture path there keeps the two from interleaving.
+		workerThread->BlockingCall([audioModule, enabled]() {
+			audioModule->SetCaptureEnabled(enabled == JNI_TRUE);
+		});
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSourceInternal
 (JNIEnv * env, jobject caller, jobject jAudioOptions)
 {
 	if (jAudioOptions == nullptr) {
@@ -237,7 +284,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 	return jni::JavaFactories::create(env, audioSource.release()).release();
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrack
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrackInternal
 (JNIEnv * env, jobject caller, jstring jlabel, jobject jsource)
 {
 	if (jlabel == nullptr) {
@@ -260,6 +307,34 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 	webrtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
 
 	return jni::JavaFactories::create(env, audioTrack.release()).release();
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFedAudioTrack
+(JNIEnv * env, jobject caller, jobject jTrack)
+{
+	if (jTrack == nullptr) {
+		return JNI_FALSE;
+	}
+
+	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
+
+	if (track == nullptr || track->kind() != webrtc::MediaStreamTrackInterface::kAudioKind) {
+		return JNI_FALSE;
+	}
+
+	webrtc::AudioSourceInterface * source = static_cast<webrtc::AudioTrackInterface *>(track)->GetSource();
+
+	if (source == nullptr) {
+		return JNI_FALSE;
+	}
+
+	// A remote source hands the track's sinks the audio it decodes, and a
+	// CustomAudioSource hands them the audio the application pushes. Either way
+	// a sender of that track is fed through the track rather than by the audio
+	// device module.
+	bool sinkFed = source->remote() || dynamic_cast<jni::CustomAudioSource *>(source) != nullptr;
+
+	return sinkFed ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVideoTrack
@@ -288,7 +363,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 	return jni::JavaFactories::create(env, videoTrack.release()).release();
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnection
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnectionInternal
 (JNIEnv * env, jobject caller, jobject jConfig, jobject jobserver)
 {
 	if (jConfig == nullptr) {

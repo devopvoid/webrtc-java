@@ -23,10 +23,7 @@
 #include <vector>
 #include <memory>
 
-#include "api/environment/environment.h"
-#include "api/environment/environment_factory.h"
 #include "api/make_ref_counted.h"
-#include "modules/audio_device/audio_device_buffer.h"
 #include "modules/audio_device/include/audio_device.h"
 #include "modules/audio_device/include/audio_device_defines.h"
 #include "rtc_base/buffer.h"
@@ -39,22 +36,24 @@
 namespace jni
 {
     // A headless AudioDeviceModule that drives the render pipeline by pulling
-    // 10 ms PCM chunks from AudioTransport and discarding them, and simulates
-    // a microphone by pulling 10 ms PCM chunks from the registered AudioTransport
-    // and feeding them into the WebRTC capture pipeline.
+    // 10 ms PCM chunks from AudioTransport and discarding them.
+    //
+    // It has no capture path. Recording is a state this module reports and
+    // nothing more, so that the recording lifecycle of the AudioDeviceModule
+    // interface still works. There is no device to capture from, and audio a
+    // headless application wants to send goes through a CustomAudioSource.
     class HeadlessAudioDeviceModule : public webrtc::AudioDeviceModule
     {
         public:
             static webrtc::scoped_refptr<HeadlessAudioDeviceModule> Create(
-                    const webrtc::Environment & env,
                     int sample_rate_hz = 48000,
                     size_t channels = 1)
             {
                 return webrtc::make_ref_counted<HeadlessAudioDeviceModule>(
-                        env, sample_rate_hz, channels);
+                        sample_rate_hz, channels);
             }
 
-            HeadlessAudioDeviceModule(const webrtc::Environment & env, int sample_rate_hz, size_t channels);
+            HeadlessAudioDeviceModule(int sample_rate_hz, size_t channels);
             ~HeadlessAudioDeviceModule() override;
 
             // ----- AudioDeviceModule interface -----
@@ -148,7 +147,6 @@ namespace jni
 
         private:
             bool PlayThreadProcess();
-            bool CaptureThreadProcess();
 
             // State
             bool initialized_ = false;
@@ -162,22 +160,25 @@ namespace jni
             size_t channels_ = 1;
 
             webrtc::BufferT<int16_t> play_buffer_;
-            webrtc::BufferT<int16_t> record_buffer_;
 
             size_t playoutFramesIn10MS_;
-            size_t recordingFramesIn10MS_;
             // Absolute wall-clock deadline (ms) of the next 10 ms tick. Advanced by a
             // fixed +10 each tick so scheduling/wake-up latency is corrected against the
             // grid rather than accumulating into the frame period.
             int64_t nextPlayoutMillis_;
-            int64_t nextRecordMillis_;
 
+            // Guards the module state above. Never held while calling into the
+            // transport, so a pull in progress does not stall other calls on
+            // this module and cannot deadlock on anything the pull does.
             mutable webrtc::Mutex mutex_;
-            std::unique_ptr<webrtc::AudioDeviceBuffer> audio_device_buffer_ RTC_GUARDED_BY(mutex_);
-            webrtc::AudioTransport * audio_callback_;
+
+            // Guards audio_callback_ and is held for the whole of a pull, so
+            // that after RegisterAudioCallback() returns no call on the old
+            // transport is still in flight.
+            webrtc::Mutex callback_mutex_;
+            webrtc::AudioTransport * audio_callback_ RTC_GUARDED_BY(callback_mutex_);
 
             webrtc::PlatformThread render_thread_;
-            webrtc::PlatformThread capture_thread_;
     };
 }
 

@@ -99,7 +99,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getTrans
 	return objectArray.release();
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrack
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrackInternal
 (JNIEnv * env, jobject caller, jobject jTrack, jobject jStreamIds)
 {
 	if (jTrack == nullptr) {
@@ -154,7 +154,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_removeTrack
 	}
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceiver
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceiverInternal
 (JNIEnv * env, jobject caller, jobject jTrack, jobject jTransceiverInit)
 {
 	if (jTrack == nullptr) {

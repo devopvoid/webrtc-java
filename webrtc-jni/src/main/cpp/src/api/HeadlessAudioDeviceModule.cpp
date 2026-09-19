@@ -18,18 +18,13 @@
 
 namespace jni
 {
-    HeadlessAudioDeviceModule::HeadlessAudioDeviceModule(const webrtc::Environment & env,
-                                                         int sample_rate_hz,
-                                                         size_t channels):
+    HeadlessAudioDeviceModule::HeadlessAudioDeviceModule(int sample_rate_hz, size_t channels):
             sample_rate_hz_(sample_rate_hz),
             channels_(channels ? channels : 1),
             playoutFramesIn10MS_(0),
-            recordingFramesIn10MS_(0),
             nextPlayoutMillis_(0),
-            nextRecordMillis_(0),
             audio_callback_(nullptr)
     {
-        audio_device_buffer_ = std::make_unique<webrtc::AudioDeviceBuffer>(env);
     }
 
     HeadlessAudioDeviceModule::~HeadlessAudioDeviceModule()
@@ -49,9 +44,14 @@ namespace jni
 
     int32_t HeadlessAudioDeviceModule::RegisterAudioCallback(webrtc::AudioTransport * audioCallback)
     {
-        webrtc::MutexLock lock(&mutex_);
+        // The render thread holds callback_mutex_ across a pull, so this waits
+        // for a pull in progress and no call reaches the old transport after
+        // this returns. Unlike AudioDeviceBuffer, the swap is accepted while
+        // playout runs: WebRTC registers its transport only once it builds the
+        // voice engine, and an application may well have started playout by
+        // then.
+        webrtc::MutexLock lock(&callback_mutex_);
         audio_callback_ = audioCallback;
-        audio_device_buffer_->RegisterAudioCallback(audioCallback);
         return 0;
     }
 
@@ -144,10 +144,9 @@ namespace jni
             return -1;
         }
 
-        playoutFramesIn10MS_ = static_cast<size_t>(sample_rate_hz_ / 100);
+        webrtc::MutexLock lock(&mutex_);
 
-        audio_device_buffer_->SetPlayoutSampleRate(static_cast<uint32_t>(sample_rate_hz_));
-        audio_device_buffer_->SetPlayoutChannels(static_cast<int>(channels_));
+        playoutFramesIn10MS_ = static_cast<size_t>(sample_rate_hz_ / 100);
 
         const size_t total_samples = channels_ * playoutFramesIn10MS_;
         if (play_buffer_.size() != total_samples) {
@@ -178,15 +177,7 @@ namespace jni
             return -1;
         }
 
-        recordingFramesIn10MS_ = static_cast<size_t>(sample_rate_hz_ / 100);
-
-        audio_device_buffer_->SetRecordingSampleRate(static_cast<uint32_t>(sample_rate_hz_));
-        audio_device_buffer_->SetRecordingChannels(static_cast<int>(channels_));
-
-        const size_t total_samples = channels_ * recordingFramesIn10MS_;
-        if (record_buffer_.size() != total_samples) {
-            record_buffer_.SetSize(total_samples);
-        }
+        webrtc::MutexLock lock(&mutex_);
 
         recording_initialized_ = true;
         return 0;
@@ -212,7 +203,6 @@ namespace jni
                 return 0; // already playing
             }
             playing_ = true;
-            audio_device_buffer_->StartPlayout();
         }
 
         // Launch 10ms render pull thread.
@@ -242,10 +232,6 @@ namespace jni
             render_thread_.Finalize();
         }
 
-        {
-            webrtc::MutexLock lock(&mutex_);
-            audio_device_buffer_->StopPlayout();
-        }
         return 0;
     }
 
@@ -263,46 +249,25 @@ namespace jni
             return -1;
         }
 
-        {
-            webrtc::MutexLock lock(&mutex_);
-            if (recording_) {
-                return 0; // already recording
-            }
-            recording_ = true;
-            audio_device_buffer_->StartRecording();
-        }
+        // Recording is a state on this module and nothing more: there is no
+        // device to capture from, and no capture thread runs. An earlier version
+        // pulled the render mix through AudioTransport and handed it back as
+        // recorded audio, which made a peer connection send the audio it had just
+        // received from the remote peer straight back to it. Audio a headless
+        // application wants to send goes through a CustomAudioSource instead.
+        webrtc::MutexLock lock(&mutex_);
 
-        // Launch 10ms capture push thread.
-        capture_thread_ = webrtc::PlatformThread::SpawnJoinable(
-            [this] {
-                while (CaptureThreadProcess()) {
-                }
-            },
-            "webrtc_audio_module_capture_thread",
-            webrtc::ThreadAttributes().SetPriority(webrtc::ThreadPriority::kRealtime));
+        recording_ = true;
 
         return 0;
     }
 
     int32_t HeadlessAudioDeviceModule::StopRecording()
     {
-        {
-            webrtc::MutexLock lock(&mutex_);
-            if (!recording_) {
-                // Already stopped.
-                return 0;
-            }
-            recording_ = false;
-        }
+        webrtc::MutexLock lock(&mutex_);
 
-        if (!capture_thread_.empty()) {
-            capture_thread_.Finalize();
-        }
+        recording_ = false;
 
-        {
-            webrtc::MutexLock lock(&mutex_);
-            audio_device_buffer_->StopRecording();
-        }
         return 0;
     }
 
@@ -442,16 +407,15 @@ namespace jni
             return -1;
         }
 
-        channels_ = enable ? 2u : 1u;
-        // Propagate channel change to AudioDeviceBuffer if playout is initialized.
         webrtc::MutexLock lock(&mutex_);
+
+        channels_ = enable ? 2u : 1u;
 
         const size_t total_samples = channels_ * playoutFramesIn10MS_;
         if (play_buffer_.size() != total_samples) {
             play_buffer_.SetSize(total_samples);
         }
 
-        audio_device_buffer_->SetPlayoutChannels(static_cast<int>(channels_));
         return 0;
     }
 
@@ -478,13 +442,10 @@ namespace jni
         if (recording_initialized_) {
             return -1;
         }
-        channels_ = enable ? 2u : 1u;
         webrtc::MutexLock lock(&mutex_);
-        const size_t total_samples = channels_ * recordingFramesIn10MS_;
-        if (record_buffer_.size() != total_samples) {
-            record_buffer_.SetSize(total_samples);
-        }
-        audio_device_buffer_->SetRecordingChannels(static_cast<int>(channels_));
+
+        channels_ = enable ? 2u : 1u;
+
         return 0;
     }
 
@@ -543,117 +504,76 @@ namespace jni
 
     bool HeadlessAudioDeviceModule::PlayThreadProcess()
     {
+        const int64_t currentTime = webrtc::TimeMillis();
+
+        // Decide under the state lock whether this tick pulls, and snapshot
+        // the format the pull needs, so the lock is not held during the pull.
+        bool pull = false;
+        size_t frames = 0;
+        size_t channels = 0;
+        uint32_t sampleRate = 0;
+        int64_t sleepMillis = 0;
+
         {
             webrtc::MutexLock lock(&mutex_);
+
             if (!playing_) {
                 return false;
             }
-        }
 
-        int64_t currentTime = webrtc::TimeMillis();
-        mutex_.Lock();
-
-        // Seed the grid on the first tick.
-        if (nextPlayoutMillis_ == 0) {
-            nextPlayoutMillis_ = currentTime;
-        }
-
-        if (currentTime >= nextPlayoutMillis_) {
-            mutex_.Unlock();
-            audio_device_buffer_->RequestPlayoutData(playoutFramesIn10MS_);
-            mutex_.Lock();
-
-            audio_device_buffer_->GetPlayoutData(play_buffer_.data());
-
-            // Advance the grid by a fixed 10 ms rather than re-anchoring to currentTime,
-            // so wake-up latency is corrected on the next tick instead of accumulating
-            // into the frame period (which otherwise pulls the effective rate below 100 Hz).
-            nextPlayoutMillis_ += 10;
-
-            // If we fell far behind (e.g. the thread was descheduled), resync to now
-            // instead of bursting frames to catch up.
-            if (nextPlayoutMillis_ < currentTime - 100) {
+            // Seed the grid on the first tick.
+            if (nextPlayoutMillis_ == 0) {
                 nextPlayoutMillis_ = currentTime;
             }
-        }
 
-        int64_t sleepMillis = nextPlayoutMillis_ - webrtc::TimeMillis();
-        mutex_.Unlock();
-
-        if (sleepMillis > 0) {
-            webrtc::Thread::SleepMs(sleepMillis);
-        }
-
-        return true;
-    }
-
-    bool HeadlessAudioDeviceModule::CaptureThreadProcess()
-    {
-        webrtc::AudioTransport* callback = nullptr;
-        {
-            webrtc::MutexLock lock(&mutex_);
-            if (!recording_) {
-                return false;
-            }
-            callback = audio_callback_;
-        }
-
-        int64_t currentTime = webrtc::TimeMillis();
-        mutex_.Lock();
-
-        // Seed the grid on the first tick.
-        if (nextRecordMillis_ == 0) {
-            nextRecordMillis_ = currentTime;
-        }
-
-        if (currentTime >= nextRecordMillis_) {
-            size_t nSamplesOut = 0;
-            const size_t nBytesPerSample = sizeof(int16_t);
-            const size_t nChannels = channels_;
-            const uint32_t samplesPerSec = static_cast<uint32_t>(sample_rate_hz_);
-            int64_t elapsed_time_ms = 0;
-            int64_t ntp_time_ms = 0;
-
-            if (callback) {
-                // Pull 10 ms of audio from the registered AudioTransport (Java AudioSource).
-                callback->NeedMorePlayData(recordingFramesIn10MS_ * nChannels,
-                                           nBytesPerSample,
-                                           nChannels,
-                                           samplesPerSec,
-                                           record_buffer_.data(),
-                                           nSamplesOut,
-                                           &elapsed_time_ms,
-                                           &ntp_time_ms);
-            }
-            else {
-                nSamplesOut = recordingFramesIn10MS_ * nChannels;
-                std::memset(record_buffer_.data(), 0, nSamplesOut * nBytesPerSample);
-            }
-
-            if (nChannels > 0) {
-                // Feed the captured buffer to WebRTC.
-                audio_device_buffer_->SetRecordedBuffer(record_buffer_.data(), recordingFramesIn10MS_);
-                audio_device_buffer_->SetVQEData(/*play_delay_ms*/ 0, /*rec_delay_ms*/ 0);
+            if (currentTime >= nextPlayoutMillis_) {
+                pull = true;
+                frames = playoutFramesIn10MS_;
+                channels = channels_;
+                sampleRate = static_cast<uint32_t>(sample_rate_hz_);
 
                 // Advance the grid by a fixed 10 ms rather than re-anchoring to currentTime,
                 // so wake-up latency is corrected on the next tick instead of accumulating
                 // into the frame period (which otherwise pulls the effective rate below 100 Hz).
-                nextRecordMillis_ += 10;
+                nextPlayoutMillis_ += 10;
 
                 // If we fell far behind (e.g. the thread was descheduled), resync to now
                 // instead of bursting frames to catch up.
-                if (nextRecordMillis_ < currentTime - 100) {
-                    nextRecordMillis_ = currentTime;
+                if (nextPlayoutMillis_ < currentTime - 100) {
+                    nextPlayoutMillis_ = currentTime;
                 }
-
-                mutex_.Unlock();
-                audio_device_buffer_->DeliverRecordedData();
-                mutex_.Lock();
             }
+
+            sleepMillis = nextPlayoutMillis_ - webrtc::TimeMillis();
         }
 
-        int64_t sleepMillis = nextRecordMillis_ - webrtc::TimeMillis();
-        mutex_.Unlock();
+        if (pull) {
+            // Pull 10 ms of rendered audio straight from the transport and drop
+            // it; there is no device to play it on. The pull is what drives the
+            // receive side of every peer connection of the factory this module
+            // belongs to, so remote audio only reaches an AudioTrack sink while
+            // this thread runs.
+            //
+            // Only callback_mutex_ is held here. It keeps the transport alive
+            // for the duration of the call (see RegisterAudioCallback) without
+            // serialising the pull against the rest of this module.
+            webrtc::MutexLock lock(&callback_mutex_);
+
+            if (audio_callback_) {
+                size_t samplesOut = 0;
+                int64_t elapsedTimeMillis = -1;
+                int64_t ntpTimeMillis = -1;
+
+                audio_callback_->NeedMorePlayData(frames,
+                                                  sizeof(int16_t) * channels,
+                                                  channels,
+                                                  sampleRate,
+                                                  play_buffer_.data(),
+                                                  samplesOut,
+                                                  &elapsedTimeMillis,
+                                                  &ntpTimeMillis);
+            }
+        }
 
         if (sleepMillis > 0) {
             webrtc::Thread::SleepMs(sleepMillis);

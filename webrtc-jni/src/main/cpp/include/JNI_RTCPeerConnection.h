@@ -33,10 +33,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
-	 * Method:    addTrack
+	 * Method:    addTrackInternal
 	 * Signature: (Ldev/onvoid/webrtc/media/MediaStreamTrack;Ljava/util/List;)Ldev/onvoid/webrtc/RTCRtpSender;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrack
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrackInternal
 	(JNIEnv *, jobject, jobject, jobject);
 
 	/*
@@ -49,10 +49,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
-	 * Method:    addTransceiver
+	 * Method:    addTransceiverInternal
 	 * Signature: (Ldev/onvoid/webrtc/media/MediaStreamTrack;Ldev/onvoid/webrtc/RTCRtpTransceiverInit;)Ldev/onvoid/webrtc/RTCRtpTransceiver;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceiver
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceiverInternal
 	(JNIEnv *, jobject, jobject, jobject);
 
 	/*

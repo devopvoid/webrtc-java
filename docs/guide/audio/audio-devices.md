@@ -85,7 +85,15 @@ AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
 PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
 ```
 
-This is useful for applications that only need video functionality, when you want to implement your own custom audio handling, or for headless modes where neither audio nor video is required. Using the dummy audio layer is particularly valuable in server-side or automated testing environments where no physical audio devices are available.
+This is useful for applications that only need video functionality, or for headless modes where neither audio nor video is required. Using the dummy audio layer is particularly valuable in server-side or automated testing environments where no physical audio devices are available.
+
+::: warning
+The dummy layer disables audio in both directions. Nothing is captured, and nothing is rendered, so an `AudioTrackSink` added to a received audio track is never called. To push your own audio, or to receive remote audio without opening a real device, use the [Headless Audio Device Module](/guide/audio/headless-audio) instead.
+:::
+
+::: warning
+Do not call `setAudioSink` or `setAudioSource` on a module you passed to a `PeerConnectionFactory`. Both replace the audio transport WebRTC installed on the module, which silently stops audio flowing to and from every peer connection of that factory. Use them on a module of your own, as [AudioRecorder](/tools/audio/audio-recorder) and [AudioPlayer](/tools/audio/audio-player) do.
+:::
 
 ## Additional Features
 
