@@ -23,10 +23,7 @@
 #include <vector>
 #include <memory>
 
-#include "api/environment/environment.h"
-#include "api/environment/environment_factory.h"
 #include "api/make_ref_counted.h"
-#include "modules/audio_device/audio_device_buffer.h"
 #include "modules/audio_device/include/audio_device.h"
 #include "modules/audio_device/include/audio_device_defines.h"
 #include "rtc_base/buffer.h"
@@ -49,15 +46,14 @@ namespace jni
     {
         public:
             static webrtc::scoped_refptr<HeadlessAudioDeviceModule> Create(
-                    const webrtc::Environment & env,
                     int sample_rate_hz = 48000,
                     size_t channels = 1)
             {
                 return webrtc::make_ref_counted<HeadlessAudioDeviceModule>(
-                        env, sample_rate_hz, channels);
+                        sample_rate_hz, channels);
             }
 
-            HeadlessAudioDeviceModule(const webrtc::Environment & env, int sample_rate_hz, size_t channels);
+            HeadlessAudioDeviceModule(int sample_rate_hz, size_t channels);
             ~HeadlessAudioDeviceModule() override;
 
             // ----- AudioDeviceModule interface -----
@@ -171,9 +167,16 @@ namespace jni
             // grid rather than accumulating into the frame period.
             int64_t nextPlayoutMillis_;
 
+            // Guards the module state above. Never held while calling into the
+            // transport, so a pull in progress does not stall other calls on
+            // this module and cannot deadlock on anything the pull does.
             mutable webrtc::Mutex mutex_;
-            std::unique_ptr<webrtc::AudioDeviceBuffer> audio_device_buffer_ RTC_GUARDED_BY(mutex_);
-            webrtc::AudioTransport * audio_callback_;
+
+            // Guards audio_callback_ and is held for the whole of a pull, so
+            // that after RegisterAudioCallback() returns no call on the old
+            // transport is still in flight.
+            webrtc::Mutex callback_mutex_;
+            webrtc::AudioTransport * audio_callback_ RTC_GUARDED_BY(callback_mutex_);
 
             webrtc::PlatformThread render_thread_;
     };
