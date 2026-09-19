@@ -209,6 +209,71 @@ audioStreamer.stop();
 
 Pushed audio goes straight to the track's senders and does **not** pass through WebRTC's audio processing module. Echo cancellation, noise suppression and gain control apply to device-captured audio only, so they have no effect on a `CustomAudioSource`. Apply any processing you need before you push.
 
+The standalone [`AudioProcessing`](/guide/audio/audio-processing) class wraps the same processing module, so you can run each chunk through it right before `pushAudio`. It takes the same 10 ms frames of 16-bit PCM that `pushAudio` takes, so no reformatting is needed in between.
+
+### Noise suppression and gain control
+
+```java
+int sampleRate = 48000;
+int channels = 1;
+int frameCount = sampleRate / 100; // 10 ms
+
+AudioProcessingConfig config = new AudioProcessingConfig();
+config.noiseSuppression.enabled = true;
+config.gainControllerDigital.enabled = true;
+config.gainControllerDigital.adaptiveDigital.enabled = true;
+
+AudioProcessing processing = new AudioProcessing();
+processing.applyConfig(config);
+
+// Input and output use the same format here; the module can also resample or
+// down-mix between the two, see the audio processing guide.
+AudioProcessingStreamConfig format = new AudioProcessingStreamConfig(sampleRate, channels);
+
+byte[] raw = new byte[frameCount * channels * 2];
+byte[] processed = new byte[processing.getTargetBufferSize(format, format)];
+
+// On the single push thread, once per 10 ms:
+fillWithAudio(raw); // your source
+int result = processing.processStream(raw, format, format, processed);
+
+if (result == 0) {
+    audioSource.pushAudio(processed, 16, sampleRate, channels, frameCount);
+}
+```
+
+Dispose the `AudioProcessing` instance together with the source once you stop pushing.
+
+### Echo cancellation
+
+Echo cancellation needs the far-end signal as a reference. Device capture gets it for free, since WebRTC feeds every rendered frame back into the module itself. For a `CustomAudioSource` you provide it: feed the audio you play out through `processReverseStream`, and tell the module how far apart the two streams are in time.
+
+```java
+config.echoCanceller.enabled = true;
+processing.applyConfig(config);
+
+// The delay between a far-end frame reaching processReverseStream and the
+// echo of it reaching processStream. Measure it for your setup; a value that
+// is roughly right is enough for the canceller to lock on.
+processing.setStreamDelayMs(50);
+
+// Feed every far-end frame you play out. A sink on the received track gets
+// them in the format below. WebRTC calls it on its own thread, which is fine:
+// processStream and processReverseStream may run concurrently.
+remoteAudioTrack.addSink((data, bitsPerSample, rate, ch, frames) -> {
+    AudioProcessingStreamConfig farEnd = new AudioProcessingStreamConfig(rate, ch);
+    byte[] reverse = new byte[processing.getTargetBufferSize(farEnd, farEnd)];
+
+    processing.processReverseStream(data, farEnd, farEnd, reverse);
+});
+```
+
+The canceller can only remove echo of audio that actually went through `processReverseStream`. If your application plays out the received audio through a path the sink does not see, or plays other sounds alongside it, that audio comes back uncancelled.
+
+::: tip
+If a factory sends only pushed audio, the processing module WebRTC creates for that factory does no work. Enabling its features through `AudioOptions` or the factory's `AudioProcessing` changes nothing for a `CustomAudioSource`; only the instance you apply yourself does.
+:::
+
 ## Conclusion
 
 The `CustomAudioSource` provides a flexible way to integrate external audio sources with WebRTC. By understanding the audio format parameters and properly managing the audio data flow, you can create applications that use custom audio from virtually any source.
