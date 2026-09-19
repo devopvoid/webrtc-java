@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>dev.onvoid.webrtc</groupId>
+		<artifactId>webrtc-java-parent</artifactId>
+		<version>0.19.0-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>webrtc-java-media</artifactId>
+
+	<name>webrtc-java-media</name>
+	<description>
+		Media extension for webrtc-java. Reads and decodes media files and network streams with
+		FFmpeg and feeds them into a peer connection.
+	</description>
+
+	<properties>
+		<!-- The FFmpeg release the third-party/ffmpeg submodule is pinned to. -->
+		<ffmpeg.version>7.1.1</ffmpeg.version>
+		<!-- Where the compiled FFmpeg libraries are installed and looked for. A
+		     build reuses an existing install instead of building again, the way
+		     the WebRTC checkout is reused. -->
+		<ffmpeg.install.dir>${user.home}/ffmpeg/${platform.classifier}</ffmpeg.install.dir>
+		<cmake.build.type>Release</cmake.build.type>
+		<!-- Generator options, set per platform below. This module links only
+		     against FFmpeg's C ABI and the JVM, never against WebRTC's C++
+		     ABI, so it needs no special toolchain or standard library. -->
+		<cmake.options />
+		<cmake.config />
+	</properties>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+			</plugin>
+
+			<!-- Builds FFmpeg and the native media library for this platform. -->
+			<plugin>
+				<groupId>com.googlecode.cmake-maven-project</groupId>
+				<artifactId>cmake-maven-plugin</artifactId>
+				<version>3.31.5-b1</version>
+				<executions>
+					<execution>
+						<id>cmake-generate</id>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<sourcePath>src/main/cpp</sourcePath>
+							<targetPath>${project.build.directory}/${platform.classifier}</targetPath>
+							<options>
+								<option>
+									"${cmake.options}"
+								</option>
+								<option>
+									-DFFMPEG_INSTALL_DIR=${ffmpeg.install.dir}
+								</option>
+								<option>
+									-DFFMPEG_VERSION=${ffmpeg.version}
+								</option>
+								<option>
+									-DCMAKE_BUILD_TYPE=${cmake.build.type}
+								</option>
+								<option>
+									-DOUTPUT_NAME_SUFFIX=${platform.classifier}
+								</option>
+							</options>
+						</configuration>
+					</execution>
+					<execution>
+						<id>cmake-compile</id>
+						<goals>
+							<goal>compile</goal>
+						</goals>
+						<configuration>
+							<config>${cmake.config}</config>
+							<projectDirectory>${project.build.directory}/${platform.classifier}</projectDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- The native library and the FFmpeg shared libraries go into a
+			     jar of their own, one per platform, exactly as webrtc-java
+			     ships its natives. The main jar stays platform independent. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>natives-jar</id>
+						<phase>package</phase>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+						<configuration>
+							<classifier>${platform.classifier}</classifier>
+							<classesDirectory>${project.build.directory}/natives</classesDirectory>
+							<archive>
+								<manifestEntries>
+									<FFmpeg-Version>${ffmpeg.version}</FFmpeg-Version>
+									<FFmpeg-License>LGPL-2.1-or-later</FFmpeg-License>
+								</manifestEntries>
+							</archive>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+	<dependencies>
+		<dependency>
+			<groupId>dev.onvoid.webrtc</groupId>
+			<artifactId>webrtc-java</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+	</dependencies>
+
+	<profiles>
+		<profile>
+			<id>windows-x86_64</id>
+			<activation>
+				<os>
+					<family>windows</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.options>-Ax64</cmake.options>
+				<cmake.config>${cmake.build.type}</cmake.config>
+			</properties>
+		</profile>
+		<profile>
+			<id>windows-aarch64</id>
+			<properties>
+				<cmake.options>-AARM64</cmake.options>
+				<cmake.config>${cmake.build.type}</cmake.config>
+			</properties>
+		</profile>
+	</profiles>
+
+</project>
