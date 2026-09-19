@@ -40,9 +40,27 @@ namespace jni
             SourceState state() const override;
             bool remote() const override;
 
+            // Delivers a frame captured now, stamping it with this source's
+            // clock. This is what the Java pushFrame() calls, so a caller that
+            // has no capture time of its own gets the timing of the moment it
+            // pushes.
             void PushFrame(const webrtc::VideoFrame & frame);
 
+            // Delivers a frame captured at the given time, in microseconds on
+            // the same clock as webrtc::TimeMicros().
+            //
+            // A caller that knows when a frame was meant to be shown, such as
+            // one playing a media file, should use this: the encoder derives
+            // the outgoing RTP timestamp from the frame's NTP capture time
+            // (VideoStreamEncoder::OnFrame), so passing the presentation time
+            // keeps the sent timeline free of the jitter of the pushing
+            // thread, and keeps video lined up with audio pushed alongside it.
+            void PushFrame(const webrtc::VideoFrame & frame, int64_t timestamp_us);
+
         private:
+            void DeliverFrame(const webrtc::VideoFrame & frame, int64_t timestamp_us,
+                              int64_t ntp_time_ms);
+
             std::shared_ptr<SyncClock> clock_;
             std::atomic<uint16_t> frame_id_;
     };

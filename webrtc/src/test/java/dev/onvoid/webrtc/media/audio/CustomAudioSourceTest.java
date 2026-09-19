@@ -104,6 +104,26 @@ class CustomAudioSourceTest extends TestBase {
     }
 
     @Test
+    void pushAudioWithTimestamp() {
+        // The timestamped overload takes the same chunks and rejects the same
+        // bad arguments; only the capture time it reports differs.
+        byte[] data = new byte[480 * 2 * 2];
+        long timestampUs = SyncClock.currentTimeUs();
+
+        customAudioSource.pushAudio(data, 16, 48000, 2, 480, timestampUs);
+        customAudioSource.pushAudio(data, 16, 48000, 2, 480, timestampUs + 10_000);
+
+        assertThrows(NullPointerException.class,
+                () -> customAudioSource.pushAudio(null, 16, 48000, 2, 480, timestampUs));
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 8, 48000, 2, 480, timestampUs));
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 16, 48000, 2, 481, timestampUs));
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 16, 48000, 0, 480, timestampUs));
+    }
+
+    @Test
     void stateAfterCreation() {
         assertEquals(MediaSource.State.LIVE, customAudioSource.getState());
     }

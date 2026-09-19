@@ -1,5 +1,7 @@
 #include "media/audio/CustomAudioSource.h"
 
+#include "rtc_base/time_utils.h"
+
 #include <algorithm>
 #include <absl/types/optional.h>
 
@@ -58,17 +60,37 @@ namespace jni
         // Apply delay if audio capture has inherent latency
         timestamp_us -= audio_capture_delay_us_;
 
-        // Calculate NTP time for this audio frame
-        int64_t ntp_time_ms = clock_->GetNtpTime().ToMs();
+        DeliverAudioDataLocked(audio_data, bits_per_sample, sample_rate,
+                              number_of_channels, number_of_frames,
+                              timestamp_us / 1000);
+    }
 
-        // Create absolute capture time
-        absl::optional<int64_t> absolute_capture_time_ms = timestamp_us / 1000;
+    void CustomAudioSource::PushAudioData(const void * audio_data, int bits_per_sample,
+                                         int sample_rate, size_t number_of_channels,
+                                         size_t number_of_frames, int64_t timestamp_us)
+    {
+        webrtc::MutexLock lock(&mutex_);
+
+        // The caller's capture time is on the same clock as TimeMicros(), so
+        // in milliseconds it is already the clock AudioTrackSinkInterface
+        // requires of an absolute capture timestamp.
+        DeliverAudioDataLocked(audio_data, bits_per_sample, sample_rate,
+                              number_of_channels, number_of_frames,
+                              timestamp_us / webrtc::kNumMicrosecsPerMillisec);
+    }
+
+    void CustomAudioSource::DeliverAudioDataLocked(const void * audio_data, int bits_per_sample,
+                                                  int sample_rate, size_t number_of_channels,
+                                                  size_t number_of_frames,
+                                                  int64_t absolute_capture_time_ms)
+    {
+        absl::optional<int64_t> capture_time_ms = absolute_capture_time_ms;
 
         // Send to all sinks with timing information
         for (auto * sink : sinks_) {
             sink->OnData(audio_data, bits_per_sample, sample_rate,
                         number_of_channels, number_of_frames,
-                        absolute_capture_time_ms);
+                        capture_time_ms);
         }
 
         // Update total samples for tracking

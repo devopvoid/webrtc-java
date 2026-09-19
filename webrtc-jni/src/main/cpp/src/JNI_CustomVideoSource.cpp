@@ -73,3 +73,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_push
         source->PushFrame(nativeFrame);
     }
 }
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_pushFrameTimestamped
+(JNIEnv * env, jobject caller, jobject javaFrame, jlong timestampUs)
+{
+    jni::CustomVideoSource * source = GetHandle<jni::CustomVideoSource>(env, caller);
+    CHECK_HANDLE(source);
+
+    if (javaFrame != nullptr) {
+        auto frame = jni::JavaLocalRef<jobject>(env, javaFrame);
+        webrtc::VideoFrame nativeFrame = jni::VideoFrame::toNative(env, frame);
+
+        source->PushFrame(nativeFrame, timestampUs);
+    }
+}

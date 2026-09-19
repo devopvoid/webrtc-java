@@ -39,6 +39,14 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_pushFrame
 	(JNIEnv *, jobject, jobject);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_CustomVideoSource
+	 * Method:    pushFrameTimestamped
+	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoFrame;J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_pushFrameTimestamped
+	(JNIEnv *, jobject, jobject, jlong);
+
 #ifdef __cplusplus
 }
 #endif
