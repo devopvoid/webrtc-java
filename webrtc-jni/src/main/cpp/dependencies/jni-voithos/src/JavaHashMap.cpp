@@ -54,7 +54,17 @@ namespace jni
 		cls = FindClass(env, "java/util/HashMap");
 
 		defaultCtor = GetMethod(env, cls, "<init>", "()V");
-		put = GetMethod(env, cls, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-		entrySet = GetMethod(env, cls, "entrySet", "()Ljava/util/Set;");
+
+		// put() and entrySet() are called on the map this class holds, which is
+		// a HashMap it created itself only when constructed without one. The
+		// other constructor takes any java.util.Map, and a method ID taken from
+		// HashMap may not be used on a map of another class: the JVM aborts with
+		// "Wrong object class or methodID passed to JNI call" under -Xcheck:jni,
+		// and is free to misbehave without it. Taking these from the interface
+		// leaves the call to virtual dispatch and works for either map.
+		jclass mapClass = FindClass(env, "java/util/Map");
+
+		put = GetMethod(env, mapClass, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+		entrySet = GetMethod(env, mapClass, "entrySet", "()Ljava/util/Set;");
 	}
 }

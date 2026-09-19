@@ -25,8 +25,12 @@ import dev.onvoid.webrtc.media.audio.*;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.junit.jupiter.api.Test;
 
@@ -78,6 +82,38 @@ class PeerConnectionFactoryTests extends TestBase {
 
 		PeerConnectionFactory factory = new PeerConnectionFactory(Collections.emptyMap(), audioDevModule);
 		factory.dispose();
+	}
+
+	@Test
+	void createWithFieldTrialsOfAnyMapType() {
+		// The field trials are read natively through a helper that used to take
+		// its method IDs from java.util.HashMap and call them on whatever map it
+		// was given. Anything but a HashMap was then undefined behaviour, which
+		// happened to work but aborts the JVM under -Xcheck:jni. Every map here
+		// is a different implementation, and none of them is a HashMap.
+		// LinkedHashMap is deliberately absent: it extends HashMap, so it would
+		// pass either way.
+		Map<String, String> treeMap = new TreeMap<>();
+		treeMap.put("WebRTC-Bar", "Enabled");
+		treeMap.put("WebRTC-Foo", "Disabled");
+
+		Map<String, String> concurrentMap = new ConcurrentHashMap<>();
+		concurrentMap.put("WebRTC-Bar", "Enabled");
+
+		List<Map<String, String>> fieldTrialMaps = Arrays.asList(
+				Collections.singletonMap("WebRTC-Bar", "Enabled"),
+				Collections.emptyMap(),
+				treeMap,
+				concurrentMap,
+				Collections.unmodifiableMap(treeMap));
+
+		for (Map<String, String> fieldTrials : fieldTrialMaps) {
+			AudioDeviceModule audioDevModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+			PeerConnectionFactory factory = new PeerConnectionFactory(fieldTrials, audioDevModule);
+
+			factory.dispose();
+			audioDevModule.dispose();
+		}
 	}
 
 	@Test
