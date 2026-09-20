@@ -229,23 +229,95 @@ else()
         --enable-protocol=pipe
     )
 
-    if(WIN32)
-        # FFmpeg builds against the MSVC runtime through its own msvc
-        # toolchain support, which keeps the DLLs free of an MSYS2 runtime
-        # dependency. configure needs Windows-style output, so cl and link
-        # must be on the PATH of the shell that runs it.
-        list(APPEND FFMPEG_CONFIGURE_ARGS --toolchain=msvc)
+    #
+    # What configure has to be told about the target. It is all worked out from
+    # what the toolchain file already set, so a target CMake can build for
+    # needs no new case here.
+    #
+
+    # The architecture under the name FFmpeg knows it by.
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+        set(FFMPEG_ARCH x86_64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+        set(FFMPEG_ARCH aarch64)
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|armv7.*|armhf)$")
+        set(FFMPEG_ARCH arm)
+    else()
+        set(FFMPEG_ARCH "")
     endif()
 
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$" AND WIN32)
-        # No assembler for this target yet; correctness first, speed later.
-        list(APPEND FFMPEG_CONFIGURE_ARGS --disable-asm --arch=arm64)
+    if(WIN32)
+        set(FFMPEG_TARGET_OS win64)
+
+        # FFmpeg builds against the MSVC runtime through its own msvc toolchain
+        # support, which keeps the DLLs free of an MSYS2 runtime dependency.
+        # configure needs Windows-style output, so cl and link must be on the
+        # PATH of the shell that runs it.
+        list(APPEND FFMPEG_CONFIGURE_ARGS --toolchain=msvc)
+    elseif(APPLE)
+        set(FFMPEG_TARGET_OS darwin)
+    else()
+        set(FFMPEG_TARGET_OS linux)
     endif()
+
+    if(FFMPEG_ARCH)
+        list(APPEND FFMPEG_CONFIGURE_ARGS --arch=${FFMPEG_ARCH})
+    endif()
+
+    set(FFMPEG_EXTRA_CFLAGS "")
+    set(FFMPEG_EXTRA_LDFLAGS "")
 
     if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+        # On Apple the architecture is chosen by a compiler flag rather than by
+        # a different compiler, and the deployment target has to match what the
+        # rest of the build asks for or the linker complains about every object.
+        set(FFMPEG_EXTRA_CFLAGS "-arch ${CMAKE_OSX_ARCHITECTURES}")
+        set(FFMPEG_EXTRA_LDFLAGS "-arch ${CMAKE_OSX_ARCHITECTURES}")
+
+        if(CMAKE_OSX_DEPLOYMENT_TARGET)
+            set(FFMPEG_EXTRA_CFLAGS
+                "${FFMPEG_EXTRA_CFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+            set(FFMPEG_EXTRA_LDFLAGS
+                "${FFMPEG_EXTRA_LDFLAGS} -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+        endif()
+    elseif(NOT WIN32)
+        # Elsewhere the target is a compiler flag the toolchain file put into
+        # CMAKE_C_FLAGS, which is exactly what FFmpeg needs to be handed too.
+        set(FFMPEG_EXTRA_CFLAGS "${CMAKE_C_FLAGS}")
+        set(FFMPEG_EXTRA_LDFLAGS "${CMAKE_C_FLAGS}")
+    endif()
+
+    if(CMAKE_SYSROOT)
+        list(APPEND FFMPEG_CONFIGURE_ARGS --sysroot=${CMAKE_SYSROOT})
+    endif()
+
+    if(CMAKE_CROSSCOMPILING)
         list(APPEND FFMPEG_CONFIGURE_ARGS
-            --extra-cflags=-arch\ ${CMAKE_OSX_ARCHITECTURES}
-            --extra-ldflags=-arch\ ${CMAKE_OSX_ARCHITECTURES})
+            --enable-cross-compile
+            --target-os=${FFMPEG_TARGET_OS})
+
+        # An assembler for a foreign architecture is a build prerequisite of
+        # its own, and this module is not fast enough to need one yet.
+        # Correctness on every platform first, speed where it is measured.
+        if(FFMPEG_ARCH STREQUAL "aarch64" OR FFMPEG_ARCH STREQUAL "arm")
+            list(APPEND FFMPEG_CONFIGURE_ARGS --disable-asm)
+        endif()
+    endif()
+
+    # The compiler CMake settled on, so that FFmpeg is built by the same one as
+    # the rest of this module rather than by whatever configure finds first.
+    if(NOT WIN32 AND CMAKE_C_COMPILER)
+        list(APPEND FFMPEG_CONFIGURE_ARGS --cc=${CMAKE_C_COMPILER})
+    endif()
+
+    # These carry spaces, so they are quoted here rather than in the script.
+    if(NOT FFMPEG_EXTRA_CFLAGS STREQUAL "")
+        string(STRIP "${FFMPEG_EXTRA_CFLAGS}" FFMPEG_EXTRA_CFLAGS)
+        list(APPEND FFMPEG_CONFIGURE_ARGS "--extra-cflags=\"${FFMPEG_EXTRA_CFLAGS}\"")
+    endif()
+    if(NOT FFMPEG_EXTRA_LDFLAGS STREQUAL "")
+        string(STRIP "${FFMPEG_EXTRA_LDFLAGS}" FFMPEG_EXTRA_LDFLAGS)
+        list(APPEND FFMPEG_CONFIGURE_ARGS "--extra-ldflags=\"${FFMPEG_EXTRA_LDFLAGS}\"")
     endif()
 
     # Build out of tree so the submodule working tree stays clean.

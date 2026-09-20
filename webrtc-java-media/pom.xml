@@ -29,6 +29,12 @@
 		     ABI, so it needs no special toolchain or standard library. -->
 		<cmake.options />
 		<cmake.config />
+		<!-- A cross build needs a compiler and a sysroot for the target. Those
+		     are described by webrtc-jni's toolchain files, which are this
+		     project's one answer to that question; a second set here would
+		     only drift from them. -->
+		<cmake.toolchain.file />
+		<media.toolchain.dir>${project.basedir}/../webrtc-jni/src/main/cpp/toolchain</media.toolchain.dir>
 	</properties>
 
 	<build>
@@ -72,6 +78,9 @@
 							<options>
 								<option>
 									"${cmake.options}"
+								</option>
+								<option>
+									-DMEDIA_TOOLCHAIN_FILE=${cmake.toolchain.file}
 								</option>
 								<option>
 									-DFFMPEG_INSTALL_DIR=${ffmpeg.install.dir}
@@ -149,6 +158,64 @@
 	</dependencies>
 
 	<profiles>
+		<!-- The platform profiles mirror webrtc-jni's, by name and by the
+		     toolchain file each one selects, so that both native libraries of
+		     a given classifier are built for the same target the same way. -->
+		<profile>
+			<id>linux-x86_64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>${media.toolchain.dir}/x86_64-linux-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-aarch32</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch32</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>${media.toolchain.dir}/aarch32-linux-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-aarch64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-linux-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>macos-aarch64</id>
+			<activation>
+				<os>
+					<family>mac</family>
+					<arch>aarch64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-macos-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>macos-cross-x86_64</id>
+			<properties>
+				<cmake.toolchain.file>${media.toolchain.dir}/x86_64-macos-cross.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+
 		<!-- Reruns the tests under -Xcheck:jni, which turns a JNI reference
 		     mistake into a hard error instead of a crash somewhere later. Not
 		     part of the default build: see the note in the root CLAUDE.md. -->
@@ -190,6 +257,7 @@
 			<properties>
 				<cmake.options>-AARM64</cmake.options>
 				<cmake.config>${cmake.build.type}</cmake.config>
+				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-windows-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 	</profiles>

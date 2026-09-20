@@ -1,5 +1,26 @@
 cmake_minimum_required(VERSION 3.13)
+
+#
+# A cross build is driven by a toolchain file, the same ones webrtc-jni uses:
+# they are where this project says which compiler and which sysroot a target is
+# built with, and having two answers to that would only let them drift apart.
+# It has to be set before project(), which is why it arrives under a name of
+# its own rather than as CMAKE_TOOLCHAIN_FILE.
+#
+if(DEFINED MEDIA_TOOLCHAIN_FILE AND NOT MEDIA_TOOLCHAIN_FILE STREQUAL "")
+    message(STATUS "Toolchain file: ${MEDIA_TOOLCHAIN_FILE}")
+    set(CMAKE_TOOLCHAIN_FILE "${MEDIA_TOOLCHAIN_FILE}")
+endif()
+
 project(webrtc-java-media CXX)
+
+# The toolchain files find a sysroot but leave it to be applied here, after
+# project(), because setting it earlier breaks CMake's own compiler checks.
+if(DEFINED DEFERRED_SYSROOT AND DEFERRED_SYSROOT)
+    message(STATUS "Sysroot: ${DEFERRED_SYSROOT}")
+    set(CMAKE_SYSROOT ${DEFERRED_SYSROOT})
+    set(CMAKE_FIND_ROOT_PATH ${DEFERRED_SYSROOT})
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
