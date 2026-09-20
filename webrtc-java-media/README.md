@@ -39,11 +39,12 @@ licensed under the Apache License 2.0 like the rest of webrtc-java.
 
 ## Building
 
-The submodule has to be present:
+This module is part of the normal build, and it builds FFmpeg from a submodule, so the submodule
+has to be present:
 
 ```shell
 git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg
-mvn install -Pwith-media-extension
+mvn install
 ```
 
 The first build compiles FFmpeg, which takes a while; later builds reuse the install directory

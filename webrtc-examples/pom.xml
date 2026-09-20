@@ -66,6 +66,12 @@
         </dependency>
 
         <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>webrtc-java-media</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-server</artifactId>
             <version>${jetty.version}</version>
@@ -95,74 +101,4 @@
         </dependency>
     </dependencies>
 
-    <profiles>
-        <!--
-            The media example needs webrtc-java-media, which is itself opt-in
-            while it is being brought up on every platform, so it is built the
-            same way and under the same profile name. Its source lives in a
-            directory of its own, so that a build without the profile does not
-            see it at all and an IDE does not report it as broken.
-
-            It is compiled on its own, out of its own source directory and into
-            an output directory of its own, rather than being added to the
-            other examples. Those are a JPMS module, the example reads
-            webrtc.java.media, and a "requires" cannot be made conditional:
-            naming a module that is not there fails the whole compile. Keeping
-            the example out of that source tree keeps its module descriptor off
-            the sourcepath, so this compiles on the class path, which is how an
-            example is run anyway. Once the media module builds on every
-            platform and joins the reactor by default, all of this collapses
-            into one dependency and one "requires".
-        -->
-        <profile>
-            <id>with-media-extension</id>
-
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-compiler-plugin</artifactId>
-                        <executions>
-                            <execution>
-                                <id>compile-media-example</id>
-                                <phase>compile</phase>
-                                <goals>
-                                    <goal>compile</goal>
-                                </goals>
-                                <configuration>
-                                    <release>17</release>
-                                    <compileSourceRoots>
-                                        <compileSourceRoot>${project.basedir}/src/media/java</compileSourceRoot>
-                                    </compileSourceRoots>
-                                    <outputDirectory>${project.build.directory}/media-classes</outputDirectory>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-
-                    <!-- The example is compiled apart from the others, so the
-                         directory it lands in has to be named for a run to
-                         find it. -->
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <version>3.5.0</version>
-                        <configuration>
-                            <additionalClasspathElements>
-                                <additionalClasspathElement>${project.build.directory}/media-classes</additionalClasspathElement>
-                            </additionalClasspathElements>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-
-            <dependencies>
-                <dependency>
-                    <groupId>${project.groupId}</groupId>
-                    <artifactId>webrtc-java-media</artifactId>
-                    <version>${project.version}</version>
-                </dependency>
-            </dependencies>
-        </profile>
-    </profiles>
 </project>

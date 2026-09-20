@@ -65,11 +65,11 @@ The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/master/we
 
 This example is useful for applications that stream pre-recorded media, or that need a dependable stand-in for a camera in testing.
 
-::: warning
-This example needs the `webrtc-java-media` module, which is opt-in while it is being brought up on every platform, so it is built and run with the `with-media-extension` profile:
+::: info
+This example needs the `webrtc-java-media` module, which builds FFmpeg from the `third-party/ffmpeg` submodule. Make sure the submodule is checked out before building, as the [Media Files](/guide/media/media-files) guide describes.
 
 ```bash
-mvn -Pwith-media-extension exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"exec.args=movie.mp4"
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"exec.args=movie.mp4"
 ```
 :::
 

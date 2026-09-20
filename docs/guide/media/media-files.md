@@ -12,17 +12,13 @@ Sending a file is a common need: a test pattern instead of a webcam, a pre-recor
 
 Decoding happens entirely in native code. Frames never travel through Java: the module hands decoded pictures straight to the native side of a `CustomVideoSource`, and 10 ms chunks to a `CustomAudioSource`. They are paced in real time and carry the presentation times of the file, so what a receiver gets keeps the timing of the media rather than the timing of a Java thread.
 
-::: warning Opt-in while it is being brought up
-The media module is not part of the default build yet, and its native library has so far been built for `windows-x86_64` only. Build it with the `with-media-extension` profile, as described below.
-:::
-
 ## Adding the Module
 
-The module builds FFmpeg from a submodule pinned to a release tag, so the submodule has to be present:
+The module is part of the normal build, and it builds FFmpeg from a submodule pinned to a release tag, so the submodule has to be present:
 
 ```shell
 git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg
-mvn install -Pwith-media-extension
+mvn install
 ```
 
 Building FFmpeg needs `make` and `nasm`. On Windows they come from MSYS2:
@@ -228,5 +224,5 @@ The module uses FFmpeg under the LGPL version 2.1 or later. It is configured wit
 See `MediaFileExample` in the `webrtc-examples` module, which opens a file, reports what it contains, creates tracks, adds them to a peer connection and follows playback to the end.
 
 ```shell
-mvn -Pwith-media-extension -pl webrtc-examples compile
+mvn -pl webrtc-examples compile
 ```
