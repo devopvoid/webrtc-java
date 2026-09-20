@@ -31,7 +31,8 @@ runs:
     - name: Install required packages
       run: |
         sudo apt update
-        sudo apt install -y binutils cmake git locales lsb-release ninja-build pipewire pipewire-pulse pkg-config python3 python3-setuptools rsync unzip wget xz-utils
+        # nasm is what FFmpeg assembles its x86 code with.
+        sudo apt install -y binutils cmake git locales lsb-release nasm ninja-build pipewire pipewire-pulse pkg-config python3 python3-setuptools rsync unzip wget xz-utils
 
         # Chromium Clang to be used with the clang toolchain file
         #curl -s https://raw.githubusercontent.com/chromium/chromium/main/tools/clang/scripts/update.py | python3 - --output-dir=/opt/clang

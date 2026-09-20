@@ -38,3 +38,16 @@ runs:
       run: |
         choco install ninja
       shell: powershell
+
+    - name: Install MSYS2 and the FFmpeg build tools
+      run: |
+        # FFmpeg's configure and makefiles are shell scripts, so building it
+        # needs a POSIX shell even with MSVC, and that shell has to carry make
+        # and nasm. Git for Windows' bash carries neither.
+        if (-not (Test-Path "C:\msys64\usr\bin\bash.exe")) {
+          choco install msys2 --no-progress -y
+        }
+        C:\msys64\usr\bin\bash.exe -lc "pacman -Sy --noconfirm && pacman -S --needed --noconfirm make nasm diffutils pkgconf"
+        # Where the media module's CMake looks for it.
+        "MSYS2_ROOT=C:\msys64" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      shell: powershell

@@ -25,6 +25,17 @@ runs:
         key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt') }}-${{ hashFiles('webrtc-jni/pom.xml') }}
         restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt') }}-
 
+    - name: Derive the FFmpeg version from the pom
+      run: echo "FFMPEG_VERSION=$(sed -n 's|.*<ffmpeg.version>\([^<]*\)</ffmpeg.version>.*|\1|p' webrtc-java-media/pom.xml)" >> "$GITHUB_ENV"
+      shell: bash
+
+    - name: Set up FFmpeg cache
+      uses: actions/cache@v4
+      with:
+        path: ~/ffmpeg
+        key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-${{ hashFiles('webrtc-java-media/pom.xml') }}
+        restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-
+
     - name: Set up Maven cache
       uses: actions/cache@v4
       with:

@@ -148,6 +148,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-tags: true
+          # The media module builds FFmpeg from its third-party submodule.
+          submodules: true
 
       - name: Get tag from current branch
         id: tag-selector
@@ -189,6 +191,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-tags: true
+          # The media module builds FFmpeg from its third-party submodule.
+          submodules: true
 
       - name: Get tag from current branch
         id: tag-selector
@@ -227,6 +231,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-tags: true
+          # The media module builds FFmpeg from its third-party submodule.
+          submodules: true
 
       - name: Get tag from current branch
         id: tag-selector

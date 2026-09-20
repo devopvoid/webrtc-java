@@ -9,6 +9,9 @@ runs:
       run: |
         # Required on macos-14
         brew install python-setuptools
+        # nasm is what FFmpeg assembles its x86 code with, which the Intel
+        # build needs even though the runner itself is Apple Silicon.
+        brew install nasm
       shell: bash
 
     - name: Select Xcode version
