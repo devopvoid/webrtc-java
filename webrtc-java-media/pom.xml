@@ -38,6 +38,23 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 			</plugin>
 
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Unlike webrtc, which resolves its natives as a jar
+					     built by webrtc-jni, this module builds its own. At
+					     test time they are not packaged yet, so the staging
+					     directory the CMake build collects them into goes on
+					     the class path instead: NativeLoader looks the
+					     libraries up as class path resources, and a directory
+					     serves them as well as a jar does. -->
+					<additionalClasspathElements>
+						<additionalClasspathElement>${project.build.directory}/natives</additionalClasspathElement>
+					</additionalClasspathElements>
+				</configuration>
+			</plugin>
+
 			<!-- Builds FFmpeg and the native media library for this platform. -->
 			<plugin>
 				<groupId>com.googlecode.cmake-maven-project</groupId>
@@ -122,6 +139,29 @@
 	</dependencies>
 
 	<profiles>
+		<!-- Reruns the tests under -Xcheck:jni, which turns a JNI reference
+		     mistake into a hard error instead of a crash somewhere later. Not
+		     part of the default build: see the note in the root CLAUDE.md. -->
+		<profile>
+			<id>jni-check</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<!-- -Xcheck:jni writes straight to the process's
+							     native stdout, which corrupts Surefire's
+							     default pipe based fork protocol on that same
+							     stream, so the fork talks over a socket. -->
+							<forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory" />
+							<argLine>-Xcheck:jni</argLine>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
 		<profile>
 			<id>windows-x86_64</id>
 			<activation>

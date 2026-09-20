@@ -21,7 +21,7 @@ find_package(JNI REQUIRED)
 
 add_subdirectory(dependencies/ffmpeg)
 
-file(GLOB SOURCES "src/*.cpp")
+file(GLOB SOURCES "src/*.cpp" "src/media/*.cpp")
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES})
 
