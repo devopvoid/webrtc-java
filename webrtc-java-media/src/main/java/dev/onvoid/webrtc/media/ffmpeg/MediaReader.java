@@ -94,6 +94,23 @@ public class MediaReader implements AutoCloseable {
 		dispose(closing);
 	}
 
+	/**
+	 * Hands the native reader over to a caller that takes responsibility for
+	 * releasing it, and leaves this reader closed. This is how a
+	 * {@link MediaPlayer} adopts a reader: two owners of the same pointer
+	 * would release it twice.
+	 *
+	 * @return The native reader, or {@code 0} if it was already given away or
+	 *         closed.
+	 */
+	synchronized long detach() {
+		long detaching = handle;
+
+		handle = 0;
+
+		return detaching;
+	}
+
 	private static native long open(String source) throws IOException;
 
 	private static native MediaInfo info(long handle);

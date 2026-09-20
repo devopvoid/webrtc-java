@@ -106,26 +106,26 @@ namespace ffmpeg
 
 	bool MediaReader::HasVideo() const
 	{
-		return VideoStream() != nullptr;
+		return GetVideoStream() != nullptr;
 	}
 
 	int MediaReader::GetVideoWidth() const
 	{
-		const AVStream * stream = VideoStream();
+		const AVStream * stream = GetVideoStream();
 
 		return stream != nullptr ? stream->codecpar->width : 0;
 	}
 
 	int MediaReader::GetVideoHeight() const
 	{
-		const AVStream * stream = VideoStream();
+		const AVStream * stream = GetVideoStream();
 
 		return stream != nullptr ? stream->codecpar->height : 0;
 	}
 
 	double MediaReader::GetFrameRate() const
 	{
-		const AVStream * stream = VideoStream();
+		const AVStream * stream = GetVideoStream();
 
 		if (stream == nullptr || stream->avg_frame_rate.den == 0) {
 			return 0;
@@ -136,7 +136,7 @@ namespace ffmpeg
 
 	const char * MediaReader::GetVideoCodecName() const
 	{
-		const AVStream * stream = VideoStream();
+		const AVStream * stream = GetVideoStream();
 
 		return avcodec_get_name(stream != nullptr
 				? stream->codecpar->codec_id : AV_CODEC_ID_NONE);
@@ -144,32 +144,67 @@ namespace ffmpeg
 
 	bool MediaReader::HasAudio() const
 	{
-		return AudioStream() != nullptr;
+		return GetAudioStream() != nullptr;
 	}
 
 	int MediaReader::GetSampleRate() const
 	{
-		const AVStream * stream = AudioStream();
+		const AVStream * stream = GetAudioStream();
 
 		return stream != nullptr ? stream->codecpar->sample_rate : 0;
 	}
 
 	int MediaReader::GetChannels() const
 	{
-		const AVStream * stream = AudioStream();
+		const AVStream * stream = GetAudioStream();
 
 		return stream != nullptr ? stream->codecpar->ch_layout.nb_channels : 0;
 	}
 
 	const char * MediaReader::GetAudioCodecName() const
 	{
-		const AVStream * stream = AudioStream();
+		const AVStream * stream = GetAudioStream();
 
 		return avcodec_get_name(stream != nullptr
 				? stream->codecpar->codec_id : AV_CODEC_ID_NONE);
 	}
 
-	const AVStream * MediaReader::VideoStream() const
+	int MediaReader::GetVideoStreamIndex() const
+	{
+		return video_stream_index_;
+	}
+
+	int MediaReader::GetAudioStreamIndex() const
+	{
+		return audio_stream_index_;
+	}
+
+	int MediaReader::ReadPacket(AVPacket * packet)
+	{
+		if (format_context_ == nullptr) {
+			return AVERROR(EINVAL);
+		}
+
+		return av_read_frame(format_context_, packet);
+	}
+
+	int MediaReader::Seek(int64_t position_us)
+	{
+		if (format_context_ == nullptr) {
+			return AVERROR(EINVAL);
+		}
+
+		if (position_us < 0) {
+			position_us = 0;
+		}
+
+		// AVSEEK_FLAG_BACKWARD lands on the keyframe at or before the target,
+		// so that what follows can actually be decoded. Frames between that
+		// keyframe and the target are decoded and dropped by the caller.
+		return av_seek_frame(format_context_, -1, position_us, AVSEEK_FLAG_BACKWARD);
+	}
+
+	const AVStream * MediaReader::GetVideoStream() const
 	{
 		if (format_context_ == nullptr || video_stream_index_ < 0) {
 			return nullptr;
@@ -178,7 +213,7 @@ namespace ffmpeg
 		return format_context_->streams[video_stream_index_];
 	}
 
-	const AVStream * MediaReader::AudioStream() const
+	const AVStream * MediaReader::GetAudioStream() const
 	{
 		if (format_context_ == nullptr || audio_stream_index_ < 0) {
 			return nullptr;

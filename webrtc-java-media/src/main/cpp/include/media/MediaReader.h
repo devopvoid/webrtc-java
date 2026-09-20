@@ -73,10 +73,25 @@ namespace ffmpeg
 			int GetChannels() const;
 			const char * GetAudioCodecName() const;
 
-		private:
-			const AVStream * VideoStream() const;
-			const AVStream * AudioStream() const;
+			// The streams the decoders attach to, or null when the source has
+			// none of that kind. They belong to the reader and die with it.
+			const AVStream * GetVideoStream() const;
+			const AVStream * GetAudioStream() const;
 
+			int GetVideoStreamIndex() const;
+			int GetAudioStreamIndex() const;
+
+			// Reads the next packet of any stream into the given packet, which
+			// the caller unrefs. Returns 0, AVERROR_EOF once the source is
+			// exhausted, or another negative AVERROR.
+			int ReadPacket(AVPacket * packet);
+
+			// Moves to the keyframe at or before the given position, in
+			// microseconds from the start. The decoders have to be flushed
+			// afterwards, since what they hold belongs to the old position.
+			int Seek(int64_t position_us);
+
+		private:
 			AVFormatContext * format_context_ = nullptr;
 			int video_stream_index_ = -1;
 			int audio_stream_index_ = -1;
