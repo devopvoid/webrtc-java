@@ -136,6 +136,16 @@
 			<artifactId>webrtc-java</artifactId>
 			<version>${project.version}</version>
 		</dependency>
+
+		<!-- The native library of this module and the FFmpeg libraries beside
+		     it, so that depending on this module brings what it needs to run.
+		     webrtc-java carries its own natives the same way. -->
+		<dependency>
+			<groupId>${project.groupId}</groupId>
+			<artifactId>${project.artifactId}</artifactId>
+			<version>${project.version}</version>
+			<classifier>${platform.classifier}</classifier>
+		</dependency>
 	</dependencies>
 
 	<profiles>
