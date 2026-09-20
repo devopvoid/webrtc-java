@@ -52,6 +52,27 @@ The [`DesktopVideoExample`](https://github.com/devopvoid/webrtc-java/blob/master
 
 This example is particularly useful for applications that need to implement screen sharing or remote desktop functionality.
 
+## Media File
+
+The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/media/java/dev/onvoid/webrtc/examples/MediaFileExample.java) demonstrates how to send a media file over a peer connection, in place of a camera and a microphone. See the [Media Files](/guide/media/media-files) guide for the API it uses.
+
+**Key features demonstrated:**
+- Opening a media file with a `MediaFileSource`
+- Reading what the source contains from its `MediaInfo`
+- Creating audio and video tracks from the media sources it feeds
+- Adding those tracks to a peer connection
+- Following playback through a `MediaPlayerListener`
+
+This example is useful for applications that stream pre-recorded media, or that need a dependable stand-in for a camera in testing.
+
+::: warning
+This example needs the `webrtc-java-media` module, which is opt-in while it is being brought up on every platform, so it is built and run with the `with-media-extension` profile:
+
+```bash
+mvn -Pwith-media-extension exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"exec.args=movie.mp4"
+```
+:::
+
 ## Web Client
 
 The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) demonstrates how to combine WebSocket signaling with WebRTC peer connections for real-time communication between web and Java clients.
