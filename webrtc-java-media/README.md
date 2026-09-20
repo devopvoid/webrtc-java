@@ -47,5 +47,15 @@ mvn install -Pwith-media-extension
 ```
 
 The first build compiles FFmpeg, which takes a while; later builds reuse the install directory
-(`ffmpeg.install.dir`, by default `~/ffmpeg/<platform>`). Building FFmpeg needs `make`, `nasm` and
-`pkg-config`; on Windows those come from an MSYS2 shell.
+(`ffmpeg.install.dir`, by default `~/ffmpeg/<platform>`).
+
+Building FFmpeg needs `make` and `nasm`. On Windows they come from MSYS2, which the build looks for
+in `C:/msys64` unless `MSYS2_ROOT` points somewhere else:
+
+```shell
+winget install MSYS2.MSYS2
+C:\msys64\usr\bin\bash -lc "pacman -S --needed make nasm diffutils pkgconf"
+```
+
+Maven still runs from an ordinary shell. The build enters MSYS2 and the Visual Studio environment
+on its own, because FFmpeg's configure needs a POSIX shell that can also see `cl` and `link`.
