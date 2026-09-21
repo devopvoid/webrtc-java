@@ -88,6 +88,23 @@ if(LINUX)
     target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
             "${LIBCPP_INCLUDE_DIR}" "${LIBCPP_ABI_INCLUDE_DIR}")
 
+    # These two belong with those include directories and have to be set here
+    # rather than left to the toolchain file, which only the x86_64 one does.
+    # webrtc-jni does not notice, because it links the webrtc target and picks
+    # them up from its PUBLIC flags; nothing carries them to this module.
+    #
+    # The bundled libc++ has wanted the hardening mode chosen at configuration
+    # time since branch-heads/7977, and without it every translation unit
+    # fails in __config before it reaches a line of ours.
+    target_compile_definitions(${PROJECT_NAME}
+            PRIVATE _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE)
+
+    # Clang finds the GCC installation inside the cross sysroots and puts its
+    # libstdc++ headers on the implicit search path, where they collide with
+    # the bundled libc++. Excluding the implicit C++ directories leaves the
+    # bundled headers serving C++ on their own.
+    target_compile_options(${PROJECT_NAME} PRIVATE -nostdinc++)
+
     target_link_directories(${PROJECT_NAME} PRIVATE "${WEBRTC_INSTALL_DIR}/lib")
     target_link_libraries(${PROJECT_NAME} PRIVATE
             -static-libgcc -stdlib=libc++ -lc++ -lc++abi)
