@@ -249,7 +249,14 @@ else()
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
         set(FFMPEG_ARCH x86_64)
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
-        set(FFMPEG_ARCH aarch64)
+        if(APPLE)
+            # Apple's clang knows this architecture as arm64 and rejects
+            # -arch aarch64 outright, which configure reports only as being
+            # unable to create an executable.
+            set(FFMPEG_ARCH arm64)
+        else()
+            set(FFMPEG_ARCH aarch64)
+        endif()
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|armv7.*|armhf)$")
         set(FFMPEG_ARCH arm)
     else()
@@ -305,6 +312,12 @@ else()
         list(APPEND FFMPEG_CONFIGURE_ARGS
             --enable-cross-compile
             --target-os=${FFMPEG_TARGET_OS})
+
+        # make install strips what it installs, with whichever strip is on
+        # the PATH, and the host's cannot read a binary built for another
+        # architecture: "unable to recognise the format of the input file".
+        # Shipping unstripped costs a little size and nothing else.
+        list(APPEND FFMPEG_CONFIGURE_ARGS --disable-stripping)
 
         # An assembler for a foreign architecture is a build prerequisite of
         # its own, and this module is not fast enough to need one yet.

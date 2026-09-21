@@ -29,12 +29,15 @@
 		     ABI, so it needs no special toolchain or standard library. -->
 		<cmake.options />
 		<cmake.config />
-		<!-- A cross build needs a compiler and a sysroot for the target. Those
-		     are described by webrtc-jni's toolchain files, which are this
-		     project's one answer to that question; a second set here would
-		     only drift from them. -->
+		<!-- A cross build needs a compiler for the target. Most targets here
+		     use this module's own toolchain files rather than webrtc-jni's:
+		     those compile with -nostdinc++ and link WebRTC's libc++, which
+		     webrtc-jni needs to match WebRTC's C++ ABI and this module, which
+		     links no C++ ABI at all, only inherits as a missing <string>. A
+		     target built natively needs no file. -->
 		<cmake.toolchain.file />
-		<media.toolchain.dir>${project.basedir}/../webrtc-jni/src/main/cpp/toolchain</media.toolchain.dir>
+		<media.toolchain.dir>${project.basedir}/src/main/cpp/toolchain</media.toolchain.dir>
+		<jni.toolchain.dir>${project.basedir}/../webrtc-jni/src/main/cpp/toolchain</jni.toolchain.dir>
 	</properties>
 
 	<build>
@@ -171,9 +174,8 @@
 					<arch>amd64</arch>
 				</os>
 			</activation>
-			<properties>
-				<cmake.toolchain.file>${media.toolchain.dir}/x86_64-linux-clang.cmake</cmake.toolchain.file>
-			</properties>
+			<!-- Built natively on an x86_64 runner, so the host compiler is
+			     already the right one. -->
 		</profile>
 		<profile>
 			<id>linux-aarch32</id>
@@ -184,7 +186,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>${media.toolchain.dir}/aarch32-linux-clang.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>${media.toolchain.dir}/aarch32-linux.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>
@@ -196,7 +198,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-linux-clang.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-linux.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>
@@ -207,15 +209,12 @@
 					<arch>aarch64</arch>
 				</os>
 			</activation>
-			<properties>
-				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-macos-clang.cmake</cmake.toolchain.file>
-			</properties>
+			<!-- Both macOS targets build for the architecture Maven itself is
+			     running as, the Intel one under "arch -x86_64", so neither is a
+			     cross build and neither needs a toolchain file. -->
 		</profile>
 		<profile>
 			<id>macos-cross-x86_64</id>
-			<properties>
-				<cmake.toolchain.file>${media.toolchain.dir}/x86_64-macos-cross.cmake</cmake.toolchain.file>
-			</properties>
 		</profile>
 
 		<!-- Reruns the tests under -Xcheck:jni, which turns a JNI reference
@@ -259,7 +258,7 @@
 			<properties>
 				<cmake.options>-AARM64</cmake.options>
 				<cmake.config>${cmake.build.type}</cmake.config>
-				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-windows-clang.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>${jni.toolchain.dir}/aarch64-windows-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 	</profiles>
