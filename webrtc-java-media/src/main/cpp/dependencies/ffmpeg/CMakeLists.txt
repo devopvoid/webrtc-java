@@ -329,7 +329,13 @@ else()
 
     # The compiler CMake settled on, so that FFmpeg is built by the same one as
     # the rest of this module rather than by whatever configure finds first.
-    if(NOT WIN32 AND CMAKE_C_COMPILER)
+    #
+    # Not on Apple. There CMake names the compiler inside the toolchain, and
+    # calling that directly skips the /usr/bin/cc shim that runs xcrun to
+    # point SDKROOT at an SDK. Without one there is no libSystem to link
+    # against, which configure reports only as being unable to create an
+    # executable. Its own default, plain "cc", goes through the shim.
+    if(NOT WIN32 AND NOT APPLE AND CMAKE_C_COMPILER)
         list(APPEND FFMPEG_CONFIGURE_ARGS --cc=${CMAKE_C_COMPILER})
     endif()
 
@@ -424,10 +430,29 @@ set MSYS2_PATH_TYPE=inherit
     )
 
     if(NOT BUILD_RESULT EQUAL 0)
+        # configure says almost nothing on the console and writes the actual
+        # reason into config.log, which on a build machine nobody can reach is
+        # the same as writing it nowhere. The tail of it goes to the console.
+        set(FFMPEG_CONFIG_LOG "${FFMPEG_BUILD_DIR}/ffbuild/config.log")
+
+        if(EXISTS "${FFMPEG_CONFIG_LOG}")
+            file(READ "${FFMPEG_CONFIG_LOG}" FFMPEG_CONFIG_LOG_TEXT)
+            string(LENGTH "${FFMPEG_CONFIG_LOG_TEXT}" FFMPEG_CONFIG_LOG_LENGTH)
+
+            if(FFMPEG_CONFIG_LOG_LENGTH GREATER 6000)
+                math(EXPR FFMPEG_CONFIG_LOG_OFFSET "${FFMPEG_CONFIG_LOG_LENGTH} - 6000")
+                string(SUBSTRING "${FFMPEG_CONFIG_LOG_TEXT}"
+                        ${FFMPEG_CONFIG_LOG_OFFSET} -1 FFMPEG_CONFIG_LOG_TEXT)
+            endif()
+
+            message("---- tail of ${FFMPEG_CONFIG_LOG} ----")
+            message("${FFMPEG_CONFIG_LOG_TEXT}")
+            message("---- end of config.log ----")
+        endif()
+
         message(FATAL_ERROR
             "Building FFmpeg failed (${BUILD_RESULT}). The script that ran is "
-            "${FFMPEG_BUILD_SCRIPT}; see ${FFMPEG_BUILD_DIR}/ffbuild/config.log for what "
-            "configure could not find.")
+            "${FFMPEG_BUILD_SCRIPT}.")
     endif()
 
     ffmpeg_is_installed(FFMPEG_INSTALLED)
