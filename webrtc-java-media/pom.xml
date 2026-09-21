@@ -29,15 +29,19 @@
 		     ABI, so it needs no special toolchain or standard library. -->
 		<cmake.options />
 		<cmake.config />
-		<!-- A cross build needs a compiler for the target. Most targets here
-		     use this module's own toolchain files rather than webrtc-jni's:
-		     those compile with -nostdinc++ and link WebRTC's libc++, which
-		     webrtc-jni needs to match WebRTC's C++ ABI and this module, which
-		     links no C++ ABI at all, only inherits as a missing <string>. A
-		     target built natively needs no file. -->
+		<!-- Linux and Windows-on-ARM build through webrtc-jni's toolchain
+		     files, so that both native libraries of a platform are built for
+		     the same target, against the same sysroot, and so end up with the
+		     same glibc floor. On Linux that also means compiling with
+		     -nostdinc++ and taking the C++ standard library from where
+		     webrtc-jni takes it, which is what webrtc.install.dir is for
+		     below. macOS builds for the architecture Maven runs as and needs
+		     no file. -->
 		<cmake.toolchain.file />
-		<media.toolchain.dir>${project.basedir}/src/main/cpp/toolchain</media.toolchain.dir>
 		<jni.toolchain.dir>${project.basedir}/../webrtc-jni/src/main/cpp/toolchain</jni.toolchain.dir>
+		<!-- Where webrtc-jni installed WebRTC, and with it the libc++ that its
+		     toolchain files expect. Same default as webrtc-jni's own. -->
+		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 	</properties>
 
 	<build>
@@ -84,6 +88,9 @@
 								</option>
 								<option>
 									-DMEDIA_TOOLCHAIN_FILE=${cmake.toolchain.file}
+								</option>
+								<option>
+									-DWEBRTC_INSTALL_DIR=${webrtc.install.dir}
 								</option>
 								<option>
 									-DFFMPEG_INSTALL_DIR=${ffmpeg.install.dir}
@@ -174,8 +181,9 @@
 					<arch>amd64</arch>
 				</os>
 			</activation>
-			<!-- Built natively on an x86_64 runner, so the host compiler is
-			     already the right one. -->
+			<properties>
+				<cmake.toolchain.file>${jni.toolchain.dir}/x86_64-linux-clang.cmake</cmake.toolchain.file>
+			</properties>
 		</profile>
 		<profile>
 			<id>linux-aarch32</id>
@@ -186,7 +194,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>${media.toolchain.dir}/aarch32-linux.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>${jni.toolchain.dir}/aarch32-linux-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>
@@ -198,7 +206,7 @@
 				</os>
 			</activation>
 			<properties>
-				<cmake.toolchain.file>${media.toolchain.dir}/aarch64-linux.cmake</cmake.toolchain.file>
+				<cmake.toolchain.file>${jni.toolchain.dir}/aarch64-linux-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 		<profile>

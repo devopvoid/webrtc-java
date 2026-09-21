@@ -246,22 +246,29 @@ else()
     #
 
     # The architecture under the name FFmpeg knows it by.
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
-        set(FFMPEG_ARCH x86_64)
-    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
-        if(APPLE)
-            # Apple's clang knows this architecture as arm64 and rejects
-            # -arch aarch64 outright, which configure reports only as being
-            # unable to create an executable.
-            set(FFMPEG_ARCH arm64)
-        else()
-            set(FFMPEG_ARCH aarch64)
+    function(ffmpeg_arch_name PROCESSOR RESULT)
+        set(NAME "")
+
+        if("${PROCESSOR}" MATCHES "^(x86_64|AMD64|amd64)$")
+            set(NAME x86_64)
+        elseif("${PROCESSOR}" MATCHES "^(aarch64|arm64|ARM64)$")
+            if(APPLE)
+                # Apple's clang knows this architecture as arm64 and rejects
+                # -arch aarch64 outright, which configure reports only as
+                # being unable to create an executable.
+                set(NAME arm64)
+            else()
+                set(NAME aarch64)
+            endif()
+        elseif("${PROCESSOR}" MATCHES "^(arm|armv7.*|armhf)$")
+            set(NAME arm)
         endif()
-    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm|armv7.*|armhf)$")
-        set(FFMPEG_ARCH arm)
-    else()
-        set(FFMPEG_ARCH "")
-    endif()
+
+        set(${RESULT} "${NAME}" PARENT_SCOPE)
+    endfunction()
+
+    ffmpeg_arch_name("${CMAKE_SYSTEM_PROCESSOR}" FFMPEG_ARCH)
+    ffmpeg_arch_name("${CMAKE_HOST_SYSTEM_PROCESSOR}" FFMPEG_HOST_ARCH)
 
     if(WIN32)
         set(FFMPEG_TARGET_OS win64)
@@ -308,7 +315,20 @@ else()
         list(APPEND FFMPEG_CONFIGURE_ARGS --sysroot=${CMAKE_SYSROOT})
     endif()
 
+    # CMake reports a cross build whenever a toolchain file names a system,
+    # even one that matches the host, and every toolchain file here does. What
+    # decides this for FFmpeg is narrower: whether it can run what it builds,
+    # which is a question about the architecture and the operating system.
+    set(FFMPEG_CROSS_COMPILING FALSE)
+
     if(CMAKE_CROSSCOMPILING)
+        if(NOT CMAKE_SYSTEM_NAME STREQUAL CMAKE_HOST_SYSTEM_NAME
+                OR NOT FFMPEG_ARCH STREQUAL FFMPEG_HOST_ARCH)
+            set(FFMPEG_CROSS_COMPILING TRUE)
+        endif()
+    endif()
+
+    if(FFMPEG_CROSS_COMPILING)
         list(APPEND FFMPEG_CONFIGURE_ARGS
             --enable-cross-compile
             --target-os=${FFMPEG_TARGET_OS})

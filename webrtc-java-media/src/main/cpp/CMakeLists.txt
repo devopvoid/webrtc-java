@@ -59,6 +59,39 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} PRIVATE ffmpeg)
 
 if(LINUX)
+    #
+    # The toolchain file builds against the Chromium sysroot, so that this
+    # library needs no newer glibc than webrtc-java's does: a machine that can
+    # run one can run the other. It also compiles with -nostdinc++, because
+    # everything Linux in this project uses the libc++ that WebRTC bundles
+    # rather than whatever the build machine happens to have.
+    #
+    # That libc++ is installed beside WebRTC itself, so webrtc-jni has to have
+    # been built before this module on Linux. It is the one thing this module
+    # takes from that build, and it is a C++ standard library, not any part of
+    # WebRTC: no WebRTC symbol is linked here, and the two native libraries
+    # still meet only through the C function table.
+    #
+    set(LIBCPP_CONFIG_DIR "${WEBRTC_INSTALL_DIR}/include/third_party/libc++")
+    set(LIBCPP_INCLUDE_DIR "${LIBCPP_CONFIG_DIR}/include")
+    set(LIBCPP_ABI_INCLUDE_DIR "${WEBRTC_INSTALL_DIR}/include/third_party/libc++abi/include")
+
+    if(NOT EXISTS "${LIBCPP_INCLUDE_DIR}")
+        message(FATAL_ERROR
+            "No libc++ in ${LIBCPP_INCLUDE_DIR}. This module builds against the one WebRTC "
+            "bundles, so webrtc-jni has to be built first, or WEBRTC_INSTALL_DIR has to point "
+            "at where it installed WebRTC.")
+    endif()
+
+    # The first carries __config_site, which the headers in the second need.
+    target_include_directories(${PROJECT_NAME} PRIVATE "${LIBCPP_CONFIG_DIR}")
+    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE
+            "${LIBCPP_INCLUDE_DIR}" "${LIBCPP_ABI_INCLUDE_DIR}")
+
+    target_link_directories(${PROJECT_NAME} PRIVATE "${WEBRTC_INSTALL_DIR}/lib")
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            -static-libgcc -stdlib=libc++ -lc++ -lc++abi)
+
     target_link_libraries(${PROJECT_NAME} PRIVATE dl pthread)
 endif()
 
