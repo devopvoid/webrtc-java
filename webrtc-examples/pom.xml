@@ -21,6 +21,27 @@
 
     <build>
         <plugins>
+            <!--
+                The media example needs webrtc-java-media's natives at run
+                time. They are not a dependency: the module attaches them at
+                its package phase, and "mvn jar:jar surefire:test", which CI
+                runs, invokes goals directly and so runs no phase at all,
+                leaving nothing to resolve against. Pointing at the directory
+                the CMake build collects them into keeps them off the
+                dependency graph entirely, which is also how the media
+                module's own tests find them.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <configuration>
+                    <additionalClasspathElements>
+                        <additionalClasspathElement>${project.basedir}/../webrtc-java-media/target/natives</additionalClasspathElement>
+                    </additionalClasspathElements>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -69,15 +90,6 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>webrtc-java-media</artifactId>
             <version>${project.version}</version>
-        </dependency>
-
-        <!-- The media module does not carry its own natives, so they are asked
-             for here. See the note in webrtc-java-media/pom.xml. -->
-        <dependency>
-            <groupId>${project.groupId}</groupId>
-            <artifactId>webrtc-java-media</artifactId>
-            <version>${project.version}</version>
-            <classifier>${platform.classifier}</classifier>
         </dependency>
 
         <dependency>
