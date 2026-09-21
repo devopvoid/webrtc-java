@@ -139,21 +139,23 @@
 		</plugins>
 	</build>
 
+	<!--
+		The natives of this module are not a dependency of it. They are built
+		and attached by this same module, so a dependency on them could not be
+		resolved on the first build of a clean machine: nothing has produced
+		them yet. webrtc-java can depend on its own classifier artifact only
+		because webrtc-jni, an earlier module, is what builds it.
+
+		Anything using this module therefore asks for the natives itself, with
+		a second dependency carrying the platform classifier. The tests here
+		need no such thing: Surefire is given the directory the CMake build
+		collects them into.
+	-->
 	<dependencies>
 		<dependency>
 			<groupId>dev.onvoid.webrtc</groupId>
 			<artifactId>webrtc-java</artifactId>
 			<version>${project.version}</version>
-		</dependency>
-
-		<!-- The native library of this module and the FFmpeg libraries beside
-		     it, so that depending on this module brings what it needs to run.
-		     webrtc-java carries its own natives the same way. -->
-		<dependency>
-			<groupId>${project.groupId}</groupId>
-			<artifactId>${project.artifactId}</artifactId>
-			<version>${project.version}</version>
-			<classifier>${platform.classifier}</classifier>
 		</dependency>
 	</dependencies>
 

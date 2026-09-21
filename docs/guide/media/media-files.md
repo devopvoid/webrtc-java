@@ -30,7 +30,7 @@ C:\msys64\usr\bin\bash -lc "pacman -S --needed make nasm diffutils pkgconf"
 
 Maven still runs from an ordinary shell; the build enters MSYS2 and the Visual Studio environment on its own. The first build compiles FFmpeg, which takes a while; later builds reuse the install directory.
 
-Once installed, depend on it alongside `webrtc-java`:
+Once installed, depend on it alongside `webrtc-java`. It takes two entries: one for the Java API, and one for the natives of the platform you are running on.
 
 ```xml
 <dependency>
@@ -38,9 +38,19 @@ Once installed, depend on it alongside `webrtc-java`:
     <artifactId>webrtc-java-media</artifactId>
     <version>0.19.0-SNAPSHOT</version>
 </dependency>
+<dependency>
+    <groupId>dev.onvoid.webrtc</groupId>
+    <artifactId>webrtc-java-media</artifactId>
+    <version>0.19.0-SNAPSHOT</version>
+    <classifier>windows-x86_64</classifier>
+</dependency>
 ```
 
-The classifier jar carries the module's native library together with the FFmpeg shared libraries it uses. Applications that do not use this module never download FFmpeg.
+The classifier jar carries the module's native library together with the FFmpeg shared libraries it uses, so applications that do not use this module never download FFmpeg. Replace the classifier with the platform you are building for: `windows-x86_64`, `windows-aarch64`, `linux-x86_64`, `linux-aarch64`, `linux-aarch32`, `macos-x86_64` or `macos-aarch64`.
+
+::: info
+Unlike `webrtc-java`, which brings its natives along by itself, this module cannot: the natives are built by the module rather than by a separate one, so a dependency on them would have nothing to resolve against on a first build. Asking for them explicitly is the price of that.
+:::
 
 ## Sending a File
 

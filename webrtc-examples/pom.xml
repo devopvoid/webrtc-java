@@ -71,6 +71,15 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- The media module does not carry its own natives, so they are asked
+             for here. See the note in webrtc-java-media/pom.xml. -->
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>webrtc-java-media</artifactId>
+            <version>${project.version}</version>
+            <classifier>${platform.classifier}</classifier>
+        </dependency>
+
         <dependency>
             <groupId>org.eclipse.jetty</groupId>
             <artifactId>jetty-server</artifactId>
