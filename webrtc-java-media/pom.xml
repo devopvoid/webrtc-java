@@ -24,6 +24,13 @@
 		     the WebRTC checkout is reused. -->
 		<ffmpeg.install.dir>${user.home}/ffmpeg/${platform.classifier}</ffmpeg.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
+		<!-- The phases the native build runs in, so that it can be turned off
+		     with -DskipNativeBuild. The test-natives lane does that: there the
+		     natives come from the job that cross compiled them, and building
+		     them again on a machine whose only job is to run them would prove
+		     nothing. These are the goals' own default phases. -->
+		<cmake.generate.phase>process-sources</cmake.generate.phase>
+		<cmake.compile.phase>compile</cmake.compile.phase>
 		<!-- Generator options, set per platform below. This module links only
 		     against FFmpeg's C ABI and the JVM, never against WebRTC's C++
 		     ABI, so it needs no special toolchain or standard library. -->
@@ -76,6 +83,7 @@
 				<executions>
 					<execution>
 						<id>cmake-generate</id>
+						<phase>${cmake.generate.phase}</phase>
 						<goals>
 							<goal>generate</goal>
 						</goals>
@@ -109,6 +117,7 @@
 					</execution>
 					<execution>
 						<id>cmake-compile</id>
+						<phase>${cmake.compile.phase}</phase>
 						<goals>
 							<goal>compile</goal>
 						</goals>
@@ -170,6 +179,22 @@
 	</dependencies>
 
 	<profiles>
+		<!-- Runs the tests against natives built elsewhere, as the
+		     test-natives lane does after unpacking them into target/natives,
+		     which is where Surefire is already told to look. -->
+		<profile>
+			<id>skip-native-build</id>
+			<activation>
+				<property>
+					<name>skipNativeBuild</name>
+				</property>
+			</activation>
+			<properties>
+				<cmake.generate.phase>none</cmake.generate.phase>
+				<cmake.compile.phase>none</cmake.compile.phase>
+			</properties>
+		</profile>
+
 		<!-- The platform profiles mirror webrtc-jni's, by name and by the
 		     toolchain file each one selects, so that both native libraries of
 		     a given classifier are built for the same target the same way. -->

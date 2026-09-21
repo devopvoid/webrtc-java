@@ -76,13 +76,50 @@ runs:
     - name: Install the natives into the local repository
       run: |
         VERSION=$(sed -n '0,/<version>/s|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml)
-        JAR=$(ls natives/webrtc-java-*.jar | head -n 1)
+        JAR=$(find natives -path '*webrtc-jni*' -name 'webrtc-java-*.jar' | head -n 1)
         echo "Installing $JAR as webrtc-java:$VERSION:${{ inputs.classifier }}"
         mvn -B -q install:install-file -Dfile="$JAR" -DgroupId=dev.onvoid.webrtc \
           -DartifactId=webrtc-java -Dversion="$VERSION" -Dpackaging=jar \
           -Dclassifier=${{ inputs.classifier }}
       shell: bash
 
+    # The media module reads its natives from the directory its own build
+    # collects them into, which is also how they are found when it builds them
+    # itself. Unpacking the jar there is all it takes to point the tests at the
+    # ones this lane is meant to exercise.
+    - name: Unpack the media natives where the tests look for them
+      run: |
+        MEDIA_JAR=$(find natives -name 'webrtc-java-media-*-${{ inputs.classifier }}.jar' | head -n 1)
+
+        if [ -z "$MEDIA_JAR" ]; then
+          echo "No webrtc-java-media natives for ${{ inputs.classifier }} in the artifact" >&2
+          exit 1
+        fi
+
+        MEDIA_JAR="$PWD/$MEDIA_JAR"
+        echo "Unpacking $MEDIA_JAR"
+
+        mkdir -p webrtc-java-media/target/natives
+        cd webrtc-java-media/target/natives
+        # jar rather than unzip: the JDK is set up above, and unzip is not on
+        # every runner image.
+        "$JAVA_HOME/bin/jar" xf "$MEDIA_JAR"
+        rm -rf META-INF
+        ls -l
+      shell: bash
+
+    # webrtc is installed rather than only tested, so that the media module
+    # below resolves it from the repository. Putting both in one reactor does
+    # not work: Maven then substitutes the module's own output for the
+    # dependency, and webrtc-java's natives, which are a classifier artifact of
+    # that same module, never reach the class path. Installing is seconds, and
+    # javadoc and sources belong to the release profile rather than to this.
     - name: Test
-      run: mvn -B -pl webrtc test -P${{ inputs.profile }}
+      run: mvn -B -pl webrtc install -P${{ inputs.profile }}
+      shell: bash
+
+    # The native build is off: these natives were cross compiled by another
+    # job, and this runner is here to run them, not to build them again.
+    - name: Test the media natives
+      run: mvn -B -pl webrtc-java-media test -DskipNativeBuild -P${{ inputs.profile }}
       shell: bash

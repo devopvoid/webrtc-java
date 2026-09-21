@@ -56,7 +56,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: natives-${{ matrix.platform.name }}
-          path: webrtc-jni/target/webrtc-java-*.jar
+          path: |
+            webrtc-jni/target/webrtc-java-*.jar
+            webrtc-java-media/target/webrtc-java-media-*.jar
           if-no-files-found: error
 
   build-linux:
@@ -97,7 +99,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: natives-${{ matrix.platform.name }}
-          path: webrtc-jni/target/webrtc-java-*.jar
+          path: |
+            webrtc-jni/target/webrtc-java-*.jar
+            webrtc-java-media/target/webrtc-java-media-*.jar
           if-no-files-found: error
 
   build-macos:
