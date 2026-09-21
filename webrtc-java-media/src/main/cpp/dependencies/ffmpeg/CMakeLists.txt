@@ -25,6 +25,11 @@ if(NOT DEFINED FFMPEG_INSTALL_DIR OR FFMPEG_INSTALL_DIR STREQUAL "")
     message(FATAL_ERROR "FFMPEG_INSTALL_DIR is not set")
 endif()
 
+# It arrives from Maven, where the user's home on Windows is a backslash
+# path. CMake reads a backslash as the start of an escape, so C:\Users\...
+# is not only the wrong separator, it is a parse error waiting to happen.
+file(TO_CMAKE_PATH "${FFMPEG_INSTALL_DIR}" FFMPEG_INSTALL_DIR)
+
 file(MAKE_DIRECTORY "${FFMPEG_INSTALL_DIR}")
 
 # The libraries this module needs, in dependency order. The order matters
@@ -158,13 +163,18 @@ else()
 
     # configure and make are run by a POSIX shell, which on Windows means MSYS2
     # and its /c/... form of a path rather than C:/...
-    macro(to_shell_path PATH_IN RESULT)
-        set(${RESULT} "${PATH_IN}")
+    # A function rather than a macro on purpose: a macro substitutes its
+    # arguments into the body as text, so a path still holding a backslash
+    # would be parsed as an escape sequence instead of passed as a value.
+    function(to_shell_path PATH_IN RESULT)
+        set(CONVERTED "${PATH_IN}")
 
         if(WIN32)
-            string(REGEX REPLACE "^([A-Za-z]):/" "/\\1/" ${RESULT} "${${RESULT}}")
+            string(REGEX REPLACE "^([A-Za-z]):/" "/\\1/" CONVERTED "${CONVERTED}")
         endif()
-    endmacro()
+
+        set(${RESULT} "${CONVERTED}" PARENT_SCOPE)
+    endfunction()
 
     to_shell_path("${FFMPEG_INSTALL_DIR}" FFMPEG_INSTALL_DIR_SH)
     to_shell_path("${FFMPEG_SOURCE_DIR}" FFMPEG_SOURCE_DIR_SH)
