@@ -73,6 +73,27 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"
 ```
 :::
 
+## Media File Player
+
+The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application that sends a media file from one peer connection to another in the same process, then shows the received video and plays the received audio in sync. Start and Stop buttons set up and tear down the whole session.
+
+**Key features demonstrated:**
+- Connecting two peer connections in one application, without a signaling server
+- Using one factory with a dummy audio layer to send the file, and another with the platform audio layer to play what is received
+- Keeping audio and video in sync by sending both tracks in the same media stream
+- Raising the video sender's `maxBitrate` above WebRTC's default, so a high-resolution file is not held to a fraction of its size
+- Rendering received video frames in a Swing component with `VideoBufferConverter`
+- Showing the file's format, the playback position, and live receive metrics (codec, resolution, frame rate, bitrate, packet loss, jitter, audio level) read from `getStats()`
+- Releasing senders, peer connections, tracks and the source in order on Stop
+
+::: info
+Like the [Media File](#media-file) example, this one needs the `webrtc-java-media` module. The file argument is optional; a file can also be chosen from the window.
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFilePlayerExample" -D"exec.args=movie.mp4"
+```
+:::
+
 ## Web Client
 
 The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) demonstrates how to combine WebSocket signaling with WebRTC peer connections for real-time communication between web and Java clients.

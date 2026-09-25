@@ -1,6 +1,7 @@
 module webrtc.java.examples {
 
     requires com.fasterxml.jackson.databind;
+    requires java.desktop;
     requires java.logging;
     requires java.net.http;
     requires org.eclipse.jetty.server;
