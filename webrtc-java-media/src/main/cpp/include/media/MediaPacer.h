@@ -58,6 +58,20 @@ namespace ffmpeg
 			static constexpr size_t kVideoCapacity = 60;
 			static constexpr size_t kAudioCapacity = 100;
 
+			// How far audio may run past its capacity while video is short.
+			//
+			// One thread decodes both, in the order the container stores
+			// them, so a full audio queue holds up video as well. Containers
+			// interleave coarsely, and a frame-threaded video decoder hands
+			// out each frame several packets after it was fed, so video can
+			// lag audio in the file by a second or more. Blocking on audio
+			// then leaves the video queue running dry, and its frames arrive
+			// late and all at once, which WebRTC's encoder answers by dropping
+			// all but the last of each burst. Letting audio grow while video
+			// is below half its capacity is what keeps video fed; this bounds
+			// how much, at ten seconds, for a source that has no video at all.
+			static constexpr size_t kAudioOverflowCapacity = 1000;
+
 			// The sources may be 0, in which case media of that kind is
 			// dropped rather than delivered.
 			MediaPacer(const webrtc_java_api * api, void * video_source,

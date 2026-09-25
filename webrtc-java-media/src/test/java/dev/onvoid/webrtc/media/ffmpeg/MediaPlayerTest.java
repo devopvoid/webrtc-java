@@ -25,6 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -146,6 +149,41 @@ class MediaPlayerTest {
 
 			assertTrue(playback.chunks.get() > 0, "no audio");
 			assertEquals(2, playback.channels.get());
+		}
+	}
+
+	@Test
+	void coarseInterleavingKeepsVideoEven() throws Exception {
+		// All three seconds of audio are stored ahead of the video, so the
+		// video can only be decoded once the audio has been read. A player
+		// that stops reading while the audio queue is full gets to the video
+		// late and delivers it in bursts, which WebRTC's encoder answers by
+		// dropping all but the last frame of each.
+		MediaReader reader = new MediaReader(
+				MediaReaderTest.asset(MediaReaderTest.COARSE_ASSET));
+
+		try (Playback playback = new Playback(reader)) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			List<Long> times;
+			synchronized (playback.frameTimes) {
+				times = new ArrayList<>(playback.frameTimes);
+			}
+
+			assertEquals(75, times.size());
+
+			// 25 fps is a frame every 40 ms. A frame on the heels of another
+			// is one that was due earlier and arrived late.
+			int bunched = 0;
+			for (int i = 1; i < times.size(); i++) {
+				if (times.get(i) - times.get(i - 1) < TimeUnit.MILLISECONDS.toNanos(10)) {
+					bunched++;
+				}
+			}
+
+			assertTrue(bunched <= 3, bunched + " frames arrived in a burst");
 		}
 	}
 
@@ -284,8 +322,10 @@ class MediaPlayerTest {
 		final AtomicInteger channels = new AtomicInteger();
 		final AtomicInteger framesPerChunk = new AtomicInteger();
 		final AtomicReference<String> error = new AtomicReference<>();
+		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
 
 		private final VideoTrackSink videoSink = frame -> {
+			frameTimes.add(System.nanoTime());
 			frames.incrementAndGet();
 			width.set(frame.buffer.getWidth());
 			height.set(frame.buffer.getHeight());

@@ -46,6 +46,12 @@ class MediaReaderTest {
 	 */
 	static final String AVI_ASSET = "/media-test.avi";
 
+	/**
+	 * Three seconds of 160x120 MJPEG at 25 fps and 8 kHz mono PCM in
+	 * Matroska, with all of the audio stored ahead of all of the video.
+	 */
+	static final String COARSE_ASSET = "/media-test-coarse.mkv";
+
 
 	@Test
 	void readsVideoInfo() throws Exception {
