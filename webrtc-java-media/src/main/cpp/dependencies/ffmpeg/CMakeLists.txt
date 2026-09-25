@@ -8,8 +8,8 @@ project(ffmpeg)
 #
 # The build runs at CMake configure time and installs into FFMPEG_INSTALL_DIR,
 # the way the WebRTC dependency of webrtc-jni does. A configure that finds the
-# libraries already installed there skips the whole thing, so only the first
-# build of a platform pays for it.
+# libraries already installed there, built with the same components, skips the
+# whole thing, so only the first build of a platform pays for it.
 #
 # The configuration is deliberately LGPL only: no --enable-gpl and no
 # --enable-nonfree, and the libraries are shared so that they can be replaced,
@@ -36,12 +36,96 @@ file(MAKE_DIRECTORY "${FFMPEG_INSTALL_DIR}")
 # twice: for the link line, and for the order the Java side loads them in.
 set(FFMPEG_LIBS avutil swresample swscale avcodec avformat)
 
+# The parts of FFmpeg this module plays with. Everything else is left out.
+set(FFMPEG_COMPONENTS
+    # Containers this module reads.
+    --enable-demuxer=mov
+    --enable-demuxer=matroska
+    --enable-demuxer=avi
+    --enable-demuxer=mpegts
+    --enable-demuxer=flv
+    --enable-demuxer=wav
+    --enable-demuxer=mp3
+    --enable-demuxer=ogg
+    --enable-demuxer=flac
+    --enable-demuxer=aac
+    # Video this module decodes.
+    --enable-decoder=h264
+    --enable-decoder=hevc
+    --enable-decoder=vp8
+    --enable-decoder=vp9
+    --enable-decoder=mpeg4
+    --enable-decoder=mjpeg
+    # What AVI files carry besides MPEG-4: Microsoft's MPEG-4 variants, which
+    # is what an AVI tagged MPG4, MP42 or DIV3 holds.
+    --enable-decoder=msmpeg4v1
+    --enable-decoder=msmpeg4v2
+    --enable-decoder=msmpeg4v3
+    # Audio this module decodes.
+    --enable-decoder=aac
+    --enable-decoder=mp3
+    --enable-decoder=opus
+    --enable-decoder=vorbis
+    --enable-decoder=flac
+    --enable-decoder=pcm_s16le
+    --enable-decoder=pcm_s16be
+    --enable-decoder=pcm_u8
+    --enable-decoder=pcm_f32le
+    # Audio common in AVI files and in MPEG transport streams.
+    --enable-decoder=mp2
+    --enable-decoder=ac3
+    # Not only for E-AC-3 itself: the AC-3 decoder calls into its tables, and
+    # MSVC, unlike GCC and clang, does not drop those calls when it is left
+    # out, so AC-3 alone fails to link on Windows.
+    --enable-decoder=eac3
+    --enable-decoder=adpcm_ms
+    --enable-decoder=adpcm_ima_wav
+    # Parsers for the decoders above.
+    --enable-parser=h264
+    --enable-parser=hevc
+    --enable-parser=vp8
+    --enable-parser=vp9
+    --enable-parser=mpeg4video
+    --enable-parser=mjpeg
+    --enable-parser=aac
+    --enable-parser=mpegaudio
+    --enable-parser=ac3
+    --enable-parser=opus
+    --enable-parser=vorbis
+    --enable-parser=flac
+    # Local files only for now; network protocols follow once the TLS
+    # backends are wired up per platform.
+    --enable-protocol=file
+    --enable-protocol=pipe
+)
+
+# Written next to an install once it is built, naming the components it was
+# built with. Without it, an install from before a component was added would
+# be taken as good, and a file needing that component would fail to play with
+# nothing to say why.
+set(FFMPEG_COMPONENTS_FILE "${FFMPEG_INSTALL_DIR}/components.txt")
+string(REPLACE ";" "\n" FFMPEG_COMPONENTS_TEXT "${FFMPEG_VERSION};${FFMPEG_COMPONENTS}")
+
 #
 # Decides whether FFmpeg has to be built, by looking for one of its headers
-# and one of its libraries in the install directory.
+# and one of its libraries in the install directory, and for a record of it
+# having been built with the components listed above.
 #
 function(ffmpeg_is_installed RESULT)
     if(NOT EXISTS "${FFMPEG_INSTALL_DIR}/include/libavformat/avformat.h")
+        set(${RESULT} FALSE PARENT_SCOPE)
+        return()
+    endif()
+
+    if(NOT EXISTS "${FFMPEG_COMPONENTS_FILE}")
+        set(${RESULT} FALSE PARENT_SCOPE)
+        return()
+    endif()
+
+    file(READ "${FFMPEG_COMPONENTS_FILE}" INSTALLED_COMPONENTS)
+
+    if(NOT INSTALLED_COMPONENTS STREQUAL FFMPEG_COMPONENTS_TEXT)
+        message(STATUS "FFmpeg in ${FFMPEG_INSTALL_DIR} was built with other components, rebuilding")
         set(${RESULT} FALSE PARENT_SCOPE)
         return()
     endif()
@@ -193,50 +277,7 @@ else()
         --disable-network
         --disable-everything
         --disable-autodetect
-        # Containers this module reads.
-        --enable-demuxer=mov
-        --enable-demuxer=matroska
-        --enable-demuxer=avi
-        --enable-demuxer=mpegts
-        --enable-demuxer=flv
-        --enable-demuxer=wav
-        --enable-demuxer=mp3
-        --enable-demuxer=ogg
-        --enable-demuxer=flac
-        --enable-demuxer=aac
-        # Video this module decodes.
-        --enable-decoder=h264
-        --enable-decoder=hevc
-        --enable-decoder=vp8
-        --enable-decoder=vp9
-        --enable-decoder=mpeg4
-        --enable-decoder=mjpeg
-        # Audio this module decodes.
-        --enable-decoder=aac
-        --enable-decoder=mp3
-        --enable-decoder=opus
-        --enable-decoder=vorbis
-        --enable-decoder=flac
-        --enable-decoder=pcm_s16le
-        --enable-decoder=pcm_s16be
-        --enable-decoder=pcm_u8
-        --enable-decoder=pcm_f32le
-        # Parsers for the decoders above.
-        --enable-parser=h264
-        --enable-parser=hevc
-        --enable-parser=vp8
-        --enable-parser=vp9
-        --enable-parser=mpeg4video
-        --enable-parser=mjpeg
-        --enable-parser=aac
-        --enable-parser=mpegaudio
-        --enable-parser=opus
-        --enable-parser=vorbis
-        --enable-parser=flac
-        # Local files only for now; network protocols follow once the TLS
-        # backends are wired up per platform.
-        --enable-protocol=file
-        --enable-protocol=pipe
+        ${FFMPEG_COMPONENTS}
     )
 
     #
@@ -474,6 +515,8 @@ set MSYS2_PATH_TYPE=inherit
             "Building FFmpeg failed (${BUILD_RESULT}). The script that ran is "
             "${FFMPEG_BUILD_SCRIPT}.")
     endif()
+
+    file(WRITE "${FFMPEG_COMPONENTS_FILE}" "${FFMPEG_COMPONENTS_TEXT}")
 
     ffmpeg_is_installed(FFMPEG_INSTALLED)
 

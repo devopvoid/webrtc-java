@@ -129,6 +129,27 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void playsAvi() throws Exception {
+		MediaReader reader = new MediaReader(MediaReaderTest.asset(MediaReaderTest.AVI_ASSET));
+
+		// Opening the player is what fails when a decoder for the file's
+		// codecs was left out of the FFmpeg build.
+		try (Playback playback = new Playback(reader)) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The asset holds six frames, all of which have to come out.
+			assertEquals(6, playback.frames.get());
+			assertEquals(1920, playback.width.get());
+			assertEquals(1080, playback.height.get());
+
+			assertTrue(playback.chunks.get() > 0, "no audio");
+			assertEquals(2, playback.channels.get());
+		}
+	}
+
+	@Test
 	void pacesInRealTime() throws Exception {
 		try (Playback playback = new Playback()) {
 			long started = System.nanoTime();

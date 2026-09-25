@@ -218,8 +218,8 @@ The FFmpeg build is deliberately small, and carries only what this module plays:
 | | |
 | --- | --- |
 | **Containers** | MP4 and MOV, Matroska and WebM, AVI, MPEG-TS, FLV, WAV, MP3, Ogg, FLAC, AAC |
-| **Video** | H.264, H.265/HEVC, VP8, VP9, MPEG-4, MJPEG |
-| **Audio** | AAC, MP3, Opus, Vorbis, FLAC, PCM |
+| **Video** | H.264, H.265/HEVC, VP8, VP9, MPEG-4 (including Xvid and DivX), Microsoft MPEG-4 v1 to v3, MJPEG |
+| **Audio** | AAC, MP3, MP2, AC-3, Opus, Vorbis, FLAC, PCM, MS and IMA ADPCM |
 
 Audio of any rate or layout is resampled to what WebRTC takes, which is 48 kHz 16-bit PCM in mono or stereo. Video that decodes to I420 — almost all 8-bit H.264, VP8, VP9 and MPEG-4 — reaches the encoder without being copied; anything else is converted first.
 
