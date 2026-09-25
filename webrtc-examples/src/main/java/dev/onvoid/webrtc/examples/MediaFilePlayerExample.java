@@ -56,6 +56,7 @@ import javax.swing.JProgressBar;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import javax.swing.UIManager;
 
 import dev.onvoid.webrtc.CreateSessionDescriptionObserver;
 import dev.onvoid.webrtc.PeerConnectionFactory;
@@ -174,7 +175,26 @@ public class MediaFilePlayerExample {
     public static void main(String[] args) {
         String file = args.length > 0 ? args[0] : "";
 
-        SwingUtilities.invokeLater(() -> new MediaFilePlayerExample().show(file));
+        SwingUtilities.invokeLater(() -> {
+            usePlatformLookAndFeel();
+
+            new MediaFilePlayerExample().show(file);
+        });
+    }
+
+    /**
+     * Makes the window look like the platform's own applications rather than
+     * Swing's cross-platform default. It has to happen before the first
+     * component is created, which only picks up the look it was made with.
+     */
+    private static void usePlatformLookAndFeel() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        }
+        catch (Exception e) {
+            // The default look works everywhere, so this is only cosmetic.
+            LOG.log(Level.WARNING, "Could not use the platform look and feel", e);
+        }
     }
 
     private MediaFilePlayerExample() {
