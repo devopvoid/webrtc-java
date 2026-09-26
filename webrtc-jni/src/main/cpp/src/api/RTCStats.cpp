@@ -99,8 +99,15 @@ namespace jni
 				RTC_LOG(LS_WARNING) << "No Java Enum for '" << stats.type() << "' found";
 			}
 
+			// NewObject takes its arguments as C varargs, which carry no type:
+			// the timestamp has to be the jlong the constructor declares, not
+			// the webrtc::Timestamp it is kept in. Passing the object happened
+			// to work where it fits in the same register as a jlong, but on
+			// 32-bit ARM a jlong is aligned to a register pair and the object
+			// is not, which shifted every argument after it and handed the
+			// constructor garbage for the type, the id and the attributes.
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
-				stats.timestamp(),
+				static_cast<jlong>(stats.timestamp().us()),
 				type ? type.get() : type,
 				JavaString::toJava(env, stats.id()).get(),
 				((JavaLocalRef<jobject>)attributeMap).get());
