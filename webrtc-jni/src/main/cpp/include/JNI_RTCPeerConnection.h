@@ -152,7 +152,6 @@ extern "C" {
 	(JNIEnv *, jobject, jobject);
 
 	/*
-	/*
 	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
 	 * Method:    getSignalingState
 	 * Signature: ()Ldev/onvoid/webrtc/RTCSignalingState;
