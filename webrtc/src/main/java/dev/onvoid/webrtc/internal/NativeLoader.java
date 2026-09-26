@@ -89,6 +89,85 @@ public class NativeLoader {
 		}
 	}
 
+	/**
+	 * Loads the specified native library together with the shared libraries it
+	 * needs, which a native extension module packages next to it.
+	 * <p>
+	 * The dependencies are loaded first, in the given order, so that by the
+	 * time the library itself is loaded every symbol it imports is already in
+	 * the process. They are extracted into one temporary directory under the
+	 * exact names given, because a dynamic linker matches an already-loaded
+	 * module by file name: a randomly named copy would be loaded a second
+	 * time, or not found at all.
+	 *
+	 * @param libName      The name of the library to load, without any
+	 *                     platform specific prefix, file extension or path.
+	 * @param dependencies The file names of the libraries to load first,
+	 *                     exactly as they are named in the JAR, in the order
+	 *                     they depend on each other.
+	 *
+	 * @throws Exception if one of the libraries could not be loaded.
+	 */
+	public static void loadLibrary(final String libName, final String... dependencies)
+			throws Exception {
+		if (LOADED_LIB_SET.contains(libName)) {
+			return;
+		}
+
+		String libFileName = System.mapLibraryName(
+				libName + "-" + getOSFamily() + "-" + getOSArch());
+		Path tempDir = Files.createTempDirectory(libName);
+
+		tempDir.toFile().deleteOnExit();
+
+		for (String dependency : dependencies) {
+			loadFromDirectory(tempDir, dependency);
+		}
+
+		loadFromDirectory(tempDir, libFileName);
+
+		LOADED_LIB_SET.add(libName);
+	}
+
+	/**
+	 * Extracts one library from the JAR into the given directory, keeping its
+	 * file name, and loads it.
+	 *
+	 * @param directory The directory to extract into.
+	 * @param fileName  The resource name of the library, which is also the
+	 *                  name it is written under.
+	 *
+	 * @throws Exception if the library is not in the JAR or could not be
+	 *                   loaded.
+	 */
+	private static void loadFromDirectory(Path directory, String fileName)
+			throws Exception {
+		Path libPath = directory.resolve(fileName);
+
+		try (InputStream is = NativeLoader.class.getClassLoader()
+				.getResourceAsStream(fileName)) {
+			if (is == null) {
+				throw new UnsatisfiedLinkError(
+						"Native library '" + fileName + "' is not on the classpath");
+			}
+
+			Files.copy(is, libPath, StandardCopyOption.REPLACE_EXISTING);
+		}
+
+		File libFile = libPath.toFile();
+
+		libFile.deleteOnExit();
+
+		try {
+			System.load(libPath.toAbsolutePath().toString());
+		}
+		catch (Throwable e) {
+			libFile.delete();
+
+			throw e;
+		}
+	}
+
 	private static String getExtension(String fileName) {
 		final int index = getExtensionIndex(fileName);
 

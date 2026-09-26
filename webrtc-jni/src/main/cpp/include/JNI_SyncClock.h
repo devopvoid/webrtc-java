@@ -47,6 +47,14 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_initialize
 	(JNIEnv *, jobject);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_media_SyncClock
+	 * Method:    currentTimeUs
+	 * Signature: ()J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_currentTimeUs
+	(JNIEnv *, jclass);
+
 #ifdef __cplusplus
 }
 #endif

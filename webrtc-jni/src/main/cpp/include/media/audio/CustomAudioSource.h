@@ -42,15 +42,34 @@ namespace jni
             SourceState state() const override;
             bool remote() const override;
 
-            // Push audio data with synchronization
+            // Push audio data with synchronization. The chunk is captured now,
+            // so it is stamped with this source's clock less the configured
+            // capture delay. This is what the Java pushAudio() calls.
             void PushAudioData(const void * audio_data, int bits_per_sample,
                               int sample_rate, size_t number_of_channels,
                               size_t number_of_frames);
+
+            // Push audio data captured at the given time, in microseconds on
+            // the same clock as webrtc::TimeMicros(). The capture delay is not
+            // applied: a caller that knows when the audio was captured has
+            // already accounted for it.
+            void PushAudioData(const void * audio_data, int bits_per_sample,
+                              int sample_rate, size_t number_of_channels,
+                              size_t number_of_frames, int64_t timestamp_us);
 
             // Set audio capture delay for synchronization adjustment
             void SetAudioCaptureDelay(int64_t delay_us);
 
         private:
+            // Hands one chunk to every sink. Both push paths hold mutex_ for
+            // the whole delivery, as they always have, so a sink cannot be
+            // removed while it is being called.
+            void DeliverAudioDataLocked(const void * audio_data, int bits_per_sample,
+                                       int sample_rate, size_t number_of_channels,
+                                       size_t number_of_frames,
+                                       int64_t absolute_capture_time_ms)
+                                       RTC_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
             // Guards sinks_ and audio_capture_delay_us_ against concurrent
             // AddSink()/RemoveSink() (called by WebRTC's own signaling/worker
             // thread as tracks attach/detach) racing with PushAudioData() and

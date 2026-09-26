@@ -74,3 +74,19 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_push
         env->ReleaseByteArrayElements(audioData, data, JNI_ABORT);
     }
 }
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_pushAudioTimestamped
+(JNIEnv * env, jobject caller, jbyteArray audioData, jint bits_per_sample, jint sampleRate, jint channels, jint frameCount, jlong timestampUs)
+{
+    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
+    CHECK_HANDLE(source);
+
+    // The caller validated the format, the frame count and the array length.
+    jbyte * data = env->GetByteArrayElements(audioData, nullptr);
+
+    if (data != nullptr) {
+        source->PushAudioData(data, bits_per_sample, sampleRate, channels, frameCount, timestampUs);
+
+        env->ReleaseByteArrayElements(audioData, data, JNI_ABORT);
+    }
+}

@@ -18,6 +18,8 @@
 #include "JavaUtils.h"
 #include "media/SyncClock.h"
 
+#include "rtc_base/time_utils.h"
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_initialize
 (JNIEnv * env, jobject caller)
 {
@@ -63,4 +65,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_dispose
     delete clock;
     
     SetHandle<std::nullptr_t>(env, caller, nullptr);
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_currentTimeUs
+(JNIEnv * env, jclass caller)
+{
+    // The clock capture timestamps handed to the custom media sources are
+    // interpreted in, which is the one WebRTC itself runs on.
+    return webrtc::TimeMicros();
 }

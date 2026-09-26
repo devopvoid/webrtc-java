@@ -92,6 +92,20 @@ The call checks its arguments and throws `IllegalArgumentException` rather than 
 The audio is handed to the track's senders on the thread that calls `pushAudio`, so call it from a single thread. A scheduled executor with one thread, as shown below, is the simplest way to do that.
 :::
 
+### Keeping the Source's Own Timing
+
+A chunk pushed with the call above is treated as captured at that moment. A source with timing of its own, such as a media file played alongside video, should say when the audio was captured instead:
+
+```java
+long baseUs = SyncClock.currentTimeUs();          // once, when playback starts
+long presentationUs = chunkIndex * 10_000L;       // 10 ms per chunk
+
+audioSource.pushAudio(pcm, 16, sampleRate, channels, frameCount,
+        baseUs + presentationUs);
+```
+
+Use the same base for the audio and the video of one source, and the two stay in sync on the receiving side. See [Custom Video Source](/guide/video/custom-video-source) for the video half. Chunks must still be pushed in real time; the timestamp describes the audio, it does not schedule it.
+
 ## Audio Format Considerations
 
 When pushing audio data, you need to consider the following parameters:

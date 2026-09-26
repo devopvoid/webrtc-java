@@ -94,6 +94,63 @@ public class CustomAudioSource extends AudioTrackSource {
 	 */
 	public void pushAudio(byte[] audioData, int bits_per_sample, int sampleRate,
 						  int channels, int frameCount) {
+		validate(audioData, bits_per_sample, sampleRate, channels, frameCount);
+
+		pushAudioInternal(audioData, bits_per_sample, sampleRate, channels,
+				frameCount);
+	}
+
+	/**
+	 * Pushes audio data that was captured at the given time. Apart from the
+	 * timestamp this behaves exactly like
+	 * {@link #pushAudio(byte[], int, int, int, int)}.
+	 * <p>
+	 * A source that knows its own timing, such as one playing a media file,
+	 * should use this so that the audio lines up with video pushed with
+	 * matching timestamps. Chunks must still be pushed in real time.
+	 *
+	 * @param audioData       The raw audio data bytes to process. Must hold at
+	 *                        least {@code frameCount * channels * 2} bytes.
+	 * @param bits_per_sample The number of bits per sample, which must be 16.
+	 * @param sampleRate      The sample rate of the audio in Hz (e.g., 44100, 48000).
+	 * @param channels        The number of audio channels (1 for mono, 2 for stereo).
+	 * @param frameCount      The number of frames in the provided audio data.
+	 * @param timestampUs     The capture time of the chunk, on the clock of
+	 *                        {@link dev.onvoid.webrtc.media.SyncClock#currentTimeUs()}.
+	 *
+	 * @throws NullPointerException     If the audio data is {@code null}.
+	 * @throws IllegalArgumentException If the audio format is not 16-bit PCM,
+	 *                                  if a value is not positive, if the chunk
+	 *                                  is larger than WebRTC can take, or if the
+	 *                                  array is too short for the frames it is
+	 *                                  said to hold.
+	 *
+	 * @see dev.onvoid.webrtc.media.SyncClock#currentTimeUs()
+	 */
+	public void pushAudio(byte[] audioData, int bits_per_sample, int sampleRate,
+						  int channels, int frameCount, long timestampUs) {
+		validate(audioData, bits_per_sample, sampleRate, channels, frameCount);
+
+		pushAudioTimestamped(audioData, bits_per_sample, sampleRate, channels,
+				frameCount, timestampUs);
+	}
+
+	/**
+	 * Checks that a chunk of audio is something WebRTC can take, so that a bad
+	 * chunk is rejected here instead of reading past the end of the array or
+	 * aborting the process in native code.
+	 *
+	 * @param audioData       The raw audio data bytes to process.
+	 * @param bits_per_sample The number of bits per sample, which must be 16.
+	 * @param sampleRate      The sample rate of the audio in Hz.
+	 * @param channels        The number of audio channels.
+	 * @param frameCount      The number of frames in the provided audio data.
+	 *
+	 * @throws NullPointerException     If the audio data is {@code null}.
+	 * @throws IllegalArgumentException If any value is out of range.
+	 */
+	private static void validate(byte[] audioData, int bits_per_sample,
+								 int sampleRate, int channels, int frameCount) {
 		requireNonNull(audioData, "audioData must not be null");
 
 		if (bits_per_sample != BITS_PER_SAMPLE) {
@@ -134,9 +191,6 @@ public class CustomAudioSource extends AudioTrackSource {
 					"Audio data holds %d bytes, but %d frames of %d channels need %d",
 					audioData.length, frameCount, channels, required));
 		}
-
-		pushAudioInternal(audioData, bits_per_sample, sampleRate, channels,
-				frameCount);
 	}
 
 	/**
@@ -158,6 +212,21 @@ public class CustomAudioSource extends AudioTrackSource {
 	private native void pushAudioInternal(byte[] audioData, int bits_per_sample,
 										  int sampleRate, int channels,
 										  int frameCount);
+
+	/**
+	 * Hands the validated audio data to the native source, stamped with the
+	 * given capture time.
+	 *
+	 * @param audioData       The raw audio data bytes to process.
+	 * @param bits_per_sample The number of bits per sample.
+	 * @param sampleRate      The sample rate of the audio in Hz.
+	 * @param channels        The number of audio channels.
+	 * @param frameCount      The number of frames in the provided audio data.
+	 * @param timestampUs     The capture time of the chunk in microseconds.
+	 */
+	private native void pushAudioTimestamped(byte[] audioData, int bits_per_sample,
+											 int sampleRate, int channels,
+											 int frameCount, long timestampUs);
 
 	/**
 	 * Initializes the native resources required by this audio source.

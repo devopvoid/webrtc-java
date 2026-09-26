@@ -18,6 +18,8 @@ package dev.onvoid.webrtc.media.video;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -99,6 +101,68 @@ class CustomVideoSourceTest extends TestBase {
         testVideoFrame(1920, 1080); // Full HD
     }
     
+    @Test
+    void pushFrameWithTimestamp() {
+        // A caller that knows its own timing, such as one playing a file,
+        // supplies the capture time and the frame carries it through unchanged
+        // instead of being stamped with the moment it was pushed.
+        VideoTrack videoTrack = factory.createVideoTrack("videoTrack", customVideoSource);
+
+        final List<Long> timestamps = new ArrayList<>();
+
+        VideoTrackSink sink = frame -> timestamps.add(frame.timestampNs);
+
+        videoTrack.addSink(sink);
+
+        long baseUs = SyncClock.currentTimeUs();
+        long frameUs = 1_000_000L / 25;
+
+        for (int i = 0; i < 3; i++) {
+            NativeI420Buffer buffer = NativeI420Buffer.allocate(320, 240);
+            VideoFrame frame = new VideoFrame(buffer, 0);
+
+            customVideoSource.pushFrame(frame, baseUs + i * frameUs);
+
+            frame.release();
+        }
+
+        assertEquals(3, timestamps.size(), "Not every frame reached the sink");
+
+        for (int i = 0; i < 3; i++) {
+            assertEquals((baseUs + i * frameUs) * 1000L, timestamps.get(i),
+                    "Frame " + i + " did not keep its capture time");
+        }
+
+        videoTrack.removeSink(sink);
+        videoTrack.dispose();
+    }
+
+    @Test
+    void pushFrameWithoutTimestampUsesSourceClock() {
+        // Without a capture time the source stamps the frame itself, which is
+        // the behaviour of pushFrame(VideoFrame) and must stay that way.
+        VideoTrack videoTrack = factory.createVideoTrack("videoTrack", customVideoSource);
+
+        final List<Long> timestamps = new ArrayList<>();
+
+        VideoTrackSink sink = frame -> timestamps.add(frame.timestampNs);
+
+        videoTrack.addSink(sink);
+
+        NativeI420Buffer buffer = NativeI420Buffer.allocate(320, 240);
+        VideoFrame frame = new VideoFrame(buffer, 424242L);
+
+        customVideoSource.pushFrame(frame);
+        frame.release();
+
+        assertEquals(1, timestamps.size());
+        assertNotEquals(424242L, timestamps.get(0),
+                "Frame kept the timestamp it was constructed with");
+
+        videoTrack.removeSink(sink);
+        videoTrack.dispose();
+    }
+
     @Test
     void constructWithSyncClock() {
         // Create a SyncClock.
