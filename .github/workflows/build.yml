@@ -53,7 +53,7 @@ jobs:
 
       - name: Upload natives for native testing
         if: matrix.platform.name == 'windows_arm64'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: natives-${{ matrix.platform.name }}
           path: |
@@ -96,7 +96,7 @@ jobs:
 
       - name: Upload natives for native testing
         if: matrix.platform.name == 'linux_arm' || matrix.platform.name == 'linux_arm64'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: natives-${{ matrix.platform.name }}
           path: |

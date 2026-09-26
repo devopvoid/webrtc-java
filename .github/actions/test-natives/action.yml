@@ -34,7 +34,7 @@ runs:
   using: "composite"
   steps:
     - name: Download natives
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: natives-${{ inputs.platform-name }}
         path: natives
