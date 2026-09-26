@@ -123,3 +123,27 @@ install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX} COMPONENT Runtime
     LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX} COMPONENT Runtime
 )
+
+#
+# The native library links WebRTC statically, and with it the third-party
+# code WebRTC builds in. Their licenses ask for their text to travel with the
+# binary, so it goes into the platform jar, under META-INF where it cannot
+# collide with anything on a classpath.
+#
+# LICENSE.md is generated from the WebRTC build rather than written by hand,
+# so that it lists exactly what is linked in. Regenerate it whenever
+# webrtc.branch changes, from the WebRTC checkout (depot_tools on the PATH):
+#
+#   python tools_webrtc/libs/generate_licenses.py --target //:webrtc <out> out/<cpu>
+#
+# The tool knows no license for ffmpeg and openh264, which rtc_use_h264 pulls
+# in, and stops; map them to third_party/ffmpeg/COPYING.LGPLv2.1 and
+# third_party/openh264/src/LICENSE in its LIB_TO_LICENSES_DICT first.
+# PATENTS is WebRTC's additional patent grant, which the tool leaves out.
+#
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/webrtc/licenses/LICENSE.md"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/webrtc/licenses/PATENTS"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF/licenses/webrtc"
+    COMPONENT Runtime
+)

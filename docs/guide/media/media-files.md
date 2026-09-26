@@ -229,6 +229,10 @@ Only local files play today. FFmpeg demuxes network sources just as well, so the
 
 The module uses FFmpeg under the LGPL version 2.1 or later. It is configured without `--enable-gpl` and without `--enable-nonfree`, and FFmpeg is linked dynamically and shipped as separate files inside the platform jar, so its libraries may be replaced with your own build, as the LGPL requires. The wrapper code is licensed under the Apache License 2.0 like the rest of webrtc-java.
 
+Each platform jar carries the LGPL text and a notice under `META-INF/licenses/ffmpeg`, naming the FFmpeg release the libraries are built from, unmodified, and where its source is. If you redistribute your application with these jars, keep those files with them.
+
+Some of the formats FFmpeg decodes, such as H.264, H.265/HEVC and AAC, may be covered by patents in some countries. Whether your use of them needs a patent license is for you to determine.
+
 ## Complete Example
 
 See `MediaFileExample` in the `webrtc-examples` module, which opens a file, reports what it contains, creates tracks, adds them to a peer connection and follows playback to the end.

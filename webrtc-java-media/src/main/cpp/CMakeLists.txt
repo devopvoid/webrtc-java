@@ -138,3 +138,30 @@ foreach(RUNTIME_LIB ${FFMPEG_RUNTIME_LIBS})
                 "${RUNTIME_LIB}" "${NATIVES_DIR}"
         COMMENT "Collecting ${RUNTIME_LIB} for the platform jar")
 endforeach()
+
+#
+# The LGPL asks for its text to travel with the FFmpeg libraries, along with
+# a notice saying what they are and where their source is. Both go under
+# META-INF, where they cannot collide with anything on a classpath.
+#
+set(FFMPEG_LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../../../third-party/ffmpeg/COPYING.LGPLv2.1")
+
+if(NOT EXISTS "${FFMPEG_LICENSE_FILE}")
+    message(FATAL_ERROR
+        "${FFMPEG_LICENSE_FILE} is missing, and the platform jar must not ship FFmpeg "
+        "without it. Check out the FFmpeg submodule.")
+endif()
+
+set(FFMPEG_NOTICE_FILE "${CMAKE_CURRENT_BINARY_DIR}/FFmpeg-NOTICE.txt")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/dependencies/ffmpeg/FFmpeg-NOTICE.txt.in"
+    "${FFMPEG_NOTICE_FILE}" @ONLY)
+
+set(FFMPEG_LICENSES_DIR "${NATIVES_DIR}/META-INF/licenses/ffmpeg")
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${FFMPEG_LICENSES_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${FFMPEG_LICENSE_FILE}" "${FFMPEG_LICENSES_DIR}/COPYING.LGPLv2.1"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${FFMPEG_NOTICE_FILE}" "${FFMPEG_LICENSES_DIR}/NOTICE.txt"
+    COMMENT "Collecting the FFmpeg license and notice for the platform jar")
