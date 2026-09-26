@@ -23,6 +23,10 @@ package dev.onvoid.webrtc.media.player;
  * playback, and that thread is the one decoding the media. An implementation
  * must therefore return promptly and must not call back into the player in a
  * way that waits for it.
+ * <p>
+ * Closing the player from here, or the {@link MediaFileSource} it belongs to,
+ * is fine: the native player is then released once this call has returned,
+ * rather than during it.
  *
  * @author Alex Andres
  */

@@ -303,12 +303,87 @@ class MediaPlayerTest {
 		}
 	}
 
+	@Test
+	void closesFromEndOfStream() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch closed = new CountDownLatch(1);
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					// On the player's own thread, which is the one closing it
+					// has to wait for.
+					player.close();
+					closed.countDown();
+				}
+			});
+
+			player.seek(2_500_000);
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			player.close();
+		}
+	}
+
+	@Test
+	void closesFromStateChangeOfCommand() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			AtomicInteger closes = new AtomicInteger();
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onStateChanged(MediaPlayerState state) {
+					// Called from within play(), on the calling thread.
+					if (state == MediaPlayerState.PLAYING) {
+						player.close();
+						closes.incrementAndGet();
+					}
+				}
+			});
+
+			player.play();
+
+			assertEquals(1, closes.get());
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			// Commands after the close find nothing to act on.
+			player.play();
+			player.seek(0);
+			player.close();
+		}
+	}
+
 	private static Path asset() throws Exception {
 		URL url = MediaPlayerTest.class.getResource(ASSET);
 
 		assertNotNull(url, "Test asset " + ASSET + " is missing");
 
 		return Paths.get(url.toURI());
+	}
+
+	/**
+	 * A pair of sources with no tracks, for tests that only need somewhere to
+	 * deliver to.
+	 */
+	private static final class Sources implements AutoCloseable {
+
+		final CustomVideoSource video = new CustomVideoSource();
+		final CustomAudioSource audio = new CustomAudioSource();
+
+		@Override
+		public void close() {
+			video.dispose();
+			audio.dispose();
+		}
 	}
 
 	/**
