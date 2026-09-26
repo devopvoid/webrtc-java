@@ -48,7 +48,10 @@ public interface MediaPlayerListener {
 	}
 
 	/**
-	 * Playback stopped because something went wrong.
+	 * Playback stopped because something went wrong. The player is left
+	 * {@link MediaPlayerState#PAUSED} where it failed: playing again carries
+	 * on past what failed, and a seek moves away from it, though a source
+	 * that cannot be read at all fails again.
 	 *
 	 * @param message What went wrong, as FFmpeg described it.
 	 */

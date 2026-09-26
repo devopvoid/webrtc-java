@@ -103,6 +103,8 @@ namespace ffmpeg
 
 	void MediaPlayer::Play()
 	{
+		bool changed = false;
+
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
@@ -120,16 +122,23 @@ namespace ffmpeg
 				seek_position_us_ = 0;
 			}
 
+			// Under the lock, together with the flag: the decode thread stops
+			// playback on an error, and the two must not interleave.
+			pacer_->Resume();
+			changed = UpdateStateLocked(kPlaying);
+
 			command_.notify_all();
 		}
 
-		pacer_->Resume();
-
-		SetState(kPlaying);
+		if (changed) {
+			NotifyState(kPlaying);
+		}
 	}
 
 	void MediaPlayer::Pause()
 	{
+		bool changed = false;
+
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
@@ -138,11 +147,14 @@ namespace ffmpeg
 			}
 
 			playing_ = false;
+
+			pacer_->Pause();
+			changed = UpdateStateLocked(kPaused);
 		}
 
-		pacer_->Pause();
-
-		SetState(kPaused);
+		if (changed) {
+			NotifyState(kPaused);
+		}
 	}
 
 	void MediaPlayer::Seek(int64_t position_us)
@@ -266,7 +278,10 @@ namespace ffmpeg
 			bool end_of_stream = false;
 
 			if (!PumpOnce(packet, &end_of_stream)) {
-				break;
+				// Playback has stopped and been reported. The thread stays,
+				// so that playing again carries on past what failed, and a
+				// seek can move away from it.
+				continue;
 			}
 
 			if (!end_of_stream) {
@@ -477,39 +492,64 @@ namespace ffmpeg
 
 	void MediaPlayer::SetState(int state)
 	{
-		MediaPlayerObserver * observer = nullptr;
+		bool changed = false;
 
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
-			if (state_ == state) {
-				return;
-			}
-
-			state_ = state;
-			observer = observer_.get();
+			changed = UpdateStateLocked(state);
 		}
 
+		if (changed) {
+			NotifyState(state);
+		}
+	}
+
+	bool MediaPlayer::UpdateStateLocked(int state)
+	{
+		if (state_ == state) {
+			return false;
+		}
+
+		state_ = state;
+
+		return true;
+	}
+
+	void MediaPlayer::NotifyState(int state)
+	{
 		// Called with the lock released: an observer runs Java code, which
-		// must never happen underneath a lock of ours.
-		if (observer != nullptr) {
-			observer->OnStateChanged(state);
+		// must never happen underneath a lock of ours. The observer does not
+		// change once the thread runs, so it is read without the lock.
+		if (observer_ != nullptr) {
+			observer_->OnStateChanged(state);
 		}
 	}
 
 	void MediaPlayer::ReportError(const std::string & message, int error)
 	{
-		MediaPlayerObserver * observer = nullptr;
+		bool changed = false;
 
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
-			playing_ = false;
-			observer = observer_.get();
+			// Playback stops where it failed, as if paused: what is queued
+			// stays queued, and playing again carries on from here. A player
+			// being closed is left to that.
+			if (!closing_ && playing_) {
+				playing_ = false;
+
+				pacer_->Pause();
+				changed = UpdateStateLocked(kPaused);
+			}
 		}
 
-		if (observer != nullptr) {
-			observer->OnError(message + ": " + ErrorText(error));
+		if (changed) {
+			NotifyState(kPaused);
+		}
+
+		if (observer_ != nullptr) {
+			observer_->OnError(message + ": " + ErrorText(error));
 		}
 	}
 }

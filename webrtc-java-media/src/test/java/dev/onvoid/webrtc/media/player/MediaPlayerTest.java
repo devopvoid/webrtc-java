@@ -424,6 +424,45 @@ class MediaPlayerTest {
 		}
 	}
 
+	@Test
+	void pausesOnDecodeError() throws Exception {
+		Path file = TestMedia.corruptFlac(tempDir, 10, 4);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			CountDownLatch failed = new CountDownLatch(1);
+			CountDownLatch ended = new CountDownLatch(1);
+
+			playback.player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+
+				@Override
+				public void onError(String message) {
+					failed.countDown();
+				}
+			});
+
+			playback.player.play();
+
+			assertTrue(failed.await(10, TimeUnit.SECONDS), "no error");
+
+			// Stopped where it failed, rather than claiming to play on.
+			assertEquals(MediaPlayerState.PAUSED, playback.player.getState());
+
+			int before = playback.chunks.get();
+
+			// Carries on past the frame that failed.
+			playback.player.play();
+
+			assertTrue(ended.await(10, TimeUnit.SECONDS), "no end of stream");
+			assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+			assertTrue(playback.chunks.get() > before, "nothing played after resuming");
+		}
+	}
+
 	private static boolean channelsEqual(byte[] data) {
 		// Interleaved 16-bit frames: the left and right sample of a frame are
 		// the two bytes pairs of each four.

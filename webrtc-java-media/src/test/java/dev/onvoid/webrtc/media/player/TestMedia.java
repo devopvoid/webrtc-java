@@ -23,6 +23,8 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.function.IntFunction;
 
 /**
  * Writes small media files that the committed assets cannot provide, because
@@ -99,67 +101,109 @@ final class TestMedia {
 	 */
 	static Path channelSwitchingFlac(Path directory, int stereoFrames,
 			int monoFrames) throws IOException {
-		final int frameCount = stereoFrames + monoFrames;
+		int[] channels = new int[stereoFrames + monoFrames];
 
+		Arrays.fill(channels, 0, stereoFrames, 2);
+		Arrays.fill(channels, stereoFrames, channels.length, 1);
+
+		return Files.write(directory.resolve("channel-switch.flac"),
+				flac(FLAC_SAMPLE_RATE, FLAC_BLOCK_SIZE, channels, TestMedia::sawtooth, -1));
+	}
+
+	/**
+	 * Writes a 48 kHz, mono, 16-bit FLAC file in which one frame cannot be
+	 * decoded: its header is intact, so the file reads as usual, but its
+	 * subframe uses a coding type FLAC reserves, which the decoder rejects.
+	 *
+	 * @param directory    Where to write the file.
+	 * @param frames       How many 100 ms frames to write.
+	 * @param corruptFrame Which of them to spoil.
+	 *
+	 * @return The file written.
+	 */
+	static Path corruptFlac(Path directory, int frames, int corruptFrame)
+			throws IOException {
+		int[] channels = new int[frames];
+
+		Arrays.fill(channels, 1);
+
+		return Files.write(directory.resolve("corrupt.flac"),
+				flac(FLAC_SAMPLE_RATE, FLAC_BLOCK_SIZE, channels, TestMedia::sawtooth,
+						corruptFrame));
+	}
+
+	/**
+	 * A sawtooth in steps of 37, so that no two neighbouring samples are ever
+	 * equal.
+	 */
+	private static short sawtooth(int n) {
+		return (short) ((n * 37) % 16000 - 8000);
+	}
+
+	/**
+	 * A FLAC stream of fixed size frames, as many as channel counts are given.
+	 * The stream starts with the channel count of its first frame.
+	 */
+	private static byte[] flac(int sampleRate, int blockSize, int[] frameChannels,
+			IntFunction<Short> signal, int corruptFrame) {
 		// The frame number is written as a single byte below.
-		if (frameCount > 127) {
-			throw new IllegalArgumentException("Too many frames: " + frameCount);
+		if (frameChannels.length > 127) {
+			throw new IllegalArgumentException("Too many frames: " + frameChannels.length);
 		}
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-		out.write(ascii("fLaC"));
+		writeBytes(out, ascii("fLaC"));
 
 		// The last metadata block, of type STREAMINFO, 34 bytes long.
 		out.write(0x80);
 		writeInt(out, 34, 3);
 
 		// Minimum and maximum block size, then unknown frame sizes.
-		writeInt(out, FLAC_BLOCK_SIZE, 2);
-		writeInt(out, FLAC_BLOCK_SIZE, 2);
+		writeInt(out, blockSize, 2);
+		writeInt(out, blockSize, 2);
 		writeInt(out, 0, 3);
 		writeInt(out, 0, 3);
 
 		// Sample rate, channels - 1, bits per sample - 1, total samples.
-		long totalSamples = (long) frameCount * FLAC_BLOCK_SIZE;
-		long packed = ((long) FLAC_SAMPLE_RATE << 44) | (1L << 41) | (15L << 36)
-				| totalSamples;
+		long totalSamples = (long) frameChannels.length * blockSize;
+		long packed = ((long) sampleRate << 44) | ((long) (frameChannels[0] - 1) << 41)
+				| (15L << 36) | totalSamples;
 
 		writeInt(out, packed, 8);
 
 		// No MD5 of the audio.
-		out.write(new byte[16]);
+		writeBytes(out, new byte[16]);
 
 		int sample = 0;
 
-		for (int frame = 0; frame < frameCount; frame++) {
-			boolean stereo = frame < stereoFrames;
-			short[] samples = new short[FLAC_BLOCK_SIZE];
+		for (int frame = 0; frame < frameChannels.length; frame++) {
+			short[] samples = new short[blockSize];
 
 			for (int i = 0; i < samples.length; i++) {
-				// A sawtooth in steps of 37, so that no two neighbouring
-				// samples are ever equal.
-				samples[i] = (short) ((sample++ * 37) % 16000 - 8000);
+				samples[i] = signal.apply(sample++);
 			}
 
-			out.write(flacFrame(frame, stereo ? 2 : 1, samples));
+			writeBytes(out, flacFrame(frame, sampleRate, frameChannels[frame], samples,
+					frame == corruptFrame));
 		}
 
-		return Files.write(directory.resolve("channel-switch.flac"), out.toByteArray());
+		return out.toByteArray();
 	}
 
 	/**
 	 * One FLAC frame of verbatim subframes, every channel carrying the given
 	 * samples.
 	 */
-	private static byte[] flacFrame(int number, int channels, short[] samples) {
+	private static byte[] flacFrame(int number, int sampleRate, int channels,
+			short[] samples, boolean corrupt) {
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 
 		// Sync code, fixed block size.
 		out.write(0xFF);
 		out.write(0xF8);
-		// Block size as 16 bits at the end of the header; 48 kHz.
-		out.write(0x7A);
+		// Block size as 16 bits at the end of the header; the sample rate.
+		out.write(0x70 | sampleRateCode(sampleRate));
 		// Mono or independent stereo; 16 bits per sample.
 		out.write(((channels - 1) << 4) | 0x08);
 		// The frame number, which fits a single byte of its UTF-8 coding.
@@ -168,8 +212,9 @@ final class TestMedia {
 		out.write(crc8(out.toByteArray()));
 
 		for (int channel = 0; channel < channels; channel++) {
-			// A verbatim subframe, no wasted bits.
-			out.write(0x02);
+			// A verbatim subframe, no wasted bits; or the first of the coding
+			// types FLAC reserves.
+			out.write(corrupt ? 0x04 : 0x02);
 
 			for (short value : samples) {
 				writeInt(out, value & 0xFFFF, 2);
@@ -179,6 +224,21 @@ final class TestMedia {
 		writeInt(out, crc16(out.toByteArray()), 2);
 
 		return out.toByteArray();
+	}
+
+	private static int sampleRateCode(int sampleRate) {
+		switch (sampleRate) {
+			case 44100:
+				return 0x9;
+			case 48000:
+				return 0xA;
+			default:
+				throw new IllegalArgumentException("Unsupported sample rate: " + sampleRate);
+		}
+	}
+
+	private static void writeBytes(ByteArrayOutputStream out, byte[] bytes) {
+		out.write(bytes, 0, bytes.length);
 	}
 
 	private static void writeInt(ByteArrayOutputStream out, long value, int bytes) {
