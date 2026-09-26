@@ -126,7 +126,12 @@ endif()
 #
 set(NATIVES_DIR "${CMAKE_CURRENT_BINARY_DIR}/../natives")
 
+# The directory is filled afresh on every build, rather than added to: a
+# library that is no longer part of the build, such as one of an earlier
+# FFmpeg release under its older major version, must not stay in it and end
+# up in the jar. The commands below run in the order they are declared.
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E remove_directory "${NATIVES_DIR}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${NATIVES_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE:${PROJECT_NAME}>" "${NATIVES_DIR}"

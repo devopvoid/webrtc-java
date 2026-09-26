@@ -18,7 +18,7 @@
 
 	<properties>
 		<!-- The FFmpeg release the third-party/ffmpeg submodule is pinned to. -->
-		<ffmpeg.version>7.1.1</ffmpeg.version>
+		<ffmpeg.version>8.1</ffmpeg.version>
 		<!-- Where the compiled FFmpeg libraries are installed and looked for. A
 		     build reuses an existing install instead of building again, the way
 		     the WebRTC checkout is reused. -->
@@ -72,6 +72,12 @@
 					<additionalClasspathElements>
 						<additionalClasspathElement>${project.build.directory}/natives</additionalClasspathElement>
 					</additionalClasspathElements>
+					<!-- The release the libraries on that path have to be,
+					     so that a test catches an install left over from an
+					     earlier one. -->
+					<systemPropertyVariables>
+						<ffmpeg.version>${ffmpeg.version}</ffmpeg.version>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 

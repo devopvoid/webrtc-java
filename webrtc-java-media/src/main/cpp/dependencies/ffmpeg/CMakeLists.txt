@@ -273,7 +273,6 @@ else()
         --disable-programs
         --disable-avdevice
         --disable-avfilter
-        --disable-postproc
         --disable-network
         --disable-everything
         --disable-autodetect
@@ -412,7 +411,21 @@ else()
 
     # Build out of tree so the submodule working tree stays clean.
     set(FFMPEG_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-build")
-    file(MAKE_DIRECTORY "${FFMPEG_BUILD_DIR}")
+
+    # A rebuild starts from nothing. make install only adds to the install
+    # directory, so the libraries of an earlier FFmpeg would stay beside the
+    # new ones, under the older major version in their names, and be packaged
+    # into the jar with them. The install directory is only cleared when the
+    # record of an earlier build of ours shows it is ours to clear, since it
+    # can be pointed anywhere. The build directory always belongs to this
+    # build, and objects compiled from another release are no use to it.
+    if(EXISTS "${FFMPEG_COMPONENTS_FILE}")
+        message(STATUS "Clearing the earlier FFmpeg build in ${FFMPEG_INSTALL_DIR}")
+        file(REMOVE_RECURSE "${FFMPEG_INSTALL_DIR}")
+    endif()
+
+    file(REMOVE_RECURSE "${FFMPEG_BUILD_DIR}")
+    file(MAKE_DIRECTORY "${FFMPEG_INSTALL_DIR}" "${FFMPEG_BUILD_DIR}")
     to_shell_path("${FFMPEG_BUILD_DIR}" FFMPEG_BUILD_DIR_SH)
 
     string(REPLACE ";" " " FFMPEG_CONFIGURE_ARGS_STR "${FFMPEG_CONFIGURE_ARGS}")
