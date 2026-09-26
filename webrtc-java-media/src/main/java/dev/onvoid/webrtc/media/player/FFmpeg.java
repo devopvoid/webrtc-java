@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 import dev.onvoid.webrtc.internal.NativeLoader;
 
@@ -51,7 +51,7 @@ public final class FFmpeg {
 
 	/**
 	 * Returns the FFmpeg version the loaded native library was built against,
-	 * for example {@code 7.1.1}. Useful to confirm which FFmpeg an application
+	 * for example {@code 8.1}. Useful to confirm which FFmpeg an application
 	 * actually ended up with, since the libraries may be replaced.
 	 *
 	 * @return The FFmpeg version string.
@@ -88,29 +88,29 @@ public final class FFmpeg {
 
 		if (osName.startsWith("windows")) {
 			return new String[] {
-					"avutil-59.dll",
-					"swresample-5.dll",
-					"swscale-8.dll",
-					"avcodec-61.dll",
-					"avformat-61.dll"
+					"avutil-60.dll",
+					"swresample-6.dll",
+					"swscale-9.dll",
+					"avcodec-62.dll",
+					"avformat-62.dll"
 			};
 		}
 		if (osName.startsWith("mac os")) {
 			return new String[] {
-					"libavutil.59.dylib",
-					"libswresample.5.dylib",
-					"libswscale.8.dylib",
-					"libavcodec.61.dylib",
-					"libavformat.61.dylib"
+					"libavutil.60.dylib",
+					"libswresample.6.dylib",
+					"libswscale.9.dylib",
+					"libavcodec.62.dylib",
+					"libavformat.62.dylib"
 			};
 		}
 
 		return new String[] {
-				"libavutil.so.59",
-				"libswresample.so.5",
-				"libswscale.so.8",
-				"libavcodec.so.61",
-				"libavformat.so.61"
+				"libavutil.so.60",
+				"libswresample.so.6",
+				"libswscale.so.9",
+				"libavcodec.so.62",
+				"libavformat.so.62"
 		};
 	}
 

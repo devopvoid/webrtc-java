@@ -78,6 +78,7 @@ When pushing video frames, you need to consider the following:
 ### Resolution
 - Common resolutions: 320x240, 640x480, 1280x720, 1920x1080
 - Higher resolutions require more bandwidth and processing power
+- Push frames at their full size: when the bitrate cannot carry them, the source scales them down (and, if asked, drops some) before they reach the encoder, the way a camera source does, and scales back up once the bandwidth allows. Local sinks on the track see the adapted frames too.
 
 ### Frame Rate
 - Common frame rates: 15, 24, 30, 60 fps

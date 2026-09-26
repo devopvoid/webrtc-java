@@ -153,12 +153,48 @@ namespace jni
 			return WEBRTC_JAVA_OK;
 		}
 
+		// The handles are the pointers the Java sources hold, typed as the
+		// concrete class, which is why a video and an audio source each get
+		// their own pair: a void pointer cannot be released without knowing
+		// what it points to.
+		void ApiVideoSourceRetain(void * source)
+		{
+			if (source != nullptr) {
+				static_cast<CustomVideoSource *>(source)->AddRef();
+			}
+		}
+
+		void ApiVideoSourceRelease(void * source)
+		{
+			if (source != nullptr) {
+				static_cast<CustomVideoSource *>(source)->Release();
+			}
+		}
+
+		void ApiAudioSourceRetain(void * source)
+		{
+			if (source != nullptr) {
+				static_cast<CustomAudioSource *>(source)->AddRef();
+			}
+		}
+
+		void ApiAudioSourceRelease(void * source)
+		{
+			if (source != nullptr) {
+				static_cast<CustomAudioSource *>(source)->Release();
+			}
+		}
+
 		const webrtc_java_api kExtensionApi = {
 			WEBRTC_JAVA_API_VERSION,
 			static_cast<uint32_t>(sizeof(webrtc_java_api)),
 			&ApiNowUs,
 			&ApiVideoSourcePush,
-			&ApiAudioSourcePush
+			&ApiAudioSourcePush,
+			&ApiVideoSourceRetain,
+			&ApiVideoSourceRelease,
+			&ApiAudioSourceRetain,
+			&ApiAudioSourceRelease
 		};
 	}
 

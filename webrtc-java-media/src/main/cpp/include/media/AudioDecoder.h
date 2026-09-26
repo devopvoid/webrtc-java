@@ -82,12 +82,28 @@ namespace ffmpeg
 			// Resamples one decoded frame into the pending buffer.
 			int Resample(const AVFrame * frame);
 
+			// Moves whatever swresample still holds into the pending buffer,
+			// which it only hands out when told that no more input follows.
+			int DrainResampler();
+
+			// Sets swresample up to convert from the given input to the
+			// output this decoder produces, replacing any earlier setup.
+			int ConfigureResampler(const AVChannelLayout * layout, int format,
+					int sample_rate);
+
 			// Moves one chunk out of the pending buffer.
 			void TakeChunk(std::vector<int16_t> & chunk, int64_t * timestamp_us);
 
 			AVCodecContext * codec_context_ = nullptr;
 			SwrContext * swr_context_ = nullptr;
 			AVFrame * decoded_ = nullptr;
+
+			// The input swresample is set up for. A stream may change any of
+			// these from one frame to the next, and a frame that no longer
+			// matches would be read with the wrong layout.
+			AVChannelLayout in_layout_ = {};
+			int in_format_ = -1;
+			int in_rate_ = 0;
 			AVRational time_base_ = { 0, 1 };
 			int channels_ = 0;
 
@@ -100,6 +116,10 @@ namespace ffmpeg
 			// packet timing looks like.
 			int64_t next_timestamp_us_ = 0;
 			bool have_timestamp_ = false;
+
+			// Set once the resampler has been drained at the end of the
+			// stream, so that it is drained once and not on every call.
+			bool resampler_drained_ = false;
 	};
 }
 

@@ -7,22 +7,19 @@ This guide explains how to send a media file over a peer connection instead of a
 - Reading what a source contains with `MediaReader` and `MediaInfo`
 - Controlling playback and following it with a listener
 - Feeding your own media sources with `MediaPlayer`
+- Playing a live stream from an IP camera or media server over RTSP
 
 Sending a file is a common need: a test pattern instead of a webcam, a pre-recorded briefing, a video that has to reach several participants. Without help, an application has to bring its own decoder and push I420 frames into a `CustomVideoSource` itself. The media module removes that work by decoding with [FFmpeg](https://ffmpeg.org) inside the library.
 
 Decoding happens entirely in native code. Frames never travel through Java: the module hands decoded pictures straight to the native side of a `CustomVideoSource`, and 10 ms chunks to a `CustomAudioSource`. They are paced in real time and carry the presentation times of the file, so what a receiver gets keeps the timing of the media rather than the timing of a Java thread.
 
-::: warning Opt-in while it is being brought up
-The media module is not part of the default build yet, and its native library has so far been built for `windows-x86_64` only. Build it with the `with-media-extension` profile, as described below.
-:::
-
 ## Adding the Module
 
-The module builds FFmpeg from a submodule pinned to a release tag, so the submodule has to be present:
+The module is part of the normal build, and it builds FFmpeg from a submodule pinned to a release tag, so the submodule has to be present:
 
 ```shell
 git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg
-mvn install -Pwith-media-extension
+mvn install
 ```
 
 Building FFmpeg needs `make` and `nasm`. On Windows they come from MSYS2:
@@ -34,7 +31,7 @@ C:\msys64\usr\bin\bash -lc "pacman -S --needed make nasm diffutils pkgconf"
 
 Maven still runs from an ordinary shell; the build enters MSYS2 and the Visual Studio environment on its own. The first build compiles FFmpeg, which takes a while; later builds reuse the install directory.
 
-Once installed, depend on it alongside `webrtc-java`:
+Once installed, depend on it alongside `webrtc-java`. It takes two entries: one for the Java API, and one for the natives of the platform you are running on.
 
 ```xml
 <dependency>
@@ -42,9 +39,19 @@ Once installed, depend on it alongside `webrtc-java`:
     <artifactId>webrtc-java-media</artifactId>
     <version>0.19.0-SNAPSHOT</version>
 </dependency>
+<dependency>
+    <groupId>dev.onvoid.webrtc</groupId>
+    <artifactId>webrtc-java-media</artifactId>
+    <version>0.19.0-SNAPSHOT</version>
+    <classifier>windows-x86_64</classifier>
+</dependency>
 ```
 
-The classifier jar carries the module's native library together with the FFmpeg shared libraries it uses. Applications that do not use this module never download FFmpeg.
+The classifier jar carries the module's native library together with the FFmpeg shared libraries it uses, so applications that do not use this module never download FFmpeg. Replace the classifier with the platform you are building for: `windows-x86_64`, `windows-aarch64`, `linux-x86_64`, `linux-aarch64`, `linux-aarch32`, `macos-x86_64` or `macos-aarch64`.
+
+::: info
+Unlike `webrtc-java`, which brings its natives along by itself, this module cannot: the natives are built by the module rather than by a separate one, so a dependency on them would have nothing to resolve against on a first build. Asking for them explicitly is the price of that.
+:::
 
 ## Sending a File
 
@@ -52,7 +59,7 @@ The classifier jar carries the module's native library together with the FFmpeg 
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaFileSource;
+import dev.onvoid.webrtc.media.player.MediaFileSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import java.nio.file.Path;
@@ -95,8 +102,8 @@ PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaInfo;
-import dev.onvoid.webrtc.media.ffmpeg.MediaReader;
+import dev.onvoid.webrtc.media.player.MediaInfo;
+import dev.onvoid.webrtc.media.player.MediaReader;
 
 try (MediaReader reader = new MediaReader(Path.of("movie.mp4"))) {
     MediaInfo info = reader.getInfo();
@@ -143,8 +150,8 @@ A seek lands on the keyframe at or before the position asked for, which is how f
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayerListener;
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayerState;
+import dev.onvoid.webrtc.media.player.MediaPlayerListener;
+import dev.onvoid.webrtc.media.player.MediaPlayerState;
 
 source.setListener(new MediaPlayerListener() {
 
@@ -167,6 +174,8 @@ source.setListener(new MediaPlayerListener() {
 
 ::: warning
 Every call arrives on the player's own thread, and that thread is the one decoding the media. A listener must return promptly, and must not wait on the player.
+
+Closing the player, or the `MediaFileSource`, from a listener is fine: it takes effect at once, and the native player is released on another thread once the listener has returned.
 :::
 
 ## Feeding Your Own Media Sources
@@ -175,8 +184,8 @@ Every call arrives on the player's own thread, and that thread is the one decodi
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayer;
-import dev.onvoid.webrtc.media.ffmpeg.MediaReader;
+import dev.onvoid.webrtc.media.player.MediaPlayer;
+import dev.onvoid.webrtc.media.player.MediaReader;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 
 CustomVideoSource videoSource = new CustomVideoSource();
@@ -191,7 +200,32 @@ player.play();
 
 ::: info
 The player takes over the reader it is given. That reader must not be used or closed afterwards; closing the player releases it.
+
+It also keeps the native side of the media sources it feeds alive until it is closed, so disposing of a source or its track while the player runs is safe.
 :::
+
+## Playing a Live Stream
+
+A source can also be a live stream behind an `rtsp://` URL, which is what IP cameras, video recorders and most media servers offer. Everything above works the same way; only the URL differs:
+
+```java
+MediaFileSource source = new MediaFileSource("rtsp://camera.local:554/stream1");
+```
+
+Credentials go into the URL, as `rtsp://user:password@camera.local/stream1`. FFmpeg first asks the server for RTP over UDP, and falls back to RTP interleaved on the RTSP connection over TCP if the server refuses UDP or no UDP packets arrive, which is what gets a stream through most firewalls.
+
+A network source can stall or disappear, so every operation that waits on a source has a time limit: opening it, and then each read during playback. It is 10 seconds unless you pass another:
+
+```java
+// Import required classes
+import java.time.Duration;
+
+MediaFileSource source = new MediaFileSource("rtsp://camera.local/stream1", Duration.ofSeconds(5));
+```
+
+An unreachable server makes the constructor throw an `IOException` once that time is up. A stream that stops sending during playback is reported to the listener's `onError`, and the player is left `PAUSED`. Closing a player never waits for the time limit: it breaks off whatever the player is waiting for at once.
+
+A live stream has no end and no length: its `MediaInfo` reports a duration of 0, looping does not apply, and seeking is reported as an error. Pausing stops reading from the server, but the server keeps sending; resuming carries on from where playback paused, which leaves it behind real time by as long as it was paused. To get back to live, close the source and open it again.
 
 ## Closing
 
@@ -212,21 +246,25 @@ The FFmpeg build is deliberately small, and carries only what this module plays:
 | | |
 | --- | --- |
 | **Containers** | MP4 and MOV, Matroska and WebM, AVI, MPEG-TS, FLV, WAV, MP3, Ogg, FLAC, AAC |
-| **Video** | H.264, H.265/HEVC, VP8, VP9, MPEG-4, MJPEG |
-| **Audio** | AAC, MP3, Opus, Vorbis, FLAC, PCM |
+| **Video** | H.264, H.265/HEVC, VP8, VP9, MPEG-4 (including Xvid and DivX), Microsoft MPEG-4 v1 to v3, MJPEG |
+| **Audio** | AAC, MP3, MP2, AC-3, Opus, Vorbis, FLAC, PCM, MS and IMA ADPCM |
 
 Audio of any rate or layout is resampled to what WebRTC takes, which is 48 kHz 16-bit PCM in mono or stereo. Video that decodes to I420 — almost all 8-bit H.264, VP8, VP9 and MPEG-4 — reaches the encoder without being copied; anything else is converted first.
 
-Only local files play today. FFmpeg demuxes network sources just as well, so the same code will cover http, rtsp and rtmp once those protocols are turned on in the build.
+Sources can be local files, or live streams over RTSP (`rtsp://`), with RTP over UDP or TCP. Protocols that need TLS, such as `rtsps://` and `https://`, are not part of the build, and neither are HLS, DASH and RTMP. A source cannot reach any other protocol either, even one FFmpeg uses internally, so a URL passed on from a user cannot make the module fetch something else.
 
 ## Licensing
 
 The module uses FFmpeg under the LGPL version 2.1 or later. It is configured without `--enable-gpl` and without `--enable-nonfree`, and FFmpeg is linked dynamically and shipped as separate files inside the platform jar, so its libraries may be replaced with your own build, as the LGPL requires. The wrapper code is licensed under the Apache License 2.0 like the rest of webrtc-java.
+
+Each platform jar carries the LGPL text and a notice under `META-INF/licenses/ffmpeg`, naming the FFmpeg release the libraries are built from, unmodified, and where its source is. If you redistribute your application with these jars, keep those files with them.
+
+Some of the formats FFmpeg decodes, such as H.264, H.265/HEVC and AAC, may be covered by patents in some countries. Whether your use of them needs a patent license is for you to determine.
 
 ## Complete Example
 
 See `MediaFileExample` in the `webrtc-examples` module, which opens a file, reports what it contains, creates tracks, adds them to a peer connection and follows playback to the end.
 
 ```shell
-mvn -Pwith-media-extension -pl webrtc-examples compile
+mvn -pl webrtc-examples compile
 ```

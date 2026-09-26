@@ -6,6 +6,19 @@ EXTERNAL COMPONENTS
 This product bundles WebRTC, which is available under a "3-clause BSD" license.
 For details, see https://webrtc.github.io/webrtc-org/license.
 
+WebRTC is linked statically into the webrtc-java platform jars, together with
+the third-party code it builds in, among them libvpx, libyuv, OpenH264, libaom,
+dav1d, Opus, BoringSSL, Abseil and, for H.264 decoding, Chromium's FFmpeg under
+the GNU Lesser General Public License version 2.1 or later. Each platform jar
+carries their licenses and WebRTC's patent grant under META-INF/licenses/webrtc.
+
+The webrtc-java-media platform jars bundle FFmpeg (https://ffmpeg.org), which is
+available under the GNU Lesser General Public License version 2.1 or later. It is
+built from an unmodified FFmpeg release, without --enable-gpl and without
+--enable-nonfree, and linked dynamically, so it can be replaced. Each platform
+jar carries the license text and a notice naming the FFmpeg version and where
+its source is, under META-INF/licenses/ffmpeg.
+
 DOCUMENTATION
 
 WebRTC 1.0: Real-time Communication Between Browsers

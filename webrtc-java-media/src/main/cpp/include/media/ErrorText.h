@@ -14,24 +14,18 @@
  * limitations under the License.
  */
 
-#include "JNI_FFmpeg.h"
+#ifndef WEBRTC_JAVA_MEDIA_ERROR_TEXT_H_
+#define WEBRTC_JAVA_MEDIA_ERROR_TEXT_H_
 
-extern "C" {
-#include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-}
+#include <string>
 
-JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_version
-(JNIEnv * env, jclass caller)
+namespace ffmpeg
 {
-	// The version of the libraries that were actually loaded, which is not
-	// necessarily the one this module was built against: the LGPL lets an
-	// application replace them.
-	return env->NewStringUTF(av_version_info());
+	// What a negative AVERROR code means, in words, for messages that reach
+	// Java. FFmpeg describes most codes itself, but leaves plain errno codes
+	// to the C runtime, and on Windows that has no words for some of the
+	// ones networking produces, such as a timeout.
+	std::string ErrorText(int error);
 }
 
-JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_license
-(JNIEnv * env, jclass caller)
-{
-	return env->NewStringUTF(avformat_license());
-}
+#endif

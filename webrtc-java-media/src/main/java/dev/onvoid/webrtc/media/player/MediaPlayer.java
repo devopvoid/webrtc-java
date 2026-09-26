@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -35,6 +35,10 @@ import dev.onvoid.webrtc.media.video.CustomVideoSource;
  * <p>
  * The player takes over the reader it is given. That reader must not be used
  * or closed afterwards; closing the player releases it.
+ * <p>
+ * The player also keeps the native side of the given sources alive until it
+ * is closed, so disposing of a source, or of a track made from it, while the
+ * player still runs is safe.
  * <p>
  * Example:
  * <pre>{@code
@@ -69,6 +73,13 @@ public class MediaPlayer implements AutoCloseable {
 
 	/** Read on the native player's thread, so never a stale value. */
 	private volatile MediaPlayerListener listener;
+
+	/**
+	 * How deep the current thread is in calls to the listener. Closing from
+	 * in there cannot release the native player on the spot: the call came
+	 * from the native player, which is still on the stack below it.
+	 */
+	private final ThreadLocal<int[]> callbackDepth = ThreadLocal.withInitial(() -> new int[1]);
 
 
 	/**
@@ -186,6 +197,12 @@ public class MediaPlayer implements AutoCloseable {
 	 * Stops playback, releases the native player and the reader it took over,
 	 * and waits for the player's thread to finish. Closing a player that is
 	 * already closed does nothing.
+	 * <p>
+	 * Closing from within a {@link MediaPlayerListener} call is allowed, but
+	 * cannot wait: the player's thread is the one making that call. The player
+	 * is closed at once, in that every later command does nothing and its
+	 * state reads as closed, and it is released on another thread as soon as
+	 * the listener call has returned.
 	 */
 	@Override
 	public void close() {
@@ -199,7 +216,31 @@ public class MediaPlayer implements AutoCloseable {
 			handle = 0;
 		}
 
-		dispose(closing);
+		if (closing == 0) {
+			return;
+		}
+
+		if (callbackDepth.get()[0] == 0) {
+			dispose(closing);
+
+			return;
+		}
+
+		Thread releaser = new Thread(() -> {
+			// A command that was already running when the handle was cleared
+			// holds the lock, and may be what made the listener call that
+			// asked for this close. Taking the lock waits for it to return;
+			// releasing it before disposing keeps the listener free to call
+			// the player while the player's thread is being waited for.
+			synchronized (lock) {
+				// Nothing to do but wait.
+			}
+
+			dispose(closing);
+		}, "MediaPlayer-close");
+
+		releaser.setDaemon(true);
+		releaser.start();
 	}
 
 	/** Called by native code on the player's thread. */
@@ -207,7 +248,7 @@ public class MediaPlayer implements AutoCloseable {
 		MediaPlayerListener current = listener;
 
 		if (current != null) {
-			current.onStateChanged(MediaPlayerState.of(state));
+			notifyListener(() -> current.onStateChanged(MediaPlayerState.of(state)));
 		}
 	}
 
@@ -216,7 +257,7 @@ public class MediaPlayer implements AutoCloseable {
 		MediaPlayerListener current = listener;
 
 		if (current != null) {
-			current.onEndOfStream();
+			notifyListener(current::onEndOfStream);
 		}
 	}
 
@@ -225,7 +266,22 @@ public class MediaPlayer implements AutoCloseable {
 		MediaPlayerListener current = listener;
 
 		if (current != null) {
-			current.onError(message);
+			notifyListener(() -> current.onError(message));
+		}
+	}
+
+	private void notifyListener(Runnable call) {
+		int[] depth = callbackDepth.get();
+
+		depth[0]++;
+
+		try {
+			call.run();
+		}
+		finally {
+			if (--depth[0] == 0) {
+				callbackDepth.remove();
+			}
 		}
 	}
 

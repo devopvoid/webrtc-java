@@ -15,35 +15,35 @@
  */
 
 #include <jni.h>
-/* Header for class dev_onvoid_webrtc_media_ffmpeg_MediaReader */
+/* Header for class dev_onvoid_webrtc_media_player_MediaReader */
 
-#ifndef _Included_dev_onvoid_webrtc_media_ffmpeg_MediaReader
-#define _Included_dev_onvoid_webrtc_media_ffmpeg_MediaReader
+#ifndef _Included_dev_onvoid_webrtc_media_player_MediaReader
+#define _Included_dev_onvoid_webrtc_media_player_MediaReader
 #ifdef __cplusplus
 extern "C" {
 #endif
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaReader
+	 * Class:     dev_onvoid_webrtc_media_player_MediaReader
 	 * Method:    open
-	 * Signature: (Ljava/lang/String;)J
+	 * Signature: (Ljava/lang/String;J)J
 	 */
-	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_open
-	(JNIEnv *, jclass, jstring);
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
+	(JNIEnv *, jclass, jstring, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaReader
+	 * Class:     dev_onvoid_webrtc_media_player_MediaReader
 	 * Method:    info
-	 * Signature: (J)Ldev/onvoid/webrtc/media/ffmpeg/MediaInfo;
+	 * Signature: (J)Ldev/onvoid/webrtc/media/player/MediaInfo;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_info
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_info
 	(JNIEnv *, jclass, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaReader
+	 * Class:     dev_onvoid_webrtc_media_player_MediaReader
 	 * Method:    dispose
 	 * Signature: (J)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_dispose
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_dispose
 	(JNIEnv *, jclass, jlong);
 
 #ifdef __cplusplus

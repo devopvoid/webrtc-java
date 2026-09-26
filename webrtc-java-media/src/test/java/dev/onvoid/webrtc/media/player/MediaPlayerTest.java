@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -22,12 +22,17 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
@@ -44,6 +49,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -76,6 +82,9 @@ class MediaPlayerTest {
 
 	private AudioDeviceModule audioModule;
 	private PeerConnectionFactory factory;
+
+	@TempDir
+	Path tempDir;
 
 
 	@BeforeAll
@@ -125,6 +134,72 @@ class MediaPlayerTest {
 			assertEquals(48000, playback.sampleRate.get());
 			assertEquals(1, playback.channels.get());
 			assertEquals(480, playback.framesPerChunk.get());
+		}
+	}
+
+	@Test
+	void playsAvi() throws Exception {
+		MediaReader reader = new MediaReader(MediaReaderTest.asset(MediaReaderTest.AVI_ASSET));
+
+		// Opening the player is what fails when a decoder for the file's
+		// codecs was left out of the FFmpeg build.
+		try (Playback playback = new Playback(reader)) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The asset holds six frames, all of which have to come out.
+			assertEquals(6, playback.frames.get());
+			assertEquals(1920, playback.width.get());
+			assertEquals(1080, playback.height.get());
+
+			assertTrue(playback.chunks.get() > 0, "no audio");
+			assertEquals(2, playback.channels.get());
+		}
+	}
+
+	@Test
+	void coarseInterleavingKeepsVideoEven() throws Exception {
+		// All three seconds of audio are stored ahead of the video, so the
+		// video can only be decoded once the audio has been read. A player
+		// that stops reading while the audio queue is full gets to the video
+		// seconds late and delivers what is overdue in a burst that WebRTC's
+		// encoder answers by dropping all but the last frame of it.
+		MediaReader reader = new MediaReader(
+				MediaReaderTest.asset(MediaReaderTest.COARSE_ASSET));
+
+		try (Playback playback = new Playback(reader)) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			List<Long> times;
+			synchronized (playback.frameTimes) {
+				times = new ArrayList<>(playback.frameTimes);
+			}
+
+			assertEquals(75, times.size());
+
+			// Frame i and the first audio chunk share a timeline, so frame i
+			// is due I frame intervals after that chunk arrived. How late the
+			// worst frame is tells a player that starved its video, seconds
+			// behind, from a busy machine that was merely slow for a moment,
+			// which a count of closely spaced frames cannot.
+			long start = Math.min(playback.firstChunkNs.get(), times.get(0));
+			long frameNs = TimeUnit.MILLISECONDS.toNanos(40);
+			long maxLateNs = 0;
+			StringBuilder offsets = new StringBuilder();
+
+			for (int i = 0; i < times.size(); i++) {
+				long offsetNs = times.get(i) - start;
+
+				maxLateNs = Math.max(maxLateNs, offsetNs - i * frameNs);
+				offsets.append(i == 0 ? "" : " ").append(offsetNs / 1_000_000);
+			}
+
+			assertTrue(maxLateNs < TimeUnit.SECONDS.toNanos(1),
+					"video was up to " + maxLateNs / 1_000_000 + " ms late; frames arrived at "
+							+ offsets + " ms after the first audio");
 		}
 	}
 
@@ -233,12 +308,222 @@ class MediaPlayerTest {
 		}
 	}
 
+	@Test
+	void closesFromEndOfStream() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch closed = new CountDownLatch(1);
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					// On the player's own thread, which is the one closing it
+					// has to wait for.
+					player.close();
+					closed.countDown();
+				}
+			});
+
+			player.seek(2_500_000);
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			player.close();
+		}
+	}
+
+	@Test
+	void closesFromStateChangeOfCommand() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			AtomicInteger closes = new AtomicInteger();
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onStateChanged(MediaPlayerState state) {
+					// Called from within play(), on the calling thread.
+					if (state == MediaPlayerState.PLAYING) {
+						player.close();
+						closes.incrementAndGet();
+					}
+				}
+			});
+
+			player.play();
+
+			assertEquals(1, closes.get());
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			// Commands after the close find nothing to act on.
+			player.play();
+			player.seek(0);
+			player.close();
+		}
+	}
+
+	@Test
+	void outlivesDisposedSources() throws Exception {
+		CustomVideoSource videoSource = new CustomVideoSource();
+		CustomAudioSource audioSource = new CustomAudioSource();
+		VideoTrack videoTrack = factory.createVideoTrack("video", videoSource);
+		AudioTrack audioTrack = factory.createAudioTrack("audio", audioSource);
+
+		try (MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+				videoSource, audioSource)) {
+			player.play();
+
+			Thread.sleep(300);
+
+			// Everything an application holds goes, the player carries on
+			// pushing into the sources it was given.
+			videoTrack.dispose();
+			audioTrack.dispose();
+			videoSource.dispose();
+			audioSource.dispose();
+
+			Thread.sleep(700);
+
+			assertEquals(MediaPlayerState.PLAYING, player.getState());
+		}
+	}
+
+	@Test
+	void failsWithoutDecoder() throws Exception {
+		Path file = TestMedia.muLawWav(tempDir);
+
+		try (Sources sources = new Sources()) {
+			// The reader opens, since the demuxer knows the format.
+			MediaReader reader = new MediaReader(file);
+
+			assertThrows(IOException.class,
+					() -> new MediaPlayer(reader, null, sources.audio));
+		}
+	}
+
+	@Test
+	void followsChannelChange() throws Exception {
+		Path file = TestMedia.channelSwitchingFlac(tempDir, 5, 10);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			// Stereo out throughout, as the file started.
+			assertEquals(2, playback.channels.get());
+			assertTrue(Math.abs(playback.chunks.get() - 150) <= 2,
+					"audio chunks: " + playback.chunks.get());
+			assertEquals(0, playback.unevenChunks.get(),
+					"chunks with differing channels");
+		}
+	}
+
+	@Test
+	void pausesOnDecodeError() throws Exception {
+		Path file = TestMedia.corruptFlac(tempDir, 10, 4);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			CountDownLatch failed = new CountDownLatch(1);
+			CountDownLatch ended = new CountDownLatch(1);
+
+			playback.player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+
+				@Override
+				public void onError(String message) {
+					failed.countDown();
+				}
+			});
+
+			playback.player.play();
+
+			assertTrue(failed.await(10, TimeUnit.SECONDS), "no error");
+
+			// Stopped where it failed, rather than claiming to play on.
+			assertEquals(MediaPlayerState.PAUSED, playback.player.getState());
+
+			int before = playback.chunks.get();
+
+			// Carries on past the frame that failed.
+			playback.player.play();
+
+			assertTrue(ended.await(10, TimeUnit.SECONDS), "no end of stream");
+			assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+			assertTrue(playback.chunks.get() > before, "nothing played after resuming");
+		}
+	}
+
+	@Test
+	void deliversResamplerTail() throws Exception {
+		// One second at 44.1 kHz, which is exactly 48000 samples at 48 kHz.
+		Path file = TestMedia.constantFlac(tempDir, 44100, 10, (short) 8000);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(100, playback.chunks.get());
+			assertEquals(48000, playback.nonZeroSamples.get());
+		}
+	}
+
+	private static int countNonZero(byte[] data) {
+		int count = 0;
+
+		for (int i = 0; i + 1 < data.length; i += 2) {
+			if (data[i] != 0 || data[i + 1] != 0) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	private static boolean channelsEqual(byte[] data) {
+		// Interleaved 16-bit frames: the left and right sample of a frame are
+		// the two bytes pairs of each four.
+		for (int i = 0; i + 3 < data.length; i += 4) {
+			if (data[i] != data[i + 2] || data[i + 1] != data[i + 3]) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	private static Path asset() throws Exception {
 		URL url = MediaPlayerTest.class.getResource(ASSET);
 
 		assertNotNull(url, "Test asset " + ASSET + " is missing");
 
 		return Paths.get(url.toURI());
+	}
+
+	/**
+	 * A pair of sources with no tracks, for tests that only need somewhere to
+	 * deliver to.
+	 */
+	private static final class Sources implements AutoCloseable {
+
+		final CustomVideoSource video = new CustomVideoSource();
+		final CustomAudioSource audio = new CustomAudioSource();
+
+		@Override
+		public void close() {
+			video.dispose();
+			audio.dispose();
+		}
 	}
 
 	/**
@@ -263,18 +548,30 @@ class MediaPlayerTest {
 		final AtomicInteger channels = new AtomicInteger();
 		final AtomicInteger framesPerChunk = new AtomicInteger();
 		final AtomicReference<String> error = new AtomicReference<>();
+		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
+		final AtomicLong firstChunkNs = new AtomicLong();
+		final AtomicInteger unevenChunks = new AtomicInteger();
+		final AtomicLong nonZeroSamples = new AtomicLong();
 
 		private final VideoTrackSink videoSink = frame -> {
+			frameTimes.add(System.nanoTime());
 			frames.incrementAndGet();
 			width.set(frame.buffer.getWidth());
 			height.set(frame.buffer.getHeight());
 		};
 
 		private final AudioTrackSink audioSink = (data, bits, rate, ch, count) -> {
+			firstChunkNs.compareAndSet(0, System.nanoTime());
 			chunks.incrementAndGet();
 			sampleRate.set(rate);
 			channels.set(ch);
 			framesPerChunk.set(count);
+
+			if (ch == 2 && !channelsEqual(data)) {
+				unevenChunks.incrementAndGet();
+			}
+
+			nonZeroSamples.addAndGet(countNonZero(data));
 		};
 
 		private boolean closed;

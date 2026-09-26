@@ -14,18 +14,25 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Objects;
 
 /**
  * An opened media source, and what it contains.
  * <p>
- * A source is anything FFmpeg can demux: a media file today, and an http, rtsp
- * or rtmp URL once those protocols are enabled in the build. Opening reads the
- * container and picks the video and audio stream that are meant to be played;
- * a source with neither fails to open.
+ * A source is a media file, or a live stream behind an {@code rtsp://} URL,
+ * such as an IP camera. Opening reads the container and picks the video and
+ * audio stream that are meant to be played; a source with neither fails to
+ * open.
+ * <p>
+ * Any single operation that waits on the source gives up once the reader's
+ * timeout has passed: opening it, reading from it during playback, seeking in
+ * it and closing it. For a file that is never an issue; for a stream it is
+ * what keeps an unreachable or stalled server from blocking indefinitely.
  * <p>
  * A reader holds a native resource and has to be closed. It is not safe to use
  * from several threads at once, other than {@link #close()}, which may be
@@ -38,6 +45,11 @@ public class MediaReader implements AutoCloseable {
 	static {
 		FFmpeg.load();
 	}
+
+	/**
+	 * How long an operation on the source may wait when no timeout is given.
+	 */
+	public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(10);
 
 	/** The native reader, or 0 once this reader has been closed. */
 	private long handle;
@@ -58,13 +70,37 @@ public class MediaReader implements AutoCloseable {
 	/**
 	 * Opens the given media source.
 	 *
-	 * @param source The path or URL of the source to open.
+	 * @param source The path or {@code rtsp://} URL of the source to open.
 	 *
 	 * @throws IOException if the source cannot be opened, or holds nothing
 	 *                     that can be played.
 	 */
 	public MediaReader(String source) throws IOException {
-		handle = open(source);
+		this(source, DEFAULT_TIMEOUT);
+	}
+
+	/**
+	 * Opens the given media source, allowing each operation on it the given
+	 * time before it fails.
+	 *
+	 * @param source  The path or {@code rtsp://} URL of the source to open.
+	 * @param timeout How long opening, and later any single read, seek or
+	 *                close, may wait on the source. {@link Duration#ZERO}
+	 *                waits as long as it takes.
+	 *
+	 * @throws IOException              if the source cannot be opened in
+	 *                                  time, or holds nothing that can be
+	 *                                  played.
+	 * @throws IllegalArgumentException if the timeout is negative.
+	 */
+	public MediaReader(String source, Duration timeout) throws IOException {
+		Objects.requireNonNull(timeout, "Timeout is null");
+
+		if (timeout.isNegative()) {
+			throw new IllegalArgumentException("Timeout is negative: " + timeout);
+		}
+
+		handle = open(source, toMicros(timeout));
 	}
 
 	/**
@@ -111,7 +147,17 @@ public class MediaReader implements AutoCloseable {
 		return detaching;
 	}
 
-	private static native long open(String source) throws IOException;
+	private static long toMicros(Duration duration) {
+		try {
+			return duration.toNanos() / 1000;
+		}
+		catch (ArithmeticException e) {
+			// Longer than nanoseconds can count, which is as good as never.
+			return 0;
+		}
+	}
+
+	private static native long open(String source, long timeoutUs) throws IOException;
 
 	private static native MediaInfo info(long handle);
 

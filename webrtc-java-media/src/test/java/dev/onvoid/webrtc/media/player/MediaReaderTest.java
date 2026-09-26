@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -38,6 +38,19 @@ class MediaReaderTest {
 
 	/** The committed test asset: 320x240 VP8 at 15 fps, 48 kHz mono Opus. */
 	private static final String ASSET = "/media-test.webm";
+
+	/**
+	 * The first quarter second of Big Buck Bunny (CC BY 3.0, Blender
+	 * Foundation) as the 1080p AVI it is distributed in, cut without
+	 * re-encoding: MS-MPEG4 v2 video at 24 fps, 48 kHz stereo MP3.
+	 */
+	static final String AVI_ASSET = "/media-test.avi";
+
+	/**
+	 * Three seconds of 160x120 MJPEG at 25 fps and 8 kHz mono PCM in
+	 * Matroska, with all of the audio stored ahead of all of the video.
+	 */
+	static final String COARSE_ASSET = "/media-test-coarse.mkv";
 
 
 	@Test
@@ -75,6 +88,22 @@ class MediaReaderTest {
 	}
 
 	@Test
+	void readsAviInfo() throws Exception {
+		try (MediaReader reader = new MediaReader(asset(AVI_ASSET))) {
+			MediaInfo info = reader.getInfo();
+
+			assertEquals(1920, info.getVideoWidth());
+			assertEquals(1080, info.getVideoHeight());
+			assertEquals(24.0, info.getFrameRate(), 0.01);
+			assertEquals("msmpeg4v2", info.getVideoCodec());
+
+			assertEquals(48000, info.getSampleRate());
+			assertEquals(2, info.getChannels());
+			assertEquals("mp3", info.getAudioCodec());
+		}
+	}
+
+	@Test
 	void missingSourceFails() {
 		IOException e = assertThrows(IOException.class,
 				() -> new MediaReader(Paths.get("no-such-file.webm")));
@@ -102,9 +131,13 @@ class MediaReaderTest {
 	}
 
 	private static Path asset() throws Exception {
-		URL url = MediaReaderTest.class.getResource(ASSET);
+		return asset(ASSET);
+	}
 
-		assertNotNull(url, "Test asset " + ASSET + " is missing");
+	static Path asset(String name) throws Exception {
+		URL url = MediaReaderTest.class.getResource(name);
+
+		assertNotNull(url, "Test asset " + name + " is missing");
 
 		return Paths.get(url.toURI());
 	}

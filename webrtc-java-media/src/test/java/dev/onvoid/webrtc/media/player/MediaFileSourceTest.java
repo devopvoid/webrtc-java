@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -137,6 +137,29 @@ class MediaFileSourceTest {
 
 		source.close();
 		source.close();
+	}
+
+	@Test
+	void closesFromEndOfStream() throws Exception {
+		MediaFileSource source = new MediaFileSource(asset());
+		CountDownLatch closed = new CountDownLatch(1);
+
+		source.setListener(new MediaPlayerListener() {
+
+			@Override
+			public void onEndOfStream() {
+				// Releases the sources while the player is still finishing
+				// on this very thread.
+				source.close();
+				closed.countDown();
+			}
+		});
+
+		source.seek(2_500_000);
+		source.play();
+
+		assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+		assertEquals(MediaPlayerState.CLOSED, source.getState());
 	}
 
 	private static Path asset() throws Exception {

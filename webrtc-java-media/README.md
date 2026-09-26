@@ -37,13 +37,20 @@ FFmpeg is linked dynamically and its libraries ship as separate files inside the
 you may replace them with your own build, as the LGPL requires. The wrapper code in this module is
 licensed under the Apache License 2.0 like the rest of webrtc-java.
 
+Each platform jar carries the LGPL text and a notice under `META-INF/licenses/ffmpeg`. The notice
+names the FFmpeg release the libraries are built from, unmodified, and where its source is; how it
+is configured is in `src/main/cpp/dependencies/ffmpeg/CMakeLists.txt`. Some of the formats FFmpeg
+decodes, such as H.264, H.265/HEVC and AAC, may be covered by patents in some countries, and whether
+your use of them needs a patent license is for you to determine.
+
 ## Building
 
-The submodule has to be present:
+This module is part of the normal build, and it builds FFmpeg from a submodule, so the submodule
+has to be present:
 
 ```shell
 git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg
-mvn install -Pwith-media-extension
+mvn install
 ```
 
 The first build compiles FFmpeg, which takes a while; later builds reuse the install directory

@@ -16,13 +16,32 @@
 
 #include "media/MediaReader.h"
 
+#include <mutex>
+
 extern "C" {
 #include <libavutil/avutil.h>
+#include <libavutil/time.h>
 #include <libavcodec/avcodec.h>
+}
+
+namespace
+{
+	// The protocols a source may use, including the ones a source opens on
+	// its own behalf, such as the TCP connection behind an rtsp:// URL. The
+	// build also carries HTTP, for RTSP tunnelled over it, which is left out
+	// here: nothing this module plays is meant to fetch an arbitrary URL.
+	constexpr const char * kProtocolWhitelist = "file,pipe,rtsp,rtp,udp,tcp";
+
+	std::once_flag network_initialized;
 }
 
 namespace ffmpeg
 {
+	MediaReader::MediaReader(int64_t timeout_us)
+		: timeout_us_(timeout_us)
+	{
+	}
+
 	MediaReader::~MediaReader()
 	{
 		Close();
@@ -32,19 +51,46 @@ namespace ffmpeg
 	{
 		Close();
 
-		int result = avformat_open_input(&format_context_, url.c_str(), nullptr, nullptr);
+		std::call_once(network_initialized, [] {
+			avformat_network_init();
+		});
+
+		// Allocated here rather than by avformat_open_input, since the
+		// interrupt callback has to be in place before opening starts.
+		format_context_ = avformat_alloc_context();
+
+		if (format_context_ == nullptr) {
+			return AVERROR(ENOMEM);
+		}
+
+		format_context_->interrupt_callback.callback = &MediaReader::OnInterrupt;
+		format_context_->interrupt_callback.opaque = this;
+
+		AVDictionary * options = nullptr;
+
+		av_dict_set(&options, "protocol_whitelist", kProtocolWhitelist, 0);
+
+		BeginBlocking();
+		int result = avformat_open_input(&format_context_, url.c_str(), nullptr, &options);
+		EndBlocking();
+
+		av_dict_free(&options);
 
 		if (result < 0) {
 			// avformat_open_input frees the context and nulls the pointer
 			// itself when it fails, so there is nothing left to release.
 			format_context_ = nullptr;
 
-			return result;
+			return TranslateError(result);
 		}
 
+		BeginBlocking();
 		result = avformat_find_stream_info(format_context_, nullptr);
+		EndBlocking();
 
 		if (result < 0) {
+			result = TranslateError(result);
+
 			Close();
 
 			return result;
@@ -80,7 +126,12 @@ namespace ffmpeg
 	void MediaReader::Close()
 	{
 		if (format_context_ != nullptr) {
+			// Closing an RTSP source tells the server, which can block as
+			// well, unless the reader was interrupted, in which case it
+			// gives up at once.
+			BeginBlocking();
 			avformat_close_input(&format_context_);
+			EndBlocking();
 		}
 
 		format_context_ = nullptr;
@@ -185,7 +236,11 @@ namespace ffmpeg
 			return AVERROR(EINVAL);
 		}
 
-		return av_read_frame(format_context_, packet);
+		BeginBlocking();
+		int result = av_read_frame(format_context_, packet);
+		EndBlocking();
+
+		return result == AVERROR_EOF ? result : TranslateError(result);
 	}
 
 	int MediaReader::Seek(int64_t position_us)
@@ -201,7 +256,55 @@ namespace ffmpeg
 		// AVSEEK_FLAG_BACKWARD lands on the keyframe at or before the target,
 		// so that what follows can actually be decoded. Frames between that
 		// keyframe and the target are decoded and dropped by the caller.
-		return av_seek_frame(format_context_, -1, position_us, AVSEEK_FLAG_BACKWARD);
+		BeginBlocking();
+		int result = av_seek_frame(format_context_, -1, position_us, AVSEEK_FLAG_BACKWARD);
+		EndBlocking();
+
+		return TranslateError(result);
+	}
+
+	void MediaReader::Interrupt()
+	{
+		interrupted_.store(true);
+	}
+
+	int MediaReader::OnInterrupt(void * opaque)
+	{
+		MediaReader * reader = static_cast<MediaReader *>(opaque);
+
+		if (reader->interrupted_.load()) {
+			return 1;
+		}
+
+		const int64_t deadline = reader->deadline_us_.load();
+
+		if (deadline != 0 && av_gettime_relative() > deadline) {
+			reader->timed_out_.store(true);
+
+			return 1;
+		}
+
+		return 0;
+	}
+
+	void MediaReader::BeginBlocking()
+	{
+		timed_out_.store(false);
+		deadline_us_.store(timeout_us_ > 0 ? av_gettime_relative() + timeout_us_ : 0);
+	}
+
+	void MediaReader::EndBlocking()
+	{
+		deadline_us_.store(0);
+	}
+
+	int MediaReader::TranslateError(int error) const
+	{
+		if (error < 0 && !interrupted_.load() && timed_out_.load()) {
+			return AVERROR(ETIMEDOUT);
+		}
+
+		return error;
 	}
 
 	const AVStream * MediaReader::GetVideoStream() const

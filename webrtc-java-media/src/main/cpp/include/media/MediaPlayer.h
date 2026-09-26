@@ -114,6 +114,15 @@ namespace ffmpeg
 
 			void PerformSeek(int64_t position_us);
 			void SetState(int state);
+
+			// Records the state, with the lock held. Returns whether it
+			// changed, in which case the caller reports it with NotifyState
+			// once the lock is released.
+			bool UpdateStateLocked(int state);
+			void NotifyState(int state);
+
+			// Stops playback where it is, as a pause does, and reports the
+			// error. The thread stays, so that playback can be resumed.
 			void ReportError(const std::string & message, int error);
 
 			std::unique_ptr<MediaReader> reader_;

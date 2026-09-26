@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 /**
  * What a {@link MediaPlayer} reports while it runs.
@@ -23,6 +23,10 @@ package dev.onvoid.webrtc.media.ffmpeg;
  * playback, and that thread is the one decoding the media. An implementation
  * must therefore return promptly and must not call back into the player in a
  * way that waits for it.
+ * <p>
+ * Closing the player from here, or the {@link MediaFileSource} it belongs to,
+ * is fine: the native player is then released once this call has returned,
+ * rather than during it.
  *
  * @author Alex Andres
  */
@@ -44,7 +48,10 @@ public interface MediaPlayerListener {
 	}
 
 	/**
-	 * Playback stopped because something went wrong.
+	 * Playback stopped because something went wrong. The player is left
+	 * {@link MediaPlayerState#PAUSED} where it failed: playing again carries
+	 * on past what failed, and a seek moves away from it, though a source
+	 * that cannot be read at all fails again.
 	 *
 	 * @param message What went wrong, as FFmpeg described it.
 	 */

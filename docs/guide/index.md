@@ -7,6 +7,7 @@ This section provides detailed guides for various features of the webrtc-java li
 - [Media Devices](/guide/media/media-devices) - Working with audio and video devices
 - [Bitrate and Framerate Constraints](/guide/media/constraints) - Controlling media quality
 - [Send-only and Receive-only](/guide/media/directionality) - Configure transceiver directions (send-only, receive-only or inactive)
+- [Media Files](/guide/media/media-files) - Sending video and audio files instead of a camera and microphone
 
 ## Audio
 

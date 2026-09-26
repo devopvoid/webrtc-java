@@ -1,0 +1,39 @@
+FFmpeg
+======
+
+The libraries avcodec, avformat, avutil, swresample and swscale in this jar
+are FFmpeg @FFMPEG_VERSION@ (https://ffmpeg.org), licensed under the GNU Lesser
+General Public License version 2.1 or later. The full text of that license is in
+COPYING.LGPLv2.1, next to this file.
+
+They are built without --enable-gpl and without --enable-nonfree, so no part
+of them is under the GPL or a non-free license.
+
+They are linked dynamically: the webrtc-java-media library loads them as
+separate shared libraries, which you may replace with your own build of a
+compatible FFmpeg version.
+
+
+Source code
+-----------
+
+The libraries are built from the FFmpeg release n@FFMPEG_VERSION@, without
+modifications:
+
+  https://github.com/FFmpeg/FFmpeg/tree/n@FFMPEG_VERSION@
+  https://ffmpeg.org/releases/ffmpeg-@FFMPEG_VERSION@.tar.xz
+
+How they are configured and built, including which demuxers, decoders,
+parsers and protocols are enabled, is set out in
+webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt of
+webrtc-java, at the release this jar belongs to:
+
+  https://github.com/devopvoid/webrtc-java
+
+
+Patents
+-------
+
+Some of the formats FFmpeg decodes, such as H.264, H.265/HEVC and AAC, may be
+covered by patents in some countries. Whether your use of them needs a patent
+license is for you to determine.

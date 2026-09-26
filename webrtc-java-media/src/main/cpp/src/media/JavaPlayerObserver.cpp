@@ -72,7 +72,7 @@ namespace ffmpeg
 		bool attached = false;
 		JNIEnv * env = Attach(&attached);
 
-		if (env != nullptr) {
+		if (CanCallJava(env)) {
 			env->CallVoidMethod(player_, on_state_changed_, static_cast<jint>(state));
 
 			ClearPendingException(env);
@@ -90,7 +90,7 @@ namespace ffmpeg
 		bool attached = false;
 		JNIEnv * env = Attach(&attached);
 
-		if (env != nullptr) {
+		if (CanCallJava(env)) {
 			env->CallVoidMethod(player_, on_end_of_stream_);
 
 			ClearPendingException(env);
@@ -108,7 +108,7 @@ namespace ffmpeg
 		bool attached = false;
 		JNIEnv * env = Attach(&attached);
 
-		if (env != nullptr) {
+		if (CanCallJava(env)) {
 			jstring text = env->NewStringUTF(message.c_str());
 
 			if (text != nullptr) {
@@ -161,6 +161,15 @@ namespace ffmpeg
 		if (attached && vm_ != nullptr) {
 			vm_->DetachCurrentThread();
 		}
+	}
+
+	bool JavaPlayerObserver::CanCallJava(JNIEnv * env)
+	{
+		// A thread that is already carrying an exception is one returning
+		// from native code into Java, which is about to see it thrown. A call
+		// into Java now is not allowed, and clearing afterwards would swallow
+		// an exception that was never ours, so the event is dropped instead.
+		return env != nullptr && env->ExceptionCheck() == JNI_FALSE;
 	}
 
 	void JavaPlayerObserver::ClearPendingException(JNIEnv * env)

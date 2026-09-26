@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.media.ffmpeg;
+package dev.onvoid.webrtc.media.player;
 
 /**
  * What a {@link MediaPlayer} is currently doing.
@@ -30,8 +30,9 @@ public enum MediaPlayerState {
 	PLAYING,
 
 	/**
-	 * Playback is held where it is. Resuming carries on from there rather
-	 * than delivering everything that fell due in the meantime.
+	 * Playback is held where it is, because it was paused or because it
+	 * failed. Resuming carries on from there rather than delivering
+	 * everything that fell due in the meantime.
 	 */
 	PAUSED,
 

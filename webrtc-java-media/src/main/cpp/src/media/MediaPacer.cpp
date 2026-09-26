@@ -69,11 +69,29 @@ namespace ffmpeg
 		  video_source_(video_source),
 		  audio_source_(audio_source)
 	{
+		// The pacing thread pushes into the sources long after the call that
+		// handed them over, so they must not go away when the application
+		// disposes of them first.
+		if (video_source_ != nullptr) {
+			api_->video_source_retain(video_source_);
+		}
+		if (audio_source_ != nullptr) {
+			api_->audio_source_retain(audio_source_);
+		}
 	}
 
 	MediaPacer::~MediaPacer()
 	{
 		Stop();
+
+		// Nothing pushes any more. A frame WebRTC still holds does not need
+		// the source, only its release callback, which frees the frame alone.
+		if (video_source_ != nullptr) {
+			api_->video_source_release(video_source_);
+		}
+		if (audio_source_ != nullptr) {
+			api_->audio_source_release(audio_source_);
+		}
 	}
 
 	void MediaPacer::Start()
@@ -144,7 +162,14 @@ namespace ffmpeg
 		std::unique_lock<std::mutex> lock(mutex_);
 
 		audio_space_.wait(lock, [this] {
-			return !running_ || audio_queue_.size() < kAudioCapacity;
+			if (!running_ || audio_queue_.size() < kAudioCapacity) {
+				return true;
+			}
+
+			// Full, but blocking now would keep video from being decoded
+			// while it is running short.
+			return audio_queue_.size() < kAudioOverflowCapacity
+					&& video_queue_.size() < kVideoCapacity / 2;
 		});
 
 		if (!running_) {
@@ -263,6 +288,9 @@ namespace ffmpeg
 					position_us_ = item.timestamp_us;
 
 					video_space_.notify_one();
+					// A shorter video queue may be what lets audio past its
+					// capacity.
+					audio_space_.notify_one();
 
 					lock.unlock();
 					DeliverVideo(std::move(item), due);

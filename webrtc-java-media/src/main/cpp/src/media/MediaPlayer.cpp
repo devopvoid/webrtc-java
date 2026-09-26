@@ -15,26 +15,13 @@
  */
 
 #include "media/MediaPlayer.h"
+#include "media/ErrorText.h"
 
 #include <chrono>
 #include <utility>
 
 extern "C" {
 #include <libavutil/error.h>
-}
-
-namespace
-{
-	std::string ErrorText(int error)
-	{
-		char buffer[AV_ERROR_MAX_STRING_SIZE] = { 0 };
-
-		if (av_strerror(error, buffer, sizeof(buffer)) < 0) {
-			return "error " + std::to_string(error);
-		}
-
-		return buffer;
-	}
 }
 
 namespace ffmpeg
@@ -103,6 +90,8 @@ namespace ffmpeg
 
 	void MediaPlayer::Play()
 	{
+		bool changed = false;
+
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
@@ -120,16 +109,23 @@ namespace ffmpeg
 				seek_position_us_ = 0;
 			}
 
+			// Under the lock, together with the flag: the decode thread stops
+			// playback on an error, and the two must not interleave.
+			pacer_->Resume();
+			changed = UpdateStateLocked(kPlaying);
+
 			command_.notify_all();
 		}
 
-		pacer_->Resume();
-
-		SetState(kPlaying);
+		if (changed) {
+			NotifyState(kPlaying);
+		}
 	}
 
 	void MediaPlayer::Pause()
 	{
+		bool changed = false;
+
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
@@ -138,11 +134,14 @@ namespace ffmpeg
 			}
 
 			playing_ = false;
+
+			pacer_->Pause();
+			changed = UpdateStateLocked(kPaused);
 		}
 
-		pacer_->Pause();
-
-		SetState(kPaused);
+		if (changed) {
+			NotifyState(kPaused);
+		}
 	}
 
 	void MediaPlayer::Seek(int64_t position_us)
@@ -191,6 +190,13 @@ namespace ffmpeg
 			playing_ = false;
 
 			command_.notify_all();
+		}
+
+		// A decode thread blocked reading a source that has gone quiet, such
+		// as a stalled network stream, would otherwise hold up the join below
+		// until the read timed out.
+		if (reader_ != nullptr) {
+			reader_->Interrupt();
 		}
 
 		// Stopping the pacer is what releases a decode thread waiting for room
@@ -266,7 +272,10 @@ namespace ffmpeg
 			bool end_of_stream = false;
 
 			if (!PumpOnce(packet, &end_of_stream)) {
-				break;
+				// Playback has stopped and been reported. The thread stays,
+				// so that playing again carries on past what failed, and a
+				// seek can move away from it.
+				continue;
 			}
 
 			if (!end_of_stream) {
@@ -277,7 +286,9 @@ namespace ffmpeg
 			// goes out before anything is rewound.
 			DrainDecoders();
 
-			if (looping_.load()) {
+			// A source that cannot be rewound, such as a live stream that has
+			// ended, cannot start over either, and ends as if not looping.
+			if (looping_.load() && reader_->Seek(0) >= 0) {
 				int64_t advance = reader_->GetDurationUs();
 
 				if (advance <= 0) {
@@ -288,7 +299,6 @@ namespace ffmpeg
 
 				loop_offset_us_.fetch_add(advance);
 
-				reader_->Seek(0);
 				video_decoder_.Flush();
 				audio_decoder_.Flush();
 
@@ -477,39 +487,70 @@ namespace ffmpeg
 
 	void MediaPlayer::SetState(int state)
 	{
-		MediaPlayerObserver * observer = nullptr;
+		bool changed = false;
 
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
-			if (state_ == state) {
-				return;
-			}
-
-			state_ = state;
-			observer = observer_.get();
+			changed = UpdateStateLocked(state);
 		}
 
+		if (changed) {
+			NotifyState(state);
+		}
+	}
+
+	bool MediaPlayer::UpdateStateLocked(int state)
+	{
+		if (state_ == state) {
+			return false;
+		}
+
+		state_ = state;
+
+		return true;
+	}
+
+	void MediaPlayer::NotifyState(int state)
+	{
 		// Called with the lock released: an observer runs Java code, which
-		// must never happen underneath a lock of ours.
-		if (observer != nullptr) {
-			observer->OnStateChanged(state);
+		// must never happen underneath a lock of ours. The observer does not
+		// change once the thread runs, so it is read without the lock.
+		if (observer_ != nullptr) {
+			observer_->OnStateChanged(state);
 		}
 	}
 
 	void MediaPlayer::ReportError(const std::string & message, int error)
 	{
-		MediaPlayerObserver * observer = nullptr;
+		bool changed = false;
 
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
-			playing_ = false;
-			observer = observer_.get();
+			// A player being closed fails whatever it was waiting on on
+			// purpose, since closing interrupts the reader. That is not an
+			// error of the source, and nobody should hear of it.
+			if (closing_) {
+				return;
+			}
+
+			// Playback stops where it failed, as if paused: what is queued
+			// stays queued, and playing again carries on from here.
+			if (playing_) {
+				playing_ = false;
+
+				pacer_->Pause();
+				changed = UpdateStateLocked(kPaused);
+			}
 		}
 
-		if (observer != nullptr) {
-			observer->OnError(message + ": " + ErrorText(error));
+		if (changed) {
+			NotifyState(kPaused);
+		}
+
+		if (observer_ != nullptr) {
+			observer_->OnError(message + ": " + ErrorText(error));
 		}
 	}
 }

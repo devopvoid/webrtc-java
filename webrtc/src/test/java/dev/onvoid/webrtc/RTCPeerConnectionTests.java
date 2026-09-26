@@ -430,6 +430,17 @@ class RTCPeerConnectionTests extends TestBase {
 		assertNotNull(statsReport);
 		assertNotNull(statsReport.getStats());
 		assertFalse(statsReport.getStats().isEmpty());
+
+		// Each entry is built from several native arguments at once, so a
+		// mismatch in how they are passed shows up as a missing type, an id
+		// that is not the one the report files it under, or no timestamp,
+		// rather than as an empty report.
+		statsReport.getStats().forEach((id, stats) -> {
+			assertNotNull(stats.getType(), "no type for " + id);
+			assertEquals(id, stats.getId());
+			assertTrue(stats.getTimestamp() > 0, "no timestamp for " + id);
+			assertNotNull(stats.getAttributes(), "no attributes for " + id);
+		});
 	}
 
 	@Test

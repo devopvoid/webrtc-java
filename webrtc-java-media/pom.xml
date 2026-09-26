@@ -18,17 +18,37 @@
 
 	<properties>
 		<!-- The FFmpeg release the third-party/ffmpeg submodule is pinned to. -->
-		<ffmpeg.version>7.1.1</ffmpeg.version>
+		<ffmpeg.version>8.1</ffmpeg.version>
 		<!-- Where the compiled FFmpeg libraries are installed and looked for. A
 		     build reuses an existing install instead of building again, the way
 		     the WebRTC checkout is reused. -->
 		<ffmpeg.install.dir>${user.home}/ffmpeg/${platform.classifier}</ffmpeg.install.dir>
 		<cmake.build.type>Release</cmake.build.type>
+		<!-- The phases the native build runs in, so that it can be turned off
+		     with -DskipNativeBuild. The test-natives lane does that: there the
+		     natives come from the job that cross compiled them, and building
+		     them again on a machine whose only job is to run them would prove
+		     nothing. These are the goals' own default phases. -->
+		<cmake.generate.phase>process-sources</cmake.generate.phase>
+		<cmake.compile.phase>compile</cmake.compile.phase>
 		<!-- Generator options, set per platform below. This module links only
 		     against FFmpeg's C ABI and the JVM, never against WebRTC's C++
 		     ABI, so it needs no special toolchain or standard library. -->
 		<cmake.options />
 		<cmake.config />
+		<!-- Linux and Windows-on-ARM build through webrtc-jni's toolchain
+		     files, so that both native libraries of a platform are built for
+		     the same target, against the same sysroot, and so end up with the
+		     same glibc floor. On Linux that also means compiling with
+		     -nostdinc++ and taking the C++ standard library from where
+		     webrtc-jni takes it, which is what webrtc.install.dir is for
+		     below. macOS builds for the architecture Maven runs as and needs
+		     no file. -->
+		<cmake.toolchain.file />
+		<jni.toolchain.dir>${project.basedir}/../webrtc-jni/src/main/cpp/toolchain</jni.toolchain.dir>
+		<!-- Where webrtc-jni installed WebRTC, and with it the libc++ that its
+		     toolchain files expect. Same default as webrtc-jni's own. -->
+		<webrtc.install.dir>${user.home}/webrtc/build</webrtc.install.dir>
 	</properties>
 
 	<build>
@@ -52,6 +72,14 @@
 					<additionalClasspathElements>
 						<additionalClasspathElement>${project.build.directory}/natives</additionalClasspathElement>
 					</additionalClasspathElements>
+					<!-- The release the libraries on that path have to be,
+					     so that a test catches an install left over from an
+					     earlier one. Not named ffmpeg.version itself: CI reads
+					     the version out of this file by that element name, and
+					     has to find it exactly once. -->
+					<systemPropertyVariables>
+						<test.ffmpeg.version>${ffmpeg.version}</test.ffmpeg.version>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 
@@ -63,6 +91,7 @@
 				<executions>
 					<execution>
 						<id>cmake-generate</id>
+						<phase>${cmake.generate.phase}</phase>
 						<goals>
 							<goal>generate</goal>
 						</goals>
@@ -72,6 +101,12 @@
 							<options>
 								<option>
 									"${cmake.options}"
+								</option>
+								<option>
+									-DMEDIA_TOOLCHAIN_FILE=${cmake.toolchain.file}
+								</option>
+								<option>
+									-DWEBRTC_INSTALL_DIR=${webrtc.install.dir}
 								</option>
 								<option>
 									-DFFMPEG_INSTALL_DIR=${ffmpeg.install.dir}
@@ -90,6 +125,7 @@
 					</execution>
 					<execution>
 						<id>cmake-compile</id>
+						<phase>${cmake.compile.phase}</phase>
 						<goals>
 							<goal>compile</goal>
 						</goals>
@@ -130,25 +166,98 @@
 		</plugins>
 	</build>
 
+	<!--
+		The natives of this module are not a dependency of it. They are built
+		and attached by this same module, so a dependency on them could not be
+		resolved on the first build of a clean machine: nothing has produced
+		them yet. webrtc-java can depend on its own classifier artifact only
+		because webrtc-jni, an earlier module, is what builds it.
+
+		Anything using this module therefore asks for the natives itself, with
+		a second dependency carrying the platform classifier. The tests here
+		need no such thing: Surefire is given the directory the CMake build
+		collects them into.
+	-->
 	<dependencies>
 		<dependency>
 			<groupId>dev.onvoid.webrtc</groupId>
 			<artifactId>webrtc-java</artifactId>
 			<version>${project.version}</version>
 		</dependency>
-
-		<!-- The native library of this module and the FFmpeg libraries beside
-		     it, so that depending on this module brings what it needs to run.
-		     webrtc-java carries its own natives the same way. -->
-		<dependency>
-			<groupId>${project.groupId}</groupId>
-			<artifactId>${project.artifactId}</artifactId>
-			<version>${project.version}</version>
-			<classifier>${platform.classifier}</classifier>
-		</dependency>
 	</dependencies>
 
 	<profiles>
+		<!-- Runs the tests against natives built elsewhere, as the
+		     test-natives lane does after unpacking them into target/natives,
+		     which is where Surefire is already told to look. -->
+		<profile>
+			<id>skip-native-build</id>
+			<activation>
+				<property>
+					<name>skipNativeBuild</name>
+				</property>
+			</activation>
+			<properties>
+				<cmake.generate.phase>none</cmake.generate.phase>
+				<cmake.compile.phase>none</cmake.compile.phase>
+			</properties>
+		</profile>
+
+		<!-- The platform profiles mirror webrtc-jni's, by name and by the
+		     toolchain file each one selects, so that both native libraries of
+		     a given classifier are built for the same target the same way. -->
+		<profile>
+			<id>linux-x86_64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>amd64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>${jni.toolchain.dir}/x86_64-linux-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-aarch32</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch32</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>${jni.toolchain.dir}/aarch32-linux-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>linux-aarch64</id>
+			<activation>
+				<os>
+					<family>linux</family>
+					<arch>aarch64</arch>
+				</os>
+			</activation>
+			<properties>
+				<cmake.toolchain.file>${jni.toolchain.dir}/aarch64-linux-clang.cmake</cmake.toolchain.file>
+			</properties>
+		</profile>
+		<profile>
+			<id>macos-aarch64</id>
+			<activation>
+				<os>
+					<family>mac</family>
+					<arch>aarch64</arch>
+				</os>
+			</activation>
+			<!-- Both macOS targets build for the architecture Maven itself is
+			     running as, the Intel one under "arch -x86_64", so neither is a
+			     cross build and neither needs a toolchain file. -->
+		</profile>
+		<profile>
+			<id>macos-cross-x86_64</id>
+		</profile>
+
 		<!-- Reruns the tests under -Xcheck:jni, which turns a JNI reference
 		     mistake into a hard error instead of a crash somewhere later. Not
 		     part of the default build: see the note in the root CLAUDE.md. -->
@@ -190,6 +299,7 @@
 			<properties>
 				<cmake.options>-AARM64</cmake.options>
 				<cmake.config>${cmake.build.type}</cmake.config>
+				<cmake.toolchain.file>${jni.toolchain.dir}/aarch64-windows-clang.cmake</cmake.toolchain.file>
 			</properties>
 		</profile>
 	</profiles>

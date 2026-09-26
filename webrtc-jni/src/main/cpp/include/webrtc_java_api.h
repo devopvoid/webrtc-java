@@ -186,6 +186,36 @@ struct webrtc_java_api {
 	 * @return WEBRTC_JAVA_OK or a negative error code.
 	 */
 	int (*audio_source_push)(void * source, const struct wj_audio_chunk * chunk);
+
+	/**
+	 * Takes a reference to a CustomVideoSource, which keeps it alive until
+	 * the matching video_source_release() however soon the application
+	 * disposes of it. An extension that keeps a handle beyond the call it was
+	 * given in, such as one pushing from a thread of its own, must hold one:
+	 * the handle is otherwise freed when the Java source is disposed.
+	 *
+	 * @param source The handle from NativeApi.handleOf(CustomVideoSource).
+	 */
+	void (*video_source_retain)(void * source);
+
+	/**
+	 * Drops a reference taken with video_source_retain(). The handle must
+	 * not be used afterwards.
+	 */
+	void (*video_source_release)(void * source);
+
+	/**
+	 * Takes a reference to a CustomAudioSource; see video_source_retain().
+	 *
+	 * @param source The handle from NativeApi.handleOf(CustomAudioSource).
+	 */
+	void (*audio_source_retain)(void * source);
+
+	/**
+	 * Drops a reference taken with audio_source_retain(). The handle must
+	 * not be used afterwards.
+	 */
+	void (*audio_source_release)(void * source);
 };
 
 #ifdef __cplusplus
