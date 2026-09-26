@@ -111,6 +111,30 @@ final class TestMedia {
 	}
 
 	/**
+	 * Writes a mono, 16-bit FLAC file holding a constant, non-zero value, at
+	 * a rate other than the 48 kHz WebRTC takes, so that playing it means
+	 * resampling it. Everything played from it is non-zero, apart from what
+	 * is missing: resampled completely, it plays as exactly as many non-zero
+	 * samples at 48 kHz as it lasts.
+	 *
+	 * @param directory  Where to write the file.
+	 * @param sampleRate 44100 or 48000.
+	 * @param frames     How many 100 ms frames to write.
+	 * @param value      The value of every sample.
+	 *
+	 * @return The file written.
+	 */
+	static Path constantFlac(Path directory, int sampleRate, int frames,
+			short value) throws IOException {
+		int[] channels = new int[frames];
+
+		Arrays.fill(channels, 1);
+
+		return Files.write(directory.resolve("constant.flac"),
+				flac(sampleRate, sampleRate / 10, channels, n -> value, -1));
+	}
+
+	/**
 	 * Writes a 48 kHz, mono, 16-bit FLAC file in which one frame cannot be
 	 * decoded: its header is intact, so the file reads as usual, but its
 	 * subframe uses a coding type FLAC reserves, which the decoder rejects.

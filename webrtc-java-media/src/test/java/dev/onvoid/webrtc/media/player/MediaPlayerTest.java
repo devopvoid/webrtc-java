@@ -463,6 +463,33 @@ class MediaPlayerTest {
 		}
 	}
 
+	@Test
+	void deliversResamplerTail() throws Exception {
+		// One second at 44.1 kHz, which is exactly 48000 samples at 48 kHz.
+		Path file = TestMedia.constantFlac(tempDir, 44100, 10, (short) 8000);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(100, playback.chunks.get());
+			assertEquals(48000, playback.nonZeroSamples.get());
+		}
+	}
+
+	private static int countNonZero(byte[] data) {
+		int count = 0;
+
+		for (int i = 0; i + 1 < data.length; i += 2) {
+			if (data[i] != 0 || data[i + 1] != 0) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
 	private static boolean channelsEqual(byte[] data) {
 		// Interleaved 16-bit frames: the left and right sample of a frame are
 		// the two bytes pairs of each four.
@@ -524,6 +551,7 @@ class MediaPlayerTest {
 		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
 		final AtomicLong firstChunkNs = new AtomicLong();
 		final AtomicInteger unevenChunks = new AtomicInteger();
+		final AtomicLong nonZeroSamples = new AtomicLong();
 
 		private final VideoTrackSink videoSink = frame -> {
 			frameTimes.add(System.nanoTime());
@@ -542,6 +570,8 @@ class MediaPlayerTest {
 			if (ch == 2 && !channelsEqual(data)) {
 				unevenChunks.incrementAndGet();
 			}
+
+			nonZeroSamples.addAndGet(countNonZero(data));
 		};
 
 		private boolean closed;

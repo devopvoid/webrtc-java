@@ -82,6 +82,10 @@ namespace ffmpeg
 			// Resamples one decoded frame into the pending buffer.
 			int Resample(const AVFrame * frame);
 
+			// Moves whatever swresample still holds into the pending buffer,
+			// which it only hands out when told that no more input follows.
+			int DrainResampler();
+
 			// Sets swresample up to convert from the given input to the
 			// output this decoder produces, replacing any earlier setup.
 			int ConfigureResampler(const AVChannelLayout * layout, int format,
@@ -112,6 +116,10 @@ namespace ffmpeg
 			// packet timing looks like.
 			int64_t next_timestamp_us_ = 0;
 			bool have_timestamp_ = false;
+
+			// Set once the resampler has been drained at the end of the
+			// stream, so that it is drained once and not on every call.
+			bool resampler_drained_ = false;
 	};
 }
 
