@@ -383,8 +383,11 @@ else()
         # make install strips what it installs, with whichever strip is on
         # the PATH, and the host's cannot read a binary built for another
         # architecture: "unable to recognise the format of the input file".
-        # Shipping unstripped costs a little size and nothing else.
-        list(APPEND FFMPEG_CONFIGURE_ARGS --disable-stripping)
+        # Shipping unstripped costs a little size and nothing else. Apple's
+        # strip reads Mach-O of every architecture, so there it stays on.
+        if(NOT APPLE)
+            list(APPEND FFMPEG_CONFIGURE_ARGS --disable-stripping)
+        endif()
 
         # An assembler for a foreign architecture is a build prerequisite of
         # its own, and this module is not fast enough to need one yet.

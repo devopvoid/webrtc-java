@@ -52,10 +52,24 @@ runs:
         key: maven-${{ inputs.platform-name }}-${{ hashFiles('**/pom.xml') }}
         restore-keys: maven-${{ inputs.platform-name }}-
 
-    - name: Set up JDK
+    # The runner is Apple Silicon. The build runs natively and cross compiles
+    # for Intel; only the tests need an Intel JVM, to load what was built, and
+    # that one runs under Rosetta.
+    - id: jdk-x64
+      name: Set up JDK (x64, for the tests)
       uses: actions/setup-java@v5
       with:
         architecture: 'x64'
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+        overwrite-settings: false
+
+    # Set up last, so that it is the JAVA_HOME the build runs with and the one
+    # whose settings.xml carries the deploy credentials.
+    - name: Set up JDK (arm64, for the build)
+      uses: actions/setup-java@v5
+      with:
+        architecture: 'aarch64'
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
         server-id: central
@@ -63,11 +77,11 @@ runs:
         server-password: MAVEN_TOKEN
 
     - name: Build
-      run: arch -x86_64 mvn package -DskipTests -Pmacos-cross-x86_64
+      run: mvn package -DskipTests -Pmacos-cross-x86_64
       shell: bash
 
     - name: Test
-      run: arch -x86_64 mvn -B jar:jar surefire:test -Pmacos-cross-x86_64
+      run: JAVA_HOME="${{ steps.jdk-x64.outputs.path }}" mvn -B jar:jar surefire:test -Pmacos-cross-x86_64
       shell: bash
 
     - name: Deploy
@@ -75,5 +89,5 @@ runs:
       env:
         MAVEN_USERNAME: ${{ inputs.maven-username }}
         MAVEN_TOKEN: ${{ inputs.maven-password }}
-      run: arch -x86_64 mvn deploy -DskipTests -Pmacos-cross-x86_64
+      run: mvn deploy -DskipTests -Pmacos-cross-x86_64
       shell: bash

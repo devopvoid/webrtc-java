@@ -42,8 +42,8 @@
 		     same glibc floor. On Linux that also means compiling with
 		     -nostdinc++ and taking the C++ standard library from where
 		     webrtc-jni takes it, which is what webrtc.install.dir is for
-		     below. macOS builds for the architecture Maven runs as and needs
-		     no file. -->
+		     below. A native macOS build needs no file; the Intel build made on
+		     Apple Silicon takes webrtc-jni's cross one. -->
 		<cmake.toolchain.file />
 		<jni.toolchain.dir>${project.basedir}/../webrtc-jni/src/main/cpp/toolchain</jni.toolchain.dir>
 		<!-- Where webrtc-jni installed WebRTC, and with it the libc++ that its
@@ -250,12 +250,15 @@
 					<arch>aarch64</arch>
 				</os>
 			</activation>
-			<!-- Both macOS targets build for the architecture Maven itself is
-			     running as, the Intel one under "arch -x86_64", so neither is a
-			     cross build and neither needs a toolchain file. -->
+			<!-- Builds for the architecture Maven itself is running as, so it
+			     needs no toolchain file. -->
 		</profile>
+		<!-- The Intel build, made on an Apple Silicon host. -->
 		<profile>
 			<id>macos-cross-x86_64</id>
+			<properties>
+				<cmake.toolchain.file>${jni.toolchain.dir}/x86_64-macos-cross.cmake</cmake.toolchain.file>
+			</properties>
 		</profile>
 
 		<!-- Reruns the tests under -Xcheck:jni, which turns a JNI reference

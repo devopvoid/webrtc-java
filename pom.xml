@@ -355,6 +355,16 @@
 				<platform.module>webrtc.macos.aarch64</platform.module>
 			</properties>
 		</profile>
+		<!-- Builds for Intel Macs on an Apple Silicon one. The macos-aarch64
+		     profile above is still activated there by the host, so this one has
+		     to be declared after it for its properties to win. -->
+		<profile>
+			<id>macos-cross-x86_64</id>
+			<properties>
+				<platform.classifier>macos-x86_64</platform.classifier>
+				<platform.module>webrtc.macos.x86_64</platform.module>
+			</properties>
+		</profile>
 	</profiles>
 
 	<dependencies>
