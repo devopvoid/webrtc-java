@@ -406,6 +406,36 @@ class MediaPlayerTest {
 		}
 	}
 
+	@Test
+	void followsChannelChange() throws Exception {
+		Path file = TestMedia.channelSwitchingFlac(tempDir, 5, 10);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			// Stereo out throughout, as the file started.
+			assertEquals(2, playback.channels.get());
+			assertTrue(Math.abs(playback.chunks.get() - 150) <= 2,
+					"audio chunks: " + playback.chunks.get());
+			assertEquals(0, playback.unevenChunks.get(),
+					"chunks with differing channels");
+		}
+	}
+
+	private static boolean channelsEqual(byte[] data) {
+		// Interleaved 16-bit frames: the left and right sample of a frame are
+		// the two bytes pairs of each four.
+		for (int i = 0; i + 3 < data.length; i += 4) {
+			if (data[i] != data[i + 2] || data[i + 1] != data[i + 3]) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	private static Path asset() throws Exception {
 		URL url = MediaPlayerTest.class.getResource(ASSET);
 
@@ -454,6 +484,7 @@ class MediaPlayerTest {
 		final AtomicReference<String> error = new AtomicReference<>();
 		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
 		final AtomicLong firstChunkNs = new AtomicLong();
+		final AtomicInteger unevenChunks = new AtomicInteger();
 
 		private final VideoTrackSink videoSink = frame -> {
 			frameTimes.add(System.nanoTime());
@@ -468,6 +499,10 @@ class MediaPlayerTest {
 			sampleRate.set(rate);
 			channels.set(ch);
 			framesPerChunk.set(count);
+
+			if (ch == 2 && !channelsEqual(data)) {
+				unevenChunks.incrementAndGet();
+			}
 		};
 
 		private boolean closed;
