@@ -54,6 +54,8 @@ namespace ffmpeg
 
 			// A listener that throws must not be left to surface somewhere
 			// unrelated later, so anything pending is reported and cleared.
+			bool CanCallJava(JNIEnv * env);
+
 			void ClearPendingException(JNIEnv * env);
 
 			JavaVM * vm_ = nullptr;

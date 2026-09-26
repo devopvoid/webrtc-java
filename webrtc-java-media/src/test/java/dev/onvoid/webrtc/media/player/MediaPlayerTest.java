@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -48,6 +49,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -80,6 +82,9 @@ class MediaPlayerTest {
 
 	private AudioDeviceModule audioModule;
 	private PeerConnectionFactory factory;
+
+	@TempDir
+	Path tempDir;
 
 
 	@BeforeAll
@@ -385,6 +390,19 @@ class MediaPlayerTest {
 			Thread.sleep(700);
 
 			assertEquals(MediaPlayerState.PLAYING, player.getState());
+		}
+	}
+
+	@Test
+	void failsWithoutDecoder() throws Exception {
+		Path file = TestMedia.muLawWav(tempDir);
+
+		try (Sources sources = new Sources()) {
+			// The reader opens, since the demuxer knows the format.
+			MediaReader reader = new MediaReader(file);
+
+			assertThrows(IOException.class,
+					() -> new MediaPlayer(reader, null, sources.audio));
 		}
 	}
 

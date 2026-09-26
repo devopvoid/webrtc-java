@@ -105,6 +105,13 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 	int result = player->Initialize();
 
 	if (result < 0) {
+		// Released before throwing: closing reports the closed state to the
+		// observer, which calls into Java, and a call into Java with an
+		// exception pending is not allowed, and would also clear it. Nothing
+		// is listening yet anyway, so the observer goes first.
+		player->SetObserver(nullptr);
+		player.reset();
+
 		ThrowIOException(env, "Opening the decoders failed: " + ErrorMessage(result));
 
 		return 0;
