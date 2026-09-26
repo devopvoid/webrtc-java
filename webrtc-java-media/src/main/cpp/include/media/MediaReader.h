@@ -17,6 +17,8 @@
 #ifndef WEBRTC_JAVA_MEDIA_MEDIA_READER_H_
 #define WEBRTC_JAVA_MEDIA_MEDIA_READER_H_
 
+#include <atomic>
+#include <cstdint>
 #include <string>
 
 extern "C" {
@@ -27,14 +29,22 @@ namespace ffmpeg
 {
 	// Opens a media source with libavformat and reports what it contains.
 	//
-	// A source is anything libavformat accepts: a file path today, and an
-	// http, rtsp or rtmp URL once those protocols are enabled in the build.
-	// Opening reads the container and picks the streams that will be played.
-	// Decoding is built on top of this and does not belong here.
+	// A source is a file path or an rtsp:// URL. Opening reads the container
+	// and picks the streams that will be played. Decoding is built on top of
+	// this and does not belong here.
+	//
+	// Every call that can block on the source, which for a network source is
+	// every call that touches it, gives up once the timeout has passed, and
+	// Interrupt() makes one give up at once from another thread.
 	class MediaReader
 	{
 		public:
-			MediaReader() = default;
+			// How long a single blocking call may take when no timeout is
+			// given: opening, reading a packet, seeking or closing.
+			static constexpr int64_t kDefaultTimeoutUs = 10 * 1000 * 1000;
+
+			// A timeout of 0 or less means no timeout.
+			explicit MediaReader(int64_t timeout_us = kDefaultTimeoutUs);
 			~MediaReader();
 
 			MediaReader(const MediaReader &) = delete;
@@ -43,7 +53,13 @@ namespace ffmpeg
 			// Opens the given source and selects the video and audio stream
 			// that are meant to be played. Returns 0, or the negative AVERROR
 			// libavformat reported, in which case the reader stays closed.
+			// Running out of time reads as AVERROR(ETIMEDOUT).
 			int Open(const std::string & url);
+
+			// Makes the call blocking on the source return at once, and
+			// every later one too. May be called from any thread; the reader
+			// can only be closed afterwards.
+			void Interrupt();
 
 			// Releases the container. Does nothing on a closed reader, and
 			// runs from the destructor.
@@ -83,7 +99,8 @@ namespace ffmpeg
 
 			// Reads the next packet of any stream into the given packet, which
 			// the caller unrefs. Returns 0, AVERROR_EOF once the source is
-			// exhausted, or another negative AVERROR.
+			// exhausted, AVERROR(ETIMEDOUT) if nothing arrived in time,
+			// AVERROR_EXIT once interrupted, or another negative AVERROR.
 			int ReadPacket(AVPacket * packet);
 
 			// Moves to the keyframe at or before the given position, in
@@ -92,9 +109,34 @@ namespace ffmpeg
 			int Seek(int64_t position_us);
 
 		private:
+			// Polled by libavformat while it blocks. Returning non-zero
+			// makes the blocking call fail with AVERROR_EXIT.
+			static int OnInterrupt(void * opaque);
+
+			// Starts the time the next blocking call has, and ends it.
+			void BeginBlocking();
+			void EndBlocking();
+
+			// A blocking call that failed because it ran out of time rather
+			// than because it was interrupted is reported as a timeout.
+			int TranslateError(int error) const;
+
 			AVFormatContext * format_context_ = nullptr;
 			int video_stream_index_ = -1;
 			int audio_stream_index_ = -1;
+
+			const int64_t timeout_us_;
+
+			// When the current blocking call runs out of time, on the clock
+			// of av_gettime_relative(), or 0 while none is running.
+			std::atomic<int64_t> deadline_us_{ 0 };
+			std::atomic<bool> interrupted_{ false };
+
+			// Set when the callback ended the current blocking call because
+			// its time was up. libavformat does not always hand back the
+			// AVERROR_EXIT the callback causes; an aborted RTSP exchange, for
+			// one, can come back as an I/O error.
+			std::atomic<bool> timed_out_{ false };
 	};
 }
 

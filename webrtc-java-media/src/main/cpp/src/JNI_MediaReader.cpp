@@ -15,6 +15,7 @@
  */
 
 #include "JNI_MediaReader.h"
+#include "media/ErrorText.h"
 #include "media/MediaReader.h"
 
 #include <string>
@@ -25,18 +26,27 @@ extern "C" {
 
 namespace
 {
-	// Turns an AVERROR code into the message FFmpeg has for it, so that a
-	// failure to open reaches Java saying what libavformat actually objected
-	// to instead of a bare number.
-	std::string ErrorMessage(int error)
+	// The source as it may be shown: a URL loses the user name and password
+	// it carries in front of its host, since error messages end up in logs.
+	// Anything that is not a URL with credentials is returned as it is.
+	std::string WithoutCredentials(const std::string & source)
 	{
-		char buffer[AV_ERROR_MAX_STRING_SIZE] = { 0 };
+		const size_t scheme_end = source.find("://");
 
-		if (av_strerror(error, buffer, sizeof(buffer)) < 0) {
-			return "Unknown FFmpeg error " + std::to_string(error);
+		if (scheme_end == std::string::npos) {
+			return source;
 		}
 
-		return buffer;
+		const size_t authority_start = scheme_end + 3;
+		const size_t authority_end = source.find_first_of("/?#", authority_start);
+		const size_t at = source.rfind('@', authority_end == std::string::npos
+				? std::string::npos : authority_end - 1);
+
+		if (at == std::string::npos || at < authority_start) {
+			return source;
+		}
+
+		return source.substr(0, authority_start) + source.substr(at + 1);
 	}
 
 	void ThrowIOException(JNIEnv * env, const std::string & message)
@@ -67,7 +77,7 @@ namespace
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
-(JNIEnv * env, jclass caller, jstring source)
+(JNIEnv * env, jclass caller, jstring source, jlong timeoutUs)
 {
 	if (source == nullptr) {
 		ThrowIOException(env, "Source must not be null");
@@ -86,13 +96,13 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
 
 	env->ReleaseStringUTFChars(source, chars);
 
-	auto reader = new ffmpeg::MediaReader();
+	auto reader = new ffmpeg::MediaReader(static_cast<int64_t>(timeoutUs));
 	int result = reader->Open(url);
 
 	if (result < 0) {
 		delete reader;
 
-		ThrowIOException(env, "Opening '" + url + "' failed: " + ErrorMessage(result));
+		ThrowIOException(env, "Opening '" + WithoutCredentials(url) + "' failed: " + ffmpeg::ErrorText(result));
 
 		return 0;
 	}

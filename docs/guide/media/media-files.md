@@ -7,6 +7,7 @@ This guide explains how to send a media file over a peer connection instead of a
 - Reading what a source contains with `MediaReader` and `MediaInfo`
 - Controlling playback and following it with a listener
 - Feeding your own media sources with `MediaPlayer`
+- Playing a live stream from an IP camera or media server over RTSP
 
 Sending a file is a common need: a test pattern instead of a webcam, a pre-recorded briefing, a video that has to reach several participants. Without help, an application has to bring its own decoder and push I420 frames into a `CustomVideoSource` itself. The media module removes that work by decoding with [FFmpeg](https://ffmpeg.org) inside the library.
 
@@ -203,6 +204,29 @@ The player takes over the reader it is given. That reader must not be used or cl
 It also keeps the native side of the media sources it feeds alive until it is closed, so disposing of a source or its track while the player runs is safe.
 :::
 
+## Playing a Live Stream
+
+A source can also be a live stream behind an `rtsp://` URL, which is what IP cameras, video recorders and most media servers offer. Everything above works the same way; only the URL differs:
+
+```java
+MediaFileSource source = new MediaFileSource("rtsp://camera.local:554/stream1");
+```
+
+Credentials go into the URL, as `rtsp://user:password@camera.local/stream1`. FFmpeg first asks the server for RTP over UDP, and falls back to RTP interleaved on the RTSP connection over TCP if the server refuses UDP or no UDP packets arrive, which is what gets a stream through most firewalls.
+
+A network source can stall or disappear, so every operation that waits on a source has a time limit: opening it, and then each read during playback. It is 10 seconds unless you pass another:
+
+```java
+// Import required classes
+import java.time.Duration;
+
+MediaFileSource source = new MediaFileSource("rtsp://camera.local/stream1", Duration.ofSeconds(5));
+```
+
+An unreachable server makes the constructor throw an `IOException` once that time is up. A stream that stops sending during playback is reported to the listener's `onError`, and the player is left `PAUSED`. Closing a player never waits for the time limit: it breaks off whatever the player is waiting for at once.
+
+A live stream has no end and no length: its `MediaInfo` reports a duration of 0, looping does not apply, and seeking is reported as an error. Pausing stops reading from the server, but the server keeps sending; resuming carries on from where playback paused, which leaves it behind real time by as long as it was paused. To get back to live, close the source and open it again.
+
 ## Closing
 
 Closing a `MediaFileSource` stops playback and releases the player along with both media sources. Release the senders a peer connection handed out, and the tracks, before that:
@@ -227,7 +251,7 @@ The FFmpeg build is deliberately small, and carries only what this module plays:
 
 Audio of any rate or layout is resampled to what WebRTC takes, which is 48 kHz 16-bit PCM in mono or stereo. Video that decodes to I420 — almost all 8-bit H.264, VP8, VP9 and MPEG-4 — reaches the encoder without being copied; anything else is converted first.
 
-Only local files play today. FFmpeg demuxes network sources just as well, so the same code will cover http, rtsp and rtmp once those protocols are turned on in the build.
+Sources can be local files, or live streams over RTSP (`rtsp://`), with RTP over UDP or TCP. Protocols that need TLS, such as `rtsps://` and `https://`, are not part of the build, and neither are HLS, DASH and RTMP. A source cannot reach any other protocol either, even one FFmpeg uses internally, so a URL passed on from a user cannot make the module fetch something else.
 
 ## Licensing
 

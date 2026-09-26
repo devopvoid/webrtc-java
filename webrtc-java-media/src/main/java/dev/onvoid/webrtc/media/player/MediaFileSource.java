@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.media.player;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
@@ -82,12 +83,27 @@ public class MediaFileSource implements AutoCloseable {
 	/**
 	 * Opens the given media source.
 	 *
-	 * @param source The path or URL of the source to play.
+	 * @param source The path or {@code rtsp://} URL of the source to play.
 	 *
 	 * @throws IOException if the source cannot be opened or decoded.
 	 */
 	public MediaFileSource(String source) throws IOException {
-		MediaReader reader = new MediaReader(source);
+		this(source, MediaReader.DEFAULT_TIMEOUT);
+	}
+
+	/**
+	 * Opens the given media source, allowing each operation on it the given
+	 * time before it fails, as {@link MediaReader} describes.
+	 *
+	 * @param source  The path or {@code rtsp://} URL of the source to play.
+	 * @param timeout How long opening, and later any single read, may wait on
+	 *                the source. {@link Duration#ZERO} waits as long as it
+	 *                takes.
+	 *
+	 * @throws IOException if the source cannot be opened in time, or decoded.
+	 */
+	public MediaFileSource(String source, Duration timeout) throws IOException {
+		MediaReader reader = new MediaReader(source, timeout);
 
 		// Read while the reader is still ours: the player takes it over.
 		info = reader.getInfo();

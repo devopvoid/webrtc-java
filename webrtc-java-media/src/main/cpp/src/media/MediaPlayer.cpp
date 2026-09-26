@@ -15,26 +15,13 @@
  */
 
 #include "media/MediaPlayer.h"
+#include "media/ErrorText.h"
 
 #include <chrono>
 #include <utility>
 
 extern "C" {
 #include <libavutil/error.h>
-}
-
-namespace
-{
-	std::string ErrorText(int error)
-	{
-		char buffer[AV_ERROR_MAX_STRING_SIZE] = { 0 };
-
-		if (av_strerror(error, buffer, sizeof(buffer)) < 0) {
-			return "error " + std::to_string(error);
-		}
-
-		return buffer;
-	}
 }
 
 namespace ffmpeg
@@ -205,6 +192,13 @@ namespace ffmpeg
 			command_.notify_all();
 		}
 
+		// A decode thread blocked reading a source that has gone quiet, such
+		// as a stalled network stream, would otherwise hold up the join below
+		// until the read timed out.
+		if (reader_ != nullptr) {
+			reader_->Interrupt();
+		}
+
 		// Stopping the pacer is what releases a decode thread waiting for room
 		// in a queue that nothing is draining any more.
 		pacer_->Stop();
@@ -292,7 +286,9 @@ namespace ffmpeg
 			// goes out before anything is rewound.
 			DrainDecoders();
 
-			if (looping_.load()) {
+			// A source that cannot be rewound, such as a live stream that has
+			// ended, cannot start over either, and ends as if not looping.
+			if (looping_.load() && reader_->Seek(0) >= 0) {
 				int64_t advance = reader_->GetDurationUs();
 
 				if (advance <= 0) {
@@ -303,7 +299,6 @@ namespace ffmpeg
 
 				loop_offset_us_.fetch_add(advance);
 
-				reader_->Seek(0);
 				video_decoder_.Flush();
 				audio_decoder_.Flush();
 
@@ -533,10 +528,16 @@ namespace ffmpeg
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
+			// A player being closed fails whatever it was waiting on on
+			// purpose, since closing interrupts the reader. That is not an
+			// error of the source, and nobody should hear of it.
+			if (closing_) {
+				return;
+			}
+
 			// Playback stops where it failed, as if paused: what is queued
-			// stays queued, and playing again carries on from here. A player
-			// being closed is left to that.
-			if (!closing_ && playing_) {
+			// stays queued, and playing again carries on from here.
+			if (playing_) {
 				playing_ = false;
 
 				pacer_->Pause();

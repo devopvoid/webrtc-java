@@ -46,7 +46,7 @@ import java.util.List;
  * <p>
  * This example shows how to:
  * <ul>
- *   <li>Open a media file or network stream with a MediaFileSource</li>
+ *   <li>Open a media file, or a live RTSP stream, with a MediaFileSource</li>
  *   <li>Read what the source contains from its MediaInfo</li>
  *   <li>Create audio and video tracks from the sources it feeds</li>
  *   <li>Add those tracks to a peer connection</li>
@@ -61,14 +61,13 @@ import java.util.List;
  * reach a remote peer through a signaling channel, as
  * {@link PeerConnectionExample} shows.
  * <p>
- * Run it with the media file to send:
+ * Run it with the media file or stream URL to send:
  * <pre>
  * java dev.onvoid.webrtc.examples.MediaFileExample movie.mp4
+ * java dev.onvoid.webrtc.examples.MediaFileExample rtsp://camera.local/stream1
  * </pre>
- * <p>
- * Only local files play today. FFmpeg demuxes network sources just as well,
- * so the same code covers http, rtsp and rtmp once those protocols are turned
- * on in the build.
+ * A stream that cannot be reached, or stops sending, is given up on after the
+ * reader's timeout, 10 seconds unless another is passed to the source.
  *
  * @author Alex Andres
  */
@@ -76,8 +75,9 @@ public class MediaFileExample {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.out.println("Usage: MediaFileExample <media-file>");
+            System.out.println("Usage: MediaFileExample <media-file | rtsp-url>");
             System.out.println("  for example: MediaFileExample movie.mp4");
+            System.out.println("           or: MediaFileExample rtsp://camera.local/stream1");
             return;
         }
 
@@ -144,7 +144,13 @@ public class MediaFileExample {
     }
 
     private static void printInfo(MediaInfo info) {
-        System.out.printf("Source runs %.3f s%n", info.getDurationUs() / 1_000_000.0);
+        if (info.getDurationUs() > 0) {
+            System.out.printf("Source runs %.3f s%n", info.getDurationUs() / 1_000_000.0);
+        }
+        else {
+            // A live stream, which has no length.
+            System.out.println("Source is live");
+        }
 
         if (info.hasVideo()) {
             System.out.printf("  video: %dx%d at %.2f fps, %s%n", info.getVideoWidth(),

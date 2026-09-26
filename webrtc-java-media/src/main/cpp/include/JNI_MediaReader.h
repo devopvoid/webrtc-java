@@ -25,10 +25,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_MediaReader
 	 * Method:    open
-	 * Signature: (Ljava/lang/String;)J
+	 * Signature: (Ljava/lang/String;J)J
 	 */
 	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
-	(JNIEnv *, jclass, jstring);
+	(JNIEnv *, jclass, jstring, jlong);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_MediaReader

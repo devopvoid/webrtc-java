@@ -93,9 +93,10 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 
 /**
- * Desktop UI counterpart to {@link MediaFileExample}: plays a media file
- * through a pair of peer connections that live in the same application, and
- * shows the received video while the received audio plays on the speakers.
+ * Desktop UI counterpart to {@link MediaFileExample}: plays a media file, or
+ * a live stream from an {@code rtsp://} URL such as an IP camera's, through a
+ * pair of peer connections that live in the same application, and shows the
+ * received video while the received audio plays on the speakers.
  * <p>
  * This example shows how to:
  * <ul>
@@ -119,10 +120,12 @@ import dev.onvoid.webrtc.media.video.VideoTrackSink;
  * media stream: the receiver lines them up with each other before handing
  * them on, so the video sink only has to draw each frame as it arrives.
  * <p>
- * Run it with an optional media file to preselect:
+ * Run it with an optional media file or stream URL to preselect:
  * <pre>
  * java dev.onvoid.webrtc.examples.MediaFilePlayerExample movie.mp4
+ * java dev.onvoid.webrtc.examples.MediaFilePlayerExample rtsp://camera.local/stream1
  * </pre>
+ * A live stream has no length, so the Loop box is disabled while one plays.
  *
  * @author Alex Andres
  */
@@ -155,7 +158,7 @@ public class MediaFilePlayerExample {
         return thread;
     });
 
-    private final JFrame frame = new JFrame("Media File Player");
+    private final JFrame frame = new JFrame("Media Player");
     private final JTextField fileField = new JTextField(32);
     private final JButton browseButton = new JButton("Browse...");
     private final JButton startButton = new JButton("Start");
@@ -183,6 +186,26 @@ public class MediaFilePlayerExample {
     }
 
     /**
+     * A short name for a source: a file's name, or a stream URL without the
+     * credentials it may carry.
+     */
+    private static String sourceName(String source) {
+        return source.contains("://") ? withoutCredentials(source) : new File(source).getName();
+    }
+
+    /**
+     * The given source without the user name and password a URL can carry in
+     * front of its host, so that it can be shown. Anything else, a file path
+     * included, is returned as it is.
+     */
+    private static String withoutCredentials(String source) {
+        // Everything between the scheme and the last @ before the path. Not
+        // parsed as a URI: a password is free to hold characters a URI
+        // parser rejects, and then it would be shown after all.
+        return source.replaceFirst("://[^/?#]*@", "://");
+    }
+
+    /**
      * Makes the window look like the platform's own applications rather than
      * Swing's cross-platform default. It has to happen before the first
      * component is created, which only picks up the look it was made with.
@@ -207,6 +230,7 @@ public class MediaFilePlayerExample {
 
     private void show(String file) {
         fileField.setText(file);
+        fileField.setToolTipText("A media file, or an rtsp:// stream URL");
 
         browseButton.addActionListener(e -> chooseFile());
         startButton.addActionListener(e -> start());
@@ -270,7 +294,7 @@ public class MediaFilePlayerExample {
     private void start() {
         String file = fileField.getText().trim();
         if (file.isEmpty()) {
-            statusLabel.setText("Choose a media file first.");
+            statusLabel.setText("Choose a media file or enter an rtsp:// URL first.");
             return;
         }
 
@@ -285,7 +309,12 @@ public class MediaFilePlayerExample {
                 Session started = new Session(file, looping);
                 session = started;
 
-                SwingUtilities.invokeLater(() -> metricsPanel.showMedia(file, started.info));
+                SwingUtilities.invokeLater(() -> {
+                    metricsPanel.showMedia(file, started.info);
+
+                    // Only a source with a length can start over.
+                    loopBox.setEnabled(started.info.getDurationUs() > 0);
+                });
             }
             catch (Exception e) {
                 LOG.log(Level.SEVERE, "Could not start playback", e);
@@ -353,6 +382,10 @@ public class MediaFilePlayerExample {
         stopButton.setEnabled(running);
         fileField.setEnabled(!running);
         browseButton.setEnabled(!running);
+
+        if (!running) {
+            loopBox.setEnabled(true);
+        }
 
         if (running) {
             statusTimer.start();
@@ -906,7 +939,7 @@ public class MediaFilePlayerExample {
             setPreferredSize(new Dimension(320, 0));
 
             addSection("Media");
-            addRow("media.file", "File");
+            addRow("media.file", "Source");
             addRow("media.duration", "Duration");
             addRow("media.video", "Video");
             addRow("media.audio", "Audio");
@@ -941,8 +974,9 @@ public class MediaFilePlayerExample {
         }
 
         void showMedia(String file, MediaInfo info) {
-            set("media.file", new File(file).getName());
-            values.get("media.file").setToolTipText(file);
+            set("media.file", sourceName(file));
+            // Never the source as typed: a stream URL may carry a password.
+            values.get("media.file").setToolTipText(withoutCredentials(file));
             set("media.duration", info.getDurationUs() > 0
                     ? formatTime(info.getDurationUs()) : "unknown");
             set("media.video", info.hasVideo()

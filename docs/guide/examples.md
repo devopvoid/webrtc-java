@@ -57,25 +57,26 @@ This example is particularly useful for applications that need to implement scre
 The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFileExample.java) demonstrates how to send a media file over a peer connection, in place of a camera and a microphone. See the [Media Files](/guide/media/media-files) guide for the API it uses.
 
 **Key features demonstrated:**
-- Opening a media file with a `MediaFileSource`
+- Opening a media file, or a live RTSP stream, with a `MediaFileSource`
 - Reading what the source contains from its `MediaInfo`
 - Creating audio and video tracks from the media sources it feeds
 - Adding those tracks to a peer connection
 - Following playback through a `MediaPlayerListener`
 
-This example is useful for applications that stream pre-recorded media, or that need a dependable stand-in for a camera in testing.
+This example is useful for applications that stream pre-recorded media, relay an IP camera into WebRTC, or need a dependable stand-in for a camera in testing.
 
 ::: info
 This example needs the `webrtc-java-media` module, which builds FFmpeg from the `third-party/ffmpeg` submodule. Make sure the submodule is checked out before building, as the [Media Files](/guide/media/media-files) guide describes.
 
 ```bash
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"exec.args=movie.mp4"
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"exec.args=rtsp://camera.local/stream1"
 ```
 :::
 
 ## Media File Player
 
-The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application that sends a media file from one peer connection to another in the same process, then shows the received video and plays the received audio in sync. Start and Stop buttons set up and tear down the whole session.
+The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application that sends a media file, or a live RTSP stream, from one peer connection to another in the same process, then shows the received video and plays the received audio in sync. Start and Stop buttons set up and tear down the whole session.
 
 **Key features demonstrated:**
 - Connecting two peer connections in one application, without a signaling server
@@ -83,11 +84,11 @@ The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/mas
 - Keeping audio and video in sync by sending both tracks in the same media stream
 - Raising the video sender's `maxBitrate` above WebRTC's default, so a high-resolution file is not held to a fraction of its size
 - Rendering received video frames in a Swing component with `VideoBufferConverter`
-- Showing the file's format, the playback position, and live receive metrics (codec, resolution, frame rate, bitrate, packet loss, jitter, audio level) read from `getStats()`
+- Showing the source's format, the playback position, and live receive metrics (codec, resolution, frame rate, bitrate, packet loss, jitter, audio level) read from `getStats()`
 - Releasing senders, peer connections, tracks and the source in order on Stop
 
 ::: info
-Like the [Media File](#media-file) example, this one needs the `webrtc-java-media` module. The file argument is optional; a file can also be chosen from the window.
+Like the [Media File](#media-file) example, this one needs the `webrtc-java-media` module. The source argument is optional; a file can also be chosen from the window, or a stream URL typed into it. A stream URL's credentials are never shown, and the Loop box is disabled while a live stream plays, since it has no length to start over from.
 
 ```bash
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFilePlayerExample" -D"exec.args=movie.mp4"

@@ -15,6 +15,7 @@
  */
 
 #include "JNI_MediaPlayer.h"
+#include "media/ErrorText.h"
 #include "media/JavaPlayerObserver.h"
 #include "media/MediaPlayer.h"
 #include "media/MediaReader.h"
@@ -29,17 +30,6 @@ extern "C" {
 
 namespace
 {
-	std::string ErrorMessage(int error)
-	{
-		char buffer[AV_ERROR_MAX_STRING_SIZE] = { 0 };
-
-		if (av_strerror(error, buffer, sizeof(buffer)) < 0) {
-			return "Unknown FFmpeg error " + std::to_string(error);
-		}
-
-		return buffer;
-	}
-
 	void ThrowIOException(JNIEnv * env, const std::string & message)
 	{
 		jclass cls = env->FindClass("java/io/IOException");
@@ -112,7 +102,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 		player->SetObserver(nullptr);
 		player.reset();
 
-		ThrowIOException(env, "Opening the decoders failed: " + ErrorMessage(result));
+		ThrowIOException(env, "Opening the decoders failed: " + ffmpeg::ErrorText(result));
 
 		return 0;
 	}

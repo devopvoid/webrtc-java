@@ -48,6 +48,11 @@ set(FFMPEG_COMPONENTS
     --enable-demuxer=mp3
     --enable-demuxer=ogg
     --enable-demuxer=flac
+    # Live streams from IP cameras and media servers. The RTSP demuxer brings
+    # the RTP depacketizers along, and with them the demuxers of the formats
+    # RTP can carry (ASF, MOV, MPEG-TS, RealMedia), as well as the HTTP
+    # protocol for RTSP tunnelled over HTTP.
+    --enable-demuxer=rtsp
     --enable-demuxer=aac
     # Video this module decodes.
     --enable-decoder=h264
@@ -93,10 +98,13 @@ set(FFMPEG_COMPONENTS
     --enable-parser=opus
     --enable-parser=vorbis
     --enable-parser=flac
-    # Local files only for now; network protocols follow once the TLS
-    # backends are wired up per platform.
+    # Local files, and what RTSP runs over. Protocols that need TLS are left
+    # out until a TLS backend is chosen per platform.
     --enable-protocol=file
     --enable-protocol=pipe
+    --enable-protocol=rtp
+    --enable-protocol=udp
+    --enable-protocol=tcp
 )
 
 # Written next to an install once it is built, naming the components it was
@@ -273,7 +281,6 @@ else()
         --disable-programs
         --disable-avdevice
         --disable-avfilter
-        --disable-network
         --disable-everything
         --disable-autodetect
         ${FFMPEG_COMPONENTS}
