@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -75,9 +76,14 @@ class CustomVideoSourceAdaptationTests extends TestBase {
 		Random random = new Random(1);
 		byte[] noise = new byte[WIDTH * HEIGHT];
 		long frameUs = 1_000_000 / 30;
-		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+		// Generous, for runners slow enough to take a while over encoding
+		// 720p of noise; a source that adapts gets there within a second or
+		// two everywhere else.
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
 		long nextStatsNs = 0;
 		long sentWidth = WIDTH;
+		int pushed = 0;
+		Map<String, Object> outbound = Collections.emptyMap();
 
 		try {
 			while (System.nanoTime() < deadline && sentWidth >= WIDTH) {
@@ -92,17 +98,37 @@ class CustomVideoSourceAdaptationTests extends TestBase {
 				VideoFrame frame = new VideoFrame(buffer, 0);
 				source.pushFrame(frame);
 				frame.release();
+				pushed++;
 
 				if (System.nanoTime() > nextStatsNs) {
 					nextStatsNs = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
-					sentWidth = sentFrameWidth(caller.getPeerConnection());
+					outbound = outboundVideoStats(caller.getPeerConnection());
+
+					Object width = outbound.get("frameWidth");
+
+					if (width instanceof Number) {
+						sentWidth = ((Number) width).longValue();
+					}
 				}
 
 				Thread.sleep(frameUs / 1000);
 			}
 
-			assertTrue(sentWidth < WIDTH,
-					"the encoder kept receiving " + WIDTH + "x" + HEIGHT + " frames");
+			// What the sender reported last says whether it encoded at all and
+			// what held it back, which is what a failure on a platform that
+			// cannot be run locally has to go on.
+			assertTrue(sentWidth < WIDTH, String.format(
+					"the encoder kept receiving %dx%d frames; %d frames pushed, "
+							+ "last outbound stats: framesEncoded=%s, framesSent=%s, "
+							+ "framesPerSecond=%s, frameWidth=%s, targetBitrate=%s, "
+							+ "qualityLimitationReason=%s, "
+							+ "qualityLimitationResolutionChanges=%s, encoderImplementation=%s",
+					WIDTH, HEIGHT, pushed, outbound.get("framesEncoded"),
+					outbound.get("framesSent"), outbound.get("framesPerSecond"),
+					outbound.get("frameWidth"), outbound.get("targetBitrate"),
+					outbound.get("qualityLimitationReason"),
+					outbound.get("qualityLimitationResolutionChanges"),
+					outbound.get("encoderImplementation")));
 		}
 		finally {
 			sender.dispose();
@@ -114,24 +140,21 @@ class CustomVideoSourceAdaptationTests extends TestBase {
 	}
 
 	/**
-	 * Returns the width of the frames the sender encodes, or the full width
-	 * while it has not reported one yet.
+	 * Returns the sender's outbound video stats, or nothing while it has not
+	 * reported any yet.
 	 */
-	private static long sentFrameWidth(RTCPeerConnection peerConnection) throws Exception {
+	private static Map<String, Object> outboundVideoStats(RTCPeerConnection peerConnection)
+			throws Exception {
 		CompletableFuture<RTCStatsReport> future = new CompletableFuture<>();
 		peerConnection.getStats(future::complete);
 
 		for (RTCStats stats : future.get(2, TimeUnit.SECONDS).getStats().values()) {
 			if (stats.getType() == RTCStatsType.OUTBOUND_RTP
 					&& "video".equals(stats.getAttributes().get("kind"))) {
-				Object width = stats.getAttributes().get("frameWidth");
-
-				if (width instanceof Number) {
-					return ((Number) width).longValue();
-				}
+				return stats.getAttributes();
 			}
 		}
 
-		return WIDTH;
+		return Collections.emptyMap();
 	}
 }

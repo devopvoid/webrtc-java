@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
@@ -157,8 +158,8 @@ class MediaPlayerTest {
 		// All three seconds of audio are stored ahead of the video, so the
 		// video can only be decoded once the audio has been read. A player
 		// that stops reading while the audio queue is full gets to the video
-		// late and delivers it in bursts, which WebRTC's encoder answers by
-		// dropping all but the last frame of each.
+		// seconds late and delivers what is overdue in a burst that WebRTC's
+		// encoder answers by dropping all but the last frame of it.
 		MediaReader reader = new MediaReader(
 				MediaReaderTest.asset(MediaReaderTest.COARSE_ASSET));
 
@@ -174,16 +175,26 @@ class MediaPlayerTest {
 
 			assertEquals(75, times.size());
 
-			// 25 fps is a frame every 40 ms. A frame on the heels of another
-			// is one that was due earlier and arrived late.
-			int bunched = 0;
-			for (int i = 1; i < times.size(); i++) {
-				if (times.get(i) - times.get(i - 1) < TimeUnit.MILLISECONDS.toNanos(10)) {
-					bunched++;
-				}
+			// Frame i and the first audio chunk share a timeline, so frame i
+			// is due I frame intervals after that chunk arrived. How late the
+			// worst frame is tells a player that starved its video, seconds
+			// behind, from a busy machine that was merely slow for a moment,
+			// which a count of closely spaced frames cannot.
+			long start = Math.min(playback.firstChunkNs.get(), times.get(0));
+			long frameNs = TimeUnit.MILLISECONDS.toNanos(40);
+			long maxLateNs = 0;
+			StringBuilder offsets = new StringBuilder();
+
+			for (int i = 0; i < times.size(); i++) {
+				long offsetNs = times.get(i) - start;
+
+				maxLateNs = Math.max(maxLateNs, offsetNs - i * frameNs);
+				offsets.append(i == 0 ? "" : " ").append(offsetNs / 1_000_000);
 			}
 
-			assertTrue(bunched <= 3, bunched + " frames arrived in a burst");
+			assertTrue(maxLateNs < TimeUnit.SECONDS.toNanos(1),
+					"video was up to " + maxLateNs / 1_000_000 + " ms late; frames arrived at "
+							+ offsets + " ms after the first audio");
 		}
 	}
 
@@ -323,6 +334,7 @@ class MediaPlayerTest {
 		final AtomicInteger framesPerChunk = new AtomicInteger();
 		final AtomicReference<String> error = new AtomicReference<>();
 		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
+		final AtomicLong firstChunkNs = new AtomicLong();
 
 		private final VideoTrackSink videoSink = frame -> {
 			frameTimes.add(System.nanoTime());
@@ -332,6 +344,7 @@ class MediaPlayerTest {
 		};
 
 		private final AudioTrackSink audioSink = (data, bits, rate, ch, count) -> {
+			firstChunkNs.compareAndSet(0, System.nanoTime());
 			chunks.incrementAndGet();
 			sampleRate.set(rate);
 			channels.set(ch);
