@@ -20,14 +20,14 @@ runs:
       shell: bash
 
     - name: Set up WebRTC cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/${{ env.WEBRTC_INSTALL_FOLDER }}
         key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt') }}-${{ hashFiles('webrtc-jni/pom.xml') }}
         restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt') }}-
 
     - name: Set up Maven cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ~/.m2/repository
         key: maven-${{ inputs.platform-name }}-${{ hashFiles('**/pom.xml') }}
@@ -52,7 +52,7 @@ runs:
     # deploy. The native library jar is handed to the aggregating publish-central
     # job instead, which attaches every platform to a single deployment.
     - name: Upload native library jar
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: natives-${{ inputs.platform-name }}
         path: webrtc-jni/target/webrtc-java-*.jar

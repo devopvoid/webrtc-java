@@ -1,3 +1,6 @@
+// The qualified export below names webrtc.java.media, which depends on this
+// module and so is never on the module path while this module compiles.
+@SuppressWarnings("module")
 module webrtc.java {
 
 	requires java.desktop;

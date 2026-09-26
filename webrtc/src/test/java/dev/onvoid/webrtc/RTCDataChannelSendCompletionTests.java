@@ -58,7 +58,8 @@ class RTCDataChannelSendCompletionTests extends TestBase {
 
 	@Test
 	void callbackExceptionDoesNotStopLaterSends() throws Exception {
-		try (TestDataChannelPair pair = new TestDataChannelPair(factory)) {
+		try (UncaughtCapture uncaught = new UncaughtCapture();
+				TestDataChannelPair pair = new TestDataChannelPair(factory)) {
 			pair.connect();
 			CountDownLatch entered = new CountDownLatch(1);
 			RTCDataChannelBuffer buffer = new RTCDataChannelBuffer(ByteBuffer.allocate(1), true);
@@ -80,12 +81,14 @@ class RTCDataChannelSendCompletionTests extends TestBase {
 			pair.sender.sendAsync(buffer, next);
 			assertNull(next.result.get(5, TimeUnit.SECONDS));
 			assertEquals(1, next.calls.get());
+			uncaught.assertReceived("Send observer test exception");
 		}
 	}
 
 	@Test
 	void failureCallbackExceptionDoesNotStopLaterSends() throws Exception {
-		try (TestDataChannelPair pair = new TestDataChannelPair(factory)) {
+		try (UncaughtCapture uncaught = new UncaughtCapture();
+				TestDataChannelPair pair = new TestDataChannelPair(factory)) {
 			CountDownLatch entered = new CountDownLatch(1);
 			RTCDataChannelBuffer buffer = new RTCDataChannelBuffer(ByteBuffer.allocate(1), true);
 			pair.sender.sendAsync(buffer, new RTCDataChannelSendObserver() {
@@ -103,6 +106,7 @@ class RTCDataChannelSendCompletionTests extends TestBase {
 			});
 			assertTrue(entered.await(5, TimeUnit.SECONDS), "Observer was not called");
 			assertRejected(pair.sender);
+			uncaught.assertReceived("Send failure observer test exception");
 		}
 	}
 
@@ -194,6 +198,30 @@ class RTCDataChannelSendCompletionTests extends TestBase {
 		public void onFailure(String error) {
 			calls.incrementAndGet();
 			result.complete(error);
+		}
+	}
+
+	/**
+	 * Replaces the default uncaught exception handler while open, so an exception
+	 * an observer throws on purpose is captured and asserted instead of printed.
+	 */
+	private static class UncaughtCapture implements AutoCloseable {
+		final CompletableFuture<Throwable> exception = new CompletableFuture<>();
+		final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+
+		UncaughtCapture() {
+			Thread.setDefaultUncaughtExceptionHandler((thread, e) -> exception.complete(e));
+		}
+
+		void assertReceived(String message) throws Exception {
+			Throwable received = exception.get(5, TimeUnit.SECONDS);
+			assertEquals(IllegalStateException.class, received.getClass());
+			assertEquals(message, received.getMessage());
+		}
+
+		@Override
+		public void close() {
+			Thread.setDefaultUncaughtExceptionHandler(previous);
 		}
 	}
 }
