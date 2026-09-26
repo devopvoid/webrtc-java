@@ -16,6 +16,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 - **Cross-platform support** - Works on Windows, macOS, and Linux (x64, ARM, ARM64)
 - **Media capabilities** - Audio and video capture from cameras and microphones
 - **Desktop capture** - Screen and application window sharing
+- **Media file playback** - Send video and audio files over a peer connection in place of a camera and microphone, with the optional FFmpeg-based `webrtc-java-media` module
 - **Data channels** - Bidirectional peer-to-peer data exchange
 - **Statistics API** - Detailed metrics for monitoring connection quality
 - **Simple integration** - Available as a Maven dependency
@@ -28,6 +29,7 @@ For more detailed information, check out the documentation:
 - [Quickstart](https://jrtc.dev/guide/get-started) - Get up and running quickly with webrtc-java
 - [Guides](https://jrtc.dev/guide/) - Comprehensive documentation on using the library
 - [Examples](https://jrtc.dev/guide/examples) - Sample code demonstrating various features
+- [Media Files](https://jrtc.dev/guide/media/media-files) - Sending video and audio files with the media module
 - [Build Notes](https://jrtc.dev/guide/build) - Instructions for building the library from source
 
 ## License

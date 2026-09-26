@@ -26,6 +26,8 @@ features:
     details: Thin JNI layer with minimal overhead, delivering near-native performance with minimal context switching between Java and native code.
   - title: Audio and video streaming
     details: Audio and video capture from cameras and microphones devices, with support for custom media sources for flexible streaming solutions.
+  - title: Media File Playback
+    details: Send video and audio files over a peer connection. The optional media module decodes with FFmpeg in native code and paces playback in real time, keeping audio and video in sync.
   - title: Screen Sharing
     details: Share application windows or the full desktop with minimal setup; integrate screen capture streams like any other media stream.
   - title: Data Channels
