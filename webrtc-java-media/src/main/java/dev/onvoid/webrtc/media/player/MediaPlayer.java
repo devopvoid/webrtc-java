@@ -36,6 +36,10 @@ import dev.onvoid.webrtc.media.video.CustomVideoSource;
  * The player takes over the reader it is given. That reader must not be used
  * or closed afterwards; closing the player releases it.
  * <p>
+ * The player also keeps the native side of the given sources alive until it
+ * is closed, so disposing of a source, or of a track made from it, while the
+ * player still runs is safe.
+ * <p>
  * Example:
  * <pre>{@code
  * CustomVideoSource videoSource = new CustomVideoSource();

@@ -69,11 +69,29 @@ namespace ffmpeg
 		  video_source_(video_source),
 		  audio_source_(audio_source)
 	{
+		// The pacing thread pushes into the sources long after the call that
+		// handed them over, so they must not go away when the application
+		// disposes of them first.
+		if (video_source_ != nullptr) {
+			api_->video_source_retain(video_source_);
+		}
+		if (audio_source_ != nullptr) {
+			api_->audio_source_retain(audio_source_);
+		}
 	}
 
 	MediaPacer::~MediaPacer()
 	{
 		Stop();
+
+		// Nothing pushes any more. A frame WebRTC still holds does not need
+		// the source, only its release callback, which frees the frame alone.
+		if (video_source_ != nullptr) {
+			api_->video_source_release(video_source_);
+		}
+		if (audio_source_ != nullptr) {
+			api_->audio_source_release(audio_source_);
+		}
 	}
 
 	void MediaPacer::Start()

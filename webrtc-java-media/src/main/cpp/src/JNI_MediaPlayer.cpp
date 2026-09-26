@@ -86,6 +86,15 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 
 		return 0;
 	}
+	if (api->size < sizeof(webrtc_java_api)) {
+		// The same version, but from before the members this module relies
+		// on were appended.
+		ThrowIOException(env, "The loaded webrtc-java library provides "
+				+ std::to_string(api->size) + " bytes of its interface, but this module needs "
+				+ std::to_string(sizeof(webrtc_java_api)));
+
+		return 0;
+	}
 
 	auto player = std::make_unique<ffmpeg::MediaPlayer>(std::move(reader), api,
 			reinterpret_cast<void *>(videoSourceHandle),

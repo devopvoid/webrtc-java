@@ -199,6 +199,8 @@ player.play();
 
 ::: info
 The player takes over the reader it is given. That reader must not be used or closed afterwards; closing the player releases it.
+
+It also keeps the native side of the media sources it feeds alive until it is closed, so disposing of a source or its track while the player runs is safe.
 :::
 
 ## Closing

@@ -362,6 +362,32 @@ class MediaPlayerTest {
 		}
 	}
 
+	@Test
+	void outlivesDisposedSources() throws Exception {
+		CustomVideoSource videoSource = new CustomVideoSource();
+		CustomAudioSource audioSource = new CustomAudioSource();
+		VideoTrack videoTrack = factory.createVideoTrack("video", videoSource);
+		AudioTrack audioTrack = factory.createAudioTrack("audio", audioSource);
+
+		try (MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+				videoSource, audioSource)) {
+			player.play();
+
+			Thread.sleep(300);
+
+			// Everything an application holds goes, the player carries on
+			// pushing into the sources it was given.
+			videoTrack.dispose();
+			audioTrack.dispose();
+			videoSource.dispose();
+			audioSource.dispose();
+
+			Thread.sleep(700);
+
+			assertEquals(MediaPlayerState.PLAYING, player.getState());
+		}
+	}
+
 	private static Path asset() throws Exception {
 		URL url = MediaPlayerTest.class.getResource(ASSET);
 
