@@ -74,9 +74,11 @@
 					</additionalClasspathElements>
 					<!-- The release the libraries on that path have to be,
 					     so that a test catches an install left over from an
-					     earlier one. -->
+					     earlier one. Not named ffmpeg.version itself: CI reads
+					     the version out of this file by that element name, and
+					     has to find it exactly once. -->
 					<systemPropertyVariables>
-						<ffmpeg.version>${ffmpeg.version}</ffmpeg.version>
+						<test.ffmpeg.version>${ffmpeg.version}</test.ffmpeg.version>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

@@ -32,9 +32,9 @@ class FFmpegTest {
 	@Test
 	void loadsPinnedRelease() {
 		// Set by the build from the version the submodule is pinned to.
-		String expected = System.getProperty("ffmpeg.version");
+		String expected = System.getProperty("test.ffmpeg.version");
 
-		assertNotNull(expected, "ffmpeg.version is not set");
+		assertNotNull(expected, "test.ffmpeg.version is not set");
 
 		// A release build names itself after its tag, n<version>.
 		assertEquals("n" + expected, FFmpeg.version());
