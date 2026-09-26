@@ -66,7 +66,7 @@ namespace
 	}
 }
 
-JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_open
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
 (JNIEnv * env, jclass caller, jstring source)
 {
 	if (source == nullptr) {
@@ -100,7 +100,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_open
 	return reinterpret_cast<jlong>(reader);
 }
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_info
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_info
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	ffmpeg::MediaReader * reader = ReaderOf(env, handle);
@@ -109,7 +109,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_info
 		return nullptr;
 	}
 
-	jclass cls = env->FindClass("dev/onvoid/webrtc/media/ffmpeg/MediaInfo");
+	jclass cls = env->FindClass("dev/onvoid/webrtc/media/player/MediaInfo");
 
 	if (cls == nullptr) {
 		return nullptr;
@@ -153,7 +153,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_info
 	return info;
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaReader_dispose
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_dispose
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	// Closing twice is allowed, so a handle that is already zero is simply

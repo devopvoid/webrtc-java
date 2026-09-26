@@ -56,7 +56,7 @@ namespace
 	}
 }
 
-JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_create
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 (JNIEnv * env, jobject caller, jlong readerHandle, jlong tableAddress,
 		jlong videoSourceHandle, jlong audioSourceHandle)
 {
@@ -104,7 +104,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_create
 	return reinterpret_cast<jlong>(player.release());
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_start
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_start
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	if (handle != 0) {
@@ -112,7 +112,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_start
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_suspend
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_suspend
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	if (handle != 0) {
@@ -120,7 +120,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_suspend
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_seek
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_seek
 (JNIEnv * env, jclass caller, jlong handle, jlong positionUs)
 {
 	if (handle != 0) {
@@ -128,7 +128,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_seek
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_setLooping
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_setLooping
 (JNIEnv * env, jclass caller, jlong handle, jboolean looping)
 {
 	if (handle != 0) {
@@ -136,13 +136,13 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_setLoopin
 	}
 }
 
-JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_position
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_position
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	return handle != 0 ? PlayerOf(handle)->GetPositionUs() : 0;
 }
 
-JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_state
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_state
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	// A player that is gone is closed, which is what the Java side reports
@@ -150,7 +150,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_state
 	return handle != 0 ? PlayerOf(handle)->GetState() : ffmpeg::kClosed;
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_dispose
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_dispose
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	// Closing twice is allowed, so a handle that is already zero is simply

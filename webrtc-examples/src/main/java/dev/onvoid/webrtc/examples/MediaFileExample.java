@@ -32,10 +32,10 @@ import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioLayer;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
-import dev.onvoid.webrtc.media.ffmpeg.MediaFileSource;
-import dev.onvoid.webrtc.media.ffmpeg.MediaInfo;
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayerListener;
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayerState;
+import dev.onvoid.webrtc.media.player.MediaFileSource;
+import dev.onvoid.webrtc.media.player.MediaInfo;
+import dev.onvoid.webrtc.media.player.MediaPlayerListener;
+import dev.onvoid.webrtc.media.player.MediaPlayerState;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.List;

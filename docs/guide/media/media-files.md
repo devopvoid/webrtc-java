@@ -58,7 +58,7 @@ Unlike `webrtc-java`, which brings its natives along by itself, this module cann
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaFileSource;
+import dev.onvoid.webrtc.media.player.MediaFileSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import java.nio.file.Path;
@@ -101,8 +101,8 @@ PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaInfo;
-import dev.onvoid.webrtc.media.ffmpeg.MediaReader;
+import dev.onvoid.webrtc.media.player.MediaInfo;
+import dev.onvoid.webrtc.media.player.MediaReader;
 
 try (MediaReader reader = new MediaReader(Path.of("movie.mp4"))) {
     MediaInfo info = reader.getInfo();
@@ -149,8 +149,8 @@ A seek lands on the keyframe at or before the position asked for, which is how f
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayerListener;
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayerState;
+import dev.onvoid.webrtc.media.player.MediaPlayerListener;
+import dev.onvoid.webrtc.media.player.MediaPlayerState;
 
 source.setListener(new MediaPlayerListener() {
 
@@ -181,8 +181,8 @@ Every call arrives on the player's own thread, and that thread is the one decodi
 
 ```java
 // Import required classes
-import dev.onvoid.webrtc.media.ffmpeg.MediaPlayer;
-import dev.onvoid.webrtc.media.ffmpeg.MediaReader;
+import dev.onvoid.webrtc.media.player.MediaPlayer;
+import dev.onvoid.webrtc.media.player.MediaReader;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 
 CustomVideoSource videoSource = new CustomVideoSource();

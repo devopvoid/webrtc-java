@@ -15,75 +15,75 @@
  */
 
 #include <jni.h>
-/* Header for class dev_onvoid_webrtc_media_ffmpeg_MediaPlayer */
+/* Header for class dev_onvoid_webrtc_media_player_MediaPlayer */
 
-#ifndef _Included_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
-#define _Included_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+#ifndef _Included_dev_onvoid_webrtc_media_player_MediaPlayer
+#define _Included_dev_onvoid_webrtc_media_player_MediaPlayer
 #ifdef __cplusplus
 extern "C" {
 #endif
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    create
 	 * Signature: (JJJJ)J
 	 */
-	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_create
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 	(JNIEnv *, jobject, jlong, jlong, jlong, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    start
 	 * Signature: (J)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_start
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_start
 	(JNIEnv *, jclass, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    suspend
 	 * Signature: (J)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_suspend
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_suspend
 	(JNIEnv *, jclass, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    seek
 	 * Signature: (JJ)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_seek
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_seek
 	(JNIEnv *, jclass, jlong, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    setLooping
 	 * Signature: (JZ)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_setLooping
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_setLooping
 	(JNIEnv *, jclass, jlong, jboolean);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    position
 	 * Signature: (J)J
 	 */
-	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_position
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_position
 	(JNIEnv *, jclass, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    state
 	 * Signature: (J)I
 	 */
-	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_state
+	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_state
 	(JNIEnv *, jclass, jlong);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_MediaPlayer
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    dispose
 	 * Signature: (J)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_MediaPlayer_dispose
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_dispose
 	(JNIEnv *, jclass, jlong);
 
 #ifdef __cplusplus

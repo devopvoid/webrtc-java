@@ -21,7 +21,7 @@ extern "C" {
 #include <libavutil/avutil.h>
 }
 
-JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_FFmpeg_version
+JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_version
 (JNIEnv * env, jclass caller)
 {
 	// The version of the libraries that were actually loaded, which is not
@@ -30,7 +30,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_FFmpeg_version
 	return env->NewStringUTF(av_version_info());
 }
 
-JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_FFmpeg_license
+JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_license
 (JNIEnv * env, jclass caller)
 {
 	return env->NewStringUTF(avformat_license());

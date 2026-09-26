@@ -6,6 +6,6 @@ module webrtc.java.media {
 
 	requires webrtc.java;
 
-	exports dev.onvoid.webrtc.media.ffmpeg;
+	exports dev.onvoid.webrtc.media.player;
 
 }

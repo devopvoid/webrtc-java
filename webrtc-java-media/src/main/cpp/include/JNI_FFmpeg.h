@@ -15,27 +15,27 @@
  */
 
 #include <jni.h>
-/* Header for class dev_onvoid_webrtc_media_ffmpeg_FFmpeg */
+/* Header for class dev_onvoid_webrtc_media_player_FFmpeg */
 
-#ifndef _Included_dev_onvoid_webrtc_media_ffmpeg_FFmpeg
-#define _Included_dev_onvoid_webrtc_media_ffmpeg_FFmpeg
+#ifndef _Included_dev_onvoid_webrtc_media_player_FFmpeg
+#define _Included_dev_onvoid_webrtc_media_player_FFmpeg
 #ifdef __cplusplus
 extern "C" {
 #endif
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_FFmpeg
+	 * Class:     dev_onvoid_webrtc_media_player_FFmpeg
 	 * Method:    version
 	 * Signature: ()Ljava/lang/String;
 	 */
-	JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_FFmpeg_version
+	JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_version
 	(JNIEnv *, jclass);
 
 	/*
-	 * Class:     dev_onvoid_webrtc_media_ffmpeg_FFmpeg
+	 * Class:     dev_onvoid_webrtc_media_player_FFmpeg
 	 * Method:    license
 	 * Signature: ()Ljava/lang/String;
 	 */
-	JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_ffmpeg_FFmpeg_license
+	JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_license
 	(JNIEnv *, jclass);
 
 #ifdef __cplusplus
