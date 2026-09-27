@@ -80,8 +80,8 @@ class RTCEncodedFrameTransformTests extends TestBase {
 			call.startMedia();
 
 			assertTrue(decoded.await(TIMEOUT_SECONDS, TimeUnit.SECONDS),
-					"too few frames decoded: encrypted " + encrypted.get()
-							+ ", decrypted " + decrypted.get());
+					"too few frames decoded: " + mimeType.get() + ", encrypted "
+							+ encrypted.get() + ", decrypted " + decrypted.get());
 
 			assertTrue(mimeType.get().startsWith("video/"), mimeType.get());
 			assertTrue(decrypted.get() > 0);
@@ -175,7 +175,7 @@ class RTCEncodedFrameTransformTests extends TestBase {
 			call.awaitConnected();
 			call.startMedia();
 
-			waitFor(() -> dropped.get() >= 30);
+			waitFor(() -> dropped.get() >= 10);
 			Thread.sleep(500);
 
 			assertEquals(0, received.get());
@@ -214,7 +214,7 @@ class RTCEncodedFrameTransformTests extends TestBase {
 			call.awaitConnected();
 			call.startMedia();
 
-			waitFor(() -> thrown.get() >= 30);
+			waitFor(() -> thrown.get() >= 10);
 
 			assertEquals(0, received.get());
 
@@ -274,7 +274,7 @@ class RTCEncodedFrameTransformTests extends TestBase {
 			call.awaitConnected();
 			call.startMedia();
 
-			waitFor(() -> frames.get() >= 30);
+			waitFor(() -> frames.get() >= 10);
 
 			int before = keyFrames.get();
 

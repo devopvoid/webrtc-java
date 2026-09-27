@@ -17,9 +17,13 @@
 package dev.onvoid.webrtc;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 
 import dev.onvoid.webrtc.media.MediaStreamTrack;
+import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
@@ -67,6 +71,8 @@ class TestMediaCall implements AutoCloseable {
 			videoTrack = factory.createVideoTrack("video", videoSource);
 			videoSender = caller.getPeerConnection().addTrack(videoTrack,
 					Collections.singletonList("stream"));
+
+			preferVp8(factory, caller.getPeerConnection(), videoSender);
 		}
 		else {
 			videoSource = null;
@@ -181,6 +187,32 @@ class TestMediaCall implements AutoCloseable {
 		if (audioTrack != null) {
 			audioTrack.dispose();
 			audioSource.dispose();
+		}
+	}
+
+	/**
+	 * Makes VP8 the preferred video codec. Platforms prefer different codecs by
+	 * default, macOS H.264 through VideoToolbox, and the tests should not
+	 * depend on which: VP8 is available everywhere, and it is the codec that
+	 * survives a transform changing the whole payload, which H.264 does not,
+	 * since its packetizer splits frames at start codes in the payload.
+	 */
+	private static void preferVp8(PeerConnectionFactory factory, RTCPeerConnection connection,
+			RTCRtpSender sender) {
+		List<RTCRtpCodecCapability> codecs = new ArrayList<>(
+				factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs());
+
+		codecs.sort(Comparator.comparing(codec -> !"VP8".equalsIgnoreCase(codec.getName())));
+
+		for (RTCRtpTransceiver transceiver : connection.getTransceivers()) {
+			RTCRtpSender transceiverSender = transceiver.getSender();
+
+			if (transceiverSender.equals(sender)) {
+				transceiver.setCodecPreferences(codecs);
+			}
+
+			transceiverSender.dispose();
+			transceiver.dispose();
 		}
 	}
 

@@ -17,7 +17,10 @@
 package dev.onvoid.webrtc.media.recorder;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -31,11 +34,13 @@ import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCOfferOptions;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
+import dev.onvoid.webrtc.RTCRtpCodecCapability;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.SetSessionDescriptionObserver;
+import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
@@ -80,6 +85,8 @@ class TestCall implements AutoCloseable {
 
 		videoSender = caller.connection.addTrack(videoTrack, Collections.singletonList("stream"));
 		audioSender = caller.connection.addTrack(audioTrack, Collections.singletonList("stream"));
+
+		preferVp8(factory, caller.connection, videoSender);
 
 		RTCSessionDescription offer = caller.createOffer();
 		callee.setRemoteDescription(offer);
@@ -135,6 +142,31 @@ class TestCall implements AutoCloseable {
 		audioTrack.dispose();
 		videoSource.dispose();
 		audioSource.dispose();
+	}
+
+	/**
+	 * Makes VP8 the preferred video codec. Platforms prefer different codecs by
+	 * default, macOS H.264 through VideoToolbox, and the tests should not
+	 * depend on which: VP8 is available everywhere, and it is what the
+	 * recordings are checked for.
+	 */
+	private static void preferVp8(PeerConnectionFactory factory, RTCPeerConnection connection,
+			RTCRtpSender sender) {
+		List<RTCRtpCodecCapability> codecs = new ArrayList<>(
+				factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs());
+
+		codecs.sort(Comparator.comparing(codec -> !"VP8".equalsIgnoreCase(codec.getName())));
+
+		for (RTCRtpTransceiver transceiver : connection.getTransceivers()) {
+			RTCRtpSender transceiverSender = transceiver.getSender();
+
+			if (transceiverSender.equals(sender)) {
+				transceiver.setCodecPreferences(codecs);
+			}
+
+			transceiverSender.dispose();
+			transceiver.dispose();
+		}
 	}
 
 	private void feed() {
