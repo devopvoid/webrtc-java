@@ -28,6 +28,10 @@ features:
     details: Audio and video capture from cameras and microphones devices, with support for custom media sources for flexible streaming solutions.
   - title: Media File Playback
     details: Send video and audio files over a peer connection. The optional media module decodes with FFmpeg in native code and paces playback in real time, keeping audio and video in sync.
+  - title: Call Recording
+    details: Record what a peer connection sends or receives into MKV, WebM or MP4 files. Encoded frames go into the file as they are, without re-encoding, so recording costs next to no CPU and keeps the exact quality of the call.
+  - title: End-to-End Encryption
+    details: Encoded transforms let Java code read, change or drop every encoded frame between encoder and network, like insertable streams in the browser; the building block for end-to-end encryption, frame metadata and stream analysis.
   - title: Screen Sharing
     details: Share application windows or the full desktop with minimal setup; integrate screen capture streams like any other media stream.
   - title: Data Channels
