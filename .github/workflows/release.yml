@@ -331,6 +331,10 @@ jobs:
               echo "::error::Missing native library jar for $classifier"
               status=1
             fi
+            if [ ! -f "natives/webrtc-java-media-$version-$classifier.jar" ]; then
+              echo "::error::Missing media native library jar for $classifier"
+              status=1
+            fi
           done
 
           exit $status
@@ -363,7 +367,7 @@ jobs:
           MAVEN_TOKEN: ${{ inputs.dryRun && 'dry-run-must-not-upload' || secrets.MAVEN_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         run: >
-          mvn -B deploy -pl .,webrtc -Prelease -DskipTests
+          mvn -B deploy -pl .,webrtc,webrtc-java-media -Prelease -DskipTests
           -Dnatives.dir="$PWD/natives"
           -DskipPublishing=${{ inputs.dryRun }}
 
@@ -377,7 +381,9 @@ jobs:
             echo
             echo "Artifacts destined for the deployment bundle:"
             echo '```'
-            ls -1 webrtc/target/*.jar webrtc/target/*.asc natives/*.asc 2>/dev/null || true
+            ls -1 webrtc/target/*.jar webrtc/target/*.asc \
+              webrtc-java-media/target/*.jar webrtc-java-media/target/*.asc \
+              natives/*.asc 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -391,6 +397,9 @@ jobs:
             webrtc/target/central-*/**
             webrtc/target/*.jar
             webrtc/target/*.asc
+            webrtc-java-media/target/central-*/**
+            webrtc-java-media/target/*.jar
+            webrtc-java-media/target/*.asc
             natives/*.asc
           if-no-files-found: warn
           retention-days: 7

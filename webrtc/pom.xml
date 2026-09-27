@@ -125,7 +125,7 @@
 			build jobs. Maven Central publishes a version as one atomic bundle, hence
 			all classifiers must be attached to a single deployment.
 
-			Run with: mvn deploy -pl .,webrtc -Prelease -Dnatives.dir=/abs/path
+			Run with: mvn deploy -pl .,webrtc,webrtc-java-media -Prelease -Dnatives.dir=/abs/path
 		-->
 		<profile>
 			<id>attach-natives-all</id>

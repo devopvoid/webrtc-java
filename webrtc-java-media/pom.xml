@@ -203,6 +203,92 @@
 			</properties>
 		</profile>
 
+		<!-- Release: attach the natives jars of all supported platforms, which
+		     the release workflow has collected into "natives.dir" from the
+		     per-platform build jobs, as webrtc does with its own. Nothing is
+		     built natively then, and no natives jar is made for the host: the
+		     one downloaded for it is attached instead.
+
+		     Run with: mvn deploy -pl .,webrtc,webrtc-java-media -Prelease -Dnatives.dir=/abs/path -->
+		<profile>
+			<id>attach-natives-all</id>
+			<activation>
+				<property>
+					<name>natives.dir</name>
+				</property>
+			</activation>
+			<properties>
+				<cmake.generate.phase>none</cmake.generate.phase>
+				<cmake.compile.phase>none</cmake.compile.phase>
+			</properties>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-jar-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>natives-jar</id>
+								<phase>none</phase>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.codehaus.mojo</groupId>
+						<artifactId>build-helper-maven-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>attach-natives</id>
+								<phase>package</phase>
+								<goals>
+									<goal>attach-artifact</goal>
+								</goals>
+								<configuration>
+									<artifacts>
+										<artifact>
+											<file>${natives.dir}/${project.artifactId}-${project.version}-windows-x86_64.jar</file>
+											<type>jar</type>
+											<classifier>windows-x86_64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.artifactId}-${project.version}-windows-aarch64.jar</file>
+											<type>jar</type>
+											<classifier>windows-aarch64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.artifactId}-${project.version}-linux-x86_64.jar</file>
+											<type>jar</type>
+											<classifier>linux-x86_64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.artifactId}-${project.version}-linux-aarch64.jar</file>
+											<type>jar</type>
+											<classifier>linux-aarch64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.artifactId}-${project.version}-linux-aarch32.jar</file>
+											<type>jar</type>
+											<classifier>linux-aarch32</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.artifactId}-${project.version}-macos-x86_64.jar</file>
+											<type>jar</type>
+											<classifier>macos-x86_64</classifier>
+										</artifact>
+										<artifact>
+											<file>${natives.dir}/${project.artifactId}-${project.version}-macos-aarch64.jar</file>
+											<type>jar</type>
+											<classifier>macos-aarch64</classifier>
+										</artifact>
+									</artifacts>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
 		<!-- The platform profiles mirror webrtc-jni's, by name and by the
 		     toolchain file each one selects, so that both native libraries of
 		     a given classifier are built for the same target the same way. -->

@@ -78,3 +78,19 @@ runs:
         if-no-files-found: error
         retention-days: 7
         overwrite: true
+
+    # The media module's natives go the same way. Only the classifier jar: the
+    # main jar is platform independent and publish-central builds it itself. The
+    # name matches publish-central's natives-* download pattern, which merges
+    # both uploads into one flat directory.
+    - name: Upload media native library jar
+      uses: actions/upload-artifact@v7
+      with:
+        name: natives-media-${{ inputs.platform-name }}
+        path: |
+          webrtc-java-media/target/webrtc-java-media-*-windows-*.jar
+          webrtc-java-media/target/webrtc-java-media-*-linux-*.jar
+          webrtc-java-media/target/webrtc-java-media-*-macos-*.jar
+        if-no-files-found: error
+        retention-days: 7
+        overwrite: true
