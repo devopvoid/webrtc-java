@@ -37,12 +37,12 @@ Once installed, depend on it alongside `webrtc-java`. It takes two entries: one 
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java-media</artifactId>
-    <version>0.19.0-SNAPSHOT</version>
+    <version>{{ VERSION }}</version>
 </dependency>
 <dependency>
     <groupId>dev.onvoid.webrtc</groupId>
     <artifactId>webrtc-java-media</artifactId>
-    <version>0.19.0-SNAPSHOT</version>
+    <version>{{ VERSION }}</version>
     <classifier>windows-x86_64</classifier>
 </dependency>
 ```
