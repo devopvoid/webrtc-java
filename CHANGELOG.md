@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0] - 2026-09-27
+
+### Features
+- Add encoded frame transforms and a media recorder by @devopvoid in [#300](https://github.com/devopvoid/webrtc-java/pull/300)
+- Add a native extension API and an FFmpeg-based media module by @devopvoid in [#291](https://github.com/devopvoid/webrtc-java/pull/291)
+
+### Bug Fixes
+- Repair the release pipeline and publish the media module by @devopvoid in [#299](https://github.com/devopvoid/webrtc-java/pull/299)
+- Clear the CI build annotations by @devopvoid in [#294](https://github.com/devopvoid/webrtc-java/pull/294)
+- Take Map method IDs from the interface instead of from HashMap by @devopvoid in [#290](https://github.com/devopvoid/webrtc-java/pull/290)
+- Keep device-captured audio out of sink-fed audio senders by @devopvoid in [#289](https://github.com/devopvoid/webrtc-java/pull/289)
+- Give AudioTrackSource a dispose() to release its native reference by @devopvoid in [#287](https://github.com/devopvoid/webrtc-java/pull/287)
+
+### Miscellaneous Tasks
+- Cache the FFmpeg build of the macOS x86_64 target by @devopvoid in [#295](https://github.com/devopvoid/webrtc-java/pull/295)
+
+### Other
+- Sync the WebRTC checkout without git history by @devopvoid in [#298](https://github.com/devopvoid/webrtc-java/pull/298)
+- Cross compile the macOS x86_64 target natively on Apple Silicon by @devopvoid in [#296](https://github.com/devopvoid/webrtc-java/pull/296)
+- Build FFmpeg on every platform and make the media module part of the normal build by @devopvoid in [#292](https://github.com/devopvoid/webrtc-java/pull/292)
+- Prepare for next development iteration by @devopvoid
+
+
 ## [0.18.0] - 2026-09-15
 
 ### Features
@@ -12,7 +35,11 @@ All notable changes to this project will be documented in this file.
 - Synchronize CustomAudioSource's sinks_ against AddSink/RemoveSink by @devopvoid in [#285](https://github.com/devopvoid/webrtc-java/pull/285)
 - JNI memory-safety and thread-safety bugs in the native bridge by @devopvoid in [#283](https://github.com/devopvoid/webrtc-java/pull/283)
 
+### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.18.0 by @github-actions[bot]
+
 ### Other
+- Prepare release v0.18.0 by @devopvoid
 - Prepare for next development iteration by @devopvoid
 
 
