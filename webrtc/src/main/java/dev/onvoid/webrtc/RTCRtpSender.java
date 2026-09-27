@@ -113,6 +113,34 @@ public class RTCRtpSender extends DisposableNativeObject {
 	public native RTCDtmfSender getDtmfSender();
 
 	/**
+	 * Sets the transform that every encoded frame of this sender passes
+	 * through between the encoder and the packetizer, replacing the one set
+	 * before. A transform of {@code null} removes it, after which frames pass
+	 * unchanged.
+	 * <p>
+	 * The transform belongs to the native sender, so it is shared by every
+	 * RTCRtpSender instance standing for it, and it stays in place when this
+	 * instance is disposed. Setting it before the connection is negotiated
+	 * avoids the key frame the encoder otherwise sends when the first
+	 * transform is set on a running video sender.
+	 *
+	 * @param transformer The transform, or {@code null} to remove it.
+	 *
+	 * @see RTCEncodedFrameTransformer
+	 */
+	public native void setTransform(RTCEncodedFrameTransformer transformer);
+
+	/**
+	 * Asks the encoder to make the next video frame a key frame, e.g. so that
+	 * a newly joined receiver or a recording can start decoding at once. Does
+	 * nothing for an audio sender.
+	 *
+	 * @throws RuntimeException If the sender has no encoder yet, before the
+	 *                          connection is negotiated.
+	 */
+	public native void generateKeyFrame();
+
+	/**
 	 * Releases the native reference held by this RTCRtpSender instance.
 	 * <p>
 	 * An RTCRtpSender is not exclusively owned by this instance: the

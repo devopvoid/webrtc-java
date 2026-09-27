@@ -17,6 +17,8 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 - **Media capabilities** - Audio and video capture from cameras and microphones
 - **Desktop capture** - Screen and application window sharing
 - **Media file playback** - Send video and audio files over a peer connection in place of a camera and microphone, with the optional FFmpeg-based `webrtc-java-media` module
+- **Call recording** - Record what a peer connection sends or receives into MKV, WebM or MP4 files, without re-encoding, with the `webrtc-java-media` module
+- **Encoded transforms** - Read, change or drop encoded audio and video frames on their way through a sender or receiver, e.g. for end-to-end encryption, like insertable streams in the browser
 - **Data channels** - Bidirectional peer-to-peer data exchange
 - **Statistics API** - Detailed metrics for monitoring connection quality
 - **Simple integration** - Available as a Maven dependency
@@ -30,6 +32,8 @@ For more detailed information, check out the documentation:
 - [Guides](https://jrtc.dev/guide/) - Comprehensive documentation on using the library
 - [Examples](https://jrtc.dev/guide/examples) - Sample code demonstrating various features
 - [Media Files](https://jrtc.dev/guide/media/media-files) - Sending video and audio files with the media module
+- [Media Recording](https://jrtc.dev/guide/media/media-recording) - Recording calls into media files with the media module
+- [Encoded Transforms](https://jrtc.dev/guide/advanced/encoded-transforms) - Reading and changing encoded frames, e.g. for end-to-end encryption
 - [Build Notes](https://jrtc.dev/guide/build) - Instructions for building the library from source
 
 ## License

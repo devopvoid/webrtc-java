@@ -15,6 +15,7 @@
  */
 
 #include "JNI_MediaPlayer.h"
+#include "media/ApiCheck.h"
 #include "media/ErrorText.h"
 #include "media/JavaPlayerObserver.h"
 #include "media/MediaPlayer.h"
@@ -64,24 +65,10 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 	const webrtc_java_api * api =
 			reinterpret_cast<const webrtc_java_api *>(tableAddress);
 
-	if (api == nullptr) {
-		ThrowIOException(env, "The webrtc-java function table is not available");
+	std::string apiError = ffmpeg::CheckApi(api);
 
-		return 0;
-	}
-	if (api->version != WEBRTC_JAVA_API_VERSION) {
-		ThrowIOException(env, "This module was built against webrtc-java interface version "
-				+ std::to_string(WEBRTC_JAVA_API_VERSION) + ", but the loaded library provides "
-				+ std::to_string(api->version));
-
-		return 0;
-	}
-	if (api->size < sizeof(webrtc_java_api)) {
-		// The same version, but from before the members this module relies
-		// on were appended.
-		ThrowIOException(env, "The loaded webrtc-java library provides "
-				+ std::to_string(api->size) + " bytes of its interface, but this module needs "
-				+ std::to_string(sizeof(webrtc_java_api)));
+	if (!apiError.empty()) {
+		ThrowIOException(env, apiError);
 
 		return 0;
 	}

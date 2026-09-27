@@ -18,6 +18,9 @@ package dev.onvoid.webrtc.internal;
 
 import java.util.Objects;
 
+import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.RTCRtpSender;
+
 /**
  * The entry point a native extension library uses to reach this library's
  * native side directly, without going through Java for every frame.
@@ -87,5 +90,46 @@ public final class NativeApi {
 
 		return object.getNativeHandle();
 	}
+
+	/**
+	 * Returns a handle through which a native extension observes the encoded
+	 * frames of the given sender, as they leave the encoder and before any
+	 * {@code RTCEncodedFrameTransformer} runs on them. The extension attaches
+	 * to it with {@code encoded_observer_add()} of the function table.
+	 * <p>
+	 * The handle carries a reference, which the extension must drop with
+	 * {@code encoded_frames_release()} once it has attached its observers,
+	 * or once it decides not to.
+	 *
+	 * @param sender The sender whose frames are to be observed.
+	 *
+	 * @return The handle, or {@code 0} if the sender was disposed.
+	 *
+	 * @throws NullPointerException If the sender is {@code null}.
+	 */
+	public static long encodedFramesOf(RTCRtpSender sender) {
+		return senderFrames(handleOf(sender));
+	}
+
+	/**
+	 * Returns a handle through which a native extension observes the encoded
+	 * frames of the given receiver, as they go to the decoder and after any
+	 * {@code RTCEncodedFrameTransformer} ran on them. See {@link
+	 * #encodedFramesOf(RTCRtpSender)} for how the handle is used and
+	 * released.
+	 *
+	 * @param receiver The receiver whose frames are to be observed.
+	 *
+	 * @return The handle, or {@code 0} if the receiver was disposed.
+	 *
+	 * @throws NullPointerException If the receiver is {@code null}.
+	 */
+	public static long encodedFramesOf(RTCRtpReceiver receiver) {
+		return receiverFrames(handleOf(receiver));
+	}
+
+	private static native long senderFrames(long senderHandle);
+
+	private static native long receiverFrames(long receiverHandle);
 
 }

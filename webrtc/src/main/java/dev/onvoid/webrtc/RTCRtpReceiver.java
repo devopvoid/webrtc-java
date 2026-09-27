@@ -84,6 +84,30 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	public native List<RTCRtpSynchronizationSource> getSynchronizationSources();
 
 	/**
+	 * Sets the transform that every encoded frame of this receiver passes
+	 * through between the depacketizer and the decoder, replacing the one set
+	 * before. A transform of {@code null} removes it, after which frames pass
+	 * unchanged.
+	 * <p>
+	 * The transform belongs to the native receiver, so it is shared by every
+	 * RTCRtpReceiver instance standing for it, and it stays in place when
+	 * this instance is disposed.
+	 *
+	 * @param transformer The transform, or {@code null} to remove it.
+	 *
+	 * @see RTCEncodedFrameTransformer
+	 */
+	public native void setTransform(RTCEncodedFrameTransformer transformer);
+
+	/**
+	 * Asks the remote sender for a video key frame, e.g. so that a recording
+	 * can start decoding at once rather than wait for the sender to send one
+	 * of its own accord, which WebRTC senders rarely do. Does nothing for an
+	 * audio receiver.
+	 */
+	public native void requestKeyFrame();
+
+	/**
 	 * Releases the native reference held by this RTCRtpReceiver instance.
 	 * <p>
 	 * An RTCRtpReceiver is not exclusively owned by this instance: the

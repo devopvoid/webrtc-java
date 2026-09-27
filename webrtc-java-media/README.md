@@ -2,7 +2,8 @@
 
 Media extension for [webrtc-java](https://github.com/devopvoid/webrtc-java). It reads media files
 and network streams with FFmpeg and feeds them into a peer connection, so an application can send
-a video file the way it would send a camera.
+a video file the way it would send a camera. It also records what a peer connection sends or
+receives into media files.
 
 ```java
 MediaFileSource source = new MediaFileSource(Path.of("movie.mp4"));
@@ -14,6 +15,18 @@ peerConnection.addTrack(videoTrack, List.of("stream"));
 peerConnection.addTrack(audioTrack, List.of("stream"));
 
 source.play();
+```
+
+Recording writes the encoded frames into the file as they are, without decoding or re-encoding:
+
+```java
+try (MediaRecorder recorder = new MediaRecorder(Path.of("call.mkv"))) {
+    recorder.addTrack(videoReceiver);
+    recorder.addTrack(audioReceiver);
+    recorder.start();
+    // ...
+    recorder.stop();
+}
 ```
 
 ## How it fits together

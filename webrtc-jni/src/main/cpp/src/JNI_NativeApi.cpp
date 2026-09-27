@@ -17,6 +17,17 @@
 #include "JNI_NativeApi.h"
 
 #include "api/ExtensionApi.h"
+#include "api/EncodedFrameTransformer.h"
+
+namespace
+{
+	// Hands the reference over to the extension, which drops it again with
+	// encoded_frames_release().
+	jlong Retained(webrtc::scoped_refptr<jni::EncodedFrameTransformer> transformer)
+	{
+		return reinterpret_cast<jlong>(transformer.release());
+	}
+}
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_tableAddress
 (JNIEnv * env, jclass caller)
@@ -28,4 +39,20 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_version
 (JNIEnv * env, jclass caller)
 {
 	return static_cast<jint>(jni::GetExtensionApi()->version);
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_senderFrames
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	auto sender = reinterpret_cast<webrtc::RtpSenderInterface *>(handle);
+
+	return sender != nullptr ? Retained(jni::EncodedFrameTransformer::Of(sender)) : 0;
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_receiverFrames
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	auto receiver = reinterpret_cast<webrtc::RtpReceiverInterface *>(handle);
+
+	return receiver != nullptr ? Retained(jni::EncodedFrameTransformer::Of(receiver)) : 0;
 }

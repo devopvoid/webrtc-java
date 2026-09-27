@@ -22,6 +22,9 @@
 #include "JavaList.h"
 #include "JavaUtils.h"
 
+#include "api/EncodedFrameTransformer.h"
+
+#include "api/media_stream_interface.h"
 #include "api/rtp_receiver_interface.h"
 
 #include <algorithm>
@@ -96,6 +99,54 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getSynchronizati
 	auto list = jni::JavaList::toArrayList(env, ssrc, jni::RTCRtpSynchronizationSource::toJava);
 
 	return list.release();
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_setTransform
+(JNIEnv * env, jobject caller, jobject jTransformer)
+{
+	webrtc::RtpReceiverInterface * receiver = GetHandle<webrtc::RtpReceiverInterface>(env, caller);
+	CHECK_HANDLE(receiver);
+
+	try {
+		// Clearing a transform that was never set installs nothing.
+		auto transformer = jTransformer != nullptr
+			? jni::EncodedFrameTransformer::Of(receiver)
+			: jni::EncodedFrameTransformer::Find(receiver);
+
+		if (transformer) {
+			transformer->SetTransformer(env, jTransformer);
+		}
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_requestKeyFrame
+(JNIEnv * env, jobject caller)
+{
+	webrtc::RtpReceiverInterface * receiver = GetHandle<webrtc::RtpReceiverInterface>(env, caller);
+	CHECK_HANDLE(receiver);
+
+	if (receiver->media_type() != webrtc::MediaType::VIDEO) {
+		return;
+	}
+
+	// A receiver has no way of its own to ask for a key frame, but the
+	// source of its track does: it is what the decoder feeds, and the one
+	// thing WebRTC lets ask the remote sender for a key frame on demand.
+	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = receiver->track();
+
+	if (track == nullptr) {
+		return;
+	}
+
+	auto videoTrack = static_cast<webrtc::VideoTrackInterface *>(track.get());
+	webrtc::VideoTrackSourceInterface * source = videoTrack->GetSource();
+
+	if (source != nullptr) {
+		source->GenerateKeyFrame();
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_dispose

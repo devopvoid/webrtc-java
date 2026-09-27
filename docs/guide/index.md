@@ -8,6 +8,7 @@ This section provides detailed guides for various features of the webrtc-java li
 - [Bitrate and Framerate Constraints](/guide/media/constraints) - Controlling media quality
 - [Send-only and Receive-only](/guide/media/directionality) - Configure transceiver directions (send-only, receive-only or inactive)
 - [Media Files](/guide/media/media-files) - Sending video and audio files instead of a camera and microphone
+- [Media Recording](/guide/media/media-recording) - Recording what a call sends or receives into a media file, without re-encoding
 
 ## Audio
 
@@ -35,6 +36,11 @@ This section provides detailed guides for various features of the webrtc-java li
 
 - [RTC Stats](/guide/monitoring/rtc-stats) - Monitoring connection quality and performance
 - [Logging](/guide/monitoring/logging) - Configuring and using the logging system
+
+## Advanced
+
+- [Field Trials](/guide/advanced/field-trials) - Enabling experimental features and tuning WebRTC internals
+- [Encoded Transforms](/guide/advanced/encoded-transforms) - Reading and changing encoded frames, e.g. for end-to-end encryption
 
 ## Additional Resources
 
