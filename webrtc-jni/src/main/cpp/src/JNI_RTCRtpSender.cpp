@@ -23,6 +23,7 @@
 #include "JavaRuntimeException.h"
 #include "JavaUtils.h"
 
+#include "api/EncodedFrameTransformer.h"
 #include "api/RTCDtmfSender.h"
 #include "api/rtp_sender_interface.h"
 
@@ -120,6 +121,45 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 	SetHandle(env, jDtmfSender, dtmfSender.get());
 
 	return jDtmfSender.release();
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setTransform
+(JNIEnv * env, jobject caller, jobject jTransformer)
+{
+	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	CHECK_HANDLE(sender);
+
+	try {
+		// Clearing a transform that was never set installs nothing.
+		auto transformer = jTransformer != nullptr
+			? jni::EncodedFrameTransformer::Of(sender)
+			: jni::EncodedFrameTransformer::Find(sender);
+
+		if (transformer) {
+			transformer->SetTransformer(env, jTransformer);
+		}
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_generateKeyFrame
+(JNIEnv * env, jobject caller)
+{
+	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	CHECK_HANDLE(sender);
+
+	// Audio has no key frames, so there is nothing to ask for.
+	if (sender->media_type() != webrtc::MediaType::VIDEO) {
+		return;
+	}
+
+	webrtc::RTCError result = sender->GenerateKeyFrame({});
+
+	if (!result.ok()) {
+		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result).c_str()));
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_dispose

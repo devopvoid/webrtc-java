@@ -38,6 +38,22 @@ extern "C" {
 	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_version
 	(JNIEnv *, jclass);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_NativeApi
+	 * Method:    senderFrames
+	 * Signature: (J)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_senderFrames
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_NativeApi
+	 * Method:    receiverFrames
+	 * Signature: (J)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_receiverFrames
+	(JNIEnv *, jclass, jlong);
+
 #ifdef __cplusplus
 }
 #endif

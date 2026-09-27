@@ -51,6 +51,11 @@
  * synchronously on the calling thread, so the caller must not hold locks that
  * a WebRTC callback could need, and must pace its calls in real time: a frame
  * is encoded and sent when it arrives, not when its timestamp says.
+ *
+ * The same table also lets an extension observe the encoded frames of an
+ * RTCRtpSender or RTCRtpReceiver, which is how media is recorded without
+ * decoding it: dev.onvoid.webrtc.internal.NativeApi.encodedFramesOf() returns
+ * a handle that encoded_observer_add() attaches an observer to.
  */
 
 #include <stdint.h>
@@ -147,6 +152,56 @@ struct wj_audio_chunk {
 	int64_t timestamp_us;
 };
 
+/** The media kind of an encoded frame. */
+#define WEBRTC_JAVA_MEDIA_AUDIO 0
+#define WEBRTC_JAVA_MEDIA_VIDEO 1
+
+/**
+ * One encoded frame, as an RTCRtpSender hands it to the packetizer or as an
+ * RTCRtpReceiver hands it to the decoder.
+ *
+ * A sender's frames are seen before the application's frame transform runs,
+ * a receiver's after it, so an observer always sees what the codec produced
+ * or will consume, never what an end-to-end encryption transform made of it.
+ *
+ * Everything the struct points to is borrowed for the duration of the call.
+ */
+struct wj_encoded_frame {
+	/** The encoded payload, "size" bytes. */
+	const uint8_t * data;
+	/** The payload size in bytes; zero for frames without payload. */
+	size_t size;
+
+	/** WEBRTC_JAVA_MEDIA_AUDIO or WEBRTC_JAVA_MEDIA_VIDEO. */
+	int media_type;
+	/** The codec as a MIME type, e.g. "video/VP8" or "audio/opus". */
+	const char * mime_type;
+	/** The RTP payload type. */
+	int payload_type;
+	/** The SSRC of the RTP stream the frame belongs to. */
+	uint32_t ssrc;
+	/** The RTP timestamp of the frame, in the clock rate of the codec. */
+	uint32_t rtp_timestamp;
+
+	/** Non-zero for a video key frame; always zero for audio. */
+	int key_frame;
+	/** Video frame width in pixels, or zero if not known for this frame. */
+	int width;
+	/** Video frame height in pixels, or zero if not known for this frame. */
+	int height;
+
+	/** now_us() at the moment the frame passed. */
+	int64_t time_us;
+};
+
+/**
+ * Called for every encoded frame passing the sender or receiver an observer
+ * is attached to. It runs on a WebRTC thread that carries media, so it must
+ * copy what it needs and return at once: it must not block, must not call
+ * into WebRTC, and must not add or remove observers.
+ */
+typedef void (*wj_encoded_frame_fn)(void * opaque, const struct wj_encoded_frame * frame);
+
 /**
  * The function table this library exposes to native extensions. It is a
  * singleton with static storage duration, so its address stays valid for the
@@ -216,6 +271,35 @@ struct webrtc_java_api {
 	 * not be used afterwards.
 	 */
 	void (*audio_source_release)(void * source);
+
+	/**
+	 * Attaches an observer to the encoded frames of a sender or receiver.
+	 * The observer keeps what it observes alive on its own, so the handle
+	 * may be released right after this call.
+	 *
+	 * @param frames The handle from NativeApi.encodedFramesOf().
+	 * @param fn     Called for every frame; see wj_encoded_frame_fn.
+	 * @param opaque Passed to "fn" unchanged.
+	 *
+	 * @return The observer, for encoded_observer_remove(), or null if a
+	 *         handle or the function was null.
+	 */
+	void * (*encoded_observer_add)(void * frames, wj_encoded_frame_fn fn, void * opaque);
+
+	/**
+	 * Detaches an observer. When this returns, "fn" is not running and will
+	 * not be called again, so whatever "opaque" points to may be freed. It
+	 * must not be called from within "fn" itself.
+	 *
+	 * @param observer The observer from encoded_observer_add().
+	 */
+	void (*encoded_observer_remove)(void * observer);
+
+	/**
+	 * Drops the reference that NativeApi.encodedFramesOf() handed out. The
+	 * handle must not be used afterwards.
+	 */
+	void (*encoded_frames_release)(void * frames);
 };
 
 #ifdef __cplusplus

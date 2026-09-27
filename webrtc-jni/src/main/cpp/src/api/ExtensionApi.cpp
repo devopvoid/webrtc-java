@@ -15,6 +15,7 @@
  */
 
 #include "api/ExtensionApi.h"
+#include "api/EncodedFrameTransformer.h"
 
 #include "media/audio/CustomAudioSource.h"
 #include "media/video/CustomVideoSource.h"
@@ -185,6 +186,49 @@ namespace jni
 			}
 		}
 
+		// What encoded_observer_add() hands out: the observer, together with
+		// a reference to the transformer it is attached to, so that removing
+		// it needs nothing else and the transformer outlives it.
+		struct EncodedObserver
+		{
+			webrtc::scoped_refptr<EncodedFrameTransformer> transformer;
+			EncodedFrameRouter::Observer * observer;
+		};
+
+		void * ApiEncodedObserverAdd(void * frames, wj_encoded_frame_fn fn, void * opaque)
+		{
+			if (frames == nullptr || fn == nullptr) {
+				return nullptr;
+			}
+
+			webrtc::scoped_refptr<EncodedFrameTransformer> transformer(
+					static_cast<EncodedFrameTransformer *>(frames));
+
+			EncodedFrameRouter::Observer * observer = transformer->AddObserver(fn, opaque);
+
+			return new EncodedObserver{ std::move(transformer), observer };
+		}
+
+		void ApiEncodedObserverRemove(void * observer)
+		{
+			if (observer == nullptr) {
+				return;
+			}
+
+			EncodedObserver * encodedObserver = static_cast<EncodedObserver *>(observer);
+
+			encodedObserver->transformer->RemoveObserver(encodedObserver->observer);
+
+			delete encodedObserver;
+		}
+
+		void ApiEncodedFramesRelease(void * frames)
+		{
+			if (frames != nullptr) {
+				static_cast<EncodedFrameTransformer *>(frames)->Release();
+			}
+		}
+
 		const webrtc_java_api kExtensionApi = {
 			WEBRTC_JAVA_API_VERSION,
 			static_cast<uint32_t>(sizeof(webrtc_java_api)),
@@ -194,7 +238,10 @@ namespace jni
 			&ApiVideoSourceRetain,
 			&ApiVideoSourceRelease,
 			&ApiAudioSourceRetain,
-			&ApiAudioSourceRelease
+			&ApiAudioSourceRelease,
+			&ApiEncodedObserverAdd,
+			&ApiEncodedObserverRemove,
+			&ApiEncodedFramesRelease
 		};
 	}
 

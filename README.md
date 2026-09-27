@@ -30,6 +30,8 @@ For more detailed information, check out the documentation:
 - [Guides](https://jrtc.dev/guide/) - Comprehensive documentation on using the library
 - [Examples](https://jrtc.dev/guide/examples) - Sample code demonstrating various features
 - [Media Files](https://jrtc.dev/guide/media/media-files) - Sending video and audio files with the media module
+- [Media Recording](https://jrtc.dev/guide/media/media-recording) - Recording calls into media files with the media module
+- [Encoded Transforms](https://jrtc.dev/guide/advanced/encoded-transforms) - Reading and changing encoded frames, e.g. for end-to-end encryption
 - [Build Notes](https://jrtc.dev/guide/build) - Instructions for building the library from source
 
 ## License

@@ -49,6 +49,22 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCRtpReceiver
+	 * Method:    setTransform
+	 * Signature: (Ldev/onvoid/webrtc/RTCEncodedFrameTransformer;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_setTransform
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpReceiver
+	 * Method:    requestKeyFrame
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_requestKeyFrame
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpReceiver
 	 * Method:    dispose
 	 * Signature: ()V
 	 */

@@ -14,8 +14,8 @@ project(ffmpeg)
 # The configuration is deliberately LGPL only: no --enable-gpl and no
 # --enable-nonfree, and the libraries are shared so that they can be replaced,
 # which is what the LGPL asks of us. Only the demuxers, decoders, parsers and
-# protocols this module actually plays are enabled; everything else is off, to
-# keep the shipped libraries small.
+# protocols this module actually plays, and the muxers it records into, are
+# enabled; everything else is off, to keep the shipped libraries small.
 #
 
 set(FFMPEG_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../third-party/ffmpeg")
@@ -98,6 +98,19 @@ set(FFMPEG_COMPONENTS
     --enable-parser=opus
     --enable-parser=vorbis
     --enable-parser=flac
+    # Recording: the containers MediaRecorder writes the encoded frames of a
+    # peer connection into, without transcoding. Matroska carries every codec
+    # WebRTC sends; WebM and MP4 each carry a subset. The muxers pull in the
+    # bitstream filters they insert on their own (vp9_superframe and the like).
+    --enable-muxer=matroska
+    --enable-muxer=webm
+    --enable-muxer=mp4
+    --enable-muxer=mov
+    # Takes the parameter sets of H.264, H.265 and AV1 out of a key frame, as
+    # the containers want them in their headers.
+    --enable-bsf=extract_extradata
+    # Reads the frame size from an AV1 key frame when WebRTC does not say.
+    --enable-parser=av1
     # Local files, and what RTSP runs over. Protocols that need TLS are left
     # out until a TLS backend is chosen per platform.
     --enable-protocol=file

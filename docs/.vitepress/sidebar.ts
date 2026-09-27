@@ -23,6 +23,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'Media Constraints', link: '/media/constraints' },
 				{ text: 'Media Directionality', link: '/media/directionality' },
 				{ text: 'Media Files', link: '/media/media-files' },
+				{ text: 'Media Recording', link: '/media/media-recording' },
 			],
 		},
 		{
@@ -72,6 +73,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			collapsed: false,
 			items: [
 				{ text: 'Field Trials', link: '/advanced/field-trials' },
+				{ text: 'Encoded Transforms', link: '/advanced/encoded-transforms' },
 			],
 		},
 	]
