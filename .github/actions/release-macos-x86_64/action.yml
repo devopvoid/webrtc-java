@@ -44,19 +44,31 @@ runs:
         key: maven-${{ inputs.platform-name }}-${{ hashFiles('**/pom.xml') }}
         restore-keys: maven-${{ inputs.platform-name }}-
 
-    - name: Set up JDK ${{ inputs.java-version }}
+    # The runner is Apple Silicon. The build runs natively and cross compiles
+    # for Intel; only the tests need an Intel JVM, to load what was built, and
+    # that one runs under Rosetta.
+    - id: jdk-x64
+      name: Set up JDK ${{ inputs.java-version }} (x64, for the tests)
       uses: actions/setup-java@v5
       with:
         architecture: 'x64'
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
 
+    # Set up last, so that it is the JAVA_HOME the build runs with.
+    - name: Set up JDK ${{ inputs.java-version }} (arm64, for the build)
+      uses: actions/setup-java@v5
+      with:
+        architecture: 'aarch64'
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+
     - name: Build
-      run: arch -x86_64 mvn package -DskipTests -Pmacos-cross-x86_64
+      run: mvn package -DskipTests -Pmacos-cross-x86_64
       shell: bash
 
     - name: Test
-      run: arch -x86_64 mvn -B jar:jar surefire:test -Pmacos-cross-x86_64
+      run: JAVA_HOME="${{ steps.jdk-x64.outputs.path }}" mvn -B jar:jar surefire:test -Pmacos-cross-x86_64
       shell: bash
 
     # Maven Central publishes a version as one atomic bundle, so this job must not
