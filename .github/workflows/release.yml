@@ -95,10 +95,13 @@ jobs:
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
+      # release:prepare runs "clean verify" over the whole reactor, and the media
+      # module in it builds FFmpeg from its third-party submodule.
       - name: Update development version
         uses: actions/checkout@v6
         with:
           ref: main
+          submodules: true
 
       # A dry run transforms the poms and writes release.properties, but creates no
       # commit and no tag, so there is nothing to amend or push below.
