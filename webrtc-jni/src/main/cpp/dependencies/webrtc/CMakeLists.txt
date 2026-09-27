@@ -254,7 +254,7 @@ if(NOT EXISTS "${WEBRTC_SRC_DIR}/depot_tools")
     message(STATUS "WebRTC: fetch depot tools")
     file(MAKE_DIRECTORY ${WEBRTC_SRC_DIR})
     execute_command(
-        COMMAND git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+        COMMAND git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
         WORKING_DIRECTORY "${WEBRTC_SRC_DIR}"
     )
 endif()
@@ -274,25 +274,51 @@ endif()
 
 file(MAKE_DIRECTORY ${WEBRTC_DIR})
 
-message(STATUS "WebRTC: fetch")
+# The branch is pinned in the .gclient solution url, so gclient syncs src
+# and every dependency at depth 1 instead of cloning their full histories
+# (what "fetch webrtc" does). Branch names resolve to a ref: branch-heads/N
+# lives under refs/, a plain branch under refs/heads/.
+if(WEBRTC_BRANCH MATCHES "^refs/")
+    set(WEBRTC_REF "${WEBRTC_BRANCH}")
+elseif(WEBRTC_BRANCH MATCHES "^branch-heads/")
+    set(WEBRTC_REF "refs/${WEBRTC_BRANCH}")
+else()
+    set(WEBRTC_REF "refs/heads/${WEBRTC_BRANCH}")
+endif()
+
+# The instrumented libraries only serve sanitizer builds (Linux).
+file(WRITE "${WEBRTC_DIR}/.gclient"
+"solutions = [
+  {
+    \"name\": \"src\",
+    \"url\": \"https://webrtc.googlesource.com/src.git@${WEBRTC_REF}\",
+    \"deps_file\": \"DEPS\",
+    \"managed\": False,
+    \"custom_deps\": {},
+    \"custom_vars\": {
+      \"checkout_instrumented_libraries\": False,
+    },
+  },
+]
+")
+
+if(EXISTS "${WEBRTC_SRC}")
+    # Drop previously applied patches so the sync can move the tree.
+    execute_command(
+        COMMAND git checkout .
+        WORKING_DIRECTORY "${WEBRTC_SRC}"
+    )
+endif()
+
+message(STATUS "WebRTC: sync \"${WEBRTC_REF}\"")
 execute_command(
-    COMMAND fetch --nohooks webrtc
+    COMMAND gclient sync --no-history --shallow --nohooks
     WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
 
-message(STATUS "WebRTC: checkout \"${WEBRTC_BRANCH}\"")
+message(STATUS "WebRTC: run hooks")
 execute_command(
-    COMMAND git checkout .
-    WORKING_DIRECTORY "${WEBRTC_SRC}"
-)
-execute_command(
-    COMMAND git checkout ${WEBRTC_BRANCH}
-    WORKING_DIRECTORY "${WEBRTC_SRC}"
-)
-
-message(STATUS "WebRTC: sync")
-execute_command(
-    COMMAND gclient sync
+    COMMAND gclient runhooks
     WORKING_DIRECTORY "${WEBRTC_DIR}"
 )
 
