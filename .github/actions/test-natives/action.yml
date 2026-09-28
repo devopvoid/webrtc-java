@@ -1,6 +1,6 @@
 name: 'Test Natives'
 
-description: 'Run the test suite on a native runner against natives that a cross compiling lane built'
+description: 'Run the test suite on a runner of the platform''s own OS and architecture, against the natives the build job uploaded'
 
 inputs:
   platform-name:

@@ -1,7 +1,7 @@
 name: Platforms
 
-# Builds and tests the native libraries of every supported platform, and hands
-# them on as artifacts: natives-<platform> holds the webrtc-java native jar,
+# Builds the native libraries of every supported platform, tests each of them on
+# a runner of its own OS and architecture, and hands them on as artifacts: natives-<platform> holds the webrtc-java native jar,
 # natives-media-<platform> the webrtc-java-media one. Nothing is deployed here;
 # the callers do that once, from all platforms together, because Maven Central
 # publishes a version as one bundle.
@@ -32,43 +32,30 @@ jobs:
       fail-fast: false
       matrix:
         # profile: the Maven profile that selects a cross compiled classifier;
-        #   empty when the classifier is the runner's own.
-        # test: whether the runner can run what was built. The ARM builds are
-        #   cross compiled and are tested by test-natives below instead.
-        # jdk-architecture, test-jdk-architecture: for the macOS Intel build,
-        #   which runs on Apple Silicon: an arm64 JDK builds, an x64 JDK under
-        #   Rosetta loads the Intel natives for the tests.
+        #   empty when the classifier is the runner's own. The macOS Intel
+        #   build runs on Apple Silicon and cross compiles.
         platform:
           - name: windows_x86_64
             runs-on: windows-2022
             profile: ''
-            test: true
           - name: windows_arm64
             runs-on: windows-2022
             profile: windows-aarch64
-            test: false
           - name: linux_x86-64
             runs-on: ubuntu-22.04
             profile: ''
-            test: true
           - name: linux_arm64
             runs-on: ubuntu-22.04
             profile: linux-aarch64
-            test: false
           - name: linux_arm
             runs-on: ubuntu-22.04
             profile: linux-aarch32
-            test: false
           - name: macos_arm64
             runs-on: macos-14
             profile: ''
-            test: true
           - name: macos_x86-64
             runs-on: macos-14
             profile: macos-cross-x86_64
-            test: true
-            jdk-architecture: aarch64
-            test-jdk-architecture: x64
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout code
@@ -95,11 +82,12 @@ jobs:
         with:
           platform-name: ${{ matrix.platform.name }}
           profile: ${{ matrix.platform.profile }}
-          test: ${{ matrix.platform.test }}
-          jdk-architecture: ${{ matrix.platform.jdk-architecture || '' }}
-          test-jdk-architecture: ${{ matrix.platform.test-jdk-architecture || '' }}
           retention-days: ${{ inputs.retention-days }}
 
+  # Every platform is tested on a runner of its own OS and architecture,
+  # against the natives the build job uploaded, so that what is tested is
+  # exactly what gets published. Most of them are cross compiled and could not
+  # be loaded on the runner that built them.
   test-natives:
     name: test-natives (${{ matrix.platform.name }})
     needs: build
@@ -107,25 +95,44 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # java-architecture: the JDK architecture, when it differs from the
+        #   runner's. linux_arm runs a 32-bit ARM JDK on an arm64 runner.
         platform:
+          - name: windows_x86_64
+            runs-on: windows-2022
+            classifier: windows-x86_64
+            java-distribution: temurin
+            java-architecture: ''
           - name: windows_arm64
             runs-on: windows-11-arm
             classifier: windows-aarch64
-            profile: windows-aarch64
             java-distribution: microsoft
             java-architecture: aarch64
+          - name: linux_x86-64
+            runs-on: ubuntu-22.04
+            classifier: linux-x86_64
+            java-distribution: temurin
+            java-architecture: ''
           - name: linux_arm64
             runs-on: ubuntu-22.04-arm
             classifier: linux-aarch64
-            profile: linux-aarch64
             java-distribution: temurin
             java-architecture: ''
           - name: linux_arm
             runs-on: ubuntu-22.04-arm
             classifier: linux-aarch32
-            profile: linux-aarch32
             java-distribution: liberica
             java-architecture: armv7
+          - name: macos_arm64
+            runs-on: macos-14
+            classifier: macos-aarch64
+            java-distribution: temurin
+            java-architecture: ''
+          - name: macos_x86-64
+            runs-on: macos-15-intel
+            classifier: macos-x86_64
+            java-distribution: temurin
+            java-architecture: ''
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout code
@@ -138,6 +145,6 @@ jobs:
         with:
           platform-name: ${{ matrix.platform.name }}
           classifier: ${{ matrix.platform.classifier }}
-          profile: ${{ matrix.platform.profile }}
+          profile: ${{ matrix.platform.classifier }}
           java-distribution: ${{ matrix.platform.java-distribution }}
           java-architecture: ${{ matrix.platform.java-architecture }}

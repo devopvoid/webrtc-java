@@ -1,6 +1,6 @@
 name: 'Maven Build'
 
-description: 'Build and test the native libraries of one platform, and upload them as artifacts'
+description: 'Build the native libraries of one platform and upload them as artifacts'
 
 inputs:
   platform-name:
@@ -12,25 +12,10 @@ inputs:
     required: false
     default: ''
 
-  test:
-    description: 'Whether to run the tests. Cross compiled natives that the runner cannot load are tested elsewhere.'
-    required: false
-    default: 'true'
-
   java-version:
     description: 'The Java build version.'
     required: false
     default: '17'
-
-  jdk-architecture:
-    description: 'The architecture of the JDK the build runs with. Empty for the runner''s own.'
-    required: false
-    default: ''
-
-  test-jdk-architecture:
-    description: 'The architecture of a second JDK the tests run with, when it differs from the build JDK.'
-    required: false
-    default: ''
 
   retention-days:
     description: 'How long the natives artifacts are kept.'
@@ -45,9 +30,9 @@ runs:
       shell: bash
 
     # Restored here, saved right after the build below: the post step of
-    # actions/cache only saves when the whole job succeeds, so a failing test
-    # would otherwise throw away a WebRTC build that took the better part of an
-    # hour.
+    # actions/cache only saves when the whole job succeeds, so a failure in a
+    # later step would otherwise throw away a WebRTC build that took the better
+    # part of an hour.
     - id: webrtc-cache
       name: Restore WebRTC cache
       uses: actions/cache/restore@v6
@@ -80,20 +65,9 @@ runs:
         key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
         restore-keys: maven-${{ runner.os }}-
 
-    - id: test-jdk
-      name: Set up JDK ${{ inputs.java-version }} (${{ inputs.test-jdk-architecture }}, for the tests)
-      if: inputs.test-jdk-architecture != ''
-      uses: actions/setup-java@v5
-      with:
-        architecture: ${{ inputs.test-jdk-architecture }}
-        java-version: ${{ inputs.java-version }}
-        distribution: 'temurin'
-
-    # Set up last, so that it is the JAVA_HOME the build runs with.
     - name: Set up JDK ${{ inputs.java-version }}
       uses: actions/setup-java@v5
       with:
-        architecture: ${{ inputs.jdk-architecture }}
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
 
@@ -117,32 +91,11 @@ runs:
         path: ~/ffmpeg
         key: ${{ steps.ffmpeg-cache.outputs.cache-primary-key }}
 
-    - name: Test
-      if: inputs.test == 'true'
-      env:
-        PROFILE: ${{ inputs.profile }}
-        TEST_JAVA_HOME: ${{ steps.test-jdk.outputs.path }}
-      run: |
-        if [ -n "$TEST_JAVA_HOME" ]; then
-          export JAVA_HOME="$TEST_JAVA_HOME"
-        fi
-        mvn -B jar:jar surefire:test ${PROFILE:+-P$PROFILE} -Dsurefire.timeout=1800
-      shell: bash
-
-    # What failed, for runners that cannot be reproduced locally.
-    - name: Upload test reports
-      if: failure()
-      uses: actions/upload-artifact@v7
-      with:
-        name: test-reports-${{ inputs.platform-name }}
-        path: '**/target/surefire-reports/'
-        if-no-files-found: ignore
-        retention-days: 7
-
-    # The natives of every platform go to the callers' publishing job, which
-    # attaches all of them to a single deployment, and the cross compiled ones
-    # to test-natives as well. Both artifacts hold one flat jar each, so that a
-    # natives-* download with merge-multiple puts every jar into one directory.
+    # The natives of every platform go to test-natives, which tests them on a
+    # runner of their own OS and architecture, and to the callers' publishing
+    # job, which attaches all of them to a single deployment. Both artifacts
+    # hold one flat jar each, so that a natives-* download with merge-multiple
+    # puts every jar into one directory.
     - name: Upload native library jar
       uses: actions/upload-artifact@v7
       with:
