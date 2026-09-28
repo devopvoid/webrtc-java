@@ -30,6 +30,17 @@ namespace jni
 	namespace VideoFrame
 	{
 		webrtc::VideoFrame toNative(JNIEnv * env, const JavaRef<jobject> & javaFrame);
+
+		// Wraps the frame for Java without copying its pixels, converting
+		// them to I420 first if they are in another format. The Java frame
+		// holds a reference to the pixel buffer, which it gives up when it
+		// is released. Returns null if the pixels cannot be converted.
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::VideoFrame & frame);
+
+		// Returns the native pixel buffer of a Java VideoFrameBuffer. A
+		// NativeI420Buffer is shared; any other buffer is converted to I420
+		// in Java and copied. Returns null if it has no readable pixels.
+		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> toNativeBuffer(JNIEnv * env, const JavaRef<jobject> & javaBuffer);
 	}
 
 	namespace I420Buffer
@@ -47,6 +58,24 @@ namespace jni
 			jfieldID buffer;
 			jfieldID rotation;
 			jfieldID timestampNs;
+			jmethodID release;
+	};
+
+	class JavaI420BufferClass : public JavaClass
+	{
+		public:
+			explicit JavaI420BufferClass(JNIEnv * env);
+
+			jclass cls;
+			jmethodID toI420;
+			jmethodID getWidth;
+			jmethodID getHeight;
+			jmethodID getDataY;
+			jmethodID getDataU;
+			jmethodID getDataV;
+			jmethodID getStrideY;
+			jmethodID getStrideU;
+			jmethodID getStrideV;
 	};
 
 	class JavaNativeI420BufferClass : public JavaClass

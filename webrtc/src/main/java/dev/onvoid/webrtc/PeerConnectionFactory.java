@@ -28,6 +28,10 @@ import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.VideoTrackSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory;
 
 import java.util.Map;
 import java.util.Objects;
@@ -52,6 +56,9 @@ import java.util.Objects;
  * {@link #createAudioSource(AudioOptions)} is called, since that is the only
  * way to send device-captured audio. A factory that sends pushed audio, or no
  * audio at all, never opens it. Playout of received audio is never affected.
+ * <p>
+ * The constructors cover the common combinations of modules. A {@link
+ * #builder() builder} sets any of them, including the video codecs.
  *
  * @author Alex Andres
  */
@@ -103,7 +110,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * Creates an instance of PeerConnectionFactory.
 	 */
 	public PeerConnectionFactory() {
-		initialize(null, null, null);
+		initialize(null, null, null, null, null);
 	}
 
 	/**
@@ -113,7 +120,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * @param audioProcessing The custom audio processing module.
 	 */
 	public PeerConnectionFactory(AudioProcessing audioProcessing) {
-		initialize(null, null, audioProcessing);
+		initialize(null, null, audioProcessing, null, null);
 	}
 
 	/**
@@ -123,7 +130,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * @param audioModule The custom audio device module.
 	 */
 	public PeerConnectionFactory(AudioDeviceModuleBase audioModule) {
-		initialize(null, audioModule, null);
+		initialize(null, audioModule, null, null, null);
 	}
 
 	/**
@@ -135,7 +142,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 */
 	public PeerConnectionFactory(AudioDeviceModuleBase audioModule,
 			AudioProcessing audioProcessing) {
-		initialize(null, audioModule, audioProcessing);
+		initialize(null, audioModule, audioProcessing, null, null);
 	}
 
 	/**
@@ -147,7 +154,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 *                    non-null and non-empty.
 	 */
 	public PeerConnectionFactory(Map<String, String> fieldTrials) {
-		initialize(fieldTrials, null, null);
+		initialize(fieldTrials, null, null, null, null);
 	}
 
 	/**
@@ -161,7 +168,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 */
 	public PeerConnectionFactory(Map<String, String> fieldTrials,
 			AudioProcessing audioProcessing) {
-		initialize(fieldTrials, null, audioProcessing);
+		initialize(fieldTrials, null, audioProcessing, null, null);
 	}
 
 	/**
@@ -175,7 +182,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 */
 	public PeerConnectionFactory(Map<String, String> fieldTrials,
 			AudioDeviceModuleBase audioModule) {
-		initialize(fieldTrials, audioModule, null);
+		initialize(fieldTrials, audioModule, null, null, null);
 	}
 
 	/**
@@ -190,7 +197,37 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 */
 	public PeerConnectionFactory(Map<String, String> fieldTrials,
 			AudioDeviceModuleBase audioModule, AudioProcessing audioProcessing) {
-		initialize(fieldTrials, audioModule, audioProcessing);
+		initialize(fieldTrials, audioModule, audioProcessing, null, null);
+	}
+
+	/**
+	 * Creates an instance of PeerConnectionFactory with what the builder was
+	 * given.
+	 *
+	 * @param builder The builder with the modules to use.
+	 */
+	private PeerConnectionFactory(Builder builder) {
+		// The built-in codecs need no detour through Java.
+		VideoEncoderFactory encoderFactory = builder.videoEncoderFactory instanceof DefaultVideoEncoderFactory
+				? null
+				: builder.videoEncoderFactory;
+		VideoDecoderFactory decoderFactory = builder.videoDecoderFactory instanceof DefaultVideoDecoderFactory
+				? null
+				: builder.videoDecoderFactory;
+
+		initialize(builder.fieldTrials, builder.audioModule, builder.audioProcessing,
+				encoderFactory, decoderFactory);
+	}
+
+	/**
+	 * Returns a builder for a PeerConnectionFactory, which sets any of the
+	 * modules the factory is created with. Whatever is not set is what the
+	 * {@link #PeerConnectionFactory() default constructor} uses.
+	 *
+	 * @return A new builder.
+	 */
+	public static Builder builder() {
+		return new Builder();
 	}
 
 	/**
@@ -364,7 +401,9 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	public native void dispose();
 
 	private native void initialize(Map<String, String> fieldTrials,
-			AudioDeviceModuleBase audioModule, AudioProcessing audioProcessing);
+			AudioDeviceModuleBase audioModule, AudioProcessing audioProcessing,
+			VideoEncoderFactory videoEncoderFactory,
+			VideoDecoderFactory videoDecoderFactory);
 
 	private native AudioTrackSource createAudioSourceInternal(AudioOptions options);
 
@@ -393,5 +432,123 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * @param enabled Whether device-captured audio may reach the audio senders.
 	 */
 	private native void setDeviceCaptureEnabled(boolean enabled);
+
+
+	/**
+	 * Builds a {@link PeerConnectionFactory}. Each module that is not set is
+	 * what the {@link PeerConnectionFactory#PeerConnectionFactory() default
+	 * constructor} uses.
+	 * <p>
+	 * Example, a factory with a codec of one's own next to the built-in ones:
+	 * <pre>{@code
+	 * PeerConnectionFactory factory = PeerConnectionFactory.builder()
+	 *     .setAudioDeviceModule(audioModule)
+	 *     .setVideoEncoderFactory(new MyEncoderFactory())
+	 *     .setVideoDecoderFactory(new MyDecoderFactory())
+	 *     .build();
+	 * }</pre>
+	 */
+	public static final class Builder {
+
+		private Map<String, String> fieldTrials;
+
+		private AudioDeviceModuleBase audioModule;
+
+		private AudioProcessing audioProcessing;
+
+		private VideoEncoderFactory videoEncoderFactory;
+
+		private VideoDecoderFactory videoDecoderFactory;
+
+
+		private Builder() {
+		}
+
+		/**
+		 * Sets the field trials, which allow enabling experimental WebRTC
+		 * features.
+		 *
+		 * @param fieldTrials The field trials to set, e.g. {@code
+		 *                    {"WebRTC-Bar": "Enabled"}}. Keys and values must
+		 *                    be non-null and non-empty.
+		 *
+		 * @return This builder.
+		 */
+		public Builder setFieldTrials(Map<String, String> fieldTrials) {
+			this.fieldTrials = fieldTrials;
+			return this;
+		}
+
+		/**
+		 * Sets the audio device module.
+		 *
+		 * @param audioModule The custom audio device module.
+		 *
+		 * @return This builder.
+		 */
+		public Builder setAudioDeviceModule(AudioDeviceModuleBase audioModule) {
+			this.audioModule = audioModule;
+			return this;
+		}
+
+		/**
+		 * Sets the audio processing module.
+		 *
+		 * @param audioProcessing The custom audio processing module.
+		 *
+		 * @return This builder.
+		 */
+		public Builder setAudioProcessing(AudioProcessing audioProcessing) {
+			this.audioProcessing = audioProcessing;
+			return this;
+		}
+
+		/**
+		 * Sets the factory of the video encoders, which decides what video
+		 * codecs the factory can send. Without one, the factory uses the
+		 * codecs of a {@link DefaultVideoEncoderFactory}.
+		 * <p>
+		 * The supported codecs are asked for once, when the factory is built;
+		 * the encoders are created from WebRTC threads while the factory is
+		 * in use.
+		 *
+		 * @param factory The video encoder factory.
+		 *
+		 * @return This builder.
+		 */
+		public Builder setVideoEncoderFactory(VideoEncoderFactory factory) {
+			this.videoEncoderFactory = factory;
+			return this;
+		}
+
+		/**
+		 * Sets the factory of the video decoders, which decides what video
+		 * codecs the factory can receive. Without one, the factory uses the
+		 * codecs of a {@link DefaultVideoDecoderFactory}.
+		 * <p>
+		 * The supported codecs are asked for once, when the factory is built;
+		 * the decoders are created from WebRTC threads while the factory is
+		 * in use.
+		 *
+		 * @param factory The video decoder factory.
+		 *
+		 * @return This builder.
+		 */
+		public Builder setVideoDecoderFactory(VideoDecoderFactory factory) {
+			this.videoDecoderFactory = factory;
+			return this;
+		}
+
+		/**
+		 * Creates the PeerConnectionFactory. The builder may be used again
+		 * afterwards.
+		 *
+		 * @return The new factory.
+		 */
+		public PeerConnectionFactory build() {
+			return new PeerConnectionFactory(this);
+		}
+
+	}
 
 }

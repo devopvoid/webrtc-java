@@ -71,6 +71,81 @@ namespace jni
 				.set_rotation(static_cast<webrtc::VideoRotation>(rotation))
 				.build();
 		}
+
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::VideoFrame & frame)
+		{
+			webrtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = frame.video_frame_buffer()->ToI420();
+
+			if (i420Buffer == nullptr) {
+				return JavaLocalRef<jobject>(env, nullptr);
+			}
+
+			const auto javaClass = JavaClasses::get<JavaVideoFrameClass>(env);
+
+			JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420Buffer);
+
+			// The reference the Java buffer gives up when it is released.
+			i420Buffer->AddRef();
+
+			jobject jFrame = env->NewObject(javaClass->cls, javaClass->ctor, jBuffer.get(),
+				static_cast<jint>(frame.rotation()),
+				static_cast<jlong>(frame.timestamp_us() * webrtc::kNumNanosecsPerMicrosec));
+
+			if (jFrame == nullptr) {
+				// The Java buffer never got to a frame that would release it.
+				i420Buffer->Release();
+				ExceptionCheck(env);
+			}
+
+			return JavaLocalRef<jobject>(env, jFrame);
+		}
+
+		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> toNativeBuffer(JNIEnv * env, const JavaRef<jobject> & javaBuffer)
+		{
+			const auto nativeClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
+
+			if (env->IsInstanceOf(javaBuffer, nativeClass->cls)) {
+				webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, javaBuffer);
+
+				return webrtc::scoped_refptr<webrtc::VideoFrameBuffer>(buffer);
+			}
+
+			const auto javaClass = JavaClasses::get<JavaI420BufferClass>(env);
+
+			JavaLocalRef<jobject> i420(env, env->CallObjectMethod(javaBuffer, javaClass->toI420));
+			ExceptionCheck(env);
+
+			if (i420.get() == nullptr) {
+				return nullptr;
+			}
+
+			const jint width = env->CallIntMethod(i420, javaClass->getWidth);
+			const jint height = env->CallIntMethod(i420, javaClass->getHeight);
+			const jint strideY = env->CallIntMethod(i420, javaClass->getStrideY);
+			const jint strideU = env->CallIntMethod(i420, javaClass->getStrideU);
+			const jint strideV = env->CallIntMethod(i420, javaClass->getStrideV);
+			ExceptionCheck(env);
+
+			JavaLocalRef<jobject> dataY(env, env->CallObjectMethod(i420, javaClass->getDataY));
+			JavaLocalRef<jobject> dataU(env, env->CallObjectMethod(i420, javaClass->getDataU));
+			JavaLocalRef<jobject> dataV(env, env->CallObjectMethod(i420, javaClass->getDataV));
+			ExceptionCheck(env);
+
+			if (dataY.get() == nullptr || dataU.get() == nullptr || dataV.get() == nullptr) {
+				return nullptr;
+			}
+
+			// Heap buffers have no address, and only direct ones can be read.
+			const uint8_t * y = static_cast<const uint8_t *>(env->GetDirectBufferAddress(dataY));
+			const uint8_t * u = static_cast<const uint8_t *>(env->GetDirectBufferAddress(dataU));
+			const uint8_t * v = static_cast<const uint8_t *>(env->GetDirectBufferAddress(dataV));
+
+			if (y == nullptr || u == nullptr || v == nullptr || width <= 0 || height <= 0) {
+				return nullptr;
+			}
+
+			return webrtc::I420Buffer::Copy(width, height, y, strideY, u, strideU, v, strideV);
+		}
 	}
 
 	namespace I420Buffer
@@ -105,6 +180,25 @@ namespace jni
 		buffer = GetFieldID(env, cls, "buffer", "L" PKG_VIDEO "VideoFrameBuffer;");
 		rotation = GetFieldID(env, cls, "rotation", "I");
 		timestampNs = GetFieldID(env, cls, "timestampNs", "J");
+		release = GetMethod(env, cls, "release", "()V");
+	}
+
+	JavaI420BufferClass::JavaI420BufferClass(JNIEnv * env)
+	{
+		cls = FindClass(env, PKG_VIDEO"I420Buffer");
+
+		// Called on buffers of any kind, so it is looked up on their type.
+		jclass bufferClass = FindClass(env, PKG_VIDEO"VideoFrameBuffer");
+
+		toI420 = GetMethod(env, bufferClass, "toI420", "()L" PKG_VIDEO "I420Buffer;");
+		getWidth = GetMethod(env, cls, "getWidth", "()I");
+		getHeight = GetMethod(env, cls, "getHeight", "()I");
+		getDataY = GetMethod(env, cls, "getDataY", "()" BYTE_BUFFER_SIG);
+		getDataU = GetMethod(env, cls, "getDataU", "()" BYTE_BUFFER_SIG);
+		getDataV = GetMethod(env, cls, "getDataV", "()" BYTE_BUFFER_SIG);
+		getStrideY = GetMethod(env, cls, "getStrideY", "()I");
+		getStrideU = GetMethod(env, cls, "getStrideU", "()I");
+		getStrideV = GetMethod(env, cls, "getStrideV", "()I");
 	}
 
 	JavaNativeI420BufferClass::JavaNativeI420BufferClass(JNIEnv * env)

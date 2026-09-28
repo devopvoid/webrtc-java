@@ -37,31 +37,11 @@
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
 
-#ifdef __APPLE__
-#include "sdk/objc/components/video_codec/RTCDefaultVideoDecoderFactory.h"
-#include "sdk/objc/components/video_codec/RTCDefaultVideoEncoderFactory.h"
-#include "sdk/objc/native/api/video_decoder_factory.h"
-#include "sdk/objc/native/api/video_encoder_factory.h"
-#else
-#include "api/video_codecs/builtin_video_decoder_factory.h"
-#include "api/video_codecs/builtin_video_encoder_factory.h"
-#include "api/video_codecs/video_decoder_factory_template_dav1d_adapter.h"
-#include "api/video_codecs/video_decoder_factory_template_libvpx_vp8_adapter.h"
-#include "api/video_codecs/video_decoder_factory_template_libvpx_vp9_adapter.h"
-#include "api/video_codecs/video_decoder_factory_template_open_h264_adapter.h"
-#include "api/video_codecs/video_encoder_factory_template_libaom_av1_adapter.h"
-#include "api/video_codecs/video_encoder_factory_template_libvpx_vp8_adapter.h"
-#include "api/video_codecs/video_encoder_factory_template_libvpx_vp9_adapter.h"
-#include "api/video_codecs/video_encoder_factory_template_open_h264_adapter.h"
-#endif
-
-#include "api/video_codecs/video_decoder_factory.h"
-#include "api/video_codecs/video_decoder_factory_template.h"
-#include "api/video_codecs/video_encoder_factory.h"
-#include "api/video_codecs/video_encoder_factory_template.h"
-
 #include "api/ProxyAudioDeviceModule.h"
 #include "media/audio/CustomAudioSource.h"
+#include "media/video/codec/DefaultVideoCodecFactories.h"
+#include "media/video/codec/VideoDecoderFactoryWrapper.h"
+#include "media/video/codec/VideoEncoderFactoryWrapper.h"
 
 #include "api/media_stream_interface.h"
 #include "rtc_base/logging.h"
@@ -70,7 +50,8 @@
 #include <map>
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
-(JNIEnv * env, jobject caller, jobject jFieldTrials, jobject audioModule, jobject audioProcessing)
+(JNIEnv * env, jobject caller, jobject jFieldTrials, jobject audioModule, jobject audioProcessing,
+	jobject jVideoEncoderFactory, jobject jVideoDecoderFactory)
 {
 	webrtc::AudioDeviceModule * audioDevModule = (audioModule != nullptr)
 		? GetHandle<webrtc::AudioDeviceModule>(env, audioModule)
@@ -95,6 +76,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		std::unique_ptr<webrtc::FieldTrialsView> fieldTrials = fieldTrialsMap.empty()
 			? nullptr
 			: std::make_unique<jni::FieldTrialsView>(std::move(fieldTrialsMap));
+
+		// Asks the Java factories for their codecs, which is where a broken
+		// factory surfaces, before anything else is set up.
+		std::unique_ptr<webrtc::VideoEncoderFactory> videoEncoderFactory = (jVideoEncoderFactory != nullptr)
+			? std::make_unique<jni::VideoEncoderFactoryWrapper>(env, jVideoEncoderFactory)
+			: jni::CreateDefaultVideoEncoderFactory();
+		std::unique_ptr<webrtc::VideoDecoderFactory> videoDecoderFactory = (jVideoDecoderFactory != nullptr)
+			? std::make_unique<jni::VideoDecoderFactoryWrapper>(env, jVideoDecoderFactory)
+			: jni::CreateDefaultVideoDecoderFactory();
 
 		auto networkThread = webrtc::Thread::CreateWithSocketServer();
 		networkThread->SetName("webrtc_jni_network_thread", nullptr);
@@ -153,21 +143,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			proxy,
 			webrtc::CreateBuiltinAudioEncoderFactory(),
 			webrtc::CreateBuiltinAudioDecoderFactory(),
-#ifdef __APPLE__
-			webrtc::ObjCToNativeVideoEncoderFactory([[RTC_OBJC_TYPE(RTCDefaultVideoEncoderFactory) alloc] init]),
-			webrtc::ObjCToNativeVideoDecoderFactory([[RTC_OBJC_TYPE(RTCDefaultVideoDecoderFactory) alloc] init]),
-#else
-			std::make_unique<webrtc::VideoEncoderFactoryTemplate<
-				webrtc::LibvpxVp8EncoderTemplateAdapter,
-				webrtc::LibvpxVp9EncoderTemplateAdapter,
-				webrtc::OpenH264EncoderTemplateAdapter,
-				webrtc::LibaomAv1EncoderTemplateAdapter>>(),
-			std::make_unique<webrtc::VideoDecoderFactoryTemplate<
-				webrtc::LibvpxVp8DecoderTemplateAdapter,
-				webrtc::LibvpxVp9DecoderTemplateAdapter,
-				webrtc::OpenH264DecoderTemplateAdapter,
-				webrtc::Dav1dDecoderTemplateAdapter>>(),
-#endif
+			std::move(videoEncoderFactory),
+			std::move(videoDecoderFactory),
 			nullptr,
 			apm,
 			nullptr,
