@@ -13,10 +13,6 @@ on:
         type: boolean
         default: false
 
-env:
-  WEBRTC_CHECKOUT_FOLDER: webrtc
-  WEBRTC_INSTALL_FOLDER: webrtc/build
-
 # Only the jobs that push commits, tags or the GitHub release get write access.
 permissions:
   contents: read
@@ -155,119 +151,18 @@ jobs:
           # The branch and the tag land together or not at all.
           git push --atomic origin HEAD:main "refs/tags/$RELEASE_TAG"
 
-  build-windows:
+  # The tag prepare-release pushed. A dry run pushes none and builds the
+  # dispatched commit instead.
+  platforms:
     needs: prepare-release
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: windows_x86_64
-            runs-on: windows-2022
-          - name: windows_arm64
-            runs-on: windows-2022
-        java: [17]
-    runs-on: ${{ matrix.platform.runs-on }}
-    steps:
-      # The tag prepare-release pushed. A dry run pushes none and builds the
-      # dispatched commit instead.
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
-          # The media module builds FFmpeg from its third-party submodule.
-          submodules: true
-
-      - id: prepare
-        name: Prepare release build
-        uses: ./.github/actions/prepare-windows
-
-      - id: maven-build
-        name: Maven build
-        uses: ./.github/actions/release
-        with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
-
-  build-linux:
-    needs: prepare-release
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: linux_arm
-            runs-on: ubuntu-22.04
-          - name: linux_arm64
-            runs-on: ubuntu-22.04
-          - name: linux_x86-64
-            runs-on: ubuntu-22.04
-        java: [17]
-    runs-on: ${{ matrix.platform.runs-on }}
-    steps:
-      # The tag prepare-release pushed. A dry run pushes none and builds the
-      # dispatched commit instead.
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
-          # The media module builds FFmpeg from its third-party submodule.
-          submodules: true
-
-      - id: prepare-build
-        name: Prepare release build
-        uses: ./.github/actions/prepare-linux
-
-      - id: maven-build
-        name: Maven build
-        uses: ./.github/actions/release
-        with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
-
-  build-macos:
-    needs: prepare-release
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: macos_x86-64
-            runs-on: macos-14
-          - name: macos_arm64
-            runs-on: macos-14
-        java: [17]
-    runs-on: ${{ matrix.platform.runs-on }}
-    steps:
-      # The tag prepare-release pushed. A dry run pushes none and builds the
-      # dispatched commit instead.
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
-          # The media module builds FFmpeg from its third-party submodule.
-          submodules: true
-
-      - id: prepare-build
-        name: Prepare release build
-        uses: ./.github/actions/prepare-macos
-
-      - id: maven-build-arm64
-        name: Maven build - Apple Silicon
-        if: matrix.platform.name == 'macos_arm64'
-        uses: ./.github/actions/release
-        with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
-
-      - id: maven-build-x86_64
-        name: Maven build - Intel
-        if: matrix.platform.name == 'macos_x86-64'
-        uses: ./.github/actions/release-macos-x86_64
-        with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
+    uses: ./.github/workflows/platforms.yml
+    with:
+      ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
+      retention-days: 7
 
   publish-central:
     name: Publish to Maven Central
-    needs: [prepare-release, build-windows, build-linux, build-macos]
+    needs: [prepare-release, platforms]
     runs-on: ubuntu-22.04
 
     steps:
@@ -279,7 +174,9 @@ jobs:
       - name: Set up Maven cache
         uses: actions/cache@v6
         with:
-          path: ~/.m2/repository
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/dev/onvoid/webrtc
           key: maven-publish-${{ hashFiles('**/pom.xml') }}
           restore-keys: maven-publish-
 
@@ -308,48 +205,6 @@ jobs:
           echo "Version to publish: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Download the native library jars of all platforms
-        uses: actions/download-artifact@v8
-        with:
-          pattern: natives-*
-          path: natives
-          merge-multiple: true
-
-      - name: Verify that every platform is present
-        run: |
-          version="${{ steps.release-version.outputs.version }}"
-          status=0
-
-          for classifier in windows-x86_64 windows-aarch64 linux-x86_64 linux-aarch64 \
-                            linux-aarch32 macos-x86_64 macos-aarch64; do
-            if [ ! -f "natives/webrtc-java-$version-$classifier.jar" ]; then
-              echo "::error::Missing native library jar for $classifier"
-              status=1
-            fi
-            if [ ! -f "natives/webrtc-java-media-$version-$classifier.jar" ]; then
-              echo "::error::Missing media native library jar for $classifier"
-              status=1
-            fi
-          done
-
-          exit $status
-
-      # The webrtc module depends on its own native library jar for the host
-      # platform. That dependency is normally installed by webrtc-jni, which is kept
-      # out of the reactor here to avoid rebuilding the native libraries.
-      - name: Seed the local repository with the host native library
-        run: |
-          version="${{ steps.release-version.outputs.version }}"
-
-          mvn -B install:install-file \
-            -Dfile="natives/webrtc-java-$version-linux-x86_64.jar" \
-            -DgroupId=dev.onvoid.webrtc \
-            -DartifactId=webrtc-java \
-            -Dversion="$version" \
-            -Dclassifier=linux-x86_64 \
-            -Dpackaging=jar \
-            -DgeneratePom=false
-
       # skipPublishing suppresses both the bundling and the upload, so a dry run
       # still builds, signs and attaches everything without anything leaving the
       # runner. As a second line of defence the Central credentials are replaced by
@@ -357,14 +212,15 @@ jobs:
       # fails on authentication instead of publishing a release. Signing does run, so
       # the GPG passphrase stays intact.
       - name: Deploy
+        uses: ./.github/actions/publish
         env:
           MAVEN_USERNAME: ${{ inputs.dryRun && 'dry-run-must-not-upload' || secrets.MAVEN_USERNAME }}
           MAVEN_TOKEN: ${{ inputs.dryRun && 'dry-run-must-not-upload' || secrets.MAVEN_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-        run: >
-          mvn -B deploy -pl .,webrtc,webrtc-java-media -Prelease -DskipTests
-          -Dnatives.dir="$PWD/natives"
-          -DskipPublishing=${{ inputs.dryRun }}
+        with:
+          version: ${{ steps.release-version.outputs.version }}
+          profiles: release
+          skip-publishing: ${{ inputs.dryRun }}
 
       - name: Summarize what would have been published
         if: ${{ inputs.dryRun }}

@@ -1,24 +1,41 @@
 name: 'Maven Build'
 
-description: 'Build the platform dependent Java library'
+description: 'Build and test the native libraries of one platform, and upload them as artifacts'
 
 inputs:
-  java-version:
-    description: 'The Java build version.'
-    required: true
-    default: '17'
-
   platform-name:
     description: 'The target platform.'
     required: true
 
-  maven-username:
-    description: 'The Maven username.'
-    required: true
+  profile:
+    description: 'The Maven profile that selects a cross compiled classifier. Empty for the runner''s own.'
+    required: false
+    default: ''
 
-  maven-password:
-    description: 'The Maven password.'
-    required: true
+  test:
+    description: 'Whether to run the tests. Cross compiled natives that the runner cannot load are tested elsewhere.'
+    required: false
+    default: 'true'
+
+  java-version:
+    description: 'The Java build version.'
+    required: false
+    default: '17'
+
+  jdk-architecture:
+    description: 'The architecture of the JDK the build runs with. Empty for the runner''s own.'
+    required: false
+    default: ''
+
+  test-jdk-architecture:
+    description: 'The architecture of a second JDK the tests run with, when it differs from the build JDK.'
+    required: false
+    default: ''
+
+  retention-days:
+    description: 'How long the natives artifacts are kept.'
+    required: false
+    default: '1'
 
 runs:
   using: "composite"
@@ -52,8 +69,8 @@ runs:
         restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-
 
     # One cache per OS: the dependencies do not differ between the platforms of
-    # an OS. The project's own artifacts, which mvn deploy installs, change with
-    # every build and stay out of it.
+    # an OS. The project's own artifacts change with every build and stay out
+    # of it.
     - name: Set up Maven cache
       uses: actions/cache@v6
       with:
@@ -63,26 +80,27 @@ runs:
         key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
         restore-keys: maven-${{ runner.os }}-
 
+    - id: test-jdk
+      name: Set up JDK ${{ inputs.java-version }} (${{ inputs.test-jdk-architecture }}, for the tests)
+      if: inputs.test-jdk-architecture != ''
+      uses: actions/setup-java@v5
+      with:
+        architecture: ${{ inputs.test-jdk-architecture }}
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+
+    # Set up last, so that it is the JAVA_HOME the build runs with.
     - name: Set up JDK ${{ inputs.java-version }}
       uses: actions/setup-java@v5
       with:
+        architecture: ${{ inputs.jdk-architecture }}
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
-        server-id: central
-        server-username: MAVEN_USERNAME
-        server-password: MAVEN_TOKEN
 
     - name: Build
-      run: |
-        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
-          mvn package -DskipTests -Plinux-aarch32
-        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
-          mvn package -DskipTests -Plinux-aarch64
-        elif [ "${{ inputs.platform-name }}" == "windows_arm64" ]; then
-          mvn package -DskipTests -Pwindows-aarch64
-        else
-          mvn package -DskipTests
-        fi
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: mvn -B package -DskipTests ${PROFILE:+-P$PROFILE}
       shell: bash
 
     - name: Save WebRTC cache
@@ -100,8 +118,15 @@ runs:
         key: ${{ steps.ffmpeg-cache.outputs.cache-primary-key }}
 
     - name: Test
-      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' && inputs.platform-name != 'windows_arm64' }}
-      run: mvn -B jar:jar surefire:test -Dsurefire.timeout=1800
+      if: inputs.test == 'true'
+      env:
+        PROFILE: ${{ inputs.profile }}
+        TEST_JAVA_HOME: ${{ steps.test-jdk.outputs.path }}
+      run: |
+        if [ -n "$TEST_JAVA_HOME" ]; then
+          export JAVA_HOME="$TEST_JAVA_HOME"
+        fi
+        mvn -B jar:jar surefire:test ${PROFILE:+-P$PROFILE} -Dsurefire.timeout=1800
       shell: bash
 
     # What failed, for runners that cannot be reproduced locally.
@@ -114,19 +139,29 @@ runs:
         if-no-files-found: ignore
         retention-days: 7
 
-    - name: Deploy
-      if: ${{ github.event_name != 'pull_request' && github.repository == 'devopvoid/webrtc-java' }}
-      env:
-        MAVEN_USERNAME: ${{ inputs.maven-username }}
-        MAVEN_TOKEN: ${{ inputs.maven-password }}
-      run: |
-        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
-          mvn deploy -DskipTests -Plinux-aarch32
-        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
-          mvn deploy -DskipTests -Plinux-aarch64
-        elif [ "${{ inputs.platform-name }}" == "windows_arm64" ]; then
-          mvn deploy -DskipTests -Pwindows-aarch64
-        else
-          mvn deploy -DskipTests
-        fi
-      shell: bash
+    # The natives of every platform go to the callers' publishing job, which
+    # attaches all of them to a single deployment, and the cross compiled ones
+    # to test-natives as well. Both artifacts hold one flat jar each, so that a
+    # natives-* download with merge-multiple puts every jar into one directory.
+    - name: Upload native library jar
+      uses: actions/upload-artifact@v7
+      with:
+        name: natives-${{ inputs.platform-name }}
+        path: webrtc-jni/target/webrtc-java-*.jar
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+        overwrite: true
+
+    # Only the classifier jar: the main jar is platform independent and the
+    # publishing job builds it itself.
+    - name: Upload media native library jar
+      uses: actions/upload-artifact@v7
+      with:
+        name: natives-media-${{ inputs.platform-name }}
+        path: |
+          webrtc-java-media/target/webrtc-java-media-*-windows-*.jar
+          webrtc-java-media/target/webrtc-java-media-*-linux-*.jar
+          webrtc-java-media/target/webrtc-java-media-*-macos-*.jar
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+        overwrite: true

@@ -33,10 +33,18 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # The build uploads each platform's two native jars as separate artifacts,
+    # one flat jar each.
     - name: Download natives
       uses: actions/download-artifact@v8
       with:
         name: natives-${{ inputs.platform-name }}
+        path: natives
+
+    - name: Download media natives
+      uses: actions/download-artifact@v8
+      with:
+        name: natives-media-${{ inputs.platform-name }}
         path: natives
 
     # PulseAudio, libudev and libdbus are deliberately not installed here: the
@@ -78,7 +86,11 @@ runs:
     - name: Install the natives into the local repository
       run: |
         VERSION=$(sed -n '0,/<version>/s|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml)
-        JAR=$(find natives -path '*webrtc-jni*' -name 'webrtc-java-*.jar' | head -n 1)
+        JAR=$(find natives -name 'webrtc-java-*-${{ inputs.classifier }}.jar' ! -name 'webrtc-java-media-*' | head -n 1)
+        if [ -z "$JAR" ]; then
+          echo "No webrtc-java natives for ${{ inputs.classifier }} in the artifact" >&2
+          exit 1
+        fi
         echo "Installing $JAR as webrtc-java:$VERSION:${{ inputs.classifier }}"
         mvn -B -q install:install-file -Dfile="$JAR" -DgroupId=dev.onvoid.webrtc \
           -DartifactId=webrtc-java -Dversion="$VERSION" -Dpackaging=jar \
@@ -95,7 +107,7 @@ runs:
     - name: Unpack the natives where the tests look for them
       run: |
         MEDIA_JAR=$(find natives -name 'webrtc-java-media-*-${{ inputs.classifier }}.jar' | head -n 1)
-        WEBRTC_JAR=$(find natives -path '*webrtc-jni*' -name 'webrtc-java-*.jar' | head -n 1)
+        WEBRTC_JAR=$(find natives -name 'webrtc-java-*-${{ inputs.classifier }}.jar' ! -name 'webrtc-java-media-*' | head -n 1)
 
         if [ -z "$MEDIA_JAR" ]; then
           echo "No webrtc-java-media natives for ${{ inputs.classifier }} in the artifact" >&2

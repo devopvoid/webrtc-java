@@ -1,0 +1,143 @@
+name: Platforms
+
+# Builds and tests the native libraries of every supported platform, and hands
+# them on as artifacts: natives-<platform> holds the webrtc-java native jar,
+# natives-media-<platform> the webrtc-java-media one. Nothing is deployed here;
+# the callers do that once, from all platforms together, because Maven Central
+# publishes a version as one bundle.
+#
+# Called by build.yml for every push and PR, and by release.yml for the tag it
+# releases, so that both build exactly the same way.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "The commit, branch or tag to build. Empty for the one that triggered the caller."
+        type: string
+        default: ''
+      retention-days:
+        description: "How long the natives artifacts are kept."
+        type: number
+        default: 1
+
+env:
+  # The default webrtc.install.dir of webrtc-jni/pom.xml, below the home directory.
+  WEBRTC_INSTALL_FOLDER: webrtc/build
+
+jobs:
+  build:
+    name: build (${{ matrix.platform.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # profile: the Maven profile that selects a cross compiled classifier;
+        #   empty when the classifier is the runner's own.
+        # test: whether the runner can run what was built. The ARM builds are
+        #   cross compiled and are tested by test-natives below instead.
+        # jdk-architecture, test-jdk-architecture: for the macOS Intel build,
+        #   which runs on Apple Silicon: an arm64 JDK builds, an x64 JDK under
+        #   Rosetta loads the Intel natives for the tests.
+        platform:
+          - name: windows_x86_64
+            runs-on: windows-2022
+            profile: ''
+            test: true
+          - name: windows_arm64
+            runs-on: windows-2022
+            profile: windows-aarch64
+            test: false
+          - name: linux_x86-64
+            runs-on: ubuntu-22.04
+            profile: ''
+            test: true
+          - name: linux_arm64
+            runs-on: ubuntu-22.04
+            profile: linux-aarch64
+            test: false
+          - name: linux_arm
+            runs-on: ubuntu-22.04
+            profile: linux-aarch32
+            test: false
+          - name: macos_arm64
+            runs-on: macos-14
+            profile: ''
+            test: true
+          - name: macos_x86-64
+            runs-on: macos-14
+            profile: macos-cross-x86_64
+            test: true
+            jdk-architecture: aarch64
+            test-jdk-architecture: x64
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          # The media module builds FFmpeg from its third-party submodule.
+          submodules: true
+
+      - name: Prepare build
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/prepare-windows
+
+      - name: Prepare build
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/prepare-linux
+
+      - name: Prepare build
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/prepare-macos
+
+      - name: Maven build
+        uses: ./.github/actions/build
+        with:
+          platform-name: ${{ matrix.platform.name }}
+          profile: ${{ matrix.platform.profile }}
+          test: ${{ matrix.platform.test }}
+          jdk-architecture: ${{ matrix.platform.jdk-architecture || '' }}
+          test-jdk-architecture: ${{ matrix.platform.test-jdk-architecture || '' }}
+          retention-days: ${{ inputs.retention-days }}
+
+  test-natives:
+    name: test-natives (${{ matrix.platform.name }})
+    needs: build
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: windows_arm64
+            runs-on: windows-11-arm
+            classifier: windows-aarch64
+            profile: windows-aarch64
+            java-distribution: microsoft
+            java-architecture: aarch64
+          - name: linux_arm64
+            runs-on: ubuntu-22.04-arm
+            classifier: linux-aarch64
+            profile: linux-aarch64
+            java-distribution: temurin
+            java-architecture: ''
+          - name: linux_arm
+            runs-on: ubuntu-22.04-arm
+            classifier: linux-aarch32
+            profile: linux-aarch32
+            java-distribution: liberica
+            java-architecture: armv7
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Test natives
+        uses: ./.github/actions/test-natives
+        with:
+          platform-name: ${{ matrix.platform.name }}
+          classifier: ${{ matrix.platform.classifier }}
+          profile: ${{ matrix.platform.profile }}
+          java-distribution: ${{ matrix.platform.java-distribution }}
+          java-architecture: ${{ matrix.platform.java-architecture }}

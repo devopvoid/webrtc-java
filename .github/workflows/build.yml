@@ -36,176 +36,59 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  WEBRTC_CHECKOUT_FOLDER: webrtc
-  WEBRTC_INSTALL_FOLDER: webrtc/build
-
 jobs:
-  build-windows:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: windows_x86_64
-            runs-on: windows-2022
-          - name: windows_arm64
-            runs-on: windows-2022
-        java: [17]
-    runs-on: ${{ matrix.platform.runs-on }}
+  platforms:
+    uses: ./.github/workflows/platforms.yml
+    with:
+      # Only the deploy-snapshot job of this same run reads them.
+      retention-days: 1
+
+  # One deployment with the natives of every platform attached, the way
+  # release.yml publishes a release, instead of seven jobs each deploying the
+  # whole reactor and racing on the snapshot metadata. It runs only once every
+  # platform has been built and tested.
+  deploy-snapshot:
+    name: Deploy snapshot
+    needs: platforms
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.repository == 'devopvoid/webrtc-java'
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          # The media module builds FFmpeg from its third-party submodule.
-          submodules: true
 
-      - id: prepare
-        name: Prepare build
-        uses: ./.github/actions/prepare-windows
-
-      - id: maven-build
-        name: Maven build
-        uses: ./.github/actions/build
+      - name: Set up Maven cache
+        uses: actions/cache@v6
         with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
-          maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_TOKEN }}
-
-      - name: Upload natives for native testing
-        if: matrix.platform.name == 'windows_arm64'
-        uses: actions/upload-artifact@v7
-        with:
-          name: natives-${{ matrix.platform.name }}
           path: |
-            webrtc-jni/target/webrtc-java-*.jar
-            webrtc-java-media/target/webrtc-java-media-*.jar
-          if-no-files-found: error
-          # Only test-natives of this same run reads them.
-          retention-days: 1
+            ~/.m2/repository
+            !~/.m2/repository/dev/onvoid/webrtc
+          key: maven-publish-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-publish-
 
-  build-linux:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: linux_arm
-            runs-on: ubuntu-22.04
-          - name: linux_arm64
-            runs-on: ubuntu-22.04
-          - name: linux_x86-64
-            runs-on: ubuntu-22.04
-        java: [17]
-    runs-on: ${{ matrix.platform.runs-on }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
         with:
-          # The media module builds FFmpeg from its third-party submodule.
-          submodules: true
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_TOKEN
 
-      - id: prepare
-        name: Prepare build
-        uses: ./.github/actions/prepare-linux
+      - name: Determine the version to deploy
+        id: version
+        run: |
+          version=$(mvn -B -q -N help:evaluate -Dexpression=project.version -DforceStdout)
+          echo "Version to deploy: $version"
+          if [[ "$version" != *-SNAPSHOT ]]; then
+            echo "::error::main is at $version, which is not a snapshot; releases are published by release.yml"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - id: maven-build
-        name: Maven build
-        uses: ./.github/actions/build
+      - name: Deploy
+        uses: ./.github/actions/publish
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_TOKEN: ${{ secrets.MAVEN_TOKEN }}
         with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
-          maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_TOKEN }}
-
-      - name: Upload natives for native testing
-        if: matrix.platform.name == 'linux_arm' || matrix.platform.name == 'linux_arm64'
-        uses: actions/upload-artifact@v7
-        with:
-          name: natives-${{ matrix.platform.name }}
-          path: |
-            webrtc-jni/target/webrtc-java-*.jar
-            webrtc-java-media/target/webrtc-java-media-*.jar
-          if-no-files-found: error
-          # Only test-natives of this same run reads them.
-          retention-days: 1
-
-  build-macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: macos_x86-64
-            runs-on: macos-14
-          - name: macos_arm64
-            runs-on: macos-14
-        java: [17]
-    runs-on: ${{ matrix.platform.runs-on }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          # The media module builds FFmpeg from its third-party submodule.
-          submodules: true
-
-      - id: prepare-build
-        name: Prepare build
-        uses: ./.github/actions/prepare-macos
-
-      - id: maven-build-arm64
-        name: Maven build - Apple Silicon
-        if: matrix.platform.name == 'macos_arm64'
-        uses: ./.github/actions/build
-        with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
-          maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_TOKEN }}
-
-      - id: maven-build-x86_64
-        name: Maven build - Intel
-        if: matrix.platform.name == 'macos_x86-64'
-        uses: ./.github/actions/build-macos-x86_64
-        with:
-          java-version: ${{ matrix.java }}
-          platform-name: ${{ matrix.platform.name }}
-          maven-username: ${{ secrets.MAVEN_USERNAME }}
-          maven-password: ${{ secrets.MAVEN_TOKEN }}
-
-  test-natives:
-    needs: [build-windows, build-linux]
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: windows_arm64
-            runs-on: windows-11-arm
-            classifier: windows-aarch64
-            profile: windows-aarch64
-            java-distribution: microsoft
-            java-architecture: aarch64
-          - name: linux_arm64
-            runs-on: ubuntu-22.04-arm
-            classifier: linux-aarch64
-            profile: linux-aarch64
-            java-distribution: temurin
-            java-architecture: ''
-          - name: linux_arm
-            runs-on: ubuntu-22.04-arm
-            classifier: linux-aarch32
-            profile: linux-aarch32
-            java-distribution: liberica
-            java-architecture: armv7
-    runs-on: ${{ matrix.platform.runs-on }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Test natives
-        uses: ./.github/actions/test-natives
-        with:
-          platform-name: ${{ matrix.platform.name }}
-          classifier: ${{ matrix.platform.classifier }}
-          profile: ${{ matrix.platform.profile }}
-          java-distribution: ${{ matrix.platform.java-distribution }}
-          java-architecture: ${{ matrix.platform.java-architecture }}
+          version: ${{ steps.version.outputs.version }}
