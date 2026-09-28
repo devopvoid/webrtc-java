@@ -14,9 +14,16 @@ on:
       - ".github/ISSUE_TEMPLATE/**"
       - ".github/workflows/pages.yml"
 
+  # A change that only touches docs cannot affect the native build. The docs
+  # site has its own check in pages.yml.
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/pages.yml"
 
   workflow_dispatch:
 
@@ -162,6 +169,7 @@ jobs:
 
   test-natives:
     needs: [build-windows, build-linux]
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

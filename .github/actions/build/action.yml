@@ -96,8 +96,18 @@ runs:
 
     - name: Test
       if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' && inputs.platform-name != 'windows_arm64' }}
-      run: mvn -B jar:jar surefire:test
+      run: mvn -B jar:jar surefire:test -Dsurefire.timeout=1800
       shell: bash
+
+    # What failed, for runners that cannot be reproduced locally.
+    - name: Upload test reports
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: test-reports-${{ inputs.platform-name }}
+        path: '**/target/surefire-reports/'
+        if-no-files-found: ignore
+        retention-days: 7
 
     - name: Deploy
       if: ${{ github.event_name != 'pull_request' && github.repository == 'devopvoid/webrtc-java' }}

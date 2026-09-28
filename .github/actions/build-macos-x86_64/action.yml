@@ -101,8 +101,18 @@ runs:
         key: ${{ steps.ffmpeg-cache.outputs.cache-primary-key }}
 
     - name: Test
-      run: JAVA_HOME="${{ steps.jdk-x64.outputs.path }}" mvn -B jar:jar surefire:test -Pmacos-cross-x86_64
+      run: JAVA_HOME="${{ steps.jdk-x64.outputs.path }}" mvn -B jar:jar surefire:test -Pmacos-cross-x86_64 -Dsurefire.timeout=1800
       shell: bash
+
+    # What failed, for runners that cannot be reproduced locally.
+    - name: Upload test reports
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: test-reports-${{ inputs.platform-name }}
+        path: '**/target/surefire-reports/'
+        if-no-files-found: ignore
+        retention-days: 7
 
     - name: Deploy
       if: ${{ github.event_name != 'pull_request' && github.repository == 'devopvoid/webrtc-java' }}

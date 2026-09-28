@@ -30,20 +30,35 @@ runs:
 
     - name: Install required packages
       run: |
-        sudo apt update
+        sudo apt-get update -q
         # nasm is what FFmpeg assembles its x86 code with.
-        sudo apt install -y binutils cmake git locales lsb-release nasm ninja-build pipewire pipewire-pulse pkg-config python3 python3-setuptools rsync unzip wget xz-utils
+        sudo apt-get install -y -q binutils cmake git locales lsb-release nasm ninja-build pipewire pipewire-pulse pkg-config python3 python3-setuptools rsync unzip wget xz-utils
+      shell: bash
 
-        # Chromium Clang to be used with the clang toolchain file. The JNI code
-        # compiles against the libc++ headers of the WebRTC build, which only
-        # support the Clang that WebRTC branch ships with, so this must be the
-        # package pinned by CLANG_REVISION and CLANG_SUB_REVISION in
-        # tools/clang/scripts/update.py of the webrtc.branch set in
-        # webrtc-jni/pom.xml. Update it whenever that branch changes.
-        CLANG_PACKAGE=clang-llvmorg-23-init-19482-g53d18800-1.tar.xz
+    # Chromium Clang to be used with the clang toolchain file. The JNI code
+    # compiles against the libc++ headers of the WebRTC build, which only
+    # support the Clang that WebRTC branch ships with, so this must be the
+    # package pinned by CLANG_REVISION and CLANG_SUB_REVISION in
+    # tools/clang/scripts/update.py of the webrtc.branch set in
+    # webrtc-jni/pom.xml. Update it whenever that branch changes.
+    - name: Select the Chromium Clang package
+      run: echo "CLANG_PACKAGE=clang-llvmorg-23-init-19482-g53d18800-1.tar.xz" >> "$GITHUB_ENV"
+      shell: bash
+
+    - name: Cache the Chromium Clang package
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/chromium-clang
+        key: chromium-clang-${{ env.CLANG_PACKAGE }}
+
+    - name: Install Chromium Clang
+      run: |
+        mkdir -p ~/.cache/chromium-clang
+        if [ ! -f ~/.cache/chromium-clang/$CLANG_PACKAGE ]; then
+          wget -q -O ~/.cache/chromium-clang/$CLANG_PACKAGE             https://commondatastorage.googleapis.com/chromium-browser-clang/Linux_x64/$CLANG_PACKAGE
+        fi
         sudo mkdir -p /opt/clang
-        wget https://commondatastorage.googleapis.com/chromium-browser-clang/Linux_x64/$CLANG_PACKAGE
-        sudo tar -xvf $CLANG_PACKAGE -C /opt/clang
+        sudo tar -xf ~/.cache/chromium-clang/$CLANG_PACKAGE -C /opt/clang
       shell: bash
 
     - name: Install required packages for x86-64
