@@ -39,12 +39,39 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jobject> jSeverity = JavaEnums::toJava(env, severity);
-		JavaLocalRef<jstring> jMessage = JavaString::toJava(env, message);
+		// WebRTC holds its global logging lock while it calls a sink, and it
+		// is built without unwinding, so nothing may throw from here: an
+		// exception passing through WebRTC's frames would leave that lock
+		// held and every thread that logs next would block forever.
+		//
+		// The code that logged may have a Java exception pending, which no
+		// JNI call may be made with. It is set aside and restored after.
+		jthrowable pending = env->ExceptionOccurred();
 
-		env->CallVoidMethod(javaSink, javaClass->onLogMessage, jSeverity.get(), jMessage.get());
+		if (pending != nullptr) {
+			env->ExceptionClear();
+		}
 
-		ExceptionCheck(env);
+		try {
+			JavaLocalRef<jobject> jSeverity = JavaEnums::toJava(env, severity);
+			JavaLocalRef<jstring> jMessage = JavaString::toJava(env, message);
+
+			env->CallVoidMethod(javaSink, javaClass->onLogMessage, jSeverity.get(), jMessage.get());
+
+			// What the sink threw is reported, but not rethrown.
+			if (env->ExceptionCheck()) {
+				env->ExceptionDescribe();
+				env->ExceptionClear();
+			}
+		}
+		catch (...) {
+			env->ExceptionClear();
+		}
+
+		if (pending != nullptr) {
+			env->Throw(pending);
+			env->DeleteLocalRef(pending);
+		}
 	}
 
 	LogSink::JavaLogSinkClass::JavaLogSinkClass(JNIEnv * env)
