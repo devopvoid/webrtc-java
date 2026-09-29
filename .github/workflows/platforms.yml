@@ -1,10 +1,11 @@
 name: Platforms
 
 # Builds the native libraries of every supported platform, tests each of them on
-# a runner of its own OS and architecture, and hands them on as artifacts: natives-<platform> holds the webrtc-java native jar,
-# natives-media-<platform> the webrtc-java-media one. Nothing is deployed here;
-# the callers do that once, from all platforms together, because Maven Central
-# publishes a version as one bundle.
+# a runner of its own OS and architecture, and hands them on as artifacts:
+# natives-<platform> holds the webrtc-java native jar, natives-media-<platform>
+# the webrtc-java-media one. Nothing is deployed here; the callers do that once,
+# from all platforms together, because Maven Central publishes a version as one
+# bundle.
 #
 # Called by build.yml for every push and PR, and by release.yml for the tag it
 # releases, so that both build exactly the same way.

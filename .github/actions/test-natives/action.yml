@@ -72,20 +72,15 @@ runs:
         distribution: ${{ inputs.java-distribution }}
         architecture: ${{ inputs.java-architecture }}
 
-    - name: Ensure Maven
-      run: |
-        if ! command -v mvn >/dev/null 2>&1; then
-          url=https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.zip
-          curl -sSfLo maven.zip "$url"
-          echo "$(curl -sSfL "$url.sha512" | cut -d' ' -f1)  maven.zip" | sha512sum -c -
-          unzip -q maven.zip -d "$RUNNER_TEMP/maven"
-          echo "$RUNNER_TEMP/maven/apache-maven-3.9.9/bin" >> "$GITHUB_PATH"
-        fi
-      shell: bash
-
     - name: Install the natives into the local repository
       run: |
-        VERSION=$(sed -n '0,/<version>/s|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml)
+        # The root pom has no parent, so its first <version> is the project's.
+        # Not sed's 0,/re/ address: that is GNU only, and macOS has BSD sed.
+        VERSION=$(sed -n 's|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml | head -n 1)
+        if [ -z "$VERSION" ]; then
+          echo "Could not read the project version from pom.xml" >&2
+          exit 1
+        fi
         JAR=$(find natives -name 'webrtc-java-*-${{ inputs.classifier }}.jar' ! -name 'webrtc-java-media-*' | head -n 1)
         if [ -z "$JAR" ]; then
           echo "No webrtc-java natives for ${{ inputs.classifier }} in the artifact" >&2
