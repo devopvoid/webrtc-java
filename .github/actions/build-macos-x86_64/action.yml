@@ -27,8 +27,13 @@ runs:
       run: echo "WEBRTC_CACHE_BRANCH=$(sed -n 's|.*<webrtc.branch>branch-heads/\([^<]*\)</webrtc.branch>.*|\1|p' webrtc-jni/pom.xml)" >> "$GITHUB_ENV"
       shell: bash
 
-    - name: Set up WebRTC cache
-      uses: actions/cache@v6
+    # Restored here, saved right after the build below: the post step of
+    # actions/cache only saves when the whole job succeeds, so a failing test
+    # would otherwise throw away a WebRTC build that took the better part of an
+    # hour.
+    - id: webrtc-cache
+      name: Restore WebRTC cache
+      uses: actions/cache/restore@v6
       with:
         path: ~/${{ env.WEBRTC_INSTALL_FOLDER }}
         key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt') }}-${{ hashFiles('webrtc-jni/pom.xml') }}
@@ -38,8 +43,9 @@ runs:
       run: echo "FFMPEG_VERSION=$(sed -n 's|.*<ffmpeg.version>\([^<]*\)</ffmpeg.version>.*|\1|p' webrtc-java-media/pom.xml)" >> "$GITHUB_ENV"
       shell: bash
 
-    - name: Set up FFmpeg cache
-      uses: actions/cache@v6
+    - id: ffmpeg-cache
+      name: Restore FFmpeg cache
+      uses: actions/cache/restore@v6
       with:
         path: ~/ffmpeg
         key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-${{ hashFiles('webrtc-java-media/pom.xml') }}
@@ -80,9 +86,33 @@ runs:
       run: mvn package -DskipTests -Pmacos-cross-x86_64
       shell: bash
 
+    - name: Save WebRTC cache
+      if: steps.webrtc-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/${{ env.WEBRTC_INSTALL_FOLDER }}
+        key: ${{ steps.webrtc-cache.outputs.cache-primary-key }}
+
+    - name: Save FFmpeg cache
+      if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: ~/ffmpeg
+        key: ${{ steps.ffmpeg-cache.outputs.cache-primary-key }}
+
     - name: Test
-      run: JAVA_HOME="${{ steps.jdk-x64.outputs.path }}" mvn -B jar:jar surefire:test -Pmacos-cross-x86_64
+      run: JAVA_HOME="${{ steps.jdk-x64.outputs.path }}" mvn -B jar:jar surefire:test -Pmacos-cross-x86_64 -Dsurefire.timeout=1800
       shell: bash
+
+    # What failed, for runners that cannot be reproduced locally.
+    - name: Upload test reports
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: test-reports-${{ inputs.platform-name }}
+        path: '**/target/surefire-reports/'
+        if-no-files-found: ignore
+        retention-days: 7
 
     - name: Deploy
       if: ${{ github.event_name != 'pull_request' && github.repository == 'devopvoid/webrtc-java' }}

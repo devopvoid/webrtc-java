@@ -4,16 +4,37 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "**.cpp"
-      - "**.h"
-      - "**.java"
+    # Everything that can change a build runs here: poms, CMake files, the FFmpeg
+    # submodule and this directory too, not only sources. A PR cannot read the
+    # caches of another PR, only those of main, so a build change that main does
+    # not rebuild leaves every following PR to build WebRTC from scratch.
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/pages.yml"
 
+  # A change that only touches docs cannot affect the native build. The docs
+  # site has its own check in pages.yml.
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/pages.yml"
 
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a PR supersedes its running build. On main every run is kept,
+# since each one deploys a snapshot and refreshes the caches.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   WEBRTC_CHECKOUT_FOLDER: webrtc
@@ -148,6 +169,7 @@ jobs:
 
   test-natives:
     needs: [build-windows, build-linux]
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
