@@ -1,24 +1,26 @@
 name: 'Maven Build'
 
-description: 'Build the platform dependent Java library'
+description: 'Build the native libraries of one platform and upload them as artifacts'
 
 inputs:
-  java-version:
-    description: 'The Java build version.'
-    required: true
-    default: '17'
-
   platform-name:
     description: 'The target platform.'
     required: true
 
-  maven-username:
-    description: 'The Maven username.'
-    required: true
+  profile:
+    description: 'The Maven profile that selects a cross compiled classifier. Empty for the runner''s own.'
+    required: false
+    default: ''
 
-  maven-password:
-    description: 'The Maven password.'
-    required: true
+  java-version:
+    description: 'The Java build version.'
+    required: false
+    default: '17'
+
+  retention-days:
+    description: 'How long the natives artifacts are kept.'
+    required: false
+    default: '1'
 
 runs:
   using: "composite"
@@ -28,9 +30,9 @@ runs:
       shell: bash
 
     # Restored here, saved right after the build below: the post step of
-    # actions/cache only saves when the whole job succeeds, so a failing test
-    # would otherwise throw away a WebRTC build that took the better part of an
-    # hour.
+    # actions/cache only saves when the whole job succeeds, so a failure in a
+    # later step would otherwise throw away a WebRTC build that took the better
+    # part of an hour.
     - id: webrtc-cache
       name: Restore WebRTC cache
       uses: actions/cache/restore@v6
@@ -52,8 +54,8 @@ runs:
         restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-
 
     # One cache per OS: the dependencies do not differ between the platforms of
-    # an OS. The project's own artifacts, which mvn deploy installs, change with
-    # every build and stay out of it.
+    # an OS. The project's own artifacts change with every build and stay out
+    # of it.
     - name: Set up Maven cache
       uses: actions/cache@v6
       with:
@@ -68,21 +70,11 @@ runs:
       with:
         java-version: ${{ inputs.java-version }}
         distribution: 'temurin'
-        server-id: central
-        server-username: MAVEN_USERNAME
-        server-password: MAVEN_TOKEN
 
     - name: Build
-      run: |
-        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
-          mvn package -DskipTests -Plinux-aarch32
-        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
-          mvn package -DskipTests -Plinux-aarch64
-        elif [ "${{ inputs.platform-name }}" == "windows_arm64" ]; then
-          mvn package -DskipTests -Pwindows-aarch64
-        else
-          mvn package -DskipTests
-        fi
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: mvn -B package -DskipTests ${PROFILE:+-P$PROFILE}
       shell: bash
 
     - name: Save WebRTC cache
@@ -99,34 +91,30 @@ runs:
         path: ~/ffmpeg
         key: ${{ steps.ffmpeg-cache.outputs.cache-primary-key }}
 
-    - name: Test
-      if: ${{ inputs.platform-name != 'linux_arm' && inputs.platform-name != 'linux_arm64' && inputs.platform-name != 'windows_arm64' }}
-      run: mvn -B jar:jar surefire:test -Dsurefire.timeout=1800
-      shell: bash
-
-    # What failed, for runners that cannot be reproduced locally.
-    - name: Upload test reports
-      if: failure()
+    # The natives of every platform go to test-natives, which tests them on a
+    # runner of their own OS and architecture, and to the callers' publishing
+    # job, which attaches all of them to a single deployment. Both artifacts
+    # hold one flat jar each, so that a natives-* download with merge-multiple
+    # puts every jar into one directory.
+    - name: Upload native library jar
       uses: actions/upload-artifact@v7
       with:
-        name: test-reports-${{ inputs.platform-name }}
-        path: '**/target/surefire-reports/'
-        if-no-files-found: ignore
-        retention-days: 7
+        name: natives-${{ inputs.platform-name }}
+        path: webrtc-jni/target/webrtc-java-*.jar
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+        overwrite: true
 
-    - name: Deploy
-      if: ${{ github.event_name != 'pull_request' && github.repository == 'devopvoid/webrtc-java' }}
-      env:
-        MAVEN_USERNAME: ${{ inputs.maven-username }}
-        MAVEN_TOKEN: ${{ inputs.maven-password }}
-      run: |
-        if [ "${{ inputs.platform-name }}" == "linux_arm" ]; then
-          mvn deploy -DskipTests -Plinux-aarch32
-        elif [ "${{ inputs.platform-name }}" == "linux_arm64" ]; then
-          mvn deploy -DskipTests -Plinux-aarch64
-        elif [ "${{ inputs.platform-name }}" == "windows_arm64" ]; then
-          mvn deploy -DskipTests -Pwindows-aarch64
-        else
-          mvn deploy -DskipTests
-        fi
-      shell: bash
+    # Only the classifier jar: the main jar is platform independent and the
+    # publishing job builds it itself.
+    - name: Upload media native library jar
+      uses: actions/upload-artifact@v7
+      with:
+        name: natives-media-${{ inputs.platform-name }}
+        path: |
+          webrtc-java-media/target/webrtc-java-media-*-windows-*.jar
+          webrtc-java-media/target/webrtc-java-media-*-linux-*.jar
+          webrtc-java-media/target/webrtc-java-media-*-macos-*.jar
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+        overwrite: true

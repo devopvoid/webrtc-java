@@ -1,0 +1,84 @@
+name: 'Maven Publish'
+
+description: 'Deploy one version with the native libraries of every platform attached, as a single deployment'
+
+# Expects the checkout of the version to deploy, a JDK whose settings.xml has
+# the "central" server, and MAVEN_USERNAME and MAVEN_TOKEN (plus
+# MAVEN_GPG_PASSPHRASE for a release) in the environment of the calling step.
+
+inputs:
+  version:
+    description: 'The version to deploy, as the natives jars are named.'
+    required: true
+
+  profiles:
+    description: 'Maven profiles to activate, comma separated. "release" adds sources, javadoc and signatures.'
+    required: false
+    default: ''
+
+  skip-publishing:
+    description: 'Build, sign and bundle everything, but upload nothing.'
+    required: false
+    default: 'false'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download the native library jars of all platforms
+      uses: actions/download-artifact@v8
+      with:
+        pattern: natives-*
+        path: natives
+        merge-multiple: true
+
+    - name: Verify that every platform is present
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        status=0
+
+        for classifier in windows-x86_64 windows-aarch64 linux-x86_64 linux-aarch64 \
+                          linux-aarch32 macos-x86_64 macos-aarch64; do
+          if [ ! -f "natives/webrtc-java-$VERSION-$classifier.jar" ]; then
+            echo "::error::Missing native library jar for $classifier"
+            status=1
+          fi
+          if [ ! -f "natives/webrtc-java-media-$VERSION-$classifier.jar" ]; then
+            echo "::error::Missing media native library jar for $classifier"
+            status=1
+          fi
+        done
+
+        exit $status
+      shell: bash
+
+    # The webrtc module depends on its own native library jar for the host
+    # platform. That dependency is normally installed by webrtc-jni, which is kept
+    # out of the reactor here to avoid rebuilding the native libraries.
+    - name: Seed the local repository with the host native library
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        mvn -B install:install-file \
+          -Dfile="natives/webrtc-java-$VERSION-linux-x86_64.jar" \
+          -DgroupId=dev.onvoid.webrtc \
+          -DartifactId=webrtc-java \
+          -Dversion="$VERSION" \
+          -Dclassifier=linux-x86_64 \
+          -Dpackaging=jar \
+          -DgeneratePom=false
+      shell: bash
+
+    # natives.dir makes webrtc and webrtc-java-media attach the jars of all
+    # platforms instead of the host's. skipPublishing suppresses both the
+    # bundling and the upload.
+    - name: Deploy
+      env:
+        PROFILES: ${{ inputs.profiles }}
+        SKIP_PUBLISHING: ${{ inputs.skip-publishing }}
+      run: >
+        mvn -B deploy -pl .,webrtc,webrtc-java-media -DskipTests
+        ${PROFILES:+-P$PROFILES}
+        -Dnatives.dir="$PWD/natives"
+        -DskipPublishing="$SKIP_PUBLISHING"
+      shell: bash
