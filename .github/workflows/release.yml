@@ -38,7 +38,7 @@ jobs:
     steps:
       # The full history, for git-cliff.
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -102,7 +102,7 @@ jobs:
           git commit -m "chore(release): Update CHANGELOG.md for $RELEASE_TAG"
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -167,7 +167,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
 
@@ -181,7 +181,7 @@ jobs:
           restore-keys: maven-publish-
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -265,7 +265,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # The notes are commit subjects, so they go through the environment and a file
       # rather than into the script, where a quote or a backtick would be run.
