@@ -1,0 +1,34 @@
+version: 2
+
+# Weekly version updates, one grouped PR per ecosystem. Security updates are
+# enabled separately in the repository settings and are not affected by this.
+#
+# The FFmpeg submodule and the WebRTC branch are left out on purpose: each bump
+# needs manual follow-up (FFmpeg's library file names and configure options,
+# the Chromium Clang pin in prepare-linux), so they are updated by hand.
+updates:
+  - package-ecosystem: github-actions
+    # Also covers the composite actions under .github/actions.
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      maven-plugins:
+        patterns: ["org.apache.maven.plugins:*", "*-maven-plugin"]
+      maven-dependencies:
+        patterns: ["*"]
+    commit-message:
+      prefix: build
+      include: scope

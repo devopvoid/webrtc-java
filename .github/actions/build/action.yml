@@ -51,12 +51,17 @@ runs:
         key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-${{ hashFiles('webrtc-java-media/pom.xml') }}
         restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-
 
+    # One cache per OS: the dependencies do not differ between the platforms of
+    # an OS. The project's own artifacts, which mvn deploy installs, change with
+    # every build and stay out of it.
     - name: Set up Maven cache
       uses: actions/cache@v6
       with:
-        path: ~/.m2/repository
-        key: maven-${{ inputs.platform-name }}-${{ hashFiles('**/pom.xml') }}
-        restore-keys: maven-${{ inputs.platform-name }}-
+        path: |
+          ~/.m2/repository
+          !~/.m2/repository/dev/onvoid/webrtc
+        key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+        restore-keys: maven-${{ runner.os }}-
 
     - name: Set up JDK ${{ inputs.java-version }}
       uses: actions/setup-java@v5

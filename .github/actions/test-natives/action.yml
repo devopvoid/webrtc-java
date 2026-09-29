@@ -67,7 +67,9 @@ runs:
     - name: Ensure Maven
       run: |
         if ! command -v mvn >/dev/null 2>&1; then
-          curl -sSLo maven.zip https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.zip
+          url=https://archive.apache.org/dist/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.zip
+          curl -sSfLo maven.zip "$url"
+          echo "$(curl -sSfL "$url.sha512" | cut -d' ' -f1)  maven.zip" | sha512sum -c -
           unzip -q maven.zip -d "$RUNNER_TEMP/maven"
           echo "$RUNNER_TEMP/maven/apache-maven-3.9.9/bin" >> "$GITHUB_PATH"
         fi
