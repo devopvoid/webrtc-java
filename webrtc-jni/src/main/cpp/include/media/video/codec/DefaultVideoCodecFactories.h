@@ -34,6 +34,11 @@ namespace jni
 	// macOS the default encoders already use VideoToolbox.
 	std::unique_ptr<webrtc::VideoEncoderFactory> CreateHardwareVideoEncoderFactory();
 	std::unique_ptr<webrtc::VideoDecoderFactory> CreateDefaultVideoDecoderFactory();
+
+	// The default decoders, with the decoders of the GPU in front of them
+	// where the platform has them, falling back to the software ones. On
+	// macOS the default decoders already use VideoToolbox.
+	std::unique_ptr<webrtc::VideoDecoderFactory> CreateHardwareVideoDecoderFactory();
 }
 
 #endif

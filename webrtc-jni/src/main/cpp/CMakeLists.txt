@@ -135,7 +135,7 @@ elseif(LINUX)
     target_link_libraries(${PROJECT_NAME} ${CXX_LIBS})
     target_link_libraries(${PROJECT_NAME} dl)
 elseif(WIN32)
-    target_link_libraries(${PROJECT_NAME} dwmapi.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
+    target_link_libraries(${PROJECT_NAME} d3d11.lib dwmapi.lib dxguid.lib mf.lib mfreadwrite.lib mfplat.lib mfuuid.lib shcore.lib)
 endif()
 
 install(TARGETS ${PROJECT_NAME}

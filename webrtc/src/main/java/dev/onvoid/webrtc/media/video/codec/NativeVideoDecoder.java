@@ -17,10 +17,10 @@
 package dev.onvoid.webrtc.media.video.codec;
 
 /**
- * A built-in decoder, created by a {@link DefaultVideoDecoderFactory}. It is a
- * placeholder: returned from a {@link VideoDecoderFactory}, it makes WebRTC
- * create the native decoder for its codec, which then runs entirely inside
- * WebRTC. Its methods are therefore not to be called from Java, and throw
+ * A built-in decoder, created by a {@link DefaultVideoDecoderFactory} or a
+ * {@link HardwareVideoDecoderFactory}. It is a placeholder: returned from a
+ * {@link VideoDecoderFactory}, it makes WebRTC create the native decoder for
+ * its codec, which then runs entirely inside WebRTC. Its methods are therefore not to be called from Java, and throw
  * {@link UnsupportedOperationException}.
  *
  * @author Alex Andres
@@ -30,9 +30,13 @@ public final class NativeVideoDecoder implements VideoDecoder {
 	/** The codec to create the native decoder for; read by native code. */
 	private final VideoCodecInfo codecInfo;
 
+	/** Whether the decoder may use the GPU; read by native code. */
+	private final boolean hardwareAcceleration;
 
-	NativeVideoDecoder(VideoCodecInfo codecInfo) {
+
+	NativeVideoDecoder(VideoCodecInfo codecInfo, boolean hardwareAcceleration) {
 		this.codecInfo = codecInfo;
+		this.hardwareAcceleration = hardwareAcceleration;
 	}
 
 	/**
