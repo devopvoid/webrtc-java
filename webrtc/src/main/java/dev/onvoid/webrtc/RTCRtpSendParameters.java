@@ -37,11 +37,19 @@ public class RTCRtpSendParameters extends RTCRtpParameters {
 	 */
 	public List<RTCRtpEncodingParameters> encodings;
 
+	/**
+	 * Only for video. What the sender gives up first when the network or the
+	 * CPU cannot keep up. If unset, WebRTC chooses by the content: it keeps
+	 * the resolution of screen shares and of tracks hinted as detailed or
+	 * text, and the frame rate of other video.
+	 */
+	public RTCDegradationPreference degradationPreference;
+
 
 	@Override
 	public String toString() {
-		return String.format("%s [transactionId=%s, encodings=%s, headerExtensions=%s, rtcp=%s, codecs=%s]",
+		return String.format("%s [transactionId=%s, encodings=%s, degradationPreference=%s, headerExtensions=%s, rtcp=%s, codecs=%s]",
 				RTCRtpSendParameters.class.getSimpleName(), transactionId,
-				encodings, headerExtensions, rtcp, codecs);
+				encodings, degradationPreference, headerExtensions, rtcp, codecs);
 	}
 }

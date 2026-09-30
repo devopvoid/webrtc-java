@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Alex Andres
+ * Copyright 2026 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,37 +14,33 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_API_RTC_RTP_CODEC_CAPABILITY_H_
-#define JNI_WEBRTC_API_RTC_RTP_CODEC_CAPABILITY_H_
+#ifndef JNI_WEBRTC_API_RTC_RESOLUTION_RESTRICTION_H_
+#define JNI_WEBRTC_API_RTC_RESOLUTION_RESTRICTION_H_
 
 #include "JavaClass.h"
 #include "JavaRef.h"
 
-#include "api/rtp_parameters.h"
+#include "api/video/resolution.h"
 
 #include <jni.h>
 
 namespace jni
 {
-	namespace RTCRtpCodecCapability
+	namespace RTCResolutionRestriction
 	{
-		class JavaRTCRtpCodecCapabilityClass : public JavaClass
+		class JavaRTCResolutionRestrictionClass : public JavaClass
 		{
 			public:
-				explicit JavaRTCRtpCodecCapabilityClass(JNIEnv * env);
+				explicit JavaRTCResolutionRestrictionClass(JNIEnv * env);
 
 				jclass cls;
 				jmethodID ctor;
-				jfieldID mediaType;
-				jfieldID name;
-				jfieldID clockRate;
-				jfieldID channels;
-				jfieldID sdpFmtp;
-				jfieldID scalabilityModes;
+				jfieldID maxWidth;
+				jfieldID maxHeight;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpCodecCapability & capability);
-		webrtc::RtpCodecCapability toNative(JNIEnv * env, const JavaRef<jobject> & capability);
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::Resolution & resolution);
+		webrtc::Resolution toNative(JNIEnv * env, const JavaRef<jobject> & restriction);
 	}
 }
 

@@ -18,6 +18,9 @@ package dev.onvoid.webrtc;
 
 import dev.onvoid.webrtc.media.MediaType;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -56,6 +59,11 @@ public class RTCRtpCodecCapability {
 	 * lowercase strings. Boolean values are represented by the string "1".
 	 */
 	private final Map<String, String> sdpFmtp;
+
+	/**
+	 * The scalability modes the codec supports; set by native code.
+	 */
+	private String[] scalabilityModes = new String[0];
 
 
 	/**
@@ -128,6 +136,18 @@ public class RTCRtpCodecCapability {
 	}
 
 	/**
+	 * Returns the scalability modes the codec supports, as named in the WebRTC
+	 * SVC specification, e.g. "L1T3". These are what {@link
+	 * RTCRtpEncodingParameters#scalabilityMode} accepts for the codec. Empty
+	 * for audio codecs, and for video codecs without layers.
+	 *
+	 * @return The supported scalability modes, unmodifiable.
+	 */
+	public List<String> getScalabilityModes() {
+		return Collections.unmodifiableList(Arrays.asList(scalabilityModes));
+	}
+
+	/**
 	 * Returns the MIME type composed of the {@code mediaType} and the {@code
 	 * name}.
 	 *
@@ -139,8 +159,8 @@ public class RTCRtpCodecCapability {
 
 	@Override
 	public String toString() {
-		return String.format("%s [mediaType=%s, name=%s, clockRate=%s, channels=%s, sdpFmtp=%s]",
+		return String.format("%s [mediaType=%s, name=%s, clockRate=%s, channels=%s, sdpFmtp=%s, scalabilityModes=%s]",
 				RTCRtpCodecCapability.class.getSimpleName(), mediaType, name,
-				clockRate, channels, sdpFmtp);
+				clockRate, channels, sdpFmtp, Arrays.toString(scalabilityModes));
 	}
 }
