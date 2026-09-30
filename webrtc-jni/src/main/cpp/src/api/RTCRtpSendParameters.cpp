@@ -22,6 +22,7 @@
 #include "api/RTCRtcpParameters.h"
 #include "JavaArrayList.h"
 #include "JavaClasses.h"
+#include "JavaEnums.h"
 #include "JavaIterable.h"
 #include "JavaList.h"
 #include "JavaString.h"
@@ -50,6 +51,11 @@ namespace jni
 			env->SetObjectField(object, javaParentClass->rtcp, rtcp.get());
 			env->SetObjectField(object, javaParentClass->codecs, codecs.get());
 
+			if (parameters.degradation_preference.has_value()) {
+				env->SetObjectField(object, javaClass->degradationPreference,
+					JavaEnums::toJava(env, *parameters.degradation_preference).get());
+			}
+
 			return JavaLocalRef<jobject>(env, object);
 		}
 
@@ -65,6 +71,7 @@ namespace jni
 			JavaLocalRef<jobject> headerExtensions = obj.getObject(javaParentClass->headerExtensions);
 			JavaLocalRef<jobject> rtcp = obj.getObject(javaParentClass->rtcp);
 			JavaLocalRef<jobject> codecs = obj.getObject(javaParentClass->codecs);
+			JavaLocalRef<jobject> degradationPreference = obj.getObject(javaClass->degradationPreference);
 
 			webrtc::RtpParameters params;
 			params.transaction_id = JavaString::toNative(env, transactionId);
@@ -81,6 +88,10 @@ namespace jni
 			if (codecs) {
 				params.codecs = JavaList::toVector(env, codecs, &RTCRtpCodecParameters::toNative);
 			}
+			if (degradationPreference) {
+				params.degradation_preference =
+					JavaEnums::toNative<webrtc::DegradationPreference>(env, degradationPreference);
+			}
 
 			return params;
 		}
@@ -93,6 +104,7 @@ namespace jni
 
 			transactionId = GetFieldID(env, cls, "transactionId", STRING_SIG);
 			encodings = GetFieldID(env, cls, "encodings", LIST_SIG);
+			degradationPreference = GetFieldID(env, cls, "degradationPreference", "L" PKG "RTCDegradationPreference;");
 		}
 	}
 }

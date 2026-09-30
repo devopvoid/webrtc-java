@@ -24,6 +24,14 @@ package dev.onvoid.webrtc;
 public class RTCRtpEncodingParameters {
 
 	/**
+	 * The RTP stream ID of the encoding, which tells simulcast encodings apart,
+	 * e.g. "f", "h" and "q" for full, half and quarter resolution. Set only
+	 * when the encodings are given to {@link RTCRtpTransceiverInit}; it cannot
+	 * be changed afterwards. Unset, or empty, without simulcast.
+	 */
+	public String rid;
+
+	/**
 	 * If unset, a value is chosen by the implementation.
 	 * <br>
 	 * Note that the chosen value is NOT returned by GetParameters, because it
@@ -69,6 +77,61 @@ public class RTCRtpEncodingParameters {
 	 */
 	public Double scaleResolutionDownBy;
 
+	/**
+	 * Only for video. The largest resolution to send this encoding in: the
+	 * video is scaled down to fit. Takes precedence over {@link
+	 * #scaleResolutionDownBy} if both are set. If unset, the resolution is not
+	 * restricted this way.
+	 */
+	public RTCResolutionRestriction scaleResolutionDownTo;
+
+	/**
+	 * Only for video. The scalability mode of the encoding, as named in the
+	 * WebRTC SVC specification, e.g. "L1T3" for three temporal layers or
+	 * "L3T3_KEY" for three spatial layers with three temporal layers each. The
+	 * codec has to support the mode, which {@link RTCRtpCodecCapability}
+	 * lists; setting one it does not support fails. If unset, the encoder
+	 * chooses its layers, or follows {@link #numTemporalLayers}.
+	 */
+	public String scalabilityMode;
+
+	/**
+	 * Only for video. The number of temporal layers to encode, if the codec
+	 * supports temporal layers. An older way to ask for them than {@link
+	 * #scalabilityMode}; set one of the two. If unset, the encoder chooses.
+	 */
+	public Integer numTemporalLayers;
+
+	/**
+	 * The share of the available bitrate the sender gets relative to the other
+	 * senders of the peer connection. It applies to the whole sender, so only
+	 * the first encoding may set it; setting it on another fails. If unset,
+	 * the default of 1.0.
+	 */
+	public Double bitratePriority;
+
+	/**
+	 * The priority the packets of the sender are marked with on the network
+	 * (DSCP), where the network honors it. It applies to the whole sender, so
+	 * only the first encoding may set it; setting it on another fails. If
+	 * unset, {@link RTCPriorityType#LOW}.
+	 */
+	public RTCPriorityType networkPriority;
+
+	/**
+	 * Only for audio. Whether the encoder may send longer audio packets when
+	 * the bitrate is low, which saves the overhead of many small packets. If
+	 * unset, it does not.
+	 */
+	public Boolean adaptivePtime;
+
+	/**
+	 * The codec to send this encoding with, one of those negotiated, which
+	 * lets simulcast encodings use different codecs. If unset, the encoding
+	 * uses the codec the negotiation settled on.
+	 */
+	public RTCRtpCodecCapability codec;
+
 
 	/**
 	 * Creates an instance of RTCRtpEncodingParameters.
@@ -79,9 +142,16 @@ public class RTCRtpEncodingParameters {
 
 	@Override
 	public String toString() {
-		return "RTCRtpEncodingParameters{" + "ssrc=" + ssrc + ", active="
-				+ active + ", maxBitrate=" + maxBitrate + ", minBitrate="
-				+ minBitrate + ", maxFramerate=" + maxFramerate
-				+ ", scaleResolutionDownBy=" + scaleResolutionDownBy + '}';
+		return "RTCRtpEncodingParameters{" + "rid=" + rid + ", ssrc=" + ssrc
+				+ ", active=" + active + ", maxBitrate=" + maxBitrate
+				+ ", minBitrate=" + minBitrate + ", maxFramerate=" + maxFramerate
+				+ ", scaleResolutionDownBy=" + scaleResolutionDownBy
+				+ ", scaleResolutionDownTo=" + scaleResolutionDownTo
+				+ ", scalabilityMode=" + scalabilityMode
+				+ ", numTemporalLayers=" + numTemporalLayers
+				+ ", bitratePriority=" + bitratePriority
+				+ ", networkPriority=" + networkPriority
+				+ ", adaptivePtime=" + adaptivePtime
+				+ ", codec=" + codec + '}';
 	}
 }

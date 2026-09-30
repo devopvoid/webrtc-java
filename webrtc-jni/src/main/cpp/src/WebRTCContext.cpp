@@ -27,6 +27,8 @@
 
 #include "api/environment/environment_factory.h"
 #include "api/peer_connection_interface.h"
+#include "api/priority.h"
+#include "api/rtp_parameters.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/ssl_adapter.h"
 
@@ -83,6 +85,8 @@ namespace jni
 		JavaEnums::add<webrtc::PeerConnectionInterface::SignalingState>(env, PKG"RTCSignalingState");
 		JavaEnums::add<webrtc::PeerConnectionInterface::TlsCertPolicy>(env, PKG"TlsCertPolicy");
 		JavaEnums::add<webrtc::RtpTransceiverDirection>(env, PKG"RTCRtpTransceiverDirection");
+		JavaEnums::add<webrtc::Priority>(env, PKG"RTCPriorityType");
+		JavaEnums::add<webrtc::DegradationPreference>(env, PKG"RTCDegradationPreference");
 		JavaEnums::add<webrtc::SdpType>(env, PKG"RTCSdpType");
 		JavaEnums::add<webrtc::AudioDeviceModule::AudioLayer>(env, PKG_AUDIO"AudioLayer");
 		JavaEnums::add<webrtc::AudioProcessing::Config::GainController1::Mode>(env, PKG_AUDIO"AudioProcessingConfig$GainController$Mode");

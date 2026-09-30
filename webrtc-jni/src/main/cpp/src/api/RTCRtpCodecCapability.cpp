@@ -23,6 +23,12 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
+#include "api/video_codecs/scalability_mode.h"
+#include "modules/video_coding/svc/scalability_mode_util.h"
+
+#include <string>
+#include <vector>
+
 namespace jni
 {
 	namespace RTCRtpCodecCapability
@@ -59,6 +65,16 @@ namespace jni
 
 			ExceptionCheck(env);
 
+			if (!capability.scalability_modes.empty()) {
+				std::vector<std::string> modes;
+
+				for (webrtc::ScalabilityMode mode : capability.scalability_modes) {
+					modes.emplace_back(webrtc::ScalabilityModeToString(mode));
+				}
+
+				env->SetObjectField(object, javaClass->scalabilityModes, JavaString::createArray(env, modes).get());
+			}
+
 			return JavaLocalRef<jobject>(env, object);
 		}
 
@@ -90,6 +106,18 @@ namespace jni
 				codecCapability.num_channels = Integer::getValue(env, channels);
 			}
 
+			JavaLocalRef<jobjectArray> modes = obj.getObjectArray(javaClass->scalabilityModes);
+			const jsize count = modes.get() != nullptr ? env->GetArrayLength(modes.get()) : 0;
+
+			for (jsize i = 0; i < count; i++) {
+				JavaLocalRef<jstring> mode(env, static_cast<jstring>(env->GetObjectArrayElement(modes.get(), i)));
+				auto scalabilityMode = webrtc::ScalabilityModeFromString(JavaString::toNative(env, mode));
+
+				if (scalabilityMode.has_value()) {
+					codecCapability.scalability_modes.push_back(*scalabilityMode);
+				}
+			}
+
 			return codecCapability;
 		}
 
@@ -104,6 +132,7 @@ namespace jni
 			clockRate = GetFieldID(env, cls, "clockRate", INTEGER_SIG);
 			channels = GetFieldID(env, cls, "channels", INTEGER_SIG);
 			sdpFmtp = GetFieldID(env, cls, "sdpFmtp", MAP_SIG);
+			scalabilityModes = GetFieldID(env, cls, "scalabilityModes", "[" STRING_SIG);
 		}
 	}
 }
