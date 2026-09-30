@@ -16,6 +16,7 @@
 
 #include "WebRTCContext.h"
 #include "api/DataBufferFactory.h"
+#include "api/RTCConfiguration.h"
 #include "api/RTCStats.h"
 #include "Exception.h"
 #include "JavaClassLoader.h"
@@ -83,6 +84,13 @@ namespace jni
 		JavaEnums::add<webrtc::PeerConnectionInterface::SignalingState>(env, PKG"RTCSignalingState");
 		JavaEnums::add<webrtc::PeerConnectionInterface::TlsCertPolicy>(env, PKG"TlsCertPolicy");
 		JavaEnums::add<webrtc::RtpTransceiverDirection>(env, PKG"RTCRtpTransceiverDirection");
+		JavaEnums::add<webrtc::PeerConnectionInterface::TcpCandidatePolicy>(env, PKG"RTCTcpCandidatePolicy");
+		JavaEnums::add<webrtc::PeerConnectionInterface::CandidateNetworkPolicy>(env, PKG"RTCCandidateNetworkPolicy");
+		JavaEnums::add<webrtc::PeerConnectionInterface::ContinualGatheringPolicy>(env, PKG"RTCContinualGatheringPolicy");
+		JavaEnums::add<webrtc::PortPrunePolicy>(env, PKG"RTCPortPrunePolicy");
+		JavaEnums::add<webrtc::VpnPreference>(env, PKG"RTCVpnPreference");
+		JavaEnums::add<jni::RTCConfiguration::AdapterTypeOrdinal>(env, PKG"RTCAdapterType");
+		JavaEnums::add<webrtc::CryptoOptions::Srtp::CryptexPolicy>(env, PKG"RTCCryptexPolicy");
 		JavaEnums::add<webrtc::SdpType>(env, PKG"RTCSdpType");
 		JavaEnums::add<webrtc::AudioDeviceModule::AudioLayer>(env, PKG_AUDIO"AudioLayer");
 		JavaEnums::add<webrtc::AudioProcessing::Config::GainController1::Mode>(env, PKG_AUDIO"AudioProcessingConfig$GainController$Mode");
