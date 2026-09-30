@@ -37,6 +37,7 @@ namespace jni
 				jmethodID ctor;
 				jfieldID transactionId;
 				jfieldID encodings;
+				jfieldID degradationPreference;
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpParameters & parameters);

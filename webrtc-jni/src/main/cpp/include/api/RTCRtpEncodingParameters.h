@@ -41,6 +41,14 @@ namespace jni
 				jfieldID maxBitrate;
 				jfieldID maxFramerate;
 				jfieldID scaleResolution;
+				jfieldID rid;
+				jfieldID scaleResolutionDownTo;
+				jfieldID scalabilityMode;
+				jfieldID numTemporalLayers;
+				jfieldID bitratePriority;
+				jfieldID networkPriority;
+				jfieldID adaptivePtime;
+				jfieldID codec;
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpEncodingParameters & parameters);
