@@ -110,6 +110,10 @@ target_include_directories(${PROJECT_NAME}
 if(WIN32 OR LINUX)
     target_include_directories(${PROJECT_NAME} PRIVATE dependencies/nvenc/include)
 endif()
+if(LINUX)
+    # libva is loaded at run time, so building needs its headers only.
+    target_include_directories(${PROJECT_NAME} PRIVATE dependencies/libva/include)
+endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     OUTPUT_NAME "${PROJECT_NAME}-${OUTPUT_NAME_SUFFIX}"
@@ -167,6 +171,13 @@ if(WIN32 OR LINUX)
     install(FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/nvenc/LICENSE"
         DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF/licenses/nvenc"
+        COMPONENT Runtime
+    )
+endif()
+if(LINUX)
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libva/COPYING"
+        DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF/licenses/libva"
         COMPONENT Runtime
     )
 endif()

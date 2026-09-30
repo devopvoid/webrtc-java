@@ -34,8 +34,9 @@ import java.util.Objects;
  *     .build();
  * }</pre>
  * <p>
- * H.264 is encoded on an NVIDIA GPU with NVENC, on Windows and Linux, and
- * on Windows otherwise with the Media Foundation encoder of the GPU driver.
+ * H.264 is encoded on an NVIDIA GPU with NVENC, on Windows and Linux. On
+ * other GPUs it is encoded with the Media Foundation encoder of the driver on
+ * Windows, and with its VA-API encoder on Linux.
  * A hardware encoder that fails to start, for example because the GPU has no
  * encoder sessions left, or fails while encoding, is replaced by the next one
  * in line, and finally by the software encoder of the same codec, so a stream

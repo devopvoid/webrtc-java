@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
+#include "media/video/codec/linux/VaapiVideoEncoderFactory.h"
 #include "media/video/codec/nvenc/NvencVideoEncoderFactory.h"
 
 namespace jni
@@ -23,8 +24,13 @@ namespace jni
 	{
 		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> factories;
 
+		// NVENC first where there is an NVIDIA GPU, whose driver has no
+		// VA-API encoder; VA-API for the GPUs of Intel and AMD.
 		if (auto nvenc = NvencVideoEncoderFactory::Create()) {
 			factories.push_back(std::move(nvenc));
+		}
+		if (auto vaapi = VaapiVideoEncoderFactory::Create()) {
+			factories.push_back(std::move(vaapi));
 		}
 
 		return factories;
