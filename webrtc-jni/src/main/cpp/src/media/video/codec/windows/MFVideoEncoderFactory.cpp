@@ -17,7 +17,6 @@
 #include "media/video/codec/windows/MFVideoEncoderFactory.h"
 #include "media/video/codec/windows/MFEncoderUtils.h"
 #include "media/video/codec/windows/MFH264Encoder.h"
-#include "media/video/codec/HardwareVideoEncoderFactory.h"
 #include "platform/windows/ComInitializer.h"
 #include "platform/windows/MFInitializer.h"
 
@@ -68,10 +67,5 @@ namespace jni
 		const webrtc::SdpVideoFormat & format)
 	{
 		return std::make_unique<MFH264Encoder>(format);
-	}
-
-	std::unique_ptr<webrtc::VideoEncoderFactory> CreatePlatformHardwareVideoEncoderFactory()
-	{
-		return MFVideoEncoderFactory::Create();
 	}
 }

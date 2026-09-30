@@ -56,9 +56,9 @@ namespace jni
 #ifdef __APPLE__
 		return CreateDefaultVideoEncoderFactory();
 #else
-		std::unique_ptr<webrtc::VideoEncoderFactory> hardware = CreatePlatformHardwareVideoEncoderFactory();
+		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware = CreatePlatformHardwareVideoEncoderFactories();
 
-		if (!hardware) {
+		if (hardware.empty()) {
 			return CreateDefaultVideoEncoderFactory();
 		}
 

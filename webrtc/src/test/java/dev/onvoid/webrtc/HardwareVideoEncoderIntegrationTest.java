@@ -71,7 +71,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	@Test
 	void hardwareEncodesH264() throws Exception {
-		assumeTrue(OS.contains("win"), "hardware encoders are implemented on Windows only");
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware encoders are implemented on Windows and Linux only");
 
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
@@ -81,11 +82,14 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		try {
 			String implementation = encoderImplementation(hardware);
 
+			boolean hardwareUsed = implementation.startsWith("NVENC")
+					|| implementation.contains("MediaFoundation");
+
 			if (HARDWARE_REQUIRED) {
-				assertTrue(implementation.contains("MediaFoundation"), implementation);
+				assertTrue(hardwareUsed, implementation);
 			}
 			else {
-				assumeTrue(implementation.contains("MediaFoundation"), "no hardware encoder: " + implementation);
+				assumeTrue(hardwareUsed, "no hardware encoder: " + implementation);
 			}
 		}
 		finally {

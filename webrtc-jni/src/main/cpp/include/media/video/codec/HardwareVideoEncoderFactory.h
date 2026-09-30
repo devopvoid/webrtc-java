@@ -27,15 +27,17 @@
 
 namespace jni
 {
-	// Puts hardware encoders in front of software ones. A codec both have is
-	// encoded in hardware, inside a wrapper that switches to the software
-	// encoder when the hardware one fails to initialize or gives up while
-	// encoding, for example once a GPU runs out of encoder sessions. A codec
-	// only one of them has is encoded by that one.
+	// Puts hardware encoders in front of software ones. A codec is encoded by
+	// the first hardware factory that has it, inside a wrapper that switches
+	// to the next hardware encoder, and finally to the software one, when an
+	// encoder fails to initialize or gives up while encoding, for example once
+	// a GPU runs out of encoder sessions. A codec only the software factory
+	// has is encoded by that one.
 	class HardwareVideoEncoderFactory : public webrtc::VideoEncoderFactory
 	{
 		public:
-			HardwareVideoEncoderFactory(std::unique_ptr<webrtc::VideoEncoderFactory> hardware,
+			// The hardware factories are in order of preference.
+			HardwareVideoEncoderFactory(std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware,
 				std::unique_ptr<webrtc::VideoEncoderFactory> software);
 			~HardwareVideoEncoderFactory() override = default;
 
@@ -44,14 +46,14 @@ namespace jni
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
-			const std::unique_ptr<webrtc::VideoEncoderFactory> hardware;
+			const std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware;
 			const std::unique_ptr<webrtc::VideoEncoderFactory> software;
 	};
 
-	// Returns a factory for the hardware encoders of the platform, or null if
-	// the platform has none this library supports, or no device that can
-	// encode. Defined per platform.
-	std::unique_ptr<webrtc::VideoEncoderFactory> CreatePlatformHardwareVideoEncoderFactory();
+	// Returns the factories for the hardware encoders of the platform that are
+	// available, in order of preference; none if the platform has none this
+	// library supports, or no device that can encode. Defined per platform.
+	std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> CreatePlatformHardwareVideoEncoderFactories();
 }
 
 #endif

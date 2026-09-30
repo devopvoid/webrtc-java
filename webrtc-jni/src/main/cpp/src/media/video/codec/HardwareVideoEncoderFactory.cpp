@@ -33,7 +33,8 @@ namespace jni
 		}
 	}
 
-	HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(std::unique_ptr<webrtc::VideoEncoderFactory> hardware,
+	HardwareVideoEncoderFactory::HardwareVideoEncoderFactory(
+		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware,
 		std::unique_ptr<webrtc::VideoEncoderFactory> software) :
 		hardware(std::move(hardware)),
 		software(std::move(software))
@@ -46,9 +47,15 @@ namespace jni
 		// does not change which codec a peer connection prefers.
 		std::vector<webrtc::SdpVideoFormat> formats = software->GetSupportedFormats();
 
-		for (const webrtc::SdpVideoFormat & format : hardware->GetSupportedFormats()) {
-			if (!Supports(*software, format)) {
-				formats.push_back(format);
+		for (const auto & factory : hardware) {
+			for (const webrtc::SdpVideoFormat & format : factory->GetSupportedFormats()) {
+				bool listed = std::any_of(formats.begin(), formats.end(), [&](const webrtc::SdpVideoFormat & other) {
+					return other.IsSameCodec(format);
+				});
+
+				if (!listed) {
+					formats.push_back(format);
+				}
 			}
 		}
 
@@ -58,20 +65,30 @@ namespace jni
 	std::unique_ptr<webrtc::VideoEncoder> HardwareVideoEncoderFactory::Create(const webrtc::Environment & env,
 		const webrtc::SdpVideoFormat & format)
 	{
-		std::unique_ptr<webrtc::VideoEncoder> hardwareEncoder;
-		std::unique_ptr<webrtc::VideoEncoder> softwareEncoder;
+		std::unique_ptr<webrtc::VideoEncoder> encoder;
 
-		if (Supports(*hardware, format)) {
-			hardwareEncoder = hardware->Create(env, format);
-		}
 		if (Supports(*software, format)) {
-			softwareEncoder = software->Create(env, format);
+			encoder = software->Create(env, format);
 		}
 
-		if (hardwareEncoder && softwareEncoder) {
-			return std::make_unique<FallbackVideoEncoder>(std::move(hardwareEncoder), std::move(softwareEncoder));
+		// Built from the back, so that the most preferred encoder comes first
+		// and each one falls back to the chain behind it.
+		for (auto factory = hardware.rbegin(); factory != hardware.rend(); ++factory) {
+			if (!Supports(**factory, format)) {
+				continue;
+			}
+
+			std::unique_ptr<webrtc::VideoEncoder> hardwareEncoder = (*factory)->Create(env, format);
+
+			if (!hardwareEncoder) {
+				continue;
+			}
+
+			encoder = encoder
+				? std::make_unique<FallbackVideoEncoder>(std::move(hardwareEncoder), std::move(encoder))
+				: std::move(hardwareEncoder);
 		}
 
-		return hardwareEncoder ? std::move(hardwareEncoder) : std::move(softwareEncoder);
+		return encoder;
 	}
 }
