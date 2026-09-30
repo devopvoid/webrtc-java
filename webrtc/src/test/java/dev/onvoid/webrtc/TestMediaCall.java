@@ -21,6 +21,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
@@ -69,6 +74,16 @@ class TestMediaCall implements AutoCloseable {
 	 * @param videoCodec The name of the video codec to prefer.
 	 */
 	TestMediaCall(PeerConnectionFactory factory, boolean video, boolean audio, String videoCodec) {
+		this(factory, video, audio, codec -> videoCodec.equalsIgnoreCase(codec.getName()));
+	}
+
+	/**
+	 * Creates a call whose video prefers the codecs the given filter accepts.
+	 *
+	 * @param videoCodec Accepts the video codecs to prefer.
+	 */
+	TestMediaCall(PeerConnectionFactory factory, boolean video, boolean audio,
+			Predicate<RTCRtpCodecCapability> videoCodec) {
 		caller = new TestPeerConnection(factory);
 		callee = new TestPeerConnection(factory);
 
@@ -127,6 +142,28 @@ class TestMediaCall implements AutoCloseable {
 		feeder = new Thread(this::feed, "TestMediaCall-feeder");
 		feeder.setDaemon(true);
 		feeder.start();
+	}
+
+	/**
+	 * Returns the caller's statistics of its outbound video stream, or null
+	 * if there are none yet.
+	 */
+	Map<String, Object> getOutboundVideoStats() throws InterruptedException {
+		CountDownLatch done = new CountDownLatch(1);
+		AtomicReference<Map<String, Object>> outbound = new AtomicReference<>();
+
+		caller.getPeerConnection().getStats(videoSender, report -> {
+			for (RTCStats stats : report.getStats().values()) {
+				if (stats.getType() == RTCStatsType.OUTBOUND_RTP) {
+					outbound.set(stats.getAttributes());
+				}
+			}
+			done.countDown();
+		});
+
+		done.await(5, TimeUnit.SECONDS);
+
+		return outbound.get();
 	}
 
 	RTCRtpSender getVideoSender() {
@@ -208,11 +245,11 @@ class TestMediaCall implements AutoCloseable {
 	 * splits frames at start codes in the payload.
 	 */
 	private static void preferCodec(PeerConnectionFactory factory, RTCPeerConnection connection,
-			RTCRtpSender sender, String name) {
+			RTCRtpSender sender, Predicate<RTCRtpCodecCapability> preferred) {
 		List<RTCRtpCodecCapability> codecs = new ArrayList<>(
 				factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs());
 
-		codecs.sort(Comparator.comparing(codec -> !name.equalsIgnoreCase(codec.getName())));
+		codecs.sort(Comparator.comparing(codec -> !preferred.test(codec)));
 
 		for (RTCRtpTransceiver transceiver : connection.getTransceivers()) {
 			RTCRtpSender transceiverSender = transceiver.getSender();

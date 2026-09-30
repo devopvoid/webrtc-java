@@ -24,24 +24,32 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The video encoders built into this library, which a {@link
- * dev.onvoid.webrtc.PeerConnectionFactory PeerConnectionFactory} uses unless
- * it is given a {@link VideoEncoderFactory} of its own. On Windows and Linux
- * these are VP8, VP9, AV1 and H.264 in software; on macOS they are those of
- * WebRTC's default factories, with H.264 through VideoToolbox.
- * {@link #getSupportedCodecs()} lists what the platform has.
+ * The built-in video encoders, with the encoders of the GPU in front of them
+ * where the platform has them. Set it on a {@link
+ * dev.onvoid.webrtc.PeerConnectionFactory PeerConnectionFactory} to encode in
+ * hardware:
+ * <pre>{@code
+ * PeerConnectionFactory factory = PeerConnectionFactory.builder()
+ *     .setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+ *     .build();
+ * }</pre>
  * <p>
- * To encode on the GPU where the platform supports it, use a {@link
- * HardwareVideoEncoderFactory} instead.
+ * On Windows, H.264 is encoded by the Media Foundation encoder of the GPU
+ * driver. A hardware encoder that fails to start, for example because the GPU
+ * has no encoder sessions left, or fails while encoding, is replaced by the
+ * software encoder of the same codec, so a stream keeps going. Where there is
+ * no hardware encoder, this factory encodes like a {@link
+ * DefaultVideoEncoderFactory}. On macOS, that already uses VideoToolbox.
+ * Linux has no hardware encoders yet.
  * <p>
- * A factory of one's own can hand out these encoders next to its own ones
- * by delegating to an instance of this class. The encoders it creates are
- * {@link NativeVideoEncoder}s, which run inside WebRTC and are not to be
- * called from Java.
+ * The hardware encoders take over only codecs the software encoders have too,
+ * so the supported codecs are the same as those of a {@link
+ * DefaultVideoEncoderFactory}, and what a peer connection negotiates does not
+ * depend on the GPU.
  *
  * @author Alex Andres
  */
-public final class DefaultVideoEncoderFactory implements VideoEncoderFactory {
+public final class HardwareVideoEncoderFactory implements VideoEncoderFactory {
 
 	static {
 		try {
@@ -57,9 +65,9 @@ public final class DefaultVideoEncoderFactory implements VideoEncoderFactory {
 
 
 	/**
-	 * Creates a factory for the built-in video encoders.
+	 * Creates a factory for the hardware video encoders.
 	 */
-	public DefaultVideoEncoderFactory() {
+	public HardwareVideoEncoderFactory() {
 		supportedCodecs = Collections.unmodifiableList(
 				Arrays.asList(getSupportedCodecsInternal()));
 	}
@@ -70,7 +78,8 @@ public final class DefaultVideoEncoderFactory implements VideoEncoderFactory {
 	}
 
 	/**
-	 * Returns a built-in encoder for the given codec.
+	 * Returns a built-in encoder for the given codec, encoding on the GPU if
+	 * it can.
 	 *
 	 * @param info The codec to encode, as negotiated.
 	 *
@@ -83,7 +92,7 @@ public final class DefaultVideoEncoderFactory implements VideoEncoderFactory {
 
 		for (VideoCodecInfo codec : supportedCodecs) {
 			if (codec.getName().equalsIgnoreCase(info.getName())) {
-				return new NativeVideoEncoder(info, false);
+				return new NativeVideoEncoder(info, true);
 			}
 		}
 

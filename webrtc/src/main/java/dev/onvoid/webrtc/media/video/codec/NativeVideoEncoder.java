@@ -19,10 +19,10 @@ package dev.onvoid.webrtc.media.video.codec;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
 /**
- * A built-in encoder, created by a {@link DefaultVideoEncoderFactory}. It is a
- * placeholder: returned from a {@link VideoEncoderFactory}, it makes WebRTC
- * create the native encoder for its codec, which then runs entirely inside
- * WebRTC. Its methods are therefore not to be called from Java, and throw
+ * A built-in encoder, created by a {@link DefaultVideoEncoderFactory} or a
+ * {@link HardwareVideoEncoderFactory}. It is a placeholder: returned from a
+ * {@link VideoEncoderFactory}, it makes WebRTC create the native encoder for
+ * its codec, which then runs entirely inside WebRTC. Its methods are therefore not to be called from Java, and throw
  * {@link UnsupportedOperationException}.
  *
  * @author Alex Andres
@@ -32,9 +32,13 @@ public final class NativeVideoEncoder implements VideoEncoder {
 	/** The codec to create the native encoder for; read by native code. */
 	private final VideoCodecInfo codecInfo;
 
+	/** Whether the encoder may use the GPU; read by native code. */
+	private final boolean hardwareAcceleration;
 
-	NativeVideoEncoder(VideoCodecInfo codecInfo) {
+
+	NativeVideoEncoder(VideoCodecInfo codecInfo, boolean hardwareAcceleration) {
 		this.codecInfo = codecInfo;
+		this.hardwareAcceleration = hardwareAcceleration;
 	}
 
 	/**

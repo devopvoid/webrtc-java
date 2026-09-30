@@ -56,6 +56,7 @@ file(GLOB SOURCES_MEDIA_AUDIO "src/media/audio/*.cpp")
 file(GLOB SOURCES_MEDIA_AUDIO_OS "src/media/audio/${SOURCE_TARGET}/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO "src/media/video/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_CODEC "src/media/video/codec/*.cpp")
+file(GLOB SOURCES_MEDIA_VIDEO_CODEC_OS "src/media/video/codec/${SOURCE_TARGET}/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_DESKTOP "src/media/video/desktop/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_DESKTOP_OS "src/media/video/desktop/${SOURCE_TARGET}/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_OS "src/media/video/${SOURCE_TARGET}/*.cpp")
@@ -71,6 +72,7 @@ list(APPEND SOURCES
     ${SOURCES_MEDIA_AUDIO_OS}
     ${SOURCES_MEDIA_VIDEO}
     ${SOURCES_MEDIA_VIDEO_CODEC}
+    ${SOURCES_MEDIA_VIDEO_CODEC_OS}
     ${SOURCES_MEDIA_VIDEO_DESKTOP}
     ${SOURCES_MEDIA_VIDEO_DESKTOP_OS}
     ${SOURCES_MEDIA_VIDEO_OS}

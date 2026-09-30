@@ -14,6 +14,28 @@ for (VideoCodecInfo codec : new DefaultVideoEncoderFactory().getSupportedCodecs(
 }
 ```
 
+### Hardware Encoding
+
+`HardwareVideoEncoderFactory` offers the same codecs as `DefaultVideoEncoderFactory`, but encodes on the GPU where the platform supports it:
+
+```java
+PeerConnectionFactory factory = PeerConnectionFactory.builder()
+        .setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+        .build();
+```
+
+| Platform | Hardware encoding |
+|---|---|
+| Windows | H.264 through the Media Foundation encoder of the GPU driver (NVIDIA, AMD, Intel) |
+| macOS | H.264 through VideoToolbox, as with `DefaultVideoEncoderFactory` |
+| Linux | Not yet; encoding is in software |
+
+On Windows, the hardware encoder takes over H.264 Constrained Baseline and Baseline with packetization mode 1, formats the software encoder offers too, so encoding in hardware never changes what is negotiated. When the hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the software encoder and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
+
+Which encoder a stream uses shows in the `encoderImplementation` statistic of its `outbound-rtp` stats, e.g. `MediaFoundation (AMDh264Encoder)` or `OpenH264`.
+
+### Native Codecs
+
 The encoders and decoders these factories create are `NativeVideoEncoder`s and `NativeVideoDecoder`s. They are placeholders that make WebRTC create the built-in codec, which then runs entirely inside WebRTC, so their methods are not to be called from Java.
 
 ## Setting the Factories
@@ -163,6 +185,7 @@ Whatever an encoder, decoder or factory method throws is logged and treated as `
 - `VideoEncoderFactory`, `VideoDecoderFactory` — create the codecs of a factory.
 - `VideoEncoder`, `VideoDecoder`, `EncodedImage` — codecs implemented in Java.
 - `DefaultVideoEncoderFactory`, `DefaultVideoDecoderFactory` — the built-in codecs.
+- `HardwareVideoEncoderFactory` — the built-in encoders, on the GPU where possible.
 - `RTCRtpTransceiver.setCodecPreferences()` — chooses among the negotiated codecs.
 
 For the full API, see the JavaDoc of the `dev.onvoid.webrtc.media.video.codec` package.
