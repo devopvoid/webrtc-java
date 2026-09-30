@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "media/video/codec/nvenc/NvencH264Encoder.h"
+#include "media/video/codec/nvenc/NvencVideoEncoder.h"
 #include "media/video/codec/nvenc/CudaContextScope.h"
 
 #include "api/video/encoded_image.h"
 #include "api/video/i420_buffer.h"
-#include "modules/video_coding/codecs/interface/common_constants.h"
+#include "api/video_codecs/scalability_mode.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
 #include "rtc_base/logging.h"
@@ -30,16 +30,12 @@
 
 namespace jni
 {
-	namespace
-	{
-		// The QP thresholds of WebRTC's own H.264 encoder.
-		constexpr int kLowH264QpThreshold = 24;
-		constexpr int kHighH264QpThreshold = 37;
-	}
-
-	NvencH264Encoder::NvencH264Encoder(NvencLibrary & library, const webrtc::SdpVideoFormat & format) :
+	NvencVideoEncoder::NvencVideoEncoder(NvencLibrary & library, webrtc::VideoCodecType codec,
+		const webrtc::SdpVideoFormat & format) :
 		library(library),
 		api(library.Api()),
+		codec(codec),
+		codecGuid(codec == webrtc::kVideoCodecAV1 ? NV_ENC_CODEC_AV1_GUID : NV_ENC_CODEC_H264_GUID),
 		implementationName("NVENC (" + library.DeviceName() + ")"),
 		context(nullptr),
 		encoder(nullptr),
@@ -52,27 +48,27 @@ namespace jni
 		framerate(30),
 		frameCount(0),
 		callback(nullptr),
-		packetizationMode(webrtc::H264PacketizationMode::NonInterleaved)
+		outputProcessor(codec, format)
 	{
-		auto mode = format.parameters.find("packetization-mode");
-
-		if (mode == format.parameters.end() || mode->second != "1") {
-			packetizationMode = webrtc::H264PacketizationMode::SingleNalUnit;
-		}
 	}
 
-	NvencH264Encoder::~NvencH264Encoder()
+	NvencVideoEncoder::~NvencVideoEncoder()
 	{
 		Release();
 	}
 
-	int32_t NvencH264Encoder::InitEncode(const webrtc::VideoCodec * settings, const Settings & encoderSettings)
+	int32_t NvencVideoEncoder::InitEncode(const webrtc::VideoCodec * settings, const Settings & encoderSettings)
 	{
 		if (settings == nullptr || settings->width == 0 || settings->height == 0) {
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 		if (settings->numberOfSimulcastStreams > 1) {
 			return WEBRTC_VIDEO_CODEC_ERR_SIMULCAST_PARAMETERS_NOT_SUPPORTED;
+		}
+		// A single layer; spatial or temporal layers are left to the
+		// software encoder.
+		if (settings->GetScalabilityMode().value_or(webrtc::ScalabilityMode::kL1T1) != webrtc::ScalabilityMode::kL1T1) {
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 		// NV12 has chroma at half the resolution in both directions.
 		if (settings->width % 2 != 0 || settings->height % 2 != 0) {
@@ -85,6 +81,7 @@ namespace jni
 		bitrateBps = std::max(1u, codecSettings.startBitrate) * 1000;
 		framerate = std::max(1u, codecSettings.maxFramerate);
 		frameCount = 0;
+		outputProcessor.Reset();
 
 		if (!library.RetainContext(&context)) {
 			RTC_LOG(LS_WARNING) << "NVENC: failed to retain the CUDA context";
@@ -103,7 +100,7 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool NvencH264Encoder::OpenSession()
+	bool NvencVideoEncoder::OpenSession()
 	{
 		CudaContextScope scope(library, context);
 
@@ -126,7 +123,7 @@ namespace jni
 		return true;
 	}
 
-	bool NvencH264Encoder::Configure()
+	bool NvencVideoEncoder::Configure()
 	{
 		CudaContextScope scope(library, context);
 
@@ -134,7 +131,7 @@ namespace jni
 		presetConfig.version = NV_ENC_PRESET_CONFIG_VER;
 		presetConfig.presetCfg.version = NV_ENC_CONFIG_VER;
 
-		NVENCSTATUS status = api.nvEncGetEncodePresetConfigEx(encoder, NV_ENC_CODEC_H264_GUID,
+		NVENCSTATUS status = api.nvEncGetEncodePresetConfigEx(encoder, codecGuid,
 			NV_ENC_PRESET_P4_GUID, NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY, &presetConfig);
 
 		if (status != NV_ENC_SUCCESS) {
@@ -144,27 +141,16 @@ namespace jni
 
 		config = presetConfig.presetCfg;
 		config.version = NV_ENC_CONFIG_VER;
-		config.profileGUID = NV_ENC_H264_PROFILE_BASELINE_GUID;
 
 		// No B-frames, and key frames only when WebRTC asks for them.
 		config.gopLength = NVENC_INFINITE_GOPLENGTH;
 		config.frameIntervalP = 1;
 
-		NV_ENC_CONFIG_H264 & h264 = config.encodeCodecConfig.h264Config;
-		h264.idrPeriod = NVENC_INFINITE_GOPLENGTH;
-		// A receiver joining later needs them with the key frame it starts from.
-		h264.repeatSPSPPS = 1;
-		h264.outputAUD = 0;
-		h264.sliceMode = 0;
-		h264.sliceModeData = 0;
-		h264.chromaFormatIDC = 1;
-		h264.level = NV_ENC_LEVEL_AUTOSELECT;
-		// Baseline has no CABAC.
-		h264.entropyCodingMode = NV_ENC_H264_ENTROPY_CODING_MODE_CAVLC;
+		ConfigureCodec();
 
 		initParams = {};
 		initParams.version = NV_ENC_INITIALIZE_PARAMS_VER;
-		initParams.encodeGUID = NV_ENC_CODEC_H264_GUID;
+		initParams.encodeGUID = codecGuid;
 		initParams.presetGUID = NV_ENC_PRESET_P4_GUID;
 		initParams.tuningInfo = NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY;
 		initParams.encodeWidth = codecSettings.width;
@@ -216,7 +202,43 @@ namespace jni
 		return true;
 	}
 
-	void NvencH264Encoder::ApplyRates()
+	void NvencVideoEncoder::ConfigureCodec()
+	{
+		if (codec == webrtc::kVideoCodecAV1) {
+			config.profileGUID = NV_ENC_AV1_PROFILE_MAIN_GUID;
+
+			NV_ENC_CONFIG_AV1 & av1 = config.encodeCodecConfig.av1Config;
+			av1.idrPeriod = NVENC_INFINITE_GOPLENGTH;
+			// A receiver joining later needs it with the key frame it
+			// starts from.
+			av1.repeatSeqHdr = 1;
+			av1.disableSeqHdr = 0;
+			// OBUs with size fields, the low overhead format WebRTC sends.
+			av1.outputAnnexBFormat = 0;
+			av1.chromaFormatIDC = 1;
+			av1.inputPixelBitDepthMinus8 = 0;
+			av1.pixelBitDepthMinus8 = 0;
+			av1.level = NV_ENC_LEVEL_AV1_AUTOSELECT;
+			av1.tier = NV_ENC_TIER_AV1_0;
+			return;
+		}
+
+		config.profileGUID = NV_ENC_H264_PROFILE_BASELINE_GUID;
+
+		NV_ENC_CONFIG_H264 & h264 = config.encodeCodecConfig.h264Config;
+		h264.idrPeriod = NVENC_INFINITE_GOPLENGTH;
+		// A receiver joining later needs them with the key frame it starts from.
+		h264.repeatSPSPPS = 1;
+		h264.outputAUD = 0;
+		h264.sliceMode = 0;
+		h264.sliceModeData = 0;
+		h264.chromaFormatIDC = 1;
+		h264.level = NV_ENC_LEVEL_AUTOSELECT;
+		// Baseline has no CABAC.
+		h264.entropyCodingMode = NV_ENC_H264_ENTROPY_CODING_MODE_CAVLC;
+	}
+
+	void NvencVideoEncoder::ApplyRates()
 	{
 		initParams.frameRateNum = framerate;
 		initParams.frameRateDen = 1;
@@ -231,14 +253,14 @@ namespace jni
 		rc.vbvInitialDelay = rc.vbvBufferSize;
 	}
 
-	int32_t NvencH264Encoder::RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * encodeCallback)
+	int32_t NvencVideoEncoder::RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * encodeCallback)
 	{
 		callback = encodeCallback;
 
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	int32_t NvencH264Encoder::Release()
+	int32_t NvencVideoEncoder::Release()
 	{
 		DestroySession();
 
@@ -250,7 +272,7 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	void NvencH264Encoder::DestroySession()
+	void NvencVideoEncoder::DestroySession()
 	{
 		if (encoder == nullptr) {
 			return;
@@ -271,7 +293,7 @@ namespace jni
 		encoder = nullptr;
 	}
 
-	int32_t NvencH264Encoder::Encode(const webrtc::VideoFrame & frame,
+	int32_t NvencVideoEncoder::Encode(const webrtc::VideoFrame & frame,
 		const std::vector<webrtc::VideoFrameType> * frameTypes)
 	{
 		if (encoder == nullptr || callback == nullptr) {
@@ -328,45 +350,35 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
-		const uint8_t * data = static_cast<const uint8_t *>(bitstream.bitstreamBufferPtr);
-		const size_t size = bitstream.bitstreamSizeInBytes;
-		const bool keyFrame = bitstream.pictureType == NV_ENC_PIC_TYPE_IDR
+		const std::span<const uint8_t> data(static_cast<const uint8_t *>(bitstream.bitstreamBufferPtr),
+			bitstream.bitstreamSizeInBytes);
+		const bool keyFrame = keyFrameRequested
+			|| bitstream.pictureType == NV_ENC_PIC_TYPE_IDR
 			|| bitstream.pictureType == NV_ENC_PIC_TYPE_I;
 
-		webrtc::scoped_refptr<webrtc::EncodedImageBuffer> encoded = webrtc::EncodedImageBuffer::Create(data, size);
-
-		api.nvEncUnlockBitstream(encoder, outputBuffer);
-
 		webrtc::EncodedImage image;
-		image.SetEncodedData(encoded);
 		image._encodedWidth = codecSettings.width;
 		image._encodedHeight = codecSettings.height;
 		image.SetRtpTimestamp(frame.rtp_timestamp());
 		image.capture_time_ms_ = frame.render_time_ms();
 		image.ntp_time_ms_ = frame.ntp_time_ms();
 		image.rotation_ = frame.rotation();
-		image.set_frame_type(keyFrame
-			? webrtc::VideoFrameType::kVideoFrameKey
-			: webrtc::VideoFrameType::kVideoFrameDelta);
-
-		// The bitstream QP, which quality scaling compares with its
-		// thresholds, rather than NVENC's average.
-		bitstreamParser.ParseBitstream(std::span<const uint8_t>(encoded->data(), encoded->size()));
-		image.qp_ = bitstreamParser.GetLastSliceQp().value_or(-1);
 
 		webrtc::CodecSpecificInfo info;
-		info.codecType = webrtc::kVideoCodecH264;
-		info.codecSpecific.H264.packetization_mode = packetizationMode;
-		info.codecSpecific.H264.temporal_idx = webrtc::kNoTemporalIdx;
-		info.codecSpecific.H264.base_layer_sync = false;
-		info.codecSpecific.H264.idr_frame = keyFrame;
+		const bool processed = outputProcessor.Process(data, keyFrame, image, info);
+
+		api.nvEncUnlockBitstream(encoder, outputBuffer);
+
+		if (!processed) {
+			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+		}
 
 		callback->OnEncodedImage(image, &info);
 
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool NvencH264Encoder::CopyToInput(const webrtc::VideoFrame & frame, uint32_t * pitch)
+	bool NvencVideoEncoder::CopyToInput(const webrtc::VideoFrame & frame, uint32_t * pitch)
 	{
 		webrtc::scoped_refptr<webrtc::I420BufferInterface> i420 = frame.video_frame_buffer()->ToI420();
 
@@ -409,7 +421,7 @@ namespace jni
 		return true;
 	}
 
-	void NvencH264Encoder::SetRates(const RateControlParameters & parameters)
+	void NvencVideoEncoder::SetRates(const RateControlParameters & parameters)
 	{
 		const uint32_t bitrate = parameters.bitrate.get_sum_bps();
 
@@ -445,14 +457,14 @@ namespace jni
 		}
 	}
 
-	webrtc::VideoEncoder::EncoderInfo NvencH264Encoder::GetEncoderInfo() const
+	webrtc::VideoEncoder::EncoderInfo NvencVideoEncoder::GetEncoderInfo() const
 	{
 		EncoderInfo info;
 		info.implementation_name = implementationName;
 		info.is_hardware_accelerated = true;
 		info.supports_native_handle = false;
 		info.supports_simulcast = false;
-		info.scaling_settings = ScalingSettings(kLowH264QpThreshold, kHighH264QpThreshold);
+		info.scaling_settings = outputProcessor.GetScalingSettings();
 		// NV12 needs even dimensions.
 		info.requested_resolution_alignment = 2;
 

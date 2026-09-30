@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include "media/video/codec/windows/MFH264Encoder.h"
+#include "media/video/codec/windows/MFVideoEncoder.h"
 #include "media/video/codec/windows/MFEncoderUtils.h"
 #include "platform/windows/ComInitializer.h"
 
 #include "api/video/encoded_image.h"
 #include "api/video/i420_buffer.h"
-#include "common_video/h264/h264_common.h"
+#include "api/video_codecs/scalability_mode.h"
 #include "modules/video_coding/codecs/interface/common_constants.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
@@ -49,10 +49,6 @@ namespace jni
 		// frames whenever a receiver needs one, so they are rarely due to
 		// this.
 		constexpr UINT32 kGopSize = 3000;
-
-		// The QP thresholds of WebRTC's own H.264 encoder.
-		constexpr int kLowH264QpThreshold = 24;
-		constexpr int kHighH264QpThreshold = 37;
 
 		// Media Foundation counts time in 100 ns units.
 		constexpr LONGLONG kUnitsPerSecond = 10000000;
@@ -107,8 +103,8 @@ namespace jni
 		}
 	}
 
-	MFH264Encoder::MFH264Encoder(const webrtc::SdpVideoFormat & format) :
-		format(format),
+	MFVideoEncoder::MFVideoEncoder(webrtc::VideoCodecType codec, const webrtc::SdpVideoFormat & format) :
+		codec(codec),
 		implementationName("MediaFoundation"),
 		inputStreamId(0),
 		outputStreamId(0),
@@ -120,27 +116,27 @@ namespace jni
 		inputRequests(0),
 		lastSampleTime(-1),
 		keyFrameRequested(false),
-		packetizationMode(webrtc::H264PacketizationMode::NonInterleaved)
+		outputProcessor(codec, format)
 	{
-		auto mode = format.parameters.find("packetization-mode");
-
-		if (mode == format.parameters.end() || mode->second != "1") {
-			packetizationMode = webrtc::H264PacketizationMode::SingleNalUnit;
-		}
 	}
 
-	MFH264Encoder::~MFH264Encoder()
+	MFVideoEncoder::~MFVideoEncoder()
 	{
 		Release();
 	}
 
-	int32_t MFH264Encoder::InitEncode(const webrtc::VideoCodec * settings, const Settings & encoderSettings)
+	int32_t MFVideoEncoder::InitEncode(const webrtc::VideoCodec * settings, const Settings & encoderSettings)
 	{
 		if (settings == nullptr || settings->width == 0 || settings->height == 0) {
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 		if (settings->numberOfSimulcastStreams > 1) {
 			return WEBRTC_VIDEO_CODEC_ERR_SIMULCAST_PARAMETERS_NOT_SUPPORTED;
+		}
+		// Hardware encoders produce a single layer; spatial or temporal
+		// layers are left to the software encoder.
+		if (settings->GetScalabilityMode().value_or(webrtc::ScalabilityMode::kL1T1) != webrtc::ScalabilityMode::kL1T1) {
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 		// NV12 has chroma at half the resolution in both directions.
 		if (settings->width % 2 != 0 || settings->height % 2 != 0) {
@@ -200,11 +196,12 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	HRESULT MFH264Encoder::CreateTransform()
+	HRESULT MFVideoEncoder::CreateTransform()
 	{
 		std::vector<ComPtr<IMFActivate>> encoders;
 
-		HRESULT hr = EnumerateHardwareH264Encoders(encoders);
+		HRESULT hr = EnumerateHardwareEncoders(codec == webrtc::kVideoCodecAV1 ? MFVideoFormat_AV1 : MFVideoFormat_H264,
+			encoders);
 
 		if (FAILED(hr)) {
 			return hr;
@@ -262,7 +259,7 @@ namespace jni
 		return hr;
 	}
 
-	HRESULT MFH264Encoder::ConfigureTypes()
+	HRESULT MFVideoEncoder::ConfigureTypes()
 	{
 		const UINT32 width = codecSettings.width;
 		const UINT32 height = codecSettings.height;
@@ -276,24 +273,33 @@ namespace jni
 		}
 
 		outputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-		outputType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264);
+		outputType->SetGUID(MF_MT_SUBTYPE, codec == webrtc::kVideoCodecAV1 ? MFVideoFormat_AV1 : MFVideoFormat_H264);
 		outputType->SetUINT32(MF_MT_AVG_BITRATE, bitrateBps);
 		outputType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		MFSetAttributeSize(outputType.Get(), MF_MT_FRAME_SIZE, width, height);
 		MFSetAttributeRatio(outputType.Get(), MF_MT_FRAME_RATE, framerate, 1);
 		MFSetAttributeRatio(outputType.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1);
 
-		// Constrained Baseline is what peers expect, and is a subset of
-		// Baseline too. Older encoders only know Baseline, which peers
-		// decode as well, since WebRTC encoders use no Baseline-only tools.
-		outputType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_ConstrainedBase);
-
-		hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
-
-		if (FAILED(hr)) {
-			outputType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base);
+		if (codec == webrtc::kVideoCodecAV1) {
+			// Main profile, 8-bit 4:2:0: AV1 profile 0, what WebRTC offers.
+			outputType->SetUINT32(MF_MT_VIDEO_PROFILE, eAVEncAV1VProfile_Main_420_8);
 
 			hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
+		}
+		else {
+			// Constrained Baseline is what peers expect, and is a subset of
+			// Baseline too. Older encoders only know Baseline, which peers
+			// decode as well, since WebRTC encoders use no Baseline-only
+			// tools.
+			outputType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_ConstrainedBase);
+
+			hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
+
+			if (FAILED(hr)) {
+				outputType->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base);
+
+				hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
+			}
 		}
 		if (FAILED(hr)) {
 			return hr;
@@ -317,7 +323,7 @@ namespace jni
 		return transform->SetInputType(inputStreamId, inputType.Get(), 0);
 	}
 
-	void MFH264Encoder::ConfigureCodec()
+	void MFVideoEncoder::ConfigureCodec()
 	{
 		if (!codecApi) {
 			return;
@@ -332,14 +338,14 @@ namespace jni
 		SetCodecValue(codecApi.Get(), CODECAPI_AVEncCommonMeanBitRate, bitrateBps);
 	}
 
-	int32_t MFH264Encoder::RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * encodeCallback)
+	int32_t MFVideoEncoder::RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * encodeCallback)
 	{
 		callback = encodeCallback;
 
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	int32_t MFH264Encoder::Release()
+	int32_t MFVideoEncoder::Release()
 	{
 		ShutdownTransform();
 
@@ -358,10 +364,13 @@ namespace jni
 		lastSampleTime = -1;
 		keyFrameRequested = false;
 
+		// No events arrive any more.
+		outputProcessor.Reset();
+
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	void MFH264Encoder::ShutdownTransform()
+	void MFVideoEncoder::ShutdownTransform()
 	{
 		// Detached first, so that no event handler touches the transform
 		// while it shuts down, nor this encoder afterwards.
@@ -384,7 +393,7 @@ namespace jni
 		}
 	}
 
-	int32_t MFH264Encoder::Encode(const webrtc::VideoFrame & frame,
+	int32_t MFVideoEncoder::Encode(const webrtc::VideoFrame & frame,
 		const std::vector<webrtc::VideoFrameType> * frameTypes)
 	{
 		webrtc::EncodedImageCallback * encodeCallback = callback.load();
@@ -472,7 +481,7 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	HRESULT MFH264Encoder::CreateInputSample(const webrtc::VideoFrame & frame, IMFSample ** sample)
+	HRESULT MFVideoEncoder::CreateInputSample(const webrtc::VideoFrame & frame, IMFSample ** sample)
 	{
 		webrtc::scoped_refptr<webrtc::I420BufferInterface> i420 = frame.video_frame_buffer()->ToI420();
 
@@ -544,7 +553,7 @@ namespace jni
 		return S_OK;
 	}
 
-	void MFH264Encoder::SetRates(const RateControlParameters & parameters)
+	void MFVideoEncoder::SetRates(const RateControlParameters & parameters)
 	{
 		const uint32_t bitrate = parameters.bitrate.get_sum_bps();
 
@@ -564,21 +573,21 @@ namespace jni
 		}
 	}
 
-	webrtc::VideoEncoder::EncoderInfo MFH264Encoder::GetEncoderInfo() const
+	webrtc::VideoEncoder::EncoderInfo MFVideoEncoder::GetEncoderInfo() const
 	{
 		EncoderInfo info;
 		info.implementation_name = implementationName;
 		info.is_hardware_accelerated = true;
 		info.supports_native_handle = false;
 		info.supports_simulcast = false;
-		info.scaling_settings = ScalingSettings(kLowH264QpThreshold, kHighH264QpThreshold);
+		info.scaling_settings = outputProcessor.GetScalingSettings();
 		// NV12 needs even dimensions.
 		info.requested_resolution_alignment = 2;
 
 		return info;
 	}
 
-	void MFH264Encoder::OnTransformEvent(MediaEventType type, HRESULT status)
+	void MFVideoEncoder::OnTransformEvent(MediaEventType type, HRESULT status)
 	{
 		switch (type) {
 			case METransformNeedInput:
@@ -605,7 +614,7 @@ namespace jni
 		}
 	}
 
-	void MFH264Encoder::ProcessOutput()
+	void MFVideoEncoder::ProcessOutput()
 	{
 		MFT_OUTPUT_STREAM_INFO info = {};
 		HRESULT hr = transform->GetOutputStreamInfo(outputStreamId, &info);
@@ -674,7 +683,7 @@ namespace jni
 		DeliverOutput(sample.Get());
 	}
 
-	void MFH264Encoder::DeliverOutput(IMFSample * sample)
+	void MFVideoEncoder::DeliverOutput(IMFSample * sample)
 	{
 		LONGLONG sampleTime = 0;
 		sample->GetSampleTime(&sampleTime);
@@ -693,47 +702,6 @@ namespace jni
 
 		std::span<const uint8_t> bitstream(data, length);
 
-		// Encoders put the parameter sets in front of the first key frame,
-		// not necessarily in front of every one, but a receiver that joins
-		// later needs them with the key frame it starts from.
-		std::vector<uint8_t> parameterSetsFound;
-		bool hasSps = false;
-		bool hasPps = false;
-
-		for (const webrtc::H264::NaluIndex & nalu : webrtc::H264::FindNaluIndices(bitstream)) {
-			const size_t end = nalu.payload_start_offset + nalu.payload_size;
-			const webrtc::H264::NaluType type = webrtc::H264::ParseNaluType(data[nalu.payload_start_offset]);
-
-			if (type == webrtc::H264::NaluType::kSps || type == webrtc::H264::NaluType::kPps) {
-				hasSps |= type == webrtc::H264::NaluType::kSps;
-				hasPps |= type == webrtc::H264::NaluType::kPps;
-
-				parameterSetsFound.insert(parameterSetsFound.end(), data + nalu.start_offset, data + end);
-			}
-			else if (type == webrtc::H264::NaluType::kIdr) {
-				keyFrame = true;
-			}
-		}
-
-		if (hasSps && hasPps) {
-			parameterSets = std::move(parameterSetsFound);
-		}
-
-		const bool prependParameterSets = keyFrame && !hasSps && !parameterSets.empty();
-		const size_t size = length + (prependParameterSets ? parameterSets.size() : 0);
-
-		webrtc::scoped_refptr<webrtc::EncodedImageBuffer> encoded = webrtc::EncodedImageBuffer::Create(size);
-		uint8_t * target = encoded->data();
-
-		if (prependParameterSets) {
-			std::copy(parameterSets.begin(), parameterSets.end(), target);
-			target += parameterSets.size();
-		}
-
-		std::copy(data, data + length, target);
-
-		buffer->Unlock();
-
 		PendingFrame pending;
 
 		{
@@ -743,6 +711,7 @@ namespace jni
 
 			if (found == pendingFrames.end()) {
 				RTC_LOG(LS_WARNING) << "Media Foundation encoder produced a frame for no input, time " << sampleTime;
+				buffer->Unlock();
 				return;
 			}
 
@@ -753,26 +722,22 @@ namespace jni
 		}
 
 		webrtc::EncodedImage image;
-		image.SetEncodedData(encoded);
 		image._encodedWidth = codecSettings.width;
 		image._encodedHeight = codecSettings.height;
 		image.SetRtpTimestamp(pending.rtpTimestamp);
 		image.capture_time_ms_ = pending.captureTimeMs;
 		image.ntp_time_ms_ = pending.ntpTimeMs;
 		image.rotation_ = pending.rotation;
-		image.set_frame_type(keyFrame
-			? webrtc::VideoFrameType::kVideoFrameKey
-			: webrtc::VideoFrameType::kVideoFrameDelta);
-
-		bitstreamParser.ParseBitstream(std::span<const uint8_t>(encoded->data(), encoded->size()));
-		image.qp_ = bitstreamParser.GetLastSliceQp().value_or(-1);
 
 		webrtc::CodecSpecificInfo info;
-		info.codecType = webrtc::kVideoCodecH264;
-		info.codecSpecific.H264.packetization_mode = packetizationMode;
-		info.codecSpecific.H264.temporal_idx = webrtc::kNoTemporalIdx;
-		info.codecSpecific.H264.base_layer_sync = false;
-		info.codecSpecific.H264.idr_frame = keyFrame;
+		const bool processed = outputProcessor.Process(bitstream, keyFrame, image, info);
+
+		buffer->Unlock();
+
+		if (!processed) {
+			failed = true;
+			return;
+		}
 
 		webrtc::EncodedImageCallback * encodeCallback = callback.load();
 

@@ -36,7 +36,9 @@ import java.util.Objects;
  * <p>
  * H.264 is encoded on an NVIDIA GPU with NVENC, on Windows and Linux. On
  * other GPUs it is encoded with the Media Foundation encoder of the driver on
- * Windows, and with its VA-API encoder on Linux.
+ * Windows, and with its VA-API encoder on Linux. AV1 is encoded on GPUs that
+ * have an AV1 encoder, with NVENC or Media Foundation, as a single layer; a
+ * stream that asks for SVC is encoded in software.
  * A hardware encoder that fails to start, for example because the GPU has no
  * encoder sessions left, or fails while encoding, is replaced by the next one
  * in line, and finally by the software encoder of the same codec, so a stream

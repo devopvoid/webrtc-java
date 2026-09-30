@@ -23,10 +23,10 @@ using Microsoft::WRL::ComPtr;
 
 namespace jni
 {
-	HRESULT EnumerateHardwareH264Encoders(std::vector<ComPtr<IMFActivate>> & encoders)
+	HRESULT EnumerateHardwareEncoders(const GUID & format, std::vector<ComPtr<IMFActivate>> & encoders)
 	{
 		MFT_REGISTER_TYPE_INFO input = { MFMediaType_Video, MFVideoFormat_NV12 };
-		MFT_REGISTER_TYPE_INFO output = { MFMediaType_Video, MFVideoFormat_H264 };
+		MFT_REGISTER_TYPE_INFO output = { MFMediaType_Video, format };
 
 		IMFActivate ** activates = nullptr;
 		UINT32 count = 0;

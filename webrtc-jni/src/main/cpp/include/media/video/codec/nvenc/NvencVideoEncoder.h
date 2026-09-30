@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_NVENC_H264_ENCODER_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_CODEC_NVENC_H264_ENCODER_H_
+#ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_NVENC_VIDEO_ENCODER_H_
+#define JNI_WEBRTC_MEDIA_VIDEO_CODEC_NVENC_VIDEO_ENCODER_H_
 
+#include "media/video/codec/EncoderOutputProcessor.h"
 #include "media/video/codec/nvenc/NvencLibrary.h"
 
+#include "api/video/video_codec_type.h"
 #include "api/video/video_frame.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_codec.h"
 #include "api/video_codecs/video_encoder.h"
-#include "common_video/h264/h264_bitstream_parser.h"
-#include "modules/video_coding/codecs/h264/include/h264_globals.h"
 
 #include <nvEncodeAPI.h>
 
@@ -34,19 +34,20 @@
 
 namespace jni
 {
-	// Encodes H.264 with NVENC, the encoder of NVIDIA GPUs, on the primary
-	// CUDA context of the device.
+	// Encodes H.264 or AV1 with NVENC, the encoder of NVIDIA GPUs, on the
+	// primary CUDA context of the device.
 	//
 	// Encoding is synchronous: with no B-frames and a low-latency preset,
 	// NVENC returns each frame as soon as it is encoded, so frames go in and
 	// out on the encoder thread. Frames are passed in system memory as NV12,
 	// into an input buffer NVENC allocates. Anything that fails makes the
 	// encoder give up, so that the next encoder in line takes over.
-	class NvencH264Encoder : public webrtc::VideoEncoder
+	class NvencVideoEncoder : public webrtc::VideoEncoder
 	{
 		public:
-			NvencH264Encoder(NvencLibrary & library, const webrtc::SdpVideoFormat & format);
-			~NvencH264Encoder() override;
+			// The codec is H.264 or AV1.
+			NvencVideoEncoder(NvencLibrary & library, webrtc::VideoCodecType codec, const webrtc::SdpVideoFormat & format);
+			~NvencVideoEncoder() override;
 
 			int32_t InitEncode(const webrtc::VideoCodec * codecSettings, const Settings & settings) override;
 			int32_t RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * callback) override;
@@ -58,6 +59,7 @@ namespace jni
 		private:
 			bool OpenSession();
 			bool Configure();
+			void ConfigureCodec();
 			void ApplyRates();
 			bool CopyToInput(const webrtc::VideoFrame & frame, uint32_t * pitch);
 			void DestroySession();
@@ -65,6 +67,8 @@ namespace jni
 		private:
 			NvencLibrary & library;
 			const NV_ENCODE_API_FUNCTION_LIST & api;
+			const webrtc::VideoCodecType codec;
+			const GUID codecGuid;
 			const std::string implementationName;
 
 			CUcontext context;
@@ -82,8 +86,7 @@ namespace jni
 
 			webrtc::EncodedImageCallback * callback;
 
-			webrtc::H264BitstreamParser bitstreamParser;
-			webrtc::H264PacketizationMode packetizationMode;
+			EncoderOutputProcessor outputProcessor;
 	};
 }
 

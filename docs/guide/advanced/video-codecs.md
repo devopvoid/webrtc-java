@@ -24,17 +24,19 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
         .build();
 ```
 
-| Platform | Hardware encoding |
-|---|---|
-| Windows | H.264 with NVENC on NVIDIA GPUs, otherwise through the Media Foundation encoder of the GPU driver (AMD, Intel) |
-| Linux | H.264 with NVENC on NVIDIA GPUs, otherwise through the VA-API encoder of the GPU driver (Intel, AMD) |
-| macOS | H.264 through VideoToolbox, as with `DefaultVideoEncoderFactory` |
+| Platform | H.264 | AV1 |
+|---|---|---|
+| Windows | NVENC on NVIDIA GPUs, otherwise the Media Foundation encoder of the GPU driver (AMD, Intel) | NVENC on NVIDIA RTX 40 and newer, otherwise Media Foundation on GPUs that encode AV1 (e.g. AMD RDNA3 and newer, Intel Arc) |
+| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA RTX 40 and newer |
+| macOS | VideoToolbox, as with `DefaultVideoEncoderFactory` | Software |
+
+Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
 
 NVENC needs an NVIDIA driver of version 522 or newer on Windows, 520 or newer on Linux. VA-API needs libva 2 and a driver that encodes H.264, such as Intel's `intel-media-va-driver` (iHD) or Mesa's `mesa-va-drivers` for AMD, and access to a render node in `/dev/dri`. All of them are loaded at run time, so nothing needs to be installed on machines without them.
 
-The hardware encoders take over H.264 Constrained Baseline and Baseline with packetization mode 1, formats the software encoder offers too, so encoding in hardware never changes what is negotiated. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (e.g. from NVENC to Media Foundation on Windows), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
+The hardware encoders take over H.264 Constrained Baseline and Baseline with packetization mode 1, and AV1 profile 0, formats the software encoders offer too, so encoding in hardware never changes what is negotiated. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (e.g. from NVENC to Media Foundation on Windows), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
 
-Which encoder a stream uses shows in the `encoderImplementation` statistic of its `outbound-rtp` stats, e.g. `NVENC (NVIDIA GeForce RTX 4070)`, `MediaFoundation (AMDh264Encoder)`, `VA-API (Intel iHD driver ...)` or `OpenH264`.
+Which encoder a stream uses shows in the `encoderImplementation` statistic of its `outbound-rtp` stats, e.g. `NVENC (NVIDIA GeForce RTX 4070)`, `MediaFoundation (AMDav1Encoder)`, `VA-API (Intel iHD driver ...)`, `OpenH264` or `libaom`.
 
 ### Native Codecs
 
