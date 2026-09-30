@@ -30,6 +30,7 @@ This section provides detailed guides for various features of the webrtc-java li
 
 ## Networking and ICE
 
+- [Peer Connection Configuration](/guide/networking/peer-connection-config) - Candidate gathering, ICE checks, TURN, SRTP ciphers and other connection settings
 - [Port Allocator Config](/guide/networking/port-allocator-config) - Restrict ICE port ranges and control candidate gathering behavior
 
 ## Monitoring and Debugging

@@ -28,6 +28,9 @@ namespace jni
 {
 	namespace RTCConfiguration
 	{
+		// The position of an adapter type in RTCAdapterType.
+		enum class AdapterTypeOrdinal : int {};
+
 		class JavaRTCConfigurationClass : public JavaClass
 		{
 			public:
@@ -44,6 +47,38 @@ namespace jni
 				jfieldID audioJitterBufferMaxPackets;
 				jfieldID audioJitterBufferFastAccelerate;
 				jfieldID audioJitterBufferMinDelayMs;
+				jfieldID iceCandidatePoolSize;
+				jfieldID tcpCandidatePolicy;
+				jfieldID candidateNetworkPolicy;
+				jfieldID continualGatheringPolicy;
+				jfieldID disableIpv6OnWifi;
+				jfieldID maxIpv6Networks;
+				jfieldID vpnPreference;
+				jfieldID surfaceIceCandidatesOnIceTransportTypeChanged;
+				jfieldID iceConnectionReceivingTimeout;
+				jfieldID iceBackupCandidatePairPingInterval;
+				jfieldID iceCheckIntervalStrongConnectivity;
+				jfieldID iceCheckIntervalWeakConnectivity;
+				jfieldID iceCheckMinInterval;
+				jfieldID iceUnwritableTimeout;
+				jfieldID iceUnwritableMinChecks;
+				jfieldID iceInactiveTimeout;
+				jfieldID stunCandidateKeepaliveInterval;
+				jfieldID stableWritableConnectionPingInterval;
+				jfieldID prioritizeMostLikelyIceCandidatePairs;
+				jfieldID enableIceRenomination;
+				jfieldID presumeWritableWhenFullyRelayed;
+				jfieldID turnPortPrunePolicy;
+				jfieldID enableDscp;
+				jfieldID enableCpuAdaptation;
+				jfieldID suspendBelowMinBitrate;
+				jfieldID screencastMinBitrate;
+				jfieldID offerExtmapAllowMixed;
+				jfieldID enableImplicitRollback;
+				jfieldID alwaysNegotiateDataChannels;
+				jfieldID networkPreference;
+				jfieldID turnLoggingId;
+				jfieldID cryptoOptions;
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::PeerConnectionInterface::RTCConfiguration & config);

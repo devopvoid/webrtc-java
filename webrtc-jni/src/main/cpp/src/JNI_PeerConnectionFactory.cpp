@@ -385,8 +385,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 	auto result = factory->CreatePeerConnectionOrError(configuration, std::move(dependencies));
 
 	if (!result.ok()) {
+		// No peer connection took the observer.
+		delete observer;
+
+		// The type is a string_view, which is not terminated and cannot be
+		// passed through varargs as it is.
+		const std::string type(ToString(result.error().type()));
+
 		env->Throw(jni::JavaRuntimeException(env, "Create PeerConnection failed: %s %s",
-			ToString(result.error().type()), result.error().message()));
+			type.c_str(), result.error().message()));
 
 		return nullptr;
 	}
@@ -400,6 +407,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 
 		return javaPeerConnection.release();
 	}
+
+	delete observer;
 
 	return nullptr;
 }

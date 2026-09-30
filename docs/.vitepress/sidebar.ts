@@ -57,6 +57,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			text: 'Networking and ICE',
 			collapsed: false,
 			items: [
+				{ text: 'Peer Connection Configuration', link: '/networking/peer-connection-config' },
 				{ text: 'Port Allocator Configuration', link: '/networking/port-allocator-config' },
 			],
 		},
