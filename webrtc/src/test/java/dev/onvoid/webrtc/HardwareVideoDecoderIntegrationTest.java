@@ -17,15 +17,18 @@
 package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import dev.onvoid.webrtc.media.video.I420Buffer;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
 
+import java.nio.ByteBuffer;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -62,6 +65,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 					&& codec.getSDPFmtp().getOrDefault("profile-level-id", "").startsWith("42e0");
 
 	private static final Predicate<RTCRtpCodecCapability> AV1 = codec -> "AV1".equalsIgnoreCase(codec.getName());
+
+	private static final Predicate<RTCRtpCodecCapability> VP9 = codec ->
+			"VP9".equalsIgnoreCase(codec.getName())
+					&& "0".equals(codec.getSDPFmtp().getOrDefault("profile-id", "0"));
 
 
 	@Test
@@ -115,8 +122,8 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		// The default decoders use VideoToolbox on macOS.
 		assertTrue(decoderImplementation(factory, H264).contains("VideoToolbox"));
 
-		// The hardware factory has nothing of its own there, and hands over to
-		// the default decoders.
+		// The hardware factory has nothing of its own for H.264 there, and
+		// hands over to the default decoders.
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
 				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
@@ -124,6 +131,108 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 		try {
 			assertTrue(decoderImplementation(hardware, H264).contains("VideoToolbox"));
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void macDecodesVp9WithVideoToolbox() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+				.build();
+
+		String implementation;
+
+		try {
+			implementation = decoderImplementation(hardware, VP9);
+		}
+		finally {
+			hardware.dispose();
+		}
+
+		boolean hardwareUsed = implementation.contains("VideoToolbox");
+
+		if (HARDWARE_REQUIRED) {
+			assertTrue(hardwareUsed, implementation);
+		}
+		else {
+			assumeTrue(hardwareUsed, "no hardware decoder: " + implementation);
+		}
+	}
+
+	@Test
+	void macDecodesVp9InSoftwareByDefault() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		// Hardware decoding is opt-in; the shared factory decodes VP9 with libvpx.
+		String implementation = decoderImplementation(factory, VP9);
+
+		assertFalse(implementation.contains("VideoToolbox"), implementation);
+	}
+
+	@Test
+	void macFollowsResolutionChange() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+				.build();
+
+		CountDownLatch full = new CountDownLatch(10);
+		CountDownLatch half = new CountDownLatch(10);
+
+		try (TestMediaCall call = new TestMediaCall(hardware, true, false, VP9)) {
+			call.negotiate();
+
+			RTCRtpReceiver receiver = call.getReceiver("video");
+			VideoTrack track = (VideoTrack) receiver.getTrack();
+			VideoTrackSink sink = frame -> {
+				int width = frame.buffer.getWidth();
+
+				if (width == 320 && frame.buffer.getHeight() == 240) {
+					full.countDown();
+				}
+				else if (width == 160 && frame.buffer.getHeight() == 120) {
+					half.countDown();
+				}
+
+				frame.release();
+			};
+			track.addSink(sink);
+
+			call.awaitConnected();
+			call.startMedia();
+
+			assertTrue(full.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
+
+			String implementation = decoderImplementationOf(call);
+
+			assumeTrue(implementation.contains("VideoToolbox"), "no hardware decoder: " + implementation);
+
+			// The sender restarts at half the size, with a key frame; the
+			// decoder has to start a session for it.
+			RTCRtpSender sender = call.getVideoSender();
+			RTCRtpSendParameters parameters = sender.getParameters();
+
+			for (RTCRtpEncodingParameters encoding : parameters.encodings) {
+				encoding.scaleResolutionDownBy = 2.0;
+			}
+
+			sender.setParameters(parameters);
+
+			assertTrue(half.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no frames at the new size");
+
+			// Still the hardware decoder, not a fallback.
+			assertTrue(decoderImplementationOf(call).contains("VideoToolbox"));
+
+			track.removeSink(sink);
+			receiver.dispose();
 		}
 		finally {
 			hardware.dispose();
@@ -139,6 +248,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			Predicate<RTCRtpCodecCapability> codec) throws Exception {
 		CountDownLatch received = new CountDownLatch(10);
 		AtomicReference<String> wrongSize = new AtomicReference<>();
+		AtomicReference<String> blank = new AtomicReference<>();
 		String implementation;
 
 		try (TestMediaCall call = new TestMediaCall(factory, true, false, codec)) {
@@ -154,6 +264,9 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 				if (width != 320 || height != 240) {
 					wrongSize.compareAndSet(null, width + "x" + height);
+				}
+				else if (!hasPicture(frame.buffer.toI420())) {
+					blank.compareAndSet(null, "a frame without a picture");
 				}
 
 				frame.release();
@@ -173,8 +286,30 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		}
 
 		assertNull(wrongSize.get(), "decoded frames of the wrong size: " + wrongSize.get());
+		assertNull(blank.get(), "decoded " + blank.get());
 
 		return implementation;
+	}
+
+	/**
+	 * Whether the luma of the frame has the gradient the call sends, rather
+	 * than a flat or empty picture. The buffer of a frame is I420 already, so
+	 * it is read as it is and stays with the frame.
+	 */
+	private static boolean hasPicture(I420Buffer buffer) {
+		ByteBuffer y = buffer.getDataY();
+		int min = 255;
+		int max = 0;
+
+		// The first row has the whole ramp, and a wrap of it.
+		for (int x = 0; x < buffer.getWidth(); x++) {
+			int value = y.get(x) & 0xff;
+
+			min = Math.min(min, value);
+			max = Math.max(max, value);
+		}
+
+		return max - min > 150;
 	}
 
 	/**
