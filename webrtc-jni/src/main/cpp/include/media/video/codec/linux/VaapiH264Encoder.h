@@ -17,14 +17,13 @@
 #ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_VAAPI_H264_ENCODER_H_
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_VAAPI_H264_ENCODER_H_
 
+#include "media/video/codec/EncoderOutputProcessor.h"
 #include "media/video/codec/linux/VaapiLibrary.h"
 
 #include "api/video/video_frame.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_codec.h"
 #include "api/video_codecs/video_encoder.h"
-#include "common_video/h264/h264_bitstream_parser.h"
-#include "modules/video_coding/codecs/h264/include/h264_globals.h"
 
 #include <va/va.h>
 #include <va/va_enc_h264.h>
@@ -103,8 +102,7 @@ namespace jni
 
 			webrtc::EncodedImageCallback * callback;
 
-			webrtc::H264BitstreamParser bitstreamParser;
-			webrtc::H264PacketizationMode packetizationMode;
+			EncoderOutputProcessor outputProcessor;
 	};
 }
 

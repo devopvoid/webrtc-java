@@ -27,14 +27,15 @@
 
 namespace jni
 {
-	// Creates the Media Foundation hardware encoders of the GPU. It offers
-	// H.264 in the profiles WebRTC's software encoder offers too, and only
-	// with packetization mode 1: mode 0 needs each NAL unit to fit a packet,
-	// which hardware encoders cannot be relied on to keep to.
+	// Creates the Media Foundation hardware encoders of the GPU, for H.264 and
+	// AV1, whichever the GPU has. It offers them in the formats WebRTC's
+	// software encoders offer too: H.264 only with packetization mode 1, since
+	// mode 0 needs each NAL unit to fit a packet, which hardware encoders
+	// cannot be relied on to keep to, and AV1 in profile 0.
 	class MFVideoEncoderFactory : public webrtc::VideoEncoderFactory
 	{
 		public:
-			// Returns a factory, or null if there is no hardware H.264
+			// Returns a factory, or null if there is no hardware H.264 or AV1
 			// encoder on this system.
 			static std::unique_ptr<MFVideoEncoderFactory> Create();
 
@@ -45,7 +46,11 @@ namespace jni
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
-			MFVideoEncoderFactory() = default;
+			MFVideoEncoderFactory(bool h264, bool av1);
+
+		private:
+			const bool h264;
+			const bool av1;
 	};
 }
 

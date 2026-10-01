@@ -15,9 +15,10 @@
  */
 
 #include "media/video/codec/nvenc/NvencVideoEncoderFactory.h"
-#include "media/video/codec/nvenc/NvencH264Encoder.h"
+#include "media/video/codec/nvenc/NvencVideoEncoder.h"
 
 #include "api/video_codecs/h264_profile_level_id.h"
+#include "api/video_codecs/video_codec.h"
 #include "modules/video_coding/codecs/h264/include/h264.h"
 
 namespace jni
@@ -40,15 +41,24 @@ namespace jni
 
 	std::vector<webrtc::SdpVideoFormat> NvencVideoEncoderFactory::GetSupportedFormats() const
 	{
-		return {
-			webrtc::CreateH264Format(webrtc::H264Profile::kProfileConstrainedBaseline, webrtc::H264Level::kLevel3_1, "1"),
-			webrtc::CreateH264Format(webrtc::H264Profile::kProfileBaseline, webrtc::H264Level::kLevel3_1, "1")
-		};
+		std::vector<webrtc::SdpVideoFormat> formats;
+
+		if (library.SupportsH264()) {
+			formats.push_back(webrtc::CreateH264Format(webrtc::H264Profile::kProfileConstrainedBaseline,
+				webrtc::H264Level::kLevel3_1, "1"));
+			formats.push_back(webrtc::CreateH264Format(webrtc::H264Profile::kProfileBaseline,
+				webrtc::H264Level::kLevel3_1, "1"));
+		}
+		if (library.SupportsAv1()) {
+			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());
+		}
+
+		return formats;
 	}
 
 	std::unique_ptr<webrtc::VideoEncoder> NvencVideoEncoderFactory::Create(const webrtc::Environment & env,
 		const webrtc::SdpVideoFormat & format)
 	{
-		return std::make_unique<NvencH264Encoder>(library, format);
+		return std::make_unique<NvencVideoEncoder>(library, webrtc::PayloadStringToCodecType(format.name), format);
 	}
 }

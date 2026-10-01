@@ -41,7 +41,8 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * <p>
  * A machine without a hardware encoder skips the tests that need one, as CI
  * runners do. Set the system property {@code webrtc.test.hardwareEncoder} to
- * {@code true} on a machine that has one, to make those tests fail instead.
+ * {@code true} on a machine that has one, to make those tests fail instead,
+ * and {@code webrtc.test.hardwareAv1Encoder} for a GPU that encodes AV1.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class HardwareVideoEncoderIntegrationTest extends TestBase {
@@ -49,6 +50,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	private static final long TIMEOUT_SECONDS = 10;
 
 	private static final boolean HARDWARE_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareEncoder");
+
+	private static final boolean HARDWARE_AV1_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareAv1Encoder");
 
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 
@@ -60,6 +63,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 			"H264".equalsIgnoreCase(codec.getName())
 					&& "1".equals(codec.getSDPFmtp().get("packetization-mode"))
 					&& codec.getSDPFmtp().getOrDefault("profile-level-id", "").startsWith("42e0");
+
+	private static final Predicate<RTCRtpCodecCapability> AV1 = codec -> "AV1".equalsIgnoreCase(codec.getName());
 
 
 	@Test
@@ -80,18 +85,27 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 				.build();
 
 		try {
-			String implementation = encoderImplementation(hardware);
+			assertHardware(encoderImplementation(hardware, H264), HARDWARE_REQUIRED);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
 
-			boolean hardwareUsed = implementation.startsWith("NVENC")
-					|| implementation.startsWith("VA-API")
-					|| implementation.contains("MediaFoundation");
+	@Test
+	void hardwareEncodesAv1() throws Exception {
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware encoders are implemented on Windows and Linux only");
 
-			if (HARDWARE_REQUIRED) {
-				assertTrue(hardwareUsed, implementation);
-			}
-			else {
-				assumeTrue(hardwareUsed, "no hardware encoder: " + implementation);
-			}
+		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.build();
+
+		try {
+			// Frames arrive either way: from the GPU, or from libaom where the
+			// GPU has no AV1 encoder.
+			assertHardware(encoderImplementation(hardware, AV1), HARDWARE_AV1_REQUIRED);
 		}
 		finally {
 			hardware.dispose();
@@ -103,19 +117,33 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		assumeFalse(OS.contains("mac"), "macOS encodes H.264 through VideoToolbox by default");
 
 		// The shared factory uses the default encoders.
-		String implementation = encoderImplementation(factory);
+		String implementation = encoderImplementation(factory, H264);
 
 		assertTrue(implementation.contains("OpenH264"), implementation);
 	}
 
+	private static void assertHardware(String implementation, boolean required) {
+		boolean hardwareUsed = implementation.startsWith("NVENC")
+				|| implementation.startsWith("VA-API")
+				|| implementation.contains("MediaFoundation");
+
+		if (required) {
+			assertTrue(hardwareUsed, implementation);
+		}
+		else {
+			assumeTrue(hardwareUsed, "no hardware encoder: " + implementation);
+		}
+	}
+
 	/**
-	 * Sends H.264 through a call until frames arrive, and returns what the
-	 * sender reports its encoder to be.
+	 * Sends video in the preferred codec through a call until frames arrive,
+	 * and returns what the sender reports its encoder to be.
 	 */
-	private static String encoderImplementation(PeerConnectionFactory factory) throws Exception {
+	private static String encoderImplementation(PeerConnectionFactory factory,
+			Predicate<RTCRtpCodecCapability> codec) throws Exception {
 		CountDownLatch received = new CountDownLatch(10);
 
-		try (TestMediaCall call = new TestMediaCall(factory, true, false, H264)) {
+		try (TestMediaCall call = new TestMediaCall(factory, true, false, codec)) {
 			call.negotiate();
 
 			RTCRtpReceiver receiver = call.getReceiver("video");

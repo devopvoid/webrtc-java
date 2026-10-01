@@ -26,9 +26,10 @@
 
 namespace jni
 {
-	// Lists the hardware H.264 encoder transforms that take NV12, best
-	// first. Media Foundation has to be started.
-	HRESULT EnumerateHardwareH264Encoders(std::vector<Microsoft::WRL::ComPtr<IMFActivate>> & encoders);
+	// Lists the hardware encoder transforms that take NV12 and produce the
+	// given video format, such as MFVideoFormat_H264, best first. Media
+	// Foundation has to be started.
+	HRESULT EnumerateHardwareEncoders(const GUID & format, std::vector<Microsoft::WRL::ComPtr<IMFActivate>> & encoders);
 
 	// Returns the name the driver gives a transform, e.g. "AMDh264Encoder".
 	std::string GetTransformName(IMFActivate * activate);

@@ -18,8 +18,6 @@
 
 #include "api/video/encoded_image.h"
 #include "api/video/i420_buffer.h"
-#include "common_video/h264/h264_common.h"
-#include "modules/video_coding/codecs/interface/common_constants.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
 #include "rtc_base/logging.h"
@@ -33,10 +31,6 @@ namespace jni
 {
 	namespace
 	{
-		// The QP thresholds of WebRTC's own H.264 encoder.
-		constexpr int kLowH264QpThreshold = 24;
-		constexpr int kHighH264QpThreshold = 37;
-
 		// frame_num counts to 2^8 before it wraps.
 		constexpr uint32_t kLog2MaxFrameNum = 8;
 		constexpr uint32_t kMaxFrameNum = 1 << kLog2MaxFrameNum;
@@ -94,23 +88,6 @@ namespace jni
 			picture.picture_id = VA_INVALID_SURFACE;
 			picture.flags = VA_PICTURE_H264_INVALID;
 		}
-
-		// Whether a key frame carries both parameter sets, which the receiver
-		// needs to decode it.
-		bool HasParameterSets(const std::vector<uint8_t> & output)
-		{
-			bool sps = false;
-			bool pps = false;
-
-			for (const webrtc::H264::NaluIndex & nalu : webrtc::H264::FindNaluIndices(output)) {
-				const webrtc::H264::NaluType type = webrtc::H264::ParseNaluType(output[nalu.payload_start_offset]);
-
-				sps |= type == webrtc::H264::NaluType::kSps;
-				pps |= type == webrtc::H264::NaluType::kPps;
-			}
-
-			return sps && pps;
-		}
 	}
 
 	VaapiH264Encoder::VaapiH264Encoder(VaapiLibrary & library, const webrtc::SdpVideoFormat & format) :
@@ -133,13 +110,8 @@ namespace jni
 		current(0),
 		referenceValid(false),
 		callback(nullptr),
-		packetizationMode(webrtc::H264PacketizationMode::NonInterleaved)
+		outputProcessor(webrtc::kVideoCodecH264, format)
 	{
-		auto mode = format.parameters.find("packetization-mode");
-
-		if (mode == format.parameters.end() || mode->second != "1") {
-			packetizationMode = webrtc::H264PacketizationMode::SingleNalUnit;
-		}
 	}
 
 	VaapiH264Encoder::~VaapiH264Encoder()
@@ -183,6 +155,7 @@ namespace jni
 		frameNum = 0;
 		current = 0;
 		referenceValid = false;
+		outputProcessor.Reset();
 
 		if (!CreateSession()) {
 			Release();
@@ -323,9 +296,19 @@ namespace jni
 
 		DestroyFrameBuffers();
 
-		if (idr && !HasParameterSets(output)) {
-			// Nothing can decode the stream then; better in software.
-			RTC_LOG(LS_WARNING) << implementationName << " writes no parameter sets into key frames";
+		webrtc::EncodedImage image;
+		image._encodedWidth = codecSettings.width;
+		image._encodedHeight = codecSettings.height;
+		image.SetRtpTimestamp(frame.rtp_timestamp());
+		image.capture_time_ms_ = frame.render_time_ms();
+		image.ntp_time_ms_ = frame.ntp_time_ms();
+		image.rotation_ = frame.rotation();
+
+		webrtc::CodecSpecificInfo info;
+
+		// A driver that writes no parameter sets into key frames makes a
+		// stream nothing can decode; better in software then.
+		if (!outputProcessor.Process(output, idr, image, info)) {
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
@@ -338,28 +321,6 @@ namespace jni
 		if (idr) {
 			idrPicId = (idrPicId + 1) & 0xFFFF;
 		}
-
-		webrtc::EncodedImage image;
-		image.SetEncodedData(webrtc::EncodedImageBuffer::Create(output.data(), output.size()));
-		image._encodedWidth = codecSettings.width;
-		image._encodedHeight = codecSettings.height;
-		image.SetRtpTimestamp(frame.rtp_timestamp());
-		image.capture_time_ms_ = frame.render_time_ms();
-		image.ntp_time_ms_ = frame.ntp_time_ms();
-		image.rotation_ = frame.rotation();
-		image.set_frame_type(idr
-			? webrtc::VideoFrameType::kVideoFrameKey
-			: webrtc::VideoFrameType::kVideoFrameDelta);
-
-		bitstreamParser.ParseBitstream(std::span<const uint8_t>(output.data(), output.size()));
-		image.qp_ = bitstreamParser.GetLastSliceQp().value_or(-1);
-
-		webrtc::CodecSpecificInfo info;
-		info.codecType = webrtc::kVideoCodecH264;
-		info.codecSpecific.H264.packetization_mode = packetizationMode;
-		info.codecSpecific.H264.temporal_idx = webrtc::kNoTemporalIdx;
-		info.codecSpecific.H264.base_layer_sync = false;
-		info.codecSpecific.H264.idr_frame = idr;
 
 		callback->OnEncodedImage(image, &info);
 
@@ -700,7 +661,7 @@ namespace jni
 		info.is_hardware_accelerated = true;
 		info.supports_native_handle = false;
 		info.supports_simulcast = false;
-		info.scaling_settings = ScalingSettings(kLowH264QpThreshold, kHighH264QpThreshold);
+		info.scaling_settings = outputProcessor.GetScalingSettings();
 		// NV12 needs even dimensions.
 		info.requested_resolution_alignment = 2;
 

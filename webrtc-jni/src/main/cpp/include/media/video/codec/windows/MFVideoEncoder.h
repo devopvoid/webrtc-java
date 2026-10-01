@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_MF_H264_ENCODER_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_CODEC_MF_H264_ENCODER_H_
+#ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_MF_VIDEO_ENCODER_H_
+#define JNI_WEBRTC_MEDIA_VIDEO_CODEC_MF_VIDEO_ENCODER_H_
 
+#include "media/video/codec/EncoderOutputProcessor.h"
 #include "media/video/codec/windows/MFTransformEvents.h"
 #include "platform/windows/MFInitializer.h"
 
+#include "api/video/video_codec_type.h"
 #include "api/video/video_frame.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_codec.h"
 #include "api/video_codecs/video_encoder.h"
-#include "common_video/h264/h264_bitstream_parser.h"
-#include "modules/video_coding/codecs/h264/include/h264_globals.h"
 
 #include <mftransform.h>
 #include <strmif.h>
@@ -42,8 +42,8 @@
 
 namespace jni
 {
-	// Encodes H.264 with the hardware encoder of the GPU, through the Media
-	// Foundation transform its driver provides. These transforms are
+	// Encodes H.264 or AV1 with the hardware encoder of the GPU, through the
+	// Media Foundation transform its driver provides. These transforms are
 	// asynchronous: they ask for input and announce output through events,
 	// which arrive on a Media Foundation thread, so encoded frames are
 	// handed to WebRTC from there.
@@ -51,11 +51,12 @@ namespace jni
 	// Frames are passed in system memory as NV12; the transform uploads them.
 	// Anything that fails makes the encoder give up, so that WebRTC switches
 	// to the software encoder.
-	class MFH264Encoder : public webrtc::VideoEncoder, public MFTransformEventListener
+	class MFVideoEncoder : public webrtc::VideoEncoder, public MFTransformEventListener
 	{
 		public:
-			explicit MFH264Encoder(const webrtc::SdpVideoFormat & format);
-			~MFH264Encoder() override;
+			// The codec is H.264 or AV1.
+			MFVideoEncoder(webrtc::VideoCodecType codec, const webrtc::SdpVideoFormat & format);
+			~MFVideoEncoder() override;
 
 			int32_t InitEncode(const webrtc::VideoCodec * codecSettings, const Settings & settings) override;
 			int32_t RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * callback) override;
@@ -79,14 +80,13 @@ namespace jni
 			HRESULT CreateTransform();
 			HRESULT ConfigureTypes();
 			void ConfigureCodec();
-			void SetBitrate(uint32_t bitrateBps);
 			HRESULT CreateInputSample(const webrtc::VideoFrame & frame, IMFSample ** sample);
 			void ProcessOutput();
 			void DeliverOutput(IMFSample * sample);
 			void ShutdownTransform();
 
 		private:
-			const webrtc::SdpVideoFormat format;
+			const webrtc::VideoCodecType codec;
 			std::string implementationName;
 
 			std::unique_ptr<MFInitializer> mfInitializer;
@@ -123,10 +123,8 @@ namespace jni
 			LONGLONG lastSampleTime;
 			bool keyFrameRequested;
 
-			// Used on the event thread only.
-			std::vector<uint8_t> parameterSets;
-			webrtc::H264BitstreamParser bitstreamParser;
-			webrtc::H264PacketizationMode packetizationMode;
+			// Used on the event thread only, and reset while no events arrive.
+			EncoderOutputProcessor outputProcessor;
 	};
 }
 

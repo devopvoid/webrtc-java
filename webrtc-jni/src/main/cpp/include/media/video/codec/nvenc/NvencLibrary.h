@@ -60,6 +60,11 @@ namespace jni
 			// The name of the device, e.g. "NVIDIA GeForce RTX 4070".
 			const std::string & DeviceName() const;
 
+			// Whether the device encodes H.264, and AV1, which only newer
+			// GPUs do.
+			bool SupportsH264() const;
+			bool SupportsAv1() const;
+
 			// Retains the primary context of the device. Every successful call
 			// has to be matched by ReleaseContext().
 			bool RetainContext(CUcontext * context) const;
@@ -72,6 +77,9 @@ namespace jni
 			NvencLibrary() = default;
 
 			bool Load();
+
+			// Asks an encode session which codecs the device supports.
+			void QueryCodecs();
 
 		private:
 			using CuInit = CUresult (JNI_CUDAAPI *)(unsigned int flags);
@@ -101,6 +109,8 @@ namespace jni
 			NV_ENCODE_API_FUNCTION_LIST api = {};
 			CUdevice device = 0;
 			std::string deviceName;
+			bool h264 = false;
+			bool av1 = false;
 	};
 }
 

@@ -18,7 +18,9 @@
 
 #include "rtc_base/logging.h"
 
+#include <cstring>
 #include <mutex>
+#include <vector>
 
 namespace jni
 {
@@ -116,9 +118,72 @@ namespace jni
 			deviceName = name;
 		}
 
-		RTC_LOG(LS_INFO) << "NVENC available on " << deviceName;
+		QueryCodecs();
+
+		if (!h264 && !av1) {
+			RTC_LOG(LS_INFO) << "NVENC: " << deviceName << " encodes neither H.264 nor AV1";
+			return false;
+		}
+
+		RTC_LOG(LS_INFO) << "NVENC available on " << deviceName << ", H.264: " << h264 << ", AV1: " << av1;
 
 		return true;
+	}
+
+	void NvencLibrary::QueryCodecs()
+	{
+		CUcontext context = nullptr;
+
+		if (!RetainContext(&context)) {
+			return;
+		}
+
+		if (PushContext(context)) {
+			NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS params = {};
+			params.version = NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;
+			params.deviceType = NV_ENC_DEVICE_TYPE_CUDA;
+			params.device = context;
+			params.apiVersion = NVENCAPI_VERSION;
+
+			void * encoder = nullptr;
+
+			if (api.nvEncOpenEncodeSessionEx(&params, &encoder) == NV_ENC_SUCCESS) {
+				uint32_t count = 0;
+
+				if (api.nvEncGetEncodeGUIDCount(encoder, &count) == NV_ENC_SUCCESS && count > 0) {
+					std::vector<GUID> guids(count);
+					uint32_t found = 0;
+
+					if (api.nvEncGetEncodeGUIDs(encoder, guids.data(), count, &found) == NV_ENC_SUCCESS) {
+						for (uint32_t i = 0; i < found; i++) {
+							h264 |= std::memcmp(&guids[i], &NV_ENC_CODEC_H264_GUID, sizeof(GUID)) == 0;
+							av1 |= std::memcmp(&guids[i], &NV_ENC_CODEC_AV1_GUID, sizeof(GUID)) == 0;
+						}
+					}
+				}
+
+				api.nvEncDestroyEncoder(encoder);
+			}
+			else {
+				// No session left to ask right now; every NVENC GPU encodes
+				// H.264.
+				h264 = true;
+			}
+
+			PopContext();
+		}
+
+		ReleaseContext();
+	}
+
+	bool NvencLibrary::SupportsH264() const
+	{
+		return h264;
+	}
+
+	bool NvencLibrary::SupportsAv1() const
+	{
+		return av1;
 	}
 
 	const NV_ENCODE_API_FUNCTION_LIST & NvencLibrary::Api() const
