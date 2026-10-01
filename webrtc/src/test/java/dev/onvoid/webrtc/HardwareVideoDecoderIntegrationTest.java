@@ -89,11 +89,59 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
 				.build();
 
+		String implementation;
+
+		try {
+			implementation = decoderImplementation(hardware, codec);
+		}
+		finally {
+			hardware.dispose();
+		}
+
+		boolean hardwareUsed = implementation.contains("MediaFoundation");
+
+		if (required) {
+			assertTrue(hardwareUsed, implementation);
+		}
+		else {
+			assumeTrue(hardwareUsed, "no hardware decoder: " + implementation);
+		}
+	}
+
+	@Test
+	void macDecodesH264WithVideoToolbox() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		// The default decoders use VideoToolbox on macOS.
+		assertTrue(decoderImplementation(factory, H264).contains("VideoToolbox"));
+
+		// The hardware factory has nothing of its own there, and hands over to
+		// the default decoders.
+		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+				.build();
+
+		try {
+			assertTrue(decoderImplementation(hardware, H264).contains("VideoToolbox"));
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	/**
+	 * Receives video in the preferred codec through a call, checks that the
+	 * decoded frames are the size that was sent, and returns what the receiver
+	 * reports its decoder to be.
+	 */
+	private static String decoderImplementation(PeerConnectionFactory factory,
+			Predicate<RTCRtpCodecCapability> codec) throws Exception {
 		CountDownLatch received = new CountDownLatch(10);
 		AtomicReference<String> wrongSize = new AtomicReference<>();
 		String implementation;
 
-		try (TestMediaCall call = new TestMediaCall(hardware, true, false, codec)) {
+		try (TestMediaCall call = new TestMediaCall(factory, true, false, codec)) {
 			call.negotiate();
 
 			RTCRtpReceiver receiver = call.getReceiver("video");
@@ -118,32 +166,22 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 			assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
 
-			implementation = decoderImplementation(call);
+			implementation = decoderImplementationOf(call);
 
 			track.removeSink(sink);
 			receiver.dispose();
 		}
-		finally {
-			hardware.dispose();
-		}
-
-		boolean hardwareUsed = implementation.contains("MediaFoundation");
-
-		if (required) {
-			assertTrue(hardwareUsed, implementation);
-		}
-		else {
-			assumeTrue(hardwareUsed, "no hardware decoder: " + implementation);
-		}
 
 		assertNull(wrongSize.get(), "decoded frames of the wrong size: " + wrongSize.get());
+
+		return implementation;
 	}
 
 	/**
 	 * Returns what the receiver reports its decoder to be, once the
 	 * statistics have caught up with it.
 	 */
-	private static String decoderImplementation(TestMediaCall call) throws InterruptedException {
+	private static String decoderImplementationOf(TestMediaCall call) throws InterruptedException {
 		Object implementation = null;
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
 

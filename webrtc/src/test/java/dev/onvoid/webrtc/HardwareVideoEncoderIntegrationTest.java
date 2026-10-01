@@ -122,6 +122,28 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		assertTrue(implementation.contains("OpenH264"), implementation);
 	}
 
+	@Test
+	void macEncodesH264WithVideoToolbox() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		// The default encoders use VideoToolbox on macOS.
+		assertTrue(encoderImplementation(factory, H264).contains("VideoToolbox"));
+
+		// The hardware factory has nothing of its own there, and hands over to
+		// the default encoders.
+		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.build();
+
+		try {
+			assertTrue(encoderImplementation(hardware, H264).contains("VideoToolbox"));
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
 	private static void assertHardware(String implementation, boolean required) {
 		boolean hardwareUsed = implementation.startsWith("NVENC")
 				|| implementation.startsWith("VA-API")
