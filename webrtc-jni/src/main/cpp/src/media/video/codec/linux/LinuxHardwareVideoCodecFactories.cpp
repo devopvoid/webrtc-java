@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
+#include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
+#include "media/video/codec/linux/VaapiVideoEncoderFactory.h"
 #include "media/video/codec/nvenc/NvencVideoEncoderFactory.h"
-#include "media/video/codec/windows/MFVideoEncoderFactory.h"
 
 namespace jni
 {
@@ -24,16 +25,21 @@ namespace jni
 	{
 		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> factories;
 
-		// NVENC first: on an NVIDIA GPU it gives more control over latency
-		// than the Media Foundation encoder of the same driver. When NVENC
-		// fails, for example out of sessions, Media Foundation takes over.
+		// NVENC first where there is an NVIDIA GPU, whose driver has no
+		// VA-API encoder; VA-API for the GPUs of Intel and AMD.
 		if (auto nvenc = NvencVideoEncoderFactory::Create()) {
 			factories.push_back(std::move(nvenc));
 		}
-		if (auto mediaFoundation = MFVideoEncoderFactory::Create()) {
-			factories.push_back(std::move(mediaFoundation));
+		if (auto vaapi = VaapiVideoEncoderFactory::Create()) {
+			factories.push_back(std::move(vaapi));
 		}
 
 		return factories;
+	}
+
+	std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> CreatePlatformHardwareVideoDecoderFactories()
+	{
+		// No hardware decoders on Linux yet.
+		return {};
 	}
 }

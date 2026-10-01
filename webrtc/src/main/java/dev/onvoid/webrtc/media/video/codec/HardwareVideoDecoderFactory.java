@@ -24,24 +24,34 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The video decoders built into this library, which a {@link
- * dev.onvoid.webrtc.PeerConnectionFactory PeerConnectionFactory} uses unless
- * it is given a {@link VideoDecoderFactory} of its own. On Windows and Linux
- * these are VP8, VP9, AV1 and H.264 in software; on macOS they are those of
- * WebRTC's default factories, with H.264 through VideoToolbox.
- * {@link #getSupportedCodecs()} lists what the platform has.
+ * The built-in video decoders, with the decoders of the GPU in front of them
+ * where the platform has them. Set it on a {@link
+ * dev.onvoid.webrtc.PeerConnectionFactory PeerConnectionFactory} to decode in
+ * hardware:
+ * <pre>{@code
+ * PeerConnectionFactory factory = PeerConnectionFactory.builder()
+ *     .setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+ *     .build();
+ * }</pre>
  * <p>
- * To decode on the GPU where the platform supports it, use a {@link
- * HardwareVideoDecoderFactory} instead.
+ * On Windows, H.264 and AV1 are decoded on the GPU through Direct3D 11 by the
+ * Media Foundation decoders of Windows, where the GPU decodes the codec.
+ * Decoded frames are copied back to system memory, which WebRTC's frames are
+ * in, so hardware decoding saves CPU mostly at high resolutions. A hardware
+ * decoder that fails to start, or fails while decoding, is replaced by the
+ * software decoder of the same codec, which starts with the next key frame.
+ * Where there is no hardware decoder, this factory decodes like a {@link
+ * DefaultVideoDecoderFactory}. On macOS, that already uses VideoToolbox.
+ * Linux has no hardware decoders yet.
  * <p>
- * A factory of one's own can hand out these decoders next to its own ones
- * by delegating to an instance of this class. The decoders it creates are
- * {@link NativeVideoDecoder}s, which run inside WebRTC and are not to be
- * called from Java.
+ * The hardware decoders take over only codecs the software decoders have too,
+ * so the supported codecs are the same as those of a {@link
+ * DefaultVideoDecoderFactory}, and what a peer connection negotiates does not
+ * depend on the GPU.
  *
  * @author Alex Andres
  */
-public final class DefaultVideoDecoderFactory implements VideoDecoderFactory {
+public final class HardwareVideoDecoderFactory implements VideoDecoderFactory {
 
 	static {
 		try {
@@ -57,9 +67,9 @@ public final class DefaultVideoDecoderFactory implements VideoDecoderFactory {
 
 
 	/**
-	 * Creates a factory for the built-in video decoders.
+	 * Creates a factory for the hardware video decoders.
 	 */
-	public DefaultVideoDecoderFactory() {
+	public HardwareVideoDecoderFactory() {
 		supportedCodecs = Collections.unmodifiableList(
 				Arrays.asList(getSupportedCodecsInternal()));
 	}
@@ -70,7 +80,8 @@ public final class DefaultVideoDecoderFactory implements VideoDecoderFactory {
 	}
 
 	/**
-	 * Returns a built-in decoder for the given codec.
+	 * Returns a built-in decoder for the given codec, decoding on the GPU if
+	 * it can.
 	 *
 	 * @param info The codec to decode, as negotiated.
 	 *
@@ -83,7 +94,7 @@ public final class DefaultVideoDecoderFactory implements VideoDecoderFactory {
 
 		for (VideoCodecInfo codec : supportedCodecs) {
 			if (codec.getName().equalsIgnoreCase(info.getName())) {
-				return new NativeVideoDecoder(info, false);
+				return new NativeVideoDecoder(info, true);
 			}
 		}
 

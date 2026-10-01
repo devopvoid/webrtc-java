@@ -166,6 +166,29 @@ class TestMediaCall implements AutoCloseable {
 		return outbound.get();
 	}
 
+	/**
+	 * Returns the callee's statistics of its inbound video stream, or null if
+	 * there are none yet.
+	 */
+	Map<String, Object> getInboundVideoStats() throws InterruptedException {
+		CountDownLatch done = new CountDownLatch(1);
+		AtomicReference<Map<String, Object>> inbound = new AtomicReference<>();
+
+		callee.getPeerConnection().getStats(report -> {
+			for (RTCStats stats : report.getStats().values()) {
+				if (stats.getType() == RTCStatsType.INBOUND_RTP
+						&& "video".equals(stats.getAttributes().get("kind"))) {
+					inbound.set(stats.getAttributes());
+				}
+			}
+			done.countDown();
+		});
+
+		done.await(5, TimeUnit.SECONDS);
+
+		return inbound.get();
+	}
+
 	RTCRtpSender getVideoSender() {
 		return videoSender;
 	}

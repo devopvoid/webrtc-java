@@ -16,6 +16,7 @@
 
 #include "media/video/codec/DefaultVideoCodecFactories.h"
 
+#include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
 
 #ifdef __APPLE__
@@ -76,6 +77,21 @@ namespace jni
 			webrtc::LibvpxVp9DecoderTemplateAdapter,
 			webrtc::OpenH264DecoderTemplateAdapter,
 			webrtc::Dav1dDecoderTemplateAdapter>>();
+#endif
+	}
+
+	std::unique_ptr<webrtc::VideoDecoderFactory> CreateHardwareVideoDecoderFactory()
+	{
+#ifdef __APPLE__
+		return CreateDefaultVideoDecoderFactory();
+#else
+		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> hardware = CreatePlatformHardwareVideoDecoderFactories();
+
+		if (hardware.empty()) {
+			return CreateDefaultVideoDecoderFactory();
+		}
+
+		return std::make_unique<HardwareVideoDecoderFactory>(std::move(hardware), CreateDefaultVideoDecoderFactory());
 #endif
 	}
 }

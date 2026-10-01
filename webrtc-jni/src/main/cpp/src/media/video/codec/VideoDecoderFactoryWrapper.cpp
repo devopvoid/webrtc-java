@@ -31,7 +31,8 @@ namespace jni
 	VideoDecoderFactoryWrapper::VideoDecoderFactoryWrapper(JNIEnv * env, jobject factory) :
 		factory(env, factory),
 		javaClass(JavaClasses::get<JavaVideoDecoderFactoryClass>(env)),
-		defaultFactory(CreateDefaultVideoDecoderFactory())
+		defaultFactory(CreateDefaultVideoDecoderFactory()),
+		hardwareFactory(CreateHardwareVideoDecoderFactory())
 	{
 		JavaLocalRef<jobject> codecs(env, env->CallObjectMethod(factory, javaClass->getSupportedCodecs));
 
@@ -69,7 +70,10 @@ namespace jni
 			if (env->IsInstanceOf(decoder, javaClass->nativeDecoderClass)) {
 				JavaLocalRef<jobject> nativeInfo(env, env->GetObjectField(decoder, javaClass->nativeDecoderCodecInfo));
 
-				return defaultFactory->Create(environment, VideoCodecInfo::toNative(env, nativeInfo));
+				const bool hardware = env->GetBooleanField(decoder, javaClass->nativeDecoderHardwareAcceleration) == JNI_TRUE;
+				webrtc::VideoDecoderFactory & builtIn = hardware ? *hardwareFactory : *defaultFactory;
+
+				return builtIn.Create(environment, VideoCodecInfo::toNative(env, nativeInfo));
 			}
 
 			return std::make_unique<VideoDecoderWrapper>(env, decoder);
@@ -93,5 +97,6 @@ namespace jni
 
 		nativeDecoderClass = FindClass(env, PKG_CODEC"NativeVideoDecoder");
 		nativeDecoderCodecInfo = GetFieldID(env, nativeDecoderClass, "codecInfo", "L" PKG_CODEC "VideoCodecInfo;");
+		nativeDecoderHardwareAcceleration = GetFieldID(env, nativeDecoderClass, "hardwareAcceleration", "Z");
 	}
 }

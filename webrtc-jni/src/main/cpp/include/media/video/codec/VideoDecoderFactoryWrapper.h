@@ -59,12 +59,15 @@ namespace jni
 
 					jclass nativeDecoderClass;
 					jfieldID nativeDecoderCodecInfo;
+					jfieldID nativeDecoderHardwareAcceleration;
 			};
 
 		private:
 			const JavaGlobalRef<jobject> factory;
 			const std::shared_ptr<JavaVideoDecoderFactoryClass> javaClass;
+			// The built-in decoders, and those with the GPU's in front.
 			const std::unique_ptr<webrtc::VideoDecoderFactory> defaultFactory;
+			const std::unique_ptr<webrtc::VideoDecoderFactory> hardwareFactory;
 
 			std::vector<webrtc::SdpVideoFormat> supportedFormats;
 	};
