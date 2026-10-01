@@ -34,13 +34,14 @@ import java.util.Objects;
  *     .build();
  * }</pre>
  * <p>
- * On Windows, H.264 is encoded by the Media Foundation encoder of the GPU
- * driver. A hardware encoder that fails to start, for example because the GPU
- * has no encoder sessions left, or fails while encoding, is replaced by the
- * software encoder of the same codec, so a stream keeps going. Where there is
- * no hardware encoder, this factory encodes like a {@link
- * DefaultVideoEncoderFactory}. On macOS, that already uses VideoToolbox.
- * Linux has no hardware encoders yet.
+ * H.264 is encoded on an NVIDIA GPU with NVENC, on Windows and Linux, and
+ * on Windows otherwise with the Media Foundation encoder of the GPU driver.
+ * A hardware encoder that fails to start, for example because the GPU has no
+ * encoder sessions left, or fails while encoding, is replaced by the next one
+ * in line, and finally by the software encoder of the same codec, so a stream
+ * keeps going. Where there is no hardware encoder, this factory encodes like a
+ * {@link DefaultVideoEncoderFactory}. On macOS, that already uses
+ * VideoToolbox.
  * <p>
  * The hardware encoders take over only codecs the software encoders have too,
  * so the supported codecs are the same as those of a {@link

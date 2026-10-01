@@ -26,13 +26,15 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 | Platform | Hardware encoding |
 |---|---|
-| Windows | H.264 through the Media Foundation encoder of the GPU driver (NVIDIA, AMD, Intel) |
+| Windows | H.264 with NVENC on NVIDIA GPUs, otherwise through the Media Foundation encoder of the GPU driver (AMD, Intel) |
+| Linux | H.264 with NVENC on NVIDIA GPUs; other GPUs encode in software |
 | macOS | H.264 through VideoToolbox, as with `DefaultVideoEncoderFactory` |
-| Linux | Not yet; encoding is in software |
 
-On Windows, the hardware encoder takes over H.264 Constrained Baseline and Baseline with packetization mode 1, formats the software encoder offers too, so encoding in hardware never changes what is negotiated. When the hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the software encoder and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
+NVENC needs an NVIDIA driver of version 522 or newer on Windows, 520 or newer on Linux; it is loaded at run time, so nothing needs to be installed on machines without one.
 
-Which encoder a stream uses shows in the `encoderImplementation` statistic of its `outbound-rtp` stats, e.g. `MediaFoundation (AMDh264Encoder)` or `OpenH264`.
+The hardware encoders take over H.264 Constrained Baseline and Baseline with packetization mode 1, formats the software encoder offers too, so encoding in hardware never changes what is negotiated. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (on Windows, from NVENC to Media Foundation), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
+
+Which encoder a stream uses shows in the `encoderImplementation` statistic of its `outbound-rtp` stats, e.g. `NVENC (NVIDIA GeForce RTX 4070)`, `MediaFoundation (AMDh264Encoder)` or `OpenH264`.
 
 ### Native Codecs
 

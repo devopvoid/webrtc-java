@@ -15,12 +15,18 @@
  */
 
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
+#include "media/video/codec/nvenc/NvencVideoEncoderFactory.h"
 
 namespace jni
 {
-	std::unique_ptr<webrtc::VideoEncoderFactory> CreatePlatformHardwareVideoEncoderFactory()
+	std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> CreatePlatformHardwareVideoEncoderFactories()
 	{
-		// No hardware encoders on Linux yet: VA-API and NVENC are to come.
-		return nullptr;
+		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> factories;
+
+		if (auto nvenc = NvencVideoEncoderFactory::Create()) {
+			factories.push_back(std::move(nvenc));
+		}
+
+		return factories;
 	}
 }

@@ -57,6 +57,12 @@ file(GLOB SOURCES_MEDIA_AUDIO_OS "src/media/audio/${SOURCE_TARGET}/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO "src/media/video/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_CODEC "src/media/video/codec/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_CODEC_OS "src/media/video/codec/${SOURCE_TARGET}/*.cpp")
+
+# NVENC is loaded at run time from the NVIDIA driver, so building it needs its
+# header only. The driver exists for Windows and Linux.
+if(WIN32 OR LINUX)
+    file(GLOB SOURCES_MEDIA_VIDEO_CODEC_NVENC "src/media/video/codec/nvenc/*.cpp")
+endif()
 file(GLOB SOURCES_MEDIA_VIDEO_DESKTOP "src/media/video/desktop/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_DESKTOP_OS "src/media/video/desktop/${SOURCE_TARGET}/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_OS "src/media/video/${SOURCE_TARGET}/*.cpp")
@@ -73,6 +79,7 @@ list(APPEND SOURCES
     ${SOURCES_MEDIA_VIDEO}
     ${SOURCES_MEDIA_VIDEO_CODEC}
     ${SOURCES_MEDIA_VIDEO_CODEC_OS}
+    ${SOURCES_MEDIA_VIDEO_CODEC_NVENC}
     ${SOURCES_MEDIA_VIDEO_DESKTOP}
     ${SOURCES_MEDIA_VIDEO_DESKTOP_OS}
     ${SOURCES_MEDIA_VIDEO_OS}
@@ -99,6 +106,10 @@ target_include_directories(${PROJECT_NAME}
         include/media
         include/rtc
 )
+
+if(WIN32 OR LINUX)
+    target_include_directories(${PROJECT_NAME} PRIVATE dependencies/nvenc/include)
+endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     OUTPUT_NAME "${PROJECT_NAME}-${OUTPUT_NAME_SUFFIX}"
@@ -151,3 +162,11 @@ install(FILES
     DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF/licenses/webrtc"
     COMPONENT Runtime
 )
+
+if(WIN32 OR LINUX)
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/nvenc/LICENSE"
+        DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF/licenses/nvenc"
+        COMPONENT Runtime
+    )
+endif()
