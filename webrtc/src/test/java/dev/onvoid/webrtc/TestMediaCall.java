@@ -60,6 +60,15 @@ class TestMediaCall implements AutoCloseable {
 
 
 	TestMediaCall(PeerConnectionFactory factory, boolean video, boolean audio) {
+		this(factory, video, audio, "VP8");
+	}
+
+	/**
+	 * Creates a call whose video prefers the given codec.
+	 *
+	 * @param videoCodec The name of the video codec to prefer.
+	 */
+	TestMediaCall(PeerConnectionFactory factory, boolean video, boolean audio, String videoCodec) {
 		caller = new TestPeerConnection(factory);
 		callee = new TestPeerConnection(factory);
 
@@ -72,7 +81,7 @@ class TestMediaCall implements AutoCloseable {
 			videoSender = caller.getPeerConnection().addTrack(videoTrack,
 					Collections.singletonList("stream"));
 
-			preferVp8(factory, caller.getPeerConnection(), videoSender);
+			preferCodec(factory, caller.getPeerConnection(), videoSender, videoCodec);
 		}
 		else {
 			videoSource = null;
@@ -191,18 +200,19 @@ class TestMediaCall implements AutoCloseable {
 	}
 
 	/**
-	 * Makes VP8 the preferred video codec. Platforms prefer different codecs by
-	 * default, macOS H.264 through VideoToolbox, and the tests should not
-	 * depend on which: VP8 is available everywhere, and it is the codec that
-	 * survives a transform changing the whole payload, which H.264 does not,
-	 * since its packetizer splits frames at start codes in the payload.
+	 * Makes the given video codec the preferred one. Platforms prefer different
+	 * codecs by default, macOS H.264 through VideoToolbox, and the tests should
+	 * not depend on which. Unless a test needs another, they prefer VP8: it is
+	 * available everywhere, and it is the codec that survives a transform
+	 * changing the whole payload, which H.264 does not, since its packetizer
+	 * splits frames at start codes in the payload.
 	 */
-	private static void preferVp8(PeerConnectionFactory factory, RTCPeerConnection connection,
-			RTCRtpSender sender) {
+	private static void preferCodec(PeerConnectionFactory factory, RTCPeerConnection connection,
+			RTCRtpSender sender, String name) {
 		List<RTCRtpCodecCapability> codecs = new ArrayList<>(
 				factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs());
 
-		codecs.sort(Comparator.comparing(codec -> !"VP8".equalsIgnoreCase(codec.getName())));
+		codecs.sort(Comparator.comparing(codec -> !name.equalsIgnoreCase(codec.getName())));
 
 		for (RTCRtpTransceiver transceiver : connection.getTransceivers()) {
 			RTCRtpSender transceiverSender = transceiver.getSender();

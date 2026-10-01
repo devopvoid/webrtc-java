@@ -34,6 +34,7 @@ For more detailed information, check out the documentation:
 - [Media Files](https://jrtc.dev/guide/media/media-files) - Sending video and audio files with the media module
 - [Media Recording](https://jrtc.dev/guide/media/media-recording) - Recording calls into media files with the media module
 - [Encoded Transforms](https://jrtc.dev/guide/advanced/encoded-transforms) - Reading and changing encoded frames, e.g. for end-to-end encryption
+- [Video Codecs](https://jrtc.dev/guide/advanced/video-codecs) - Adding video codecs implemented in Java, or limiting the built-in ones
 - [Build Notes](https://jrtc.dev/guide/build) - Instructions for building the library from source
 
 ## License

@@ -42,6 +42,7 @@ This section provides detailed guides for various features of the webrtc-java li
 
 - [Field Trials](/guide/advanced/field-trials) - Enabling experimental features and tuning WebRTC internals
 - [Encoded Transforms](/guide/advanced/encoded-transforms) - Reading and changing encoded frames, e.g. for end-to-end encryption
+- [Video Codecs](/guide/advanced/video-codecs) - Adding video codecs implemented in Java, or limiting the built-in ones
 
 ## Additional Resources
 

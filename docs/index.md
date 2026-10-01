@@ -32,6 +32,8 @@ features:
     details: Record what a peer connection sends or receives into MKV, WebM or MP4 files. Encoded frames go into the file as they are, without re-encoding, so recording costs next to no CPU and keeps the exact quality of the call.
   - title: End-to-End Encryption
     details: Encoded transforms let Java code read, change or drop every encoded frame between encoder and network, like insertable streams in the browser; the building block for end-to-end encryption, frame metadata and stream analysis.
+  - title: Custom Video Codecs
+    details: Plug video encoders and decoders written in Java into WebRTC, next to the built-in VP8, VP9, AV1 and H.264, to bring in a codec of your own or a hardware encoder from another library.
   - title: Screen Sharing
     details: Share application windows or the full desktop with minimal setup; integrate screen capture streams like any other media stream.
   - title: Data Channels

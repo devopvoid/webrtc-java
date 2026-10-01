@@ -10,6 +10,7 @@ module webrtc.java {
 	exports dev.onvoid.webrtc.media;
 	exports dev.onvoid.webrtc.media.audio;
 	exports dev.onvoid.webrtc.media.video;
+	exports dev.onvoid.webrtc.media.video.codec;
 	exports dev.onvoid.webrtc.media.video.desktop;
 
 	// Not API for applications. A native extension module, such as the FFmpeg

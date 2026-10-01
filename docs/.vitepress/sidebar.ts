@@ -75,6 +75,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			items: [
 				{ text: 'Field Trials', link: '/advanced/field-trials' },
 				{ text: 'Encoded Transforms', link: '/advanced/encoded-transforms' },
+				{ text: 'Video Codecs', link: '/advanced/video-codecs' },
 			],
 		},
 	]

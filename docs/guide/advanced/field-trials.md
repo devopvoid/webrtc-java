@@ -24,6 +24,15 @@ PeerConnectionFactory factory = new PeerConnectionFactory(fieldTrials, audioProc
 PeerConnectionFactory factory = new PeerConnectionFactory(fieldTrials, audioModule, audioProcessing);
 ```
 
+`PeerConnectionFactory.builder()` sets them too, next to anything else a factory is created with, such as its [video codecs](/guide/advanced/video-codecs):
+
+```java
+PeerConnectionFactory factory = PeerConnectionFactory.builder()
+        .setFieldTrials(fieldTrials)
+        .setAudioDeviceModule(audioModule)
+        .build();
+```
+
 ## Constraints
 
 Each key and value must be non-null and non-empty. Passing a map that violates this constraint throws an exception when the `PeerConnectionFactory` is created.
