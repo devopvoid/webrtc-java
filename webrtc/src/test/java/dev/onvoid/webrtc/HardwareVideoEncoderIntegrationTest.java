@@ -83,6 +83,7 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 			String implementation = encoderImplementation(hardware);
 
 			boolean hardwareUsed = implementation.startsWith("NVENC")
+					|| implementation.startsWith("VA-API")
 					|| implementation.contains("MediaFoundation");
 
 			if (HARDWARE_REQUIRED) {
