@@ -204,6 +204,29 @@ The player takes over the reader it is given. That reader must not be used or cl
 It also keeps the native side of the media sources it feeds alive until it is closed, so disposing of a source or its track while the player runs is safe.
 :::
 
+## Decoding in Hardware
+
+Decoding H.264 and VP9 takes a good part of a processor at high resolutions, and for every stream of a camera wall. A player can decode them on the media engine or GPU of the machine instead. It does so when asked to, with a flag on `MediaFileSource` or `MediaPlayer`:
+
+```java
+// A file whose video is decoded in hardware, where the platform can.
+MediaFileSource source = new MediaFileSource(path, true);
+
+// The same for a player of your own.
+MediaPlayer player = new MediaPlayer(new MediaReader(path), videoSource, null, true);
+
+// What is actually in use: false if the platform or the stream has no
+// hardware decoder for it.
+boolean hardware = source.getPlayer().isHardwareDecoding();
+```
+
+The pictures are the same ones software decoding gives; in the tests, every frame of H.264 and VP9 media is compared with its software counterpart. Hardware decoding is off unless asked for.
+
+- **Platforms:** macOS through VideoToolbox, Windows through Direct3D 11, with DXVA2 for what has no Direct3D 11 decoder, and Linux through NVDEC on NVIDIA GPUs (x86-64 and ARM64; the driver provides `libcuda.so.1` and `libnvcuvid.so.1`, which are loaded when a player asks for hardware). The flag is accepted everywhere; where the platform has no hardware decoder, or the FFmpeg build has none for it (32-bit ARM, VA-API on Intel and AMD GPUs), the video is decoded in software, and `isHardwareDecoding()` says so.
+- **Codecs:** H.264 and VP9. VP8, MPEG-4, MJPEG and H.265/HEVC are decoded in software.
+- **Fallback:** a stream the hardware does not take, such as a profile it cannot decode, is decoded in software without the player noticing more than `isHardwareDecoding()` turning `false`. If the hardware fails after it has produced a picture, decoding goes on in software from the next key frame.
+- **What it saves** is processor time, not the copy: a decoded picture is read back from the media engine into system memory, and converted to I420 as WebRTC wants it. On an Apple M2, a 1080p H.264 stream took 11.6 ms of processor time per frame in software and 1.4 ms in hardware, and a 4K stream 35.7 ms against 4.2 ms, about seven to eight times less. Per frame, software on all cores is faster on the clock, which does not matter at playback speed. These are figures for one machine and for synthetic media, not a promise.
+
 ## Playing a Live Stream
 
 A source can also be a live stream behind an `rtsp://` URL, which is what IP cameras, video recorders and most media servers offer. Everything above works the same way; only the URL differs:

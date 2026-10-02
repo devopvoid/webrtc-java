@@ -46,6 +46,16 @@ namespace ffmpeg
 		observer_ = std::move(observer);
 	}
 
+	void MediaPlayer::SetHardwareDecoding(bool hardware)
+	{
+		hardware_decoding_ = hardware;
+	}
+
+	bool MediaPlayer::IsHardwareDecoding() const
+	{
+		return video_decoder_.IsHardware();
+	}
+
 	int MediaPlayer::Initialize()
 	{
 		if (reader_ == nullptr || !reader_->IsOpen()) {
@@ -53,7 +63,7 @@ namespace ffmpeg
 		}
 
 		if (reader_->HasVideo()) {
-			int result = video_decoder_.Open(reader_->GetVideoStream());
+			int result = video_decoder_.Open(reader_->GetVideoStream(), hardware_decoding_);
 
 			if (result < 0) {
 				return result;

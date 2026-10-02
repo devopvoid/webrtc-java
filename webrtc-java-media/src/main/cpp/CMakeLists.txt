@@ -170,3 +170,16 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${FFMPEG_NOTICE_FILE}" "${FFMPEG_LICENSES_DIR}/NOTICE.txt"
     COMMENT "Collecting the FFmpeg license and notice for the platform jar")
+
+# The headers FFmpeg was built against for NVDEC have licenses of their own,
+# which go along as well.
+if(FFMPEG_NVDEC)
+    set(FFNVCODEC_LICENSES_DIR "${NATIVES_DIR}/META-INF/licenses/ffnvcodec")
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${FFNVCODEC_LICENSES_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/ffnvcodec/LICENSE"
+                "${FFNVCODEC_LICENSES_DIR}/LICENSE"
+        COMMENT "Collecting the license of the NVDEC headers for the platform jar")
+endif()

@@ -81,6 +81,20 @@ public class MediaFileSource implements AutoCloseable {
 	}
 
 	/**
+	 * Opens the media file at the given path, decoding its video in hardware
+	 * where the platform can, as {@link MediaPlayer#MediaPlayer(MediaReader,
+	 * CustomVideoSource, CustomAudioSource, boolean)} describes.
+	 *
+	 * @param path             The path of the file to play.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *
+	 * @throws IOException if the source cannot be opened or decoded.
+	 */
+	public MediaFileSource(Path path, boolean hardwareDecoding) throws IOException {
+		this(path.toAbsolutePath().toString(), MediaReader.DEFAULT_TIMEOUT, hardwareDecoding);
+	}
+
+	/**
 	 * Opens the given media source.
 	 *
 	 * @param source The path or {@code rtsp://} URL of the source to play.
@@ -89,6 +103,20 @@ public class MediaFileSource implements AutoCloseable {
 	 */
 	public MediaFileSource(String source) throws IOException {
 		this(source, MediaReader.DEFAULT_TIMEOUT);
+	}
+
+	/**
+	 * Opens the given media source, decoding its video in hardware where the
+	 * platform can, as {@link MediaPlayer#MediaPlayer(MediaReader,
+	 * CustomVideoSource, CustomAudioSource, boolean)} describes.
+	 *
+	 * @param source           The path or {@code rtsp://} URL of the source to play.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *
+	 * @throws IOException if the source cannot be opened or decoded.
+	 */
+	public MediaFileSource(String source, boolean hardwareDecoding) throws IOException {
+		this(source, MediaReader.DEFAULT_TIMEOUT, hardwareDecoding);
 	}
 
 	/**
@@ -103,6 +131,24 @@ public class MediaFileSource implements AutoCloseable {
 	 * @throws IOException if the source cannot be opened in time, or decoded.
 	 */
 	public MediaFileSource(String source, Duration timeout) throws IOException {
+		this(source, timeout, false);
+	}
+
+	/**
+	 * Opens the given media source, allowing each operation on it the given
+	 * time before it fails, and decoding its video in hardware where the
+	 * platform can, as {@link MediaPlayer#MediaPlayer(MediaReader,
+	 * CustomVideoSource, CustomAudioSource, boolean)} describes.
+	 *
+	 * @param source           The path or {@code rtsp://} URL of the source to play.
+	 * @param timeout          How long opening, and later any single read, may
+	 *                         wait on the source. {@link Duration#ZERO} waits
+	 *                         as long as it takes.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *
+	 * @throws IOException if the source cannot be opened in time, or decoded.
+	 */
+	public MediaFileSource(String source, Duration timeout, boolean hardwareDecoding) throws IOException {
 		MediaReader reader = new MediaReader(source, timeout);
 
 		// Read while the reader is still ours: the player takes it over.
@@ -112,7 +158,7 @@ public class MediaFileSource implements AutoCloseable {
 		audioSource = info.hasAudio() ? new CustomAudioSource() : null;
 
 		try {
-			player = new MediaPlayer(reader, videoSource, audioSource);
+			player = new MediaPlayer(reader, videoSource, audioSource, hardwareDecoding);
 		}
 		catch (IOException | RuntimeException e) {
 			// The player did not take charge, so what was made here has to be

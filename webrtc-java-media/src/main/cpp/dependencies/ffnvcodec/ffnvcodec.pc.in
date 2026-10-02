@@ -1,0 +1,7 @@
+prefix=@FFNVCODEC_DIR@
+includedir=${prefix}/include
+
+Name: ffnvcodec
+Description: FFmpeg version of Nvidia Codec SDK headers
+Version: 12.0.16.1
+Cflags: -I${includedir}
