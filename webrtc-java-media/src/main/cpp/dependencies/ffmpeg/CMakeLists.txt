@@ -143,7 +143,24 @@ elseif(WIN32)
         --enable-hwaccel=h264_dxva2
         --enable-hwaccel=vp9_dxva2
     )
+elseif(LINUX AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64|arm64|ARM64)$")
+    # NVDEC, on NVIDIA GPUs. FFmpeg loads the CUDA driver and libnvcuvid with
+    # dlopen when a device is created, so the libraries load on a machine with
+    # no NVIDIA driver. The build needs the headers of nv-codec-headers, which
+    # dependencies/ffnvcodec carries, found through a pkg-config file made
+    # below. Not for 32-bit ARM, which has no NVIDIA driver to load.
+    set(FFMPEG_NVDEC TRUE)
+
+    list(APPEND FFMPEG_COMPONENTS
+        --enable-ffnvcodec
+        --enable-nvdec
+        --enable-hwaccel=h264_nvdec
+        --enable-hwaccel=vp9_nvdec
+    )
 endif()
+
+# The parent adds the license of the NVDEC headers to the platform jar.
+set(FFMPEG_NVDEC "${FFMPEG_NVDEC}" PARENT_SCOPE)
 
 # Written next to an install once it is built, naming the components it was
 # built with. Without it, an install from before a component was added would
@@ -508,6 +525,30 @@ fi
 ")
     else()
         set(FFMPEG_MAKE "${MAKE_EXECUTABLE}")
+    endif()
+
+    if(FFMPEG_NVDEC)
+        # configure looks for the NVDEC headers through pkg-config, so that
+        # needs to be there, and to know where the vendored headers are.
+        find_program(PKG_CONFIG_EXECUTABLE NAMES pkg-config pkgconf)
+
+        if(NOT PKG_CONFIG_EXECUTABLE)
+            message(FATAL_ERROR
+                "No pkg-config, which FFmpeg's configure uses to find the NVDEC headers. "
+                "Install it, for example with: sudo apt-get install pkg-config")
+        endif()
+
+        get_filename_component(FFNVCODEC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../ffnvcodec" ABSOLUTE)
+        set(FFNVCODEC_PC_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffnvcodec-pc")
+
+        configure_file("${FFNVCODEC_DIR}/ffnvcodec.pc.in" "${FFNVCODEC_PC_DIR}/ffnvcodec.pc" @ONLY)
+
+        # Only our directory: a sysroot or library path of the host would put
+        # the includedir somewhere it is not.
+        set(FFMPEG_SHELL_PREAMBLE
+"${FFMPEG_SHELL_PREAMBLE}export PKG_CONFIG_PATH=\"${FFNVCODEC_PC_DIR}:$PKG_CONFIG_PATH\"
+unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+")
     endif()
 
     set(FFMPEG_BUILD_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/build-ffmpeg.sh")
