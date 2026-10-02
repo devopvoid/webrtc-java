@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_MF_VIDEO_DECODER_FACTORY_H_
-#define JNI_WEBRTC_MEDIA_VIDEO_CODEC_MF_VIDEO_DECODER_FACTORY_H_
+#ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_VT_VIDEO_DECODER_FACTORY_H_
+#define JNI_WEBRTC_MEDIA_VIDEO_CODEC_VT_VIDEO_DECODER_FACTORY_H_
 
 #include "api/environment/environment.h"
 #include "api/video_codecs/sdp_video_format.h"
@@ -27,30 +27,26 @@
 
 namespace jni
 {
-	// Creates the Media Foundation decoders that decode on the GPU, for H.264,
-	// AV1 and VP9, whichever the GPU decodes and Windows has a decoder for that
-	// uses Direct3D 11. It offers them in the formats WebRTC's software
-	// decoders offer too: H.264 in all its profiles, and AV1 and VP9 in
-	// profile 0.
-	class MFVideoDecoderFactory : public webrtc::VideoDecoderFactory
+	// Creates the VideoToolbox decoders that WebRTC's own decoders for macOS
+	// do not offer: VP9, in profile 0, the format the software factory
+	// offers first. H.264 is decoded through VideoToolbox by the default
+	// decoders already.
+	class VTVideoDecoderFactory : public webrtc::VideoDecoderFactory
 	{
 		public:
-			// Returns a factory, or null if the GPU decodes none of the codecs.
-			static std::unique_ptr<MFVideoDecoderFactory> Create();
+			// Returns a factory, or null if this Mac has no hardware decoder
+			// for VP9. The decoder VideoToolbox has for VP9 has to be
+			// registered first; this does it, once for the process.
+			static std::unique_ptr<VTVideoDecoderFactory> Create();
 
-			~MFVideoDecoderFactory() override = default;
+			~VTVideoDecoderFactory() override = default;
 
 			std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
 			std::unique_ptr<webrtc::VideoDecoder> Create(const webrtc::Environment & env,
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
-			MFVideoDecoderFactory(bool h264, bool av1, bool vp9);
-
-		private:
-			const bool h264;
-			const bool av1;
-			const bool vp9;
+			VTVideoDecoderFactory() = default;
 	};
 }
 

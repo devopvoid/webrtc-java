@@ -54,9 +54,6 @@ namespace jni
 
 	std::unique_ptr<webrtc::VideoEncoderFactory> CreateHardwareVideoEncoderFactory()
 	{
-#ifdef __APPLE__
-		return CreateDefaultVideoEncoderFactory();
-#else
 		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware = CreatePlatformHardwareVideoEncoderFactories();
 
 		if (hardware.empty()) {
@@ -64,7 +61,6 @@ namespace jni
 		}
 
 		return std::make_unique<HardwareVideoEncoderFactory>(std::move(hardware), CreateDefaultVideoEncoderFactory());
-#endif
 	}
 
 	std::unique_ptr<webrtc::VideoDecoderFactory> CreateDefaultVideoDecoderFactory()
@@ -82,9 +78,6 @@ namespace jni
 
 	std::unique_ptr<webrtc::VideoDecoderFactory> CreateHardwareVideoDecoderFactory()
 	{
-#ifdef __APPLE__
-		return CreateDefaultVideoDecoderFactory();
-#else
 		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> hardware = CreatePlatformHardwareVideoDecoderFactories();
 
 		if (hardware.empty()) {
@@ -92,6 +85,5 @@ namespace jni
 		}
 
 		return std::make_unique<HardwareVideoDecoderFactory>(std::move(hardware), CreateDefaultVideoDecoderFactory());
-#endif
 	}
 }

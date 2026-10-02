@@ -56,7 +56,14 @@ namespace jni
 
 		const GUID & InputFormat(webrtc::VideoCodecType codec)
 		{
-			return codec == webrtc::kVideoCodecAV1 ? MFVideoFormat_AV1 : MFVideoFormat_H264;
+			switch (codec) {
+				case webrtc::kVideoCodecAV1:
+					return MFVideoFormat_AV1;
+				case webrtc::kVideoCodecVP9:
+					return MFVideoFormat_VP90;
+				default:
+					return MFVideoFormat_H264;
+			}
 		}
 	}
 
@@ -174,6 +181,16 @@ namespace jni
 
 		if (SUCCEEDED(hr)) {
 			hr = SetOutputType();
+
+			// A VP9 stream states its size in the key frames only, and its
+			// decoder may offer no output type before it has seen one. It then
+			// asks for the type again with MF_E_TRANSFORM_STREAM_CHANGE, which
+			// DrainOutput answers, and a decoder that cannot give one at all
+			// fails there, and the software decoder takes over.
+			if (FAILED(hr) && codec == webrtc::kVideoCodecVP9 && !resolution.Valid()) {
+				RTC_LOG(LS_INFO) << implementationName << " offers no output type yet, hr=" << hr;
+				hr = S_OK;
+			}
 		}
 		if (SUCCEEDED(hr)) {
 			hr = transform->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
@@ -239,6 +256,15 @@ namespace jni
 		}
 		if (image.size() == 0) {
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
+
+		// The layers of a VP9 frame with spatial layers reach a decoder back to
+		// back, without the superframe index that tells where one ends. libvpx
+		// takes them that way; a hardware decoder is not known to.
+		if (codec == webrtc::kVideoCodecVP9
+			&& (image.SpatialIndex().value_or(0) > 0 || image.SpatialLayerFrameSize(1).has_value()))
+		{
+			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
 		ComPtr<IMFMediaBuffer> buffer;

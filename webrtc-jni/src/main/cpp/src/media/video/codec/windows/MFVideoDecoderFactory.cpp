@@ -58,6 +58,7 @@ namespace jni
 	{
 		bool h264 = false;
 		bool av1 = false;
+		bool vp9 = false;
 
 		try {
 			ComInitializer comInitializer;
@@ -86,23 +87,27 @@ namespace jni
 				&& HasDirect3DDecoder(MFVideoFormat_H264, manager.Get());
 			av1 = SupportsDecoderProfile(device.Get(), D3D11_DECODER_PROFILE_AV1_VLD_PROFILE0)
 				&& HasDirect3DDecoder(MFVideoFormat_AV1, manager.Get());
+			vp9 = SupportsDecoderProfile(device.Get(), D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0)
+				&& HasDirect3DDecoder(MFVideoFormat_VP90, manager.Get());
 		}
 		catch (...) {
 			return nullptr;
 		}
 
-		RTC_LOG(LS_INFO) << "Media Foundation hardware decoders, H.264: " << h264 << ", AV1: " << av1;
+		RTC_LOG(LS_INFO) << "Media Foundation hardware decoders, H.264: " << h264 << ", AV1: " << av1
+			<< ", VP9: " << vp9;
 
-		if (!h264 && !av1) {
+		if (!h264 && !av1 && !vp9) {
 			return nullptr;
 		}
 
-		return std::unique_ptr<MFVideoDecoderFactory>(new MFVideoDecoderFactory(h264, av1));
+		return std::unique_ptr<MFVideoDecoderFactory>(new MFVideoDecoderFactory(h264, av1, vp9));
 	}
 
-	MFVideoDecoderFactory::MFVideoDecoderFactory(bool h264, bool av1) :
+	MFVideoDecoderFactory::MFVideoDecoderFactory(bool h264, bool av1, bool vp9) :
 		h264(h264),
-		av1(av1)
+		av1(av1),
+		vp9(vp9)
 	{
 	}
 
@@ -115,6 +120,9 @@ namespace jni
 		}
 		if (av1) {
 			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());
+		}
+		if (vp9) {
+			formats.push_back(webrtc::SdpVideoFormat::VP9Profile0());
 		}
 
 		return formats;

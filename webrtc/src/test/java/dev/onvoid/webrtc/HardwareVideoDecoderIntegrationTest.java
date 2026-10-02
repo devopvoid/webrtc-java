@@ -17,15 +17,18 @@
 package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import dev.onvoid.webrtc.media.video.I420Buffer;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
 
+import java.nio.ByteBuffer;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -43,7 +46,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * A machine without a hardware decoder skips the tests that need one, as CI
  * runners do. Set the system property {@code webrtc.test.hardwareDecoder} to
  * {@code true} on a machine that has one, to make those tests fail instead,
- * and {@code webrtc.test.hardwareAv1Decoder} for a GPU that decodes AV1.
+ * and {@code webrtc.test.hardwareAv1Decoder} for a GPU that decodes AV1, and
+ * {@code webrtc.test.hardwareVp9Decoder} for one that decodes VP9 on Windows.
+ * On macOS the VP9 tests follow {@code webrtc.test.hardwareDecoder}.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class HardwareVideoDecoderIntegrationTest extends TestBase {
@@ -54,6 +59,8 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 	private static final boolean HARDWARE_AV1_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareAv1Decoder");
 
+	private static final boolean HARDWARE_VP9_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareVp9Decoder");
+
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 
 	private static final Predicate<RTCRtpCodecCapability> H264 = codec ->
@@ -62,6 +69,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 					&& codec.getSDPFmtp().getOrDefault("profile-level-id", "").startsWith("42e0");
 
 	private static final Predicate<RTCRtpCodecCapability> AV1 = codec -> "AV1".equalsIgnoreCase(codec.getName());
+
+	private static final Predicate<RTCRtpCodecCapability> VP9 = codec ->
+			"VP9".equalsIgnoreCase(codec.getName())
+					&& "0".equals(codec.getSDPFmtp().getOrDefault("profile-id", "0"));
 
 
 	@Test
@@ -115,8 +126,8 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		// The default decoders use VideoToolbox on macOS.
 		assertTrue(decoderImplementation(factory, H264).contains("VideoToolbox"));
 
-		// The hardware factory has nothing of its own there, and hands over to
-		// the default decoders.
+		// The hardware factory has nothing of its own for H.264 there, and
+		// hands over to the default decoders.
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
 				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
@@ -130,6 +141,247 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		}
 	}
 
+	@Test
+	void hardwareDecodesVp9() throws Exception {
+		assumeVp9Platform();
+
+		PeerConnectionFactory hardware = hardwareFactory();
+		String implementation;
+
+		try {
+			implementation = decoderImplementation(hardware, VP9);
+		}
+		finally {
+			hardware.dispose();
+		}
+
+		expectVp9Hardware(implementation);
+	}
+
+	@Test
+	void defaultDecodesVp9InSoftware() throws Exception {
+		assumeVp9Platform();
+
+		// Hardware decoding is opt-in; the shared factory decodes VP9 with libvpx.
+		String implementation = decoderImplementation(factory, VP9);
+
+		assertFalse(isHardware(implementation), implementation);
+	}
+
+	@Test
+	void hardwareFollowsResolutionChange() throws Exception {
+		assumeVp9Platform();
+
+		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+				.build();
+
+		CountDownLatch full = new CountDownLatch(10);
+		CountDownLatch half = new CountDownLatch(10);
+
+		try (TestMediaCall call = new TestMediaCall(hardware, true, false, VP9)) {
+			call.negotiate();
+
+			RTCRtpReceiver receiver = call.getReceiver("video");
+			VideoTrack track = (VideoTrack) receiver.getTrack();
+			VideoTrackSink sink = frame -> {
+				int width = frame.buffer.getWidth();
+
+				if (width == 320 && frame.buffer.getHeight() == 240) {
+					full.countDown();
+				}
+				else if (width == 160 && frame.buffer.getHeight() == 120) {
+					half.countDown();
+				}
+
+				frame.release();
+			};
+			track.addSink(sink);
+
+			call.awaitConnected();
+			call.startMedia();
+
+			assertTrue(full.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
+
+			String implementation = decoderImplementationOf(call);
+
+			expectVp9Hardware(implementation);
+
+			// The sender restarts at half the size, with a key frame; the
+			// decoder has to start a session for it.
+			RTCRtpSender sender = call.getVideoSender();
+			RTCRtpSendParameters parameters = sender.getParameters();
+
+			for (RTCRtpEncodingParameters encoding : parameters.encodings) {
+				encoding.scaleResolutionDownBy = 2.0;
+			}
+
+			sender.setParameters(parameters);
+
+			assertTrue(half.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no frames at the new size");
+
+			// Still the hardware decoder, not a fallback.
+			assertTrue(isHardware(decoderImplementationOf(call)));
+
+			track.removeSink(sink);
+			receiver.dispose();
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void vp9NeedsNoKeyFrames() throws Exception {
+		assumeVp9Platform();
+
+		CallResult result = receiveVideo(hardwareFactory(), VP9, 320, 240, null, 60);
+
+		expectVp9Hardware(result.decoder);
+
+		// An inter frame that fails to decode makes the receiver ask for a key
+		// frame, and every key frame is then the only frame that decodes. A
+		// stream that is decoded has the one key frame it started with.
+		assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+		assertTrue(result.keyFrames <= 2, "key frames decoded: " + result.keyFrames);
+	}
+
+	@Test
+	void vp9TemporalLayers() throws Exception {
+		assumeVp9Platform();
+
+		// Temporal layers are one spatial layer, which the hardware decodes.
+		CallResult result = receiveVideo(hardwareFactory(), VP9, 320, 240, "L1T3", 60);
+
+		expectVp9Hardware(result.decoder);
+
+		assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+	}
+
+	@Test
+	void vp9SpatialLayers() throws Exception {
+		assumeVp9Platform();
+
+		// WebRTC encodes spatial layers only above a size, and drops them
+		// below it.
+		CallResult result = receiveVideo(hardwareFactory(), VP9, 640, 480, "L2T2", 60);
+
+		assumeTrue(result.scalability.startsWith("L2"), "no spatial layers were encoded: " + result.scalability);
+
+		// The frames arrive, from libvpx: the layers of a frame come without a
+		// superframe index, which VideoToolbox does not decode, and which a
+		// Media Foundation decoder is not known to.
+		assertFalse(isHardware(result.decoder), result.decoder);
+	}
+
+	private PeerConnectionFactory hardwareFactory() {
+		return PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+				.build();
+	}
+
+	/**
+	 * Skips the test where VP9 is not decoded in hardware: macOS and Windows.
+	 */
+	private static void assumeVp9Platform() {
+		assumeTrue(OS.contains("mac") || OS.contains("win"),
+				"VP9 is decoded in hardware on macOS and Windows only");
+	}
+
+	private static boolean isHardware(String implementation) {
+		return implementation.contains("VideoToolbox") || implementation.contains("MediaFoundation");
+	}
+
+	/**
+	 * Where a hardware decoder is required, the test fails without one;
+	 * elsewhere it is skipped.
+	 */
+	private static void expectVp9Hardware(String implementation) {
+		boolean required = OS.contains("mac") ? HARDWARE_REQUIRED : HARDWARE_VP9_REQUIRED;
+
+		if (required) {
+			assertTrue(isHardware(implementation), implementation);
+		}
+		else {
+			assumeTrue(isHardware(implementation), "no hardware decoder: " + implementation);
+		}
+	}
+
+	/**
+	 * What a call that received video tells about its decoder.
+	 */
+	private static final class CallResult {
+
+		String decoder = "";
+		String scalability = "";
+		long pliCount;
+		long keyFrames;
+
+	}
+
+	/**
+	 * Receives the given number of frames through a call that sends video of
+	 * the given size, and reads what the receiver reports. Disposes the
+	 * factory.
+	 */
+	private static CallResult receiveVideo(PeerConnectionFactory hardware, Predicate<RTCRtpCodecCapability> codec,
+			int width, int height, String scalabilityMode, int frames) throws Exception {
+		CountDownLatch received = new CountDownLatch(frames);
+		CallResult result = new CallResult();
+
+		try (TestMediaCall call = new TestMediaCall(hardware, true, false, codec)) {
+			call.setVideoSize(width, height);
+			call.negotiate();
+
+			RTCRtpReceiver receiver = call.getReceiver("video");
+			VideoTrack track = (VideoTrack) receiver.getTrack();
+			VideoTrackSink sink = frame -> {
+				frame.release();
+				received.countDown();
+			};
+			track.addSink(sink);
+
+			call.awaitConnected();
+
+			if (scalabilityMode != null) {
+				RTCRtpSender sender = call.getVideoSender();
+				RTCRtpSendParameters parameters = sender.getParameters();
+				parameters.encodings.get(0).scalabilityMode = scalabilityMode;
+
+				sender.setParameters(parameters);
+			}
+
+			call.startMedia();
+
+			assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
+
+			result.decoder = decoderImplementationOf(call);
+
+			Map<String, Object> inbound = call.getInboundVideoStats();
+			Map<String, Object> outbound = call.getOutboundVideoStats();
+
+			result.pliCount = count(inbound, "pliCount");
+			result.keyFrames = count(inbound, "keyFramesDecoded");
+			result.scalability = outbound == null ? "" : String.valueOf(outbound.get("scalabilityMode"));
+
+			track.removeSink(sink);
+			receiver.dispose();
+		}
+		finally {
+			hardware.dispose();
+		}
+
+		return result;
+	}
+
+	private static long count(Map<String, Object> stats, String name) {
+		Object value = stats == null ? null : stats.get(name);
+
+		return value instanceof Number ? ((Number) value).longValue() : 0;
+	}
+
 	/**
 	 * Receives video in the preferred codec through a call, checks that the
 	 * decoded frames are the size that was sent, and returns what the receiver
@@ -139,6 +391,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			Predicate<RTCRtpCodecCapability> codec) throws Exception {
 		CountDownLatch received = new CountDownLatch(10);
 		AtomicReference<String> wrongSize = new AtomicReference<>();
+		AtomicReference<String> blank = new AtomicReference<>();
 		String implementation;
 
 		try (TestMediaCall call = new TestMediaCall(factory, true, false, codec)) {
@@ -154,6 +407,9 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 				if (width != 320 || height != 240) {
 					wrongSize.compareAndSet(null, width + "x" + height);
+				}
+				else if (!hasPicture(frame.buffer.toI420())) {
+					blank.compareAndSet(null, "a frame without a picture");
 				}
 
 				frame.release();
@@ -173,8 +429,30 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		}
 
 		assertNull(wrongSize.get(), "decoded frames of the wrong size: " + wrongSize.get());
+		assertNull(blank.get(), "decoded " + blank.get());
 
 		return implementation;
+	}
+
+	/**
+	 * Whether the luma of the frame has the gradient the call sends, rather
+	 * than a flat or empty picture. The buffer of a frame is I420 already, so
+	 * it is read as it is and stays with the frame.
+	 */
+	private static boolean hasPicture(I420Buffer buffer) {
+		ByteBuffer y = buffer.getDataY();
+		int min = 255;
+		int max = 0;
+
+		// The first row has the whole ramp, and a wrap of it.
+		for (int x = 0; x < buffer.getWidth(); x++) {
+			int value = y.get(x) & 0xff;
+
+			min = Math.min(min, value);
+			max = Math.max(max, value);
+		}
+
+		return max - min > 150;
 	}
 
 	/**
