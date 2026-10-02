@@ -106,8 +106,8 @@ public class MediaPlayer implements AutoCloseable {
 	 * <p>
 	 * With {@code hardwareDecoding} the player decodes H.264 and VP9 video on
 	 * the media engine or GPU of the machine where there is one the platform
-	 * offers (VideoToolbox on macOS), which takes a fraction of the processor
-	 * time. The pictures are the same as software decoding gives. A stream the
+	 * offers (VideoToolbox on macOS, Direct3D 11 and DXVA on Windows), which
+	 * takes a fraction of the processor time. The pictures are the same as software decoding gives. A stream the
 	 * hardware does not take, or a codec it has no decoder for, is decoded in
 	 * software; {@link #isHardwareDecoding()} tells which it is.
 	 *

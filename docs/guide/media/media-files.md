@@ -222,7 +222,7 @@ boolean hardware = source.getPlayer().isHardwareDecoding();
 
 The pictures are the same ones software decoding gives; in the tests, every frame of H.264 and VP9 media is compared with its software counterpart. Hardware decoding is off unless asked for.
 
-- **Platforms:** macOS, through VideoToolbox. The flag is accepted everywhere; where the FFmpeg build has no hardware decoder, the video is decoded in software, and `isHardwareDecoding()` says so.
+- **Platforms:** macOS through VideoToolbox, and Windows through Direct3D 11, with DXVA2 for what has no Direct3D 11 decoder. The flag is accepted everywhere; where the FFmpeg build has no hardware decoder, the video is decoded in software, and `isHardwareDecoding()` says so.
 - **Codecs:** H.264 and VP9. VP8, MPEG-4, MJPEG and H.265/HEVC are decoded in software.
 - **Fallback:** a stream the hardware does not take, such as a profile it cannot decode, is decoded in software without the player noticing more than `isHardwareDecoding()` turning `false`. If the hardware fails after it has produced a picture, decoding goes on in software from the next key frame.
 - **What it saves** is processor time, not the copy: a decoded picture is read back from the media engine into system memory, and converted to I420 as WebRTC wants it. On an Apple M2, a 1080p H.264 stream took 11.6 ms of processor time per frame in software and 1.4 ms in hardware, and a 4K stream 35.7 ms against 4.2 ms, about seven to eight times less. Per frame, software on all cores is faster on the clock, which does not matter at playback speed. These are figures for one machine and for synthetic media, not a promise.

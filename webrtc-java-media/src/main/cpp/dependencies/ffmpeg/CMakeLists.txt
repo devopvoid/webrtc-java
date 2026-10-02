@@ -122,13 +122,26 @@ set(FFMPEG_COMPONENTS
 
 # Decoding on the media engine or GPU, which a player does when it is asked to.
 # H.264 and VP9 only: the codecs the module plays that platform decoders have
-# too, and ones it can fall back to software for. VideoToolbox is part of macOS,
-# so nothing is added to what the libraries need to load.
+# too, and ones it can fall back to software for.
 if(APPLE)
+    # VideoToolbox is part of macOS, so nothing is added to what the libraries
+    # need to load.
     list(APPEND FFMPEG_COMPONENTS
         --enable-videotoolbox
         --enable-hwaccel=h264_videotoolbox
         --enable-hwaccel=vp9_videotoolbox
+    )
+elseif(WIN32)
+    # Direct3D 11 first, DXVA2 for what has no D3D11 decoder. FFmpeg loads
+    # d3d11.dll, dxgi.dll, d3d9.dll and dxva2.dll when a device is created, so
+    # a machine without a GPU decoder loads the libraries all the same.
+    list(APPEND FFMPEG_COMPONENTS
+        --enable-d3d11va
+        --enable-dxva2
+        --enable-hwaccel=h264_d3d11va2
+        --enable-hwaccel=vp9_d3d11va2
+        --enable-hwaccel=h264_dxva2
+        --enable-hwaccel=vp9_dxva2
     )
 endif()
 
