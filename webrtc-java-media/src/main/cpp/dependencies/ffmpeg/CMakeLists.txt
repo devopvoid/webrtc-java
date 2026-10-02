@@ -120,6 +120,18 @@ set(FFMPEG_COMPONENTS
     --enable-protocol=tcp
 )
 
+# Decoding on the media engine or GPU, which a player does when it is asked to.
+# H.264 and VP9 only: the codecs the module plays that platform decoders have
+# too, and ones it can fall back to software for. VideoToolbox is part of macOS,
+# so nothing is added to what the libraries need to load.
+if(APPLE)
+    list(APPEND FFMPEG_COMPONENTS
+        --enable-videotoolbox
+        --enable-hwaccel=h264_videotoolbox
+        --enable-hwaccel=vp9_videotoolbox
+    )
+endif()
+
 # Written next to an install once it is built, naming the components it was
 # built with. Without it, an install from before a component was added would
 # be taken as good, and a file needing that component would fail to play with

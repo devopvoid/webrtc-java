@@ -25,10 +25,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    create
-	 * Signature: (JJJJ)J
+	 * Signature: (JJJJZ)J
 	 */
 	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
-	(JNIEnv *, jobject, jlong, jlong, jlong, jlong);
+	(JNIEnv *, jobject, jlong, jlong, jlong, jlong, jboolean);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
@@ -68,6 +68,14 @@ extern "C" {
 	 * Signature: (J)J
 	 */
 	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_position
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
+	 * Method:    hardwareDecoding
+	 * Signature: (J)Z
+	 */
+	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_hardwareDecoding
 	(JNIEnv *, jclass, jlong);
 
 	/*

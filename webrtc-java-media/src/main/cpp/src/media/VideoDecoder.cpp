@@ -21,6 +21,8 @@ extern "C" {
 #include <libavutil/pixdesc.h>
 }
 
+#include <string>
+
 namespace
 {
 	// yuv420p is what WebRTC calls I420. yuvj420p has the same planes and
@@ -29,6 +31,34 @@ namespace
 	bool IsI420(int format)
 	{
 		return format == AV_PIX_FMT_YUV420P || format == AV_PIX_FMT_YUVJ420P;
+	}
+
+	// The kinds of hardware device the platform decodes video with, best
+	// first. Whether FFmpeg was built with a decoder for one is another
+	// matter, and is found out when the codec asks for it.
+	std::vector<AVHWDeviceType> DeviceTypes()
+	{
+#if defined(__APPLE__)
+		return { AV_HWDEVICE_TYPE_VIDEOTOOLBOX };
+#elif defined(_WIN32)
+		return { AV_HWDEVICE_TYPE_D3D11VA, AV_HWDEVICE_TYPE_DXVA2 };
+#else
+		return { AV_HWDEVICE_TYPE_CUDA };
+#endif
+	}
+
+	bool IsFailure(int result)
+	{
+		return result < 0 && result != AVERROR(EAGAIN) && result != AVERROR_EOF;
+	}
+
+	std::string ErrorString(int error)
+	{
+		char text[AV_ERROR_MAX_STRING_SIZE] = {};
+
+		av_strerror(error, text, sizeof(text));
+
+		return text;
 	}
 }
 
@@ -39,7 +69,7 @@ namespace ffmpeg
 		Close();
 	}
 
-	int VideoDecoder::Open(const AVStream * stream)
+	int VideoDecoder::Open(const AVStream * stream, bool hardware)
 	{
 		Close();
 
@@ -47,7 +77,43 @@ namespace ffmpeg
 			return AVERROR(EINVAL);
 		}
 
-		const AVCodec * codec = avcodec_find_decoder(stream->codecpar->codec_id);
+		stream_ = stream;
+
+		int result = OpenContext(hardware);
+
+		if (result < 0 && hardware) {
+			av_log(nullptr, AV_LOG_INFO, "No hardware video decoder (%s), decoding in software\n",
+					ErrorString(result).c_str());
+
+			result = OpenContext(false);
+		}
+		if (result < 0) {
+			Close();
+
+			return result;
+		}
+
+		decoded_ = av_frame_alloc();
+		transferred_ = av_frame_alloc();
+
+		if (decoded_ == nullptr || transferred_ == nullptr) {
+			Close();
+
+			return AVERROR(ENOMEM);
+		}
+
+		time_base_ = stream->time_base;
+
+		// A decoder that is set up for hardware is on probation until it has
+		// produced its first frame.
+		probation_ = hardware_;
+
+		return 0;
+	}
+
+	int VideoDecoder::OpenContext(bool hardware)
+	{
+		const AVCodec * codec = avcodec_find_decoder(stream_->codecpar->codec_id);
 
 		if (codec == nullptr) {
 			return AVERROR_DECODER_NOT_FOUND;
@@ -59,47 +125,107 @@ namespace ffmpeg
 			return AVERROR(ENOMEM);
 		}
 
-		int result = avcodec_parameters_to_context(codec_context_, stream->codecpar);
+		int result = avcodec_parameters_to_context(codec_context_, stream_->codecpar);
 
 		if (result < 0) {
-			Close();
+			avcodec_free_context(&codec_context_);
 
 			return result;
 		}
 
 		// Without this the decoder cannot put a meaningful timestamp on a
 		// frame, and every frame would come back with AV_NOPTS_VALUE.
-		codec_context_->pkt_timebase = stream->time_base;
+		codec_context_->pkt_timebase = stream_->time_base;
 
-		// 0 lets libavcodec pick a thread count for the machine. Decoding is
-		// the one part of playback that can genuinely use several cores.
-		codec_context_->thread_count = 0;
+		if (hardware) {
+			if (!SetUpHardware(codec)) {
+				avcodec_free_context(&codec_context_);
+
+				return AVERROR(ENOSYS);
+			}
+
+			// The hardware does the decoding; threads would only wait for it.
+			codec_context_->thread_count = 1;
+		}
+		else {
+			// 0 lets libavcodec pick a thread count for the machine. Decoding
+			// is the one part of playback that can genuinely use several cores.
+			codec_context_->thread_count = 0;
+		}
 
 		result = avcodec_open2(codec_context_, codec, nullptr);
 
 		if (result < 0) {
-			Close();
+			avcodec_free_context(&codec_context_);
+
+			hardware_format_ = AV_PIX_FMT_NONE;
 
 			return result;
 		}
 
-		decoded_ = av_frame_alloc();
-
-		if (decoded_ == nullptr) {
-			Close();
-
-			return AVERROR(ENOMEM);
-		}
-
-		time_base_ = stream->time_base;
+		hardware_ = hardware;
 
 		return 0;
 	}
 
+	bool VideoDecoder::SetUpHardware(const AVCodec * codec)
+	{
+		for (AVHWDeviceType type : DeviceTypes()) {
+			for (int index = 0;; index++) {
+				const AVCodecHWConfig * config = avcodec_get_hw_config(codec, index);
+
+				if (config == nullptr) {
+					break;
+				}
+				if (!(config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX) || config->device_type != type) {
+					continue;
+				}
+
+				AVBufferRef * device = nullptr;
+
+				if (av_hwdevice_ctx_create(&device, type, nullptr, nullptr, 0) < 0) {
+					// This kind of device is not there; the next may be.
+					break;
+				}
+
+				codec_context_->hw_device_ctx = device;
+				codec_context_->get_format = &VideoDecoder::ChooseFormat;
+				codec_context_->opaque = this;
+
+				hardware_format_ = config->pix_fmt;
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	AVPixelFormat VideoDecoder::ChooseFormat(AVCodecContext * context, const AVPixelFormat * formats)
+	{
+		const VideoDecoder * decoder = static_cast<const VideoDecoder *>(context->opaque);
+
+		for (const AVPixelFormat * format = formats; *format != AV_PIX_FMT_NONE; format++) {
+			if (*format == decoder->hardware_format_) {
+				return *format;
+			}
+		}
+
+		// The decoder does not offer the hardware format for this stream:
+		// a profile or a size the hardware does not take. Software it is.
+		return avcodec_default_get_format(context, formats);
+	}
+
 	void VideoDecoder::Close()
 	{
+		DropKeptPackets();
+		DropPending();
+
 		if (decoded_ != nullptr) {
 			av_frame_free(&decoded_);
+		}
+		if (transferred_ != nullptr) {
+			av_frame_free(&transferred_);
 		}
 		if (sws_context_ != nullptr) {
 			sws_freeContext(sws_context_);
@@ -110,6 +236,10 @@ namespace ffmpeg
 			avcodec_free_context(&codec_context_);
 		}
 
+		stream_ = nullptr;
+		hardware_ = false;
+		hardware_format_ = AV_PIX_FMT_NONE;
+		probation_ = false;
 		time_base_ = { 0, 1 };
 	}
 
@@ -118,6 +248,10 @@ namespace ffmpeg
 		if (codec_context_ != nullptr) {
 			avcodec_flush_buffers(codec_context_);
 		}
+
+		// What was kept belongs to the position that was left.
+		DropKeptPackets();
+		DropPending();
 	}
 
 	int VideoDecoder::SendPacket(const AVPacket * packet)
@@ -126,7 +260,22 @@ namespace ffmpeg
 			return AVERROR(EINVAL);
 		}
 
-		return avcodec_send_packet(codec_context_, packet);
+		if (probation_ && packet != nullptr) {
+			KeepPacket(packet);
+		}
+
+		int result = avcodec_send_packet(codec_context_, packet);
+
+		if (hardware_ && IsFailure(result)) {
+			result = FallBackToSoftware(result);
+
+			if (packet == nullptr && result == AVERROR(EAGAIN)) {
+				// The drain the caller started was the hardware decoder's.
+				result = avcodec_send_packet(codec_context_, nullptr);
+			}
+		}
+
+		return result;
 	}
 
 	int VideoDecoder::ReceiveFrame(AVFrame ** frame, int64_t * timestamp_us)
@@ -135,6 +284,28 @@ namespace ffmpeg
 			return AVERROR(EINVAL);
 		}
 
+		if (!pending_.empty()) {
+			*frame = pending_.front().frame;
+			*timestamp_us = pending_.front().timestamp_us;
+
+			pending_.pop_front();
+
+			return 0;
+		}
+
+		int result = ReceiveFromCodec(frame, timestamp_us);
+
+		if (hardware_ && IsFailure(result)) {
+			// Decoding goes on in software; the pictures of the packets it
+			// takes up again come with the calls that follow.
+			return FallBackToSoftware(result);
+		}
+
+		return result;
+	}
+
+	int VideoDecoder::ReceiveFromCodec(AVFrame ** frame, int64_t * timestamp_us)
+	{
 		int result = avcodec_receive_frame(codec_context_, decoded_);
 
 		if (result < 0) {
@@ -149,7 +320,27 @@ namespace ffmpeg
 		*timestamp_us = pts != AV_NOPTS_VALUE
 				? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) : 0;
 
-		if (IsI420(decoded_->format)) {
+		const bool hardware_frame = hardware_format_ != AV_PIX_FMT_NONE && decoded_->format == hardware_format_;
+
+		if (hardware_frame) {
+			// The picture is in the memory of the hardware decoder. Bring it
+			// into system memory, as NV12, and convert it like any other
+			// format that is not I420.
+			av_frame_unref(transferred_);
+
+			result = av_hwframe_transfer_data(transferred_, decoded_, 0);
+
+			if (result >= 0) {
+				transferred_->width = decoded_->width;
+				transferred_->height = decoded_->height;
+
+				result = ConvertToI420(transferred_, frame);
+			}
+
+			av_frame_unref(transferred_);
+			av_frame_unref(decoded_);
+		}
+		else if (IsI420(decoded_->format)) {
 			// Hand over a reference to the decoded picture rather than a copy
 			// of it. The caller drops that reference once WebRTC is done.
 			AVFrame * reference = av_frame_alloc();
@@ -171,15 +362,115 @@ namespace ffmpeg
 			}
 
 			*frame = reference;
+			result = 0;
+		}
+		else {
+			result = ConvertToI420(decoded_, frame);
 
-			return 0;
+			av_frame_unref(decoded_);
 		}
 
-		result = ConvertToI420(decoded_, frame);
+		if (result >= 0 && probation_) {
+			// The first picture is out: either the hardware decoded it, or the
+			// decoder offered no hardware format and it was software that did.
+			probation_ = false;
 
-		av_frame_unref(decoded_);
+			DropKeptPackets();
+
+			if (!hardware_frame) {
+				hardware_ = false;
+			}
+		}
 
 		return result;
+	}
+
+	int VideoDecoder::FallBackToSoftware(int error)
+	{
+		av_log(nullptr, AV_LOG_WARNING, "Hardware video decoding failed (%s), decoding in software\n",
+				ErrorString(error).c_str());
+
+		avcodec_free_context(&codec_context_);
+
+		hardware_ = false;
+		hardware_format_ = AV_PIX_FMT_NONE;
+
+		int result = OpenContext(false);
+
+		if (result < 0) {
+			DropKeptPackets();
+
+			return result;
+		}
+
+		// Nothing has come out of the hardware yet: the packets it was sent
+		// are decoded again, so that none of them is lost. After a picture
+		// the stream goes on from its next key frame.
+		std::vector<AVPacket *> kept;
+		kept.swap(kept_);
+
+		probation_ = false;
+
+		for (AVPacket * packet : kept) {
+			int sent = avcodec_send_packet(codec_context_, packet);
+
+			while (sent == AVERROR(EAGAIN)) {
+				// The decoder wants its pictures taken before it takes more.
+				AVFrame * frame = nullptr;
+				int64_t timestamp_us = 0;
+
+				if (ReceiveFromCodec(&frame, &timestamp_us) < 0) {
+					break;
+				}
+
+				pending_.push_back({ frame, timestamp_us });
+
+				sent = avcodec_send_packet(codec_context_, packet);
+			}
+
+			av_packet_free(&packet);
+		}
+
+		return AVERROR(EAGAIN);
+	}
+
+	void VideoDecoder::KeepPacket(const AVPacket * packet)
+	{
+		AVPacket * copy = kept_.size() < kMaxKeptPackets ? av_packet_clone(packet) : nullptr;
+
+		if (copy == nullptr) {
+			// Too many to keep: the hardware has been given its chance.
+			probation_ = false;
+
+			DropKeptPackets();
+
+			return;
+		}
+
+		kept_.push_back(copy);
+	}
+
+	void VideoDecoder::DropKeptPackets()
+	{
+		for (AVPacket * packet : kept_) {
+			av_packet_free(&packet);
+		}
+
+		kept_.clear();
+	}
+
+	void VideoDecoder::DropPending()
+	{
+		for (Pending & pending : pending_) {
+			av_frame_free(&pending.frame);
+		}
+
+		pending_.clear();
+	}
+
+	bool VideoDecoder::IsHardware() const
+	{
+		return hardware_.load();
 	}
 
 	int VideoDecoder::ConvertToI420(const AVFrame * source, AVFrame ** result)

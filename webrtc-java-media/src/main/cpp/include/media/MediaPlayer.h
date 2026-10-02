@@ -74,6 +74,14 @@ namespace ffmpeg
 			// that it does not change once the thread is running.
 			void SetObserver(std::unique_ptr<MediaPlayerObserver> observer);
 
+			// Asks for video to be decoded in hardware where the platform can.
+			// Call this before Initialize.
+			void SetHardwareDecoding(bool hardware);
+
+			// Whether video is decoded in hardware right now, which can be
+			// less than was asked for.
+			bool IsHardwareDecoding() const;
+
 			// Opens the decoders for whichever streams the source has.
 			// Returns 0 or a negative AVERROR.
 			int Initialize();
@@ -131,6 +139,7 @@ namespace ffmpeg
 			AudioDecoder audio_decoder_;
 
 			const webrtc_java_api * api_;
+			bool hardware_decoding_ = false;
 			bool has_video_ = false;
 			bool has_audio_ = false;
 
