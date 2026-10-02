@@ -219,17 +219,17 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
+		// The parser gives a header only for a frame that states its size:
+		// key frames, and inter frames that do not take it from a reference.
+		// Most inter frames take it, and have none.
 		const std::optional<webrtc::Vp9UncompressedHeader> header =
 			webrtc::ParseUncompressedVp9Header(std::span<const uint8_t>(image.data(), image.size()));
-
-		if (!header) {
-			return Fail(kVTVideoDecoderBadDataErr);
-		}
 
 		if (image.FrameType() == webrtc::VideoFrameType::kVideoFrameKey) {
 			StreamConfig config;
 
-			if (!ReadConfig(*header, config) || !EnsureSession(config)) {
+			// A key frame has to state what the session is made for.
+			if (!header || !ReadConfig(*header, config) || !EnsureSession(config)) {
 				return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 			}
 
@@ -241,9 +241,10 @@ namespace jni
 				return WEBRTC_VIDEO_CODEC_ERROR;
 			}
 
-			// Another size without a key frame, by reference scaling, is not
-			// something the session takes.
-			if (!header->show_existing_frame && header->frame_width != 0
+			// A frame that states another size without being a key frame is
+			// reference scaling, which the session does not take. One that
+			// takes its size from a reference has no header to check.
+			if (header && !header->show_existing_frame
 				&& (header->frame_width != active.width || header->frame_height != active.height))
 			{
 				return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;

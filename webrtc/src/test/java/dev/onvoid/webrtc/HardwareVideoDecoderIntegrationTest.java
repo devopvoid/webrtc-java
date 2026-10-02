@@ -239,6 +239,128 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		}
 	}
 
+	@Test
+	void macVp9NeedsNoKeyFrames() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		CallResult result = receiveVideo(hardwareFactory(), VP9, 320, 240, null, 60);
+
+		assumeTrue(result.decoder.contains("VideoToolbox"), "no hardware decoder: " + result.decoder);
+
+		// An inter frame that fails to decode makes the receiver ask for a key
+		// frame, and every key frame is then the only frame that decodes. A
+		// stream that is decoded has the one key frame it started with.
+		assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+		assertTrue(result.keyFrames <= 2, "key frames decoded: " + result.keyFrames);
+	}
+
+	@Test
+	void macVp9TemporalLayers() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		// Temporal layers are one spatial layer, which VideoToolbox decodes.
+		CallResult result = receiveVideo(hardwareFactory(), VP9, 320, 240, "L1T3", 60);
+
+		assumeTrue(result.decoder.contains("VideoToolbox"), "no hardware decoder: " + result.decoder);
+
+		assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+	}
+
+	@Test
+	void macVp9SpatialLayers() throws Exception {
+		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+
+		// WebRTC encodes spatial layers only above a size, and drops them
+		// below it.
+		CallResult result = receiveVideo(hardwareFactory(), VP9, 640, 480, "L2T2", 60);
+
+		assumeTrue(result.scalability.startsWith("L2"), "no spatial layers were encoded: " + result.scalability);
+
+		// The frames arrive, from libvpx: VideoToolbox does not decode a
+		// frame whose layers come without a superframe index.
+		assertFalse(result.decoder.contains("VideoToolbox"), result.decoder);
+	}
+
+	private PeerConnectionFactory hardwareFactory() {
+		return PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+				.build();
+	}
+
+	/**
+	 * What a call that received video tells about its decoder.
+	 */
+	private static final class CallResult {
+
+		String decoder = "";
+		String scalability = "";
+		long pliCount;
+		long keyFrames;
+
+	}
+
+	/**
+	 * Receives the given number of frames through a call that sends video of
+	 * the given size, and reads what the receiver reports. Disposes the
+	 * factory.
+	 */
+	private static CallResult receiveVideo(PeerConnectionFactory hardware, Predicate<RTCRtpCodecCapability> codec,
+			int width, int height, String scalabilityMode, int frames) throws Exception {
+		CountDownLatch received = new CountDownLatch(frames);
+		CallResult result = new CallResult();
+
+		try (TestMediaCall call = new TestMediaCall(hardware, true, false, codec)) {
+			call.setVideoSize(width, height);
+			call.negotiate();
+
+			RTCRtpReceiver receiver = call.getReceiver("video");
+			VideoTrack track = (VideoTrack) receiver.getTrack();
+			VideoTrackSink sink = frame -> {
+				frame.release();
+				received.countDown();
+			};
+			track.addSink(sink);
+
+			call.awaitConnected();
+
+			if (scalabilityMode != null) {
+				RTCRtpSender sender = call.getVideoSender();
+				RTCRtpSendParameters parameters = sender.getParameters();
+				parameters.encodings.get(0).scalabilityMode = scalabilityMode;
+
+				sender.setParameters(parameters);
+			}
+
+			call.startMedia();
+
+			assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
+
+			result.decoder = decoderImplementationOf(call);
+
+			Map<String, Object> inbound = call.getInboundVideoStats();
+			Map<String, Object> outbound = call.getOutboundVideoStats();
+
+			result.pliCount = count(inbound, "pliCount");
+			result.keyFrames = count(inbound, "keyFramesDecoded");
+			result.scalability = outbound == null ? "" : String.valueOf(outbound.get("scalabilityMode"));
+
+			track.removeSink(sink);
+			receiver.dispose();
+		}
+		finally {
+			hardware.dispose();
+		}
+
+		return result;
+	}
+
+	private static long count(Map<String, Object> stats, String name) {
+		Object value = stats == null ? null : stats.get(name);
+
+		return value instanceof Number ? ((Number) value).longValue() : 0;
+	}
+
 	/**
 	 * Receives video in the preferred codec through a call, checks that the
 	 * decoded frames are the size that was sent, and returns what the receiver
