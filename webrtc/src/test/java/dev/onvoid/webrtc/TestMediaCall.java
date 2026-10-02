@@ -46,8 +46,8 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
  */
 class TestMediaCall implements AutoCloseable {
 
-	private static final int WIDTH = 320;
-	private static final int HEIGHT = 240;
+	private static final int DEFAULT_WIDTH = 320;
+	private static final int DEFAULT_HEIGHT = 240;
 
 	private final CustomVideoSource videoSource;
 	private final CustomAudioSource audioSource;
@@ -62,6 +62,9 @@ class TestMediaCall implements AutoCloseable {
 
 	private volatile boolean feeding;
 	private Thread feeder;
+
+	private volatile int width = DEFAULT_WIDTH;
+	private volatile int height = DEFAULT_HEIGHT;
 
 
 	TestMediaCall(PeerConnectionFactory factory, boolean video, boolean audio) {
@@ -124,6 +127,16 @@ class TestMediaCall implements AutoCloseable {
 	void negotiate() throws Exception {
 		callee.setRemoteDescription(caller.createOffer());
 		caller.setRemoteDescription(callee.createAnswer());
+	}
+
+	/**
+	 * Sets the size of the video the call sends, 320x240 unless changed. Call
+	 * it before {@link #startMedia()}. Spatial layers need a larger picture:
+	 * WebRTC encodes none below a certain size.
+	 */
+	void setVideoSize(int width, int height) {
+		this.width = width;
+		this.height = height;
 	}
 
 	/**
@@ -309,7 +322,7 @@ class TestMediaCall implements AutoCloseable {
 			}
 
 			if (videoSource != null && videoFrames * 1000 / 30 <= elapsedMs) {
-				NativeI420Buffer buffer = NativeI420Buffer.allocate(WIDTH, HEIGHT);
+				NativeI420Buffer buffer = NativeI420Buffer.allocate(width, height);
 				ByteBuffer y = buffer.getDataY();
 
 				// A moving gradient, so that frames differ from each other.
