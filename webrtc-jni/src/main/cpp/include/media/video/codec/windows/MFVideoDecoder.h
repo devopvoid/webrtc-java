@@ -38,7 +38,7 @@
 
 namespace jni
 {
-	// Decodes H.264 or AV1 on the GPU, with the decoder transform of Windows
+	// Decodes H.264, AV1 or VP9 on the GPU, with the decoder transform of Windows
 	// for the codec, which decodes through DXVA on the Direct3D 11 device it
 	// is given.
 	//
@@ -52,7 +52,7 @@ namespace jni
 	class MFVideoDecoder : public webrtc::VideoDecoder
 	{
 		public:
-			// The codec is H.264 or AV1.
+			// The codec is H.264, AV1 or VP9.
 			explicit MFVideoDecoder(webrtc::VideoCodecType codec);
 			~MFVideoDecoder() override;
 
