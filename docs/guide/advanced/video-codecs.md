@@ -51,11 +51,11 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 | Platform | Hardware decoding |
 |---|---|
-| Windows | H.264 and AV1, on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
+| Windows | H.264, AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
 | Linux | Not yet; decoding is in software |
 | macOS | H.264 through VideoToolbox, as with `DefaultVideoDecoderFactory`, and VP9 (profile 0) through VideoToolbox's VP9 decoder, on Macs that have one |
 
-AV1 on Windows needs the *AV1 Video Extension*, which Windows 11 includes. Decoded frames are copied from GPU memory back to system memory, where WebRTC's frames are, so hardware decoding pays off mostly at high resolutions and with many streams; at low resolutions WebRTC's software decoders are about as cheap. A hardware decoder that fails, or turns out to decode in software, is replaced by the software decoder, which starts with the next key frame.
+AV1 on Windows needs the *AV1 Video Extension*, which Windows 11 includes, and VP9 the *VP9 Video Extensions*, a free component of the Microsoft Store that a system may not have; without it, VP9 is decoded in software. Streams with spatial layers (SVC) are decoded in software too, since their layers reach a decoder without the index that says where each ends. Decoded frames are copied from GPU memory back to system memory, where WebRTC's frames are, so hardware decoding pays off mostly at high resolutions and with many streams; at low resolutions WebRTC's software decoders are about as cheap. A hardware decoder that fails, or turns out to decode in software, is replaced by the software decoder, which starts with the next key frame.
 
 On macOS, VP9 decoding in hardware saves CPU: in a measurement on an Apple M2 it took a fraction of the processor time libvpx needs, but multi-threaded libvpx was about as fast on the clock. VideoToolbox decodes VP9 in hardware only where the Mac has a decoder for it, which Apple silicon does; a Mac without one decodes VP9 with libvpx as before. Profile 2 (10 bit), sizes below 64x64 or above 4096x4096, and streams with spatial layers (SVC) are decoded with libvpx too.
 

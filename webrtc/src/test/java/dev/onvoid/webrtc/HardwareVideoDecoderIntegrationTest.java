@@ -46,7 +46,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * A machine without a hardware decoder skips the tests that need one, as CI
  * runners do. Set the system property {@code webrtc.test.hardwareDecoder} to
  * {@code true} on a machine that has one, to make those tests fail instead,
- * and {@code webrtc.test.hardwareAv1Decoder} for a GPU that decodes AV1.
+ * and {@code webrtc.test.hardwareAv1Decoder} for a GPU that decodes AV1, and
+ * {@code webrtc.test.hardwareVp9Decoder} for one that decodes VP9 on Windows.
+ * On macOS the VP9 tests follow {@code webrtc.test.hardwareDecoder}.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class HardwareVideoDecoderIntegrationTest extends TestBase {
@@ -56,6 +58,8 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	private static final boolean HARDWARE_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareDecoder");
 
 	private static final boolean HARDWARE_AV1_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareAv1Decoder");
+
+	private static final boolean HARDWARE_VP9_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareVp9Decoder");
 
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 
@@ -138,14 +142,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	}
 
 	@Test
-	void macDecodesVp9WithVideoToolbox() throws Exception {
-		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+	void hardwareDecodesVp9() throws Exception {
+		assumeVp9Platform();
 
-		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
-				.setAudioDeviceModule(audioDevModule)
-				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
-				.build();
-
+		PeerConnectionFactory hardware = hardwareFactory();
 		String implementation;
 
 		try {
@@ -155,29 +155,22 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			hardware.dispose();
 		}
 
-		boolean hardwareUsed = implementation.contains("VideoToolbox");
-
-		if (HARDWARE_REQUIRED) {
-			assertTrue(hardwareUsed, implementation);
-		}
-		else {
-			assumeTrue(hardwareUsed, "no hardware decoder: " + implementation);
-		}
+		expectVp9Hardware(implementation);
 	}
 
 	@Test
-	void macDecodesVp9InSoftwareByDefault() throws Exception {
-		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+	void defaultDecodesVp9InSoftware() throws Exception {
+		assumeVp9Platform();
 
 		// Hardware decoding is opt-in; the shared factory decodes VP9 with libvpx.
 		String implementation = decoderImplementation(factory, VP9);
 
-		assertFalse(implementation.contains("VideoToolbox"), implementation);
+		assertFalse(isHardware(implementation), implementation);
 	}
 
 	@Test
-	void macFollowsResolutionChange() throws Exception {
-		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+	void hardwareFollowsResolutionChange() throws Exception {
+		assumeVp9Platform();
 
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
@@ -213,7 +206,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 			String implementation = decoderImplementationOf(call);
 
-			assumeTrue(implementation.contains("VideoToolbox"), "no hardware decoder: " + implementation);
+			expectVp9Hardware(implementation);
 
 			// The sender restarts at half the size, with a key frame; the
 			// decoder has to start a session for it.
@@ -229,7 +222,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			assertTrue(half.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no frames at the new size");
 
 			// Still the hardware decoder, not a fallback.
-			assertTrue(decoderImplementationOf(call).contains("VideoToolbox"));
+			assertTrue(isHardware(decoderImplementationOf(call)));
 
 			track.removeSink(sink);
 			receiver.dispose();
@@ -240,12 +233,12 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	}
 
 	@Test
-	void macVp9NeedsNoKeyFrames() throws Exception {
-		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+	void vp9NeedsNoKeyFrames() throws Exception {
+		assumeVp9Platform();
 
 		CallResult result = receiveVideo(hardwareFactory(), VP9, 320, 240, null, 60);
 
-		assumeTrue(result.decoder.contains("VideoToolbox"), "no hardware decoder: " + result.decoder);
+		expectVp9Hardware(result.decoder);
 
 		// An inter frame that fails to decode makes the receiver ask for a key
 		// frame, and every key frame is then the only frame that decodes. A
@@ -255,20 +248,20 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	}
 
 	@Test
-	void macVp9TemporalLayers() throws Exception {
-		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+	void vp9TemporalLayers() throws Exception {
+		assumeVp9Platform();
 
-		// Temporal layers are one spatial layer, which VideoToolbox decodes.
+		// Temporal layers are one spatial layer, which the hardware decodes.
 		CallResult result = receiveVideo(hardwareFactory(), VP9, 320, 240, "L1T3", 60);
 
-		assumeTrue(result.decoder.contains("VideoToolbox"), "no hardware decoder: " + result.decoder);
+		expectVp9Hardware(result.decoder);
 
 		assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
 	}
 
 	@Test
-	void macVp9SpatialLayers() throws Exception {
-		assumeTrue(OS.contains("mac"), "VideoToolbox is available on macOS only");
+	void vp9SpatialLayers() throws Exception {
+		assumeVp9Platform();
 
 		// WebRTC encodes spatial layers only above a size, and drops them
 		// below it.
@@ -276,9 +269,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 		assumeTrue(result.scalability.startsWith("L2"), "no spatial layers were encoded: " + result.scalability);
 
-		// The frames arrive, from libvpx: VideoToolbox does not decode a
-		// frame whose layers come without a superframe index.
-		assertFalse(result.decoder.contains("VideoToolbox"), result.decoder);
+		// The frames arrive, from libvpx: the layers of a frame come without a
+		// superframe index, which VideoToolbox does not decode, and which a
+		// Media Foundation decoder is not known to.
+		assertFalse(isHardware(result.decoder), result.decoder);
 	}
 
 	private PeerConnectionFactory hardwareFactory() {
@@ -286,6 +280,33 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 				.setAudioDeviceModule(audioDevModule)
 				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
 				.build();
+	}
+
+	/**
+	 * Skips the test where VP9 is not decoded in hardware: macOS and Windows.
+	 */
+	private static void assumeVp9Platform() {
+		assumeTrue(OS.contains("mac") || OS.contains("win"),
+				"VP9 is decoded in hardware on macOS and Windows only");
+	}
+
+	private static boolean isHardware(String implementation) {
+		return implementation.contains("VideoToolbox") || implementation.contains("MediaFoundation");
+	}
+
+	/**
+	 * Where a hardware decoder is required, the test fails without one;
+	 * elsewhere it is skipped.
+	 */
+	private static void expectVp9Hardware(String implementation) {
+		boolean required = OS.contains("mac") ? HARDWARE_REQUIRED : HARDWARE_VP9_REQUIRED;
+
+		if (required) {
+			assertTrue(isHardware(implementation), implementation);
+		}
+		else {
+			assumeTrue(isHardware(implementation), "no hardware decoder: " + implementation);
+		}
 	}
 
 	/**
