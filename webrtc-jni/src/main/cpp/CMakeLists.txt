@@ -63,6 +63,11 @@ file(GLOB SOURCES_MEDIA_VIDEO_CODEC_OS "src/media/video/codec/${SOURCE_TARGET}/*
 if(WIN32 OR LINUX)
     file(GLOB SOURCES_MEDIA_VIDEO_CODEC_NVENC "src/media/video/codec/nvenc/*.cpp")
 endif()
+# NVDEC the same, for decoding. Only Linux has a decoder built on it so far;
+# Windows decodes through Media Foundation.
+if(LINUX)
+    file(GLOB SOURCES_MEDIA_VIDEO_CODEC_NVDEC "src/media/video/codec/nvdec/*.cpp")
+endif()
 file(GLOB SOURCES_MEDIA_VIDEO_DESKTOP "src/media/video/desktop/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_DESKTOP_OS "src/media/video/desktop/${SOURCE_TARGET}/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_OS "src/media/video/${SOURCE_TARGET}/*.cpp")
@@ -80,6 +85,7 @@ list(APPEND SOURCES
     ${SOURCES_MEDIA_VIDEO_CODEC}
     ${SOURCES_MEDIA_VIDEO_CODEC_OS}
     ${SOURCES_MEDIA_VIDEO_CODEC_NVENC}
+    ${SOURCES_MEDIA_VIDEO_CODEC_NVDEC}
     ${SOURCES_MEDIA_VIDEO_DESKTOP}
     ${SOURCES_MEDIA_VIDEO_DESKTOP_OS}
     ${SOURCES_MEDIA_VIDEO_OS}
@@ -113,6 +119,9 @@ endif()
 if(LINUX)
     # libva is loaded at run time, so building needs its headers only.
     target_include_directories(${PROJECT_NAME} PRIVATE dependencies/libva/include)
+
+    # So is NVDEC, and the CUDA driver it runs on.
+    target_include_directories(${PROJECT_NAME} PRIVATE dependencies/nvdec/include)
 endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -178,6 +187,11 @@ if(LINUX)
     install(FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/libva/COPYING"
         DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF/licenses/libva"
+        COMPONENT Runtime
+    )
+    install(FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/nvdec/LICENSE"
+        DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF/licenses/nvdec"
         COMPONENT Runtime
     )
 endif()
