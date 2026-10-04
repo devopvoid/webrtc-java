@@ -33,7 +33,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
@@ -90,6 +92,158 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	@Test
 	void hardwareDecodesAv1() throws Exception {
 		assertHardwareDecodes(AV1, HARDWARE_AV1_REQUIRED);
+	}
+
+	@Test
+	void hardwareCropsPaddedH264() throws Exception {
+		assertCropsPaddedFrames(H264, implementation -> expectHardware(implementation, HARDWARE_REQUIRED));
+	}
+
+	@Test
+	void hardwareCropsPaddedAv1() throws Exception {
+		assertCropsPaddedFrames(AV1, implementation -> expectHardware(implementation, HARDWARE_AV1_REQUIRED));
+	}
+
+	@Test
+	void hardwareCropsPaddedVp9() throws Exception {
+		assumeVp9Platform();
+
+		assertCropsPaddedFrames(VP9, HardwareVideoDecoderIntegrationTest::expectVp9Hardware);
+	}
+
+	/**
+	 * Sends 640x360, a height that is not a multiple of 16 or 64, so the
+	 * decoder puts the picture into a larger surface, and checks that what
+	 * comes out is the picture: the size that was sent (or a scaled-down one
+	 * of the same shape), the luma gradient in the first and the last row,
+	 * and the flat chroma of the call where it should be. Chroma read from the
+	 * wrong offset of the surface would be luma, or padding.
+	 */
+	private void assertCropsPaddedFrames(Predicate<RTCRtpCodecCapability> codec, Consumer<String> expectHardware)
+			throws Exception {
+		final int width = 640;
+		final int height = 360;
+
+		PeerConnectionFactory hardware = hardwareFactory();
+		CountDownLatch received = new CountDownLatch(30);
+		AtomicReference<String> wrong = new AtomicReference<>();
+		AtomicInteger padded = new AtomicInteger();
+		String implementation;
+
+		try (TestMediaCall call = new TestMediaCall(hardware, true, false, codec)) {
+			call.setVideoSize(width, height);
+			call.negotiate();
+
+			RTCRtpReceiver receiver = call.getReceiver("video");
+			VideoTrack track = (VideoTrack) receiver.getTrack();
+			VideoTrackSink sink = frame -> {
+				int frameWidth = frame.buffer.getWidth();
+				int frameHeight = frame.buffer.getHeight();
+
+				if (frameWidth * height != frameHeight * width) {
+					// Not the shape that was sent: padding came along.
+					wrong.compareAndSet(null, "a frame of " + frameWidth + "x" + frameHeight);
+				}
+				else {
+					String error = checkPicture(frame.buffer.toI420());
+
+					if (error != null) {
+						wrong.compareAndSet(null, "a " + frameWidth + "x" + frameHeight + " frame with " + error);
+					}
+					if (frameHeight % 16 != 0) {
+						padded.incrementAndGet();
+					}
+				}
+
+				frame.release();
+				received.countDown();
+			};
+			track.addSink(sink);
+
+			call.awaitConnected();
+			call.startMedia();
+
+			assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
+
+			implementation = decoderImplementationOf(call);
+
+			track.removeSink(sink);
+			receiver.dispose();
+		}
+		finally {
+			hardware.dispose();
+		}
+
+		expectHardware.accept(implementation);
+
+		assertNull(wrong.get(), implementation + " decoded " + wrong.get());
+		assertTrue(padded.get() > 0, "no frame needed padding");
+	}
+
+	/**
+	 * Returns what is wrong with the picture of a frame the call sent, or
+	 * {@code null}.
+	 */
+	private static String checkPicture(I420Buffer buffer) {
+		ByteBuffer y = buffer.getDataY();
+		int lastRow = (buffer.getHeight() - 1) * buffer.getStrideY();
+
+		if (!isRamp(y, 0, buffer.getWidth())) {
+			return "no gradient in the first row";
+		}
+		if (!isRamp(y, lastRow, buffer.getWidth())) {
+			return "no gradient in the last row";
+		}
+
+		int chromaWidth = (buffer.getWidth() + 1) / 2;
+		int chromaHeight = (buffer.getHeight() + 1) / 2;
+
+		if (!isFlat(buffer.getDataU(), buffer.getStrideU(), chromaWidth, chromaHeight, TestMediaCall.CHROMA_U)) {
+			return "U not at " + TestMediaCall.CHROMA_U;
+		}
+		if (!isFlat(buffer.getDataV(), buffer.getStrideV(), chromaWidth, chromaHeight, TestMediaCall.CHROMA_V)) {
+			return "V not at " + TestMediaCall.CHROMA_V;
+		}
+
+		return null;
+	}
+
+	private static boolean isRamp(ByteBuffer plane, int offset, int length) {
+		int min = 255;
+		int max = 0;
+
+		for (int x = 0; x < length; x++) {
+			int value = plane.get(offset + x) & 0xff;
+
+			min = Math.min(min, value);
+			max = Math.max(max, value);
+		}
+
+		return max - min > 150;
+	}
+
+	private static boolean isFlat(ByteBuffer plane, int stride, int width, int height, int expected) {
+		for (int row = 0; row < height; row++) {
+			for (int x = 0; x < width; x++) {
+				int value = plane.get(row * stride + x) & 0xff;
+
+				// Coding leaves a flat plane close to, not exactly at, its value.
+				if (Math.abs(value - expected) > 16) {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	private static void expectHardware(String implementation, boolean required) {
+		if (required) {
+			assertTrue(isHardware(implementation), implementation);
+		}
+		else {
+			assumeTrue(isHardware(implementation), "no hardware decoder: " + implementation);
+		}
 	}
 
 	private void assertHardwareDecodes(Predicate<RTCRtpCodecCapability> codec, boolean required) throws Exception {
@@ -440,19 +594,8 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	 * it is read as it is and stays with the frame.
 	 */
 	private static boolean hasPicture(I420Buffer buffer) {
-		ByteBuffer y = buffer.getDataY();
-		int min = 255;
-		int max = 0;
-
 		// The first row has the whole ramp, and a wrap of it.
-		for (int x = 0; x < buffer.getWidth(); x++) {
-			int value = y.get(x) & 0xff;
-
-			min = Math.min(min, value);
-			max = Math.max(max, value);
-		}
-
-		return max - min > 150;
+		return isRamp(buffer.getDataY(), 0, buffer.getWidth());
 	}
 
 	/**
