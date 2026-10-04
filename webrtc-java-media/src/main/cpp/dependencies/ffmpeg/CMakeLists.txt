@@ -135,9 +135,14 @@ elseif(WIN32)
     # Direct3D 11 first, DXVA2 for what has no D3D11 decoder. FFmpeg loads
     # d3d11.dll, dxgi.dll, d3d9.dll and dxva2.dll when a device is created, so
     # a machine without a GPU decoder loads the libraries all the same.
+    # The decoders offer the D3D11 pixel format, which the *_d3d11va2
+    # hwaccels decode into, only when the older *_d3d11va ones are enabled as
+    # well (h264_slice.c, vp9.c), so both are needed.
     list(APPEND FFMPEG_COMPONENTS
         --enable-d3d11va
         --enable-dxva2
+        --enable-hwaccel=h264_d3d11va
+        --enable-hwaccel=vp9_d3d11va
         --enable-hwaccel=h264_d3d11va2
         --enable-hwaccel=vp9_d3d11va2
         --enable-hwaccel=h264_dxva2
