@@ -120,6 +120,11 @@ namespace ffmpeg
 			// reference the caller owns.
 			int ConvertToI420(const AVFrame * source, AVFrame ** result);
 
+			// A new I420 frame of the given size, whose buffer comes from a
+			// pool, so that the picture lands in memory that is already
+			// mapped. The caller owns the frame.
+			int AllocateI420(int width, int height, AVFrame ** result);
+
 			// A picture decoded while the packets of a failed hardware decoder
 			// were decoded again, which the caller has not asked for yet.
 			struct Pending
@@ -133,6 +138,12 @@ namespace ffmpeg
 			SwsContext * sws_context_ = nullptr;
 			AVFrame * decoded_ = nullptr;
 			AVFrame * transferred_ = nullptr;
+			// The size of the decoder's surfaces that transferred_ was made for.
+			int transfer_width_ = 0;
+			int transfer_height_ = 0;
+			AVBufferPool * pool_ = nullptr;
+			int pool_width_ = 0;
+			int pool_height_ = 0;
 			AVRational time_base_ = { 0, 1 };
 
 			AVPixelFormat hardware_format_ = AV_PIX_FMT_NONE;
