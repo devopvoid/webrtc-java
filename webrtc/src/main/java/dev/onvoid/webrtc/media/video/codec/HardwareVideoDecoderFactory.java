@@ -40,9 +40,12 @@ import java.util.Objects;
  * in, so hardware decoding saves CPU mostly at high resolutions. A hardware
  * decoder that fails to start, or fails while decoding, is replaced by the
  * software decoder of the same codec, which starts with the next key frame.
- * Where there is no hardware decoder, this factory decodes like a {@link
- * DefaultVideoDecoderFactory}. On macOS, that already uses VideoToolbox.
- * Linux has no hardware decoders yet.
+ * On macOS, H.264 is decoded through VideoToolbox by the {@link
+ * DefaultVideoDecoderFactory} already, and this factory adds VP9 (profile 0)
+ * through the VP9 decoder of VideoToolbox, on Macs that have one; streams it
+ * cannot decode, such as those with spatial layers, go to libvpx. Where there
+ * is no hardware decoder, this factory decodes like a {@link
+ * DefaultVideoDecoderFactory}. Linux has no hardware decoders yet.
  * <p>
  * The hardware decoders take over only codecs the software decoders have too,
  * so the supported codecs are the same as those of a {@link
