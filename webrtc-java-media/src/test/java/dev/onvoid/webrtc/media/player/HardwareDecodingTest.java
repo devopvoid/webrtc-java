@@ -29,6 +29,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32;
 
@@ -169,6 +172,240 @@ class HardwareDecodingTest {
 		assertTrue(hardware.frames.size() < FRAMES, "frames: " + hardware.frames.size());
 	}
 
+	@Test
+	void loopsInHardware() throws Exception {
+		Result software = play(H264, false, 0);
+		Result hardware = playLooped(H264, 2 * FRAMES + 5);
+
+		requireHardware(hardware);
+
+		// Every pass starts over from the first key frame, which flushes the
+		// decoder, and the pictures of each pass are those of the first.
+		assertTrue(hardware.frames.size() >= 2 * FRAMES, "frames: " + hardware.frames.size());
+
+		for (int i = 0; i < 2 * FRAMES; i++) {
+			assertEquals(software.frames.get(i % FRAMES), hardware.frames.get(i), "frame " + i);
+		}
+	}
+
+	@Test
+	void seekBetweenKeyFrames() throws Exception {
+		// Half a second in is not a key frame; the player has to start from
+		// the key frame before it, however the reader gets there.
+		Result software = play(H264, false, 500_000);
+		Result hardware = play(H264, true, 500_000);
+
+		assertNull(hardware.error);
+
+		requireHardware(hardware);
+
+		assertEquals(software.frames, hardware.frames);
+	}
+
+	@Test
+	void seekAfterEndStartsOver() throws Exception {
+		Result expected = play(VP9, false, 0);
+		Result result = new Result();
+		CountDownLatch[] ended = { new CountDownLatch(1) };
+
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		VideoTrackSink sink = frame -> {
+			result.frames.add(lumaChecksum(frame.buffer.toI420()));
+
+			frame.release();
+		};
+
+		track.addSink(sink);
+
+		try (MediaPlayer player = new MediaPlayer(new MediaReader(path(VP9)), source, null, true)) {
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended[0].countDown();
+				}
+
+				@Override
+				public void onError(String message) {
+					result.error = message;
+					ended[0].countDown();
+				}
+			});
+
+			player.play();
+
+			assertTrue(ended[0].await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no end of stream");
+
+			requireHardware(player.isHardwareDecoding());
+
+			int firstPass = result.frames.size();
+
+			// A decoder that has drained at the end of the stream takes
+			// packets again after a seek.
+			ended[0] = new CountDownLatch(1);
+
+			player.seek(0);
+			player.play();
+
+			assertTrue(ended[0].await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no second end of stream");
+			assertNull(result.error);
+			assertEquals(FRAMES, firstPass);
+			assertEquals(2 * FRAMES, result.frames.size());
+			assertEquals(expected.frames, result.frames.subList(0, FRAMES));
+			assertEquals(expected.frames, result.frames.subList(FRAMES, 2 * FRAMES));
+		}
+		finally {
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+		}
+	}
+
+	@Test
+	void pausesAndResumes() throws Exception {
+		Result software = play(H264, false, 0);
+		Result result = new Result();
+		CountDownLatch ended = new CountDownLatch(1);
+
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		VideoTrackSink sink = frame -> {
+			result.frames.add(lumaChecksum(frame.buffer.toI420()));
+
+			frame.release();
+		};
+
+		track.addSink(sink);
+
+		try (MediaPlayer player = new MediaPlayer(new MediaReader(path(H264)), source, null, true)) {
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+
+				@Override
+				public void onError(String message) {
+					result.error = message;
+					ended.countDown();
+				}
+			});
+
+			player.play();
+
+			awaitFrames(result, 5);
+			player.pause();
+
+			// Whatever was in flight arrives, then nothing does.
+			Thread.sleep(300);
+
+			int paused = result.frames.size();
+
+			Thread.sleep(300);
+
+			assertEquals(paused, result.frames.size(), "frames while paused");
+
+			player.play();
+
+			assertTrue(ended.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no end of stream");
+			assertNull(result.error);
+
+			requireHardware(player.isHardwareDecoding());
+
+			// Pausing neither drops nor repeats a picture.
+			assertEquals(software.frames, result.frames);
+		}
+		finally {
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+		}
+	}
+
+	@Test
+	void closesWhilePlaying() throws Exception {
+		// Closing a player takes the hardware decoder down in the middle of
+		// decoding, with frames still on the GPU. Do it again and again: a
+		// session or a device that leaks would run out.
+		for (int i = 0; i < 20; i++) {
+			CustomVideoSource source = new CustomVideoSource();
+			VideoTrack track = factory.createVideoTrack("video", source);
+			CountDownLatch first = new CountDownLatch(1);
+			VideoTrackSink sink = frame -> {
+				frame.release();
+				first.countDown();
+			};
+
+			track.addSink(sink);
+
+			try (MediaPlayer player = new MediaPlayer(new MediaReader(path(H264)), source, null, true)) {
+				player.play();
+
+				assertTrue(first.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no frame in round " + i);
+
+				requireHardware(player.isHardwareDecoding());
+			}
+			finally {
+				track.removeSink(sink);
+				track.dispose();
+				source.dispose();
+			}
+		}
+	}
+
+	@Test
+	void opensManyWithoutPlaying() throws Exception {
+		// A decoder that is opened and closed without a single packet, which
+		// the hardware has to hand its session back for.
+		for (int i = 0; i < 50; i++) {
+			CustomVideoSource source = new CustomVideoSource();
+
+			try (MediaPlayer player = new MediaPlayer(new MediaReader(path(i % 2 == 0 ? H264 : VP9)),
+					source, null, true)) {
+				if (i == 0) {
+					requireHardware(player.isHardwareDecoding());
+				}
+			}
+			finally {
+				source.dispose();
+			}
+		}
+	}
+
+	@Test
+	void decodesConcurrently() throws Exception {
+		Result h264 = play(H264, false, 0);
+		Result vp9 = play(VP9, false, 0);
+
+		int players = 4;
+		ExecutorService executor = Executors.newFixedThreadPool(players);
+
+		try {
+			List<Future<Result>> results = new ArrayList<>();
+
+			// Several sessions on the one GPU at the same time, in both codecs.
+			for (int i = 0; i < players; i++) {
+				String asset = i % 2 == 0 ? H264 : VP9;
+
+				results.add(executor.submit(() -> play(asset, true, 0)));
+			}
+			for (int i = 0; i < players; i++) {
+				Result result = results.get(i).get(60, TimeUnit.SECONDS);
+
+				assertNull(result.error);
+
+				requireHardware(result);
+
+				assertEquals(i % 2 == 0 ? h264.frames : vp9.frames, result.frames, "player " + i);
+			}
+		}
+		finally {
+			executor.shutdownNow();
+		}
+	}
+
 	private void assertMatchesSoftware(String asset) throws Exception {
 		Result software = play(asset, false, 0);
 		Result hardware = play(asset, true, 0);
@@ -252,6 +489,59 @@ class HardwareDecodingTest {
 		}
 
 		return result;
+	}
+
+	/**
+	 * Plays the asset in a loop, in hardware, until the sink has seen at least
+	 * the given number of frames, then stops.
+	 */
+	private Result playLooped(String asset, int minFrames) throws Exception {
+		Result result = new Result();
+
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		VideoTrackSink sink = frame -> {
+			result.frames.add(lumaChecksum(frame.buffer.toI420()));
+
+			frame.release();
+		};
+
+		track.addSink(sink);
+
+		try (MediaPlayer player = new MediaPlayer(new MediaReader(path(asset)), source, null, true)) {
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onError(String message) {
+					result.error = message;
+				}
+			});
+
+			player.setLooping(true);
+			player.play();
+
+			awaitFrames(result, minFrames);
+
+			result.hardware = player.isHardwareDecoding();
+		}
+		finally {
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+		}
+
+		return result;
+	}
+
+	private static void awaitFrames(Result result, int count) throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+
+		while (result.frames.size() < count && result.error == null && System.nanoTime() < deadline) {
+			Thread.sleep(10);
+		}
+
+		assertNull(result.error);
+		assertTrue(result.frames.size() >= count, "frames: " + result.frames.size());
 	}
 
 	/** A checksum of the luma of a picture, row by row so that the stride does not matter. */
