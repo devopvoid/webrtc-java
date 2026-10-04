@@ -34,8 +34,11 @@ import java.util.Objects;
  *     .build();
  * }</pre>
  * <p>
- * On Windows, H.264 and AV1 are decoded on the GPU through Direct3D 11 by the
- * Media Foundation decoders of Windows, where the GPU decodes the codec.
+ * On Windows, H.264, AV1 and VP9 (profile 0) are decoded on the GPU through
+ * Direct3D 11 by the Media Foundation decoders of Windows, where the GPU
+ * decodes the codec and Windows has a decoder for it; VP9 needs the VP9 Video
+ * Extensions of the Microsoft Store. VP9 streams with spatial layers go to
+ * libvpx.
  * Decoded frames are copied back to system memory, which WebRTC's frames are
  * in, so hardware decoding saves CPU mostly at high resolutions. A hardware
  * decoder that fails to start, or fails while decoding, is replaced by the
