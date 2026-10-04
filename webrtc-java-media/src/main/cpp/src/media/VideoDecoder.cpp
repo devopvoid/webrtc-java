@@ -41,7 +41,7 @@ namespace
 #if defined(__APPLE__)
 		return { AV_HWDEVICE_TYPE_VIDEOTOOLBOX };
 #elif defined(_WIN32)
-		return { AV_HWDEVICE_TYPE_D3D11VA };
+		return { AV_HWDEVICE_TYPE_D3D12VA, AV_HWDEVICE_TYPE_D3D11VA };
 #else
 		return { AV_HWDEVICE_TYPE_CUDA };
 #endif

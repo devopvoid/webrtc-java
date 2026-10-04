@@ -132,8 +132,9 @@ if(APPLE)
         --enable-hwaccel=vp9_videotoolbox
     )
 elseif(WIN32)
-    # Direct3D 11 only. DXVA2, on Direct3D 9, would add nothing on a GPU of
-    # the last decade, which decodes H.264 and VP9 through Direct3D 11.
+    # Direct3D 11, and 12 further down. DXVA2, on Direct3D 9, would add
+    # nothing on a GPU of the last decade, which decodes H.264 and VP9
+    # through Direct3D 11.
     # FFmpeg loads d3d11.dll and dxgi.dll when a device is created, so a
     # machine without a GPU decoder loads the libraries all the same.
     # The decoders offer the D3D11 pixel format, which the *_d3d11va2
@@ -145,6 +146,17 @@ elseif(WIN32)
         --enable-hwaccel=vp9_d3d11va
         --enable-hwaccel=h264_d3d11va2
         --enable-hwaccel=vp9_d3d11va2
+    )
+    # Direct3D 12 as well, which the player tries first: reading a picture
+    # back costs about half the processor time it does through Direct3D 11 at
+    # 4K. It needs Windows 10 2004 or later and a driver with Direct3D 12
+    # video decoding; a machine without them has a Direct3D 11 decoder to
+    # fall back to, as it always had. Like Direct3D 11 it is loaded when a
+    # device is created.
+    list(APPEND FFMPEG_COMPONENTS
+        --enable-d3d12va
+        --enable-hwaccel=h264_d3d12va
+        --enable-hwaccel=vp9_d3d12va
     )
 elseif(LINUX AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64|arm64|ARM64)$")
     # NVDEC, on NVIDIA GPUs. FFmpeg loads the CUDA driver and libnvcuvid with
