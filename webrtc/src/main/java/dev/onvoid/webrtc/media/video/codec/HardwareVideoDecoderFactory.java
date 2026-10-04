@@ -48,7 +48,12 @@ import java.util.Objects;
  * through the VP9 decoder of VideoToolbox, on Macs that have one; streams it
  * cannot decode, such as those with spatial layers, go to libvpx. Where there
  * is no hardware decoder, this factory decodes like a {@link
- * DefaultVideoDecoderFactory}. Linux has no hardware decoders yet.
+ * DefaultVideoDecoderFactory}.
+ * <p>
+ * On Linux, H.264 and VP9 (profile 0) are decoded on NVIDIA GPUs with NVDEC,
+ * loaded from the NVIDIA driver when the factory is made; a machine without
+ * the driver is not affected. Streams with spatial layers go to libvpx.
+ * Decoding with VA-API, on the GPUs of Intel and AMD, is not there yet.
  * <p>
  * The hardware decoders take over only codecs the software decoders have too,
  * so the supported codecs are the same as those of a {@link

@@ -17,6 +17,7 @@
 #include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
 #include "media/video/codec/linux/VaapiVideoEncoderFactory.h"
+#include "media/video/codec/nvdec/NvdecVideoDecoderFactory.h"
 #include "media/video/codec/nvenc/NvencVideoEncoderFactory.h"
 
 namespace jni
@@ -39,7 +40,14 @@ namespace jni
 
 	std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> CreatePlatformHardwareVideoDecoderFactories()
 	{
-		// No hardware decoders on Linux yet.
-		return {};
+		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> factories;
+
+		// NVDEC, on NVIDIA GPUs. Decoding with VA-API, for the GPUs of Intel
+		// and AMD, is to come.
+		if (auto nvdec = NvdecVideoDecoderFactory::Create()) {
+			factories.push_back(std::move(nvdec));
+		}
+
+		return factories;
 	}
 }

@@ -49,7 +49,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * runners do. Set the system property {@code webrtc.test.hardwareDecoder} to
  * {@code true} on a machine that has one, to make those tests fail instead,
  * and {@code webrtc.test.hardwareAv1Decoder} for a GPU that decodes AV1, and
- * {@code webrtc.test.hardwareVp9Decoder} for one that decodes VP9 on Windows.
+ * {@code webrtc.test.hardwareVp9Decoder} for one that decodes VP9 on Windows or Linux.
  * On macOS the VP9 tests follow {@code webrtc.test.hardwareDecoder}.
  */
 @Execution(ExecutionMode.SAME_THREAD)
@@ -247,7 +247,8 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	}
 
 	private void assertHardwareDecodes(Predicate<RTCRtpCodecCapability> codec, boolean required) throws Exception {
-		assumeTrue(OS.contains("win"), "hardware decoders are implemented on Windows only");
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware decoders are implemented on Windows and Linux only");
 
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
@@ -263,7 +264,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			hardware.dispose();
 		}
 
-		boolean hardwareUsed = implementation.contains("MediaFoundation");
+		boolean hardwareUsed = isHardware(implementation);
 
 		if (required) {
 			assertTrue(hardwareUsed, implementation);
@@ -335,6 +336,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		CountDownLatch half = new CountDownLatch(10);
 
 		try (TestMediaCall call = new TestMediaCall(hardware, true, false, VP9)) {
+			// Large enough that half the size is still one every hardware
+			// decoder takes: NVDEC does not decode VP9 below 128 pixels on the
+			// shorter side, and falls back to libvpx for such a stream.
+			call.setVideoSize(640, 480);
 			call.negotiate();
 
 			RTCRtpReceiver receiver = call.getReceiver("video");
@@ -342,10 +347,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			VideoTrackSink sink = frame -> {
 				int width = frame.buffer.getWidth();
 
-				if (width == 320 && frame.buffer.getHeight() == 240) {
+				if (width == 640 && frame.buffer.getHeight() == 480) {
 					full.countDown();
 				}
-				else if (width == 160 && frame.buffer.getHeight() == 120) {
+				else if (width == 320 && frame.buffer.getHeight() == 240) {
 					half.countDown();
 				}
 
@@ -425,7 +430,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 		// The frames arrive, from libvpx: the layers of a frame come without a
 		// superframe index, which VideoToolbox does not decode, and which a
-		// Media Foundation decoder is not known to.
+		// Media Foundation or NVDEC decoder is not known to.
 		assertFalse(isHardware(result.decoder), result.decoder);
 	}
 
@@ -440,12 +445,13 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	 * Skips the test where VP9 is not decoded in hardware: macOS and Windows.
 	 */
 	private static void assumeVp9Platform() {
-		assumeTrue(OS.contains("mac") || OS.contains("win"),
-				"VP9 is decoded in hardware on macOS and Windows only");
+		assumeTrue(OS.contains("mac") || OS.contains("win") || OS.contains("linux"),
+				"VP9 is decoded in hardware on macOS, Windows and Linux only");
 	}
 
 	private static boolean isHardware(String implementation) {
-		return implementation.contains("VideoToolbox") || implementation.contains("MediaFoundation");
+		return implementation.contains("VideoToolbox") || implementation.contains("MediaFoundation")
+				|| implementation.contains("NVDEC");
 	}
 
 	/**
