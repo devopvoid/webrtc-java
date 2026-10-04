@@ -41,7 +41,7 @@ namespace
 #if defined(__APPLE__)
 		return { AV_HWDEVICE_TYPE_VIDEOTOOLBOX };
 #elif defined(_WIN32)
-		return { AV_HWDEVICE_TYPE_D3D11VA };
+		return { AV_HWDEVICE_TYPE_D3D12VA, AV_HWDEVICE_TYPE_D3D11VA };
 #else
 		return { AV_HWDEVICE_TYPE_CUDA };
 #endif
@@ -232,6 +232,14 @@ namespace ffmpeg
 
 			sws_context_ = nullptr;
 		}
+
+		// Frames still out with WebRTC keep their buffers, and the pool goes
+		// when the last of them comes back.
+		av_buffer_pool_uninit(&pool_);
+
+		pool_width_ = 0;
+		pool_height_ = 0;
+
 		if (codec_context_ != nullptr) {
 			avcodec_free_context(&codec_context_);
 		}
@@ -326,18 +334,35 @@ namespace ffmpeg
 			// The picture is in the memory of the hardware decoder. Bring it
 			// into system memory, as NV12, and convert it like any other
 			// format that is not I420.
-			av_frame_unref(transferred_);
+			//
+			// The system-memory frame stays between pictures: a buffer of
+			// this size is a fresh allocation every time it is dropped, and
+			// the pages of a fresh allocation cost more to fault in than the
+			// copy into them. The buffer is made for the size of the decoder's
+			// surfaces, which is as much as a transfer may copy (Direct3D 12
+			// copies all of it, padding included), so it is kept only for
+			// as long as those, the picture and the format stay as they are.
+			const AVHWFramesContext * frames = reinterpret_cast<const AVHWFramesContext *>(decoded_->hw_frames_ctx->data);
+
+			if (transferred_->buf[0] != nullptr && (transferred_->width != decoded_->width
+					|| transferred_->height != decoded_->height || transferred_->format != frames->sw_format
+					|| transfer_width_ != frames->width || transfer_height_ != frames->height)) {
+				av_frame_unref(transferred_);
+			}
+
+			const bool allocated = transferred_->buf[0] == nullptr;
 
 			result = av_hwframe_transfer_data(transferred_, decoded_, 0);
 
 			if (result >= 0) {
-				transferred_->width = decoded_->width;
-				transferred_->height = decoded_->height;
+				if (allocated) {
+					transfer_width_ = frames->width;
+					transfer_height_ = frames->height;
+				}
 
 				result = ConvertToI420(transferred_, frame);
 			}
 
-			av_frame_unref(transferred_);
 			av_frame_unref(decoded_);
 		}
 		else if (IsI420(decoded_->format)) {
@@ -485,21 +510,11 @@ namespace ffmpeg
 			return AVERROR(EINVAL);
 		}
 
-		AVFrame * converted = av_frame_alloc();
+		AVFrame * converted = nullptr;
 
-		if (converted == nullptr) {
-			return AVERROR(ENOMEM);
-		}
-
-		converted->format = AV_PIX_FMT_YUV420P;
-		converted->width = source->width;
-		converted->height = source->height;
-
-		int error = av_frame_get_buffer(converted, 0);
+		int error = AllocateI420(source->width, source->height, &converted);
 
 		if (error < 0) {
-			av_frame_free(&converted);
-
 			return error;
 		}
 
@@ -513,6 +528,63 @@ namespace ffmpeg
 		}
 
 		*result = converted;
+
+		return 0;
+	}
+
+	int VideoDecoder::AllocateI420(int width, int height, AVFrame ** result)
+	{
+		constexpr int kAlign = 32;
+
+		if (pool_ == nullptr || pool_width_ != width || pool_height_ != height) {
+			av_buffer_pool_uninit(&pool_);
+
+			const int size = av_image_get_buffer_size(AV_PIX_FMT_YUV420P, width, height, kAlign);
+
+			if (size < 0) {
+				return size;
+			}
+
+			pool_ = av_buffer_pool_init(size, av_buffer_allocz);
+			pool_width_ = width;
+			pool_height_ = height;
+
+			if (pool_ == nullptr) {
+				return AVERROR(ENOMEM);
+			}
+		}
+
+		AVFrame * frame = av_frame_alloc();
+
+		if (frame == nullptr) {
+			return AVERROR(ENOMEM);
+		}
+
+		// The buffer goes back to the pool when the last reference to the
+		// frame is dropped, so the memory of a picture is reused for the
+		// next ones rather than allocated, and faulted in, each time.
+		frame->buf[0] = av_buffer_pool_get(pool_);
+
+		if (frame->buf[0] == nullptr) {
+			av_frame_free(&frame);
+
+			return AVERROR(ENOMEM);
+		}
+
+		frame->format = AV_PIX_FMT_YUV420P;
+		frame->width = width;
+		frame->height = height;
+
+		int error = av_image_fill_arrays(frame->data, frame->linesize, frame->buf[0]->data,
+				AV_PIX_FMT_YUV420P, width, height, kAlign);
+
+		if (error < 0) {
+			av_frame_free(&frame);
+
+			return error;
+		}
+
+		*result = frame;
 
 		return 0;
 	}
