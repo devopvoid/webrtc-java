@@ -182,6 +182,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		CountDownLatch half = new CountDownLatch(10);
 
 		try (TestMediaCall call = new TestMediaCall(hardware, true, false, VP9)) {
+			// Large enough that half the size is still one every hardware
+			// decoder takes: NVDEC does not decode VP9 below 128 pixels on the
+			// shorter side, and falls back to libvpx for such a stream.
+			call.setVideoSize(640, 480);
 			call.negotiate();
 
 			RTCRtpReceiver receiver = call.getReceiver("video");
@@ -189,10 +193,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			VideoTrackSink sink = frame -> {
 				int width = frame.buffer.getWidth();
 
-				if (width == 320 && frame.buffer.getHeight() == 240) {
+				if (width == 640 && frame.buffer.getHeight() == 480) {
 					full.countDown();
 				}
-				else if (width == 160 && frame.buffer.getHeight() == 120) {
+				else if (width == 320 && frame.buffer.getHeight() == 240) {
 					half.countDown();
 				}
 
