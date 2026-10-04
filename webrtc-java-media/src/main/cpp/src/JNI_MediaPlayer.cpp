@@ -49,7 +49,7 @@ namespace
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 (JNIEnv * env, jobject caller, jlong readerHandle, jlong tableAddress,
-		jlong videoSourceHandle, jlong audioSourceHandle)
+		jlong videoSourceHandle, jlong audioSourceHandle, jboolean hardwareDecoding)
 {
 	// The Java side detached the reader before this call, so it is ours now
 	// and has to be released here if anything goes wrong.
@@ -78,6 +78,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 			reinterpret_cast<void *>(audioSourceHandle));
 
 	player->SetObserver(std::make_unique<ffmpeg::JavaPlayerObserver>(env, caller));
+	player->SetHardwareDecoding(hardwareDecoding == JNI_TRUE);
 
 	int result = player->Initialize();
 
@@ -133,6 +134,12 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_position
 (JNIEnv * env, jclass caller, jlong handle)
 {
 	return handle != 0 ? PlayerOf(handle)->GetPositionUs() : 0;
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_hardwareDecoding
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return handle != 0 && PlayerOf(handle)->IsHardwareDecoding() ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_state

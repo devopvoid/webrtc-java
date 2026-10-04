@@ -85,7 +85,7 @@ public class MediaPlayer implements AutoCloseable {
 	/**
 	 * Creates a player for the given source, delivering into the given custom
 	 * media sources. At least one of them has to be present; media of a kind
-	 * with no source is decoded and dropped.
+	 * with no source is decoded and dropped. Video is decoded in software.
 	 *
 	 * @param reader      The source to play, which this player takes over.
 	 * @param videoSource Where video goes, or {@code null} for none.
@@ -96,6 +96,32 @@ public class MediaPlayer implements AutoCloseable {
 	 */
 	public MediaPlayer(MediaReader reader, CustomVideoSource videoSource,
 			CustomAudioSource audioSource) throws IOException {
+		this(reader, videoSource, audioSource, false);
+	}
+
+	/**
+	 * Creates a player for the given source, delivering into the given custom
+	 * media sources. At least one of them has to be present; media of a kind
+	 * with no source is decoded and dropped.
+	 * <p>
+	 * With {@code hardwareDecoding} the player decodes H.264 and VP9 video on
+	 * the media engine or GPU of the machine where there is one the platform
+	 * offers (VideoToolbox on macOS, Direct3D 11 on Windows, NVDEC on NVIDIA
+	 * GPUs on Linux), which takes a fraction of the processor time. The
+	 * pictures are the same as software decoding gives. A stream the
+	 * hardware does not take, or a codec it has no decoder for, is decoded in
+	 * software; {@link #isHardwareDecoding()} tells which it is.
+	 *
+	 * @param reader           The source to play, which this player takes over.
+	 * @param videoSource      Where video goes, or {@code null} for none.
+	 * @param audioSource      Where audio goes, or {@code null} for none.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *
+	 * @throws IOException              if the source cannot be decoded.
+	 * @throws IllegalArgumentException if both sources are {@code null}.
+	 */
+	public MediaPlayer(MediaReader reader, CustomVideoSource videoSource,
+			CustomAudioSource audioSource, boolean hardwareDecoding) throws IOException {
 		Objects.requireNonNull(reader, "MediaReader is null");
 
 		if (videoSource == null && audioSource == null) {
@@ -113,7 +139,8 @@ public class MediaPlayer implements AutoCloseable {
 
 		handle = create(readerHandle, NativeApi.tableAddress(),
 				videoSource != null ? NativeApi.handleOf(videoSource) : 0,
-				audioSource != null ? NativeApi.handleOf(audioSource) : 0);
+				audioSource != null ? NativeApi.handleOf(audioSource) : 0,
+				hardwareDecoding);
 	}
 
 	/**
@@ -179,6 +206,21 @@ public class MediaPlayer implements AutoCloseable {
 	public long getPositionUs() {
 		synchronized (lock) {
 			return position(handle);
+		}
+	}
+
+	/**
+	 * Returns whether the video is being decoded in hardware. That can be
+	 * less than was asked for: the platform may have no hardware decoder for
+	 * the codec, or the hardware may not take the stream, in which case the
+	 * player decodes in software. It can turn {@code false} while playing, if
+	 * the hardware decoder fails, and never turns {@code true} again.
+	 *
+	 * @return {@code true} if video is decoded in hardware.
+	 */
+	public boolean isHardwareDecoding() {
+		synchronized (lock) {
+			return handle != 0 && hardwareDecoding(handle);
 		}
 	}
 
@@ -286,7 +328,7 @@ public class MediaPlayer implements AutoCloseable {
 	}
 
 	private native long create(long readerHandle, long tableAddress,
-			long videoSourceHandle, long audioSourceHandle) throws IOException;
+			long videoSourceHandle, long audioSourceHandle, boolean hardwareDecoding) throws IOException;
 
 	private static native void start(long handle);
 
@@ -299,6 +341,8 @@ public class MediaPlayer implements AutoCloseable {
 	private static native long position(long handle);
 
 	private static native int state(long handle);
+
+	private static native boolean hardwareDecoding(long handle);
 
 	private static native void dispose(long handle);
 
