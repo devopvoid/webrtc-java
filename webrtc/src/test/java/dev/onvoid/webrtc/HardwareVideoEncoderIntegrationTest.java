@@ -26,10 +26,13 @@ import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
@@ -113,6 +116,142 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	}
 
 	@Test
+	void hardwareEncodes1080p() throws Exception {
+		assumeNvenc();
+
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try (Run run = new Run(hardware, H264, 1920, 1080)) {
+			run.awaitFrames(10);
+
+			assertHardware(run.implementation(), HARDWARE_REQUIRED);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void hardwareEncodesOddSize() throws Exception {
+		assumeNvenc();
+
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		// NV12 needs even dimensions; the encoder asks for them to be aligned
+		// and is not left with a size it has to refuse.
+		try (Run run = new Run(hardware, H264, 641, 361)) {
+			run.awaitFrames(10);
+
+			assertHardware(run.implementation(), HARDWARE_REQUIRED);
+			assertEquals(0, run.width.get() % 2, "width " + run.width.get());
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void hardwareFollowsResolutionChange() throws Exception {
+		assumeNvenc();
+
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try (Run run = new Run(hardware, H264, 320, 240)) {
+			run.awaitFrames(10);
+
+			assertHardware(run.implementation(), HARDWARE_REQUIRED);
+
+			// A new size starts the encoder over, with a new session.
+			run.call.setVideoSize(640, 480);
+			run.awaitWidth(640);
+
+			run.call.setVideoSize(320, 240);
+			run.awaitWidth(320);
+
+			assertHardware(run.implementation(), HARDWARE_REQUIRED);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void hardwareFollowsBitrateCap() throws Exception {
+		assumeNvenc();
+
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try (Run run = new Run(hardware, H264, 640, 480)) {
+			run.awaitFrames(10);
+
+			assertHardware(run.implementation(), HARDWARE_REQUIRED);
+
+			// The encoder is reconfigured in place, without a new session or
+			// a lost stream.
+			run.setMaxBitrate(150_000);
+			run.awaitTargetBitrate(150_000);
+			run.awaitMoreFrames(10);
+
+			run.setMaxBitrate(2_000_000);
+			run.awaitMoreFrames(10);
+
+			assertHardware(run.implementation(), HARDWARE_REQUIRED);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void hardwareRestartsCleanly() throws Exception {
+		assumeNvenc();
+
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try {
+			// A session or a CUDA context left behind by each call would run
+			// the GPU out of encoder sessions, and the later calls would be
+			// encoded in software.
+			for (int i = 0; i < 15; i++) {
+				try (Run run = new Run(hardware, H264, 320, 240)) {
+					run.awaitFrames(5);
+
+					assertHardware(run.implementation(), HARDWARE_REQUIRED);
+				}
+			}
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void hardwareEncodesSeveralStreams() throws Exception {
+		assumeNvenc();
+
+		PeerConnectionFactory hardware = hardwareFactory();
+		List<Run> runs = new ArrayList<>();
+
+		try {
+			for (int i = 0; i < 4; i++) {
+				runs.add(new Run(hardware, H264, 320, 240));
+			}
+			for (Run run : runs) {
+				run.awaitFrames(10);
+
+				assertHardware(run.implementation(), HARDWARE_REQUIRED);
+			}
+		}
+		finally {
+			for (Run run : runs) {
+				run.close();
+			}
+
+			hardware.dispose();
+		}
+	}
+
+	@Test
 	void defaultEncodesH264InSoftware() throws Exception {
 		assumeFalse(OS.contains("mac"), "macOS encodes H.264 through VideoToolbox by default");
 
@@ -142,6 +281,18 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		finally {
 			hardware.dispose();
 		}
+	}
+
+	private static void assumeNvenc() {
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware encoders are implemented on Windows and Linux only");
+	}
+
+	private PeerConnectionFactory hardwareFactory() {
+		return PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.build();
 	}
 
 	private static void assertHardware(String implementation, boolean required) {
@@ -200,6 +351,110 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 			receiver.dispose();
 
 			return String.valueOf(implementation);
+		}
+	}
+
+	/**
+	 * A call that sends video in the given codec and size, and counts what
+	 * the receiver gets.
+	 */
+	private static final class Run implements AutoCloseable {
+
+		final TestMediaCall call;
+		final RTCRtpReceiver receiver;
+		final VideoTrack track;
+		final VideoTrackSink sink;
+		final AtomicInteger frames = new AtomicInteger();
+		final AtomicInteger width = new AtomicInteger();
+
+
+		Run(PeerConnectionFactory factory, Predicate<RTCRtpCodecCapability> codec, int width,
+				int height) throws Exception {
+			call = new TestMediaCall(factory, true, false, codec);
+			call.setVideoSize(width, height);
+			call.negotiate();
+
+			receiver = call.getReceiver("video");
+			track = (VideoTrack) receiver.getTrack();
+			sink = frame -> {
+				this.width.set(frame.buffer.getWidth());
+				frame.release();
+				frames.incrementAndGet();
+			};
+			track.addSink(sink);
+
+			call.awaitConnected();
+			call.startMedia();
+		}
+
+		void awaitFrames(int count) throws InterruptedException {
+			await(() -> frames.get() >= count, "frames: " + frames.get() + " of " + count);
+		}
+
+		void awaitMoreFrames(int count) throws InterruptedException {
+			awaitFrames(frames.get() + count);
+		}
+
+		void awaitWidth(int expected) throws InterruptedException {
+			await(() -> width.get() == expected, "width " + width.get() + ", expected " + expected);
+		}
+
+		void setMaxBitrate(int bitrate) {
+			RTCRtpSendParameters parameters = call.getVideoSender().getParameters();
+			parameters.encodings.get(0).maxBitrate = bitrate;
+
+			call.getVideoSender().setParameters(parameters);
+		}
+
+		void awaitTargetBitrate(double atMost) throws InterruptedException {
+			await(() -> {
+				Map<String, Object> outbound = call.getOutboundVideoStats();
+				Object target = outbound == null ? null : outbound.get("targetBitrate");
+
+				return target instanceof Number && ((Number) target).doubleValue() <= atMost;
+			}, "target bitrate not at or below " + atMost);
+		}
+
+		String implementation() throws InterruptedException {
+			// The statistics catch up with the encoder shortly after.
+			Object[] implementation = new Object[1];
+
+			await(() -> {
+				Map<String, Object> outbound = call.getOutboundVideoStats();
+
+				implementation[0] = outbound == null ? null : outbound.get("encoderImplementation");
+
+				return implementation[0] != null;
+			}, "no encoder implementation in the statistics");
+
+			return String.valueOf(implementation[0]);
+		}
+
+		@Override
+		public void close() throws InterruptedException {
+			track.removeSink(sink);
+			receiver.dispose();
+			call.close();
+		}
+
+		private static void await(Condition condition, String description) throws InterruptedException {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+
+			while (System.nanoTime() < deadline) {
+				if (condition.test()) {
+					return;
+				}
+
+				Thread.sleep(50);
+			}
+
+			assertTrue(condition.test(), description);
+		}
+
+		private interface Condition {
+
+			boolean test() throws InterruptedException;
+
 		}
 	}
 
