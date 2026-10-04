@@ -139,14 +139,21 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_ERR_SIMULCAST_PARAMETERS_NOT_SUPPORTED;
 		}
 		// NV12 has chroma at half the resolution in both directions, and the
-		// frame is cropped in units of two pixels.
-		if (settings->width % 2 != 0 || settings->height % 2 != 0) {
+		// frame is cropped in units of two pixels. The first frame of a source
+		// can be odd, since WebRTC asks the source for
+		// requested_resolution_alignment only once the encoder has been set up.
+		// Refusing it would leave the whole session to the software encoder, so
+		// the encoder takes the even size below it and drops the last row and
+		// column of such frames.
+		if (settings->width < 2 || settings->height < 2) {
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 
 		Release();
 
 		codecSettings = *settings;
+		codecSettings.width &= ~1;
+		codecSettings.height &= ~1;
 		widthInMbs = (codecSettings.width + 15) / 16;
 		heightInMbs = (codecSettings.height + 15) / 16;
 		bitrateBps = std::max(1u, codecSettings.startBitrate) * 1000;
@@ -339,8 +346,12 @@ namespace jni
 		const int height = static_cast<int>(codecSettings.height);
 
 		// WebRTC initializes the encoder again when the frame size changes,
-		// so a frame of another size is one that raced with that.
-		if (i420->width() != width || i420->height() != height) {
+		// so a frame of another size is one that raced with that. An odd frame
+		// is cropped to the even size the encoder took, which needs no copy.
+		const bool cropped = i420->width() - width >= 0 && i420->width() - width <= 1
+			&& i420->height() - height >= 0 && i420->height() - height <= 1;
+
+		if (!cropped) {
 			webrtc::scoped_refptr<webrtc::I420Buffer> scaled = webrtc::I420Buffer::Create(width, height);
 			scaled->ScaleFrom(*i420);
 			i420 = scaled;
