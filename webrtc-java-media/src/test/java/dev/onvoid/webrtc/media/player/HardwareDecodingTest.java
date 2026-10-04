@@ -81,6 +81,30 @@ class HardwareDecodingTest {
 	/** VP9 profile 1, 4:4:4, which no hardware decoder takes. */
 	private static final String VP9_444 = "/media-test-vp9-444.webm";
 
+	/**
+	 * The larger and odder sizes are one second at 15 fps with a key frame
+	 * every eight frames: 1080p H.264 High with B-frames, 1080p VP9, 4K H.264,
+	 * and H.264 at 1366x768. {@code media-test-h264-10bit.mkv} (High 10) and
+	 * {@code media-test-h264-444.mkv} (High 4:4:4 Predictive) are 320x240, in
+	 * formats no hardware decoder takes. All were made with FFmpeg (libx264 and
+	 * libvpx-vp9) from a moving gradient with a little noise, for example:
+	 * <pre>
+	 * ffmpeg -f lavfi -i "gradients=s=1920x1080:r=15:d=1:speed=0.02,noise=alls=4:allf=t,format=yuv420p" \
+	 *     -c:v libx264 -profile:v high -bf 2 -g 8 -crf 30 -maxrate 4M -bufsize 4M -an media-test-h264-1080p.mkv
+	 * </pre>
+	 */
+	private static final String H264_1080P = "/media-test-h264-1080p.mkv";
+
+	private static final String VP9_1080P = "/media-test-vp9-1080p.webm";
+
+	private static final String H264_4K = "/media-test-h264-4k.mkv";
+
+	private static final String H264_1366 = "/media-test-h264-1366.mkv";
+
+	private static final String H264_10BIT = "/media-test-h264-10bit.mkv";
+
+	private static final String H264_444 = "/media-test-h264-444.mkv";
+
 	/** VP8, for which no platform has a decoder this module uses. */
 	private static final String VP8 = "/media-test.webm";
 
@@ -406,7 +430,62 @@ class HardwareDecodingTest {
 		}
 	}
 
+	@Test
+	void h264MatchesSoftware1080p() throws Exception {
+		// 1080 rows are not a multiple of the 16 of a macroblock: the decoder
+		// puts them in a surface of 1088 and the player has to crop it.
+		assertMatchesSoftware(H264_1080P, 15, "1920x1080");
+	}
+
+	@Test
+	void vp9MatchesSoftware1080p() throws Exception {
+		// VP9 decodes in blocks of 64, so the surface is larger still.
+		assertMatchesSoftware(VP9_1080P, 15, "1920x1080");
+	}
+
+	@Test
+	void h264MatchesSoftware4k() throws Exception {
+		assertMatchesSoftware(H264_4K, 15, "3840x2160");
+	}
+
+	@Test
+	void h264MatchesSoftwareLaptopSize() throws Exception {
+		// 1366x768: a width that is no multiple of 16 and not of 8 either, so
+		// the picture is cropped on the right as well as at the bottom.
+		assertMatchesSoftware(H264_1366, 15, "1366x768");
+	}
+
+	@Test
+	void tenBitH264FallsBack() throws Exception {
+		assertFallsBack(H264_10BIT);
+	}
+
+	@Test
+	void h264444FallsBack() throws Exception {
+		assertFallsBack(H264_444);
+	}
+
+	/**
+	 * A stream that hardware decoders do not take is played in software, with
+	 * the pictures software decoding gives and no error.
+	 */
+	private void assertFallsBack(String asset) throws Exception {
+		Result software = play(asset, false, 0);
+		Result hardware = play(asset, true, 0);
+
+		assertNull(software.error);
+		assertNull(hardware.error);
+
+		assertFalse(hardware.hardware);
+		assertEquals(15, hardware.frames.size());
+		assertEquals(software.frames, hardware.frames);
+	}
+
 	private void assertMatchesSoftware(String asset) throws Exception {
+		assertMatchesSoftware(asset, FRAMES, null);
+	}
+
+	private void assertMatchesSoftware(String asset, int frames, String size) throws Exception {
 		Result software = play(asset, false, 0);
 		Result hardware = play(asset, true, 0);
 
@@ -415,7 +494,12 @@ class HardwareDecodingTest {
 
 		requireHardware(hardware);
 
-		assertEquals(FRAMES, software.frames.size());
+		assertEquals(frames, software.frames.size());
+
+		if (size != null) {
+			assertEquals(size, software.size);
+			assertEquals(size, hardware.size);
+		}
 
 		// The pictures are the same, frame by frame.
 		assertEquals(software.frames, hardware.frames);
@@ -450,6 +534,7 @@ class HardwareDecodingTest {
 		CustomVideoSource source = new CustomVideoSource();
 		VideoTrack track = factory.createVideoTrack("video", source);
 		VideoTrackSink sink = frame -> {
+			result.size = frame.buffer.getWidth() + "x" + frame.buffer.getHeight();
 			result.frames.add(lumaChecksum(frame.buffer.toI420()));
 
 			frame.release();
@@ -570,6 +655,7 @@ class HardwareDecodingTest {
 		final List<Long> frames = Collections.synchronizedList(new ArrayList<>());
 		volatile String error;
 		volatile boolean hardware;
+		volatile String size;
 
 	}
 
