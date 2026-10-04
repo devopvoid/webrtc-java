@@ -49,6 +49,12 @@ class TestMediaCall implements AutoCloseable {
 	private static final int DEFAULT_WIDTH = 320;
 	private static final int DEFAULT_HEIGHT = 240;
 
+	/** The value of every U sample the call sends. */
+	static final int CHROMA_U = 90;
+
+	/** The value of every V sample the call sends. */
+	static final int CHROMA_V = 160;
+
 	private final CustomVideoSource videoSource;
 	private final CustomAudioSource audioSource;
 	private final VideoTrack videoTrack;
@@ -331,6 +337,11 @@ class TestMediaCall implements AutoCloseable {
 				}
 				shade += 3;
 
+				// Flat chroma, so that a receiver can tell where the decoder
+				// took its chroma from.
+				fill(buffer.getDataU(), CHROMA_U);
+				fill(buffer.getDataV(), CHROMA_V);
+
 				VideoFrame frame = new VideoFrame(buffer, 0);
 				videoSource.pushFrame(frame);
 				frame.release();
@@ -343,6 +354,12 @@ class TestMediaCall implements AutoCloseable {
 			catch (InterruptedException e) {
 				return;
 			}
+		}
+	}
+
+	private static void fill(ByteBuffer plane, int value) {
+		for (int i = 0; i < plane.capacity(); i++) {
+			plane.put(i, (byte) value);
 		}
 	}
 
