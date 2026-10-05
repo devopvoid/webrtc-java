@@ -117,6 +117,9 @@ class HardwareDecodingTest {
 	private AudioDeviceModule audioModule;
 	private PeerConnectionFactory factory;
 
+	/** Whether the hardware decoder of this machine decodes, once it is known. */
+	private Boolean hardwareDecodes;
+
 
 	@BeforeAll
 	void initFactory() {
@@ -299,7 +302,7 @@ class HardwareDecodingTest {
 	void softwareThatTakesOverUsesEveryCore() throws Exception {
 		assumeTrue(Runtime.getRuntime().availableProcessors() > 1, "a single core");
 
-		requireHardwareDecoder();
+		requireHardwareContext();
 
 		// VP9 in 4:4:4: the hardware decoder offers no format for it, and the
 		// stream is decoded in software. The decoder made for the hardware has
@@ -645,10 +648,28 @@ class HardwareDecodingTest {
 	}
 
 	/**
-	 * Skips the test where this machine has no hardware decoder to make fail,
+	 * Skips the test where this machine has no hardware decoder that decodes,
 	 * and fails it where one is required.
+	 * <p>
+	 * A decoder that opens is not one that decodes: a virtual machine, as CI
+	 * runs on, can have the device and no engine behind it, and the stream is
+	 * decoded in software from its first packet, where a fault meant for the
+	 * hardware never arrives. So a stream is played first, once, and the
+	 * hardware has to have delivered its pictures.
 	 */
 	private void requireHardwareDecoder() throws Exception {
+		if (hardwareDecodes == null) {
+			hardwareDecodes = play(H264, true, 0).hardware;
+		}
+
+		requireHardware(hardwareDecodes);
+	}
+
+	/**
+	 * Skips the test where this machine has no hardware decoder to set up,
+	 * and fails it where one is required.
+	 */
+	private void requireHardwareContext() throws Exception {
 		try (MediaFileSource source = new MediaFileSource(path(H264), true)) {
 			requireHardware(source.getPlayer().isHardwareDecoding());
 		}
