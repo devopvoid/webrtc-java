@@ -1,0 +1,90 @@
+d3d12va: reuse the reference-only resource of a texture that is decoded into again
+
+Applies to FFmpeg n8.1. Not needed once FFmpeg has its own fix: drop this
+file when a release that has one is pinned.
+
+On a driver that requires reference-only allocations (AMD, Intel),
+d3d12va_decode.c keeps a map of reference-only resources next to the pictures
+it decodes, and frees an entry only once the texture it was made for is no
+longer listed in ref_resources. A hardware frame pool hands out the same few
+textures again and again, and a texture that is handed out again is, as a
+rule, still listed there, as the entry of a picture that is long gone. Each
+time, get_reference_only_resource() took a free entry for it, or made a new
+one, though the texture had one already, and nothing freed the extra: both
+entries match the texture, so prepare_reference_only_resources() keeps both,
+and it hands the decoder the first it finds, which is the older one, holding
+a picture from long ago, as the reference of the new ones.
+
+Decoding then fails with "No space for new Reference frame!" once the entries
+run out: at the 10th picture of a VP9 stream and the 18th of an H.264 one,
+with the pool and reference sets of the small streams this was found with.
+Until then the decoder can be given the older entry, and so a stale picture,
+as a reference.
+
+The second problem is that the map is allocated with max_num_ref + 1
+entries, one more than a picture can have references, because the entry of
+the picture that has just left the reference set is only freed after the new
+one has been given its own. Every loop over the map stops one short of that.
+
+A texture that already has an entry now keeps it, and the loops cover the
+whole map.
+
+diff --git a/libavcodec/d3d12va_decode.c b/libavcodec/d3d12va_decode.c
+index 4e714efb1a..3e34d7583c 100644
+--- a/libavcodec/d3d12va_decode.c
++++ b/libavcodec/d3d12va_decode.c
+@@ -61,8 +61,20 @@ static ID3D12Resource *get_reference_only_resource(AVCodecContext *avctx, ID3D12
+         return NULL;
+     }
+ 
++    // A texture that is decoded into again, because the pool handed it out
++    // once more, keeps the reference-only resource it had. Giving it another
++    // would leave two for one texture, which nothing frees as long as the
++    // texture is listed in ref_resources, and which prepare_reference_only_resources
++    // would pick between by order rather than by age.
++    for (i = 0; i < ctx->max_num_ref + 1; i++) {
++        if (reference_only_map[i].resource != NULL && reference_only_map[i].output_resource == output_resource) {
++            reference_only_map[i].used = 1;
++            return reference_only_map[i].resource;
++        }
++    }
++
+     // find unused resource
+-    for (i = 0; i < ctx->max_num_ref; i++) {
++    for (i = 0; i < ctx->max_num_ref + 1; i++) {
+         if (!reference_only_map[i].used && reference_only_map[i].resource != NULL) {
+             reference_only_map[i].used = 1;
+             resource = reference_only_map[i].resource;
+@@ -72,12 +84,12 @@ static ID3D12Resource *get_reference_only_resource(AVCodecContext *avctx, ID3D12
+     }
+ 
+     // find space to allocate
+-    for (i = 0; i < ctx->max_num_ref; i++) {
++    for (i = 0; i < ctx->max_num_ref + 1; i++) {
+         if (reference_only_map[i].resource == NULL)
+             break;
+     }
+ 
+-    if (i == ctx->max_num_ref) {
++    if (i == ctx->max_num_ref + 1) {
+         av_log(avctx, AV_LOG_ERROR, "No space for new Reference frame!\n");
+         return NULL;
+     }
+@@ -105,7 +117,7 @@ static void free_reference_only_resources(AVCodecContext *avctx)
+     int i;
+     ReferenceFrame *reference_only_map = ctx->reference_only_map;
+     if (reference_only_map != NULL) {
+-        for (i = 0; i < ctx->max_num_ref; i++) {
++        for (i = 0; i < ctx->max_num_ref + 1; i++) {
+             if (reference_only_map[i].resource != NULL) {
+                 D3D12_OBJECT_RELEASE(reference_only_map[i].resource);
+             }
+@@ -123,7 +135,7 @@ static void prepare_reference_only_resources(AVCodecContext *avctx)
+     if (reference_only_map == NULL)
+         return;
+     memset(ctx->ref_only_resources, 0, ctx->max_num_ref * sizeof(*(ctx->ref_only_resources)));
+-    for (j = 0; j < ctx->max_num_ref; j++) {
++    for (j = 0; j < ctx->max_num_ref + 1; j++) {
+         for (i = 0; i < ctx->max_num_ref; i++) {
+             if (reference_only_map[j].used && reference_only_map[j].output_resource == ctx->ref_resources[i]) {
+                 ctx->ref_only_resources[i] = reference_only_map[j].resource;
