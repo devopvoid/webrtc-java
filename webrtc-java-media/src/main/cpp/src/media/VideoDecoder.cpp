@@ -15,6 +15,7 @@
  */
 
 #include "media/VideoDecoder.h"
+#include "media/HardwareFault.h"
 
 extern "C" {
 #include <libavutil/imgutils.h>
@@ -82,7 +83,9 @@ namespace ffmpeg
 		int result = OpenContext(hardware);
 
 		if (result < 0 && hardware) {
-			av_log(nullptr, AV_LOG_INFO, "No hardware video decoder (%s), decoding in software\n",
+			// Verbose: a codec with no hardware decoder is nothing to report,
+			// and IsHardware tells a caller that wants to know.
+			av_log(nullptr, AV_LOG_VERBOSE, "No hardware video decoder (%s), decoding in software\n",
 					ErrorString(result).c_str());
 
 			result = OpenContext(false);
@@ -113,6 +116,8 @@ namespace ffmpeg
 
 	int VideoDecoder::OpenContext(bool hardware)
 	{
+		software_selected_ = false;
+
 		const AVCodec * codec = avcodec_find_decoder(stream_->codecpar->codec_id);
 
 		if (codec == nullptr) {
@@ -165,6 +170,10 @@ namespace ffmpeg
 
 		hardware_ = hardware;
 
+		if (!hardware) {
+			HardwareFault::NoteSoftwareDecoder(codec_context_->thread_count);
+		}
+
 		return 0;
 	}
 
@@ -203,7 +212,7 @@ namespace ffmpeg
 
 	AVPixelFormat VideoDecoder::ChooseFormat(AVCodecContext * context, const AVPixelFormat * formats)
 	{
-		const VideoDecoder * decoder = static_cast<const VideoDecoder *>(context->opaque);
+		VideoDecoder * decoder = static_cast<VideoDecoder *>(context->opaque);
 
 		for (const AVPixelFormat * format = formats; *format != AV_PIX_FMT_NONE; format++) {
 			if (*format == decoder->hardware_format_) {
@@ -212,7 +221,11 @@ namespace ffmpeg
 		}
 
 		// The decoder does not offer the hardware format for this stream:
-		// a profile or a size the hardware does not take. Software it is.
+		// a profile or a size the hardware does not take. Software it is, and
+		// the context made for hardware, which has one thread, is replaced by
+		// one made for software.
+		decoder->software_selected_ = true;
+
 		return avcodec_default_get_format(context, formats);
 	}
 
@@ -248,6 +261,10 @@ namespace ffmpeg
 		hardware_ = false;
 		hardware_format_ = AV_PIX_FMT_NONE;
 		probation_ = false;
+		software_selected_ = false;
+		draining_ = false;
+		awaiting_key_frame_ = false;
+		skipped_ = 0;
 		time_base_ = { 0, 1 };
 	}
 
@@ -257,9 +274,34 @@ namespace ffmpeg
 			avcodec_flush_buffers(codec_context_);
 		}
 
-		// What was kept belongs to the position that was left.
+		// What was kept belongs to the position that was left, and a seek
+		// lands on a key frame anyway.
 		DropKeptPackets();
 		DropPending();
+
+		draining_ = false;
+		awaiting_key_frame_ = false;
+		skipped_ = 0;
+	}
+
+	bool VideoDecoder::IsHardwareFailure(int result) const
+	{
+		return IsFailure(result) && (probation_ || result != AVERROR_INVALIDDATA);
+	}
+
+	bool VideoDecoder::SkipUntilKeyFrame(const AVPacket * packet)
+	{
+		if (!awaiting_key_frame_) {
+			return false;
+		}
+
+		if ((packet->flags & AV_PKT_FLAG_KEY) != 0 || ++skipped_ > kMaxSkippedPackets) {
+			awaiting_key_frame_ = false;
+
+			return false;
+		}
+
+		return true;
 	}
 
 	int VideoDecoder::SendPacket(const AVPacket * packet)
@@ -268,18 +310,29 @@ namespace ffmpeg
 			return AVERROR(EINVAL);
 		}
 
+		if (packet == nullptr) {
+			draining_ = true;
+		}
+		else if (SkipUntilKeyFrame(packet)) {
+			return 0;
+		}
+
 		if (probation_ && packet != nullptr) {
 			KeepPacket(packet);
 		}
 
-		int result = avcodec_send_packet(codec_context_, packet);
+		int result = hardware_ ? HardwareFault::NextSendError() : 0;
 
-		if (hardware_ && IsFailure(result)) {
-			result = FallBackToSoftware(result);
+		if (result == 0) {
+			result = avcodec_send_packet(codec_context_, packet);
+		}
 
-			if (packet == nullptr && result == AVERROR(EAGAIN)) {
-				// The drain the caller started was the hardware decoder's.
-				result = avcodec_send_packet(codec_context_, nullptr);
+		if (hardware_) {
+			if (probation_ && software_selected_) {
+				return FallBackToSoftware(0, packet);
+			}
+			if (IsHardwareFailure(result)) {
+				return FallBackToSoftware(result, packet);
 			}
 		}
 
@@ -303,10 +356,14 @@ namespace ffmpeg
 
 		int result = ReceiveFromCodec(frame, timestamp_us);
 
-		if (hardware_ && IsFailure(result)) {
-			// Decoding goes on in software; the pictures of the packets it
-			// takes up again come with the calls that follow.
-			return FallBackToSoftware(result);
+		const bool software_chosen = hardware_ && probation_ && software_selected_;
+
+		if (software_chosen || (hardware_ && IsHardwareFailure(result))) {
+			// Decoding goes on in software, and the pictures of the packets it
+			// takes up again are the next ones.
+			int error = FallBackToSoftware(software_chosen ? 0 : result, nullptr);
+
+			return error < 0 ? error : ReceiveFrame(frame, timestamp_us);
 		}
 
 		return result;
@@ -314,7 +371,26 @@ namespace ffmpeg
 
 	int VideoDecoder::ReceiveFromCodec(AVFrame ** frame, int64_t * timestamp_us)
 	{
+		if (hardware_ && HardwareFault::HoldsPictures()) {
+			while (avcodec_receive_frame(codec_context_, decoded_) >= 0) {
+				av_frame_unref(decoded_);
+			}
+
+			return draining_ ? HardwareFault::DrainError() : AVERROR(EAGAIN);
+		}
+
 		int result = avcodec_receive_frame(codec_context_, decoded_);
+
+		if (hardware_ && probation_ && software_selected_) {
+			// The picture, if there is one, is of no use: ReceiveFrame replaces
+			// this decoder, which has the one thread of a hardware decoder,
+			// and decodes the packets again.
+			if (result >= 0) {
+				av_frame_unref(decoded_);
+			}
+
+			return AVERROR(EAGAIN);
+		}
 
 		if (result < 0) {
 			return result;
@@ -395,14 +471,17 @@ namespace ffmpeg
 			av_frame_unref(decoded_);
 		}
 
-		if (result >= 0 && probation_) {
-			// The first picture is out: either the hardware decoded it, or the
-			// decoder offered no hardware format and it was software that did.
-			probation_ = false;
+		if (result >= 0) {
+			if (probation_) {
+				// The first picture is out, and the hardware decoded it.
+				probation_ = false;
 
-			DropKeptPackets();
+				DropKeptPackets();
+			}
 
 			if (!hardware_frame) {
+				// The decoder went for a software format part way through, for
+				// a size or a profile the hardware does not take.
 				hardware_ = false;
 			}
 		}
@@ -410,10 +489,15 @@ namespace ffmpeg
 		return result;
 	}
 
-	int VideoDecoder::FallBackToSoftware(int error)
+	int VideoDecoder::FallBackToSoftware(int error, const AVPacket * current)
 	{
-		av_log(nullptr, AV_LOG_WARNING, "Hardware video decoding failed (%s), decoding in software\n",
-				ErrorString(error).c_str());
+		if (error < 0) {
+			av_log(nullptr, AV_LOG_WARNING, "Hardware video decoding failed (%s), decoding in software\n",
+					ErrorString(error).c_str());
+		}
+		else {
+			av_log(nullptr, AV_LOG_VERBOSE, "The hardware does not take the stream, decoding in software\n");
+		}
 
 		avcodec_free_context(&codec_context_);
 
@@ -428,35 +512,58 @@ namespace ffmpeg
 			return result;
 		}
 
-		// Nothing has come out of the hardware yet: the packets it was sent
-		// are decoded again, so that none of them is lost. After a picture
-		// the stream goes on from its next key frame.
+		// Nothing has come out of the hardware yet: the packets it was sent,
+		// the current one among them, are decoded again, so that none of them
+		// is lost.
+		const bool replay = probation_;
+
 		std::vector<AVPacket *> kept;
 		kept.swap(kept_);
 
 		probation_ = false;
 
 		for (AVPacket * packet : kept) {
-			int sent = avcodec_send_packet(codec_context_, packet);
-
-			while (sent == AVERROR(EAGAIN)) {
-				// The decoder wants its pictures taken before it takes more.
-				AVFrame * frame = nullptr;
-				int64_t timestamp_us = 0;
-
-				if (ReceiveFromCodec(&frame, &timestamp_us) < 0) {
-					break;
-				}
-
-				pending_.push_back({ frame, timestamp_us });
-
-				sent = avcodec_send_packet(codec_context_, packet);
-			}
+			SendToSoftware(packet);
 
 			av_packet_free(&packet);
 		}
 
-		return AVERROR(EAGAIN);
+		if (!replay) {
+			// After a picture the new decoder has none of the ones that the
+			// next refer to, so the stream goes on from its next key frame,
+			// the current packet included.
+			awaiting_key_frame_ = true;
+			skipped_ = 0;
+
+			if (current != nullptr && !SkipUntilKeyFrame(current)) {
+				SendToSoftware(current);
+			}
+		}
+
+		if (draining_) {
+			SendToSoftware(nullptr);
+		}
+
+		return 0;
+	}
+
+	void VideoDecoder::SendToSoftware(const AVPacket * packet)
+	{
+		int sent = avcodec_send_packet(codec_context_, packet);
+
+		while (sent == AVERROR(EAGAIN)) {
+			// The decoder wants its pictures taken before it takes more.
+			AVFrame * frame = nullptr;
+			int64_t timestamp_us = 0;
+
+			if (ReceiveFromCodec(&frame, &timestamp_us) < 0) {
+				break;
+			}
+
+			pending_.push_back({ frame, timestamp_us });
+
+			sent = avcodec_send_packet(codec_context_, packet);
+		}
 	}
 
 	void VideoDecoder::KeepPacket(const AVPacket * packet)
