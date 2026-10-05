@@ -60,7 +60,8 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * A machine without a hardware decoder for the codec skips the tests that need
  * one, as CI runners do. Set the system property {@code
  * webrtc.test.hardwareDecoding} to {@code true} on a machine that has one, to
- * make those tests fail instead.
+ * make those tests fail instead, and {@code webrtc.test.hardwareAv1Decoding}
+ * for a GPU that decodes AV1.
  * <p>
  * The assets are 320x240 at 15 fps, two seconds, with a key frame every second:
  * {@code media-test-h264.mkv} is H.264 High made by the VideoToolbox encoder,
@@ -75,6 +76,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 class HardwareDecodingTest {
 
 	private static final boolean HARDWARE_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareDecoding");
+
+	/** AV1 needs a newer GPU than the other codecs, so it has a property of its own. */
+	private static final boolean HARDWARE_AV1_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareAv1Decoding");
 
 	private static final String H264 = "/media-test-h264.mkv";
 
@@ -106,6 +110,30 @@ class HardwareDecodingTest {
 	private static final String H264_10BIT = "/media-test-h264-10bit.mkv";
 
 	private static final String H264_444 = "/media-test-h264-444.mkv";
+
+	/**
+	 * HEVC (Main) made with libx265, 320x240 at 15 fps, two seconds with a key
+	 * frame every second, and the same in 1080p, one second with a key frame
+	 * every eight frames. Both are the moving gradient with noise of the other
+	 * assets, for example:
+	 * <pre>
+	 * ffmpeg -f lavfi -i "gradients=s=1920x1080:r=15:d=1:speed=0.02,noise=alls=4:allf=t,format=yuv420p" \
+	 *     -c:v libx265 -preset fast -b:v 3M -maxrate 4M -bufsize 4M \
+	 *     -x265-params keyint=8:min-keyint=8:log-level=error -an media-test-hevc-1080p.mkv
+	 * </pre>
+	 */
+	private static final String HEVC = "/media-test-hevc.mkv";
+
+	private static final String HEVC_1080P = "/media-test-hevc-1080p.mkv";
+
+	/**
+	 * AV1 (Main) made with SVT-AV1, in the same sizes as the HEVC assets and
+	 * the same way, with {@code -c:v libsvtav1 -preset 8 -b:v 150k -g 15} and
+	 * {@code -b:v 3M -g 8}.
+	 */
+	private static final String AV1 = "/media-test-av1.mkv";
+
+	private static final String AV1_1080P = "/media-test-av1-1080p.mkv";
 
 	/** VP8, for which no platform has a decoder this module uses. */
 	private static final String VP8 = "/media-test.webm";
@@ -141,6 +169,39 @@ class HardwareDecodingTest {
 	@Test
 	void vp9MatchesSoftware() throws Exception {
 		assertMatchesSoftware(VP9);
+	}
+
+	@Test
+	void hevcMatchesSoftware() throws Exception {
+		assertMatchesSoftware(HEVC);
+	}
+
+	@Test
+	void av1MatchesSoftware() throws Exception {
+		// The software side is dav1d, which FFmpeg prefers to its own decoder,
+		// the one that decodes on the hardware.
+		assertMatchesSoftware(AV1, FRAMES, null, HARDWARE_AV1_REQUIRED);
+	}
+
+	@Test
+	void av1MatchesSoftware1080p() throws Exception {
+		assertMatchesSoftware(AV1_1080P, 15, "1920x1080", HARDWARE_AV1_REQUIRED);
+	}
+
+	@Test
+	void av1DecodesInSoftware() throws Exception {
+		Result result = play(AV1, false, 0);
+
+		assertNull(result.error);
+		assertFalse(result.hardware);
+		assertEquals(FRAMES, result.frames.size());
+	}
+
+	@Test
+	void hevcMatchesSoftware1080p() throws Exception {
+		// HEVC decodes in blocks of up to 64, so the surface is 1088 rows high
+		// and the player has to crop it.
+		assertMatchesSoftware(HEVC_1080P, 15, "1920x1080");
 	}
 
 	@Test
@@ -620,13 +681,18 @@ class HardwareDecodingTest {
 	}
 
 	private void assertMatchesSoftware(String asset, int frames, String size) throws Exception {
+		assertMatchesSoftware(asset, frames, size, HARDWARE_REQUIRED);
+	}
+
+	private void assertMatchesSoftware(String asset, int frames, String size, boolean required)
+			throws Exception {
 		Result software = play(asset, false, 0);
 		Result hardware = play(asset, true, 0);
 
 		assertNull(software.error);
 		assertNull(hardware.error);
 
-		requireHardware(hardware);
+		requireHardware(hardware.hardware, required);
 
 		assertEquals(frames, software.frames.size());
 
@@ -676,7 +742,11 @@ class HardwareDecodingTest {
 	}
 
 	private static void requireHardware(boolean hardware) {
-		if (HARDWARE_REQUIRED) {
+		requireHardware(hardware, HARDWARE_REQUIRED);
+	}
+
+	private static void requireHardware(boolean hardware, boolean required) {
+		if (required) {
 			assertTrue(hardware, "the player did not decode in hardware");
 		}
 		else {

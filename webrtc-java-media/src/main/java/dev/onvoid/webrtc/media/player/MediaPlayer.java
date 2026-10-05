@@ -104,8 +104,8 @@ public class MediaPlayer implements AutoCloseable {
 	 * media sources. At least one of them has to be present; media of a kind
 	 * with no source is decoded and dropped.
 	 * <p>
-	 * With {@code hardwareDecoding} the player decodes H.264 and VP9 video on
-	 * the media engine or GPU of the machine where there is one the platform
+	 * With {@code hardwareDecoding} the player decodes H.264, H.265/HEVC, VP9
+	 * and AV1 video on the media engine or GPU of the machine where there is one the platform
 	 * offers (VideoToolbox on macOS, Direct3D 12 or 11 on Windows, NVDEC on
 	 * NVIDIA GPUs on Linux), which takes less processor time, by an amount
 	 * that depends on the platform and the stream. The

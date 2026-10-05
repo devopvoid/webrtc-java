@@ -39,7 +39,8 @@ namespace ffmpeg
 	// with swscale first, which costs one copy and is the price of the format
 	// rather than of this design.
 	//
-	// Asked to, it decodes H.264 and VP9 on the media engine or GPU instead.
+	// Asked to, it decodes H.264, HEVC, VP9 and AV1 on the media engine or GPU
+	// instead.
 	// The pictures that come out are the same; they are read back into system
 	// memory and converted, so the gain is processor time, not the copy. A
 	// stream the hardware cannot decode is decoded in software, without the

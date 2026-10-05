@@ -14,6 +14,18 @@ separate shared libraries, which you may replace with your own build of a
 compatible FFmpeg version.
 
 
+dav1d
+-----
+
+libavcodec contains dav1d @DAV1D_VERSION@ (https://code.videolan.org/videolan/dav1d),
+the AV1 decoder of the VideoLAN project, linked in statically. dav1d is
+licensed under the BSD 2-Clause license, whose text is in
+META-INF/licenses/dav1d/COPYING of this jar. It is built from the release tag
+@DAV1D_VERSION@, without modifications:
+
+  https://code.videolan.org/videolan/dav1d/-/tree/@DAV1D_VERSION@
+
+
 Source code
 -----------
 
