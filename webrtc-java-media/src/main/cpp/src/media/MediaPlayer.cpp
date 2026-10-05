@@ -174,7 +174,7 @@ namespace ffmpeg
 		// on the request until it gets out of that. Dropping what is queued
 		// both frees it and throws away what belongs to the old position; the
 		// thread flushes again once the seek has actually happened.
-		pacer_->Flush();
+		pacer_->Flush(position_us + loop_offset_us_.load());
 	}
 
 	void MediaPlayer::SetLooping(bool looping)
@@ -317,11 +317,13 @@ namespace ffmpeg
 				continue;
 			}
 
-			// Everything has been handed over, but not yet played out.
+			// Everything has been handed over, but not yet played out. A seek
+			// ends the wait too: it empties the queue, which would otherwise
+			// look like the source having played out.
 			for (;;) {
 				std::unique_lock<std::mutex> lock(mutex_);
 
-				if (closing_ || pacer_->IsDrained()) {
+				if (closing_ || seek_pending_ || pacer_->IsDrained()) {
 					break;
 				}
 
@@ -333,6 +335,12 @@ namespace ffmpeg
 
 				if (closing_) {
 					break;
+				}
+
+				if (seek_pending_) {
+					// Not at the end any more; the seek is carried out at the
+					// top, and playback goes on from where it lands.
+					continue;
 				}
 
 				ended_ = true;
@@ -492,7 +500,7 @@ namespace ffmpeg
 		loop_offset_us_.store(0);
 		max_source_pts_us_ = position_us;
 
-		pacer_->Flush();
+		pacer_->Flush(position_us);
 	}
 
 	void MediaPlayer::SetState(int state)

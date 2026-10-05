@@ -219,12 +219,16 @@ namespace ffmpeg
 		work_.notify_all();
 	}
 
-	void MediaPacer::Flush()
+	void MediaPacer::Flush(int64_t position_us)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		video_queue_.clear();
 		audio_queue_.clear();
+
+		// Audio only ever moves the position forward, so a position left from
+		// before a seek backwards would hold it there until audio caught up.
+		position_us_ = position_us;
 
 		// The next item delivered starts a new mapping, wherever it comes from.
 		have_base_ = false;
