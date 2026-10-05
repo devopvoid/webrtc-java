@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.media.player;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -44,6 +45,7 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -181,6 +183,135 @@ class HardwareDecodingTest {
 		try (MediaFileSource source = new MediaFileSource(path(H264))) {
 			assertFalse(source.getPlayer().isHardwareDecoding());
 		}
+	}
+
+	@AfterEach
+	void disarmFaults() {
+		HardwareFault.disarm();
+	}
+
+	@Test
+	void failureBeforeTheFirstPictureIsDecodedAgain() throws Exception {
+		requireHardwareDecoder();
+
+		Result software = play(H264, false, 0);
+
+		HardwareFault.failSend(false, 0);
+
+		Result hardware = play(H264, true, 0);
+
+		// The packets the hardware was sent are decoded again in software, so
+		// nothing is lost.
+		assertNull(hardware.error);
+		assertFalse(hardware.hardware);
+		assertEquals(software.frames, hardware.frames);
+	}
+
+	@Test
+	void badDataBeforeTheFirstPictureIsLeftToSoftware() throws Exception {
+		requireHardwareDecoder();
+
+		Result software = play(H264, false, 0);
+
+		// Before it has delivered anything, a decoder that fails is not told
+		// from the stream failing: software decodes the same packets, and says
+		// if it is the stream.
+		HardwareFault.failSend(true, 0);
+
+		Result hardware = play(H264, true, 0);
+
+		assertNull(hardware.error);
+		assertFalse(hardware.hardware);
+		assertEquals(software.frames, hardware.frames);
+	}
+
+	@Test
+	void failureAfterPicturesGoesOnAtTheNextKeyFrame() throws Exception {
+		assertGoesOnAtTheNextKeyFrame(H264);
+	}
+
+	@Test
+	void failureAfterPicturesGoesOnAtTheNextKeyFrameVp9() throws Exception {
+		// Where H.264 decoders skip what they cannot decode, a VP9 decoder
+		// fails on a picture whose references it does not have, so the new
+		// decoder must not be sent any before the key frame.
+		assertGoesOnAtTheNextKeyFrame(VP9);
+	}
+
+	private void assertGoesOnAtTheNextKeyFrame(String asset) throws Exception {
+		requireHardwareDecoder();
+
+		Result software = play(asset, false, 0);
+
+		// Five packets in, the second of the two key frames is ten packets away.
+		HardwareFault.failSend(false, 5);
+
+		Result hardware = play(asset, true, 0);
+
+		assertNull(hardware.error);
+		assertFalse(hardware.hardware);
+
+		// What the hardware delivered, then the second second of the media
+		// from its key frame, as software decodes it. Pictures that need ones
+		// lost with the hardware decoder are not delivered at all.
+		int second = FRAMES / 2;
+		int before = hardware.frames.size() - second;
+
+		assertTrue(before > 0 && before < second, "frames: " + hardware.frames.size());
+		assertEquals(software.frames.subList(0, before), hardware.frames.subList(0, before));
+		assertEquals(software.frames.subList(second, FRAMES), hardware.frames.subList(before, hardware.frames.size()));
+	}
+
+	@Test
+	void badDataAfterPicturesIsNotAHardwareFailure() throws Exception {
+		requireHardwareDecoder();
+
+		HardwareFault.failSend(true, 5);
+
+		Result hardware = play(H264, true, 0);
+
+		// As with software decoding, playback stops with the error, and the
+		// hardware keeps the stream: a damaged packet says nothing of it.
+		assertNotNull(hardware.error);
+		assertTrue(hardware.hardware, "the player gave up the hardware over bad data");
+	}
+
+	@Test
+	void failureWhileDrainingKeepsThePictures() throws Exception {
+		requireHardwareDecoder();
+
+		Result software = play(H264, false, 0);
+
+		// The hardware delivers nothing until the end of the stream, where it
+		// fails: every picture comes from the software decoder that takes over
+		// and is told that the stream has ended.
+		HardwareFault.failDrain();
+
+		Result hardware = play(H264, true, 0);
+
+		assertNull(hardware.error);
+		assertFalse(hardware.hardware);
+		assertEquals(FRAMES, hardware.frames.size());
+		assertEquals(software.frames, hardware.frames);
+	}
+
+	@Test
+	void softwareThatTakesOverUsesEveryCore() throws Exception {
+		assumeTrue(Runtime.getRuntime().availableProcessors() > 1, "a single core");
+
+		requireHardwareDecoder();
+
+		// VP9 in 4:4:4: the hardware decoder offers no format for it, and the
+		// stream is decoded in software. The decoder made for the hardware has
+		// one thread, so it is replaced by one that has the cores of the
+		// machine.
+		HardwareFault.disarm();
+
+		Result hardware = play(VP9_444, true, 0);
+
+		assertNull(hardware.error);
+		assertFalse(hardware.hardware);
+		assertTrue(HardwareFault.softwareThreads() > 1, "threads: " + HardwareFault.softwareThreads());
 	}
 
 	@Test
@@ -511,6 +642,16 @@ class HardwareDecodingTest {
 	 */
 	private static void requireHardware(Result result) {
 		requireHardware(result.hardware);
+	}
+
+	/**
+	 * Skips the test where this machine has no hardware decoder to make fail,
+	 * and fails it where one is required.
+	 */
+	private void requireHardwareDecoder() throws Exception {
+		try (MediaFileSource source = new MediaFileSource(path(H264), true)) {
+			requireHardware(source.getPlayer().isHardwareDecoding());
+		}
 	}
 
 	private static void requireHardware(boolean hardware) {

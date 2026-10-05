@@ -91,6 +91,10 @@ namespace ffmpeg
 			// frame, to be decoded again in software if it fails by then.
 			static constexpr size_t kMaxKeptPackets = 32;
 
+			// How many packets may be passed over while waiting for a key
+			// frame, for a stream whose packets do not say which ones are.
+			static constexpr size_t kMaxSkippedPackets = 250;
+
 			// Opens the codec context of the stream, in hardware or not.
 			int OpenContext(bool hardware);
 
@@ -106,11 +110,27 @@ namespace ffmpeg
 			// into system memory first.
 			int ReceiveFromCodec(AVFrame ** frame, int64_t * timestamp_us);
 
-			// Opens a software decoder in place of the hardware one that
-			// failed with the given error, and decodes the packets kept
-			// since the start again. Returns the AVERROR the caller gets:
-			// EAGAIN once decoding goes on, or an error if it cannot.
-			int FallBackToSoftware(int error);
+			// Whether a result of the hardware decoder means that it failed.
+			// A stream that cannot be decoded, which is how corrupt data shows,
+			// fails a software decoder as well and says nothing of the
+			// hardware, except before its first picture, where the software
+			// decoder is the one to tell.
+			bool IsHardwareFailure(int result) const;
+
+			// Opens a software decoder in place of the hardware one, which
+			// failed with the given error, or if that is 0 did not take the
+			// stream, and decodes the packets kept since the start again.
+			// The packet being sent when it happened, if any, is the current
+			// one. Returns 0, or the error that kept a decoder from opening.
+			int FallBackToSoftware(int error, const AVPacket * current);
+
+			// Hands a packet, or null to drain, to the codec, taking its
+			// pictures aside while it asks for that.
+			void SendToSoftware(const AVPacket * packet);
+
+			// Whether a packet is passed over because the decoder is waiting
+			// for a key frame, which it is after it lost pictures it needs.
+			bool SkipUntilKeyFrame(const AVPacket * packet);
 
 			void KeepPacket(const AVPacket * packet);
 			void DropKeptPackets();
@@ -153,6 +173,19 @@ namespace ffmpeg
 			// sent to it are kept.
 			bool probation_ = false;
 			std::vector<AVPacket *> kept_;
+
+			// Set by ChooseFormat when the decoder went for a software format.
+			bool software_selected_ = false;
+
+			// Whether the end of the stream was announced, which a decoder that
+			// takes over has to be told as well.
+			bool draining_ = false;
+
+			// After a software decoder took over from a hardware one that had
+			// delivered pictures, it has none of the ones the next refer to,
+			// and starts again at a key frame.
+			bool awaiting_key_frame_ = false;
+			size_t skipped_ = 0;
 			std::deque<Pending> pending_;
 	};
 }
