@@ -776,6 +776,15 @@ c_link_args = [${DAV1D_C_LINK_ARGS_TEXT}]
         endif()
     endif()
 
+    # Meson finds the compiler by its path inside the Xcode toolchain, which
+    # skips the /usr/bin/cc shim that points SDKROOT at an SDK, and without one
+    # there is no libSystem to link against: "cannot compile programs". So the
+    # SDK is named here, for Meson only, as FFmpeg's own configure gets it from
+    # the shim.
+    if(APPLE)
+        string(APPEND DAV1D_ENVIRONMENT "export SDKROOT=\"$(xcrun --sdk macosx --show-sdk-path)\"\n")
+    endif()
+
     string(REPLACE ";" " " DAV1D_SETUP_STR "${DAV1D_SETUP_OPTIONS}")
 
     to_shell_path("${DAV1D_INSTALL_DIR}" DAV1D_INSTALL_DIR_SH)
@@ -788,7 +797,7 @@ c_link_args = [${DAV1D_C_LINK_ARGS_TEXT}]
     set(DAV1D_BUILD_STEPS
 "${DAV1D_ENVIRONMENT}\"${MESON_EXECUTABLE_SH}\" setup \"${DAV1D_BUILD_DIR}\" \"${DAV1D_SOURCE_DIR}\" --prefix=\"${DAV1D_INSTALL_DIR}\" ${DAV1D_SETUP_STR}
 \"${MESON_EXECUTABLE_SH}\" install -C \"${DAV1D_BUILD_DIR}\"
-unset CC CFLAGS LDFLAGS
+unset CC CFLAGS LDFLAGS SDKROOT
 ")
 
     if(WIN32)
