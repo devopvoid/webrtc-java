@@ -50,8 +50,8 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: ~/ffmpeg
-        key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-${{ hashFiles('webrtc-java-media/pom.xml') }}
-        restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt') }}-
+        key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt', 'webrtc-java-media/src/main/cpp/dependencies/ffmpeg/patches/*.patch') }}-${{ hashFiles('webrtc-java-media/pom.xml') }}
+        restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt', 'webrtc-java-media/src/main/cpp/dependencies/ffmpeg/patches/*.patch') }}-
 
     # One cache per OS: the dependencies do not differ between the platforms of
     # an OS. The project's own artifacts change with every build and stay out

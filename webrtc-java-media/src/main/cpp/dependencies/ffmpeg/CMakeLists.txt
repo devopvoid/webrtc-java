@@ -185,6 +185,108 @@ set(FFMPEG_COMPONENTS_FILE "${FFMPEG_INSTALL_DIR}/components.txt")
 string(REPLACE ";" "\n" FFMPEG_COMPONENTS_TEXT "${FFMPEG_VERSION};${FFMPEG_COMPONENTS}")
 
 #
+# Fixes to FFmpeg that its release does not have yet, in patches/*.patch, in
+# the order of their names. They are applied to the source for the build and
+# taken off it again afterwards, so that the submodule is as clean after a
+# build as it was before, and a bump of the submodule shows at once which of
+# them its release still needs: one that no longer applies stops the build.
+#
+# They belong to the install like its components do, by the name and the
+# contents of each, so that an install built without a patch, or with another
+# version of it, is built again.
+#
+file(GLOB FFMPEG_PATCHES "${CMAKE_CURRENT_SOURCE_DIR}/patches/*.patch")
+list(SORT FFMPEG_PATCHES)
+
+foreach(PATCH ${FFMPEG_PATCHES})
+    get_filename_component(PATCH_NAME "${PATCH}" NAME)
+    file(SHA256 "${PATCH}" PATCH_HASH)
+
+    string(APPEND FFMPEG_COMPONENTS_TEXT "\npatch ${PATCH_NAME} ${PATCH_HASH}")
+endforeach()
+
+# Applies the patches to the source. One that is applied already is left as it
+# is: a build that was cut short does not get to take them off.
+function(ffmpeg_apply_patches)
+    foreach(PATCH ${FFMPEG_PATCHES})
+        get_filename_component(PATCH_NAME "${PATCH}" NAME)
+
+        # Whitespace is ignored because a checkout may have turned the line
+        # endings of the source into something else than the patch has.
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" apply --check --ignore-whitespace "${PATCH}"
+            WORKING_DIRECTORY "${FFMPEG_SOURCE_DIR}"
+            RESULT_VARIABLE CAN_APPLY
+            OUTPUT_QUIET ERROR_QUIET)
+
+        if(CAN_APPLY EQUAL 0)
+            execute_process(
+                COMMAND "${GIT_EXECUTABLE}" apply --ignore-whitespace "${PATCH}"
+                WORKING_DIRECTORY "${FFMPEG_SOURCE_DIR}"
+                RESULT_VARIABLE APPLY_RESULT)
+
+            if(NOT APPLY_RESULT EQUAL 0)
+                ffmpeg_revert_patches()
+
+                message(FATAL_ERROR "Applying ${PATCH_NAME} to the FFmpeg source failed (${APPLY_RESULT})")
+            endif()
+
+            message(STATUS "Applied ${PATCH_NAME} to the FFmpeg source")
+            continue()
+        endif()
+
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" apply --check --reverse --ignore-whitespace "${PATCH}"
+            WORKING_DIRECTORY "${FFMPEG_SOURCE_DIR}"
+            RESULT_VARIABLE IS_APPLIED
+            OUTPUT_QUIET ERROR_QUIET)
+
+        if(NOT IS_APPLIED EQUAL 0)
+            # The ones before it come off again: the source is left as it was.
+            ffmpeg_revert_patches()
+
+            message(FATAL_ERROR
+                "${PATCH_NAME} does not apply to the FFmpeg source in ${FFMPEG_SOURCE_DIR}. If the "
+                "submodule moved to a release that has the fix, remove the patch from "
+                "${CMAKE_CURRENT_SOURCE_DIR}/patches; otherwise update it.")
+        endif()
+
+        message(STATUS "${PATCH_NAME} is applied to the FFmpeg source already")
+    endforeach()
+endfunction()
+
+# Takes the patches that are on the source off it again, last one first.
+function(ffmpeg_revert_patches)
+    set(REVERSED_PATCHES ${FFMPEG_PATCHES})
+    list(REVERSE REVERSED_PATCHES)
+
+    foreach(PATCH ${REVERSED_PATCHES})
+        get_filename_component(PATCH_NAME "${PATCH}" NAME)
+
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" apply --check --reverse --ignore-whitespace "${PATCH}"
+            WORKING_DIRECTORY "${FFMPEG_SOURCE_DIR}"
+            RESULT_VARIABLE IS_ON
+            OUTPUT_QUIET ERROR_QUIET)
+
+        if(NOT IS_ON EQUAL 0)
+            continue()
+        endif()
+
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" apply --reverse --ignore-whitespace "${PATCH}"
+            WORKING_DIRECTORY "${FFMPEG_SOURCE_DIR}"
+            RESULT_VARIABLE REVERT_RESULT)
+
+        if(NOT REVERT_RESULT EQUAL 0)
+            message(WARNING
+                "Taking ${PATCH_NAME} off the FFmpeg source failed (${REVERT_RESULT}); the submodule "
+                "is left modified. `git checkout .` in ${FFMPEG_SOURCE_DIR} restores it.")
+        endif()
+    endforeach()
+endfunction()
+
+#
 # Decides whether FFmpeg has to be built, by looking for one of its headers
 # and one of its libraries in the install directory, and for a record of it
 # having been built with the components listed above.
@@ -489,7 +591,8 @@ else()
         list(APPEND FFMPEG_CONFIGURE_ARGS "--extra-ldflags=\"${FFMPEG_EXTRA_LDFLAGS}\"")
     endif()
 
-    # Build out of tree so the submodule working tree stays clean.
+    # Build out of tree so the submodule working tree stays clean. The patches
+    # are put on it for the length of the build only.
     set(FFMPEG_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-build")
 
     # A rebuild starts from nothing. make install only adds to the install
@@ -607,11 +710,26 @@ set MSYS2_PATH_TYPE=inherit
     message(STATUS "Building FFmpeg ${FFMPEG_VERSION} into ${FFMPEG_INSTALL_DIR} with ${BUILD_JOBS} jobs")
     message(STATUS "  configure ${FFMPEG_CONFIGURE_ARGS_STR}")
 
+    if(FFMPEG_PATCHES)
+        find_program(GIT_EXECUTABLE NAMES git)
+
+        if(NOT GIT_EXECUTABLE)
+            message(FATAL_ERROR "No 'git' found, which applies the patches to FFmpeg in ${CMAKE_CURRENT_SOURCE_DIR}/patches.")
+        endif()
+
+        ffmpeg_apply_patches()
+    endif()
+
     execute_process(
         COMMAND ${FFMPEG_BUILD_COMMAND}
         WORKING_DIRECTORY "${FFMPEG_BUILD_DIR}"
         RESULT_VARIABLE BUILD_RESULT
     )
+
+    # Off again whether or not the build worked.
+    if(FFMPEG_PATCHES)
+        ffmpeg_revert_patches()
+    endif()
 
     if(NOT BUILD_RESULT EQUAL 0)
         # configure says almost nothing on the console and writes the actual
