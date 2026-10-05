@@ -280,6 +280,62 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void seekNearTheEndIsNotLost() throws Exception {
+		// Two seconds of video only. All of it is decoded and queued within
+		// moments, so the decoding thread spends the playback waiting for the
+		// queue to play out, which is where a seek used to be mistaken for the
+		// end of the source.
+		try (Playback playback = new Playback(new MediaReader(
+				Paths.get(MediaPlayerTest.class.getResource("/media-test-h264.mkv").toURI())))) {
+			playback.player.play();
+
+			Thread.sleep(700);
+
+			int before = playback.frames.get();
+
+			assertTrue(before > 0 && before < 30, "frames before the seek: " + before);
+			assertEquals(1, playback.ended.getCount(), "ended before the seek");
+
+			playback.player.seek(0);
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The seek went back to the start, so the whole source plays again
+			// on top of what was delivered before it.
+			assertTrue(playback.frames.get() >= before + 29,
+					"playback did not go on after the seek: " + playback.frames.get()
+							+ " frames, " + before + " before it");
+			assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+		}
+	}
+
+	@Test
+	void positionFollowsABackwardSeekOfAudio() throws Exception {
+		// Audio alone, where nothing but the audio sets the position.
+		Path flac = TestMedia.constantFlac(tempDir, 48000, 40, (short) 1000);
+
+		try (Playback playback = new Playback(new MediaReader(flac))) {
+			playback.player.play();
+
+			Thread.sleep(1500);
+
+			long before = playback.player.getPositionUs();
+
+			assertTrue(before > 1_000_000, "position before the seek: " + before);
+
+			playback.player.seek(0);
+
+			Thread.sleep(400);
+
+			long after = playback.player.getPositionUs();
+
+			// About 0.4 s into the source again, not held at where it was.
+			assertTrue(after < before / 2, "position after seeking back: " + after
+					+ " us, " + before + " us before it");
+		}
+	}
+
+	@Test
 	void needsAtLeastOneSource() throws Exception {
 		MediaReader reader = new MediaReader(asset());
 

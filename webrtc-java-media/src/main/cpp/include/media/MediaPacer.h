@@ -104,8 +104,10 @@ namespace ffmpeg
 
 			// Drops everything queued and forgets the clock mapping, so that
 			// the next item delivered starts a new one. This is what a seek
-			// needs: what is queued belongs to the position being left.
-			void Flush();
+			// needs: what is queued belongs to the position being left. The
+			// position is where playback is taken to be until an item has been
+			// delivered, in the timestamps the items are pushed with.
+			void Flush(int64_t position_us);
 
 			// True once everything handed over has been delivered.
 			bool IsDrained() const;
