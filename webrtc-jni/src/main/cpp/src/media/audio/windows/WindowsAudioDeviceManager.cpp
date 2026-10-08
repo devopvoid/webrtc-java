@@ -27,6 +27,7 @@
 #include "modules/audio_device/include/audio_device.h"
 #include "rtc_base/logging.h"
 
+#include <exception>
 #include <stdlib.h>
 
 namespace jni
@@ -408,7 +409,17 @@ namespace jni
 		{
 			RTC_LOG(LS_INFO) << "MMF: Device added: " << deviceId;
 
-			addDevice(deviceId);
+			// IMMNotificationClient callbacks run on a system thread. An exception that leaves one
+			// has no handler above it and terminates the process, so it is logged and dropped.
+			try {
+				addDevice(deviceId);
+			}
+			catch (const std::exception & e) {
+				RTC_LOG(LS_ERROR) << "MMF: Device added handling failed: " << e.what();
+			}
+			catch (...) {
+				RTC_LOG(LS_ERROR) << "MMF: Device added handling failed";
+			}
 
 			return S_OK;
 		}
@@ -417,7 +428,15 @@ namespace jni
 		{
 			RTC_LOG(LS_INFO) << "MMF: Device removed: " << deviceId;
 
-			removeDevice(deviceId);
+			try {
+				removeDevice(deviceId);
+			}
+			catch (const std::exception & e) {
+				RTC_LOG(LS_ERROR) << "MMF: Device removed handling failed: " << e.what();
+			}
+			catch (...) {
+				RTC_LOG(LS_ERROR) << "MMF: Device removed handling failed";
+			}
 
 			return S_OK;
 		}
@@ -430,16 +449,24 @@ namespace jni
 				return S_OK;
 			}
 
-			switch (newState) {
-				case DEVICE_STATE_ACTIVE:
-					addDevice(deviceId);
-					break;
+			try {
+				switch (newState) {
+					case DEVICE_STATE_ACTIVE:
+						addDevice(deviceId);
+						break;
 
-				case DEVICE_STATE_DISABLED:
-				case DEVICE_STATE_NOTPRESENT:
-				case DEVICE_STATE_UNPLUGGED:
-					removeDevice(deviceId);
-					break;
+					case DEVICE_STATE_DISABLED:
+					case DEVICE_STATE_NOTPRESENT:
+					case DEVICE_STATE_UNPLUGGED:
+						removeDevice(deviceId);
+						break;
+				}
+			}
+			catch (const std::exception & e) {
+				RTC_LOG(LS_ERROR) << "MMF: Device state change handling failed: " << e.what();
+			}
+			catch (...) {
+				RTC_LOG(LS_ERROR) << "MMF: Device state change handling failed";
 			}
 
 			return S_OK;
