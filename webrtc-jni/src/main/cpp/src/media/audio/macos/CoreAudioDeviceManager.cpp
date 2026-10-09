@@ -23,6 +23,7 @@
 #include <IOKit/audio/IOAudioTypes.h>
 
 #include <exception>
+#include <vector>
 
 #if !defined(MAC_OS_VERSION_12_0) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_VERSION_12_0
     #define kAudioObjectPropertyElementMain kAudioObjectPropertyElementMaster
@@ -94,11 +95,13 @@ namespace jni
 			OSStatus status = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &pa, 0, nullptr, &dataSize);
 			ThrowIfFailed(status, "CoreAudio: Enumerate audio endpoints failed");
 
-			const int numDevices = dataSize / sizeof(AudioDeviceID);
-			AudioDeviceID * devIDs = new AudioDeviceID[numDevices];
+			std::vector<AudioDeviceID> devIDs(dataSize / sizeof(AudioDeviceID));
 
-			status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &pa, 0, nullptr, &dataSize, devIDs);
+			status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &pa, 0, nullptr, &dataSize, devIDs.data());
 			ThrowIfFailed(status, "CoreAudio: Enumerate audio endpoints failed");
+
+			// The list may have shrunk between the two calls.
+			const int numDevices = dataSize / sizeof(AudioDeviceID);
 
 			AudioDeviceID defaultID = getDefaultDeviceID(scope);
 
@@ -119,8 +122,6 @@ namespace jni
 					}
 				}
 			}
-
-			delete[] devIDs;
 		}
 
 		void CoreAudioDeviceManager::onDevicesChanged()
@@ -136,11 +137,13 @@ namespace jni
 			OSStatus status = AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &pa, 0, nullptr, &dataSize);
 			ThrowIfFailed(status, "CoreAudio: Enumerate audio endpoints failed");
 
-			const int numDevices = dataSize / sizeof(AudioDeviceID);
-			AudioDeviceID * devIDs = new AudioDeviceID[numDevices];
+			std::vector<AudioDeviceID> devIDs(dataSize / sizeof(AudioDeviceID));
 
-			status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &pa, 0, nullptr, &dataSize, devIDs);
+			status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &pa, 0, nullptr, &dataSize, devIDs.data());
 			ThrowIfFailed(status, "CoreAudio: Enumerate audio endpoints failed");
+
+			// The list may have shrunk between the two calls.
+			const int numDevices = dataSize / sizeof(AudioDeviceID);
 
 			// Check, if a new device is available.
 			for (int i = 0; i < numDevices; i++) {
@@ -201,10 +204,8 @@ namespace jni
 			}
 
 			// Check, if a device was disconnected.
-			checkDeviceGone(captureDevices, devIDs, numDevices, kAudioObjectPropertyScopeInput);
-			checkDeviceGone(playbackDevices, devIDs, numDevices, kAudioObjectPropertyScopeOutput);
-
-			delete[] devIDs;
+			checkDeviceGone(captureDevices, devIDs.data(), numDevices, kAudioObjectPropertyScopeInput);
+			checkDeviceGone(playbackDevices, devIDs.data(), numDevices, kAudioObjectPropertyScopeOutput);
 		}
 
 		void CoreAudioDeviceManager::onDefaultDeviceChanged(const AudioObjectPropertyScope & scope, DeviceList<AudioDevicePtr> & devices, const AudioDevicePtr & device)
@@ -256,19 +257,20 @@ namespace jni
 			AudioDevicePtr removed = devices.removeDevice(predicate);
 
 			if (removed != nullptr) {
+				// Compare with the default this manager holds, not with a newly read one: a new
+				// device object never equals the removed one, and reading a device that has just
+				// gone fails. The system's new default, if any, is looked up in the list.
 				if (scope == kAudioObjectPropertyScopeInput) {
-					AudioDevicePtr def = getDefaultAudioCaptureDevice();
-
-					if (removed == def) {
-						onDefaultDeviceChanged(scope, captureDevices, def);
+					if (removed == getDefaultCaptureDevice()) {
+						setDefaultCaptureDevice(nullptr);
+						onDefaultDeviceChanged(scope, captureDevices, nullptr);
 					}
 					removed->directionType = AudioDeviceDirectionType::adtCapture;
 				}
 				else if (scope == kAudioObjectPropertyScopeOutput) {
-					AudioDevicePtr def = getDefaultAudioPlaybackDevice();
-
-					if (removed == def) {
-						onDefaultDeviceChanged(scope, playbackDevices, def);
+					if (removed == getDefaultPlaybackDevice()) {
+						setDefaultPlaybackDevice(nullptr);
+						onDefaultDeviceChanged(scope, playbackDevices, nullptr);
 					}
 					removed->directionType = AudioDeviceDirectionType::adtRender;
 				}
@@ -280,6 +282,10 @@ namespace jni
 		AudioDevicePtr CoreAudioDeviceManager::createDefaultAudioDevice(const AudioObjectPropertyScope & scope)
 		{
 			AudioDeviceID defaultID = getDefaultDeviceID(scope);
+
+			if (defaultID == kAudioObjectUnknown) {
+				return nullptr;
+			}
 
 			return createAudioDevice(defaultID, scope);
 		}
@@ -295,7 +301,13 @@ namespace jni
 			pa.mElement = kAudioObjectPropertyElementMain;
 
 			OSStatus status = AudioObjectGetPropertyData(deviceID, &pa, 0, nullptr, &dataSize, &devNameRef);
-			ThrowIfFailed(status, "CoreAudio: Get device name failed");
+
+			// A device can go away between reading the device list and reading its properties.
+			// It is skipped, so that one such device does not cut short the whole enumeration.
+			if (status != noErr || devNameRef == nullptr) {
+				RTC_LOG(LS_WARNING) << "CoreAudio: Get device name failed: Device = " << deviceID << ", Status = " << status;
+				return nullptr;
+			}
 
 			std::string name = CFStringRefToUTF8(devNameRef);
 			std::string id = std::to_string(deviceID);

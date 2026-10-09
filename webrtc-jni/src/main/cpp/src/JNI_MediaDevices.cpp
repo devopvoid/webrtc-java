@@ -68,6 +68,10 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAu
 	try {
 	    auto device = context->getAudioDeviceManager()->getDefaultAudioPlaybackDevice();
 
+		if (device == nullptr) {
+			return nullptr;
+		}
+
 		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
 	}
 	catch (...) {
@@ -84,6 +88,10 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAu
 
 	try {
 	    auto device = context->getAudioDeviceManager()->getDefaultAudioCaptureDevice();
+
+		if (device == nullptr) {
+			return nullptr;
+		}
 
 		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
 	}
