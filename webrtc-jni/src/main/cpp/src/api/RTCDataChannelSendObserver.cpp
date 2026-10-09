@@ -57,11 +57,7 @@ namespace jni
 			}
 		}
 		// A Java exception must not escape into WebRTC's network task or a destructor.
-		if (env->ExceptionCheck()) {
-			JavaLocalRef<jthrowable> exception(env, env->ExceptionOccurred());
-			env->ExceptionClear();
-			ReportUncaughtException(env, exception.get());
-		}
+		ReportPendingException(env);
 	}
 
 	RTCDataChannelSendObserver::JavaSendObserverClass::JavaSendObserverClass(JNIEnv * env)

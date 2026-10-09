@@ -15,6 +15,7 @@
  */
 
 #include "media/MediaStreamTrackObserver.h"
+#include "api/WebRTCUtils.h"
 #include "JavaFactories.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
@@ -41,19 +42,26 @@ namespace jni
 
 		// Check state changes.
 
-		if (eventType == MediaStreamTrackEvent::mute) {
-			if (track->enabled() != trackEnabled) {
-				// The condition "muted" is managed using the "enabled" property.
-				env->CallVoidMethod(javaTrack, javaClass->onTrackMute, createJavaTrack(env).release(), !track->enabled());
-				ExceptionCheck(env);
+		try {
+			if (eventType == MediaStreamTrackEvent::mute) {
+				if (track->enabled() != trackEnabled) {
+					// The condition "muted" is managed using the "enabled" property.
+					JavaLocalRef<jobject> jTrack = createJavaTrack(env);
+					env->CallVoidMethod(javaTrack, javaClass->onTrackMute, jTrack.get(), !track->enabled());
+				}
+			}
+			else if (eventType == MediaStreamTrackEvent::ended) {
+				if (track->state() != trackState && track->state() == webrtc::MediaStreamTrackInterface::TrackState::kEnded) {
+					JavaLocalRef<jobject> jTrack = createJavaTrack(env);
+					env->CallVoidMethod(javaTrack, javaClass->onTrackEnd, jTrack.get());
+				}
 			}
 		}
-		else if (eventType == MediaStreamTrackEvent::ended) {
-			if (track->state() != trackState && track->state() == webrtc::MediaStreamTrackInterface::TrackState::kEnded) {
-				env->CallVoidMethod(javaTrack, javaClass->onTrackEnd, createJavaTrack(env).release());
-				ExceptionCheck(env);
-			}
+		catch (...) {
+			ThrowCxxJavaException(env);
 		}
+
+		ReportPendingException(env);
 
 		// Save current state.
 		trackEnabled = track->enabled();

@@ -38,7 +38,7 @@ namespace jni
 
 		env->CallVoidMethod(observer, javaClass->onSuccess);
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	void SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
@@ -49,11 +49,16 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
+		try {
+			JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
-		env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+			env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	SetSessionDescriptionObserver::JavaSetSessionDescObserverClass::JavaSetSessionDescObserverClass(JNIEnv * env)

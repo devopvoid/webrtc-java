@@ -38,11 +38,16 @@ namespace jni
 			return;
 		}
 
-		auto state = JavaEnums::toJava(env, info.state());
+		try {
+			auto state = JavaEnums::toJava(env, info.state());
 
-		env->CallVoidMethod(observer, javaClass->onStateChange, state.get());
+			env->CallVoidMethod(observer, javaClass->onStateChange, state.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	void RTCDtlsTransportObserver::OnError(webrtc::RTCError error)
@@ -53,11 +58,16 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
+		try {
+			JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
-		env->CallVoidMethod(observer, javaClass->onError, errorMessage.get());
+			env->CallVoidMethod(observer, javaClass->onError, errorMessage.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	RTCDtlsTransportObserver::JavaRTCDtlsTransportObserverClass::JavaRTCDtlsTransportObserverClass(JNIEnv * env)

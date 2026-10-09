@@ -15,6 +15,7 @@
  */
 
 #include "api/RTCDtmfSenderObserver.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
@@ -36,12 +37,17 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jstring> jTone = JavaString::toJava(env, tone);
-		JavaLocalRef<jstring> jToneBuffer = JavaString::toJava(env, tone_buffer);
+		try {
+			JavaLocalRef<jstring> jTone = JavaString::toJava(env, tone);
+			JavaLocalRef<jstring> jToneBuffer = JavaString::toJava(env, tone_buffer);
 
-		env->CallVoidMethod(observer, javaClass->onToneChange, jTone.get(), jToneBuffer.get());
+			env->CallVoidMethod(observer, javaClass->onToneChange, jTone.get(), jToneBuffer.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	RTCDtmfSenderObserver::JavaRTCDtmfSenderObserverClass::JavaRTCDtmfSenderObserverClass(JNIEnv * env)
