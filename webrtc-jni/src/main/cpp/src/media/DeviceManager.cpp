@@ -16,17 +16,23 @@
 
 #include "media/DeviceManager.h"
 
+#include <vector>
+
 namespace jni
 {
 	namespace avdev
 	{
 		void DeviceManager::attachHotplugListener(PDeviceHotplugListener listener)
 		{
+			std::lock_guard<std::mutex> lock(listenerMutex);
+
 			hotplugListeners.push_back(listener);
 		}
 
 		void DeviceManager::detachHotplugListener(PDeviceHotplugListener listener)
 		{
+			std::lock_guard<std::mutex> lock(listenerMutex);
+
 			hotplugListeners.remove_if([listener](std::weak_ptr<DeviceHotplugListener> p) {
 				return !(p.owner_before(listener) || listener.owner_before(p));
 			});
@@ -44,21 +50,33 @@ namespace jni
 
 		void DeviceManager::notifyListeners(DevicePtr device, const DeviceEvent event)
 		{
-			for (auto i = hotplugListeners.begin(); i != hotplugListeners.end();) {
-				if ((*i).expired()) {
-					i = hotplugListeners.erase(i);
-				}
-				else {
+			// Listeners are attached and detached on Java threads while the operating system
+			// reports device changes on its own. The listeners are called on a copy, outside the
+			// lock, so that one may detach itself (or another) from within its callback.
+			std::vector<PDeviceHotplugListener> listeners;
+
+			{
+				std::lock_guard<std::mutex> lock(listenerMutex);
+
+				for (auto i = hotplugListeners.begin(); i != hotplugListeners.end();) {
 					PDeviceHotplugListener listener = (*i).lock();
 
-					if (event == DeviceEvent::Connected) {
-						listener->deviceConnected(device);
+					if (listener) {
+						listeners.push_back(listener);
+						++i;
 					}
-					else if (event == DeviceEvent::Disconnected) {
-						listener->deviceDisconnected(device);
+					else {
+						i = hotplugListeners.erase(i);
 					}
+				}
+			}
 
-					++i;
+			for (const PDeviceHotplugListener & listener : listeners) {
+				if (event == DeviceEvent::Connected) {
+					listener->deviceConnected(device);
+				}
+				else if (event == DeviceEvent::Disconnected) {
+					listener->deviceDisconnected(device);
 				}
 			}
 		}
