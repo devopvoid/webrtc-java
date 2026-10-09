@@ -15,7 +15,9 @@
  */
 
 #include "media/audio/AudioTransportSink.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
+#include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
 namespace jni
@@ -46,12 +48,17 @@ namespace jni
 		const jbyte * buffer = static_cast<const jbyte *>(audioSamples);
 		jsize dataSize = static_cast<jsize>(nSamples * nBytesPerSample);
 
-		jbyteArray dataArray = env->NewByteArray(dataSize);
-		env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
-		env->CallVoidMethod(sink, javaClass->onRecordedData, dataArray, nSamples, nBytesPerSample, nChannels, samplesPerSec, totalDelayMS, clockDrift);
+		JavaLocalRef<jbyteArray> dataArray(env, env->NewByteArray(dataSize));
 
-		ExceptionCheck(env);
-		env->DeleteLocalRef(dataArray);
+		if (dataArray.get() != nullptr) {
+			env->SetByteArrayRegion(dataArray.get(), 0, dataSize, buffer);
+			env->CallVoidMethod(sink, javaClass->onRecordedData, dataArray.get(), static_cast<jint>(nSamples),
+				static_cast<jint>(nBytesPerSample), static_cast<jint>(nChannels), static_cast<jint>(samplesPerSec),
+				static_cast<jint>(totalDelayMS), static_cast<jint>(clockDrift));
+		}
+
+		// The audio device's thread must not see a C++ exception.
+		ReportPendingException(env);
 
 		return 0;
 	}

@@ -72,10 +72,6 @@ namespace jni
 			};
 
 		private:
-			// Reports a Java exception thrown by a callback without letting it
-			// unwind through WebRTC.
-			void ReportException(JNIEnv * env) noexcept;
-
 			JavaGlobalRef<jobject> observer;
 
 			const std::shared_ptr<JavaPeerConnectionObserverClass> javaClass;

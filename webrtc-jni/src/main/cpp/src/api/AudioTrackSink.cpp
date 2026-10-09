@@ -15,7 +15,9 @@
  */
 
 #include "api/AudioTrackSink.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
+#include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
 namespace jni
@@ -37,12 +39,15 @@ namespace jni
 		const jbyte * buffer = static_cast<const jbyte *>(data);
 		jsize dataSize = static_cast<jsize>(frames * channels * (bitsPerSample / 8));
 
-		jbyteArray dataArray = env->NewByteArray(dataSize);
-		env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
+		JavaLocalRef<jbyteArray> dataArray(env, env->NewByteArray(dataSize));
 
-		env->CallVoidMethod(sink, javaClass->onData, dataArray, bitsPerSample, sampleRate, channels, frames);
-		ExceptionCheck(env);
-		env->DeleteLocalRef(dataArray);
+		if (dataArray.get() != nullptr) {
+			env->SetByteArrayRegion(dataArray.get(), 0, dataSize, buffer);
+			env->CallVoidMethod(sink, javaClass->onData, dataArray.get(), static_cast<jint>(bitsPerSample),
+				static_cast<jint>(sampleRate), static_cast<jint>(channels), static_cast<jint>(frames));
+		}
+
+		ReportPendingException(env);
 	}
 
 	AudioTrackSink::JavaAudioTrackSinkClass::JavaAudioTrackSinkClass(JNIEnv * env)

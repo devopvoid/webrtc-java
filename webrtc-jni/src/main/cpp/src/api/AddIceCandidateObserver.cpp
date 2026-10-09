@@ -79,11 +79,7 @@ namespace jni
 		}
 
 		// A Java exception must not escape into WebRTC's signaling thread.
-		if (env->ExceptionCheck()) {
-			JavaLocalRef<jthrowable> exception(env, env->ExceptionOccurred());
-			env->ExceptionClear();
-			ReportUncaughtException(env, exception.get());
-		}
+		ReportPendingException(env);
 	}
 
 	AddIceCandidateObserver::JavaAddIceCandidateObserverClass::JavaAddIceCandidateObserverClass(JNIEnv * env)

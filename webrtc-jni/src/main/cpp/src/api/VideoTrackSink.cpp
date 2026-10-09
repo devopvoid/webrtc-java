@@ -15,7 +15,9 @@
  */
 
 #include "api/VideoTrackSink.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
+#include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
 #include "api/video/i420_buffer.h"
@@ -52,14 +54,19 @@ namespace jni
 		jint rotation = static_cast<jint>(frame.rotation());
 		jlong timestamp = frame.timestamp_us() * webrtc::kNumNanosecsPerMicrosec;
 
-		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
-		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
+		try {
+			JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
+			JavaLocalRef<jobject> jFrame(env, env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp));
 
-		env->CallVoidMethod(sink, javaClass->onFrame, jFrame);
-		ExceptionCheck(env);
-		// jBuffer is a JavaLocalRef and deletes its own local reference on
-		// scope exit; deleting it again here would be a double free.
-		env->DeleteLocalRef(jFrame);
+			if (jFrame.get() != nullptr) {
+				env->CallVoidMethod(sink, javaClass->onFrame, jFrame.get());
+			}
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+
+		ReportPendingException(env);
 	}
 
 	VideoTrackSink::JavaVideoTrackSinkClass::JavaVideoTrackSinkClass(JNIEnv * env)

@@ -30,7 +30,7 @@ namespace jni
 	// ExceptionDescribe would print the "Exception in thread" prefix straight to
 	// native stderr and the stack trace to System.err, splitting the report
 	// across two streams and leaving the prefix on an unterminated line.
-	void ReportUncaughtException(JNIEnv * env, jthrowable exception)
+	void ReportUncaughtException(JNIEnv * env, jthrowable exception) noexcept
 	{
 		JavaLocalRef<jclass> threadClass(env, env->FindClass("java/lang/Thread"));
 		JavaLocalRef<jclass> handlerClass(env, env->FindClass("java/lang/Thread$UncaughtExceptionHandler"));
@@ -58,5 +58,17 @@ namespace jni
 		if (env->ExceptionCheck()) {
 			env->ExceptionClear();
 		}
+	}
+
+	void ReportPendingException(JNIEnv * env) noexcept
+	{
+		if (!env->ExceptionCheck()) {
+			return;
+		}
+
+		JavaLocalRef<jthrowable> exception(env, env->ExceptionOccurred());
+		env->ExceptionClear();
+
+		ReportUncaughtException(env, exception.get());
 	}
 }

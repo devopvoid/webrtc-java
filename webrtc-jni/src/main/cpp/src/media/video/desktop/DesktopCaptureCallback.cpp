@@ -16,8 +16,10 @@
 
 #include "media/video/desktop/DesktopCaptureCallback.h"
 #include "media/video/desktop/DesktopFrame.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
 #include "JavaEnums.h"
+#include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
 #include "libyuv/convert.h"
@@ -50,13 +52,17 @@ namespace jni
 		if (result != webrtc::DesktopCapturer::Result::SUCCESS) {
 			// Propagate the failure to Java instead of silently dropping it —
 			// callers waiting for a frame otherwise have to rely on timeouts.
-			auto jerror = JavaEnums::toJava(env, result);
-			env->CallVoidMethod(callback, javaClass->onCaptureResult, jerror.get(), nullptr);
-			ExceptionCheck(env);
+			try {
+				auto jerror = JavaEnums::toJava(env, result);
+				env->CallVoidMethod(callback, javaClass->onCaptureResult, jerror.get(), nullptr);
+			}
+			catch (...) {
+				ThrowCxxJavaException(env);
+			}
+
+			ReportPendingException(env);
 			return;
 		}
-
-		auto jresult = JavaEnums::toJava(env, result);
 
 		int width = frame->size().width();
 		int height = frame->size().height();
@@ -113,15 +119,21 @@ namespace jni
 		webrtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
 		i420BufferCopy->AddRef();
 
-		JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
-		jobject jFrame = env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp);
+		try {
+			auto jresult = JavaEnums::toJava(env, result);
+			JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
+			JavaLocalRef<jobject> jFrame(env, env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp));
 
-		env->CallVoidMethod(callback, javaClass->onCaptureResult, jresult.get(), jFrame);
+			if (jFrame.get() != nullptr) {
+				env->CallVoidMethod(callback, javaClass->onCaptureResult, jresult.get(), jFrame.get());
+			}
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
-		// jBuffer is a JavaLocalRef and deletes its own local reference on
-		// scope exit; deleting it again here would be a double free.
-		env->DeleteLocalRef(jFrame);
+		// The capturer is WebRTC code, whichever thread it calls back on.
+		ReportPendingException(env);
 	}
 
 	DesktopCaptureCallback::JavaDesktopCaptureCallbackClass::JavaDesktopCaptureCallbackClass(JNIEnv * env)

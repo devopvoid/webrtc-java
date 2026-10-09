@@ -82,7 +82,13 @@ namespace jni
 	// uncaught exception handler, as the JVM does for an exception escaping a
 	// Java thread. Callbacks that WebRTC invokes use it, because a C++
 	// exception must not unwind through WebRTC's frames.
-	void ReportUncaughtException(JNIEnv * env, jthrowable exception);
+	void ReportUncaughtException(JNIEnv * env, jthrowable exception) noexcept;
+
+	// Clears the Java exception pending on the calling thread, if any, and
+	// reports it as uncaught. A callback that WebRTC invokes ends with this
+	// instead of ExceptionCheck(), which throws, after turning any C++
+	// exception of its own into a Java one with ThrowCxxJavaException().
+	void ReportPendingException(JNIEnv * env) noexcept;
 }
 
 #endif

@@ -18,6 +18,7 @@
 #include "api/RTCSessionDescription.h"
 #include "api/WebRTCUtils.h"
 #include "JavaString.h"
+#include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
 namespace jni
@@ -36,11 +37,16 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jobject> javaDesc = jni::RTCSessionDescription::toJava(env, desc);
+		try {
+			JavaLocalRef<jobject> javaDesc = jni::RTCSessionDescription::toJava(env, desc);
 
-		env->CallVoidMethod(observer, javaClass->onSuccess, javaDesc.get());
+			env->CallVoidMethod(observer, javaClass->onSuccess, javaDesc.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	void CreateSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
@@ -51,11 +57,16 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
+		try {
+			JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
 
-		env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+			env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
- 		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	CreateSessionDescriptionObserver::JavaCreateSessionDescObserverClass::JavaCreateSessionDescObserverClass(JNIEnv * env)

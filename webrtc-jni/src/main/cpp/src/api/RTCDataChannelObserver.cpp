@@ -15,6 +15,7 @@
  */
 
 #include "api/RTCDataChannelObserver.h"
+#include "api/WebRTCUtils.h"
 #include "JavaFactories.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
@@ -38,7 +39,7 @@ namespace jni
 
 		env->CallVoidMethod(observer, javaClass->onStateChange);
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	void RTCDataChannelObserver::OnMessage(const webrtc::DataBuffer & buffer)
@@ -49,11 +50,16 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jobject> jBuffer = bufferFactory->create(env, &buffer);
+		try {
+			JavaLocalRef<jobject> jBuffer = bufferFactory->create(env, &buffer);
 
-		env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.get());
+			env->CallVoidMethod(observer, javaClass->onMessage, jBuffer.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	void RTCDataChannelObserver::OnBufferedAmountChange(uint64_t sent_data_size)
@@ -66,7 +72,7 @@ namespace jni
 
 		env->CallVoidMethod(observer, javaClass->onBufferedAmountChange, static_cast<jlong>(sent_data_size));
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	RTCDataChannelObserver::JavaRTCDataChannelObserverClass::JavaRTCDataChannelObserverClass(JNIEnv * env)

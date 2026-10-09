@@ -17,6 +17,7 @@
 #include "api/RTCStatsCollectorCallback.h"
 #include "api/RTCStatsReport.h"
 #include "api/WebRTCUtils.h"
+#include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
 namespace jni
@@ -35,11 +36,16 @@ namespace jni
 			return;
 		}
 
-		JavaLocalRef<jobject> javaReport = jni::RTCStatsReport::toJava(env, report);
+		try {
+			JavaLocalRef<jobject> javaReport = jni::RTCStatsReport::toJava(env, report);
 
-		env->CallVoidMethod(callback, javaClass->onStatsDelivered, javaReport.get());
+			env->CallVoidMethod(callback, javaClass->onStatsDelivered, javaReport.get());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		ExceptionCheck(env);
+		ReportPendingException(env);
 	}
 
 	RTCStatsCollectorCallback::JavaRTCStatsCollectorCallbackClass::JavaRTCStatsCollectorCallbackClass(JNIEnv * env)
