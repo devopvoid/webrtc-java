@@ -31,12 +31,43 @@ import dev.onvoid.webrtc.media.MediaStreamTrack;
  */
 public class RTCRtpSender extends DisposableNativeObject {
 
+	/*
+	 * The native observer set through this object, owned by it and freed when
+	 * replaced, removed or disposed.
+	 */
+	@SuppressWarnings("unused")
+	private long observerHandle;
+
+
 	/**
 	 * Constructor to be used by the native api.
 	 */
 	private RTCRtpSender() {
 
 	}
+
+	/**
+	 * Returns the ID of this sender, which is unique within its peer
+	 * connection. It is the same for all RTCRtpSender objects of the same
+	 * sender.
+	 *
+	 * @return The ID of this sender.
+	 */
+	public native String getId();
+
+	/**
+	 * Sets the observer that is told when this sender sends its first RTP
+	 * packet, replacing any observer set before. {@code null} removes the
+	 * observer.
+	 * <p>
+	 * A sender has one observer. It belongs to the RTCRtpSender object it was
+	 * set through: disposing that object removes it, also when it was set
+	 * through another object of the same sender in the meantime, so set it
+	 * through one object.
+	 *
+	 * @param observer The observer, or {@code null}.
+	 */
+	public native void setObserver(RTCRtpSenderObserver observer);
 
 	/**
 	 * Returns the track that is associated with this RTCRtpSender. If track is
@@ -101,6 +132,15 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * @param streamIds The IDs of the media streams.
 	 */
 	public native void setStreams(List<String> streamIds);
+
+	/**
+	 * Returns the IDs of the media streams associated with this sender's
+	 * track, as given to {@link RTCPeerConnection#addTrack addTrack}, the
+	 * {@link RTCRtpTransceiverInit} or {@link #setStreams}.
+	 *
+	 * @return The IDs of the media streams.
+	 */
+	public native List<String> getStreams();
 
 	/**
 	 * Returns the RTCDtmfSender associated with this RTCRtpSender. The RTCDtmfSender
