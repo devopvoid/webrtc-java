@@ -39,6 +39,9 @@ namespace jni
 			void deviceDisconnected(avdev::DevicePtr device) override;
 
 		private:
+			void notify(const avdev::DevicePtr & device, jmethodID method);
+
+		private:
 			class JavaDeviceChangeListenerClass : public JavaClass
 			{
 				public:

@@ -19,6 +19,7 @@
 
 #include <list>
 #include <memory>
+#include <mutex>
 
 #include "media/DeviceHotplugListener.h"
 
@@ -48,6 +49,7 @@ namespace jni
 				void notifyListeners(DevicePtr device, const DeviceEvent event);
 
 				std::list<std::weak_ptr<DeviceHotplugListener>> hotplugListeners;
+				std::mutex listenerMutex;
 		};
 	}
 }

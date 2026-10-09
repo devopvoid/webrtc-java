@@ -15,9 +15,11 @@
 #include <jni.h>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace jni
 {
@@ -39,39 +41,81 @@ namespace jni
 
 			JavaVM * getVM();
 
-			void addNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef, const std::shared_ptr<void> & nativeRef);
+			// Keeps a native object (a listener's native peer) alive for as long as
+			// the Java object stays registered. An entry is found again by the Java
+			// object together with its owner and kind: the same Java listener can be
+			// registered with several owners (tracks), or as several kinds of
+			// listener with one owner, and each registration has its own native
+			// object.
+			void addNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef, const std::shared_ptr<void> & nativeRef, const void * owner = nullptr, int kind = 0);
 
 			template<typename T>
-			std::shared_ptr<T> removeNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef)
+			std::shared_ptr<T> removeNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef, const void * owner = nullptr, int kind = 0)
 			{
 				auto className = JavaClassUtils::toNativeClassName(env, javaRef);
+
+				std::lock_guard<std::mutex> lock(objectMapMutex);
+
 				auto it = objectMap.find(className);
 
 				if (it == objectMap.end()) {
 					return nullptr;
 				}
 
-				auto globalRef = JavaGlobalRef<jobject>(env, javaRef.get());
 				auto & list = it->second;
 				std::shared_ptr<T> nativeRef = nullptr;
 
 				for (auto it = list.begin(); it != list.end(); ++it) {
-					if (env->IsSameObject(it->first, globalRef)) {
-						nativeRef = std::static_pointer_cast<T>(it->second);
+					if (it->owner == owner && it->kind == kind && env->IsSameObject(it->javaRef, javaRef)) {
+						nativeRef = std::static_pointer_cast<T>(it->nativeRef);
 						list.erase(it);
 						break;
 					}
 				}
 
-				env->DeleteGlobalRef(globalRef);
-
 				return nativeRef;
 			}
 
+			// Removes every entry of the owner, of all kinds, which must all hold a
+			// native object of type T.
+			template<typename T>
+			std::vector<std::shared_ptr<T>> removeNativeRefs(const void * owner)
+			{
+				std::vector<std::shared_ptr<T>> nativeRefs;
+
+				std::lock_guard<std::mutex> lock(objectMapMutex);
+
+				for (auto & entry : objectMap) {
+					auto & list = entry.second;
+
+					for (auto it = list.begin(); it != list.end();) {
+						if (it->owner == owner) {
+							nativeRefs.push_back(std::static_pointer_cast<T>(it->nativeRef));
+							it = list.erase(it);
+						}
+						else {
+							++it;
+						}
+					}
+				}
+
+				return nativeRefs;
+			}
+
 		private:
+			struct NativeRef
+			{
+				JavaGlobalRef<jobject> javaRef;
+				const void * owner;
+				int kind;
+				std::shared_ptr<void> nativeRef;
+			};
+
 			JavaVM * vm;
-			// Java object class name mapped to a Java object reference and its native object reference.
-			std::unordered_map<std::string, std::list<std::pair<JavaGlobalRef<jobject>, std::shared_ptr<void>>>> objectMap;
+			// Java object class name mapped to the registrations of Java objects of that class.
+			std::unordered_map<std::string, std::list<NativeRef>> objectMap;
+			// Listeners are added and removed on any Java thread.
+			std::mutex objectMapMutex;
 	};
 }
 

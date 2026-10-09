@@ -19,20 +19,13 @@ namespace jni
 		return vm;
 	}
 
-	void JavaContext::addNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef, const std::shared_ptr<void> & nativeRef)
+	void JavaContext::addNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef, const std::shared_ptr<void> & nativeRef, const void * owner, int kind)
 	{
 		auto className = JavaClassUtils::toNativeClassName(env, javaRef);
-		auto globalRef = JavaGlobalRef<jobject>(env, javaRef.get());
-		auto pair = std::make_pair(globalRef, nativeRef);
-		auto it = objectMap.find(className);
+		NativeRef entry = { JavaGlobalRef<jobject>(env, javaRef.get()), owner, kind, nativeRef };
 
-		if (it == objectMap.end()) {
-			std::list<std::pair<JavaGlobalRef<jobject>, std::shared_ptr<void>>> list = { pair };
+		std::lock_guard<std::mutex> lock(objectMapMutex);
 
-			objectMap[className] = list;
-		}
-		else {
-			it->second.push_back(pair);
-		}
+		objectMap[className].push_back(std::move(entry));
 	}
 }
