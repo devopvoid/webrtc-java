@@ -22,6 +22,8 @@
 #include <Foundation/Foundation.h>
 #include <IOKit/audio/IOAudioTypes.h>
 
+#include <exception>
+
 #if !defined(MAC_OS_VERSION_12_0) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_VERSION_12_0
     #define kAudioObjectPropertyElementMain kAudioObjectPropertyElementMaster
 #endif
@@ -388,27 +390,39 @@ namespace jni
 		OSStatus CoreAudioDeviceManager::deviceListenerProc(AudioObjectID objectID, UInt32 numberAddresses, const AudioObjectPropertyAddress addresses[], void * clientData) {
 			CoreAudioDeviceManager * manager = static_cast<CoreAudioDeviceManager *>(clientData);
 
+			// This runs on a CoreAudio HAL queue. An exception that leaves it has no handler above
+			// it and terminates the process, so nothing thrown below may escape: a device that
+			// vanishes between the device list and the read of its properties is an ordinary event
+			// (Bluetooth profile switch, an aggregate device torn down), not a fatal one.
 			for (int i = 0; i < numberAddresses; i++) {
-				switch (addresses[i].mSelector) {
-					case kAudioHardwarePropertyDevices:
-					{
-						manager->onDevicesChanged();
-						break;
-					}
+				try {
+					switch (addresses[i].mSelector) {
+						case kAudioHardwarePropertyDevices:
+						{
+							manager->onDevicesChanged();
+							break;
+						}
 
-					case kAudioHardwarePropertyDefaultInputDevice:
-					{
-						AudioDevicePtr def = manager->getDefaultCaptureDevice();
-						manager->onDefaultDeviceChanged(kAudioObjectPropertyScopeInput, manager->captureDevices, def);
-						break;
-					}
+						case kAudioHardwarePropertyDefaultInputDevice:
+						{
+							AudioDevicePtr def = manager->getDefaultCaptureDevice();
+							manager->onDefaultDeviceChanged(kAudioObjectPropertyScopeInput, manager->captureDevices, def);
+							break;
+						}
 
-					case kAudioHardwarePropertyDefaultOutputDevice:
-					{
-						AudioDevicePtr defp = manager->getDefaultPlaybackDevice();
-						manager->onDefaultDeviceChanged(kAudioObjectPropertyScopeOutput, manager->playbackDevices, defp);
-						break;
+						case kAudioHardwarePropertyDefaultOutputDevice:
+						{
+							AudioDevicePtr defp = manager->getDefaultPlaybackDevice();
+							manager->onDefaultDeviceChanged(kAudioObjectPropertyScopeOutput, manager->playbackDevices, defp);
+							break;
+						}
 					}
+				}
+				catch (const std::exception & e) {
+					RTC_LOG(LS_ERROR) << "CoreAudio: Device change handling failed: " << e.what();
+				}
+				catch (...) {
+					RTC_LOG(LS_ERROR) << "CoreAudio: Device change handling failed";
 				}
 			}
 
