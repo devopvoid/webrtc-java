@@ -33,6 +33,14 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
 	CHECK_HANDLE(track);
 
+	// Listeners still registered are taken off the track before it goes. Their
+	// entries are keyed by this track's address, which a later track can be
+	// given, and an observer left registered would be freed with its entry
+	// while the track (if something else still holds it) can still call it.
+	for (const auto & observer : javaContext->removeNativeRefs<jni::MediaStreamTrackObserver>(track)) {
+		track->UnregisterObserver(observer.get());
+	}
+
 	webrtc::RefCountReleaseStatus status = track->Release();
 
 	// Our reference is gone the moment Release() returns, regardless of
@@ -104,7 +112,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addEndedEve
 
 		track->RegisterObserver(observer);
 
-		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr);
+		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr, track, static_cast<int>(jni::MediaStreamTrackEvent::ended));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -118,7 +126,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeEnded
 	CHECK_HANDLE(track);
 
 	try {
-		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener));
+		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener), track, static_cast<int>(jni::MediaStreamTrackEvent::ended));
 
 		if (observerPtr) {
 			track->UnregisterObserver(observerPtr.get());
@@ -141,7 +149,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addMuteEven
 
 		track->RegisterObserver(observer);
 
-		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr);
+		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), observerPtr, track, static_cast<int>(jni::MediaStreamTrackEvent::mute));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -155,7 +163,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeMuteE
 	CHECK_HANDLE(track);
 
 	try {
-		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener));
+		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener), track, static_cast<int>(jni::MediaStreamTrackEvent::mute));
 
 		if (observerPtr) {
 			track->UnregisterObserver(observerPtr.get());

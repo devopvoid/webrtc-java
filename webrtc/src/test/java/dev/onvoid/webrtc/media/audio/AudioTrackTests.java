@@ -92,6 +92,71 @@ class AudioTrackTests extends TestBase {
 	}
 
 	@Test
+	void removeListenerFromOneOfTwoTracks() {
+		// Mute events are delivered before setEnabled() returns.
+		AudioTrack otherTrack = factory.createAudioTrack("otherTrack",
+				factory.createAudioSource(new AudioOptions()));
+		List<String> mutedTracks = Collections.synchronizedList(new ArrayList<>());
+		MediaStreamTrackMuteListener listener = (track, muted) -> mutedTracks.add(track.getId());
+
+		audioTrack.addTrackMuteListener(listener);
+		otherTrack.addTrackMuteListener(listener);
+
+		// Removing the second registration must not take the first one.
+		otherTrack.removeTrackMuteListener(listener);
+
+		otherTrack.setEnabled(false);
+		audioTrack.setEnabled(false);
+
+		audioTrack.removeTrackMuteListener(listener);
+		otherTrack.dispose();
+
+		assertEquals(Collections.singletonList("audioTrack"), mutedTracks);
+	}
+
+	@Test
+	void removeListenerOfOneKind() {
+		// One object registered as both a mute and an ended listener.
+		List<Boolean> muteEvents = Collections.synchronizedList(new ArrayList<>());
+
+		class Listener implements MediaStreamTrackMuteListener, MediaStreamTrackEndedListener {
+
+			@Override
+			public void onTrackMute(MediaStreamTrack track, boolean muted) {
+				muteEvents.add(muted);
+			}
+
+			@Override
+			public void onTrackEnd(MediaStreamTrack track) {
+			}
+		}
+
+		Listener listener = new Listener();
+
+		audioTrack.addTrackMuteListener(listener);
+		audioTrack.addTrackEndedListener(listener);
+
+		audioTrack.removeTrackEndedListener(listener);
+
+		audioTrack.setEnabled(false);
+
+		audioTrack.removeTrackMuteListener(listener);
+
+		assertEquals(Collections.singletonList(true), muteEvents);
+	}
+
+	@Test
+	void disposeWithListeners() {
+		AudioTrack track = factory.createAudioTrack("otherTrack",
+				factory.createAudioSource(new AudioOptions()));
+
+		track.addTrackMuteListener((t, muted) -> { });
+		track.addTrackEndedListener(t -> { });
+
+		assertDoesNotThrow(track::dispose);
+	}
+
+	@Test
 	void addRemoveListenersConcurrently() throws Exception {
 		// Each thread has a track of its own and new listeners (a lambda without
 		// captures would be one shared instance), so that the only state the
