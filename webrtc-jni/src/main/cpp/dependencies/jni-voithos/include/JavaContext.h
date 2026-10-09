@@ -15,6 +15,7 @@
 #include <jni.h>
 #include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -45,25 +46,25 @@ namespace jni
 			std::shared_ptr<T> removeNativeRef(JNIEnv * env, const JavaLocalRef<jobject> & javaRef)
 			{
 				auto className = JavaClassUtils::toNativeClassName(env, javaRef);
+
+				std::lock_guard<std::mutex> lock(objectMapMutex);
+
 				auto it = objectMap.find(className);
 
 				if (it == objectMap.end()) {
 					return nullptr;
 				}
 
-				auto globalRef = JavaGlobalRef<jobject>(env, javaRef.get());
 				auto & list = it->second;
 				std::shared_ptr<T> nativeRef = nullptr;
 
 				for (auto it = list.begin(); it != list.end(); ++it) {
-					if (env->IsSameObject(it->first, globalRef)) {
+					if (env->IsSameObject(it->first, javaRef)) {
 						nativeRef = std::static_pointer_cast<T>(it->second);
 						list.erase(it);
 						break;
 					}
 				}
-
-				env->DeleteGlobalRef(globalRef);
 
 				return nativeRef;
 			}
@@ -72,6 +73,8 @@ namespace jni
 			JavaVM * vm;
 			// Java object class name mapped to a Java object reference and its native object reference.
 			std::unordered_map<std::string, std::list<std::pair<JavaGlobalRef<jobject>, std::shared_ptr<void>>>> objectMap;
+			// Listeners are added and removed on any Java thread.
+			std::mutex objectMapMutex;
 	};
 }
 

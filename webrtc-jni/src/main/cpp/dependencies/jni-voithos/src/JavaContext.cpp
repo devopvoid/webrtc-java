@@ -24,6 +24,9 @@ namespace jni
 		auto className = JavaClassUtils::toNativeClassName(env, javaRef);
 		auto globalRef = JavaGlobalRef<jobject>(env, javaRef.get());
 		auto pair = std::make_pair(globalRef, nativeRef);
+
+		std::lock_guard<std::mutex> lock(objectMapMutex);
+
 		auto it = objectMap.find(className);
 
 		if (it == objectMap.end()) {
