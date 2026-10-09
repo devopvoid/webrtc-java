@@ -77,6 +77,12 @@ namespace jni
 	}
 
 	std::string RTCErrorToString(const webrtc::RTCError & error);
+
+	// Hands an exception thrown by a Java callback to the calling thread's
+	// uncaught exception handler, as the JVM does for an exception escaping a
+	// Java thread. Callbacks that WebRTC invokes use it, because a C++
+	// exception must not unwind through WebRTC's frames.
+	void ReportUncaughtException(JNIEnv * env, jthrowable exception);
 }
 
 #endif

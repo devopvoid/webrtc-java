@@ -118,12 +118,10 @@ transceiver.setDirection(RTCRtpTransceiverDirection.INACTIVE);
 transceiver.setDirection(RTCRtpTransceiverDirection.SEND_RECV);
 
 // After changing directions, create a new offer and perform negotiation.
-RTCOfferOptions opts = new RTCOfferOptions();
-pc.createOffer(opts, new CreateSessionDescriptionObserver() {
+pc.setLocalDescription(new SetSessionDescriptionObserver() {
     @Override
-    public void onSuccess(RTCSessionDescription description) {
-        pc.setLocalDescription(description, /* observer */ null);
-        // Send to remote and await/set remote answer accordingly
+    public void onSuccess() {
+        // Send pc.getLocalDescription() to the remote peer and set its answer
     }
     @Override
     public void onFailure(String error) { /* handle error */ }

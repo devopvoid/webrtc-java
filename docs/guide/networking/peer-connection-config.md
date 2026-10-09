@@ -69,17 +69,33 @@ config.cryptoOptions = crypto;
 
 `cryptexPolicy` encrypts the RTP header extensions and CSRCs as a whole (RFC 9335) where the peer supports it (`NEGOTIATE`) or always (`REQUIRE`).
 
+`certificates` takes the DTLS certificate a peer connection authenticates with, as an `RTCCertificatePEM`; without one, WebRTC generates a certificate per connection. A certificate that does not parse makes `createPeerConnection()` and `setConfiguration()` throw.
+
 ## Signaling
 
 | Setting | Effect |
 |---|---|
 | `offerExtmapAllowMixed` | Allows one- and two-byte header extensions to be mixed in offers. Default true. |
-| `enableImplicitRollback` | Rolls a pending local offer back when a remote offer arrives, as perfect negotiation needs. Default false. |
+| `enableImplicitRollback` | Rolls a pending local offer back when a remote offer arrives, as perfect negotiation needs. Default false. Pair it with `setLocalDescription(observer)`, which creates the offer or answer itself. |
 | `alwaysNegotiateDataChannels` | Includes data channels in offers before any is created. Default false. |
+
+## Changing a Running Connection
+
+A few controls are methods of `RTCPeerConnection` rather than configuration fields, and can be used at any time.
+
+`setBitrate(min, current, max)` limits the bandwidth all streams sent by the connection may use together, in bits per second. A `null` value leaves that limit as it is, and `current` resets the bandwidth estimate to that value. Limits from the SDP and from each sender's encoding parameters still apply. Values that are negative or not ordered as min ≤ current ≤ max make it throw.
+
+```java
+// Start from 1 Mbps and never use more than 2.5 Mbps.
+peerConnection.setBitrate(null, 1_000_000, 2_500_000);
+```
+
+`setAudioPlayout(false)` stops the audio device from playing received audio; the audio is still decoded and its statistics still updated. `setAudioRecording(false)` stops the audio device from recording, so tracks fed by it send nothing, while tracks fed by a `CustomAudioSource` keep sending. Both are on by default and act on the audio device module, which all connections of a `PeerConnectionFactory` share.
 
 ## Related API
 
 - `RTCConfiguration` — the configuration of a peer connection.
 - `RTCPeerConnection.getConfiguration()`, `setConfiguration()` — read and change it.
+- `RTCPeerConnection.setBitrate()`, `setAudioPlayout()`, `setAudioRecording()` — controls of a running connection.
 - `RTCCryptoOptions` — the SRTP cipher suites.
 - `PortAllocatorConfig` — ports and interfaces, see [Port Allocator Configuration](/guide/networking/port-allocator-config).

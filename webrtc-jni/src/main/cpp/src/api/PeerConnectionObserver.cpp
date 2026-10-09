@@ -15,6 +15,7 @@
  */
 
 #include "api/PeerConnectionObserver.h"
+#include "api/RTCCandidatePairChangeEvent.h"
 #include "api/RTCIceCandidate.h"
 #include "api/RTCPeerConnectionIceErrorEvent.h"
 #include "api/WebRTCUtils.h"
@@ -220,6 +221,28 @@ namespace jni
 		ExceptionCheck(env);
 	}
 
+	void PeerConnectionObserver::OnIceCandidateRemoved(const webrtc::IceCandidate * candidate)
+	{
+		JNIEnv * env = AttachCurrentThread();
+
+		if (env == nullptr || candidate == nullptr) {
+			return;
+		}
+
+		try {
+			JavaLocalRef<jobject> jCandidate = RTCIceCandidate::toJava(env, candidate);
+
+			if (!env->ExceptionCheck()) {
+				env->CallVoidMethod(observer, javaClass->onIceCandidateRemoved, jCandidate.get());
+			}
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+
+		ReportException(env);
+	}
+
 	void PeerConnectionObserver::OnIceConnectionReceivingChange(bool receiving)
 	{
 		JNIEnv * env = AttachCurrentThread();
@@ -241,21 +264,27 @@ namespace jni
 			return;
 		}
 
-		const webrtc::Candidate & remote = event.selected_candidate_pair.remote_candidate();
+		try {
+			JavaLocalRef<jobject> jEvent = RTCCandidatePairChangeEvent::toJava(env, event);
 
-		std::string ip = remote.address().ipaddr().ToString();
-		int port = remote.address().port();
+			if (!env->ExceptionCheck()) {
+				env->CallVoidMethod(observer, javaClass->onSelectedCandidatePairChanged, jEvent.get());
+			}
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-		const auto typeName = remote.type_name();
-		std::string type(typeName.data(), typeName.size());
+		ReportException(env);
+	}
 
-		JavaLocalRef<jstring> jAddress = JavaString::toJava(env, ip);
-		JavaLocalRef<jstring> jType = JavaString::toJava(env, type);
-
-		env->CallVoidMethod(observer, javaClass->onSelectedCandidatePairChanged,
-			jAddress.get(), static_cast<jint>(port), jType.get());
-
-		ExceptionCheck(env);
+	void PeerConnectionObserver::ReportException(JNIEnv * env) noexcept
+	{
+		if (env->ExceptionCheck()) {
+			JavaLocalRef<jthrowable> exception(env, env->ExceptionOccurred());
+			env->ExceptionClear();
+			ReportUncaughtException(env, exception.get());
+		}
 	}
 
 	PeerConnectionObserver::JavaPeerConnectionObserverClass::JavaPeerConnectionObserverClass(JNIEnv * env)
@@ -273,7 +302,8 @@ namespace jni
 		onIceGatheringChange = GetMethod(env, cls, "onIceGatheringChange", "(L" PKG "RTCIceGatheringState;)V");
 		onIceCandidate = GetMethod(env, cls, "onIceCandidate", "(L" PKG "RTCIceCandidate;)V");
 		onIceCandidateError = GetMethod(env, cls, "onIceCandidateError", "(L" PKG "RTCPeerConnectionIceErrorEvent;)V");
+		onIceCandidateRemoved = GetMethod(env, cls, "onIceCandidateRemoved", "(L" PKG "RTCIceCandidate;)V");
 		onIceConnectionReceivingChange = GetMethod(env, cls, "onIceConnectionReceivingChange", "(Z)V");
-		onSelectedCandidatePairChanged = GetMethod(env, cls, "onSelectedCandidatePairChanged", "(Ljava/lang/String;ILjava/lang/String;)V");
+		onSelectedCandidatePairChanged = GetMethod(env, cls, "onSelectedCandidatePairChanged", "(L" PKG "RTCCandidatePairChangeEvent;)V");
 	}
 }

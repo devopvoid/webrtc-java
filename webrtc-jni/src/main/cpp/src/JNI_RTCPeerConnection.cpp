@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCPeerConnection.h"
+#include "api/AddIceCandidateObserver.h"
 #include "api/CreateSessionDescriptionObserver.h"
 #include "api/SetSessionDescriptionObserver.h"
 #include "api/RTCAnswerOptions.h"
@@ -33,15 +34,19 @@
 #include "JavaIterable.h"
 #include "JavaList.h"
 #include "JavaNullPointerException.h"
+#include "JavaPrimitive.h"
 #include "JavaRef.h"
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
 
 #include "api/peer_connection_interface.h"
+#include "api/transport/bitrate_settings.h"
 #include "api/rtp_receiver_interface.h"
 #include "api/rtp_sender_interface.h"
 
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -384,6 +389,27 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setLocalDescript
 	}
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setLocalDescriptionImplicit
+(JNIEnv * env, jobject caller, jobject jobserver)
+{
+	if (jobserver == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "SetSessionDescriptionObserver must not be null"));
+		return;
+	}
+
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLE(pc);
+
+	try {
+		auto observer = new webrtc::RefCountedObject<jni::SetSessionDescriptionObserver>(env, jni::JavaGlobalRef<jobject>(env, jobserver));
+
+		pc->SetLocalDescription(observer);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setRemoteDescription
 (JNIEnv * env, jobject caller, jobject jSessionDesc, jobject jobserver)
 {
@@ -429,6 +455,106 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addIceCandidate
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addIceCandidateWithObserver
+(JNIEnv * env, jobject caller, jobject jCandidate, jobject jObserver)
+{
+	if (jCandidate == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "RTCIceCandidate must not be null"));
+		return;
+	}
+	if (jObserver == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "AddIceCandidateObserver must not be null"));
+		return;
+	}
+
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLE(pc);
+
+	try {
+		auto candidate = jni::RTCIceCandidate::toNative(env, jni::JavaLocalRef<jobject>(env, jCandidate));
+
+		// std::function has to be copyable, the observer reports only once.
+		auto observer = std::make_shared<jni::AddIceCandidateObserver>(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+
+		pc->AddIceCandidate(std::move(candidate), [observer](webrtc::RTCError error) {
+			observer->OnComplete(std::move(error));
+		});
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_removeIceCandidate
+(JNIEnv * env, jobject caller, jobject jCandidate)
+{
+	if (jCandidate == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "RTCIceCandidate must not be null"));
+		return false;
+	}
+
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLEV(pc, false);
+
+	try {
+		auto candidate = jni::RTCIceCandidate::toNative(env, jni::JavaLocalRef<jobject>(env, jCandidate));
+
+		return static_cast<jboolean>(pc->RemoveIceCandidate(candidate.get()));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return false;
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setBitrate
+(JNIEnv * env, jobject caller, jobject jMinBitrate, jobject jCurrentBitrate, jobject jMaxBitrate)
+{
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLE(pc);
+
+	auto toOptional = [env](jobject value) -> std::optional<int> {
+		if (value == nullptr) {
+			return std::nullopt;
+		}
+		return jni::Integer::getValue(env, value);
+	};
+
+	try {
+		webrtc::BitrateSettings settings;
+		settings.min_bitrate_bps = toOptional(jMinBitrate);
+		settings.start_bitrate_bps = toOptional(jCurrentBitrate);
+		settings.max_bitrate_bps = toOptional(jMaxBitrate);
+
+		webrtc::RTCError error = pc->SetBitrate(settings);
+
+		if (!error.ok()) {
+			env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(error).c_str()));
+		}
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setAudioPlayout
+(JNIEnv * env, jobject caller, jboolean playout)
+{
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLE(pc);
+
+	pc->SetAudioPlayout(static_cast<bool>(playout));
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setAudioRecording
+(JNIEnv * env, jobject caller, jboolean recording)
+{
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLE(pc);
+
+	pc->SetAudioRecording(static_cast<bool>(recording));
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getSignalingState

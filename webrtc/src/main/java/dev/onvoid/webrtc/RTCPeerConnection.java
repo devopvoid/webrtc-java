@@ -288,6 +288,25 @@ public class RTCPeerConnection extends NativeObject {
 			SetSessionDescriptionObserver observer);
 
 	/**
+	 * Creates an offer or an answer, whichever the signaling state calls for,
+	 * and applies it as the local description. Unlike calling {@link
+	 * #createOffer} or {@link #createAnswer} first, nothing can change between
+	 * creating the description and applying it, which makes this the simpler
+	 * way to implement "perfect negotiation". The applied description can be
+	 * read with {@link #getLocalDescription()} once the observer reports
+	 * success.
+	 * <p>
+	 * An offer is created with default {@link RTCOfferOptions}, so an ICE
+	 * restart has to be requested with {@link #restartIce()} beforehand.
+	 *
+	 * @param observer The observer to be notified once the description has
+	 *                 been successfully set.
+	 */
+	public void setLocalDescription(SetSessionDescriptionObserver observer) {
+		setLocalDescriptionImplicit(observer);
+	}
+
+	/**
 	 * Instructs the RTCPeerConnection to apply the supplied
 	 * RTCSessionDescription as the remote offer or answer. Setting the remote
 	 * description changes the local media state.
@@ -307,6 +326,86 @@ public class RTCPeerConnection extends NativeObject {
 	 *                  signaling channel.
 	 */
 	public native void addIceCandidate(RTCIceCandidate candidate);
+
+	/**
+	 * Adds a remote ICE candidate to the ICE Agent and reports the outcome.
+	 * Unlike {@link #addIceCandidate(RTCIceCandidate)}, the candidate is
+	 * queued behind any pending offer/answer operation, as the standard
+	 * requires, so it can be called right after {@link #setRemoteDescription}
+	 * without waiting for it to complete.
+	 *
+	 * @param candidate A new ICE candidate received from the remote peer over a
+	 *                  signaling channel.
+	 * @param observer  The observer to be notified once the candidate has been
+	 *                  added, or has been rejected.
+	 */
+	public void addIceCandidate(RTCIceCandidate candidate,
+			AddIceCandidateObserver observer) {
+		addIceCandidateWithObserver(candidate, observer);
+	}
+
+	/**
+	 * Removes a remote ICE candidate that was added before, for example
+	 * because the remote peer reported it through {@link
+	 * PeerConnectionObserver#onIceCandidateRemoved}. The candidate is matched
+	 * by its {@code sdpMid} and its candidate attribute.
+	 *
+	 * @param candidate The remote ICE candidate to remove.
+	 *
+	 * @return {@code true} if the candidate was found in the remote
+	 * description and removed, {@code false} if it was not found, there is no
+	 * remote description, or the connection is closed.
+	 */
+	public native boolean removeIceCandidate(RTCIceCandidate candidate);
+
+	/**
+	 * Limits the bandwidth that all RTP streams sent by this connection may
+	 * use together, in bits per second. A {@code null} value leaves that
+	 * limit as it is. Other limits still apply, such as a "b=AS" line in the
+	 * SDP or the {@link RTCRtpEncodingParameters} of a sender.
+	 * <p>
+	 * Setting {@code currentBitrate} resets the bandwidth estimate to that
+	 * value, which is where the estimate starts from after a call that
+	 * already knows its network.
+	 *
+	 * @param minBitrate     The minimum bitrate, or {@code null}.
+	 * @param currentBitrate The bitrate to restart estimation from, or
+	 *                       {@code null}.
+	 * @param maxBitrate     The maximum bitrate, or {@code null}.
+	 *
+	 * @throws RuntimeException If a value is negative, they are not ordered
+	 *                          as min &le; current &le; max, or the connection
+	 *                          is closed.
+	 */
+	public native void setBitrate(Integer minBitrate, Integer currentBitrate,
+			Integer maxBitrate);
+
+	/**
+	 * Enables or disables playout of all received audio streams of this
+	 * connection. Playout is enabled by default. While disabled, the audio
+	 * device does not play, but received audio is still decoded and its
+	 * statistics are still updated.
+	 * <p>
+	 * The switch applies to the audio device module, which is shared by all
+	 * connections of the same {@link PeerConnectionFactory}.
+	 *
+	 * @param playout {@code true} to play received audio.
+	 */
+	public native void setAudioPlayout(boolean playout);
+
+	/**
+	 * Enables or disables recording of the audio this connection sends.
+	 * Recording is enabled by default. While disabled, the audio device does
+	 * not record, so audio tracks fed by it send nothing. Tracks fed by a
+	 * {@link dev.onvoid.webrtc.media.audio.CustomAudioSource} do not use the
+	 * device and keep sending.
+	 * <p>
+	 * The switch applies to the audio device module, which is shared by all
+	 * connections of the same {@link PeerConnectionFactory}.
+	 *
+	 * @param recording {@code true} to record audio.
+	 */
+	public native void setAudioRecording(boolean recording);
 
 	/**
 	 * Returns the signaling state of the RTCPeerConnection.
@@ -424,5 +523,11 @@ public class RTCPeerConnection extends NativeObject {
 
 	private native RTCRtpTransceiver addTransceiverInternal(
 			MediaStreamTrack track, RTCRtpTransceiverInit init);
+
+	private native void setLocalDescriptionImplicit(
+			SetSessionDescriptionObserver observer);
+
+	private native void addIceCandidateWithObserver(RTCIceCandidate candidate,
+			AddIceCandidateObserver observer);
 
 }

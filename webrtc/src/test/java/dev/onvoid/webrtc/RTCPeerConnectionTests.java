@@ -27,6 +27,7 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
@@ -461,6 +462,85 @@ class RTCPeerConnectionTests extends TestBase {
 		assertEquals(RTCSignalingState.CLOSED, peerConnection.getSignalingState());
 		assertEquals(RTCIceGatheringState.NEW, peerConnection.getIceGatheringState());
 		assertEquals(RTCIceConnectionState.CLOSED, peerConnection.getIceConnectionState());
+	}
+
+	@Test
+	void setBitrate() {
+		peerConnection.setBitrate(100_000, 300_000, 2_000_000);
+		peerConnection.setBitrate(null, null, 1_000_000);
+		peerConnection.setBitrate(null, null, null);
+
+		RuntimeException error = assertThrows(RuntimeException.class,
+				() -> peerConnection.setBitrate(500_000, 300_000, null));
+		assertTrue(error.getMessage().startsWith("[INVALID_PARAMETER]"), error.getMessage());
+
+		assertThrows(RuntimeException.class,
+				() -> peerConnection.setBitrate(null, null, -1));
+	}
+
+	@Test
+	void setAudioPlayoutAndRecording() {
+		peerConnection.setAudioPlayout(false);
+		peerConnection.setAudioRecording(false);
+		peerConnection.setAudioPlayout(true);
+		peerConnection.setAudioRecording(true);
+	}
+
+	@Test
+	void addIceCandidateWithoutRemoteDescription() throws Exception {
+		RTCIceCandidate candidate = new RTCIceCandidate("0", 0,
+				"candidate:1 1 udp 2122260223 192.168.1.10 54321 typ host generation 0");
+		CountDownLatch done = new CountDownLatch(1);
+		AtomicReference<String> failure = new AtomicReference<>();
+
+		peerConnection.addIceCandidate(candidate, new AddIceCandidateObserver() {
+			@Override
+			public void onSuccess() {
+				done.countDown();
+			}
+
+			@Override
+			public void onFailure(String error) {
+				failure.set(error);
+				done.countDown();
+			}
+		});
+
+		assertTrue(done.await(5, TimeUnit.SECONDS));
+		assertNotNull(failure.get());
+		assertTrue(failure.get().startsWith("[INVALID_STATE]"), failure.get());
+
+		assertFalse(peerConnection.removeIceCandidate(candidate));
+	}
+
+	@Test
+	void iceCandidateNullParams() {
+		RTCIceCandidate candidate = new RTCIceCandidate("0", 0,
+				"candidate:1 1 udp 2122260223 192.168.1.10 54321 typ host generation 0");
+
+		assertThrows(NullPointerException.class,
+				() -> peerConnection.addIceCandidate(null, new TestAddIceObserver()));
+		assertThrows(NullPointerException.class,
+				() -> peerConnection.addIceCandidate(candidate, null));
+		assertThrows(NullPointerException.class,
+				() -> peerConnection.removeIceCandidate(null));
+		assertThrows(NullPointerException.class,
+				() -> peerConnection.setLocalDescription((SetSessionDescriptionObserver) null));
+	}
+
+	@Test
+	void implicitLocalDescriptionCreatesOffer() throws Exception {
+		peerConnection.createDataChannel("data", new RTCDataChannelInit());
+
+		TestSetDescObserver observer = new TestSetDescObserver();
+		peerConnection.setLocalDescription(observer);
+		observer.get(5, TimeUnit.SECONDS);
+
+		RTCSessionDescription local = peerConnection.getLocalDescription();
+
+		assertNotNull(local);
+		assertEquals(RTCSdpType.OFFER, local.sdpType);
+		assertEquals(RTCSignalingState.HAVE_LOCAL_OFFER, peerConnection.getSignalingState());
 	}
 
 	@Test
