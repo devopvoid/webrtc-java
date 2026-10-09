@@ -152,6 +152,41 @@ class RTCConfigurationFieldsTests extends TestBase {
 	}
 
 	@Test
+	void malformedCertificateThrows() {
+		// Used to abort the JVM through an RTC_CHECK.
+		RTCConfiguration config = new RTCConfiguration();
+		config.certificates.add(new RTCCertificatePEM("no key", "no certificate", 0));
+
+		RuntimeException error = assertThrows(RuntimeException.class,
+				() -> factory.createPeerConnection(config, new Observer()));
+
+		assertEquals("Supplied certificate is malformed", error.getMessage());
+
+		config.certificates.set(0, null);
+
+		assertThrows(NullPointerException.class,
+				() -> factory.createPeerConnection(config, new Observer()));
+	}
+
+	@Test
+	void setConfigurationRejectsMalformedCertificate() {
+		RTCPeerConnection connection = factory.createPeerConnection(new RTCConfiguration(), new Observer());
+
+		try {
+			RTCConfiguration config = connection.getConfiguration();
+			config.certificates.add(new RTCCertificatePEM("no key", "no certificate", 0));
+
+			RuntimeException error = assertThrows(RuntimeException.class,
+					() -> connection.setConfiguration(config));
+
+			assertEquals("Supplied certificate is malformed", error.getMessage());
+		}
+		finally {
+			connection.close();
+		}
+	}
+
+	@Test
 	void setConfigurationApplies() {
 		RTCPeerConnection connection = factory.createPeerConnection(new RTCConfiguration(), new Observer());
 

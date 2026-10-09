@@ -62,12 +62,14 @@ config.id = -1;  // Let WebRTC assign an ID
 // Configure sub-protocol (default: null)
 config.protocol = "my-protocol";  // Optional sub-protocol name
 
-// Configure priority (default: LOW)
-config.priority = RTCPriorityType.LOW;
+// Configure priority (default: LOW), announced to the remote peer
+config.priority = RTCPriorityType.HIGH;
 
 // Create the data channel with this configuration
 RTCDataChannel dataChannel = peerConnection.createDataChannel("myChannel", config);
 ```
+
+`getPriority()` returns a channel's priority; a channel the remote peer opened has the priority it announced. WebRTC only uses the priority to share the connection between channels when SCTP message interleaving is on, which needs the field trial `WebRTC-DataChannelMessageInterleaving/Enabled/` on both peers (see [Field Trials](/guide/advanced/field-trials)). Without it, channels take turns regardless of priority.
 
 ## Handling Data Channel Events
 

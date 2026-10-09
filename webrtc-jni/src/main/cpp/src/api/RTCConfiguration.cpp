@@ -24,11 +24,14 @@
 #include "JavaEnums.h"
 #include "JavaIterable.h"
 #include "JavaList.h"
+#include "JavaNullPointerException.h"
 #include "JavaRef.h"
 #include "JavaObject.h"
 #include "JavaPrimitive.h"
+#include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "JavaWrappedException.h"
 #include "JNI_WebRTC.h"
 
 namespace jni
@@ -187,13 +190,19 @@ namespace jni
 			configuration.rtcp_mux_policy = JavaEnums::toNative<webrtc::PeerConnectionInterface::RtcpMuxPolicy>(env, mp);
 
 			for (auto & item : JavaIterable(env, cr)) {
+				if (item.get() == nullptr) {
+					throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+						JavaNullPointerException(env, "RTCCertificatePEM must not be null")));
+				}
+
 				auto certificate = webrtc::RTCCertificate::FromPEM(jni::RTCCertificatePEM::toNative(env, item));
 
-				RTC_CHECK(certificate != nullptr) << "Supplied certificate is malformed";
-
-				if (certificate != nullptr) {
-					configuration.certificates.push_back(certificate);
+				if (certificate == nullptr) {
+					throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+						JavaRuntimeException(env, "Supplied certificate is malformed")));
 				}
+
+				configuration.certificates.push_back(certificate);
 			}
 
 			if (pac.get() != nullptr) {

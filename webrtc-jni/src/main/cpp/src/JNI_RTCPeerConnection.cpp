@@ -487,12 +487,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setConfiguration
 	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
 	CHECK_HANDLE(pc);
 
-	auto config = jni::RTCConfiguration::toNative(env, jni::JavaLocalRef<jobject>(env, jConfig));
+	try {
+		auto config = jni::RTCConfiguration::toNative(env, jni::JavaLocalRef<jobject>(env, jConfig));
 
-	webrtc::RTCError error = pc->SetConfiguration(config);
+		webrtc::RTCError error = pc->SetConfiguration(config);
 
-	if (!error.ok()) {
-		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(error).c_str()));
+		if (!error.ok()) {
+			env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(error).c_str()));
+		}
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 }
 

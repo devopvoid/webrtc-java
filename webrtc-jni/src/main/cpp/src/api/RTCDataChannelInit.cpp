@@ -16,6 +16,7 @@
 
 #include "api/RTCDataChannelInit.h"
 #include "JavaClasses.h"
+#include "JavaEnums.h"
 #include "JavaObject.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
@@ -37,6 +38,13 @@ namespace jni
 			init.maxRetransmits = obj.getInt(javaClass->maxRetransmits);
 			init.id = obj.getInt(javaClass->id);
 			init.protocol = JavaString::toNative(env, obj.getString(javaClass->protocol));
+
+			// Left unset when null, which WebRTC treats as low priority.
+			JavaLocalRef<jobject> priority = obj.getObject(javaClass->priority);
+
+			if (priority.get()) {
+				init.priority = webrtc::PriorityValue(JavaEnums::toNative<webrtc::Priority>(env, priority));
+			}
 
 			return init;
 		}

@@ -81,6 +81,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCDataChannel
+	 * Method:    getPriority
+	 * Signature: ()Ldev/onvoid/webrtc/RTCPriorityType;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getPriority
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCDataChannel
 	 * Method:    getId
 	 * Signature: ()I
 	 */
