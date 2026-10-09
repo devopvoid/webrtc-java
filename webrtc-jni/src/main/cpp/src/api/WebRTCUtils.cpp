@@ -15,6 +15,7 @@
  */
 
 #include "api/WebRTCUtils.h"
+#include "JavaRef.h"
 
 namespace jni
 {
@@ -24,5 +25,38 @@ namespace jni
 		std::string message = error.message();
 
 		return "[" + type + "] " + message;
+	}
+
+	// ExceptionDescribe would print the "Exception in thread" prefix straight to
+	// native stderr and the stack trace to System.err, splitting the report
+	// across two streams and leaving the prefix on an unterminated line.
+	void ReportUncaughtException(JNIEnv * env, jthrowable exception)
+	{
+		JavaLocalRef<jclass> threadClass(env, env->FindClass("java/lang/Thread"));
+		JavaLocalRef<jclass> handlerClass(env, env->FindClass("java/lang/Thread$UncaughtExceptionHandler"));
+		if (env->ExceptionCheck()) {
+			env->ExceptionClear();
+			return;
+		}
+
+		jmethodID currentThread = env->GetStaticMethodID(threadClass.get(), "currentThread", "()Ljava/lang/Thread;");
+		jmethodID getHandler = env->GetMethodID(threadClass.get(), "getUncaughtExceptionHandler",
+			"()Ljava/lang/Thread$UncaughtExceptionHandler;");
+		jmethodID uncaughtException = env->GetMethodID(handlerClass.get(), "uncaughtException",
+			"(Ljava/lang/Thread;Ljava/lang/Throwable;)V");
+		if (env->ExceptionCheck()) {
+			env->ExceptionClear();
+			return;
+		}
+
+		JavaLocalRef<jobject> thread(env, env->CallStaticObjectMethod(threadClass.get(), currentThread));
+		JavaLocalRef<jobject> handler(env, env->CallObjectMethod(thread.get(), getHandler));
+		if (!env->ExceptionCheck() && handler.get()) {
+			env->CallVoidMethod(handler.get(), uncaughtException, thread.get(), exception);
+		}
+		// Like the JVM, ignore an exception thrown by the handler itself.
+		if (env->ExceptionCheck()) {
+			env->ExceptionClear();
+		}
 	}
 }

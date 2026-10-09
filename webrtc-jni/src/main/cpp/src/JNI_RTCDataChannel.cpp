@@ -27,6 +27,7 @@
 #include "api/data_channel_interface.h"
 #include "rtc_base/logging.h"
 
+#include <initializer_list>
 #include <memory>
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
@@ -117,6 +118,27 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isNegotiated
 	CHECK_HANDLEV(channel, false);
 
 	return static_cast<jboolean>(channel->negotiated());
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getPriority
+(JNIEnv * env, jobject caller)
+{
+	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	CHECK_HANDLEV(channel, nullptr);
+
+	// The priority is a number on the wire; a remote peer may announce one
+	// between the four levels, which is rounded up to the next level.
+	const uint16_t value = channel->priority().value();
+	webrtc::Priority priority = webrtc::Priority::kHigh;
+
+	for (auto level : { webrtc::Priority::kVeryLow, webrtc::Priority::kLow, webrtc::Priority::kMedium }) {
+		if (value <= webrtc::PriorityValue(level).value()) {
+			priority = level;
+			break;
+		}
+	}
+
+	return jni::JavaEnums::toJava(env, priority).release();
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getId

@@ -37,6 +37,38 @@ import org.junit.jupiter.api.Test;
 class RTCDataChannelTests extends TestBase {
 
 	@Test
+	void priority() {
+		RTCPeerConnection connection = factory.createPeerConnection(
+				new RTCConfiguration(), candidate -> { });
+
+		try {
+			// The priority used to be ignored, so every channel was LOW.
+			for (RTCPriorityType priority : RTCPriorityType.values()) {
+				RTCDataChannelInit init = new RTCDataChannelInit();
+				init.priority = priority;
+
+				RTCDataChannel channel = connection.createDataChannel(priority.name(), init);
+
+				assertEquals(priority, channel.getPriority());
+
+				channel.dispose();
+			}
+
+			RTCDataChannelInit init = new RTCDataChannelInit();
+			init.priority = null;
+
+			RTCDataChannel channel = connection.createDataChannel("unset", init);
+
+			assertEquals(RTCPriorityType.LOW, channel.getPriority());
+
+			channel.dispose();
+		}
+		finally {
+			connection.close();
+		}
+	}
+
+	@Test
 	void bufferedAmountChangeCallback() throws Exception {
 		DataPeerConnection caller = new DataPeerConnection(factory);
 		DataPeerConnection callee = new DataPeerConnection(factory);

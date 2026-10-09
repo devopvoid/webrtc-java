@@ -116,6 +116,18 @@ public class RTCDataChannel extends DisposableNativeObject {
 	public native boolean isNegotiated();
 
 	/**
+	 * Returns the priority of this RTCDataChannel, as set in {@link
+	 * RTCDataChannelInit#priority}. A channel that is announced by the remote
+	 * peer has the priority the remote peer gave it; a negotiated channel has
+	 * the one it was created with on each side.
+	 * A numeric priority that lies between two levels is reported as the
+	 * nearest level above it.
+	 *
+	 * @return The priority of this data channel.
+	 */
+	public native RTCPriorityType getPriority();
+
+	/**
 	 * Returns the ID for this RTCDataChannel. The value is initially {@code
 	 * null}, which is what will be returned if the ID was not provided at
 	 * channel creation time, and the DTLS role of the SCTP transport has not

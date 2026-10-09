@@ -66,7 +66,12 @@ public class RTCDataChannelInit {
 	public String protocol;
 
 	/**
-	 * Priority of this channel.
+	 * Priority of this channel. It is announced to the remote peer when the
+	 * channel opens. WebRTC only uses it to share the SCTP transport between
+	 * channels when SCTP message interleaving is enabled with the field trial
+	 * "WebRTC-DataChannelMessageInterleaving/Enabled/" on both peers; otherwise
+	 * channels take turns regardless of priority. {@code null} means {@link
+	 * RTCPriorityType#LOW}.
 	 */
 	public RTCPriorityType priority = RTCPriorityType.LOW;
 
