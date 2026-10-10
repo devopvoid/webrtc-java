@@ -229,21 +229,34 @@ namespace jni
 
 				scaled_buffer->ScaleFrom(*buffer);
 
-				OnFrame(webrtc::VideoFrame::Builder()
+				webrtc::VideoFrame scaled = webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(scaled_buffer)
 					.set_rotation(webrtc::kVideoRotation_0)
 					.set_timestamp_us(time)
-					.build());
+					.build();
+
+				if (!ProcessFrame(scaled)) {
+					OnFrame(scaled);
+				}
 			}
 			else {
 				// No adaptations needed, just return the frame as is.
-				OnFrame(webrtc::VideoFrame::Builder()
+				webrtc::VideoFrame unscaled = webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(buffer)
 					.set_rotation(webrtc::kVideoRotation_0)
 					.set_timestamp_us(time)
-					.build());
+					.build();
+
+				if (!ProcessFrame(unscaled)) {
+					OnFrame(unscaled);
+				}
 			}
 		}
+	}
+
+	void VideoTrackDesktopSource::DeliverProcessedFrame(const webrtc::VideoFrame & frame)
+	{
+		OnFrame(frame);
 	}
 
 	void VideoTrackDesktopSource::capture()

@@ -205,10 +205,19 @@ namespace jni
             buffer = i420_buffer;
         }
 
-        OnFrame(webrtc::VideoFrame::Builder()
+        webrtc::VideoFrame captured = webrtc::VideoFrame::Builder()
                 .set_video_frame_buffer(buffer)
                 .set_rotation(webrtc::kVideoRotation_0)
                 .set_timestamp_us(translated_timestamp_us)
-                .build());
+                .build();
+
+        if (!ProcessFrame(captured)) {
+            OnFrame(captured);
+        }
+    }
+
+    void VideoTrackDeviceSourceMac::DeliverProcessedFrame(const webrtc::VideoFrame & frame)
+    {
+        OnFrame(frame);
     }
 }

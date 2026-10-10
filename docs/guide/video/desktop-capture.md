@@ -147,6 +147,10 @@ videoSource.stop();
 videoSource.dispose();
 ```
 
+### Processing Frames
+
+A `VideoDesktopSource` can pass its frames through a `VideoProcessor` before they reach its tracks, for example to blank out a part of the screen. It works as for a camera; see [Changing Frames Before They Are Sent](/guide/video/camera-capture#changing-frames-before-they-are-sent).
+
 ### Handling Source Changes
 
 If desktop sources might change during your application's lifecycle (e.g., new windows opening or screens connecting), you should periodically refresh the source list:

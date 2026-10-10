@@ -22,9 +22,11 @@
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/platform_thread.h"
 
+#include "media/video/VideoProcessorHost.h"
+
 namespace jni
 {
-	class VideoTrackDesktopSource : public webrtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback
+	class VideoTrackDesktopSource : public webrtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback, public VideoProcessorHost
 	{
         public:
             VideoTrackDesktopSource();
@@ -47,6 +49,9 @@ namespace jni
 
             // DesktopCapturer::Callback implementation.
             void OnCaptureResult(webrtc::DesktopCapturer::Result result, std::unique_ptr<webrtc::DesktopFrame> frame) override;
+
+            // VideoProcessorHost implementation.
+            void DeliverProcessedFrame(const webrtc::VideoFrame & frame) override;
 
         private:
             void capture();

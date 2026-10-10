@@ -34,8 +34,13 @@ public class VideoDesktopSource extends VideoTrackSource {
 
 	public native void stop();
 
-	public native void dispose();
+	public void dispose() {
+		detachVideoProcessor();
+		disposeInternal();
+	}
 
 	private native void initialize();
+
+	private native void disposeInternal();
 
 }

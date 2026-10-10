@@ -25,6 +25,7 @@
 #include "sdk/objc/base/RTCMacros.h"
 #include "sdk/objc/components/capturer/RTCCameraVideoCapturer.h"
 
+#include "media/video/VideoProcessorHost.h"
 #include "media/video/VideoTrackDeviceSourceBase.h"
 
 
@@ -35,7 +36,7 @@
 
 namespace jni
 {
-	class VideoTrackDeviceSourceMac : public webrtc::AdaptedVideoTrackSource, public VideoTrackDeviceSourceBase
+	class VideoTrackDeviceSourceMac : public webrtc::AdaptedVideoTrackSource, public VideoTrackDeviceSourceBase, public VideoProcessorHost
 	{
 		public:
 			VideoTrackDeviceSourceMac();
@@ -52,6 +53,9 @@ namespace jni
             bool remote() const override;
 
             void OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame);
+
+            // VideoProcessorHost implementation.
+            void DeliverProcessedFrame(const webrtc::VideoFrame & frame) override;
 
 		private:
 			void destroy();

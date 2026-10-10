@@ -189,17 +189,26 @@ namespace jni
 
 			scaled_buffer->ScaleFrom(*frame.video_frame_buffer()->ToI420());
 			
-			broadcaster.OnFrame(webrtc::VideoFrame::Builder()
+			webrtc::VideoFrame scaled = webrtc::VideoFrame::Builder()
 				.set_video_frame_buffer(scaled_buffer)
 				.set_rotation(webrtc::kVideoRotation_0)
 				.set_timestamp_us(frame.timestamp_us())
 				.set_id(frame.id())
-				.build());
+				.build();
+
+			if (!ProcessFrame(scaled)) {
+				broadcaster.OnFrame(scaled);
+			}
 		}
-		else {
+		else if (!ProcessFrame(frame)) {
 			// No adaptations needed, just return the frame as is.
 			broadcaster.OnFrame(frame);
 		}
+	}
+
+	void VideoTrackDeviceSource::DeliverProcessedFrame(const webrtc::VideoFrame & frame)
+	{
+		broadcaster.OnFrame(frame);
 	}
 
 	webrtc::VideoSourceInterface<webrtc::VideoFrame> * VideoTrackDeviceSource::source()
