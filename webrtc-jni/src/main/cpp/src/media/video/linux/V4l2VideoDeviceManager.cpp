@@ -104,6 +104,12 @@ namespace jni
 				}
 
 				const char * node = lib.udev_device_get_devnode(dev);
+
+				if (!node) {
+					lib.udev_device_unref(dev);
+					continue;
+				}
+
 				bool error = false;
 
 				int v4l2_fd = open(node, O_RDONLY);
@@ -238,21 +244,25 @@ namespace jni
 					}
 
 					const char * subsystem = lib.udev_device_get_subsystem(dev);
+					const char * action = lib.udev_device_get_action(dev);
+					const char * node = lib.udev_device_get_devnode(dev);
 
-					if (strcmp(subsystem, UDEV_SUBSYSTEM) != 0) {
+					// Any of these can be missing, and a std::string made from
+					// a null pointer aborts this thread and the process with it.
+					if (!subsystem || !action || !node || strcmp(subsystem, UDEV_SUBSYSTEM) != 0) {
 						lib.udev_device_unref(dev);
 						continue;
 					}
 
-					const char * action = lib.udev_device_get_action(dev);
-					const char * node = lib.udev_device_get_devnode(dev);
-					const char * name = lib.udev_device_get_property_value(dev, "ID_V4L_PRODUCT");
-
 					if (strcmp(action, UDEV_ADD) == 0 && checkDevice(node)) {
-						addDevice(name, node);
+						// The product name is set by udev's v4l_id rule, which
+						// not every system has.
+						const char * name = lib.udev_device_get_property_value(dev, "ID_V4L_PRODUCT");
+
+						addDevice(name ? name : node, node);
 					}
 					else if (strcmp(action, UDEV_REMOVE) == 0) {
-						removeDevice(name, node);
+						removeDevice(node);
 					}
 
 					lib.udev_device_unref(dev);
@@ -270,10 +280,13 @@ namespace jni
 			notifyDeviceConnected(device);
 		}
 
-		void V4l2VideoDeviceManager::removeDevice(const std::string & name, const std::string & descriptor)
+		void V4l2VideoDeviceManager::removeDevice(const std::string & descriptor)
 		{
-			auto predicate = [name, descriptor](const VideoDevicePtr & dev) {
-				return dev->getName() == name && dev->getDescriptor() == descriptor;
+			// The device node identifies the device. Its name may have come
+			// from the driver (enumeration) or from udev (hotplug), which need
+			// not agree, so it is not compared.
+			auto predicate = [descriptor](const VideoDevicePtr & dev) {
+				return dev->getDescriptor() == descriptor;
 			};
 
 			VideoDevicePtr removed = captureDevices.removeDevice(predicate);
