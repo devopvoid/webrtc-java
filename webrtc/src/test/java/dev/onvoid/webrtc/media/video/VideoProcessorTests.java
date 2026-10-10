@@ -223,7 +223,15 @@ class VideoProcessorTests extends TestBase {
 		ScreenCapturer capturer = new ScreenCapturer();
 
 		try {
-			List<DesktopSource> screens = capturer.getDesktopSources();
+			List<DesktopSource> screens;
+
+			try {
+				screens = capturer.getDesktopSources();
+			}
+			catch (Error | RuntimeException e) {
+				// Without a display, as on headless Linux, listing fails.
+				screens = null;
+			}
 
 			assumeFalse(screens == null || screens.isEmpty(), "No screen to capture");
 
