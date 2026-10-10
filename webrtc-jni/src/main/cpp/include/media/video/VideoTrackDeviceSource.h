@@ -26,12 +26,13 @@
 #include "modules/video_capture/video_capture.h"
 #include "modules/video_capture/video_capture_defines.h"
 
+#include "media/video/VideoProcessorHost.h"
 #include "media/video/VideoTrackDeviceSourceBase.h"
 #include "media/video/VideoDevice.h"
 
 namespace jni
 {
-	class VideoTrackDeviceSource : public webrtc::VideoTrackSource, public webrtc::VideoSinkInterface<webrtc::VideoFrame>, public VideoTrackDeviceSourceBase
+	class VideoTrackDeviceSource : public webrtc::VideoTrackSource, public webrtc::VideoSinkInterface<webrtc::VideoFrame>, public VideoTrackDeviceSourceBase, public VideoProcessorHost
 	{
 		public:
 			VideoTrackDeviceSource();
@@ -50,6 +51,9 @@ namespace jni
 
 			// VideoSinkInterface implementation.
 			void OnFrame(const webrtc::VideoFrame & frame) override;
+
+			// VideoProcessorHost implementation.
+			void DeliverProcessedFrame(const webrtc::VideoFrame & frame) override;
 
 		private:
 			bool startCapture();

@@ -88,11 +88,16 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_sto
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_dispose
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_disposeInternal
 (JNIEnv * env, jobject caller)
 {
 	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
 	CHECK_HANDLE(videoSource);
+
+	// A track may keep the source alive; it must not reach the processor
+	// any more.
+	videoSource->SetVideoProcessor(env, nullptr);
+	SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr);
 
 	webrtc::RefCountReleaseStatus status = videoSource->Release();
 
@@ -110,5 +115,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_ini
 {
 	webrtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDesktopSource>();
 
+	SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()));
 	SetHandle(env, caller, videoSource.release());
 }

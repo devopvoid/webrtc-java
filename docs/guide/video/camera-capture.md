@@ -296,6 +296,43 @@ This scaling process works as follows:
 
 Note that scaling is a computationally expensive operation, especially for high-resolution frames. Consider the performance implications when choosing target dimensions and how frequently you scale frames.
 
+### Changing Frames Before They Are Sent
+
+A `VideoProcessor` sits between a camera or desktop source and its tracks, so it can change what is sent and shown: blur a background, draw an overlay, mirror the picture. The source passes each frame to `onFrameCaptured()` after adapting it to what its tracks ask for, so frames already have the size and rate that will be sent. The processor delivers the frames to send to the sink it gets in `setSink()`: the same frame, a new one, or none to drop it.
+
+```java
+videoSource.setVideoProcessor(new VideoProcessor() {
+    private VideoTrackSink sink;
+
+    @Override
+    public void setSink(VideoTrackSink sink) {
+        this.sink = sink;
+    }
+
+    @Override
+    public void onFrameCaptured(VideoFrame frame) {
+        // Captured frames are I420; toI420() returns the same buffer.
+        I420Buffer input = frame.buffer.toI420();
+        NativeI420Buffer output = NativeI420Buffer.allocate(input.getWidth(), input.getHeight());
+
+        // ... write the changed picture into output's planes ...
+
+        VideoFrame processed = new VideoFrame(output, frame.rotation, frame.timestampNs);
+        sink.onVideoFrame(processed);
+        processed.release();
+    }
+});
+```
+
+Rules that keep this correct:
+
+- The frame passed to `onFrameCaptured()` is released when the method returns. To deliver it later, or from another thread, call `frame.retain()` first and `frame.release()` when done.
+- The sink does not take over a delivered frame's reference, so release a frame you created or retained after delivering it.
+- The pixels of a captured frame may be shared with the source. Write changes into a new buffer, as above, instead of into the captured one.
+- `onFrameCaptured()` runs on the capture thread and holds up capturing while it runs. An exception it throws goes to that thread's uncaught exception handler, and the frame is dropped.
+
+`setVideoProcessor(null)` removes the processor. A `CustomVideoSource` does not take a processor: change the frames before pushing them.
+
 ## Best Practices
 
 When implementing camera capture in your application, consider these best practices:

@@ -116,7 +116,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_stop
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_dispose
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_disposeInternal
 (JNIEnv * env, jobject caller)
 {
 #ifdef __APPLE__
@@ -126,6 +126,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_disp
 #endif
 
 	CHECK_HANDLE(videoSource);
+
+	// A track may keep the source alive; it must not reach the processor
+	// any more.
+	videoSource->SetVideoProcessor(env, nullptr);
+	SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr);
 
 	webrtc::RefCountReleaseStatus status = videoSource->Release();
 
@@ -143,9 +148,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_init
 {
 #ifdef __APPLE__
     webrtc::scoped_refptr<jni::VideoTrackDeviceSourceMac> videoSource_ = webrtc::make_ref_counted<jni::VideoTrackDeviceSourceMac>();
+    SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource_.get()));
     SetHandle(env, caller, videoSource_.release());
 #else
     webrtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDeviceSource>();
+    SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()));
     SetHandle(env, caller, videoSource.release());
 #endif
 }

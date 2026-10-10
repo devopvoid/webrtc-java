@@ -41,10 +41,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDeviceSource
-	 * Method:    dispose
+	 * Method:    disposeInternal
 	 * Signature: ()V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_dispose
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_disposeInternal
 	(JNIEnv *, jobject);
 
 	/*
