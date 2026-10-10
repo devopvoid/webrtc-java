@@ -43,6 +43,7 @@
 
 #include "api/ProxyAudioDeviceModule.h"
 #include "media/audio/CustomAudioSource.h"
+#include "media/audio/codec/AudioCodecFactories.h"
 #include "media/video/codec/DefaultVideoCodecFactories.h"
 #include "media/video/codec/VideoDecoderFactoryWrapper.h"
 #include "media/video/codec/VideoEncoderFactoryWrapper.h"
@@ -55,7 +56,8 @@
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 (JNIEnv * env, jobject caller, jobject jFieldTrials, jobject audioModule, jobject audioProcessing,
-	jobject jVideoEncoderFactory, jobject jVideoDecoderFactory, jboolean hardwareEncoders, jboolean hardwareDecoders)
+	jobject jVideoEncoderFactory, jobject jVideoDecoderFactory, jobject jAudioEncoderFactory,
+	jobject jAudioDecoderFactory, jboolean hardwareEncoders, jboolean hardwareDecoders)
 {
 	webrtc::AudioDeviceModule * audioDevModule = (audioModule != nullptr)
 		? GetHandle<webrtc::AudioDeviceModule>(env, audioModule)
@@ -94,6 +96,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			: hardwareDecoders
 				? jni::CreateHardwareVideoDecoderFactory()
 				: jni::CreateDefaultVideoDecoderFactory();
+
+		webrtc::scoped_refptr<webrtc::AudioEncoderFactory> audioEncoderFactory =
+			jni::CreateAudioEncoderFactory(env, jni::JavaLocalRef<jobject>(env, jAudioEncoderFactory));
+		webrtc::scoped_refptr<webrtc::AudioDecoderFactory> audioDecoderFactory =
+			jni::CreateAudioDecoderFactory(env, jni::JavaLocalRef<jobject>(env, jAudioDecoderFactory));
 
 		auto networkThread = webrtc::Thread::CreateWithSocketServer();
 		networkThread->SetName("webrtc_jni_network_thread", nullptr);
@@ -148,8 +155,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		dependencies.event_log_factory = std::make_unique<webrtc::RtcEventLogFactory>();
 		dependencies.env = webrtc::CreateEnvironment(std::move(fieldTrials));
 		dependencies.adm = proxy;
-		dependencies.audio_encoder_factory = webrtc::CreateBuiltinAudioEncoderFactory();
-		dependencies.audio_decoder_factory = webrtc::CreateBuiltinAudioDecoderFactory();
+		dependencies.audio_encoder_factory = audioEncoderFactory;
+		dependencies.audio_decoder_factory = audioDecoderFactory;
 		dependencies.audio_processing_builder = (processing != nullptr)
 			? webrtc::CustomAudioProcessing(webrtc::scoped_refptr<webrtc::AudioProcessing>(processing))
 			: std::make_unique<webrtc::BuiltinAudioProcessingBuilder>();

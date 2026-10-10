@@ -54,6 +54,7 @@ file(GLOB SOURCES_API_AUDIO "src/api/audio/*.cpp")
 file(GLOB SOURCES_MEDIA "src/media/*.cpp")
 file(GLOB SOURCES_MEDIA_AUDIO "src/media/audio/*.cpp")
 file(GLOB SOURCES_MEDIA_AUDIO_OS "src/media/audio/${SOURCE_TARGET}/*.cpp")
+file(GLOB SOURCES_MEDIA_AUDIO_CODEC "src/media/audio/codec/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO "src/media/video/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_CODEC "src/media/video/codec/*.cpp")
 file(GLOB SOURCES_MEDIA_VIDEO_CODEC_OS "src/media/video/codec/${SOURCE_TARGET}/*.cpp")
@@ -81,6 +82,7 @@ list(APPEND SOURCES
     ${SOURCES_MEDIA}
     ${SOURCES_MEDIA_AUDIO}
     ${SOURCES_MEDIA_AUDIO_OS}
+    ${SOURCES_MEDIA_AUDIO_CODEC}
     ${SOURCES_MEDIA_VIDEO}
     ${SOURCES_MEDIA_VIDEO_CODEC}
     ${SOURCES_MEDIA_VIDEO_CODEC_OS}

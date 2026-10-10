@@ -9,6 +9,7 @@ module webrtc.java {
 	exports dev.onvoid.webrtc.logging;
 	exports dev.onvoid.webrtc.media;
 	exports dev.onvoid.webrtc.media.audio;
+	exports dev.onvoid.webrtc.media.audio.codec;
 	exports dev.onvoid.webrtc.media.video;
 	exports dev.onvoid.webrtc.media.video.codec;
 	exports dev.onvoid.webrtc.media.video.desktop;
