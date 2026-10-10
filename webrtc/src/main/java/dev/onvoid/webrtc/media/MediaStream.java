@@ -73,6 +73,15 @@ public class MediaStream extends DisposableNativeObject {
 	 */
 	public native void removeTrack(MediaStreamTrack track);
 
+	/**
+	 * Detaches this object from its native stream.
+	 * <p>
+	 * A MediaStream is handed out by {@link
+	 * dev.onvoid.webrtc.PeerConnectionObserver#onAddTrack} as a view of a
+	 * remote stream that the peer connection owns, and holds no reference to
+	 * it. Disposing it leaves the stream and its tracks as they are. A view is
+	 * valid for as long as the peer connection keeps the stream.
+	 */
 	@Override
 	public native void dispose();
 
