@@ -8,6 +8,8 @@ runs:
     - name: Install required packages
       run: |
         choco install ninja
+        # Meson builds dav1d, the software decoder of AV1 in the media module.
+        python -m pip install meson
       shell: powershell
 
     - name: Install MSYS2 and the FFmpeg build tools

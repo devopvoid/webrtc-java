@@ -48,6 +48,31 @@ namespace
 #endif
 	}
 
+	// The decoder to open for a codec. Software gets the one FFmpeg prefers.
+	// Hardware gets it too, unless it has no hardware configuration: where
+	// another decoder of the codec stands in front of the one that decodes on
+	// the hardware, as libdav1d does for the AV1 decoder of FFmpeg itself (which
+	// has no software path), the hardware has to be given the latter.
+	const AVCodec * FindDecoder(AVCodecID id, bool hardware)
+	{
+		const AVCodec * preferred = avcodec_find_decoder(id);
+
+		if (!hardware || preferred == nullptr || avcodec_get_hw_config(preferred, 0) != nullptr) {
+			return preferred;
+		}
+
+		void * iterator = nullptr;
+
+		while (const AVCodec * candidate = av_codec_iterate(&iterator)) {
+			if (candidate->id == id && av_codec_is_decoder(candidate)
+					&& avcodec_get_hw_config(candidate, 0) != nullptr) {
+				return candidate;
+			}
+		}
+
+		return preferred;
+	}
+
 	bool IsFailure(int result)
 	{
 		return result < 0 && result != AVERROR(EAGAIN) && result != AVERROR_EOF;
@@ -118,7 +143,7 @@ namespace ffmpeg
 	{
 		software_selected_ = false;
 
-		const AVCodec * codec = avcodec_find_decoder(stream_->codecpar->codec_id);
+		const AVCodec * codec = FindDecoder(stream_->codecpar->codec_id, hardware);
 
 		if (codec == nullptr) {
 			return AVERROR_DECODER_NOT_FOUND;

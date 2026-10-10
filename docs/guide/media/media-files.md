@@ -15,21 +15,21 @@ Decoding happens entirely in native code. Frames never travel through Java: the 
 
 ## Adding the Module
 
-The module is part of the normal build, and it builds FFmpeg from a submodule pinned to a release tag, so the submodule has to be present:
+The module is part of the normal build, and it builds FFmpeg and dav1d (the software decoder of AV1) from submodules pinned to release tags, so the submodules have to be present:
 
 ```shell
-git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg
+git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg webrtc-java-media/third-party/dav1d
 mvn install
 ```
 
-Building FFmpeg needs `make` and `nasm`. On Windows they come from MSYS2:
+Building FFmpeg needs `make` and `nasm`, and building dav1d needs [Meson](https://mesonbuild.com) (`pip install meson`) and Ninja. On Windows `make` and `nasm` come from MSYS2:
 
 ```shell
 winget install MSYS2.MSYS2
 C:\msys64\usr\bin\bash -lc "pacman -S --needed make nasm diffutils pkgconf"
 ```
 
-Maven still runs from an ordinary shell; the build enters MSYS2 and the Visual Studio environment on its own. The first build compiles FFmpeg, which takes a while; later builds reuse the install directory.
+Maven still runs from an ordinary shell; the build enters MSYS2 and the Visual Studio environment on its own. The first build compiles FFmpeg and dav1d, which takes a while; later builds reuse the install directory.
 
 Once installed, depend on it alongside `webrtc-java`. It takes two entries: one for the Java API, and one for the natives of the platform you are running on.
 
@@ -206,7 +206,7 @@ It also keeps the native side of the media sources it feeds alive until it is cl
 
 ## Decoding in Hardware
 
-Decoding H.264 and VP9 takes a good part of a processor at high resolutions, and for every stream of a camera wall. A player can decode them on the media engine or GPU of the machine instead. It does so when asked to, with a flag on `MediaFileSource` or `MediaPlayer`:
+Decoding H.264, H.265/HEVC, VP9 and AV1 takes a good part of a processor at high resolutions, and for every stream of a camera wall. A player can decode them on the media engine or GPU of the machine instead. It does so when asked to, with a flag on `MediaFileSource` or `MediaPlayer`:
 
 ```java
 // A file whose video is decoded in hardware, where the platform can.
@@ -220,10 +220,10 @@ MediaPlayer player = new MediaPlayer(new MediaReader(path), videoSource, null, t
 boolean hardware = source.getPlayer().isHardwareDecoding();
 ```
 
-The pictures are the same ones software decoding gives; in the tests, every frame of H.264 and VP9 media is compared with its software counterpart. Hardware decoding is off unless asked for.
+The pictures are the same ones software decoding gives; in the tests, every frame of media in each of these codecs is compared with its software counterpart. Hardware decoding is off unless asked for.
 
 - **Platforms:** macOS through VideoToolbox, Windows through Direct3D 12 (Windows 10 version 2004 or later, with a driver that decodes video through it) and otherwise Direct3D 11, and Linux through NVDEC on NVIDIA GPUs (x86-64 and ARM64; the driver provides `libcuda.so.1` and `libnvcuvid.so.1`, which are loaded when a player asks for hardware). The flag is accepted everywhere; where the platform has no hardware decoder, or the FFmpeg build has none for it (32-bit ARM, VA-API on Intel and AMD GPUs), the video is decoded in software, and `isHardwareDecoding()` says so.
-- **Codecs:** H.264 and VP9. VP8, MPEG-4, MJPEG and H.265/HEVC are decoded in software.
+- **Codecs:** H.264, H.265/HEVC, VP9 and AV1, where the GPU decodes them: a GPU that is a few years old may lack AV1, and on a Mac only an M3 or later has it. VP8, MPEG-4 and MJPEG are decoded in software, and so is AV1 where there is no GPU decoder for it (it is decoded by dav1d, which is built into the FFmpeg libraries).
 - **Fallback:** a stream the hardware does not take, such as a profile it cannot decode, is decoded in software without the player noticing more than `isHardwareDecoding()` turning `false`. If the hardware fails before its first picture, the packets it was sent are decoded again in software and none is lost; if it fails after one, decoding goes on in software from the next key frame. A damaged packet is not taken for a hardware failure after the first picture: as with software decoding, playback stops with an error, and the hardware keeps the stream.
 - **What it saves** is processor time, not the copy: a decoded picture is read back from the media engine into system memory, and converted to I420 as WebRTC wants it. On an Apple M2, a 1080p H.264 stream took 11.6 ms of processor time per frame in software and 1.4 ms in hardware, and a 4K stream 35.7 ms against 4.2 ms, about seven to eight times less. Per frame, software on all cores is faster on the clock, which does not matter at playback speed. Windows gains less: on an NVIDIA GeForce RTX 3080 through Direct3D 12, a 1080p H.264 stream took about 2.1 ms of processor time per frame against 3.6 ms in software, and a 4K stream 5.4 ms against 6.6 ms. Direct3D 11 reads the picture back more slowly and took more than software at 4K (12.4 ms), which is why Direct3D 12 comes first. These are figures for one machine each and for synthetic media, not a promise; try it on your own streams before relying on it.
 
@@ -269,7 +269,7 @@ The FFmpeg build is deliberately small, and carries only what this module plays:
 | | |
 | --- | --- |
 | **Containers** | MP4 and MOV, Matroska and WebM, AVI, MPEG-TS, FLV, WAV, MP3, Ogg, FLAC, AAC |
-| **Video** | H.264, H.265/HEVC, VP8, VP9, MPEG-4 (including Xvid and DivX), Microsoft MPEG-4 v1 to v3, MJPEG |
+| **Video** | H.264, H.265/HEVC, VP8, VP9, AV1, MPEG-4 (including Xvid and DivX), Microsoft MPEG-4 v1 to v3, MJPEG |
 | **Audio** | AAC, MP3, MP2, AC-3, Opus, Vorbis, FLAC, PCM, MS and IMA ADPCM |
 
 Audio of any rate or layout is resampled to what WebRTC takes, which is 48 kHz 16-bit PCM in mono or stereo. Video that decodes to I420 — almost all 8-bit H.264, VP8, VP9 and MPEG-4 — reaches the encoder without being copied; anything else is converted first.

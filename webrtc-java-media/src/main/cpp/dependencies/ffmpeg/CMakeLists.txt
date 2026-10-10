@@ -120,32 +120,48 @@ set(FFMPEG_COMPONENTS
     --enable-protocol=tcp
 )
 
-# Decoding on the media engine or GPU, which a player does when it is asked to.
-# H.264 and VP9 only: the codecs the module plays that platform decoders have
-# too, and ones it can fall back to software for.
+# Decoding on the media engine or GPU, which a player does when it is asked to:
+# H.264, HEVC, VP9 and AV1, the codecs the module plays that platform decoders
+# have too. The native AV1 decoder of FFmpeg has no software path, it exists for
+# the hardware, so AV1 has dav1d to fall back to, which is built beside FFmpeg
+# and linked into libavcodec (see the dav1d build below). FFmpeg prefers it to
+# its own decoder, and the player picks the other one for the hardware.
+list(APPEND FFMPEG_COMPONENTS
+    --enable-decoder=av1
+    --enable-libdav1d
+    --enable-decoder=libdav1d
+)
+
 if(APPLE)
     # VideoToolbox is part of macOS, so nothing is added to what the libraries
-    # need to load.
+    # need to load. AV1 is decoded by the media engine of an M3 or later only,
+    # and a Mac without it takes the software decoder.
     list(APPEND FFMPEG_COMPONENTS
         --enable-videotoolbox
         --enable-hwaccel=h264_videotoolbox
+        --enable-hwaccel=hevc_videotoolbox
         --enable-hwaccel=vp9_videotoolbox
+        --enable-hwaccel=av1_videotoolbox
     )
 elseif(WIN32)
     # Direct3D 11, and 12 further down. DXVA2, on Direct3D 9, would add
-    # nothing on a GPU of the last decade, which decodes H.264 and VP9
-    # through Direct3D 11.
+    # nothing on a GPU of the last decade, which decodes H.264, HEVC, VP9 and
+    # AV1 through Direct3D 11.
     # FFmpeg loads d3d11.dll and dxgi.dll when a device is created, so a
     # machine without a GPU decoder loads the libraries all the same.
     # The decoders offer the D3D11 pixel format, which the *_d3d11va2
     # hwaccels decode into, only when the older *_d3d11va ones are enabled as
-    # well (h264_slice.c, vp9.c), so both are needed.
+    # well (h264_slice.c, vp9.c, hevcdec.c, av1dec.c), so both are needed.
     list(APPEND FFMPEG_COMPONENTS
         --enable-d3d11va
         --enable-hwaccel=h264_d3d11va
+        --enable-hwaccel=hevc_d3d11va
         --enable-hwaccel=vp9_d3d11va
+        --enable-hwaccel=av1_d3d11va
         --enable-hwaccel=h264_d3d11va2
+        --enable-hwaccel=hevc_d3d11va2
         --enable-hwaccel=vp9_d3d11va2
+        --enable-hwaccel=av1_d3d11va2
     )
     # Direct3D 12 as well, which the player tries first: reading a picture
     # back costs about half the processor time it does through Direct3D 11 at
@@ -156,7 +172,9 @@ elseif(WIN32)
     list(APPEND FFMPEG_COMPONENTS
         --enable-d3d12va
         --enable-hwaccel=h264_d3d12va
+        --enable-hwaccel=hevc_d3d12va
         --enable-hwaccel=vp9_d3d12va
+        --enable-hwaccel=av1_d3d12va
     )
 elseif(LINUX AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64|arm64|ARM64)$")
     # NVDEC, on NVIDIA GPUs. FFmpeg loads the CUDA driver and libnvcuvid with
@@ -170,7 +188,9 @@ elseif(LINUX AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64|ar
         --enable-ffnvcodec
         --enable-nvdec
         --enable-hwaccel=h264_nvdec
+        --enable-hwaccel=hevc_nvdec
         --enable-hwaccel=vp9_nvdec
+        --enable-hwaccel=av1_nvdec
     )
 endif()
 
@@ -204,6 +224,49 @@ foreach(PATCH ${FFMPEG_PATCHES})
 
     string(APPEND FFMPEG_COMPONENTS_TEXT "\npatch ${PATCH_NAME} ${PATCH_HASH}")
 endforeach()
+
+#
+# dav1d is the software decoder of AV1, built from the third-party/dav1d
+# submodule with Meson into a prefix of its own, as a static library, which
+# FFmpeg then links into libavcodec. Its version and the options it is built
+# with belong to the install like the components do, so that an install made
+# with another version or other options is built again.
+#
+set(DAV1D_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../third-party/dav1d")
+get_filename_component(DAV1D_SOURCE_DIR "${DAV1D_SOURCE_DIR}" ABSOLUTE)
+
+set(DAV1D_OPTIONS
+    --buildtype=release
+    --default-library=static
+    -Denable_tools=false
+    -Denable_tests=false
+    -Denable_examples=false
+    -Denable_docs=false
+)
+
+if(WIN32)
+    # FFmpeg is compiled without a choice of C runtime, which for MSVC is the
+    # static one, so dav1d has to be as well. The dynamic one, which Meson
+    # takes for a release build, does not link into it.
+    list(APPEND DAV1D_OPTIONS -Db_vscrt=mt)
+endif()
+
+set(DAV1D_VERSION "missing")
+
+if(EXISTS "${DAV1D_SOURCE_DIR}/meson.build")
+    file(STRINGS "${DAV1D_SOURCE_DIR}/meson.build" DAV1D_VERSION_LINE
+        REGEX "^[ ]+version: '[0-9]+\\.[0-9]+\\.[0-9]+'," LIMIT_COUNT 1)
+
+    if(DAV1D_VERSION_LINE MATCHES "'([0-9]+\\.[0-9]+\\.[0-9]+)'")
+        set(DAV1D_VERSION "${CMAKE_MATCH_1}")
+    endif()
+endif()
+
+string(REPLACE ";" " " DAV1D_OPTIONS_TEXT "${DAV1D_OPTIONS}")
+string(APPEND FFMPEG_COMPONENTS_TEXT "\ndav1d ${DAV1D_VERSION} ${DAV1D_OPTIONS_TEXT}")
+
+# The parent names the version in the notice that goes into the platform jar.
+set(DAV1D_VERSION "${DAV1D_VERSION}" PARENT_SCOPE)
 
 # Applies the patches to the source. One that is applied already is left as it
 # is: a build that was cut short does not get to take them off.
@@ -359,7 +422,8 @@ else()
         # shell, so check for them there rather than with find_program.
         get_filename_component(MSYS2_BIN_DIR "${BASH_EXECUTABLE}" DIRECTORY)
 
-        foreach(REQUIRED_TOOL make nasm)
+        # pkgconf is how FFmpeg's configure finds dav1d.
+        foreach(REQUIRED_TOOL make nasm pkgconf)
             if(NOT EXISTS "${MSYS2_BIN_DIR}/${REQUIRED_TOOL}.exe")
                 message(FATAL_ERROR
                     "MSYS2 has no '${REQUIRED_TOOL}', which building FFmpeg needs. Run inside "
@@ -455,6 +519,7 @@ else()
         --disable-avfilter
         --disable-everything
         --disable-autodetect
+        --pkg-config-flags=--static
         ${FFMPEG_COMPONENTS}
     )
 
@@ -591,6 +656,165 @@ else()
         list(APPEND FFMPEG_CONFIGURE_ARGS "--extra-ldflags=\"${FFMPEG_EXTRA_LDFLAGS}\"")
     endif()
 
+    #
+    # dav1d, built before FFmpeg, whose configure finds it through pkg-config.
+    # It is built for the same target as FFmpeg, from what this file already
+    # worked out about it: for the host as it is, with the compiler and flags
+    # in the environment, and for another target with a cross file.
+    #
+    if(NOT EXISTS "${DAV1D_SOURCE_DIR}/meson.build")
+        message(FATAL_ERROR
+            "The dav1d submodule is not checked out. Run:\n"
+            "  git submodule update --init --depth 1 webrtc-java-media/third-party/dav1d")
+    endif()
+
+    find_program(MESON_EXECUTABLE NAMES meson)
+
+    if(NOT MESON_EXECUTABLE)
+        message(FATAL_ERROR
+            "No 'meson' found, which building dav1d needs. Install it, for example with:\n"
+            "  pip install meson\n"
+            "and make sure it is on the PATH. Meson also needs Ninja, which building WebRTC "
+            "needs as well.")
+    endif()
+
+    set(DAV1D_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/dav1d-build")
+    set(DAV1D_INSTALL_DIR "${CMAKE_CURRENT_BINARY_DIR}/dav1d-install")
+
+    file(REMOVE_RECURSE "${DAV1D_BUILD_DIR}" "${DAV1D_INSTALL_DIR}")
+
+    set(DAV1D_SETUP_OPTIONS ${DAV1D_OPTIONS} --libdir=lib)
+    set(DAV1D_ENVIRONMENT "")
+
+    if(FFMPEG_CROSS_COMPILING)
+        if(WIN32)
+            set(DAV1D_SYSTEM windows)
+            set(DAV1D_COMPILER cl)
+        elseif(APPLE)
+            set(DAV1D_SYSTEM darwin)
+            set(DAV1D_COMPILER cc)
+        else()
+            set(DAV1D_SYSTEM linux)
+            set(DAV1D_COMPILER "${CMAKE_C_COMPILER}")
+        endif()
+
+        if(FFMPEG_ARCH STREQUAL "arm64")
+            set(DAV1D_CPU_FAMILY aarch64)
+        else()
+            set(DAV1D_CPU_FAMILY "${FFMPEG_ARCH}")
+        endif()
+
+        # The flags FFmpeg is given go to dav1d as well, as the Meson options
+        # that hold the flags of the C compiler and linker.
+        set(DAV1D_C_ARGS "${FFMPEG_EXTRA_CFLAGS}")
+        set(DAV1D_C_LINK_ARGS "${FFMPEG_EXTRA_LDFLAGS}")
+
+        if(CMAKE_SYSROOT)
+            string(APPEND DAV1D_C_ARGS " --sysroot=${CMAKE_SYSROOT}")
+            string(APPEND DAV1D_C_LINK_ARGS " --sysroot=${CMAKE_SYSROOT}")
+        endif()
+
+        separate_arguments(DAV1D_C_ARGS UNIX_COMMAND "${DAV1D_C_ARGS}")
+        separate_arguments(DAV1D_C_LINK_ARGS UNIX_COMMAND "${DAV1D_C_LINK_ARGS}")
+
+        # Meson reads these as lists of quoted strings.
+        set(DAV1D_C_ARGS_TEXT "")
+        foreach(ARG ${DAV1D_C_ARGS})
+            list(APPEND DAV1D_C_ARGS_TEXT "'${ARG}'")
+        endforeach()
+        string(REPLACE ";" ", " DAV1D_C_ARGS_TEXT "${DAV1D_C_ARGS_TEXT}")
+
+        set(DAV1D_C_LINK_ARGS_TEXT "")
+        foreach(ARG ${DAV1D_C_LINK_ARGS})
+            list(APPEND DAV1D_C_LINK_ARGS_TEXT "'${ARG}'")
+        endforeach()
+        string(REPLACE ";" ", " DAV1D_C_LINK_ARGS_TEXT "${DAV1D_C_LINK_ARGS_TEXT}")
+
+        set(DAV1D_BINARIES "c = ['${DAV1D_COMPILER}']")
+
+        if(CMAKE_AR)
+            string(APPEND DAV1D_BINARIES "\nar = ['${CMAKE_AR}']")
+        endif()
+
+        set(DAV1D_CROSS_FILE "${CMAKE_CURRENT_BINARY_DIR}/dav1d-cross.ini")
+
+        file(WRITE "${DAV1D_CROSS_FILE}"
+"# Generated by CMake. The target dav1d is built for.
+[binaries]
+${DAV1D_BINARIES}
+
+[host_machine]
+system = '${DAV1D_SYSTEM}'
+cpu_family = '${DAV1D_CPU_FAMILY}'
+cpu = '${DAV1D_CPU_FAMILY}'
+endian = 'little'
+
+[properties]
+needs_exe_wrapper = true
+
+[built-in options]
+c_args = [${DAV1D_C_ARGS_TEXT}]
+c_link_args = [${DAV1D_C_LINK_ARGS_TEXT}]
+")
+
+        list(APPEND DAV1D_SETUP_OPTIONS --cross-file "${DAV1D_CROSS_FILE}")
+
+        # No assembler for a foreign architecture, as with FFmpeg above.
+        if(FFMPEG_ARCH STREQUAL "aarch64" OR FFMPEG_ARCH STREQUAL "arm64" OR FFMPEG_ARCH STREQUAL "arm")
+            list(APPEND DAV1D_SETUP_OPTIONS -Denable_asm=false)
+        endif()
+    elseif(NOT WIN32)
+        # On Windows the compiler is the one vcvars puts first on the PATH.
+        if(NOT APPLE AND CMAKE_C_COMPILER)
+            string(APPEND DAV1D_ENVIRONMENT "export CC=\"${CMAKE_C_COMPILER}\"\n")
+        endif()
+        if(NOT FFMPEG_EXTRA_CFLAGS STREQUAL "")
+            string(APPEND DAV1D_ENVIRONMENT "export CFLAGS=\"${FFMPEG_EXTRA_CFLAGS}\"\n")
+        endif()
+        if(NOT FFMPEG_EXTRA_LDFLAGS STREQUAL "")
+            string(APPEND DAV1D_ENVIRONMENT "export LDFLAGS=\"${FFMPEG_EXTRA_LDFLAGS}\"\n")
+        endif()
+    endif()
+
+    # Meson finds the compiler by its path inside the Xcode toolchain, which
+    # skips the /usr/bin/cc shim that points SDKROOT at an SDK, and without one
+    # there is no libSystem to link against: "cannot compile programs". So the
+    # SDK is named here, for Meson only, as FFmpeg's own configure gets it from
+    # the shim.
+    if(APPLE)
+        string(APPEND DAV1D_ENVIRONMENT "export SDKROOT=\"$(xcrun --sdk macosx --show-sdk-path)\"\n")
+    endif()
+
+    string(REPLACE ";" " " DAV1D_SETUP_STR "${DAV1D_SETUP_OPTIONS}")
+
+    to_shell_path("${DAV1D_INSTALL_DIR}" DAV1D_INSTALL_DIR_SH)
+    to_shell_path("${MESON_EXECUTABLE}" MESON_EXECUTABLE_SH)
+
+    # Meson, which is a native program even on Windows, is given the paths in
+    # the form CMake has them in. The static library is installed as libdav1d.a
+    # whatever the compiler, and the linker of MSVC is told to look for
+    # dav1d.lib.
+    set(DAV1D_BUILD_STEPS
+"${DAV1D_ENVIRONMENT}\"${MESON_EXECUTABLE_SH}\" setup \"${DAV1D_BUILD_DIR}\" \"${DAV1D_SOURCE_DIR}\" --prefix=\"${DAV1D_INSTALL_DIR}\" ${DAV1D_SETUP_STR}
+\"${MESON_EXECUTABLE_SH}\" install -C \"${DAV1D_BUILD_DIR}\"
+unset CC CFLAGS LDFLAGS SDKROOT
+")
+
+    if(WIN32)
+        string(APPEND DAV1D_BUILD_STEPS
+"cp \"${DAV1D_INSTALL_DIR_SH}/lib/libdav1d.a\" \"${DAV1D_INSTALL_DIR_SH}/lib/dav1d.lib\"
+")
+    endif()
+
+    # FFmpeg finds dav1d through pkg-config, which --pkg-config-flags=--static
+    # above has it read what a static library links against with as well. Only
+    # our directory is searched: a sysroot or library path of the host would put
+    # the include directory somewhere it is not.
+    string(APPEND DAV1D_BUILD_STEPS
+"export PKG_CONFIG_PATH=\"${DAV1D_INSTALL_DIR_SH}/lib/pkgconfig:$PKG_CONFIG_PATH\"
+unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+")
+
     # Build out of tree so the submodule working tree stays clean. The patches
     # are put on it for the length of the build only.
     set(FFMPEG_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-build")
@@ -674,7 +898,7 @@ unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
     file(WRITE "${FFMPEG_BUILD_SCRIPT}"
 "# Generated by CMake. Builds FFmpeg ${FFMPEG_VERSION} for webrtc-java-media.
 set -e
-${FFMPEG_SHELL_PREAMBLE}cd \"${FFMPEG_BUILD_DIR_SH}\"
+${FFMPEG_SHELL_PREAMBLE}${DAV1D_BUILD_STEPS}cd \"${FFMPEG_BUILD_DIR_SH}\"
 # FFmpeg names its version after the git tag it finds, and a shallow clone of
 # the submodule has none, so it would name itself after a commit hash. Handing
 # make the release the source says it is names it the same way however the
