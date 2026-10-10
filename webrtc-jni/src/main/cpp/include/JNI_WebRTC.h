@@ -22,6 +22,7 @@
 #define PKG_LOG      "dev/onvoid/webrtc/logging/"
 #define PKG_MEDIA    "dev/onvoid/webrtc/media/"
 #define PKG_AUDIO    "dev/onvoid/webrtc/media/audio/"
+#define PKG_AUDIO_CODEC "dev/onvoid/webrtc/media/audio/codec/"
 #define PKG_VIDEO    "dev/onvoid/webrtc/media/video/"
 #define PKG_CODEC    "dev/onvoid/webrtc/media/video/codec/"
 #define PKG_DESKTOP  "dev/onvoid/webrtc/media/video/desktop/"
