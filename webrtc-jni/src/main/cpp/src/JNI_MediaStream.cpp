@@ -31,7 +31,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStream_id
 	webrtc::MediaStreamInterface * stream = GetHandle<webrtc::MediaStreamInterface>(env, caller);
 	CHECK_HANDLEV(stream, nullptr);
 
-	return jni::JavaString::toJava(env, stream->id());
+	return jni::JavaString::toJava(env, stream->id()).release();
 }
 
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getAudioTracks
@@ -110,13 +110,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_dispose
 	webrtc::MediaStreamInterface * stream = GetHandle<webrtc::MediaStreamInterface>(env, caller);
 	CHECK_HANDLE(stream);
 
-	webrtc::RefCountReleaseStatus status = stream->Release();
-
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-	}
-
+	// Java MediaStreams are only made by PeerConnectionObserver::OnAddTrack,
+	// as views of the peer connection's remote streams that hold no reference.
+	// Releasing one here dropped the peer connection's reference instead, and
+	// could free the stream while WebRTC still used it. Only the Java object
+	// is detached. A Java MediaStream made with a reference of its own would
+	// have to be told apart here, as MediaStreamTrack tells its views apart.
 	SetHandle<std::nullptr_t>(env, caller, nullptr);
-
-	stream = nullptr;
 }

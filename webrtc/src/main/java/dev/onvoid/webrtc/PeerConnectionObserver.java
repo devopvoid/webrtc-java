@@ -145,7 +145,8 @@ public interface PeerConnectionObserver {
 	 *
 	 * @param receiver     The created RTP receiver.
 	 * @param mediaStreams Associated remote MediaStreams of the negotiated
-	 *                     media track.
+	 *                     media track. They are views of streams the peer
+	 *                     connection owns; see {@link MediaStream#dispose()}.
 	 */
 	default void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
 	}
