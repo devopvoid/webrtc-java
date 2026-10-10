@@ -15,6 +15,7 @@
  */
 
 #include "media/MediaStreamTrackObserver.h"
+#include "media/MediaStreamTrackView.h"
 #include "api/WebRTCUtils.h"
 #include "JavaFactories.h"
 #include "JavaUtils.h"
@@ -70,15 +71,7 @@ namespace jni
 
 	JavaLocalRef<jobject> MediaStreamTrackObserver::createJavaTrack(JNIEnv * env)
 	{
-		if (const webrtc::AudioTrackInterface * t = dynamic_cast<const webrtc::AudioTrackInterface *>(track)) {
-			return jni::JavaFactories::create(env, t);
-		}
-		else if (const webrtc::VideoTrackInterface * t = dynamic_cast<const webrtc::VideoTrackInterface *>(track)) {
-			return jni::JavaFactories::create(env, t);
-		}
-		else {
-			return jni::JavaLocalRef<jobject>(env, nullptr);
-		}
+		return MediaStreamTrackView::create(env, track);
 	}
 
 	MediaStreamTrackObserver::JavaMediaStreamTrackListenerClass::JavaMediaStreamTrackListenerClass(JNIEnv * env)

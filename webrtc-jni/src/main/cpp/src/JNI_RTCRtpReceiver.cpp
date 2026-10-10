@@ -28,6 +28,7 @@
 
 #include "api/media_stream_interface.h"
 #include "api/rtp_receiver_interface.h"
+#include "media/MediaStreamTrackView.h"
 
 #include <algorithm>
 
@@ -39,14 +40,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getTrack
 
 	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = receiver->track();
 
-	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track.get())) {
-		return jni::JavaFactories::create(env, t).release();
-	}
-	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track.get())) {
-		return jni::JavaFactories::create(env, t).release();
-	}
-
-	return nullptr;
+	// The receiver keeps the track; the Java object is only a view of it.
+	return jni::MediaStreamTrackView::create(env, track.get()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getTransport

@@ -76,6 +76,9 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * (video) or a zero-information-content equivalent. In the case of video,
 	 * the RTCRtpSender SHOULD send one black frame per second. If track is
 	 * {@code null} then the RTCRtpSender does not send.
+	 * <p>
+	 * The returned object is a view of the sender's track; see
+	 * {@link MediaStreamTrack#dispose()}.
 	 *
 	 * @return The media track associated with this sender.
 	 */

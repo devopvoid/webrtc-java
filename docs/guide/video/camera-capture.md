@@ -192,7 +192,8 @@ public class MyPeerConnectionObserver implements PeerConnectionObserver {
 
         // The receiver and transceiver are query results you own; dispose
         // them once the track has been retrieved. The track itself is
-        // unaffected and keeps delivering frames to its sink.
+        // unaffected and keeps delivering frames to its sink. It is a view
+        // of the receiver's track and needs no dispose() of its own.
         receiver.dispose();
         transceiver.dispose();
     }

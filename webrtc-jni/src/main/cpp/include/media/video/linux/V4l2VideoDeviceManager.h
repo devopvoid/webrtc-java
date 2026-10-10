@@ -38,7 +38,7 @@ namespace jni
 
 			private:
 				void addDevice(const std::string & name, const std::string & descriptor);
-				void removeDevice(const std::string & name, const std::string & descriptor);
+				void removeDevice(const std::string & descriptor);
 				void run();
 				bool checkDevice(const std::string & descriptor);
 				int ioctlDevice(int fh, int request, void * arg);
