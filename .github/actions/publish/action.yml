@@ -72,12 +72,19 @@ runs:
     # natives.dir makes webrtc and webrtc-java-media attach the jars of all
     # platforms instead of the host's. skipPublishing suppresses both the
     # bundling and the upload.
+    #
+    # Since Maven 3.10, credentials are only sent to the origins of the
+    # repository with the server's id. The server is "central", which is also
+    # the id of Maven Central itself (repo.maven.apache.org), so the token would
+    # be withheld from central.sonatype.com and every upload fails with 401.
+    # credentialScope=id restores matching by id alone.
     - name: Deploy
       env:
         PROFILES: ${{ inputs.profiles }}
         SKIP_PUBLISHING: ${{ inputs.skip-publishing }}
       run: >
         mvn -B deploy -pl .,webrtc,webrtc-java-media -DskipTests
+        -Dmaven.repository.credentialScope=id
         ${PROFILES:+-P$PROFILES}
         -Dnatives.dir="$PWD/natives"
         -DskipPublishing="$SKIP_PUBLISHING"
