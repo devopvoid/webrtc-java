@@ -39,6 +39,7 @@
 
 #include "api/ProxyAudioDeviceModule.h"
 #include "media/audio/CustomAudioSource.h"
+#include "media/audio/codec/AudioCodecFactories.h"
 #include "media/video/codec/DefaultVideoCodecFactories.h"
 #include "media/video/codec/VideoDecoderFactoryWrapper.h"
 #include "media/video/codec/VideoEncoderFactoryWrapper.h"
@@ -51,7 +52,8 @@
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 (JNIEnv * env, jobject caller, jobject jFieldTrials, jobject audioModule, jobject audioProcessing,
-	jobject jVideoEncoderFactory, jobject jVideoDecoderFactory)
+	jobject jVideoEncoderFactory, jobject jVideoDecoderFactory, jobject jAudioEncoderFactory,
+	jobject jAudioDecoderFactory)
 {
 	webrtc::AudioDeviceModule * audioDevModule = (audioModule != nullptr)
 		? GetHandle<webrtc::AudioDeviceModule>(env, audioModule)
@@ -85,6 +87,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		std::unique_ptr<webrtc::VideoDecoderFactory> videoDecoderFactory = (jVideoDecoderFactory != nullptr)
 			? std::make_unique<jni::VideoDecoderFactoryWrapper>(env, jVideoDecoderFactory)
 			: jni::CreateDefaultVideoDecoderFactory();
+
+		webrtc::scoped_refptr<webrtc::AudioEncoderFactory> audioEncoderFactory =
+			jni::CreateAudioEncoderFactory(env, jni::JavaLocalRef<jobject>(env, jAudioEncoderFactory));
+		webrtc::scoped_refptr<webrtc::AudioDecoderFactory> audioDecoderFactory =
+			jni::CreateAudioDecoderFactory(env, jni::JavaLocalRef<jobject>(env, jAudioDecoderFactory));
 
 		auto networkThread = webrtc::Thread::CreateWithSocketServer();
 		networkThread->SetName("webrtc_jni_network_thread", nullptr);
@@ -141,8 +148,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			workerThread.get(),
 			signalingThread.get(),
 			proxy,
-			webrtc::CreateBuiltinAudioEncoderFactory(),
-			webrtc::CreateBuiltinAudioDecoderFactory(),
+			audioEncoderFactory,
+			audioDecoderFactory,
 			std::move(videoEncoderFactory),
 			std::move(videoDecoderFactory),
 			nullptr,

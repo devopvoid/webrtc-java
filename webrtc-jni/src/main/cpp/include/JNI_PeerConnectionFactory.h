@@ -82,10 +82,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    initialize
-	 * Signature: (Ljava/util/Map;Ldev/onvoid/webrtc/media/audio/AudioDeviceModuleBase;Ldev/onvoid/webrtc/media/audio/AudioProcessing;Ldev/onvoid/webrtc/media/video/codec/VideoEncoderFactory;Ldev/onvoid/webrtc/media/video/codec/VideoDecoderFactory;)V
+	 * Signature: (Ljava/util/Map;Ldev/onvoid/webrtc/media/audio/AudioDeviceModuleBase;Ldev/onvoid/webrtc/media/audio/AudioProcessing;Ldev/onvoid/webrtc/media/video/codec/VideoEncoderFactory;Ldev/onvoid/webrtc/media/video/codec/VideoDecoderFactory;Ldev/onvoid/webrtc/media/audio/codec/AudioEncoderFactory;Ldev/onvoid/webrtc/media/audio/codec/AudioDecoderFactory;)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
-	(JNIEnv *, jobject, jobject, jobject, jobject, jobject, jobject);
+	(JNIEnv *, jobject, jobject, jobject, jobject, jobject, jobject, jobject, jobject);
 
 #ifdef __cplusplus
 }
