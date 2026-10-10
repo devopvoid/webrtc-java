@@ -43,7 +43,8 @@ public class MediaStream extends DisposableNativeObject {
 
 	/**
 	 * Returns an array of MediaStreamTrack objects representing the audio
-	 * tracks in this stream.
+	 * tracks in this stream. They are views of the stream's tracks; see
+	 * {@link MediaStreamTrack#dispose()}.
 	 *
 	 * @return The audio tracks in this stream.
 	 */
@@ -51,7 +52,8 @@ public class MediaStream extends DisposableNativeObject {
 
 	/**
 	 * Returns an array of MediaStreamTrack objects representing the video
-	 * tracks in this stream.
+	 * tracks in this stream. They are views of the stream's tracks; see
+	 * {@link MediaStreamTrack#dispose()}.
 	 *
 	 * @return The video tracks in this stream.
 	 */

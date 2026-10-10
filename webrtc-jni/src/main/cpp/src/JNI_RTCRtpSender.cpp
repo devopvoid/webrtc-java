@@ -26,6 +26,7 @@
 #include "api/EncodedFrameTransformer.h"
 #include "api/RTCDtmfSender.h"
 #include "api/rtp_sender_interface.h"
+#include "media/MediaStreamTrackView.h"
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTrack
 (JNIEnv * env, jobject caller)
@@ -35,14 +36,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTrack
 
 	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = sender->track();
 
-	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track.get())) {
-		return jni::JavaFactories::create(env, t).release();
-	}
-	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track.get())) {
-		return jni::JavaFactories::create(env, t).release();
-	}
-
-	return nullptr;
+	// The sender keeps the track; the Java object is only a view of it.
+	return jni::MediaStreamTrackView::create(env, track.get()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTransport

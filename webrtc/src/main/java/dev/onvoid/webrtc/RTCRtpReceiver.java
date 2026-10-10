@@ -41,6 +41,9 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	 * track.stop() is final, although clones are not affected. Since
 	 * receiver.track.stop() does not implicitly stop receiver, Receiver Reports
 	 * continue to be sent.
+	 * <p>
+	 * The returned object is a view of the receiver's track; see
+	 * {@link MediaStreamTrack#dispose()}.
 	 *
 	 * @return The media track associated with this receiver.
 	 */

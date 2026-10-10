@@ -20,6 +20,7 @@
 #include "JavaFactories.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "media/MediaStreamTrackView.h"
 
 #include "api/media_stream_interface.h"
 #include "rtc_base/logging.h"
@@ -42,7 +43,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getAudio
 	jni::JavaLocalRef<jobjectArray> objectArray;
 
 	try {
-		objectArray = jni::createObjectArray(env, stream->GetAudioTracks());
+		objectArray = jni::MediaStreamTrackView::createArray(env, stream->GetAudioTracks());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -60,7 +61,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getVideo
 	jni::JavaLocalRef<jobjectArray> objectArray;
 
 	try {
-		objectArray = jni::createObjectArray(env, stream->GetVideoTracks());
+		objectArray = jni::MediaStreamTrackView::createArray(env, stream->GetVideoTracks());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

@@ -23,6 +23,7 @@
 #include "WebRTCContext.h"
 
 #include "media/MediaStreamTrackObserver.h"
+#include "media/MediaStreamTrackView.h"
 
 #include "api/media_stream_interface.h"
 #include "rtc_base/logging.h"
@@ -32,6 +33,13 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 {
 	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
 	CHECK_HANDLE(track);
+
+	// A view holds no reference to the track and does not own its listeners:
+	// the track lives on with whatever owns it, so only this object detaches.
+	if (jni::MediaStreamTrackView::isView(env, caller)) {
+		SetHandle<std::nullptr_t>(env, caller, nullptr);
+		return;
+	}
 
 	// Listeners still registered are taken off the track before it goes. Their
 	// entries are keyed by this track's address, which a later track can be
