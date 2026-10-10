@@ -54,6 +54,21 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeSinkI
 	}
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_setVolumeInternal
+(JNIEnv * env, jobject caller, jdouble volume)
+{
+	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+	CHECK_HANDLE(track);
+
+	// Only the source of a remote track, a RemoteAudioSource, applies the
+	// volume; the source of a local track ignores it.
+	webrtc::AudioSourceInterface * source = track->GetSource();
+
+	if (source != nullptr) {
+		source->SetVolume(static_cast<double>(volume));
+	}
+}
+
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_getSignalLevel
 (JNIEnv * env, jobject caller)
 {

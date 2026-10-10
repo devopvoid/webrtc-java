@@ -16,10 +16,12 @@
 
 #include "JNI_RTCRtpReceiver.h"
 #include "api/RTCRtpParameters.h"
+#include "api/RTCRtpReceiverObserver.h"
 #include "api/RTCRtpContributingSource.h"
 #include "api/RTCRtpSynchronizationSource.h"
 #include "JavaFactories.h"
 #include "JavaList.h"
+#include "JavaString.h"
 #include "JavaUtils.h"
 
 #include "api/EncodedFrameTransformer.h"
@@ -149,11 +151,52 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_requestKeyFrame
 	}
 }
 
+JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getId
+(JNIEnv * env, jobject caller)
+{
+	webrtc::RtpReceiverInterface * receiver = GetHandle<webrtc::RtpReceiverInterface>(env, caller);
+	CHECK_HANDLEV(receiver, nullptr);
+
+	return jni::JavaString::toJava(env, receiver->id()).release();
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_setObserver
+(JNIEnv * env, jobject caller, jobject jObserver)
+{
+	webrtc::RtpReceiverInterface * receiver = GetHandle<webrtc::RtpReceiverInterface>(env, caller);
+	CHECK_HANDLE(receiver);
+
+	try {
+		jni::RTCRtpReceiverObserver * observer = nullptr;
+
+		if (jObserver != nullptr) {
+			observer = new jni::RTCRtpReceiverObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+		}
+
+		// Runs on the signaling thread, which is also the thread that calls
+		// the observer, so the previous one is out of use once this returns.
+		receiver->SetObserver(observer);
+
+		ReplaceNativeObserver(env, caller, "observerHandle", observer);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_dispose
 (JNIEnv * env, jobject caller)
 {
 	webrtc::RtpReceiverInterface * receiver = GetHandle<webrtc::RtpReceiverInterface>(env, caller);
 	CHECK_HANDLE(receiver);
+
+	// WebRTC must let go of an observer set through this object before it is
+	// deleted.
+	if (GetHandle<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle") != nullptr) {
+		receiver->SetObserver(nullptr);
+
+		ClearNativeObserver<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle");
+	}
 
 	// Unlike e.g. MediaStreamTrack, an RTCRtpReceiver is not exclusively
 	// owned by one Java wrapper: the owning RtpTransceiver keeps its own

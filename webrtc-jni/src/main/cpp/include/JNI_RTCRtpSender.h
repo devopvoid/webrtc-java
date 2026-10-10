@@ -81,6 +81,30 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCRtpSender
+	 * Method:    getId
+	 * Signature: ()Ljava/lang/String;
+	 */
+	JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getId
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpSender
+	 * Method:    setObserver
+	 * Signature: (Ldev/onvoid/webrtc/RTCRtpSenderObserver;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setObserver
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpSender
+	 * Method:    getStreams
+	 * Signature: ()Ljava/util/List;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getStreams
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpSender
 	 * Method:    dispose
 	 * Signature: ()V
 	 */

@@ -331,6 +331,28 @@ RTCRtpSender videoSender = peerConnection.addTrack(videoTrack, streamIds);
 RTCRtpSender audioSender = peerConnection.addTrack(audioTrack, streamIds);
 ```
 
+### Receiving Tracks
+
+A remote track arrives in `onTrack` with the transceiver that carries it. To learn when its media actually starts flowing, for example to show a video only once there is something to show, set an `RTCRtpReceiverObserver`; an `RTCRtpSenderObserver` does the same for the first packet a sender sends. Either is called right away when that has already happened:
+
+```java
+@Override
+public void onTrack(RTCRtpTransceiver transceiver) {
+    RTCRtpReceiver receiver = transceiver.getReceiver();
+
+    receiver.setObserver(mediaType -> System.out.println("First " + mediaType + " packet received"));
+
+    MediaStreamTrack track = receiver.getTrack();
+
+    if (track instanceof AudioTrack) {
+        // Playout volume of this remote track, 0 to 10; 1 plays it as received.
+        ((AudioTrack) track).setVolume(0.5);
+    }
+}
+```
+
+An observer belongs to the `RTCRtpReceiver` or `RTCRtpSender` object it was set through, and is removed when that object is disposed. `getId()` identifies a sender or receiver, and `RTCRtpSender.getStreams()` returns the stream IDs its track was added with.
+
 ## Cleanup
 
 Always properly dispose of resources when you're done:
