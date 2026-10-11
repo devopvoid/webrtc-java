@@ -56,6 +56,7 @@ namespace jni
 		decltype(&::vaDeriveImage) DeriveImage = nullptr;
 		decltype(&::vaCreateImage) CreateImage = nullptr;
 		decltype(&::vaPutImage) PutImage = nullptr;
+		decltype(&::vaGetImage) GetImage = nullptr;
 		decltype(&::vaDestroyImage) DestroyImage = nullptr;
 	};
 
@@ -84,6 +85,9 @@ namespace jni
 			// Whether the driver encodes the profile, 4:2:0 at constant
 			// bitrate, and with which entrypoint, full or low-power.
 			bool EncodeEntrypoint(VAProfile profile, VAEntrypoint * entrypoint) const;
+
+			// Whether the driver decodes the profile into 4:2:0 surfaces.
+			bool Decodes(VAProfile profile) const;
 
 			// The driver, e.g. "Intel iHD driver for Intel(R) Gen Graphics".
 			const std::string & Vendor() const;

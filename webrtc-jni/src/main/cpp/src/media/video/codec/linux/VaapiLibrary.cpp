@@ -90,6 +90,7 @@ namespace jni
 			&& va.Resolve("vaDeriveImage", api.DeriveImage)
 			&& va.Resolve("vaCreateImage", api.CreateImage)
 			&& va.Resolve("vaPutImage", api.PutImage)
+			&& va.Resolve("vaGetImage", api.GetImage)
 			&& va.Resolve("vaDestroyImage", api.DestroyImage);
 
 		if (!resolved) {
@@ -221,6 +222,37 @@ namespace jni
 	bool VaapiLibrary::EncodeEntrypoint(VAProfile profile, VAEntrypoint * supported) const
 	{
 		return SupportsEncoding(display, profile, supported);
+	}
+
+	bool VaapiLibrary::Decodes(VAProfile profile) const
+	{
+		const int maxEntrypoints = api.MaxNumEntrypoints(display);
+
+		if (maxEntrypoints <= 0) {
+			return false;
+		}
+
+		std::vector<VAEntrypoint> entrypoints(maxEntrypoints);
+		int count = 0;
+
+		if (api.QueryConfigEntrypoints(display, profile, entrypoints.data(), &count) != VA_STATUS_SUCCESS) {
+			return false;
+		}
+
+		entrypoints.resize(count);
+
+		if (std::find(entrypoints.begin(), entrypoints.end(), VAEntrypointVLD) == entrypoints.end()) {
+			return false;
+		}
+
+		VAConfigAttrib attribute = {};
+		attribute.type = VAConfigAttribRTFormat;
+
+		if (api.GetConfigAttributes(display, profile, VAEntrypointVLD, &attribute, 1) != VA_STATUS_SUCCESS) {
+			return false;
+		}
+
+		return attribute.value != VA_ATTRIB_NOT_SUPPORTED && (attribute.value & VA_RT_FORMAT_YUV420);
 	}
 
 	const std::string & VaapiLibrary::Vendor() const
