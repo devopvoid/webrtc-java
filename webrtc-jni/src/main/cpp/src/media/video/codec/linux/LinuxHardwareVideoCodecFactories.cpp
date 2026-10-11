@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "media/video/codec/HardwareCodecOptions.h"
 #include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
 #include "media/video/codec/linux/VaapiVideoEncoderFactory.h"
@@ -31,7 +32,9 @@ namespace jni
 		if (auto nvenc = NvencVideoEncoderFactory::Create()) {
 			factories.push_back(std::move(nvenc));
 		}
-		if (auto vaapi = VaapiVideoEncoderFactory::Create()) {
+		// The VA-API codecs beyond H.264 only if asked for: they have not
+		// been tested on an Intel or AMD GPU yet.
+		if (auto vaapi = VaapiVideoEncoderFactory::Create(IsExperimentalVaapiEnabled())) {
 			factories.push_back(std::move(vaapi));
 		}
 

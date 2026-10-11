@@ -77,8 +77,13 @@ namespace jni
 
 			VADisplay Display() const;
 
-			// The encode entrypoint the driver offers, full or low-power.
+			// The encode entrypoint the driver offers for H.264, full or
+			// low-power.
 			VAEntrypoint Entrypoint() const;
+
+			// Whether the driver encodes the profile, 4:2:0 at constant
+			// bitrate, and with which entrypoint, full or low-power.
+			bool EncodeEntrypoint(VAProfile profile, VAEntrypoint * entrypoint) const;
 
 			// The driver, e.g. "Intel iHD driver for Intel(R) Gen Graphics".
 			const std::string & Vendor() const;
@@ -90,7 +95,7 @@ namespace jni
 
 			bool Load();
 			bool OpenDisplay();
-			bool SupportsEncoding(VADisplay display, VAEntrypoint * entrypoint) const;
+			bool SupportsEncoding(VADisplay display, VAProfile profile, VAEntrypoint * entrypoint) const;
 
 		private:
 			DynamicLibrary va;

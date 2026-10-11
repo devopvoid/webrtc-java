@@ -132,7 +132,7 @@ namespace jni
 			if (nodeDisplay != nullptr && api.Initialize(nodeDisplay, &major, &minor) == VA_STATUS_SUCCESS) {
 				VAEntrypoint nodeEntrypoint;
 
-				if (SupportsEncoding(nodeDisplay, &nodeEntrypoint)) {
+				if (SupportsEncoding(nodeDisplay, VAProfileH264ConstrainedBaseline, &nodeEntrypoint)) {
 					fd = nodeFd;
 					display = nodeDisplay;
 					entrypoint = nodeEntrypoint;
@@ -152,7 +152,7 @@ namespace jni
 		return false;
 	}
 
-	bool VaapiLibrary::SupportsEncoding(VADisplay nodeDisplay, VAEntrypoint * supported) const
+	bool VaapiLibrary::SupportsEncoding(VADisplay nodeDisplay, VAProfile profile, VAEntrypoint * supported) const
 	{
 		const int maxEntrypoints = api.MaxNumEntrypoints(nodeDisplay);
 
@@ -163,7 +163,7 @@ namespace jni
 		std::vector<VAEntrypoint> entrypoints(maxEntrypoints);
 		int count = 0;
 
-		if (api.QueryConfigEntrypoints(nodeDisplay, VAProfileH264ConstrainedBaseline, entrypoints.data(),
+		if (api.QueryConfigEntrypoints(nodeDisplay, profile, entrypoints.data(),
 			&count) != VA_STATUS_SUCCESS)
 		{
 			return false;
@@ -183,7 +183,7 @@ namespace jni
 			attributes[0].type = VAConfigAttribRTFormat;
 			attributes[1].type = VAConfigAttribRateControl;
 
-			if (api.GetConfigAttributes(nodeDisplay, VAProfileH264ConstrainedBaseline, candidate, attributes, 2) !=
+			if (api.GetConfigAttributes(nodeDisplay, profile, candidate, attributes, 2) !=
 				VA_STATUS_SUCCESS)
 			{
 				continue;
@@ -216,6 +216,11 @@ namespace jni
 	VAEntrypoint VaapiLibrary::Entrypoint() const
 	{
 		return entrypoint;
+	}
+
+	bool VaapiLibrary::EncodeEntrypoint(VAProfile profile, VAEntrypoint * supported) const
+	{
+		return SupportsEncoding(display, profile, supported);
 	}
 
 	const std::string & VaapiLibrary::Vendor() const
