@@ -16,6 +16,9 @@ runs:
         # nasm is what FFmpeg assembles its x86 code with, which the Intel
         # build needs even though the runner itself is Apple Silicon.
         brew install nasm
+        # Meson and Ninja build dav1d, the software decoder of AV1 in the media
+        # module, and FFmpeg's configure finds it with pkgconf.
+        brew install meson ninja pkgconf
       shell: bash
 
     - name: Select Xcode version

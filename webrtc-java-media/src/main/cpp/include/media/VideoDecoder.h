@@ -39,11 +39,16 @@ namespace ffmpeg
 	// with swscale first, which costs one copy and is the price of the format
 	// rather than of this design.
 	//
-	// Asked to, it decodes H.264 and VP9 on the media engine or GPU instead.
+	// Asked to, it decodes H.264, HEVC, VP9 and AV1 on the media engine or GPU
+	// instead.
 	// The pictures that come out are the same; they are read back into system
 	// memory and converted, so the gain is processor time, not the copy. A
 	// stream the hardware cannot decode is decoded in software, without the
 	// caller noticing more than IsHardware turning false.
+	//
+	// HEVC is the exception: it is decoded on the hardware only, whether that
+	// is asked for or not, and never in software. Where the hardware cannot
+	// decode it, opening or decoding fails.
 	class VideoDecoder
 	{
 		public:
@@ -56,6 +61,8 @@ namespace ffmpeg
 			// Opens a decoder for the given stream, which must outlive this
 			// decoder, in hardware if that is asked for and the platform has
 			// a hardware decoder for the codec, and in software otherwise.
+			// HEVC goes to the hardware in any case, and without a hardware
+			// decoder for it the result is AVERROR_DECODER_NOT_FOUND.
 			// Returns 0 or a negative AVERROR.
 			int Open(const AVStream * stream, bool hardware = false);
 

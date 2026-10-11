@@ -104,21 +104,30 @@ public class MediaPlayer implements AutoCloseable {
 	 * media sources. At least one of them has to be present; media of a kind
 	 * with no source is decoded and dropped.
 	 * <p>
-	 * With {@code hardwareDecoding} the player decodes H.264 and VP9 video on
-	 * the media engine or GPU of the machine where there is one the platform
+	 * With {@code hardwareDecoding} the player decodes H.264, H.265/HEVC, VP9
+	 * and AV1 video on the media engine or GPU of the machine where there is one the platform
 	 * offers (VideoToolbox on macOS, Direct3D 12 or 11 on Windows, NVDEC on
 	 * NVIDIA GPUs on Linux), which takes less processor time, by an amount
 	 * that depends on the platform and the stream. The
 	 * pictures are the same as software decoding gives. A stream the
 	 * hardware does not take, or a codec it has no decoder for, is decoded in
 	 * software; {@link #isHardwareDecoding()} tells which it is.
+	 * <p>
+	 * H.265/HEVC is decoded in hardware only, with or without
+	 * {@code hardwareDecoding}, and never in software. Without a hardware
+	 * decoder for it the player cannot be created, and if the hardware fails
+	 * while playing, or does not take the stream, playback stops with an
+	 * error.
 	 *
 	 * @param reader           The source to play, which this player takes over.
 	 * @param videoSource      Where video goes, or {@code null} for none.
 	 * @param audioSource      Where audio goes, or {@code null} for none.
 	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
 	 *
-	 * @throws IOException              if the source cannot be decoded.
+	 * @throws IOException              if the source cannot be decoded,
+	 *                                  including HEVC on a machine without a
+	 *                                  hardware decoder for it.
 	 * @throws IllegalArgumentException if both sources are {@code null}.
 	 */
 	public MediaPlayer(MediaReader reader, CustomVideoSource videoSource,
@@ -215,7 +224,8 @@ public class MediaPlayer implements AutoCloseable {
 	 * less than was asked for: the platform may have no hardware decoder for
 	 * the codec, or the hardware may not take the stream, in which case the
 	 * player decodes in software. It can turn {@code false} while playing, if
-	 * the hardware decoder fails, and never turns {@code true} again.
+	 * the hardware decoder fails, and never turns {@code true} again. For
+	 * HEVC, which is decoded in hardware only, it is always {@code true}.
 	 *
 	 * @return {@code true} if video is decoded in hardware.
 	 */

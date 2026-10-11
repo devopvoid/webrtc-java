@@ -31,6 +31,7 @@ namespace
 	std::atomic<int> error_code{ 0 };
 	std::atomic<int> packets_left{ 0 };
 	std::atomic<int> software_threads{ 0 };
+	std::atomic<bool> devices_hidden{ false };
 }
 
 namespace ffmpeg
@@ -48,10 +49,16 @@ namespace ffmpeg
 		mode.store(kDrain);
 	}
 
+	void HardwareFault::HideDevices()
+	{
+		devices_hidden.store(true);
+	}
+
 	void HardwareFault::Disarm()
 	{
 		mode.store(kNone);
 		software_threads.store(0);
+		devices_hidden.store(false);
 	}
 
 	void HardwareFault::NoteSoftwareDecoder(int threads)
@@ -90,5 +97,10 @@ namespace ffmpeg
 		mode.store(kNone);
 
 		return error_code.load();
+	}
+
+	bool HardwareFault::DevicesHidden()
+	{
+		return devices_hidden.load();
 	}
 }

@@ -54,7 +54,14 @@ final class HardwareFault {
 	static native void failDrain();
 
 	/**
-	 * Forgets any fault, and the thread count of {@link #softwareThreads()}.
+	 * Makes the platform look as if it had no hardware device to decode
+	 * with, until {@link #disarm()}: a machine without a GPU decoder.
+	 */
+	static native void hideDevices();
+
+	/**
+	 * Forgets any fault and hidden devices, and the thread count of
+	 * {@link #softwareThreads()}.
 	 */
 	static native void disarm();
 

@@ -171,6 +171,24 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             "${FFMPEG_NOTICE_FILE}" "${FFMPEG_LICENSES_DIR}/NOTICE.txt"
     COMMENT "Collecting the FFmpeg license and notice for the platform jar")
 
+# dav1d, the software decoder of AV1, is linked into libavcodec, and its license
+# asks for its text to go along with the binaries.
+set(DAV1D_LICENSE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/../../../third-party/dav1d/COPYING")
+
+if(NOT EXISTS "${DAV1D_LICENSE_FILE}")
+    message(FATAL_ERROR
+        "${DAV1D_LICENSE_FILE} is missing, and the platform jar must not ship dav1d "
+        "without it. Check out the dav1d submodule.")
+endif()
+
+set(DAV1D_LICENSES_DIR "${NATIVES_DIR}/META-INF/licenses/dav1d")
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${DAV1D_LICENSES_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${DAV1D_LICENSE_FILE}" "${DAV1D_LICENSES_DIR}/COPYING"
+    COMMENT "Collecting the dav1d license for the platform jar")
+
 # The headers FFmpeg was built against for NVDEC have licenses of their own,
 # which go along as well.
 if(FFMPEG_NVDEC)

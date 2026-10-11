@@ -62,7 +62,7 @@ This module is part of the normal build, and it builds FFmpeg from a submodule, 
 has to be present:
 
 ```shell
-git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg
+git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg webrtc-java-media/third-party/dav1d
 mvn install
 ```
 
@@ -76,6 +76,10 @@ in `C:/msys64` unless `MSYS2_ROOT` points somewhere else:
 winget install MSYS2.MSYS2
 C:\msys64\usr\bin\bash -lc "pacman -S --needed make nasm diffutils pkgconf"
 ```
+
+dav1d, the software decoder of AV1, is built first and linked into FFmpeg. Building it needs Meson
+and Ninja (`pip install meson`, with `meson` on the `PATH`; `ninja` is there for the WebRTC build
+already).
 
 Maven still runs from an ordinary shell. The build enters MSYS2 and the Visual Studio environment
 on its own, because FFmpeg's configure needs a POSIX shell that can also see `cl` and `link`.

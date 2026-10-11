@@ -38,6 +38,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_HardwareFault_failDra
 	ffmpeg::HardwareFault::FailDrain(AVERROR_EXTERNAL);
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_HardwareFault_hideDevices
+(JNIEnv * env, jclass caller)
+{
+	ffmpeg::HardwareFault::HideDevices();
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_HardwareFault_disarm
 (JNIEnv * env, jclass caller)
 {

@@ -14,6 +14,18 @@ separate shared libraries, which you may replace with your own build of a
 compatible FFmpeg version.
 
 
+dav1d
+-----
+
+libavcodec contains dav1d @DAV1D_VERSION@ (https://code.videolan.org/videolan/dav1d),
+the AV1 decoder of the VideoLAN project, linked in statically. dav1d is
+licensed under the BSD 2-Clause license, whose text is in
+META-INF/licenses/dav1d/COPYING of this jar. It is built from the release tag
+@DAV1D_VERSION@, without modifications:
+
+  https://code.videolan.org/videolan/dav1d/-/tree/@DAV1D_VERSION@
+
+
 Source code
 -----------
 
@@ -37,3 +49,19 @@ Patents
 Some of the formats FFmpeg decodes, such as H.264, H.265/HEVC and AAC, may be
 covered by patents in some countries. Whether your use of them needs a patent
 license is for you to determine.
+
+
+HEVC/H.265
+----------
+
+Disclaimer regarding HEVC/H.265:
+This project decodes HEVC/H.265 video through hardware acceleration only, using
+the hardware decoders of the operating system or GPU (VideoToolbox, Direct3D
+11/12, NVDEC). It does not include, bundle, or distribute any software-based
+HEVC encoder (such as x265), and it never decodes HEVC in software. The FFmpeg
+libraries in the webrtc-java-media platform jars that decode HEVC in hardware
+(all but 32-bit ARM Linux) contain FFmpeg's HEVC decoder, because FFmpeg's
+hardware decoding runs through it: it reads the stream's headers and passes the
+coded data to the hardware decoder, which decodes the pictures. End-users and distributors are responsible for ensuring that the
+underlying operating system or hardware platform holds a valid license for HEVC
+playback and encoding.

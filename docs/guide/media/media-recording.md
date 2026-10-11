@@ -48,6 +48,8 @@ The container follows the file name:
 
 A name FFmpeg does not know gets Matroska. A track whose codec the file cannot hold, VP8 in MP4 for example, is left out and reported as a warning, and the rest is recorded.
 
+Matroska has no codec ID of its own for G.711, so it is stored as Windows audio (`A_MS/ACM`), the way FFmpeg itself stores it. Players built on FFmpeg, such as VLC and mpv, play it; some others do not.
+
 ## Following a Recording
 
 A `MediaRecorderListener` hears when the file begins, what was left out, and whether writing failed:
