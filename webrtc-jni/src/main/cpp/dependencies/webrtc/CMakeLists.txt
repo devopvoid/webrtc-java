@@ -76,17 +76,22 @@ function(print text)
 endfunction()
 
 function(execute_command)
-    cmake_parse_arguments(CMD_ARGS "" "WORKING_DIRECTORY" "COMMAND" ${ARGN})
+    cmake_parse_arguments(CMD_ARGS "" "WORKING_DIRECTORY;RESULT_VARIABLE" "COMMAND" ${ARGN})
 
     execute_process(
         COMMAND ${SHELLCOMMAND} ${CMD_ARGS_COMMAND}
         WORKING_DIRECTORY "${CMD_ARGS_WORKING_DIRECTORY}"
         OUTPUT_VARIABLE COMMAND_OUTPUT
         ERROR_VARIABLE COMMAND_ERROR
+        RESULT_VARIABLE COMMAND_RESULT
     )
 
     print("${COMMAND_OUTPUT}")
     print("${COMMAND_ERROR}")
+
+    if(CMD_ARGS_RESULT_VARIABLE)
+        set(${CMD_ARGS_RESULT_VARIABLE} "${COMMAND_RESULT}" PARENT_SCOPE)
+    endif()
 endfunction()
 
 function(sysroot_install)
@@ -129,6 +134,74 @@ message(STATUS "WebRTC target: ${SOURCE_TARGET} ${TARGET_CPU}")
 message(STATUS "WebRTC build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "WebRTC use custom libcxx: ${CUSTOM_LIBCXX}")
 message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
+
+# The GN args WebRTC is built with. They come before the check for a compiled
+# WebRTC below, because a build is only used if it was made with these.
+set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" \
+use_custom_libcxx=${CUSTOM_LIBCXX} \
+is_clang=true \
+is_debug=false \
+is_component_build=false \
+treat_warnings_as_errors=false \
+rtc_build_tools=false \
+rtc_use_perfetto=false \
+rtc_use_pipewire=false \
+rtc_enable_protobuf=false \
+rtc_build_examples=false \
+rtc_include_tests=false \
+use_rtti=true \
+rtc_use_h264=true \
+rtc_use_h265=true \
+ffmpeg_branding=\"Chrome\" \
+symbol_level=0")
+
+if(APPLE)
+    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
+elseif(LINUX)
+    # Build the PipeWire/xdg-desktop-portal capturer for Wayland sessions. The
+    # X11 capturer stays in as well; WebRTC picks PipeWire at runtime only when
+    # IsRunningUnderWayland() is true. rtc_link_pipewire stays false (default),
+    # so libpipewire is dlopen'd and X11-only systems gain no hard dependency.
+    string(REPLACE "rtc_use_pipewire=false" "rtc_use_pipewire=true" COMPILE_ARGS "${COMPILE_ARGS}")
+
+    if(${TARGET_CPU} STREQUAL "arm")
+        set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
+    elseif(${TARGET_CPU} STREQUAL "arm64")
+        set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm64\"")
+    endif()
+endif()
+
+# Written next to a compiled WebRTC, in the build tree and in the install
+# directory, naming the GN args it was built with. A build without it, or with
+# other args, is not used and WebRTC is built again: it would lack what the
+# args enable (H.265 for one), or have defines, and with them struct layouts,
+# that differ from those the JNI code is compiled with below. Changing an arg
+# here thus rebuilds WebRTC on its own; CI's cache key covers this file.
+set(WEBRTC_ARGS_FILE "webrtc-java-gn-args.txt")
+
+function(webrtc_args_match DIRECTORY RESULT)
+    set(MATCHES FALSE)
+
+    if(EXISTS "${DIRECTORY}/${WEBRTC_ARGS_FILE}")
+        file(READ "${DIRECTORY}/${WEBRTC_ARGS_FILE}" RECORDED_ARGS)
+
+        if(RECORDED_ARGS STREQUAL COMPILE_ARGS)
+            set(MATCHES TRUE)
+        endif()
+    endif()
+
+    set(${RESULT} ${MATCHES} PARENT_SCOPE)
+endfunction()
+
+webrtc_args_match("${WEBRTC_INSTALL_DIR}" WEBRTC_INSTALLED_ARGS_MATCH)
+webrtc_args_match("${WEBRTC_SRC}/${WEBRTC_BUILD}" WEBRTC_BUILT_ARGS_MATCH)
+
+if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}" AND NOT WEBRTC_INSTALLED_ARGS_MATCH)
+    # Out of the way, so that nothing links it before the new build replaces
+    # it on install.
+    message(STATUS "WebRTC: the installed build has other GN args, building again")
+    file(REMOVE "${WEBRTC_LIB_PATH_INSTALLED}")
+endif()
 
 
 # The api/video utility classes (AdaptedVideoTrackSource, VideoAdapter,
@@ -197,6 +270,11 @@ target_include_directories(${PROJECT_NAME}
 )
 target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB} ${VIDEO_UTIL_LINK_LIBS})
 
+# rtc_use_h265=true makes gn define RTC_ENABLE_H265 for WebRTC; the JNI code
+# needs it as well, for the H.265 parts of WebRTC's headers it uses (the H.265
+# bitstream parser) and to be compiled against the same declarations.
+target_compile_definitions(${PROJECT_NAME} PUBLIC RTC_ENABLE_H265)
+
 if(APPLE)
     target_include_directories(${PROJECT_NAME}
         PUBLIC
@@ -240,7 +318,8 @@ elseif(WIN32)
     target_link_libraries(${PROJECT_NAME} D3D11 DXGI user32 gdi32 iphlpapi dmoguids msdmo secur32 strmiids winmm wmcodecdspuuid ws2_32)
 endif()
 
-if(EXISTS "${WEBRTC_LIB_PATH}" OR EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
+if((EXISTS "${WEBRTC_LIB_PATH}" AND WEBRTC_BUILT_ARGS_MATCH) OR
+   (EXISTS "${WEBRTC_LIB_PATH_INSTALLED}" AND WEBRTC_INSTALLED_ARGS_MATCH))
     message(STATUS "WebRTC: Compiled version found '${TARGET_LINK_LIB}'")
 
     if(LINUX)
@@ -350,38 +429,6 @@ if (PATCHES)
 endif()
 
 message(STATUS "WebRTC: generate")
-set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" \
-use_custom_libcxx=${CUSTOM_LIBCXX} \
-is_clang=true \
-is_debug=false \
-is_component_build=false \
-treat_warnings_as_errors=false \
-rtc_build_tools=false \
-rtc_use_perfetto=false \
-rtc_use_pipewire=false \
-rtc_enable_protobuf=false \
-rtc_build_examples=false \
-rtc_include_tests=false \
-use_rtti=true \
-rtc_use_h264=true \
-ffmpeg_branding=\"Chrome\" \
-symbol_level=0")
-
-if(APPLE)
-    set(COMPILE_ARGS "${COMPILE_ARGS} mac_deployment_target=\"${CMAKE_OSX_DEPLOYMENT_TARGET}\"")
-elseif(LINUX)
-    # Build the PipeWire/xdg-desktop-portal capturer for Wayland sessions. The
-    # X11 capturer stays in as well; WebRTC picks PipeWire at runtime only when
-    # IsRunningUnderWayland() is true. rtc_link_pipewire stays false (default),
-    # so libpipewire is dlopen'd and X11-only systems gain no hard dependency.
-    string(REPLACE "rtc_use_pipewire=false" "rtc_use_pipewire=true" COMPILE_ARGS "${COMPILE_ARGS}")
-
-    if(${TARGET_CPU} STREQUAL "arm")
-        set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm\"")
-    elseif(${TARGET_CPU} STREQUAL "arm64")
-        set(COMPILE_ARGS "${COMPILE_ARGS} custom_toolchain=\"//build/toolchain/linux:clang_arm64\"")
-    endif()
-endif()
 
 if(LINUX)
     # The sysroot pkg-config environment exported for the JNI configure step
@@ -395,9 +442,14 @@ if(LINUX)
     unset(ENV{PKG_CONFIG_PATH})
 endif()
 
+# The record of the GN args goes away first: a build that fails part way
+# leaves a library that is neither the old one nor the new.
+file(REMOVE "${WEBRTC_SRC}/${WEBRTC_BUILD}/${WEBRTC_ARGS_FILE}")
+
 execute_command(
     COMMAND gn gen ${WEBRTC_BUILD} --args=${COMPILE_ARGS}
     WORKING_DIRECTORY "${WEBRTC_SRC}"
+    RESULT_VARIABLE GN_RESULT
 )
 
 message(STATUS "WebRTC: compile")
@@ -405,7 +457,9 @@ if(APPLE)
     execute_command(
         COMMAND ninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
         WORKING_DIRECTORY "${WEBRTC_SRC}"
+        RESULT_VARIABLE NINJA_RESULT
     )
+    set(NINJA_UTIL_RESULT 0)
 
     file(GLOB_RECURSE SDK_OBJC_FILES ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/*.o)
 
@@ -416,6 +470,7 @@ else()
     execute_command(
         COMMAND ninja -C "${WEBRTC_BUILD}"
         WORKING_DIRECTORY "${WEBRTC_SRC}"
+        RESULT_VARIABLE NINJA_RESULT
     )
 
     # The api/video utility targets are not reachable from the default
@@ -424,6 +479,7 @@ else()
     execute_command(
         COMMAND ninja -C "${WEBRTC_BUILD}" api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
         WORKING_DIRECTORY "${WEBRTC_SRC}"
+        RESULT_VARIABLE NINJA_UTIL_RESULT
     )
 endif()
 
@@ -516,6 +572,17 @@ elseif(WIN32)
             DESTINATION "${WEBRTC_INSTALL_DIR}/lib"
         )
     endforeach()
+endif()
+
+# The record of the GN args, once the build has succeeded, in the build tree
+# and, with the library, in the install directory.
+if(GN_RESULT EQUAL 0 AND NINJA_RESULT EQUAL 0 AND NINJA_UTIL_RESULT EQUAL 0 AND EXISTS "${WEBRTC_LIB_PATH}")
+    file(WRITE "${WEBRTC_SRC}/${WEBRTC_BUILD}/${WEBRTC_ARGS_FILE}" "${COMPILE_ARGS}")
+
+    install(FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/${WEBRTC_ARGS_FILE}" DESTINATION "${WEBRTC_INSTALL_DIR}")
+else()
+    message(WARNING "WebRTC: the build failed (gn ${GN_RESULT}, ninja ${NINJA_RESULT}, ${NINJA_UTIL_RESULT}); "
+        "its GN args are not recorded, so the next configure builds it again")
 endif()
 
 install(FILES "${WEBRTC_LIB_PATH}" DESTINATION "${WEBRTC_INSTALL_DIR}/lib")

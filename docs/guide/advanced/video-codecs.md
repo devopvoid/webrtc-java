@@ -112,6 +112,22 @@ class MyEncoderFactory implements VideoEncoderFactory {
 
 The list is in order of preference. A codec name WebRTC does not know, such as `X-MYCODEC`, is negotiated like any other and sent with the generic RTP packetization. `RTCRtpTransceiver.setCodecPreferences()` picks among the negotiated codecs per transceiver.
 
+### H.265
+
+The library is built with WebRTC's H.265 support: H.265 is negotiated with its SDP parameters (`profile-id`, `tier-flag`, `level-id`, `tx-mode`) and sent with the H.265 RTP payload format (RFC 7798). WebRTC has no H.265 encoder or decoder of its own, and this library adds none in software, so H.265 is offered only by a factory that brings one, such as a hardware encoder reached through another library:
+
+```java
+Map<String, String> parameters = new HashMap<>();
+parameters.put("profile-id", "1");     // Main
+parameters.put("tier-flag", "0");
+parameters.put("level-id", "93");      // level 3.1
+parameters.put("tx-mode", "SRST");
+
+codecs.add(new VideoCodecInfo("H265", parameters));
+```
+
+The encoder hands WebRTC each picture as an access unit in Annex B form, with the parameter sets (VPS, SPS and PPS) in every key frame, and the decoder receives them the same way.
+
 ## Implementing an Encoder
 
 WebRTC calls `initEncode()`, then `encode()` for each frame and `setRates()` whenever the target bitrate changes, and finally `release()`. It may initialize a released encoder again, possibly with another frame size. These calls come from one WebRTC thread at a time.
@@ -165,7 +181,7 @@ Things to keep in mind:
 - The capture time of an `EncodedImage` must be the `timestampNs` of the frame it encodes. That is how WebRTC matches output to input; an image with any other capture time is dropped.
 - The frame passed to `encode()` is valid only until the method returns. An encoder that works asynchronously calls `frame.retain()` and later `frame.release()`, and hands its output to the callback from its own thread, in encoding order. The pixels must not be changed, since other consumers may share them.
 - `onEncodedFrame()` copies the payload, so the buffer may be reused once it returns. Frames handed over after `release()` are ignored.
-- `getScalingSettings()`, `getEncoderInfo()`, `getResolutionBitrateLimits()`, `getImplementationName()` and `isHardwareEncoder()` have defaults and may be overridden. The default scaling settings use WebRTC's quantizer thresholds for VP8, VP9 and H.264; a custom codec without a quantizer should return `ScalingSettings.OFF`.
+- `getScalingSettings()`, `getEncoderInfo()`, `getResolutionBitrateLimits()`, `getImplementationName()` and `isHardwareEncoder()` have defaults and may be overridden. The default scaling settings use WebRTC's quantizer thresholds for VP8, VP9, H.264 and H.265 (which has those of H.264 until WebRTC has its own); a custom codec without a quantizer should return `ScalingSettings.OFF`.
 
 ## Implementing a Decoder
 

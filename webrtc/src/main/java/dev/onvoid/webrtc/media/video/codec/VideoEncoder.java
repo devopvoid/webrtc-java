@@ -278,7 +278,7 @@ public interface VideoEncoder {
 
 		/**
 		 * Quality scaling with the thresholds WebRTC uses for VP8, VP9 and
-		 * H.264, and none for any other codec.
+		 * H.264, and for H.265 those of H.264, and none for any other codec.
 		 */
 		public static final ScalingSettings DEFAULT = new ScalingSettings(true, null, null);
 

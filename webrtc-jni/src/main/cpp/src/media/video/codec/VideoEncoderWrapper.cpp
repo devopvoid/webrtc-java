@@ -502,6 +502,9 @@ namespace jni
 			case webrtc::kVideoCodecVP9:
 				return ScalingSettings(low.value_or(kLowVp9QpThreshold), high.value_or(kHighVp9QpThreshold));
 
+			case webrtc::kVideoCodecH265:
+				// WebRTC has no thresholds of its own for H.265 yet and uses those
+				// of H.264 (bugs.webrtc.org/13485), as its Android wrapper does.
 			case webrtc::kVideoCodecH264:
 				return ScalingSettings(low.value_or(kLowH264QpThreshold), high.value_or(kHighH264QpThreshold));
 
@@ -561,6 +564,12 @@ namespace jni
 			case webrtc::kVideoCodecH264:
 				h264BitstreamParser.ParseBitstream(image);
 				qp = h264BitstreamParser.GetLastSliceQp().value_or(-1);
+				success = qp >= 0;
+				break;
+
+			case webrtc::kVideoCodecH265:
+				h265BitstreamParser.ParseBitstream(image);
+				qp = h265BitstreamParser.GetLastSliceQp().value_or(-1);
 				success = qp >= 0;
 				break;
 
