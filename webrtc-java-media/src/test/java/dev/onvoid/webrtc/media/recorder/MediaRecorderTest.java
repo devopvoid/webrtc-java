@@ -152,6 +152,16 @@ class MediaRecorderTest {
 	}
 
 	@Test
+	void recordsMuLawIntoMatroska() throws Exception {
+		assertRecordsG711("PCMU", "pcm_mulaw");
+	}
+
+	@Test
+	void recordsALawIntoMatroska() throws Exception {
+		assertRecordsG711("PCMA", "pcm_alaw");
+	}
+
+	@Test
 	void leavesOutCodecFileCannotHold() throws Exception {
 		// MP4 has no place for VP8, which the call sends.
 		Path file = tempDir.resolve("audio-only.mp4");
@@ -248,6 +258,40 @@ class MediaRecorderTest {
 
 		assertTrue(stopped.get());
 		assertTrue(readInfo(file).hasVideo());
+	}
+
+	/**
+	 * Records a call that sends G.711 into Matroska, which has no codec ID of
+	 * its own for it, and reads the audio back as the codec it was sent in.
+	 */
+	private void assertRecordsG711(String sdpName, String codecName) throws Exception {
+		Path file = tempDir.resolve(sdpName + ".mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory, sdpName);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.addTrack(call.getAudioSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			Thread.sleep(RECORD_MS);
+
+			assertTrue(recorder.stop());
+		}
+
+		assertNull(listener.error.get());
+		assertTrue(listener.warnings.isEmpty(), listener.warnings.toString());
+
+		MediaInfo info = readInfo(file);
+
+		assertEquals("vp8", info.getVideoCodec());
+		assertEquals(codecName, info.getAudioCodec());
+		assertEquals(8000, info.getSampleRate());
+		assertEquals(1, info.getChannels());
+		assertDuration(info);
 	}
 
 	private static MediaInfo readInfo(Path file) throws Exception {

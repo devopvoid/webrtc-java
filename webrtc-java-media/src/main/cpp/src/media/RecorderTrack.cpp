@@ -77,17 +77,26 @@ namespace ffmpeg
 		// Whether the container holds the codec. The codec tags say most of
 		// it, but the MP4 family refuses some codecs only when the header is
 		// written, which would fail the whole file rather than leave out one
-		// track.
+		// track, and Matroska holds more than its tags say.
 		bool CanHold(const AVOutputFormat * format, AVCodecID codec_id)
 		{
 			const bool mp4 = std::strcmp(format->name, "mp4") == 0;
 			const bool mov = std::strcmp(format->name, "mov") == 0;
+			const bool matroska = std::strcmp(format->name, "matroska") == 0;
 
 			if ((mp4 || mov) && codec_id == AV_CODEC_ID_VP8) {
 				return false;
 			}
 			if (mov && (codec_id == AV_CODEC_ID_VP9 || codec_id == AV_CODEC_ID_AV1)) {
 				return false;
+			}
+			// Matroska has no codec ID of its own for G.711, so its tags say
+			// no. Its muxer writes it all the same, as it does any audio with
+			// a WAV format tag: in the mode kept for Windows audio codecs
+			// (A_MS/ACM, the WAVEFORMATEX in the codec private data), which
+			// is what "ffmpeg -c copy" makes of it too. WebM has no such mode.
+			if (matroska && (codec_id == AV_CODEC_ID_PCM_MULAW || codec_id == AV_CODEC_ID_PCM_ALAW)) {
+				return true;
 			}
 
 			return avformat_query_codec(format, codec_id, FF_COMPLIANCE_NORMAL) == 1;
