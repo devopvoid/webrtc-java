@@ -312,7 +312,8 @@ public final class EncodedImage {
 
 		/**
 		 * Sets the quantizer. Without one, WebRTC parses it from the payload
-		 * of VP8, VP9 and H.264 frames, which quality scaling depends on.
+		 * of VP8, VP9, H.264 and H.265 frames, which quality scaling depends
+		 * on.
 		 *
 		 * @param qp The quantizer, or {@code null} if it is not known.
 		 *
