@@ -1,0 +1,339 @@
+--- a/modules/audio_device/BUILD.gn
++++ b/modules/audio_device/BUILD.gn
+@@ -261,9 +261,11 @@
+     "../../api:scoped_refptr",
+     "../../api:sequence_checker",
+     "../../api/audio:audio_device",
++    "../../api/audio:audio_frame_api",
+     "../../api/environment",
+     "../../api/task_queue",
+     "../../api/units:time_delta",
++    "../../audio/utility:audio_frame_operations",
+     "../../common_audio",
+     "../../common_audio:common_audio_c",
+     "../../rtc_base:buffer",
+--- a/modules/audio_device/win/audio_device_core_win.cc
++++ b/modules/audio_device/win/audio_device_core_win.cc
+@@ -25,9 +25,13 @@
+ #include <uuids.h>
+ #include <windows.h>
+ 
++#include <algorithm>
++#include <cmath>
+ #include <iomanip>
+ 
++#include "api/audio/channel_layout.h"
+ #include "api/make_ref_counted.h"
++#include "audio/utility/channel_mixing_matrix.h"
+ #include "rtc_base/checks.h"
+ #include "rtc_base/logging.h"
+ #include "rtc_base/platform_thread.h"
+@@ -77,6 +81,129 @@
+ 
+ enum { kAecCaptureStreamIndex = 0, kAecRenderStreamIndex = 1 };
+ 
++// Returns the channel layout of a WASAPI format, mapping the speaker masks
++// the way Chrome's ChannelConfigToChannelLayout() does. A mask that is not
++// one of these, or that does not match the channel count, is treated as
++// discrete channels, which are copied by index.
++ChannelLayout WaveFormatToChannelLayout(const WAVEFORMATEX* format) {
++  ChannelLayout layout = GuessChannelLayout(format->nChannels);
++  if (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE && format->cbSize >= 22) {
++    switch (
++        reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->dwChannelMask) {
++      case KSAUDIO_SPEAKER_MONO:
++        layout = CHANNEL_LAYOUT_MONO;
++        break;
++      case KSAUDIO_SPEAKER_STEREO:
++        layout = CHANNEL_LAYOUT_STEREO;
++        break;
++      case KSAUDIO_SPEAKER_QUAD:
++        layout = CHANNEL_LAYOUT_QUAD;
++        break;
++      case KSAUDIO_SPEAKER_SURROUND:
++        layout = CHANNEL_LAYOUT_4_0;
++        break;
++      case KSAUDIO_SPEAKER_5POINT1:
++        layout = CHANNEL_LAYOUT_5_1_BACK;
++        break;
++      case KSAUDIO_SPEAKER_5POINT1_SURROUND:
++        layout = CHANNEL_LAYOUT_5_1;
++        break;
++      case KSAUDIO_SPEAKER_7POINT1:
++        layout = CHANNEL_LAYOUT_7_1_WIDE;
++        break;
++      case KSAUDIO_SPEAKER_7POINT1_SURROUND:
++        layout = CHANNEL_LAYOUT_7_1;
++        break;
++      default:
++        break;
++    }
++  }
++  if (layout == CHANNEL_LAYOUT_UNSUPPORTED ||
++      ChannelLayoutToChannelCount(layout) != format->nChannels) {
++    layout = CHANNEL_LAYOUT_DISCRETE;
++  }
++  return layout;
++}
++
++// Builds the stream format for a device that accepts none of the formats
++// WebRTC asks for: 16-bit PCM in the channel count, speaker mask and sample
++// rate of the device's shared-mode mix format. The audio engine converts
++// 16-bit PCM to its float mix format itself, but not the channel count or
++// the rate, so these must match the mix format. Chrome and Firefox open such
++// devices the same way and convert the channels themselves. `matrix` gets the
++// conversion from `client_channels` to the device (render) or back
++// (capture), and stays empty when the channel counts match. Returns false if
++// the mix format cannot be used.
++bool MixFormatForClient(const WAVEFORMATEX* mix_format,
++                        uint16_t client_channels,
++                        bool render,
++                        WAVEFORMATEXTENSIBLE* format,
++                        std::vector<std::vector<float>>* matrix) {
++  matrix->clear();
++  // WebRTC exchanges audio in 10 ms blocks of whole frames.
++  if (mix_format->nChannels == 0 || mix_format->nSamplesPerSec % 100 != 0) {
++    return false;
++  }
++
++  *format = WAVEFORMATEXTENSIBLE();
++  format->Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
++  format->Format.nChannels = mix_format->nChannels;
++  format->Format.nSamplesPerSec = mix_format->nSamplesPerSec;
++  format->Format.wBitsPerSample = 16;
++  format->Format.nBlockAlign =
++      format->Format.nChannels * format->Format.wBitsPerSample / 8;
++  format->Format.nAvgBytesPerSec =
++      format->Format.nSamplesPerSec * format->Format.nBlockAlign;
++  format->Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
++  format->Samples.wValidBitsPerSample = format->Format.wBitsPerSample;
++  format->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
++  if (mix_format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
++      mix_format->cbSize >= 22) {
++    format->dwChannelMask =
++        reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(mix_format)
++            ->dwChannelMask;
++  }
++
++  if (format->Format.nChannels == client_channels) {
++    return true;
++  }
++
++  const ChannelLayout client_layout = GuessChannelLayout(client_channels);
++  const ChannelLayout device_layout =
++      WaveFormatToChannelLayout(&format->Format);
++  if (render) {
++    ChannelMixingMatrix(client_layout, client_channels, device_layout,
++                        format->Format.nChannels)
++        .CreateTransformationMatrix(matrix);
++  } else {
++    ChannelMixingMatrix(device_layout, format->Format.nChannels, client_layout,
++                        client_channels)
++        .CreateTransformationMatrix(matrix);
++  }
++  return true;
++}
++
++// Converts `frames` interleaved frames with `matrix`, which has one row per
++// output channel and one column per input channel.
++void MixChannels(const std::vector<std::vector<float>>& matrix,
++                 const int16_t* input,
++                 int16_t* output,
++                 size_t frames) {
++  const size_t output_channels = matrix.size();
++  const size_t input_channels = matrix[0].size();
++  for (size_t frame = 0; frame < frames; ++frame) {
++    for (size_t out = 0; out < output_channels; ++out) {
++      float sample = 0.f;
++      for (size_t in = 0; in < input_channels; ++in) {
++        sample += matrix[out][in] * input[in];
++      }
++      *output++ = static_cast<int16_t>(
++          std::clamp(std::lrintf(sample), -32768l, 32767l));
++    }
++    input += input_channels;
++  }
++}
++
+ // An implementation of IMediaBuffer, as required for
+ // IMediaObject::ProcessOutput(). After consuming data provided by
+ // ProcessOutput(), call SetLength() to update the buffer availability.
+@@ -1822,6 +1949,8 @@
+   HRESULT hr = S_OK;
+   WAVEFORMATEX* pWfxOut = NULL;
+   WAVEFORMATEX Wfx = WAVEFORMATEX();
++  WAVEFORMATEXTENSIBLE WfxMix = WAVEFORMATEXTENSIBLE();
++  WAVEFORMATEX* pWfxSelected = &Wfx;
+   WAVEFORMATEX* pWfxClosestMatch = NULL;
+   UINT bufferFrameCount = 0;
+   constexpr int freqs[] = {48000, 44100, 16000, 96000, 32000, 8000};
+@@ -1901,6 +2030,7 @@
+   // TODO(andrew): what happens in the event of failure in the above loop?
+   //   Is _ptrClientOut->Initialize expected to fail?
+   //   Same in InitRecording().
++  _playMixMatrix.clear();
+   if (hr == S_OK) {
+     _playAudioFrameSize = Wfx.nBlockAlign;
+     // Block size is the number of samples each channel in 10ms.
+@@ -1924,6 +2054,29 @@
+     RTC_LOG(LS_VERBOSE) << "_playAudioFrameSize: " << _playAudioFrameSize;
+     RTC_LOG(LS_VERBOSE) << "_playBlockSize     : " << _playBlockSize;
+     RTC_LOG(LS_VERBOSE) << "_playChannels      : " << _playChannels;
++  } else if (pWfxOut &&
++             MixFormatForClient(pWfxOut, _playChannelsPrioList[0],
++                                /*render=*/true, &WfxMix, &_playMixMatrix)) {
++    // None of the formats above is supported. This happens when the mix
++    // format has more than two channels, as with gaming headsets that mix in
++    // 7.1, since a shared-mode stream must have the channel count of the mix
++    // format. Open the stream in the mix format and convert WebRTC's audio to
++    // it in the render thread.
++    pWfxSelected = &WfxMix.Format;
++    _playAudioFrameSize = WfxMix.Format.nBlockAlign;
++    _playBlockSize = WfxMix.Format.nSamplesPerSec / 100;
++    _playSampleRate = WfxMix.Format.nSamplesPerSec;
++    _devicePlaySampleRate = WfxMix.Format.nSamplesPerSec;
++    _devicePlayBlockSize = WfxMix.Format.nSamplesPerSec / 100;
++    _playChannels = _playChannelsPrioList[0];
++    _playConvertBuffer.resize(_playBlockSize * _playChannels);
++
++    RTC_LOG(LS_INFO) << "Rendering in the mix format: nChannels="
++                     << WfxMix.Format.nChannels
++                     << ", nSamplesPerSec=" << WfxMix.Format.nSamplesPerSec
++                     << ", dwChannelMask=0x"
++                     << ToHex(static_cast<int>(WfxMix.dwChannelMask))
++                     << ", converted from " << _playChannels << " channel(s)";
+   }
+ 
+   // Create a rendering stream.
+@@ -1959,7 +2112,7 @@
+       hnsBufferDuration,  // requested buffer capacity as a time value (in
+                           // 100-nanosecond units)
+       0,                  // periodicity
+-      &Wfx,               // selected wave format
++      pWfxSelected,       // selected wave format
+       NULL);              // session GUID
+ 
+   if (FAILED(hr)) {
+@@ -2056,6 +2209,7 @@
+   ptrWav->cbSize = 0;
+ 
+   // Set the VoE format equal to the AEC output format.
++  _recMixMatrix.clear();
+   _recAudioFrameSize = ptrWav->nBlockAlign;
+   _recSampleRate = ptrWav->nSamplesPerSec;
+   _recBlockSize = ptrWav->nSamplesPerSec / 100;
+@@ -2136,6 +2290,8 @@
+   HRESULT hr = S_OK;
+   WAVEFORMATEX* pWfxIn = NULL;
+   WAVEFORMATEXTENSIBLE Wfx = WAVEFORMATEXTENSIBLE();
++  WAVEFORMATEXTENSIBLE WfxMix = WAVEFORMATEXTENSIBLE();
++  WAVEFORMATEXTENSIBLE* pWfxSelected = &Wfx;
+   WAVEFORMATEX* pWfxClosestMatch = NULL;
+   UINT bufferFrameCount = 0;
+   constexpr int freqs[6] = {48000, 44100, 16000, 96000, 32000, 8000};
+@@ -2216,6 +2372,7 @@
+       break;
+   }
+ 
++  _recMixMatrix.clear();
+   if (hr == S_OK) {
+     _recAudioFrameSize = Wfx.Format.nBlockAlign;
+     _recSampleRate = Wfx.Format.nSamplesPerSec;
+@@ -2236,6 +2393,25 @@
+     RTC_LOG(LS_VERBOSE) << "_recAudioFrameSize: " << _recAudioFrameSize;
+     RTC_LOG(LS_VERBOSE) << "_recBlockSize     : " << _recBlockSize;
+     RTC_LOG(LS_VERBOSE) << "_recChannels      : " << _recChannels;
++  } else if (pWfxIn &&
++             MixFormatForClient(pWfxIn, _recChannelsPrioList[0],
++                                /*render=*/false, &WfxMix, &_recMixMatrix)) {
++    // None of the formats above is supported; see InitPlayout(). Open the
++    // stream in the mix format and convert it to WebRTC's channel count in
++    // the capture thread. `_recAudioFrameSize` stays the size of a frame in
++    // WebRTC's format, which is what the capture thread buffers.
++    pWfxSelected = &WfxMix;
++    _recChannels = _recChannelsPrioList[0];
++    _recAudioFrameSize = _recChannels * WfxMix.Format.wBitsPerSample / 8;
++    _recSampleRate = WfxMix.Format.nSamplesPerSec;
++    _recBlockSize = WfxMix.Format.nSamplesPerSec / 100;
++
++    RTC_LOG(LS_INFO) << "Capturing in the mix format: nChannels="
++                     << WfxMix.Format.nChannels
++                     << ", nSamplesPerSec=" << WfxMix.Format.nSamplesPerSec
++                     << ", dwChannelMask=0x"
++                     << ToHex(static_cast<int>(WfxMix.dwChannelMask))
++                     << ", converted to " << _recChannels << " channel(s)";
+   }
+ 
+   // Create a capturing stream.
+@@ -2246,10 +2422,10 @@
+           AUDCLNT_STREAMFLAGS_NOPERSIST,   // volume and mute settings for an
+                                            // audio session will not persist
+                                            // across system restarts
+-      0,                    // required for event-driven shared mode
+-      0,                    // periodicity
+-      (WAVEFORMATEX*)&Wfx,  // selected wave format
+-      NULL);                // session GUID
++      0,                            // required for event-driven shared mode
++      0,                            // periodicity
++      (WAVEFORMATEX*)pWfxSelected,  // selected wave format
++      NULL);                        // session GUID
+ 
+   if (hr != S_OK) {
+     RTC_LOG(LS_ERROR) << "IAudioClient::Initialize() failed:";
+@@ -2832,7 +3008,14 @@
+           }
+ 
+           // Get the actual (stored) data
+-          nSamples = _ptrAudioBuffer->GetPlayoutData((int8_t*)pData);
++          if (_playMixMatrix.empty()) {
++            nSamples = _ptrAudioBuffer->GetPlayoutData((int8_t*)pData);
++          } else {
++            nSamples =
++                _ptrAudioBuffer->GetPlayoutData(_playConvertBuffer.data());
++            MixChannels(_playMixMatrix, _playConvertBuffer.data(),
++                        reinterpret_cast<int16_t*>(pData), _playBlockSize);
++          }
+         }
+ 
+         DWORD dwFlags(0);
+@@ -3221,7 +3404,12 @@
+ 
+         RTC_DCHECK_NE(framesAvailable, 0);
+ 
+-        if (pData) {
++        if (pData && !_recMixMatrix.empty()) {
++          MixChannels(_recMixMatrix, reinterpret_cast<const int16_t*>(pData),
++                      reinterpret_cast<int16_t*>(
++                          &syncBuffer[syncBufIndex * _recAudioFrameSize]),
++                      framesAvailable);
++        } else if (pData) {
+           CopyMemory(&syncBuffer[syncBufIndex * _recAudioFrameSize], pData,
+                      framesAvailable * _recAudioFrameSize);
+         } else {
+--- a/modules/audio_device/win/audio_device_core_win.h
++++ b/modules/audio_device/win/audio_device_core_win.h
+@@ -21,6 +21,8 @@
+ #include <mediaobj.h>     // IMediaObject
+ #include <mmdeviceapi.h>  // MMDevice
+ 
++#include <vector>
++
+ #include "api/scoped_refptr.h"
+ #include "modules/audio_device/audio_device_generic.h"
+ #include "rtc_base/synchronization/mutex.h"
+@@ -270,6 +272,15 @@
+   uint16_t _recChannelsPrioList[3];
+   uint16_t _playChannelsPrioList[2];
+ 
++  // Channel conversion for a device that is opened in its own mix format,
++  // because it accepts none of the formats above. Each matrix maps WebRTC's
++  // mono or stereo to the device's channels (render), or back (capture), and
++  // is empty when no conversion is needed. `_playConvertBuffer` holds one
++  // 10 ms block in WebRTC's channel count before it is converted.
++  std::vector<std::vector<float>> _playMixMatrix;
++  std::vector<std::vector<float>> _recMixMatrix;
++  std::vector<int16_t> _playConvertBuffer;
++
+   LARGE_INTEGER _perfCounterFreq;
+   double _perfCounterFactor;
+ 

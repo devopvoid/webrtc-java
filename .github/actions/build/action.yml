@@ -38,8 +38,8 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: ~/${{ env.WEBRTC_INSTALL_FOLDER }}
-        key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt') }}-${{ hashFiles('webrtc-jni/pom.xml') }}
-        restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt') }}-
+        key: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt', 'webrtc-jni/src/main/cpp/dependencies/webrtc/patches/**/*.patch') }}-${{ hashFiles('webrtc-jni/pom.xml') }}
+        restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt', 'webrtc-jni/src/main/cpp/dependencies/webrtc/patches/**/*.patch') }}-
 
     - name: Derive the FFmpeg version from the pom
       run: echo "FFMPEG_VERSION=$(sed -n 's|.*<ffmpeg.version>\([^<]*\)</ffmpeg.version>.*|\1|p' webrtc-java-media/pom.xml)" >> "$GITHUB_ENV"
