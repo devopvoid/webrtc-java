@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/windows/MFVideoEncoderFactory.h"
+#include "media/video/codec/H265Format.h"
 #include "media/video/codec/windows/MFEncoderUtils.h"
 #include "media/video/codec/windows/MFVideoEncoder.h"
 #include "platform/windows/ComInitializer.h"
@@ -49,6 +50,7 @@ namespace jni
 	std::unique_ptr<MFVideoEncoderFactory> MFVideoEncoderFactory::Create()
 	{
 		bool h264 = false;
+		bool h265 = false;
 		bool av1 = false;
 
 		try {
@@ -56,22 +58,24 @@ namespace jni
 			MFInitializer mfInitializer;
 
 			h264 = HasHardwareEncoder(MFVideoFormat_H264);
+			h265 = HasHardwareEncoder(MFVideoFormat_HEVC);
 			av1 = HasHardwareEncoder(MFVideoFormat_AV1);
 		}
 		catch (...) {
 			return nullptr;
 		}
 
-		if (!h264 && !av1) {
+		if (!h264 && !h265 && !av1) {
 			RTC_LOG(LS_INFO) << "No Media Foundation hardware encoder found";
 			return nullptr;
 		}
 
-		return std::unique_ptr<MFVideoEncoderFactory>(new MFVideoEncoderFactory(h264, av1));
+		return std::unique_ptr<MFVideoEncoderFactory>(new MFVideoEncoderFactory(h264, h265, av1));
 	}
 
-	MFVideoEncoderFactory::MFVideoEncoderFactory(bool h264, bool av1) :
+	MFVideoEncoderFactory::MFVideoEncoderFactory(bool h264, bool h265, bool av1) :
 		h264(h264),
+		h265(h265),
 		av1(av1)
 	{
 	}
@@ -85,6 +89,9 @@ namespace jni
 				webrtc::H264Level::kLevel3_1, "1"));
 			formats.push_back(webrtc::CreateH264Format(webrtc::H264Profile::kProfileBaseline,
 				webrtc::H264Level::kLevel3_1, "1"));
+		}
+		if (h265) {
+			formats.push_back(CreateH265MainFormat());
 		}
 		if (av1) {
 			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());

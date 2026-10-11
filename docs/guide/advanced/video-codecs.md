@@ -26,8 +26,8 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 | Platform | H.264 | H.265 | AV1 |
 |---|---|---|---|
-| Windows | NVENC on NVIDIA GPUs, otherwise the Media Foundation encoder of the GPU driver (AMD, Intel) | Not offered | NVENC on NVIDIA RTX 40 and newer, otherwise Media Foundation on GPUs that encode AV1 (e.g. AMD RDNA3 and newer, Intel Arc) |
-| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | Not offered | NVENC on NVIDIA RTX 40 and newer |
+| Windows | NVENC on NVIDIA GPUs, otherwise the Media Foundation encoder of the GPU driver (AMD, Intel) | NVENC on NVIDIA GPUs, otherwise Media Foundation on GPUs that encode H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise Media Foundation on GPUs that encode AV1 (e.g. AMD RDNA3 and newer, Intel Arc) |
+| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs | NVENC on NVIDIA RTX 40 and newer |
 | macOS | VideoToolbox, as with `DefaultVideoEncoderFactory` | VideoToolbox, on Macs with a hardware HEVC encoder, such as all with Apple silicon | Software |
 
 Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
@@ -51,13 +51,13 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 | Platform | Hardware decoding |
 |---|---|
-| Windows | H.264, AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
+| Windows | H.264, H.265 (Main profile), AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
 | Linux | H.264 and VP9 (profile 0) on NVIDIA GPUs, through NVDEC; VA-API, for Intel and AMD GPUs, is not there yet |
 | macOS | H.264 through VideoToolbox, as with `DefaultVideoDecoderFactory`; VP9 (profile 0) and H.265 (Main profile) through the decoders of VideoToolbox, on Macs that have them, and AV1 (profile 0) on Apple M3 and newer |
 
 On Linux, NVDEC needs an NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1`; both are loaded when the factory is made, so a machine without the driver is not affected. Streams with spatial layers are decoded in software.
 
-AV1 on Windows needs the *AV1 Video Extension*, which Windows 11 includes, and VP9 the *VP9 Video Extensions*, a free component of the Microsoft Store that a system may not have; without it, VP9 is decoded in software. Streams with spatial layers (SVC) are decoded in software too, since their layers reach a decoder without the index that says where each ends. Decoded frames are copied from GPU memory back to system memory, where WebRTC's frames are, so hardware decoding pays off mostly at high resolutions and with many streams; at low resolutions WebRTC's software decoders are about as cheap. A hardware decoder that fails, or turns out to decode in software, is replaced by the software decoder, which starts with the next key frame.
+AV1 on Windows needs the *AV1 Video Extension*, which Windows 11 includes, and VP9 the *VP9 Video Extensions*, a free component of the Microsoft Store that a system may not have; without it, VP9 is decoded in software. H.265 needs the *HEVC Video Extensions* of the Microsoft Store, or an HEVC decoder of the GPU vendor; without one, H.265 is not offered, since it has no software decoder. Streams with spatial layers (SVC) are decoded in software too, since their layers reach a decoder without the index that says where each ends. Decoded frames are copied from GPU memory back to system memory, where WebRTC's frames are, so hardware decoding pays off mostly at high resolutions and with many streams; at low resolutions WebRTC's software decoders are about as cheap. A hardware decoder that fails, or turns out to decode in software, is replaced by the software decoder, which starts with the next key frame.
 
 On macOS, VP9 decoding in hardware saves CPU: in a measurement on an Apple M2 it took a fraction of the processor time libvpx needs, but multi-threaded libvpx was about as fast on the clock. VideoToolbox decodes VP9 in hardware only where the Mac has a decoder for it, which Apple silicon does; a Mac without one decodes VP9 with libvpx as before. Profile 2 (10 bit), sizes below 64x64 or above 4096x4096, and streams with spatial layers (SVC) are decoded with libvpx too.
 

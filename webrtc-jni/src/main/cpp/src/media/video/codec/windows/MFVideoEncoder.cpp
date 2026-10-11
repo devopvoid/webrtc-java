@@ -53,6 +53,19 @@ namespace jni
 		// Media Foundation counts time in 100 ns units.
 		constexpr LONGLONG kUnitsPerSecond = 10000000;
 
+		// The subtype the encoder produces for a codec.
+		const GUID & OutputSubtype(webrtc::VideoCodecType codec)
+		{
+			switch (codec) {
+				case webrtc::kVideoCodecAV1:
+					return MFVideoFormat_AV1;
+				case webrtc::kVideoCodecH265:
+					return MFVideoFormat_HEVC;
+				default:
+					return MFVideoFormat_H264;
+			}
+		}
+
 		// Initializes COM for the calling thread, once. Media Foundation
 		// transforms are free-threaded, so the apartment a thread already
 		// has does as well.
@@ -207,8 +220,7 @@ namespace jni
 	{
 		std::vector<ComPtr<IMFActivate>> encoders;
 
-		HRESULT hr = EnumerateHardwareEncoders(codec == webrtc::kVideoCodecAV1 ? MFVideoFormat_AV1 : MFVideoFormat_H264,
-			encoders);
+		HRESULT hr = EnumerateHardwareEncoders(OutputSubtype(codec), encoders);
 
 		if (FAILED(hr)) {
 			return hr;
@@ -280,7 +292,7 @@ namespace jni
 		}
 
 		outputType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-		outputType->SetGUID(MF_MT_SUBTYPE, codec == webrtc::kVideoCodecAV1 ? MFVideoFormat_AV1 : MFVideoFormat_H264);
+		outputType->SetGUID(MF_MT_SUBTYPE, OutputSubtype(codec));
 		outputType->SetUINT32(MF_MT_AVG_BITRATE, bitrateBps);
 		outputType->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive);
 		MFSetAttributeSize(outputType.Get(), MF_MT_FRAME_SIZE, width, height);
@@ -290,6 +302,12 @@ namespace jni
 		if (codec == webrtc::kVideoCodecAV1) {
 			// Main profile, 8-bit 4:2:0: AV1 profile 0, what WebRTC offers.
 			outputType->SetUINT32(MF_MT_VIDEO_PROFILE, eAVEncAV1VProfile_Main_420_8);
+
+			hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
+		}
+		else if (codec == webrtc::kVideoCodecH265) {
+			// Main profile, 8-bit 4:2:0, what the factory offers.
+			outputType->SetUINT32(MF_MT_VIDEO_PROFILE, eAVEncH265VProfile_Main_420_8);
 
 			hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
 		}

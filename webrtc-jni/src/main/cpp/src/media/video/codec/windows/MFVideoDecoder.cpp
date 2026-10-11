@@ -61,6 +61,8 @@ namespace jni
 					return MFVideoFormat_AV1;
 				case webrtc::kVideoCodecVP9:
 					return MFVideoFormat_VP90;
+				case webrtc::kVideoCodecH265:
+					return MFVideoFormat_HEVC;
 				default:
 					return MFVideoFormat_H264;
 			}

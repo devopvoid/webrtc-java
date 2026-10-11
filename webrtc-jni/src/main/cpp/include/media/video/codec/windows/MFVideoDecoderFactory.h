@@ -28,10 +28,11 @@
 namespace jni
 {
 	// Creates the Media Foundation decoders that decode on the GPU, for H.264,
-	// AV1 and VP9, whichever the GPU decodes and Windows has a decoder for that
-	// uses Direct3D 11. It offers them in the formats WebRTC's software
-	// decoders offer too: H.264 in all its profiles, and AV1 and VP9 in
-	// profile 0.
+	// H.265, AV1 and VP9, whichever the GPU decodes and Windows has a decoder
+	// for that uses Direct3D 11. It offers them in the formats WebRTC's
+	// software decoders offer too: H.264 in all its profiles, and AV1 and VP9
+	// in profile 0. H.265, which WebRTC has no decoder of its own for, is
+	// offered in Main profile.
 	class MFVideoDecoderFactory : public webrtc::VideoDecoderFactory
 	{
 		public:
@@ -45,10 +46,11 @@ namespace jni
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
-			MFVideoDecoderFactory(bool h264, bool av1, bool vp9);
+			MFVideoDecoderFactory(bool h264, bool h265, bool av1, bool vp9);
 
 		private:
 			const bool h264;
+			const bool h265;
 			const bool av1;
 			const bool vp9;
 	};
