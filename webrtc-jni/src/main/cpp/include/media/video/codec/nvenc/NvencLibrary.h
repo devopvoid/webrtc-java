@@ -60,9 +60,10 @@ namespace jni
 			// The name of the device, e.g. "NVIDIA GeForce RTX 4070".
 			const std::string & DeviceName() const;
 
-			// Whether the device encodes H.264, and AV1, which only newer
-			// GPUs do.
+			// Whether the device encodes H.264, H.265, which GPUs since
+			// Maxwell do, and AV1, which only newer GPUs do.
 			bool SupportsH264() const;
+			bool SupportsH265() const;
 			bool SupportsAv1() const;
 
 			// Retains the primary context of the device. Every successful call
@@ -110,6 +111,7 @@ namespace jni
 			CUdevice device = 0;
 			std::string deviceName;
 			bool h264 = false;
+			bool h265 = false;
 			bool av1 = false;
 	};
 }

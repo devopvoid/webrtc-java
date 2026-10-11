@@ -35,7 +35,9 @@ namespace jni
 		library(library),
 		api(library.Api()),
 		codec(codec),
-		codecGuid(codec == webrtc::kVideoCodecAV1 ? NV_ENC_CODEC_AV1_GUID : NV_ENC_CODEC_H264_GUID),
+		codecGuid(codec == webrtc::kVideoCodecAV1 ? NV_ENC_CODEC_AV1_GUID
+			: codec == webrtc::kVideoCodecH265 ? NV_ENC_CODEC_HEVC_GUID
+			: NV_ENC_CODEC_H264_GUID),
 		implementationName("NVENC (" + library.DeviceName() + ")"),
 		context(nullptr),
 		encoder(nullptr),
@@ -227,6 +229,25 @@ namespace jni
 			av1.pixelBitDepthMinus8 = 0;
 			av1.level = NV_ENC_LEVEL_AV1_AUTOSELECT;
 			av1.tier = NV_ENC_TIER_AV1_0;
+			return;
+		}
+		if (codec == webrtc::kVideoCodecH265) {
+			// Main profile, 8-bit 4:2:0, what the factory offers.
+			config.profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
+
+			NV_ENC_CONFIG_HEVC & hevc = config.encodeCodecConfig.hevcConfig;
+			hevc.idrPeriod = NVENC_INFINITE_GOPLENGTH;
+			// A receiver joining later needs them with the key frame it
+			// starts from.
+			hevc.repeatSPSPPS = 1;
+			hevc.disableSPSPPS = 0;
+			hevc.outputAUD = 0;
+			hevc.sliceMode = 0;
+			hevc.sliceModeData = 0;
+			hevc.chromaFormatIDC = 1;
+			hevc.pixelBitDepthMinus8 = 0;
+			hevc.level = NV_ENC_LEVEL_AUTOSELECT;
+			hevc.tier = NV_ENC_TIER_HEVC_MAIN;
 			return;
 		}
 

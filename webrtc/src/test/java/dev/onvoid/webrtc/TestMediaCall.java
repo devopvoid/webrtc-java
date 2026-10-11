@@ -186,6 +186,36 @@ class TestMediaCall implements AutoCloseable {
 	}
 
 	/**
+	 * Returns the MIME type of the codec the caller sends video in, such as
+	 * {@code video/H265}, or null if the statistics do not tell yet. The codec
+	 * preferred is not always the one sent: a call goes on with the next
+	 * negotiated codec when the encoder of the preferred one fails.
+	 */
+	String getSentVideoCodec() throws InterruptedException {
+		CountDownLatch done = new CountDownLatch(1);
+		AtomicReference<String> mimeType = new AtomicReference<>();
+
+		caller.getPeerConnection().getStats(videoSender, report -> {
+			Map<String, RTCStats> all = report.getStats();
+
+			for (RTCStats stats : all.values()) {
+				if (stats.getType() == RTCStatsType.OUTBOUND_RTP) {
+					RTCStats codec = all.get(String.valueOf(stats.getAttributes().get("codecId")));
+
+					if (codec != null) {
+						mimeType.set(String.valueOf(codec.getAttributes().get("mimeType")));
+					}
+				}
+			}
+			done.countDown();
+		});
+
+		done.await(5, TimeUnit.SECONDS);
+
+		return mimeType.get();
+	}
+
+	/**
 	 * Returns the callee's statistics of its inbound video stream, or null if
 	 * there are none yet.
 	 */

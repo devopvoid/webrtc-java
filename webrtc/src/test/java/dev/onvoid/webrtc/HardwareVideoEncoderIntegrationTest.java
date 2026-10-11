@@ -17,14 +17,18 @@
 package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
+import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +49,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * A machine without a hardware encoder skips the tests that need one, as CI
  * runners do. Set the system property {@code webrtc.test.hardwareEncoder} to
  * {@code true} on a machine that has one, to make those tests fail instead,
- * and {@code webrtc.test.hardwareAv1Encoder} for a GPU that encodes AV1.
+ * {@code webrtc.test.hardwareAv1Encoder} for a GPU that encodes AV1, and
+ * {@code webrtc.test.hardwareH265Encoder} for one that encodes and decodes
+ * H.265, which a call in H.265 needs at both ends, having no software codec.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class HardwareVideoEncoderIntegrationTest extends TestBase {
@@ -55,6 +61,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	private static final boolean HARDWARE_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareEncoder");
 
 	private static final boolean HARDWARE_AV1_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareAv1Encoder");
+
+	private static final boolean HARDWARE_H265_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareH265Encoder");
 
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 
@@ -69,12 +77,179 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	private static final Predicate<RTCRtpCodecCapability> AV1 = codec -> "AV1".equalsIgnoreCase(codec.getName());
 
+	private static final Predicate<RTCRtpCodecCapability> H265 = codec -> "H265".equalsIgnoreCase(codec.getName());
+
 
 	@Test
 	void hardwareKeepsCodecs() {
-		// Hardware encoding must not change what is negotiated.
-		assertEquals(new DefaultVideoEncoderFactory().getSupportedCodecs(),
-				new HardwareVideoEncoderFactory().getSupportedCodecs());
+		// Hardware encoding must not change which codec is preferred: the
+		// codecs of the default encoders come first, in their order. After
+		// them comes H.265 where the GPU encodes it, which has no software
+		// encoder.
+		List<VideoCodecInfo> software = new DefaultVideoEncoderFactory().getSupportedCodecs();
+		List<VideoCodecInfo> hardware = new HardwareVideoEncoderFactory().getSupportedCodecs();
+
+		assertTrue(hardware.size() >= software.size(), hardware.toString());
+		assertEquals(software, hardware.subList(0, software.size()));
+
+		for (VideoCodecInfo added : hardware.subList(software.size(), hardware.size())) {
+			assertEquals("H265", added.getName(), hardware.toString());
+		}
+	}
+
+	@Test
+	void softwareOffersNoH265() {
+		// H.265 is encoded and decoded in hardware only, never in software.
+		assertFalse(offersH265(new DefaultVideoEncoderFactory().getSupportedCodecs()));
+		assertFalse(offersH265(new DefaultVideoDecoderFactory().getSupportedCodecs()));
+	}
+
+	@Test
+	void hardwareEncodesH265() throws Exception {
+		assumeH265();
+
+		PeerConnectionFactory hardware = hardwareCallFactory();
+
+		// 640x360: hardware H.265 encoders have a minimum size, and AMD's
+		// Media Foundation encoder refuses widths up to 352. WebRTC then
+		// switches to the next codec, there being no software H.265.
+		try (Run run = new Run(hardware, H265, 640, 360)) {
+			run.awaitFrames(10);
+
+			assertH265(run);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void h265EncodesOddSize() throws Exception {
+		assumeH265();
+
+		PeerConnectionFactory hardware = hardwareCallFactory();
+
+		// 4:2:0 needs even dimensions, which the encoder asks for, rather than
+		// refusing the size and ending the H.265 stream.
+		try (Run run = new Run(hardware, H265, 641, 361)) {
+			run.awaitFrames(10);
+
+			assertH265(run);
+			assertEquals(0, run.width.get() % 2, "width " + run.width.get());
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void h265FollowsResolutionChange() throws Exception {
+		assumeH265();
+
+		PeerConnectionFactory hardware = hardwareCallFactory();
+
+		try (Run run = new Run(hardware, H265, 640, 360)) {
+			run.awaitFrames(10);
+
+			// A new size starts the encoder over, with a new session, and the
+			// decoder with new parameter sets.
+			run.call.setVideoSize(960, 540);
+			run.awaitWidth(960);
+
+			run.call.setVideoSize(640, 360);
+			run.awaitWidth(640);
+
+			assertH265(run);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void h265FollowsBitrateCap() throws Exception {
+		assumeH265();
+
+		PeerConnectionFactory hardware = hardwareCallFactory();
+
+		try (Run run = new Run(hardware, H265, 640, 360)) {
+			run.awaitFrames(10);
+
+			// The encoder is reconfigured in place, without a new session or
+			// a lost stream.
+			run.setMaxBitrate(150_000);
+			run.awaitTargetBitrate(150_000);
+			run.awaitMoreFrames(10);
+
+			run.setMaxBitrate(2_000_000);
+			run.awaitMoreFrames(10);
+
+			assertH265(run);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void h265RestartsCleanly() throws Exception {
+		assumeH265();
+
+		PeerConnectionFactory hardware = hardwareCallFactory();
+
+		try {
+			// A session left behind by each call would run the hardware out of
+			// sessions, and the later calls would not be in H.265.
+			for (int i = 0; i < 10; i++) {
+				try (Run run = new Run(hardware, H265, 640, 360)) {
+					run.awaitFrames(5);
+
+					assertH265(run);
+				}
+			}
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	/**
+	 * Skips the test where the hardware does not both encode and decode H.265,
+	 * which a call in it needs at either end, there being no software codec;
+	 * fails it where that is required.
+	 */
+	private static void assumeH265() {
+		boolean available = offersH265(new HardwareVideoEncoderFactory().getSupportedCodecs())
+				&& offersH265(new HardwareVideoDecoderFactory().getSupportedCodecs());
+
+		if (HARDWARE_H265_REQUIRED) {
+			assertTrue(available, "no hardware H.265 encoder and decoder");
+		}
+		else {
+			assumeTrue(available, "no hardware H.265 encoder and decoder");
+		}
+	}
+
+	/**
+	 * Checks that the call is still in H.265, which it would not be after an
+	 * encoder failure, and is encoded in hardware.
+	 */
+	private static void assertH265(Run run) throws InterruptedException {
+		assertEquals("video/H265", run.codec());
+		assertHardware(run.implementation(), true);
+	}
+
+	/** A factory that encodes as well as decodes in hardware. */
+	private PeerConnectionFactory hardwareCallFactory() {
+		return PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
+				.build();
+	}
+
+	private static boolean offersH265(List<VideoCodecInfo> codecs) {
+		return codecs.stream().anyMatch(codec -> "H265".equalsIgnoreCase(codec.getName()));
 	}
 
 	@Test
@@ -268,8 +443,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		// The default encoders use VideoToolbox on macOS.
 		assertTrue(encoderImplementation(factory, H264).contains("VideoToolbox"));
 
-		// The hardware factory has nothing of its own there, and hands over to
-		// the default encoders.
+		// The hardware factory has nothing of its own for H.264 there, and
+		// hands over to the default encoders.
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
 				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
@@ -298,7 +473,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	private static void assertHardware(String implementation, boolean required) {
 		boolean hardwareUsed = implementation.startsWith("NVENC")
 				|| implementation.startsWith("VA-API")
-				|| implementation.contains("MediaFoundation");
+				|| implementation.contains("MediaFoundation")
+				|| implementation.contains("VideoToolbox");
 
 		if (required) {
 			assertTrue(hardwareUsed, implementation);
@@ -415,7 +591,19 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 			}, "target bitrate not at or below " + atMost);
 		}
 
-		String implementation() throws InterruptedException {
+		String codec() throws InterruptedException {
+			String[] codec = new String[1];
+
+			await(() -> {
+				codec[0] = call.getSentVideoCodec();
+
+				return codec[0] != null;
+			}, "no codec in the statistics");
+
+			return codec[0];
+		}
+
+				String implementation() throws InterruptedException {
 			// The statistics catch up with the encoder shortly after.
 			Object[] implementation = new Object[1];
 

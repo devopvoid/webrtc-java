@@ -157,6 +157,7 @@ namespace jni
 					if (api.nvEncGetEncodeGUIDs(encoder, guids.data(), count, &found) == NV_ENC_SUCCESS) {
 						for (uint32_t i = 0; i < found; i++) {
 							h264 |= std::memcmp(&guids[i], &NV_ENC_CODEC_H264_GUID, sizeof(GUID)) == 0;
+							h265 |= std::memcmp(&guids[i], &NV_ENC_CODEC_HEVC_GUID, sizeof(GUID)) == 0;
 							av1 |= std::memcmp(&guids[i], &NV_ENC_CODEC_AV1_GUID, sizeof(GUID)) == 0;
 						}
 					}
@@ -179,6 +180,11 @@ namespace jni
 	bool NvencLibrary::SupportsH264() const
 	{
 		return h264;
+	}
+
+	bool NvencLibrary::SupportsH265() const
+	{
+		return h265;
 	}
 
 	bool NvencLibrary::SupportsAv1() const

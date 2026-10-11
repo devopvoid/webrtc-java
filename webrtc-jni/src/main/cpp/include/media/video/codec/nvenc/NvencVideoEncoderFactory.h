@@ -29,10 +29,11 @@
 
 namespace jni
 {
-	// Creates NVENC encoders on an NVIDIA GPU, for H.264 and, on GPUs that
-	// have it, AV1. It offers them in the formats WebRTC's software encoders
-	// offer too: H.264 only with packetization mode 1, since mode 0 needs each
-	// NAL unit to fit a packet, and AV1 in profile 0.
+	// Creates NVENC encoders on an NVIDIA GPU, for H.264, H.265 and, on GPUs
+	// that have it, AV1. It offers H.264 and AV1 in the formats WebRTC's
+	// software encoders offer too: H.264 only with packetization mode 1, since
+	// mode 0 needs each NAL unit to fit a packet, and AV1 in profile 0. H.265,
+	// which WebRTC has no encoder of its own for, is offered in Main profile.
 	class NvencVideoEncoderFactory : public webrtc::VideoEncoderFactory
 	{
 		public:

@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/nvenc/NvencVideoEncoderFactory.h"
+#include "media/video/codec/H265Format.h"
 #include "media/video/codec/nvenc/NvencVideoEncoder.h"
 
 #include "api/video_codecs/h264_profile_level_id.h"
@@ -48,6 +49,9 @@ namespace jni
 				webrtc::H264Level::kLevel3_1, "1"));
 			formats.push_back(webrtc::CreateH264Format(webrtc::H264Profile::kProfileBaseline,
 				webrtc::H264Level::kLevel3_1, "1"));
+		}
+		if (library.SupportsH265()) {
+			formats.push_back(CreateH265MainFormat());
 		}
 		if (library.SupportsAv1()) {
 			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());

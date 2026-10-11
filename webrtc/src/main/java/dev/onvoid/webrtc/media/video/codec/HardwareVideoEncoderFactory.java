@@ -38,18 +38,21 @@ import java.util.Objects;
  * other GPUs it is encoded with the Media Foundation encoder of the driver on
  * Windows, and with its VA-API encoder on Linux. AV1 is encoded on GPUs that
  * have an AV1 encoder, with NVENC or Media Foundation, as a single layer; a
- * stream that asks for SVC is encoded in software.
+ * stream that asks for SVC is encoded in software. H.265 (Main profile) is
+ * encoded with NVENC or Media Foundation on GPUs that have an H.265 encoder.
  * A hardware encoder that fails to start, for example because the GPU has no
  * encoder sessions left, or fails while encoding, is replaced by the next one
  * in line, and finally by the software encoder of the same codec, so a stream
  * keeps going. Where there is no hardware encoder, this factory encodes like a
- * {@link DefaultVideoEncoderFactory}. On macOS, that already uses
- * VideoToolbox.
+ * {@link DefaultVideoEncoderFactory}. On macOS, that already encodes H.264
+ * with VideoToolbox, and this factory adds H.265 (Main profile), encoded by
+ * the hardware HEVC encoder of VideoToolbox on Macs that have one.
  * <p>
- * The hardware encoders take over only codecs the software encoders have too,
- * so the supported codecs are the same as those of a {@link
- * DefaultVideoEncoderFactory}, and what a peer connection negotiates does not
- * depend on the GPU.
+ * The supported codecs are those of a {@link DefaultVideoEncoderFactory}, in
+ * the same order, so the codec a peer connection prefers does not depend on
+ * the hardware. H.265 comes after them, only where the hardware encodes it:
+ * there is no software encoder for it to fall back to, and it is never
+ * encoded in software.
  *
  * @author Alex Andres
  */

@@ -19,6 +19,7 @@
 #include "api/video/render_resolution.h"
 #include "api/video_codecs/scalability_mode.h"
 #include "common_video/h264/h264_common.h"
+#include "common_video/h265/h265_common.h"
 #include "modules/video_coding/codecs/interface/common_constants.h"
 #include "rtc_base/logging.h"
 
@@ -131,10 +132,19 @@ namespace jni
 		webrtc::EncodedImage & image, webrtc::CodecSpecificInfo & info)
 	{
 		std::vector<uint8_t> output;
+		bool processed;
 
-		const bool processed = codec == webrtc::kVideoCodecAV1
-			? ProcessAv1(bitstream, keyFrame, output)
-			: ProcessH264(bitstream, keyFrame, output);
+		switch (codec) {
+			case webrtc::kVideoCodecAV1:
+				processed = ProcessAv1(bitstream, keyFrame, output);
+				break;
+			case webrtc::kVideoCodecH265:
+				processed = ProcessH265(bitstream, keyFrame, output);
+				break;
+			default:
+				processed = ProcessH264(bitstream, keyFrame, output);
+				break;
+		}
 
 		if (!processed) {
 			return false;
@@ -145,9 +155,15 @@ namespace jni
 			? webrtc::VideoFrameType::kVideoFrameKey
 			: webrtc::VideoFrameType::kVideoFrameDelta);
 
+		const std::span<const uint8_t> encoded(output.data(), output.size());
+
 		if (codec == webrtc::kVideoCodecH264) {
-			h264Parser.ParseBitstream(std::span<const uint8_t>(output.data(), output.size()));
+			h264Parser.ParseBitstream(encoded);
 			image.qp_ = h264Parser.GetLastSliceQp().value_or(-1);
+		}
+		else if (codec == webrtc::kVideoCodecH265) {
+			h265Parser.ParseBitstream(encoded);
+			image.qp_ = h265Parser.GetLastSliceQp().value_or(-1);
 		}
 		else {
 			image.qp_ = -1;
@@ -193,6 +209,57 @@ namespace jni
 		else if (keyFrame) {
 			if (parameterSets.empty()) {
 				RTC_LOG(LS_WARNING) << "H.264 encoder produced a key frame without SPS and PPS";
+				return false;
+			}
+
+			output.insert(output.end(), parameterSets.begin(), parameterSets.end());
+		}
+
+		output.insert(output.end(), bitstream.begin(), bitstream.end());
+
+		return true;
+	}
+
+	bool EncoderOutputProcessor::ProcessH265(std::span<const uint8_t> bitstream, bool & keyFrame,
+		std::vector<uint8_t> & output)
+	{
+		std::vector<uint8_t> parameterSetsFound;
+		bool hasVps = false;
+		bool hasSps = false;
+		bool hasPps = false;
+
+		const std::vector<webrtc::H265::NaluIndex> nalus = webrtc::H265::FindNaluIndices(bitstream);
+
+		if (nalus.empty()) {
+			return false;
+		}
+
+		for (const webrtc::H265::NaluIndex & nalu : nalus) {
+			const size_t end = nalu.payload_start_offset + nalu.payload_size;
+			const uint8_t type = webrtc::H265::ParseNaluType(bitstream[nalu.payload_start_offset]);
+
+			if (type == webrtc::H265::NaluType::kVps || type == webrtc::H265::NaluType::kSps
+				|| type == webrtc::H265::NaluType::kPps)
+			{
+				hasVps |= type == webrtc::H265::NaluType::kVps;
+				hasSps |= type == webrtc::H265::NaluType::kSps;
+				hasPps |= type == webrtc::H265::NaluType::kPps;
+
+				parameterSetsFound.insert(parameterSetsFound.end(),
+					bitstream.begin() + nalu.start_offset, bitstream.begin() + end);
+			}
+			else if (type >= webrtc::H265::NaluType::kBlaWLp && type <= webrtc::H265::NaluType::kRsvIrapVcl23) {
+				// An IRAP picture (IDR, CRA, BLA), which a decoder can start at.
+				keyFrame = true;
+			}
+		}
+
+		if (hasVps && hasSps && hasPps) {
+			parameterSets = std::move(parameterSetsFound);
+		}
+		else if (keyFrame) {
+			if (parameterSets.empty()) {
+				RTC_LOG(LS_WARNING) << "H.265 encoder produced a key frame without VPS, SPS and PPS";
 				return false;
 			}
 
@@ -260,8 +327,8 @@ namespace jni
 			return;
 		}
 
-		// AV1 has no codec specific information; WebRTC sends its frame
-		// dependencies from these, in the dependency descriptor.
+		// AV1 and H.265 have no codec specific information; WebRTC sends
+		// their frame dependencies from these, in the dependency descriptor.
 		auto layerFrames = svcController.NextFrameConfig(/*restart=*/keyFrame);
 		info.generic_frame_info = svcController.OnEncodeDone(layerFrames[0]);
 		info.scalability_mode = webrtc::ScalabilityMode::kL1T1;
@@ -276,7 +343,9 @@ namespace jni
 
 	webrtc::VideoEncoder::ScalingSettings EncoderOutputProcessor::GetScalingSettings() const
 	{
-		if (codec == webrtc::kVideoCodecH264) {
+		// H.265 has no thresholds of its own in WebRTC yet and uses those of
+		// H.264 (bugs.webrtc.org/13485).
+		if (codec == webrtc::kVideoCodecH264 || codec == webrtc::kVideoCodecH265) {
 			return webrtc::VideoEncoder::ScalingSettings(kLowH264QpThreshold, kHighH264QpThreshold);
 		}
 

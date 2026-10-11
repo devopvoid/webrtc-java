@@ -15,8 +15,13 @@
  */
 
 #include "media/video/codec/macos/VTVideoDecoderFactory.h"
+#include "media/video/codec/macos/VTAv1Decoder.h"
+#include "media/video/codec/macos/VTH265Decoder.h"
 #include "media/video/codec/macos/VTVp9Decoder.h"
+#include "media/video/codec/H265Format.h"
 
+#include "api/video/video_codec_type.h"
+#include "api/video_codecs/video_codec.h"
 #include "rtc_base/logging.h"
 
 #include <VideoToolbox/VideoToolbox.h>
@@ -25,20 +30,39 @@ namespace jni
 {
 	namespace
 	{
-		// Whether this Mac decodes VP9 in hardware. VideoToolbox has the VP9
-		// decoder only after it is registered, so that comes first. The
-		// answer does not change while the process runs, and is asked once.
+		// Whether this Mac decodes the codec in hardware. The answer does not
+		// change while the process runs, and is asked once per codec.
+		bool HasHardwareDecoder(CMVideoCodecType codec, const char * name)
+		{
+			const bool supported = VTIsHardwareDecodeSupported(codec);
+
+			RTC_LOG(LS_INFO) << "VideoToolbox hardware decoder for " << name << ": " << supported;
+
+			return supported;
+		}
+
 		bool HasHardwareVp9Decoder()
 		{
+			// VideoToolbox has the VP9 decoder only after it is registered.
 			static const bool available = [] {
 				VTRegisterSupplementalVideoDecoderIfAvailable(kCMVideoCodecType_VP9);
 
-				const bool supported = VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9);
-
-				RTC_LOG(LS_INFO) << "VideoToolbox hardware decoder for VP9: " << supported;
-
-				return supported;
+				return HasHardwareDecoder(kCMVideoCodecType_VP9, "VP9");
 			}();
+
+			return available;
+		}
+
+		bool HasHardwareAv1Decoder()
+		{
+			static const bool available = HasHardwareDecoder(kCMVideoCodecType_AV1, "AV1");
+
+			return available;
+		}
+
+		bool HasHardwareH265Decoder()
+		{
+			static const bool available = HasHardwareDecoder(kCMVideoCodecType_HEVC, "H.265");
 
 			return available;
 		}
@@ -46,21 +70,47 @@ namespace jni
 
 	std::unique_ptr<VTVideoDecoderFactory> VTVideoDecoderFactory::Create()
 	{
-		if (!HasHardwareVp9Decoder()) {
+		std::vector<webrtc::SdpVideoFormat> formats;
+
+		if (HasHardwareVp9Decoder()) {
+			formats.push_back(webrtc::SdpVideoFormat::VP9Profile0());
+		}
+		if (HasHardwareAv1Decoder()) {
+			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());
+		}
+		if (HasHardwareH265Decoder()) {
+			formats.push_back(CreateH265MainFormat());
+		}
+
+		if (formats.empty()) {
 			return nullptr;
 		}
 
-		return std::unique_ptr<VTVideoDecoderFactory>(new VTVideoDecoderFactory());
+		return std::unique_ptr<VTVideoDecoderFactory>(new VTVideoDecoderFactory(std::move(formats)));
+	}
+
+	VTVideoDecoderFactory::VTVideoDecoderFactory(std::vector<webrtc::SdpVideoFormat> formats) :
+		formats(std::move(formats))
+	{
 	}
 
 	std::vector<webrtc::SdpVideoFormat> VTVideoDecoderFactory::GetSupportedFormats() const
 	{
-		return { webrtc::SdpVideoFormat::VP9Profile0() };
+		return formats;
 	}
 
 	std::unique_ptr<webrtc::VideoDecoder> VTVideoDecoderFactory::Create(const webrtc::Environment & env,
 		const webrtc::SdpVideoFormat & format)
 	{
-		return std::make_unique<VTVp9Decoder>();
+		switch (webrtc::PayloadStringToCodecType(format.name)) {
+			case webrtc::kVideoCodecVP9:
+				return std::make_unique<VTVp9Decoder>();
+			case webrtc::kVideoCodecAV1:
+				return std::make_unique<VTAv1Decoder>();
+			case webrtc::kVideoCodecH265:
+				return std::make_unique<VTH265Decoder>();
+			default:
+				return nullptr;
+		}
 	}
 }

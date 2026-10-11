@@ -34,7 +34,7 @@
 
 namespace jni
 {
-	// Encodes H.264 or AV1 with NVENC, the encoder of NVIDIA GPUs, on the
+	// Encodes H.264, H.265 or AV1 with NVENC, the encoder of NVIDIA GPUs, on the
 	// primary CUDA context of the device.
 	//
 	// Encoding is synchronous: with no B-frames and a low-latency preset,
@@ -45,7 +45,7 @@ namespace jni
 	class NvencVideoEncoder : public webrtc::VideoEncoder
 	{
 		public:
-			// The codec is H.264 or AV1.
+			// The codec is H.264, H.265 or AV1.
 			NvencVideoEncoder(NvencLibrary & library, webrtc::VideoCodecType codec, const webrtc::SdpVideoFormat & format);
 			~NvencVideoEncoder() override;
 

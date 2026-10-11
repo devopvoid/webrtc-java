@@ -17,14 +17,21 @@
 #include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
 #include "media/video/codec/macos/VTVideoDecoderFactory.h"
+#include "media/video/codec/macos/VTVideoEncoderFactory.h"
 
 namespace jni
 {
 	std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> CreatePlatformHardwareVideoEncoderFactories()
 	{
-		// H.264 is encoded through VideoToolbox by the default encoders, and
-		// VideoToolbox has no encoder for the other codecs.
-		return {};
+		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> factories;
+
+		// H.264 is encoded through VideoToolbox by the default encoders;
+		// H.265 is the codec they lack.
+		if (auto videoToolbox = VTVideoEncoderFactory::Create()) {
+			factories.push_back(std::move(videoToolbox));
+		}
+
+		return factories;
 	}
 
 	std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> CreatePlatformHardwareVideoDecoderFactories()
@@ -32,7 +39,8 @@ namespace jni
 		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> factories;
 
 		// H.264 is decoded through VideoToolbox by the default decoders;
-		// VP9 is the codec they decode in software.
+		// VP9 and AV1 are the codecs they decode in software, and H.265 one
+		// they lack.
 		if (auto videoToolbox = VTVideoDecoderFactory::Create()) {
 			factories.push_back(std::move(videoToolbox));
 		}

@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/windows/MFVideoDecoderFactory.h"
+#include "media/video/codec/H265Format.h"
 #include "media/video/codec/windows/MFDecoderUtils.h"
 #include "media/video/codec/windows/MFVideoDecoder.h"
 #include "platform/windows/ComInitializer.h"
@@ -57,6 +58,7 @@ namespace jni
 	std::unique_ptr<MFVideoDecoderFactory> MFVideoDecoderFactory::Create()
 	{
 		bool h264 = false;
+		bool h265 = false;
 		bool av1 = false;
 		bool vp9 = false;
 
@@ -85,6 +87,10 @@ namespace jni
 			// decoder that lets it.
 			h264 = SupportsDecoderProfile(device.Get(), D3D11_DECODER_PROFILE_H264_VLD_NOFGT)
 				&& HasDirect3DDecoder(MFVideoFormat_H264, manager.Get());
+			// Windows has an HEVC decoder only with the HEVC Video Extensions
+			// installed, or one the GPU vendor provides.
+			h265 = SupportsDecoderProfile(device.Get(), D3D11_DECODER_PROFILE_HEVC_VLD_MAIN)
+				&& HasDirect3DDecoder(MFVideoFormat_HEVC, manager.Get());
 			av1 = SupportsDecoderProfile(device.Get(), D3D11_DECODER_PROFILE_AV1_VLD_PROFILE0)
 				&& HasDirect3DDecoder(MFVideoFormat_AV1, manager.Get());
 			vp9 = SupportsDecoderProfile(device.Get(), D3D11_DECODER_PROFILE_VP9_VLD_PROFILE0)
@@ -94,18 +100,19 @@ namespace jni
 			return nullptr;
 		}
 
-		RTC_LOG(LS_INFO) << "Media Foundation hardware decoders, H.264: " << h264 << ", AV1: " << av1
-			<< ", VP9: " << vp9;
+		RTC_LOG(LS_INFO) << "Media Foundation hardware decoders, H.264: " << h264 << ", H.265: " << h265
+			<< ", AV1: " << av1 << ", VP9: " << vp9;
 
-		if (!h264 && !av1 && !vp9) {
+		if (!h264 && !h265 && !av1 && !vp9) {
 			return nullptr;
 		}
 
-		return std::unique_ptr<MFVideoDecoderFactory>(new MFVideoDecoderFactory(h264, av1, vp9));
+		return std::unique_ptr<MFVideoDecoderFactory>(new MFVideoDecoderFactory(h264, h265, av1, vp9));
 	}
 
-	MFVideoDecoderFactory::MFVideoDecoderFactory(bool h264, bool av1, bool vp9) :
+	MFVideoDecoderFactory::MFVideoDecoderFactory(bool h264, bool h265, bool av1, bool vp9) :
 		h264(h264),
+		h265(h265),
 		av1(av1),
 		vp9(vp9)
 	{
@@ -117,6 +124,9 @@ namespace jni
 
 		if (h264) {
 			formats = webrtc::SupportedH264DecoderCodecs();
+		}
+		if (h265) {
+			formats.push_back(CreateH265MainFormat());
 		}
 		if (av1) {
 			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());
