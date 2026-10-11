@@ -31,7 +31,26 @@ namespace jni
 	{
 		cudaVideoCodec CudaCodecOf(webrtc::VideoCodecType codec)
 		{
-			return codec == webrtc::kVideoCodecVP9 ? cudaVideoCodec_VP9 : cudaVideoCodec_H264;
+			switch (codec) {
+				case webrtc::kVideoCodecVP9:
+					return cudaVideoCodec_VP9;
+				case webrtc::kVideoCodecH265:
+					return cudaVideoCodec_HEVC;
+				case webrtc::kVideoCodecAV1:
+					return cudaVideoCodec_AV1;
+				default:
+					return cudaVideoCodec_H264;
+			}
+		}
+
+		// An AV1 temporal delimiter OBU: type 2, with a size field of 0
+		// (section 5.6 of the AV1 specification).
+		constexpr uint8_t kAv1TemporalDelimiter[] = { 0x12, 0x00 };
+
+		bool StartsWithTemporalDelimiter(const uint8_t * data, size_t size)
+		{
+			// The OBU type is in bits 3 to 6 of the header.
+			return size > 0 && ((data[0] >> 3) & 0x0F) == 2;
 		}
 
 		// How many entries of a frame that never came out are kept.
@@ -131,6 +150,11 @@ namespace jni
 		{
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
+		// The frames of an AV1 spatial layer above the first likewise go to
+		// dav1d, which decodes them as they come.
+		if (codec == webrtc::kVideoCodecAV1 && image.SpatialIndex().value_or(0) > 0) {
+			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+		}
 
 		// The parser needs the parameters of the stream, which a key frame
 		// carries. Until one has come, WebRTC is asked for it.
@@ -163,6 +187,16 @@ namespace jni
 		packet.payload = image.data();
 		packet.payload_size = image.size();
 		packet.timestamp = timestamp;
+
+		// NVDEC's AV1 parser takes temporal units, which begin with a
+		// temporal delimiter; WebRTC's frames come without one.
+		if (codec == webrtc::kVideoCodecAV1 && !StartsWithTemporalDelimiter(image.data(), image.size())) {
+			av1Unit.assign(std::begin(kAv1TemporalDelimiter), std::end(kAv1TemporalDelimiter));
+			av1Unit.insert(av1Unit.end(), image.data(), image.data() + image.size());
+
+			packet.payload = av1Unit.data();
+			packet.payload_size = av1Unit.size();
+		}
 
 		const CUresult result = library.Api().cuvidParseVideoData(parser, &packet);
 

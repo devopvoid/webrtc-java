@@ -31,7 +31,8 @@
 
 namespace jni
 {
-	// Decodes H.264 or VP9 profile 0 on the NVDEC engine of an NVIDIA GPU.
+	// Decodes H.264, H.265 Main, VP9 profile 0 or AV1 profile 0 on the NVDEC
+	// engine of an NVIDIA GPU.
 	//
 	// NVDEC's own parser takes the encoded image, finds the pictures in it and
 	// calls back in three steps: a sequence, which creates the decoder, a
@@ -44,11 +45,12 @@ namespace jni
 	// Whatever NVDEC cannot decode, such as another profile or a size the GPU
 	// does not take, and whatever fails, returns
 	// WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE, so that the software decoder takes
-	// over.
+	// over. H.265 has none, so for it that is an error, and WebRTC asks the
+	// sender for a key frame.
 	class NvdecVideoDecoder : public webrtc::VideoDecoder
 	{
 		public:
-			// The codec is H.264 or VP9.
+			// The codec is H.264, H.265, VP9 or AV1.
 			NvdecVideoDecoder(NvdecLibrary & library, webrtc::VideoCodecType codec);
 			~NvdecVideoDecoder() override;
 
@@ -112,6 +114,9 @@ namespace jni
 
 			// The decoded picture in system memory, NV12.
 			std::vector<uint8_t> nv12;
+
+			// An AV1 frame with the temporal delimiter put in front of it.
+			std::vector<uint8_t> av1Unit;
 
 			int64_t counter;
 			std::map<int64_t, PendingFrame> pendingFrames;
