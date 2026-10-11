@@ -18,25 +18,37 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import dev.onvoid.webrtc.media.video.NativeI420Buffer;
+import dev.onvoid.webrtc.media.video.VideoFrame;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.EncodedImage;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
+import dev.onvoid.webrtc.media.video.codec.VideoCodecStatus;
+import dev.onvoid.webrtc.media.video.codec.VideoDecoder;
+import dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
@@ -52,8 +64,8 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * {@code webrtc.test.hardwareAv1Encoder} for a GPU that encodes AV1,
  * {@code webrtc.test.hardwareH265Encoder} for one that encodes and decodes
  * H.265, which a call in H.265 needs at both ends, having no software codec,
- * and {@code webrtc.test.hardwareVp9Encoder} for one that encodes VP9 (Intel,
- * on Windows), which is tested with hardware VP9 encoding turned on.
+ * and {@code webrtc.test.hardwareVp9Encoder} for one that encodes VP9 (Intel),
+ * which is tested with hardware VP9 encoding turned on.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class HardwareVideoEncoderIntegrationTest extends TestBase {
@@ -70,6 +82,9 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	/** The property that turns on hardware VP9 encoding, which is off by default. */
 	private static final String VP9_ENCODER_PROPERTY = "webrtc.hardware.vp9Encoder";
+
+	/** The property that turns on VA-API's codecs beyond H.264, off by default. */
+	private static final String VAAPI_EXPERIMENTAL_PROPERTY = "webrtc.hardware.vaapiExperimental";
 
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 
@@ -280,7 +295,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	@Test
 	void hardwareEncodesVp9WhenEnabled() throws Exception {
-		assumeTrue(OS.contains("win"), "hardware VP9 encoding is implemented on Windows only");
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware VP9 encoding is implemented on Windows and Linux only");
 
 		String previous = System.setProperty(VP9_ENCODER_PROPERTY, "true");
 
@@ -302,6 +318,57 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 			}
 			else {
 				System.setProperty(VP9_ENCODER_PROPERTY, previous);
+			}
+		}
+	}
+
+	@Test
+	void hardwareH265EncoderSendsWholeAccessUnits() throws Exception {
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware encoders are implemented on Windows and Linux only");
+
+		// On Linux, VA-API's H.265 encoder is there only when turned on.
+		String previous = System.setProperty(VAAPI_EXPERIMENTAL_PROPERTY, "true");
+
+		try {
+			// The receiver needs no H.265 decoder of its own: a Java decoder
+			// checks what arrives, so that a GPU that encodes but does not
+			// decode H.265 is tested as well.
+			boolean available = offersH265(new HardwareVideoEncoderFactory().getSupportedCodecs());
+
+			if (HARDWARE_H265_REQUIRED) {
+				assertTrue(available, "no hardware H.265 encoder");
+			}
+			else {
+				assumeTrue(available, "no hardware H.265 encoder");
+			}
+
+			H265CheckingDecoderFactory decoders = new H265CheckingDecoderFactory();
+			PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+					.setAudioDeviceModule(audioDevModule)
+					.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+					.setVideoDecoderFactory(decoders)
+					.build();
+
+			// 640x360, which hardware H.265 encoders take (see above).
+			try (Run run = new Run(hardware, H265, 640, 360)) {
+				run.awaitFrames(10);
+
+				assertHardware(run.implementation(), true);
+			}
+			finally {
+				hardware.dispose();
+			}
+
+			assertNull(decoders.problem.get(), decoders.problem.get());
+			assertTrue(decoders.keyFrames.get() > 0, "no key frame arrived");
+		}
+		finally {
+			if (previous == null) {
+				System.clearProperty(VAAPI_EXPERIMENTAL_PROPERTY);
+			}
+			else {
+				System.setProperty(VAAPI_EXPERIMENTAL_PROPERTY, previous);
 			}
 		}
 	}
@@ -702,6 +769,111 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 			boolean test() throws InterruptedException;
 
 		}
+	}
+
+
+
+	/**
+	 * Receives H.265 without decoding it: checks that every key frame is a
+	 * whole access unit, with its parameter sets (VPS, SPS, PPS) and an IRAP
+	 * picture, and hands back a blank frame of the encoded size for each
+	 * frame, so that the call goes on. Every other codec goes to the default
+	 * decoders.
+	 */
+	private static final class H265CheckingDecoderFactory implements VideoDecoderFactory {
+
+		final DefaultVideoDecoderFactory builtIn = new DefaultVideoDecoderFactory();
+		final AtomicInteger keyFrames = new AtomicInteger();
+		final AtomicReference<String> problem = new AtomicReference<>();
+
+
+		@Override
+		public List<VideoCodecInfo> getSupportedCodecs() {
+			Map<String, String> parameters = new HashMap<>();
+			parameters.put("profile-id", "1");
+			parameters.put("tier-flag", "0");
+			parameters.put("level-id", "93");
+			parameters.put("tx-mode", "SRST");
+
+			List<VideoCodecInfo> codecs = new ArrayList<>(builtIn.getSupportedCodecs());
+			codecs.add(new VideoCodecInfo("H265", parameters));
+			return codecs;
+		}
+
+		@Override
+		public VideoDecoder createDecoder(VideoCodecInfo info) {
+			if (!"H265".equalsIgnoreCase(info.getName())) {
+				return builtIn.createDecoder(info);
+			}
+
+			return new VideoDecoder() {
+
+				private Callback callback;
+				private int width = 640;
+				private int height = 360;
+
+
+				@Override
+				public VideoCodecStatus initDecode(Settings settings, Callback callback) {
+					this.callback = callback;
+					return VideoCodecStatus.OK;
+				}
+
+				@Override
+				public VideoCodecStatus release() {
+					return VideoCodecStatus.OK;
+				}
+
+				@Override
+				public VideoCodecStatus decode(EncodedImage image) {
+					Set<Integer> types = nalUnitTypes(image.getBuffer());
+
+					if (image.getFrameType() == EncodedImage.FrameType.KEY) {
+						boolean parameterSets = types.contains(32) && types.contains(33) && types.contains(34);
+						boolean irap = types.stream().anyMatch(type -> type >= 16 && type <= 23);
+
+						if (parameterSets && irap) {
+							keyFrames.incrementAndGet();
+						}
+						else {
+							problem.compareAndSet(null, "a key frame with the NAL unit types " + types);
+						}
+					}
+					else if (types.isEmpty()) {
+						problem.compareAndSet(null, "a frame without NAL units");
+					}
+
+					if (image.getEncodedWidth() > 0 && image.getEncodedHeight() > 0) {
+						width = image.getEncodedWidth();
+						height = image.getEncodedHeight();
+					}
+
+					VideoFrame frame = new VideoFrame(NativeI420Buffer.allocate(width, height),
+							image.getCaptureTimeNs());
+					callback.onDecodedFrame(frame, null, null);
+					frame.release();
+
+					return VideoCodecStatus.OK;
+				}
+			};
+		}
+
+		/** The types of the NAL units of an access unit in Annex B form. */
+		private static Set<Integer> nalUnitTypes(ByteBuffer accessUnit) {
+			Set<Integer> types = new TreeSet<>();
+			ByteBuffer data = accessUnit.duplicate();
+			int limit = data.limit();
+
+			for (int i = data.position(); i + 3 < limit; i++) {
+				if (data.get(i) == 0 && data.get(i + 1) == 0 && data.get(i + 2) == 1) {
+					types.add((data.get(i + 3) >> 1) & 0x3F);
+					i += 2;
+				}
+			}
+
+			return types;
+		}
+
 	}
 
 }

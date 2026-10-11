@@ -27,18 +27,26 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Platform | H.264 | H.265 | AV1 |
 |---|---|---|---|
 | Windows | NVENC on NVIDIA GPUs, otherwise the Media Foundation encoder of the GPU driver (AMD, Intel) | NVENC on NVIDIA GPUs, otherwise Media Foundation on GPUs that encode H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise Media Foundation on GPUs that encode AV1 (e.g. AMD RDNA3 and newer, Intel Arc) |
-| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs | NVENC on NVIDIA RTX 40 and newer |
+| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs; VA-API (Intel, AMD) when turned on, see below | NVENC on NVIDIA RTX 40 and newer |
 | macOS | VideoToolbox, as with `DefaultVideoEncoderFactory` | VideoToolbox, on Macs with a hardware HEVC encoder, such as all with Apple silicon | Software |
 
 Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
 
-VP9 can be encoded in hardware too, on Windows with the Media Foundation VP9 encoder of the GPU driver, which Intel GPUs have. It is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
+VP9 can be encoded in hardware too, with the VP9 encoder of the GPU driver, which Intel GPUs have: through Media Foundation on Windows and VA-API on Linux. It is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
 
 ```java
 System.setProperty("webrtc.hardware.vp9Encoder", "true");
 ```
 
 Where the GPU has no VP9 encoder, or the stream asks for SVC, VP9 is still encoded with libvpx.
+
+On Linux, H.265 can be encoded with the VA-API encoder of Intel and AMD drivers, also off by default until it has been tested on such GPUs:
+
+```java
+System.setProperty("webrtc.hardware.vaapiExperimental", "true");
+```
+
+It is offered only where the driver encodes H.265 Main, and only for sending: Intel and AMD GPUs do not decode H.265 here yet, so the other end has to.
 
 NVENC needs an NVIDIA driver of version 522 or newer on Windows, 520 or newer on Linux. VA-API needs libva 2 and a driver that encodes H.264, such as Intel's `intel-media-va-driver` (iHD) or Mesa's `mesa-va-drivers` for AMD, and access to a render node in `/dev/dri`. All of them are loaded at run time, so nothing needs to be installed on machines without them.
 
@@ -60,7 +68,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Platform | Hardware decoding |
 |---|---|
 | Windows | H.264, H.265 (Main profile), AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
-| Linux | H.264 and VP9 (profile 0) on NVIDIA GPUs, through NVDEC; VA-API, for Intel and AMD GPUs, is not there yet |
+| Linux | H.264 and VP9 (profile 0) on NVIDIA GPUs, through NVDEC; VP9 (profile 0) on Intel and AMD GPUs through VA-API, when turned on with `webrtc.hardware.vaapiExperimental` |
 | macOS | H.264 through VideoToolbox, as with `DefaultVideoDecoderFactory`; VP9 (profile 0) and H.265 (Main profile) through the decoders of VideoToolbox, on Macs that have them, and AV1 (profile 0) on Apple M3 and newer |
 
 On Linux, NVDEC needs an NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1`; both are loaded when the factory is made, so a machine without the driver is not affected. Streams with spatial layers are decoded in software.

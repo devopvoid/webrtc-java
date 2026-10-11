@@ -548,7 +548,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 	private static boolean isHardware(String implementation) {
 		return implementation.contains("VideoToolbox") || implementation.contains("MediaFoundation")
-				|| implementation.contains("NVDEC");
+				|| implementation.contains("NVDEC") || implementation.contains("VA-API");
 	}
 
 	/**
