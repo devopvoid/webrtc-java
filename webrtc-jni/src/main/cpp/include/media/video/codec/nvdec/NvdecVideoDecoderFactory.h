@@ -29,10 +29,11 @@
 
 namespace jni
 {
-	// Creates the NVDEC decoders that decode on an NVIDIA GPU, for H.264 and
-	// VP9, whichever the GPU decodes. It offers them in the formats WebRTC's
-	// software decoders offer too: H.264 in all its profiles, and VP9 in
-	// profile 0.
+	// Creates the NVDEC decoders that decode on an NVIDIA GPU, for H.264,
+	// H.265, VP9 and AV1, whichever the GPU decodes. It offers them in the
+	// formats WebRTC's software decoders offer too: H.264 in all its profiles,
+	// and VP9 and AV1 in profile 0. H.265, which WebRTC has no decoder of its
+	// own for, is offered in Main profile.
 	class NvdecVideoDecoderFactory : public webrtc::VideoDecoderFactory
 	{
 		public:

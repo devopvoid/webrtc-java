@@ -58,7 +58,8 @@ namespace jni
 	{
 		public:
 			// Returns the library, or null if there is no NVIDIA driver, no
-			// CUDA device, or a device that decodes neither H.264 nor VP9.
+			// CUDA device, or a device that decodes none of H.264, H.265, VP9
+			// and AV1.
 			static NvdecLibrary * Get();
 
 			NvdecLibrary(const NvdecLibrary &) = delete;
@@ -69,8 +70,12 @@ namespace jni
 			// The name of the device, e.g. "NVIDIA GeForce RTX 4070".
 			const std::string & DeviceName() const;
 
+			// Whether the device decodes the codec at all, 8 bit 4:2:0. AV1
+			// only newer GPUs do (since Ampere).
 			bool SupportsH264() const;
+			bool SupportsH265() const;
 			bool SupportsVp9() const;
+			bool SupportsAv1() const;
 
 			// Whether the device decodes the codec, 8 bit 4:2:0, at this
 			// coded size. Needs the context current.
@@ -100,7 +105,9 @@ namespace jni
 			CUdevice device = 0;
 			std::string deviceName;
 			bool h264 = false;
+			bool h265 = false;
 			bool vp9 = false;
+			bool av1 = false;
 	};
 
 	// Makes a CUDA context current on the calling thread for as long as it

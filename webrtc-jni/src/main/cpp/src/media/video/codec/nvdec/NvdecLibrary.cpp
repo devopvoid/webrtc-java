@@ -103,19 +103,22 @@ namespace jni
 
 		if (PushContext(context)) {
 			h264 = QueryCodec(cudaVideoCodec_H264);
+			h265 = QueryCodec(cudaVideoCodec_HEVC);
 			vp9 = QueryCodec(cudaVideoCodec_VP9);
+			av1 = QueryCodec(cudaVideoCodec_AV1);
 
 			PopContext();
 		}
 
 		ReleaseContext();
 
-		if (!h264 && !vp9) {
-			RTC_LOG(LS_INFO) << "NVDEC: " << deviceName << " decodes neither H.264 nor VP9";
+		if (!h264 && !h265 && !vp9 && !av1) {
+			RTC_LOG(LS_INFO) << "NVDEC: " << deviceName << " decodes none of H.264, H.265, VP9 and AV1";
 			return false;
 		}
 
-		RTC_LOG(LS_INFO) << "NVDEC available on " << deviceName << ", H.264: " << h264 << ", VP9: " << vp9;
+		RTC_LOG(LS_INFO) << "NVDEC available on " << deviceName << ", H.264: " << h264 << ", H.265: " << h265
+			<< ", VP9: " << vp9 << ", AV1: " << av1;
 
 		return true;
 	}
@@ -162,9 +165,19 @@ namespace jni
 		return h264;
 	}
 
+	bool NvdecLibrary::SupportsH265() const
+	{
+		return h265;
+	}
+
 	bool NvdecLibrary::SupportsVp9() const
 	{
 		return vp9;
+	}
+
+	bool NvdecLibrary::SupportsAv1() const
+	{
+		return av1;
 	}
 
 	bool NvdecLibrary::RetainContext(CUcontext * context) const
