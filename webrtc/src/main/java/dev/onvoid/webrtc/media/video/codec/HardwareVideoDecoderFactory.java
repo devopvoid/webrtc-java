@@ -51,12 +51,14 @@ import java.util.Objects;
  * to libvpx and dav1d. Where there is no hardware decoder, this factory
  * decodes like a {@link DefaultVideoDecoderFactory}.
  * <p>
- * On Linux, H.264 and VP9 (profile 0) are decoded on NVIDIA GPUs with NVDEC,
- * loaded from the NVIDIA driver when the factory is made; a machine without
- * the driver is not affected. Streams with spatial layers go to libvpx.
- * VP9 (profile 0) is decoded with VA-API on the GPUs of Intel and AMD only
- * with the system property {@code webrtc.hardware.vaapiExperimental} set to
- * {@code true}: the decoder has not been tested on such a GPU yet.
+ * On Linux, H.264, H.265 (Main profile), VP9 (profile 0) and AV1 (profile 0)
+ * are decoded on NVIDIA GPUs with NVDEC, each where the GPU decodes it (AV1
+ * since Ampere), loaded from the NVIDIA driver when the factory is made; a
+ * machine without the driver is not affected. Streams with spatial layers go
+ * to libvpx and dav1d. VP9 (profile 0) is decoded with VA-API on the GPUs of
+ * Intel and AMD only with the system property
+ * {@code webrtc.hardware.vaapiExperimental} set to {@code true}: the decoder
+ * has not been tested on such a GPU yet.
  * <p>
  * The supported codecs are those of a {@link DefaultVideoDecoderFactory}, in
  * the same order. H.265 comes after them, only where the hardware decodes it:

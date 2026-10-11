@@ -49,8 +49,9 @@ namespace jni
 	{
 		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> factories;
 
-		// NVDEC on NVIDIA GPUs; VA-API for the GPUs of Intel and AMD, only if
-		// asked for, since it has not been tested on such a GPU yet.
+		// NVDEC on NVIDIA GPUs, for H.264, H.265, VP9 and AV1; VA-API for the
+		// GPUs of Intel and AMD, only if asked for, since it has not been
+		// tested on such a GPU yet.
 		if (auto nvdec = NvdecVideoDecoderFactory::Create()) {
 			factories.push_back(std::move(nvdec));
 		}

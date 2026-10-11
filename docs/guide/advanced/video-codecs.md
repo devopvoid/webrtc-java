@@ -68,7 +68,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Platform | Hardware decoding |
 |---|---|
 | Windows | H.264, H.265 (Main profile), AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
-| Linux | H.264 and VP9 (profile 0) on NVIDIA GPUs, through NVDEC; VP9 (profile 0) on Intel and AMD GPUs through VA-API, when turned on with `webrtc.hardware.vaapiExperimental` |
+| Linux | H.264, H.265 (Main profile), VP9 and AV1 (profile 0) on NVIDIA GPUs that decode them, through NVDEC; VP9 (profile 0) on Intel and AMD GPUs through VA-API, when turned on with `webrtc.hardware.vaapiExperimental` |
 | macOS | H.264 through VideoToolbox, as with `DefaultVideoDecoderFactory`; VP9 (profile 0) and H.265 (Main profile) through the decoders of VideoToolbox, on Macs that have them, and AV1 (profile 0) on Apple M3 and newer |
 
 On Linux, NVDEC needs an NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1`; both are loaded when the factory is made, so a machine without the driver is not affected. Streams with spatial layers are decoded in software.
