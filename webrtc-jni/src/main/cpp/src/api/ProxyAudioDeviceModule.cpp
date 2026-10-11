@@ -34,7 +34,8 @@ namespace jni
 			delegate_(std::move(delegate)),
 			captureEnabled_(false),
 			gate_(captureEnabled_),
-			gateRegistered_(false)
+			gateRegistered_(false),
+			workerThread_(nullptr)
 	{
 	}
 
@@ -52,6 +53,20 @@ namespace jni
 	}
 
 	void ProxyAudioDeviceModule::SetCaptureEnabled(bool enabled)
+	{
+		webrtc::Thread * workerThread = workerThread_.load(std::memory_order_acquire);
+
+		if (workerThread) {
+			workerThread->BlockingCall([this, enabled]() {
+				ApplyCaptureEnabled(enabled);
+			});
+		}
+		else {
+			ApplyCaptureEnabled(enabled);
+		}
+	}
+
+	void ProxyAudioDeviceModule::ApplyCaptureEnabled(bool enabled)
 	{
 		captureEnabled_.store(enabled, std::memory_order_release);
 
@@ -85,6 +100,10 @@ namespace jni
 
 		if (result == 0) {
 			gateRegistered_ = audioCallback != nullptr;
+
+			// WebRtcVoiceEngine registers and unregisters its transport on the
+			// factory's worker thread.
+			workerThread_.store(audioCallback ? webrtc::Thread::Current() : nullptr, std::memory_order_release);
 		}
 
 		return result;

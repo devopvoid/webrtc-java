@@ -94,9 +94,6 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	private long signalingThreadHandle;
 
 	@SuppressWarnings("unused")
-	private long workerThreadHandle;
-
-	@SuppressWarnings("unused")
 	private long audioModuleHandle;
 
 	/** Guards {@link #audioInputMode}. */

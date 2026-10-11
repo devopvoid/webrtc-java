@@ -20,6 +20,7 @@
 #include "api/audio/audio_device.h"
 #include "api/audio/audio_device_defines.h"
 #include "api/scoped_refptr.h"
+#include "rtc_base/thread.h"
 
 #include <atomic>
 #include <cstdint>
@@ -61,8 +62,12 @@ namespace jni
 			~ProxyAudioDeviceModule() override;
 
 			// Enables or disables the device capture path. May be called from any
-			// thread. Callers that must not interleave with AudioState starting a
-			// recording should run this on the factory's worker thread.
+			// thread. AudioState starts and stops the module's recording on the
+			// factory's worker thread, so the switch is made there to keep the two
+			// from interleaving. The factory creates and owns that thread; this
+			// proxy learns it when WebRTC registers its transport, which it does
+			// on the worker thread. Until then no send stream can exist, and the
+			// switch is made on the calling thread.
 			void SetCaptureEnabled(bool enabled);
 			bool CaptureEnabled() const;
 
@@ -145,6 +150,8 @@ namespace jni
 			std::optional<Stats> GetStats() const override;
 
 		private:
+			void ApplyCaptureEnabled(bool enabled);
+
 			// The AudioTransport registered with the wrapped module in place of
 			// the one WebRTC registers with this proxy. Render calls are always
 			// forwarded; recorded data is forwarded only while capture is enabled.
@@ -203,6 +210,8 @@ namespace jni
 			std::atomic<bool> captureEnabled_;
 			TransportGate gate_;
 			bool gateRegistered_;
+			// The factory's worker thread, set while WebRTC's transport is registered.
+			std::atomic<webrtc::Thread *> workerThread_;
 	};
 }
 
