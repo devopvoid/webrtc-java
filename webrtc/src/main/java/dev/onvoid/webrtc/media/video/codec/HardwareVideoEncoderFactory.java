@@ -40,6 +40,11 @@ import java.util.Objects;
  * have an AV1 encoder, with NVENC or Media Foundation, as a single layer; a
  * stream that asks for SVC is encoded in software. H.265 (Main profile) is
  * encoded with NVENC or Media Foundation on GPUs that have an H.265 encoder.
+ * VP9 (profile 0) is encoded with Media Foundation on GPUs that have a VP9
+ * encoder, which on Windows are Intel's, but only with the system property
+ * {@code webrtc.hardware.vp9Encoder} set to {@code true} when the factory is
+ * created: the encoder has not been tested on such a GPU yet. Without it, VP9
+ * is encoded with libvpx.
  * A hardware encoder that fails to start, for example because the GPU has no
  * encoder sessions left, or fails while encoding, is replaced by the next one
  * in line, and finally by the software encoder of the same codec, so a stream

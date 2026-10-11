@@ -61,6 +61,8 @@ namespace jni
 					return MFVideoFormat_AV1;
 				case webrtc::kVideoCodecH265:
 					return MFVideoFormat_HEVC;
+				case webrtc::kVideoCodecVP9:
+					return MFVideoFormat_VP90;
 				default:
 					return MFVideoFormat_H264;
 			}
@@ -308,6 +310,12 @@ namespace jni
 		else if (codec == webrtc::kVideoCodecH265) {
 			// Main profile, 8-bit 4:2:0, what the factory offers.
 			outputType->SetUINT32(MF_MT_VIDEO_PROFILE, eAVEncH265VProfile_Main_420_8);
+
+			hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
+		}
+		else if (codec == webrtc::kVideoCodecVP9) {
+			// 8-bit 4:2:0: VP9 profile 0, what WebRTC offers.
+			outputType->SetUINT32(MF_MT_VIDEO_PROFILE, eAVEncVP9VProfile_420_8);
 
 			hr = transform->SetOutputType(outputStreamId, outputType.Get(), 0);
 		}

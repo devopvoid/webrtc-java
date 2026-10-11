@@ -21,6 +21,7 @@
 #include "common_video/h264/h264_common.h"
 #include "common_video/h265/h265_common.h"
 #include "modules/video_coding/codecs/interface/common_constants.h"
+#include "modules/video_coding/utility/vp9_uncompressed_header_parser.h"
 #include "rtc_base/logging.h"
 
 namespace jni
@@ -30,6 +31,10 @@ namespace jni
 		// The QP thresholds of WebRTC's own H.264 encoder.
 		constexpr int kLowH264QpThreshold = 24;
 		constexpr int kHighH264QpThreshold = 37;
+
+		// Those of the Java VP9 encoders, for a QP of 0 to 255.
+		constexpr int kLowVp9QpThreshold = 96;
+		constexpr int kHighVp9QpThreshold = 185;
 
 		// AV1 OBU types, section 6.2.2 of the AV1 specification.
 		constexpr uint8_t kObuSequenceHeader = 1;
@@ -121,11 +126,14 @@ namespace jni
 		if (mode == format.parameters.end() || mode->second != "1") {
 			packetizationMode = webrtc::H264PacketizationMode::SingleNalUnit;
 		}
+
+		gof.SetGofInfoVP9(webrtc::TemporalStructureMode::kTemporalStructureMode1);
 	}
 
 	void EncoderOutputProcessor::Reset()
 	{
 		parameterSets.clear();
+		gofIndex = 0;
 	}
 
 	bool EncoderOutputProcessor::Process(std::span<const uint8_t> bitstream, bool keyFrame,
@@ -140,6 +148,11 @@ namespace jni
 				break;
 			case webrtc::kVideoCodecH265:
 				processed = ProcessH265(bitstream, keyFrame, output);
+				break;
+			case webrtc::kVideoCodecVP9:
+				// No parameter sets: every key frame carries what it needs.
+				output.assign(bitstream.begin(), bitstream.end());
+				processed = !output.empty();
 				break;
 			default:
 				processed = ProcessH264(bitstream, keyFrame, output);
@@ -164,6 +177,10 @@ namespace jni
 		else if (codec == webrtc::kVideoCodecH265) {
 			h265Parser.ParseBitstream(encoded);
 			image.qp_ = h265Parser.GetLastSliceQp().value_or(-1);
+		}
+		else if (codec == webrtc::kVideoCodecVP9) {
+			int qp = -1;
+			image.qp_ = webrtc::vp9::GetQp(output.data(), output.size(), &qp) ? qp : -1;
 		}
 		else {
 			image.qp_ = -1;
@@ -328,7 +345,8 @@ namespace jni
 		}
 
 		// AV1 and H.265 have no codec specific information; WebRTC sends
-		// their frame dependencies from these, in the dependency descriptor.
+		// their frame dependencies, and those of VP9, from these, in the
+		// dependency descriptor.
 		auto layerFrames = svcController.NextFrameConfig(/*restart=*/keyFrame);
 		info.generic_frame_info = svcController.OnEncodeDone(layerFrames[0]);
 		info.scalability_mode = webrtc::ScalabilityMode::kL1T1;
@@ -339,6 +357,32 @@ namespace jni
 				webrtc::RenderResolution(image._encodedWidth, image._encodedHeight)
 			};
 		}
+
+		if (codec == webrtc::kVideoCodecVP9) {
+			// VP9 has its own RTP header, which WebRTC fills from these: one
+			// spatial and one temporal layer, the group of frames sent with
+			// every key frame.
+			if (keyFrame) {
+				gofIndex = 0;
+			}
+
+			info.codecSpecific.VP9.inter_pic_predicted = !keyFrame;
+			info.codecSpecific.VP9.flexible_mode = false;
+			info.codecSpecific.VP9.ss_data_available = keyFrame;
+			info.codecSpecific.VP9.temporal_idx = webrtc::kNoTemporalIdx;
+			info.codecSpecific.VP9.temporal_up_switch = true;
+			info.codecSpecific.VP9.inter_layer_predicted = false;
+			info.codecSpecific.VP9.gof_idx = static_cast<uint8_t>(gofIndex++ % gof.num_frames_in_gof);
+			info.codecSpecific.VP9.num_spatial_layers = 1;
+			info.codecSpecific.VP9.first_frame_in_picture = true;
+			info.codecSpecific.VP9.spatial_layer_resolution_present = keyFrame;
+
+			if (keyFrame) {
+				info.codecSpecific.VP9.width[0] = image._encodedWidth;
+				info.codecSpecific.VP9.height[0] = image._encodedHeight;
+				info.codecSpecific.VP9.gof.CopyGofInfoVP9(gof);
+			}
+		}
 	}
 
 	webrtc::VideoEncoder::ScalingSettings EncoderOutputProcessor::GetScalingSettings() const
@@ -347,6 +391,9 @@ namespace jni
 		// H.264 (bugs.webrtc.org/13485).
 		if (codec == webrtc::kVideoCodecH264 || codec == webrtc::kVideoCodecH265) {
 			return webrtc::VideoEncoder::ScalingSettings(kLowH264QpThreshold, kHighH264QpThreshold);
+		}
+		if (codec == webrtc::kVideoCodecVP9) {
+			return webrtc::VideoEncoder::ScalingSettings(kLowVp9QpThreshold, kHighVp9QpThreshold);
 		}
 
 		return webrtc::VideoEncoder::ScalingSettings::kOff;

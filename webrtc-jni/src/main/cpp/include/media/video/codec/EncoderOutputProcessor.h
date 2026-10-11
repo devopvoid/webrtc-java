@@ -24,6 +24,7 @@
 #include "common_video/h264/h264_bitstream_parser.h"
 #include "common_video/h265/h265_bitstream_parser.h"
 #include "modules/video_coding/codecs/h264/include/h264_globals.h"
+#include "modules/video_coding/codecs/vp9/include/vp9_globals.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/svc/scalable_video_controller_no_layering.h"
 
@@ -43,7 +44,8 @@ namespace jni
 	// key frame, not necessarily in front of every one, so they are kept and
 	// put back where missing. The frame dependencies WebRTC needs for AV1 and
 	// H.265 are those of a stream without layers, which is all hardware
-	// encoders produce here.
+	// encoders produce here. VP9 frames go out as they come, with the VP9
+	// information of a single layer, as the Java encoders get it.
 	class EncoderOutputProcessor
 	{
 		public:
@@ -64,8 +66,9 @@ namespace jni
 				webrtc::CodecSpecificInfo & info);
 
 			// The quality scaling settings that suit the codec: the thresholds
-			// of WebRTC's H.264 encoder, for H.265 as well, and none for AV1,
-			// whose QP is not parsed from the bitstream.
+			// of WebRTC's H.264 encoder, for H.265 as well, those for VP9 of
+			// the Java encoders, and none for AV1, whose QP is not parsed from
+			// the bitstream.
 			webrtc::VideoEncoder::ScalingSettings GetScalingSettings() const;
 
 		private:
@@ -87,6 +90,11 @@ namespace jni
 			webrtc::H264BitstreamParser h264Parser;
 			webrtc::H265BitstreamParser h265Parser;
 			webrtc::ScalableVideoControllerNoLayering svcController;
+
+			// The group of frames VP9 describes: one layer, every frame
+			// referring to the one before.
+			webrtc::GofInfoVP9 gof;
+			size_t gofIndex = 0;
 	};
 }
 
