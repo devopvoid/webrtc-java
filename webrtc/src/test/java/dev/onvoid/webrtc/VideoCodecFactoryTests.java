@@ -229,6 +229,26 @@ class VideoCodecFactoryTests extends TestBase {
 	}
 
 	@Test
+	void javaEncoderDroppingFramesKeepsSending() throws Exception {
+		// A Java encoder drops a frame by producing nothing for it. WebRTC is
+		// told about the frames dropped once a later one comes out, and the
+		// frames encoded still arrive.
+		TestEncoderFactory encoderFactory = new TestEncoderFactory();
+		encoderFactory.dropEveryOtherFrame = true;
+
+		PeerConnectionFactory built = testCodecFactory(encoderFactory, new TestDecoderFactory());
+
+		try {
+			assertFramesReceived(built, TEST_CODEC);
+		}
+		finally {
+			built.dispose();
+		}
+
+		assertTrue(encoderFactory.dropped.get() > 0, "the encoder dropped no frames");
+	}
+
+	@Test
 	void factoryDelegatesToBuiltInCodec() throws Exception {
 		AtomicInteger encoders = new AtomicInteger();
 		AtomicInteger decoders = new AtomicInteger();
@@ -499,9 +519,13 @@ class VideoCodecFactoryTests extends TestBase {
 		final DefaultVideoEncoderFactory builtIn = new DefaultVideoEncoderFactory();
 		final AtomicInteger created = new AtomicInteger();
 		final AtomicReference<TestEncoder> last = new AtomicReference<>();
+		final AtomicInteger dropped = new AtomicInteger();
 		final VideoCodecInfo codec;
 
 		volatile EncodeListener onEncode;
+
+		/** Makes the encoders produce nothing for every other frame. */
+		volatile boolean dropEveryOtherFrame;
 
 
 		TestEncoderFactory() {
@@ -600,6 +624,8 @@ class VideoCodecFactoryTests extends TestBase {
 
 		private Callback callback;
 
+		private int frames;
+
 
 		TestEncoder(TestEncoderFactory factory, boolean h265) {
 			this.factory = factory;
@@ -621,6 +647,12 @@ class VideoCodecFactoryTests extends TestBase {
 
 		@Override
 		public VideoCodecStatus encode(VideoFrame frame, EncodeInfo info) {
+			if (factory.dropEveryOtherFrame && frames++ % 2 == 1) {
+				// Dropped: no output, as a rate controlled encoder would do.
+				factory.dropped.incrementAndGet();
+				return VideoCodecStatus.OK;
+			}
+
 			int width = frame.buffer.getWidth();
 			int height = frame.buffer.getHeight();
 			int luma = frame.buffer.toI420().getDataY().get(0) & 0xFF;

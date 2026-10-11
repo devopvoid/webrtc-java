@@ -164,6 +164,9 @@ namespace jni
 		}
 
 		image.SetEncodedData(webrtc::EncodedImageBuffer::Create(output.data(), output.size()));
+		// A stream without layers: nothing else follows for this frame, which
+		// lets WebRTC release what it keeps of the frame until then.
+		image.set_end_of_temporal_unit(true);
 		image.set_frame_type(keyFrame
 			? webrtc::VideoFrameType::kVideoFrameKey
 			: webrtc::VideoFrameType::kVideoFrameDelta);

@@ -80,6 +80,8 @@ namespace jni
 			int32_t HandleReturnCode(JNIEnv * env, int32_t status, const char * method);
 			void InvalidateCallback(JNIEnv * env);
 			void UpdateEncoderInfo(JNIEnv * env);
+			// Tells WebRTC that a frame given to the encoder will not come out.
+			void ReportDroppedFrame(uint32_t rtpTimestamp);
 
 			ScalingSettings GetScalingSettings(JNIEnv * env) const;
 			std::vector<ResolutionBitrateLimits> GetResolutionBitrateLimits(JNIEnv * env) const;
