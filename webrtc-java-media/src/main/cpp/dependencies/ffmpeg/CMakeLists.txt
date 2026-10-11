@@ -198,10 +198,29 @@ elseif(LINUX AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64|ar
         --enable-hwaccel=vp9_nvdec
         --enable-hwaccel=av1_nvdec
     )
+    # Vulkan Video, for the GPUs of Intel and AMD, which have no NVDEC: the
+    # player tries it after NVDEC. FFmpeg loads the Vulkan loader
+    # (libvulkan.so.1) with dlopen when a device is created, so, as with NVDEC,
+    # the libraries load on a machine without Vulkan. The build needs the
+    # Vulkan headers, newer than distributions have (VP9 needs 1.4.317), which
+    # dependencies/vulkan carries, found through a pkg-config file made below.
+    # The decoding itself is the driver's: Mesa (ANV for Intel, RADV for AMD)
+    # or NVIDIA's, recent enough to have the video extensions of each codec.
+    set(FFMPEG_VULKAN TRUE)
+
+    list(APPEND FFMPEG_COMPONENTS
+        --enable-vulkan
+        --enable-hwaccel=h264_vulkan
+        --enable-hwaccel=hevc_vulkan
+        --enable-hwaccel=vp9_vulkan
+        --enable-hwaccel=av1_vulkan
+    )
 endif()
 
-# The parent adds the license of the NVDEC headers to the platform jar.
+# The parent adds the licenses of the NVDEC and Vulkan headers to the platform
+# jar.
 set(FFMPEG_NVDEC "${FFMPEG_NVDEC}" PARENT_SCOPE)
+set(FFMPEG_VULKAN "${FFMPEG_VULKAN}" PARENT_SCOPE)
 
 # Written next to an install once it is built, naming the components it was
 # built with. Without it, an install from before a component was added would
@@ -875,26 +894,36 @@ fi
         set(FFMPEG_MAKE "${MAKE_EXECUTABLE}")
     endif()
 
-    if(FFMPEG_NVDEC)
-        # configure looks for the NVDEC headers through pkg-config, so that
-        # needs to be there, and to know where the vendored headers are.
+    if(FFMPEG_NVDEC OR FFMPEG_VULKAN)
+        # configure looks for the NVDEC and Vulkan headers through pkg-config,
+        # so that needs to be there, and to know where the vendored headers
+        # are.
         find_program(PKG_CONFIG_EXECUTABLE NAMES pkg-config pkgconf)
 
         if(NOT PKG_CONFIG_EXECUTABLE)
             message(FATAL_ERROR
-                "No pkg-config, which FFmpeg's configure uses to find the NVDEC headers. "
+                "No pkg-config, which FFmpeg's configure uses to find the NVDEC and Vulkan headers. "
                 "Install it, for example with: sudo apt-get install pkg-config")
         endif()
 
-        get_filename_component(FFNVCODEC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../ffnvcodec" ABSOLUTE)
-        set(FFNVCODEC_PC_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffnvcodec-pc")
+        set(HEADERS_PC_DIR "${CMAKE_CURRENT_BINARY_DIR}/headers-pc")
 
-        configure_file("${FFNVCODEC_DIR}/ffnvcodec.pc.in" "${FFNVCODEC_PC_DIR}/ffnvcodec.pc" @ONLY)
+        if(FFMPEG_NVDEC)
+            get_filename_component(FFNVCODEC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../ffnvcodec" ABSOLUTE)
+
+            configure_file("${FFNVCODEC_DIR}/ffnvcodec.pc.in" "${HEADERS_PC_DIR}/ffnvcodec.pc" @ONLY)
+        endif()
+        if(FFMPEG_VULKAN)
+            get_filename_component(VULKAN_HEADERS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../vulkan" ABSOLUTE)
+
+            configure_file("${VULKAN_HEADERS_DIR}/vulkan.pc.in" "${HEADERS_PC_DIR}/vulkan.pc" @ONLY)
+        endif()
 
         # Only our directory: a sysroot or library path of the host would put
-        # the includedir somewhere it is not.
+        # the includedir somewhere it is not, and the host's own vulkan.pc
+        # would name headers too old for VP9.
         set(FFMPEG_SHELL_PREAMBLE
-"${FFMPEG_SHELL_PREAMBLE}export PKG_CONFIG_PATH=\"${FFNVCODEC_PC_DIR}:$PKG_CONFIG_PATH\"
+"${FFMPEG_SHELL_PREAMBLE}export PKG_CONFIG_PATH=\"${HEADERS_PC_DIR}:$PKG_CONFIG_PATH\"
 unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
 ")
     endif()

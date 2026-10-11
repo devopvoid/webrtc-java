@@ -201,3 +201,17 @@ if(FFMPEG_NVDEC)
                 "${FFNVCODEC_LICENSES_DIR}/LICENSE"
         COMMENT "Collecting the license of the NVDEC headers for the platform jar")
 endif()
+
+# So do the Vulkan headers it was built against for Vulkan Video.
+if(FFMPEG_VULKAN)
+    set(VULKAN_LICENSES_DIR "${NATIVES_DIR}/META-INF/licenses/vulkan")
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${VULKAN_LICENSES_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/vulkan/LICENSE.md"
+                "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/vulkan/LICENSES/Apache-2.0.txt"
+                "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/vulkan/LICENSES/MIT.txt"
+                "${VULKAN_LICENSES_DIR}"
+        COMMENT "Collecting the licenses of the Vulkan headers for the platform jar")
+endif()

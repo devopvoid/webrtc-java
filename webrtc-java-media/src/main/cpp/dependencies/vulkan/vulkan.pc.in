@@ -1,0 +1,7 @@
+prefix=@VULKAN_HEADERS_DIR@
+includedir=${prefix}/include
+
+Name: Vulkan-Loader
+Description: Vulkan headers, for a build that loads the Vulkan loader at run time
+Version: 1.4.317
+Cflags: -I${includedir}

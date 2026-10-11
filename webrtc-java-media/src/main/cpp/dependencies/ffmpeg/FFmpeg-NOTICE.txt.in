@@ -57,11 +57,12 @@ HEVC/H.265
 Disclaimer regarding HEVC/H.265:
 This project decodes HEVC/H.265 video through hardware acceleration only, using
 the hardware decoders of the operating system or GPU (VideoToolbox, Direct3D
-11/12, NVDEC). It does not include, bundle, or distribute any software-based
-HEVC encoder (such as x265), and it never decodes HEVC in software. The FFmpeg
-libraries in the webrtc-java-media platform jars that decode HEVC in hardware
-(all but 32-bit ARM Linux) contain FFmpeg's HEVC decoder, because FFmpeg's
-hardware decoding runs through it: it reads the stream's headers and passes the
-coded data to the hardware decoder, which decodes the pictures. End-users and distributors are responsible for ensuring that the
-underlying operating system or hardware platform holds a valid license for HEVC
-playback and encoding.
+11/12, NVDEC, Vulkan Video). It does not include, bundle, or distribute any
+software-based HEVC encoder (such as x265), and it never decodes HEVC in
+software. The FFmpeg libraries in the webrtc-java-media platform jars that
+decode HEVC in hardware (all but 32-bit ARM Linux) contain FFmpeg's HEVC
+decoder, because FFmpeg's hardware decoding runs through it: it reads the
+stream's headers and passes the coded data to the hardware decoder, which
+decodes the pictures. End-users and distributors are responsible for ensuring
+that the underlying operating system or hardware platform holds a valid license
+for HEVC playback and encoding.
