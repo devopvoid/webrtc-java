@@ -49,9 +49,11 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * A machine without a hardware encoder skips the tests that need one, as CI
  * runners do. Set the system property {@code webrtc.test.hardwareEncoder} to
  * {@code true} on a machine that has one, to make those tests fail instead,
- * {@code webrtc.test.hardwareAv1Encoder} for a GPU that encodes AV1, and
+ * {@code webrtc.test.hardwareAv1Encoder} for a GPU that encodes AV1,
  * {@code webrtc.test.hardwareH265Encoder} for one that encodes and decodes
- * H.265, which a call in H.265 needs at both ends, having no software codec.
+ * H.265, which a call in H.265 needs at both ends, having no software codec,
+ * and {@code webrtc.test.hardwareVp9Encoder} for one that encodes VP9 (Intel,
+ * on Windows), which is tested with hardware VP9 encoding turned on.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class HardwareVideoEncoderIntegrationTest extends TestBase {
@@ -63,6 +65,11 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	private static final boolean HARDWARE_AV1_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareAv1Encoder");
 
 	private static final boolean HARDWARE_H265_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareH265Encoder");
+
+	private static final boolean HARDWARE_VP9_REQUIRED = Boolean.getBoolean("webrtc.test.hardwareVp9Encoder");
+
+	/** The property that turns on hardware VP9 encoding, which is off by default. */
+	private static final String VP9_ENCODER_PROPERTY = "webrtc.hardware.vp9Encoder";
 
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 
@@ -78,6 +85,10 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	private static final Predicate<RTCRtpCodecCapability> AV1 = codec -> "AV1".equalsIgnoreCase(codec.getName());
 
 	private static final Predicate<RTCRtpCodecCapability> H265 = codec -> "H265".equalsIgnoreCase(codec.getName());
+
+	private static final Predicate<RTCRtpCodecCapability> VP9 = codec ->
+			"VP9".equalsIgnoreCase(codec.getName())
+					&& "0".equals(codec.getSDPFmtp().getOrDefault("profile-id", "0"));
 
 
 	@Test
@@ -246,6 +257,53 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
 				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
 				.build();
+	}
+
+	@Test
+	void vp9HardwareEncodingIsOptIn() throws Exception {
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware encoders are implemented on Windows and Linux only");
+		assumeTrue(System.getProperty(VP9_ENCODER_PROPERTY) == null, VP9_ENCODER_PROPERTY + " is set");
+
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try {
+			// Without the property, VP9 stays with libvpx on every GPU.
+			String implementation = encoderImplementation(hardware, VP9);
+
+			assertTrue(implementation.contains("libvpx"), implementation);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void hardwareEncodesVp9WhenEnabled() throws Exception {
+		assumeTrue(OS.contains("win"), "hardware VP9 encoding is implemented on Windows only");
+
+		String previous = System.setProperty(VP9_ENCODER_PROPERTY, "true");
+
+		try {
+			PeerConnectionFactory hardware = hardwareFactory();
+
+			try {
+				// Only Intel GPUs encode VP9; elsewhere libvpx does, and the
+				// test is skipped unless hardware is required.
+				assertHardware(encoderImplementation(hardware, VP9), HARDWARE_VP9_REQUIRED);
+			}
+			finally {
+				hardware.dispose();
+			}
+		}
+		finally {
+			if (previous == null) {
+				System.clearProperty(VP9_ENCODER_PROPERTY);
+			}
+			else {
+				System.setProperty(VP9_ENCODER_PROPERTY, previous);
+			}
+		}
 	}
 
 	private static boolean offersH265(List<VideoCodecInfo> codecs) {

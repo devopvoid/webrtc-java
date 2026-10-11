@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "media/video/codec/HardwareCodecOptions.h"
 #include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
 #include "media/video/codec/nvenc/NvencVideoEncoderFactory.h"
@@ -32,7 +33,9 @@ namespace jni
 		if (auto nvenc = NvencVideoEncoderFactory::Create()) {
 			factories.push_back(std::move(nvenc));
 		}
-		if (auto mediaFoundation = MFVideoEncoderFactory::Create()) {
+		// VP9 only if asked for: only Intel GPUs encode it, and the encoder
+		// has not been tested on one.
+		if (auto mediaFoundation = MFVideoEncoderFactory::Create(IsHardwareVp9EncoderEnabled())) {
 			factories.push_back(std::move(mediaFoundation));
 		}
 

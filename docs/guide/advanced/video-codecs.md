@@ -32,6 +32,14 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
 
+VP9 can be encoded in hardware too, on Windows with the Media Foundation VP9 encoder of the GPU driver, which Intel GPUs have. It is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
+
+```java
+System.setProperty("webrtc.hardware.vp9Encoder", "true");
+```
+
+Where the GPU has no VP9 encoder, or the stream asks for SVC, VP9 is still encoded with libvpx.
+
 NVENC needs an NVIDIA driver of version 522 or newer on Windows, 520 or newer on Linux. VA-API needs libva 2 and a driver that encodes H.264, such as Intel's `intel-media-va-driver` (iHD) or Mesa's `mesa-va-drivers` for AMD, and access to a render node in `/dev/dri`. All of them are loaded at run time, so nothing needs to be installed on machines without them.
 
 The hardware encoders take over H.264 Constrained Baseline and Baseline with packetization mode 1, and AV1 profile 0, formats the software encoders offer too, so encoding these in hardware never changes what is negotiated. H.265 (Main profile) has no software encoder: it is offered after the other codecs, only where the hardware encodes it, so the codec a peer connection prefers stays the same, and a call uses H.265 only if it is preferred (e.g. with `RTCRtpTransceiver.setCodecPreferences()`) and the other end decodes it. On macOS, VideoToolbox is required to encode H.265 in hardware, and never falls back to its software encoder; a Mac without a hardware HEVC encoder does not offer H.265. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (e.g. from NVENC to Media Foundation on Windows), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
