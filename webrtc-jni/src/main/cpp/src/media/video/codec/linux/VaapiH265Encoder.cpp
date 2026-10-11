@@ -17,14 +17,11 @@
 #include "media/video/codec/linux/VaapiH265Encoder.h"
 
 #include "api/video/encoded_image.h"
-#include "api/video/i420_buffer.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
 #include "rtc_base/logging.h"
-#include "third_party/libyuv/include/libyuv/convert_from.h"
 
 #include <algorithm>
-#include <cstring>
 
 namespace jni
 {
@@ -45,11 +42,6 @@ namespace jni
 		constexpr uint32_t kCodingTypeP = 2;
 
 		constexpr uint32_t kInitialQp = 26;
-
-		// How many seconds of video the rate control may buffer, as a
-		// multiple of the bitrate.
-		constexpr uint32_t kHrdBufferNumerator = 3;
-		constexpr uint32_t kHrdBufferDenominator = 2;
 
 		// The lowest H.265 level whose limits a stream fits in, going by its
 		// picture size and luma sample rate, per table A.8 of the standard;
@@ -100,9 +92,9 @@ namespace jni
 	VaapiH265Encoder::VaapiH265Encoder(VaapiLibrary & library, VAEntrypoint entrypoint,
 		const webrtc::SdpVideoFormat & format) :
 		library(library),
-		va(library.Api()),
 		entrypoint(entrypoint),
 		implementationName("VA-API (" + library.Vendor() + ")"),
+		session(library, "VA-API H.265"),
 		// FFmpeg's choice for a driver that does not say: 32x32 coding tree
 		// blocks, coding blocks of at least 16x16, transform blocks of 4x4 to
 		// 32x32 and three levels of transform hierarchy.
@@ -117,11 +109,7 @@ namespace jni
 		signDataHiding(false),
 		transformSkip(false),
 		cuQpDelta(true),
-		config(VA_INVALID_ID),
-		context(VA_INVALID_ID),
-		inputSurface(VA_INVALID_SURFACE),
-		reconstructed{ VA_INVALID_SURFACE, VA_INVALID_SURFACE },
-		codedBuffer(VA_INVALID_ID),
+		initialized(false),
 		codecSettings(),
 		widthInCtbs(0),
 		heightInCtbs(0),
@@ -142,24 +130,13 @@ namespace jni
 		Release();
 	}
 
-	bool VaapiH265Encoder::Check(VAStatus status, const char * operation) const
-	{
-		if (status == VA_STATUS_SUCCESS) {
-			return true;
-		}
-
-		RTC_LOG(LS_WARNING) << "VA-API H.265: " << operation << " failed: " << library.ErrorString(status);
-
-		return false;
-	}
-
 	void VaapiH265Encoder::QueryCapabilities()
 	{
 		VAConfigAttrib attributes[2] = {};
 		attributes[0].type = VAConfigAttribEncHEVCBlockSizes;
 		attributes[1].type = VAConfigAttribEncHEVCFeatures;
 
-		if (va.GetConfigAttributes(library.Display(), VAProfileHEVCMain, entrypoint, attributes, 2) !=
+		if (library.Api().GetConfigAttributes(library.Display(), VAProfileHEVCMain, entrypoint, attributes, 2) !=
 			VA_STATUS_SUCCESS)
 		{
 			return;
@@ -226,68 +203,18 @@ namespace jni
 		referenceValid = false;
 		outputProcessor.Reset();
 
-		if (!CreateSession()) {
+		// Whole coding tree blocks, which the driver may write all of.
+		if (!session.Create(VAProfileHEVCMain, entrypoint, widthInCtbs << log2CtbSize, heightInCtbs << log2CtbSize)) {
 			Release();
 			return WEBRTC_VIDEO_CODEC_ERROR;
 		}
+
+		initialized = true;
 
 		RTC_LOG(LS_INFO) << implementationName << " H.265 initialized: " << codecSettings.width << "x"
 			<< codecSettings.height << " at " << bitrateBps << " bps, CTB " << ctbSize << ", min CB " << alignment;
 
 		return WEBRTC_VIDEO_CODEC_OK;
-	}
-
-	bool VaapiH265Encoder::CreateSession()
-	{
-		VADisplay display = library.Display();
-
-		VAConfigAttrib attributes[2] = {};
-		attributes[0].type = VAConfigAttribRTFormat;
-		attributes[0].value = VA_RT_FORMAT_YUV420;
-		attributes[1].type = VAConfigAttribRateControl;
-		attributes[1].value = VA_RC_CBR;
-
-		if (!Check(va.CreateConfig(display, VAProfileHEVCMain, entrypoint, attributes, 2, &config),
-			"creating the configuration"))
-		{
-			config = VA_INVALID_ID;
-			return false;
-		}
-
-		// Whole coding tree blocks, which the driver may write all of.
-		const unsigned int width = widthInCtbs << log2CtbSize;
-		const unsigned int height = heightInCtbs << log2CtbSize;
-
-		VASurfaceID surfaces[3] = { VA_INVALID_SURFACE, VA_INVALID_SURFACE, VA_INVALID_SURFACE };
-
-		if (!Check(va.CreateSurfaces(display, VA_RT_FORMAT_YUV420, width, height, surfaces, 3, nullptr, 0),
-			"creating surfaces"))
-		{
-			return false;
-		}
-
-		inputSurface = surfaces[0];
-		reconstructed[0] = surfaces[1];
-		reconstructed[1] = surfaces[2];
-
-		if (!Check(va.CreateContext(display, config, width, height, VA_PROGRESSIVE, surfaces, 3, &context),
-			"creating the context"))
-		{
-			context = VA_INVALID_ID;
-			return false;
-		}
-
-		// Room for a frame that does not compress at all.
-		const unsigned int codedSize = width * height * 3 / 2 + 64 * 1024;
-
-		if (!Check(va.CreateBuffer(display, context, VAEncCodedBufferType, codedSize, 1, nullptr, &codedBuffer),
-			"creating the output buffer"))
-		{
-			codedBuffer = VA_INVALID_ID;
-			return false;
-		}
-
-		return true;
 	}
 
 	int32_t VaapiH265Encoder::RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * encodeCallback)
@@ -299,48 +226,18 @@ namespace jni
 
 	int32_t VaapiH265Encoder::Release()
 	{
-		DestroySession();
+		session.Destroy();
+
+		initialized = false;
+		referenceValid = false;
 
 		return WEBRTC_VIDEO_CODEC_OK;
-	}
-
-	void VaapiH265Encoder::DestroySession()
-	{
-		VADisplay display = library.Display();
-
-		DestroyFrameBuffers();
-
-		if (codedBuffer != VA_INVALID_ID) {
-			va.DestroyBuffer(display, codedBuffer);
-			codedBuffer = VA_INVALID_ID;
-		}
-		if (context != VA_INVALID_ID) {
-			va.DestroyContext(display, context);
-			context = VA_INVALID_ID;
-		}
-
-		VASurfaceID surfaces[3] = { inputSurface, reconstructed[0], reconstructed[1] };
-
-		if (inputSurface != VA_INVALID_SURFACE) {
-			va.DestroySurfaces(display, surfaces, 3);
-		}
-
-		inputSurface = VA_INVALID_SURFACE;
-		reconstructed[0] = VA_INVALID_SURFACE;
-		reconstructed[1] = VA_INVALID_SURFACE;
-
-		if (config != VA_INVALID_ID) {
-			va.DestroyConfig(display, config);
-			config = VA_INVALID_ID;
-		}
-
-		referenceValid = false;
 	}
 
 	int32_t VaapiH265Encoder::Encode(const webrtc::VideoFrame & frame,
 		const std::vector<webrtc::VideoFrameType> * frameTypes)
 	{
-		if (context == VA_INVALID_ID || callback == nullptr) {
+		if (!initialized || callback == nullptr) {
 			return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
 		}
 
@@ -356,14 +253,17 @@ namespace jni
 			pictureOrder = 0;
 		}
 
+		const int alignment = 1 << log2MinCbSize;
 		std::vector<uint8_t> output;
 
-		if (!Upload(frame) || !Submit(idr) || !ReadOutput(output)) {
-			DestroyFrameBuffers();
+		const bool encoded = session.Upload(frame, static_cast<int>(codecSettings.width),
+			static_cast<int>(codecSettings.height), alignment - 1) && Submit(idr) && session.ReadOutput(output);
+
+		session.DropBuffers();
+
+		if (!encoded) {
 			return WEBRTC_VIDEO_CODEC_ERROR;
 		}
-
-		DestroyFrameBuffers();
 
 		webrtc::EncodedImage image;
 		image._encodedWidth = codecSettings.width;
@@ -393,112 +293,19 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool VaapiH265Encoder::Upload(const webrtc::VideoFrame & frame)
-	{
-		webrtc::scoped_refptr<webrtc::I420BufferInterface> i420 = frame.video_frame_buffer()->ToI420();
-
-		if (!i420) {
-			return false;
-		}
-
-		const int width = static_cast<int>(codecSettings.width);
-		const int height = static_cast<int>(codecSettings.height);
-
-		// A frame up to a coding block larger is cropped to the size the
-		// encoder took, which needs no copy; one of another size raced with
-		// a change of size, and is scaled.
-		const int alignment = 1 << log2MinCbSize;
-		const bool cropped = i420->width() >= width && i420->width() - width < alignment
-			&& i420->height() >= height && i420->height() - height < alignment;
-
-		if (!cropped) {
-			webrtc::scoped_refptr<webrtc::I420Buffer> scaled = webrtc::I420Buffer::Create(width, height);
-			scaled->ScaleFrom(*i420);
-			i420 = scaled;
-		}
-
-		VADisplay display = library.Display();
-		VAImage image = {};
-		image.image_id = VA_INVALID_ID;
-
-		// Writing into the surface directly where the driver allows it,
-		// otherwise into an image that is copied into the surface.
-		bool derived = va.DeriveImage(display, inputSurface, &image) == VA_STATUS_SUCCESS
-			&& image.format.fourcc == VA_FOURCC_NV12;
-
-		if (!derived) {
-			if (image.image_id != VA_INVALID_ID) {
-				va.DestroyImage(display, image.image_id);
-			}
-
-			VAImageFormat format = {};
-			format.fourcc = VA_FOURCC_NV12;
-			format.byte_order = VA_LSB_FIRST;
-			format.bits_per_pixel = 12;
-
-			if (!Check(va.CreateImage(display, &format, width, height, &image), "creating an image")) {
-				return false;
-			}
-		}
-
-		void * data = nullptr;
-		bool uploaded = Check(va.MapBuffer(display, image.buf, &data), "mapping an image");
-
-		if (uploaded) {
-			uint8_t * base = static_cast<uint8_t *>(data);
-
-			libyuv::I420ToNV12(i420->DataY(), i420->StrideY(), i420->DataU(), i420->StrideU(),
-				i420->DataV(), i420->StrideV(),
-				base + image.offsets[0], static_cast<int>(image.pitches[0]),
-				base + image.offsets[1], static_cast<int>(image.pitches[1]),
-				width, height);
-
-			va.UnmapBuffer(display, image.buf);
-
-			if (!derived) {
-				uploaded = Check(va.PutImage(display, inputSurface, image.image_id, 0, 0, width, height,
-					0, 0, width, height), "copying an image");
-			}
-		}
-
-		va.DestroyImage(display, image.image_id);
-
-		return uploaded;
-	}
-
 	bool VaapiH265Encoder::Submit(bool idr)
 	{
 		if (idr) {
 			VAEncSequenceParameterBufferHEVC sequence = {};
 			FillSequence(sequence);
 
-			if (!AddBuffer(VAEncSequenceParameterBufferType, &sequence, sizeof(sequence))) {
+			if (!session.AddBuffer(VAEncSequenceParameterBufferType, &sequence, sizeof(sequence))) {
 				return false;
 			}
 		}
 
-		if (idr || ratesChanged) {
-			VAEncMiscParameterRateControl rateControl = {};
-			rateControl.bits_per_second = bitrateBps;
-			rateControl.target_percentage = 100;
-			rateControl.window_size = 1000;
-			rateControl.initial_qp = kInitialQp;
-
-			VAEncMiscParameterFrameRate frameRate = {};
-			// The numerator in the low 16 bits, the denominator in the high.
-			frameRate.framerate = framerate | (1u << 16);
-
-			VAEncMiscParameterHRD hrd = {};
-			hrd.buffer_size = static_cast<uint32_t>(
-				static_cast<uint64_t>(bitrateBps) * kHrdBufferNumerator / kHrdBufferDenominator);
-			hrd.initial_buffer_fullness = hrd.buffer_size / 2;
-
-			if (!AddMiscParameter(VAEncMiscParameterTypeRateControl, &rateControl, sizeof(rateControl)) ||
-				!AddMiscParameter(VAEncMiscParameterTypeFrameRate, &frameRate, sizeof(frameRate)) ||
-				!AddMiscParameter(VAEncMiscParameterTypeHRD, &hrd, sizeof(hrd)))
-			{
-				return false;
-			}
+		if ((idr || ratesChanged) && !session.AddRateControl(bitrateBps, framerate, kInitialQp)) {
+			return false;
 		}
 
 		VAEncPictureParameterBufferHEVC picture = {};
@@ -507,93 +314,9 @@ namespace jni
 		VAEncSliceParameterBufferHEVC slice = {};
 		FillSlice(slice, idr);
 
-		if (!AddBuffer(VAEncPictureParameterBufferType, &picture, sizeof(picture)) ||
-			!AddBuffer(VAEncSliceParameterBufferType, &slice, sizeof(slice)))
-		{
-			return false;
-		}
-
-		VADisplay display = library.Display();
-
-		if (!Check(va.BeginPicture(display, context, inputSurface), "beginning a picture")) {
-			return false;
-		}
-
-		bool rendered = Check(va.RenderPicture(display, context, frameBuffers.data(),
-			static_cast<int>(frameBuffers.size())), "rendering a picture");
-
-		// A picture that was begun has to be ended.
-		bool ended = Check(va.EndPicture(display, context), "ending a picture");
-
-		return rendered && ended && Check(va.SyncSurface(display, inputSurface), "waiting for a picture");
-	}
-
-	bool VaapiH265Encoder::ReadOutput(std::vector<uint8_t> & output)
-	{
-		VADisplay display = library.Display();
-		void * data = nullptr;
-
-		if (!Check(va.MapBuffer(display, codedBuffer, &data), "mapping the output")) {
-			return false;
-		}
-
-		bool complete = true;
-
-		for (auto * segment = static_cast<VACodedBufferSegment *>(data); segment != nullptr;
-			segment = static_cast<VACodedBufferSegment *>(segment->next))
-		{
-			if (segment->status & VA_CODED_BUF_STATUS_SLICE_OVERFLOW_MASK) {
-				complete = false;
-			}
-
-			const uint8_t * bytes = static_cast<const uint8_t *>(segment->buf);
-			output.insert(output.end(), bytes, bytes + segment->size);
-		}
-
-		va.UnmapBuffer(display, codedBuffer);
-
-		if (!complete || output.empty()) {
-			RTC_LOG(LS_WARNING) << "VA-API H.265: a frame did not fit the output buffer";
-			return false;
-		}
-
-		return true;
-	}
-
-	bool VaapiH265Encoder::AddBuffer(VABufferType type, void * data, size_t size)
-	{
-		VABufferID buffer = VA_INVALID_ID;
-
-		if (!Check(va.CreateBuffer(library.Display(), context, type, static_cast<unsigned int>(size), 1, data,
-			&buffer), "creating a parameter buffer"))
-		{
-			return false;
-		}
-
-		frameBuffers.push_back(buffer);
-
-		return true;
-	}
-
-	bool VaapiH265Encoder::AddMiscParameter(VAEncMiscParameterType type, const void * data, size_t size)
-	{
-		// A VAEncMiscParameterBuffer: the type, followed by the parameter.
-		std::vector<uint8_t> buffer(sizeof(VAEncMiscParameterBuffer) + size);
-
-		auto * header = reinterpret_cast<VAEncMiscParameterBuffer *>(buffer.data());
-		header->type = type;
-		std::memcpy(header->data, data, size);
-
-		return AddBuffer(VAEncMiscParameterBufferType, buffer.data(), buffer.size());
-	}
-
-	void VaapiH265Encoder::DestroyFrameBuffers()
-	{
-		for (VABufferID buffer : frameBuffers) {
-			va.DestroyBuffer(library.Display(), buffer);
-		}
-
-		frameBuffers.clear();
+		return session.AddBuffer(VAEncPictureParameterBufferType, &picture, sizeof(picture))
+			&& session.AddBuffer(VAEncSliceParameterBufferType, &slice, sizeof(slice))
+			&& session.Encode();
 	}
 
 	void VaapiH265Encoder::FillSequence(VAEncSequenceParameterBufferHEVC & sequence) const
@@ -633,7 +356,7 @@ namespace jni
 	VAPictureHEVC VaapiH265Encoder::Reference() const
 	{
 		VAPictureHEVC reference = {};
-		reference.picture_id = reconstructed[1 - current];
+		reference.picture_id = session.Reconstructed(1 - current);
 		reference.pic_order_cnt = pictureOrder - 1;
 		// A short-term reference before the current picture.
 		reference.flags = VA_PICTURE_HEVC_RPS_ST_CURR_BEFORE;
@@ -643,7 +366,7 @@ namespace jni
 
 	void VaapiH265Encoder::FillPicture(VAEncPictureParameterBufferHEVC & picture, bool idr) const
 	{
-		picture.decoded_curr_pic.picture_id = reconstructed[current];
+		picture.decoded_curr_pic.picture_id = session.Reconstructed(current);
 		picture.decoded_curr_pic.pic_order_cnt = pictureOrder;
 		picture.decoded_curr_pic.flags = 0;
 
@@ -655,7 +378,7 @@ namespace jni
 			picture.reference_frames[0] = Reference();
 		}
 
-		picture.coded_buf = codedBuffer;
+		picture.coded_buf = session.CodedBuffer();
 		// No collocated picture: there is no temporal motion vector
 		// prediction.
 		picture.collocated_ref_pic_index = 0xFF;

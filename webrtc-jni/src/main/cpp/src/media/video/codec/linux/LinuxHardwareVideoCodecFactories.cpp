@@ -32,9 +32,12 @@ namespace jni
 		if (auto nvenc = NvencVideoEncoderFactory::Create()) {
 			factories.push_back(std::move(nvenc));
 		}
-		// The VA-API codecs beyond H.264 only if asked for: they have not
-		// been tested on an Intel or AMD GPU yet.
-		if (auto vaapi = VaapiVideoEncoderFactory::Create(IsExperimentalVaapiEnabled())) {
+		// The VA-API codecs beyond H.264 only if asked for, H.265 and VP9
+		// each with its own switch: they have not been tested on an Intel or
+		// AMD GPU yet.
+		auto vaapi = VaapiVideoEncoderFactory::Create(IsExperimentalVaapiEnabled(), IsHardwareVp9EncoderEnabled());
+
+		if (vaapi) {
 			factories.push_back(std::move(vaapi));
 		}
 

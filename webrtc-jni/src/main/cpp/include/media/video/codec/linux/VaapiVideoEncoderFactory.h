@@ -33,13 +33,14 @@ namespace jni
 	// and AMD drivers do. It offers H.264 in the profiles WebRTC's software
 	// encoder offers too, and only with packetization mode 1: mode 0 needs
 	// each NAL unit to fit a packet. With the experimental VA-API codecs
-	// turned on, it offers H.265 Main as well, where the driver encodes it.
+	// turned on, it offers H.265 Main as well, and with hardware VP9 encoding
+	// turned on VP9 profile 0, where the driver encodes them.
 	class VaapiVideoEncoderFactory : public webrtc::VideoEncoderFactory
 	{
 		public:
 			// Returns a factory, or null if no GPU driver encodes H.264
 			// through VA-API.
-			static std::unique_ptr<VaapiVideoEncoderFactory> Create(bool experimental);
+			static std::unique_ptr<VaapiVideoEncoderFactory> Create(bool experimental, bool vp9Enabled);
 
 			~VaapiVideoEncoderFactory() override = default;
 
@@ -48,12 +49,15 @@ namespace jni
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
-			VaapiVideoEncoderFactory(VaapiLibrary & library, bool h265, VAEntrypoint h265Entrypoint);
+			VaapiVideoEncoderFactory(VaapiLibrary & library, bool h265, VAEntrypoint h265Entrypoint, bool vp9,
+				VAEntrypoint vp9Entrypoint);
 
 		private:
 			VaapiLibrary & library;
 			const bool h265;
 			const VAEntrypoint h265Entrypoint;
+			const bool vp9;
+			const VAEntrypoint vp9Entrypoint;
 	};
 }
 

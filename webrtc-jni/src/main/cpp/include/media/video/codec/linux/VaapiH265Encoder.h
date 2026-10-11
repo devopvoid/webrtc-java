@@ -18,6 +18,7 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_VAAPI_H265_ENCODER_H_
 
 #include "media/video/codec/EncoderOutputProcessor.h"
+#include "media/video/codec/linux/VaapiEncodeSession.h"
 #include "media/video/codec/linux/VaapiLibrary.h"
 
 #include "api/video/video_frame.h"
@@ -63,15 +64,7 @@ namespace jni
 		private:
 			// What the driver says about the HEVC encoder it has.
 			void QueryCapabilities();
-			bool CreateSession();
-			void DestroySession();
-			bool Upload(const webrtc::VideoFrame & frame);
 			bool Submit(bool idr);
-			bool ReadOutput(std::vector<uint8_t> & output);
-
-			bool AddBuffer(VABufferType type, void * data, size_t size);
-			bool AddMiscParameter(VAEncMiscParameterType type, const void * data, size_t size);
-			void DestroyFrameBuffers();
 
 			void FillSequence(VAEncSequenceParameterBufferHEVC & sequence) const;
 			void FillPicture(VAEncPictureParameterBufferHEVC & picture, bool idr) const;
@@ -79,13 +72,11 @@ namespace jni
 			// The picture the current one refers to.
 			VAPictureHEVC Reference() const;
 
-			bool Check(VAStatus status, const char * operation) const;
-
 		private:
 			VaapiLibrary & library;
-			const VaapiFunctions & va;
 			const VAEntrypoint entrypoint;
 			const std::string implementationName;
+			VaapiEncodeSession session;
 
 			// The sizes, in log2 of luma samples, and the tools the driver
 			// takes.
@@ -101,14 +92,7 @@ namespace jni
 			bool transformSkip;
 			bool cuQpDelta;
 
-			VAConfigID config;
-			VAContextID context;
-			VASurfaceID inputSurface;
-			// The frame being encoded, and the one it refers to.
-			VASurfaceID reconstructed[2];
-			VABufferID codedBuffer;
-			std::vector<VABufferID> frameBuffers;
-
+			bool initialized;
 			webrtc::VideoCodec codecSettings;
 			uint32_t widthInCtbs;
 			uint32_t heightInCtbs;
@@ -117,7 +101,7 @@ namespace jni
 			bool ratesChanged;
 
 			// The picture order count since the last IDR picture, and which of
-			// the reconstructed surfaces holds the reference.
+			// the reconstructed surfaces holds the current picture.
 			int32_t pictureOrder;
 			int current;
 			bool referenceValid;

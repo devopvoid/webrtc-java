@@ -32,7 +32,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
 
-VP9 can be encoded in hardware too, on Windows with the Media Foundation VP9 encoder of the GPU driver, which Intel GPUs have. It is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
+VP9 can be encoded in hardware too, with the VP9 encoder of the GPU driver, which Intel GPUs have: through Media Foundation on Windows and VA-API on Linux. It is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
 
 ```java
 System.setProperty("webrtc.hardware.vp9Encoder", "true");

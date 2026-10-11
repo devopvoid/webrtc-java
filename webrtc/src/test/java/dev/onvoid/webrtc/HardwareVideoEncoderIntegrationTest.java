@@ -64,8 +64,8 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
  * {@code webrtc.test.hardwareAv1Encoder} for a GPU that encodes AV1,
  * {@code webrtc.test.hardwareH265Encoder} for one that encodes and decodes
  * H.265, which a call in H.265 needs at both ends, having no software codec,
- * and {@code webrtc.test.hardwareVp9Encoder} for one that encodes VP9 (Intel,
- * on Windows), which is tested with hardware VP9 encoding turned on.
+ * and {@code webrtc.test.hardwareVp9Encoder} for one that encodes VP9 (Intel),
+ * which is tested with hardware VP9 encoding turned on.
  */
 @Execution(ExecutionMode.SAME_THREAD)
 class HardwareVideoEncoderIntegrationTest extends TestBase {
@@ -295,7 +295,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	@Test
 	void hardwareEncodesVp9WhenEnabled() throws Exception {
-		assumeTrue(OS.contains("win"), "hardware VP9 encoding is implemented on Windows only");
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware VP9 encoding is implemented on Windows and Linux only");
 
 		String previous = System.setProperty(VP9_ENCODER_PROPERTY, "true");
 
