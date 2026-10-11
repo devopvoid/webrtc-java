@@ -220,11 +220,13 @@ MediaPlayer player = new MediaPlayer(new MediaReader(path), videoSource, null, t
 boolean hardware = source.getPlayer().isHardwareDecoding();
 ```
 
-The pictures are the same ones software decoding gives; in the tests, every frame of media in each of these codecs is compared with its software counterpart. Hardware decoding is off unless asked for.
+The pictures are the same ones software decoding gives; in the tests, every frame of media in each of these codecs is compared with its software counterpart (for HEVC, with checksums of the pictures FFmpeg's software decoder gave once). Hardware decoding is off unless asked for, except for H.265/HEVC.
+
+**HEVC is decoded in hardware only.** A player decodes it on the media engine or GPU whether or not the flag is set, and never in software: `isHardwareDecoding()` is always `true` for it. Where the machine has no hardware decoder for HEVC, creating the player fails with an `IOException`; where the hardware does not take a stream (a profile it cannot decode) or fails while playing, playback stops with an error. The fallback below does not apply to it.
 
 - **Platforms:** macOS through VideoToolbox, Windows through Direct3D 12 (Windows 10 version 2004 or later, with a driver that decodes video through it) and otherwise Direct3D 11, and Linux through NVDEC on NVIDIA GPUs (x86-64 and ARM64; the driver provides `libcuda.so.1` and `libnvcuvid.so.1`, which are loaded when a player asks for hardware). The flag is accepted everywhere; where the platform has no hardware decoder, or the FFmpeg build has none for it (32-bit ARM, VA-API on Intel and AMD GPUs), the video is decoded in software, and `isHardwareDecoding()` says so.
 - **Codecs:** H.264, H.265/HEVC, VP9 and AV1, where the GPU decodes them: a GPU that is a few years old may lack AV1, and on a Mac only an M3 or later has it. VP8, MPEG-4 and MJPEG are decoded in software, and so is AV1 where there is no GPU decoder for it (it is decoded by dav1d, which is built into the FFmpeg libraries).
-- **Fallback:** a stream the hardware does not take, such as a profile it cannot decode, is decoded in software without the player noticing more than `isHardwareDecoding()` turning `false`. If the hardware fails before its first picture, the packets it was sent are decoded again in software and none is lost; if it fails after one, decoding goes on in software from the next key frame. A damaged packet is not taken for a hardware failure after the first picture: as with software decoding, playback stops with an error, and the hardware keeps the stream.
+- **Fallback** (every codec but HEVC): a stream the hardware does not take, such as a profile it cannot decode, is decoded in software without the player noticing more than `isHardwareDecoding()` turning `false`. If the hardware fails before its first picture, the packets it was sent are decoded again in software and none is lost; if it fails after one, decoding goes on in software from the next key frame. A damaged packet is not taken for a hardware failure after the first picture: as with software decoding, playback stops with an error, and the hardware keeps the stream.
 - **What it saves** is processor time, not the copy: a decoded picture is read back from the media engine into system memory, and converted to I420 as WebRTC wants it. On an Apple M2, a 1080p H.264 stream took 11.6 ms of processor time per frame in software and 1.4 ms in hardware, and a 4K stream 35.7 ms against 4.2 ms, about seven to eight times less. Per frame, software on all cores is faster on the clock, which does not matter at playback speed. Windows gains less: on an NVIDIA GeForce RTX 3080 through Direct3D 12, a 1080p H.264 stream took about 2.1 ms of processor time per frame against 3.6 ms in software, and a 4K stream 5.4 ms against 6.6 ms. Direct3D 11 reads the picture back more slowly and took more than software at 4K (12.4 ms), which is why Direct3D 12 comes first. These are figures for one machine each and for synthetic media, not a promise; try it on your own streams before relying on it.
 
 ## Playing a Live Stream
@@ -269,7 +271,7 @@ The FFmpeg build is deliberately small, and carries only what this module plays:
 | | |
 | --- | --- |
 | **Containers** | MP4 and MOV, Matroska and WebM, AVI, MPEG-TS, FLV, WAV, MP3, Ogg, FLAC, AAC |
-| **Video** | H.264, H.265/HEVC, VP8, VP9, AV1, MPEG-4 (including Xvid and DivX), Microsoft MPEG-4 v1 to v3, MJPEG |
+| **Video** | H.264, H.265/HEVC (hardware only), VP8, VP9, AV1, MPEG-4 (including Xvid and DivX), Microsoft MPEG-4 v1 to v3, MJPEG |
 | **Audio** | AAC, MP3, MP2, AC-3, Opus, Vorbis, FLAC, PCM, MS and IMA ADPCM |
 
 Audio of any rate or layout is resampled to what WebRTC takes, which is 48 kHz 16-bit PCM in mono or stereo. Video that decodes to I420 — almost all 8-bit H.264, VP8, VP9 and MPEG-4 — reaches the encoder without being copied; anything else is converted first.

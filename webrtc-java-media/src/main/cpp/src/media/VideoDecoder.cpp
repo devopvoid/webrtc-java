@@ -48,6 +48,16 @@ namespace
 #endif
 	}
 
+	// Whether the codec is decoded on the hardware only, never in software:
+	// HEVC. FFmpeg's decoder of it is in the build all the same, because the
+	// hardware decoders run inside it (it reads the headers and hands the
+	// slices to the hardware), but it decodes no picture itself. Where the
+	// hardware cannot, opening or decoding the stream fails.
+	bool IsHardwareOnly(AVCodecID id)
+	{
+		return id == AV_CODEC_ID_HEVC;
+	}
+
 	// The decoder to open for a codec. Software gets the one FFmpeg prefers.
 	// Hardware gets it too, unless it has no hardware configuration: where
 	// another decoder of the codec stands in front of the one that decodes on
@@ -105,9 +115,27 @@ namespace ffmpeg
 
 		stream_ = stream;
 
+		// A codec decoded on the hardware only goes there whether that was
+		// asked for or not.
+		const bool hardware_only = IsHardwareOnly(stream->codecpar->codec_id);
+
+		if (hardware_only) {
+			hardware = true;
+		}
+
 		int result = OpenContext(hardware);
 
-		if (result < 0 && hardware) {
+		if (result < 0 && hardware_only) {
+			av_log(nullptr, AV_LOG_ERROR, "No hardware decoder for %s (%s), which is not decoded in software\n",
+					avcodec_get_name(stream->codecpar->codec_id), ErrorString(result).c_str());
+
+			if (result == AVERROR(ENOSYS)) {
+				// No hardware device or configuration for it: as far as this
+				// machine goes, there is no decoder.
+				result = AVERROR_DECODER_NOT_FOUND;
+			}
+		}
+		else if (result < 0 && hardware) {
 			// Verbose: a codec with no hardware decoder is nothing to report,
 			// and IsHardware tells a caller that wants to know.
 			av_log(nullptr, AV_LOG_VERBOSE, "No hardware video decoder (%s), decoding in software\n",
@@ -142,6 +170,10 @@ namespace ffmpeg
 	int VideoDecoder::OpenContext(bool hardware)
 	{
 		software_selected_ = false;
+
+		if (!hardware && IsHardwareOnly(stream_->codecpar->codec_id)) {
+			return AVERROR_DECODER_NOT_FOUND;
+		}
 
 		const AVCodec * codec = FindDecoder(stream_->codecpar->codec_id, hardware);
 
@@ -204,6 +236,10 @@ namespace ffmpeg
 
 	bool VideoDecoder::SetUpHardware(const AVCodec * codec)
 	{
+		if (HardwareFault::DevicesHidden()) {
+			return false;
+		}
+
 		for (AVHWDeviceType type : DeviceTypes()) {
 			for (int index = 0;; index++) {
 				const AVCodecHWConfig * config = avcodec_get_hw_config(codec, index);
@@ -246,7 +282,13 @@ namespace ffmpeg
 		}
 
 		// The decoder does not offer the hardware format for this stream:
-		// a profile or a size the hardware does not take. Software it is, and
+		// a profile or a size the hardware does not take.
+		if (IsHardwareOnly(context->codec_id)) {
+			// No software format either, so the stream fails to decode.
+			return AV_PIX_FMT_NONE;
+		}
+
+		// Software it is, and
 		// the context made for hardware, which has one thread, is replaced by
 		// one made for software.
 		decoder->software_selected_ = true;
@@ -516,6 +558,17 @@ namespace ffmpeg
 
 	int VideoDecoder::FallBackToSoftware(int error, const AVPacket * current)
 	{
+		if (IsHardwareOnly(stream_->codecpar->codec_id)) {
+			av_log(nullptr, AV_LOG_ERROR, "Hardware video decoding of %s failed (%s), and it is not decoded in software\n",
+					avcodec_get_name(stream_->codecpar->codec_id), ErrorString(error).c_str());
+
+			probation_ = false;
+
+			DropKeptPackets();
+
+			return error < 0 ? error : AVERROR_DECODER_NOT_FOUND;
+		}
+
 		if (error < 0) {
 			av_log(nullptr, AV_LOG_WARNING, "Hardware video decoding failed (%s), decoding in software\n",
 					ErrorString(error).c_str());

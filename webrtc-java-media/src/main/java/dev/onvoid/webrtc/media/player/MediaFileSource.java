@@ -87,6 +87,7 @@ public class MediaFileSource implements AutoCloseable {
 	 *
 	 * @param path             The path of the file to play.
 	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
 	 *
 	 * @throws IOException if the source cannot be opened or decoded.
 	 */
@@ -112,6 +113,7 @@ public class MediaFileSource implements AutoCloseable {
 	 *
 	 * @param source           The path or {@code rtsp://} URL of the source to play.
 	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
 	 *
 	 * @throws IOException if the source cannot be opened or decoded.
 	 */
@@ -145,6 +147,7 @@ public class MediaFileSource implements AutoCloseable {
 	 *                         wait on the source. {@link Duration#ZERO} waits
 	 *                         as long as it takes.
 	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
 	 *
 	 * @throws IOException if the source cannot be opened in time, or decoded.
 	 */

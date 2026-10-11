@@ -20,10 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -55,7 +59,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 /**
  * Tests decoding video in hardware: that a player asked to decode in hardware
  * sends the very pictures software decoding does, and that it falls back to
- * software where the hardware has nothing to offer.
+ * software where the hardware has nothing to offer. HEVC, which is decoded in
+ * hardware only, is compared with reference checksums instead, and must never
+ * reach a software decoder.
  * <p>
  * A machine without a hardware decoder for the codec skips the tests that need
  * one, as CI runners do. Set the system property {@code
@@ -121,6 +127,10 @@ class HardwareDecodingTest {
 	 *     -c:v libx265 -preset fast -b:v 3M -maxrate 4M -bufsize 4M \
 	 *     -x265-params keyint=8:min-keyint=8:log-level=error -an media-test-hevc-1080p.mkv
 	 * </pre>
+	 * {@code media-test-hevc.luma.txt} and {@code media-test-hevc-1080p.luma.txt}
+	 * hold the luma checksums of their pictures, one a line, as FFmpeg 8.1's
+	 * software decoder gave them before this module stopped decoding HEVC in
+	 * software.
 	 */
 	private static final String HEVC = "/media-test-hevc.mkv";
 
@@ -148,6 +158,9 @@ class HardwareDecodingTest {
 	/** Whether the hardware decoder of this machine decodes, once it is known. */
 	private Boolean hardwareDecodes;
 
+	/** Whether this machine decodes HEVC in hardware, once it is known. */
+	private Boolean hevcHardwareDecodes;
+
 
 	@BeforeAll
 	void initFactory() {
@@ -172,8 +185,94 @@ class HardwareDecodingTest {
 	}
 
 	@Test
-	void hevcMatchesSoftware() throws Exception {
-		assertMatchesSoftware(HEVC);
+	void hevcMatchesReference() throws Exception {
+		assertHevcMatchesReference(HEVC, FRAMES, null);
+	}
+
+	@Test
+	void hevcMatchesReference1080p() throws Exception {
+		// HEVC decodes in blocks of up to 64, so the surface is 1088 rows high
+		// and the player has to crop it.
+		assertHevcMatchesReference(HEVC_1080P, 15, "1920x1080");
+	}
+
+	@Test
+	void hevcGoesToHardwareUnasked() throws Exception {
+		requireHevcHardware();
+
+		Result result = play(HEVC, false, 0);
+
+		assertNull(result.error);
+		assertTrue(result.hardware);
+		assertEquals(reference(HEVC), result.frames);
+		assertEquals(0, HardwareFault.softwareThreads(), "a software decoder was opened");
+	}
+
+	@Test
+	void hevcWithoutHardwareDoesNotOpen() throws Exception {
+		// On any machine: without a hardware device, HEVC has no decoder,
+		// asked for hardware or not.
+		HardwareFault.hideDevices();
+
+		for (boolean hardware : new boolean[] { true, false }) {
+			CustomVideoSource source = new CustomVideoSource();
+
+			try {
+				IOException error = assertThrows(IOException.class,
+						() -> new MediaPlayer(new MediaReader(path(HEVC)), source, null, hardware));
+
+				assertTrue(error.getMessage().contains("Decoder not found"), error.getMessage());
+			}
+			finally {
+				source.dispose();
+			}
+		}
+
+		assertEquals(0, HardwareFault.softwareThreads(), "a software decoder was opened");
+	}
+
+	@Test
+	void otherCodecsWithoutHardwareFallBack() throws Exception {
+		// The same hidden devices leave H.264 to software, as ever.
+		HardwareFault.hideDevices();
+
+		Result result = play(H264, true, 0);
+
+		assertNull(result.error);
+		assertFalse(result.hardware);
+		assertEquals(FRAMES, result.frames.size());
+		assertTrue(HardwareFault.softwareThreads() > 0, "no software decoder");
+	}
+
+	@Test
+	void hevcHardwareFailureStopsPlayback() throws Exception {
+		requireHevcHardware();
+
+		// Before the first picture, where any other codec would have its
+		// packets decoded again in software.
+		HardwareFault.failSend(false, 0);
+
+		Result result = play(HEVC, true, 0);
+
+		assertNotNull(result.error);
+		assertTrue(result.frames.isEmpty(), "frames: " + result.frames.size());
+		assertEquals(0, HardwareFault.softwareThreads(), "a software decoder was opened");
+	}
+
+	@Test
+	void hevcHardwareFailureAfterPicturesStopsPlayback() throws Exception {
+		requireHevcHardware();
+
+		HardwareFault.failSend(false, 5);
+
+		Result result = play(HEVC, true, 0);
+		List<Long> reference = reference(HEVC);
+
+		// What the hardware delivered, and nothing after it.
+		assertNotNull(result.error);
+		assertTrue(result.frames.size() < reference.size(), "frames: " + result.frames.size());
+		assertEquals(reference.subList(0, result.frames.size()), result.frames);
+		assertEquals(0, HardwareFault.softwareThreads(), "a software decoder was opened");
 	}
 
 	@Test
@@ -195,13 +294,6 @@ class HardwareDecodingTest {
 		assertNull(result.error);
 		assertFalse(result.hardware);
 		assertEquals(FRAMES, result.frames.size());
-	}
-
-	@Test
-	void hevcMatchesSoftware1080p() throws Exception {
-		// HEVC decodes in blocks of up to 64, so the surface is 1088 rows high
-		// and the player has to crop it.
-		assertMatchesSoftware(HEVC_1080P, 15, "1920x1080");
 	}
 
 	@Test
@@ -703,6 +795,71 @@ class HardwareDecodingTest {
 
 		// The pictures are the same, frame by frame.
 		assertEquals(software.frames, hardware.frames);
+	}
+
+	/**
+	 * HEVC, which is decoded in hardware only, has no software decoding to
+	 * compare with: its pictures are compared with checksums of the ones
+	 * FFmpeg's software decoder gave. HEVC decoding is exact, so every
+	 * decoder that follows the standard gives the same.
+	 */
+	private void assertHevcMatchesReference(String asset, int frames, String size) throws Exception {
+		requireHevcHardware();
+
+		Result hardware = play(asset, true, 0);
+
+		assertNull(hardware.error);
+		assertTrue(hardware.hardware);
+		assertEquals(frames, hardware.frames.size());
+
+		if (size != null) {
+			assertEquals(size, hardware.size);
+		}
+
+		assertEquals(reference(asset), hardware.frames);
+	}
+
+	/**
+	 * Skips the test where this machine does not decode HEVC in hardware, and
+	 * fails it where hardware is required. A decoder that opens is not one that
+	 * decodes (see {@link #requireHardwareDecoder()}), so a stream is played
+	 * first, once.
+	 */
+	private void requireHevcHardware() throws Exception {
+		if (hevcHardwareDecodes == null) {
+			try {
+				Result result = play(HEVC, true, 0);
+
+				hevcHardwareDecodes = result.error == null && result.hardware && !result.frames.isEmpty();
+			}
+			catch (IOException e) {
+				// No hardware decoder for HEVC, so no decoder at all.
+				hevcHardwareDecodes = false;
+			}
+			finally {
+				HardwareFault.disarm();
+			}
+		}
+
+		requireHardware(hevcHardwareDecodes);
+	}
+
+	/**
+	 * The luma checksums of an asset's pictures, from the file next to it
+	 * named after it with {@code .luma.txt} in place of its extension, one
+	 * hexadecimal CRC-32 a line.
+	 */
+	private static List<Long> reference(String asset) throws Exception {
+		String name = asset.substring(0, asset.lastIndexOf('.')) + ".luma.txt";
+		List<Long> checksums = new ArrayList<>();
+
+		for (String line : Files.readAllLines(path(name), StandardCharsets.US_ASCII)) {
+			if (!line.trim().isEmpty()) {
+				checksums.add(Long.parseLong(line.trim(), 16));
+			}
+		}
+
+		return checksums;
 	}
 
 	/**

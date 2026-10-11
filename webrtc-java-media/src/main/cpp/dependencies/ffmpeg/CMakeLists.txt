@@ -56,6 +56,9 @@ set(FFMPEG_COMPONENTS
     --enable-demuxer=aac
     # Video this module decodes.
     --enable-decoder=h264
+    # HEVC for the hardware only: the hwaccels below run inside this decoder,
+    # which reads the headers and hands the slices on, so it has to be here.
+    # VideoDecoder never lets it decode a picture in software.
     --enable-decoder=hevc
     --enable-decoder=vp8
     --enable-decoder=vp9

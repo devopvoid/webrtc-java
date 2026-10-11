@@ -38,6 +38,10 @@ namespace ffmpeg
 			// to drain: the failure of a decoder that never delivered.
 			static void FailDrain(int error);
 
+			// Makes the platform look as if it had no hardware device to
+			// decode with, until disarmed: a machine without a GPU decoder.
+			static void HideDevices();
+
 			// Forgets any fault, and the software decoder noted last.
 			static void Disarm();
 
@@ -57,6 +61,9 @@ namespace ffmpeg
 
 			// The error to fail the receive of a picture with once draining.
 			static int DrainError();
+
+			// Whether the hardware devices are hidden.
+			static bool DevicesHidden();
 	};
 }
 

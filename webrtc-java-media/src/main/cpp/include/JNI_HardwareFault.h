@@ -40,6 +40,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_HardwareFault
+	 * Method:    hideDevices
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_HardwareFault_hideDevices
+	(JNIEnv *, jclass);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_HardwareFault
 	 * Method:    disarm
 	 * Signature: ()V
 	 */
