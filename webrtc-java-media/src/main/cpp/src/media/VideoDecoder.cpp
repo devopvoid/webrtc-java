@@ -44,7 +44,11 @@ namespace
 #elif defined(_WIN32)
 		return { AV_HWDEVICE_TYPE_D3D12VA, AV_HWDEVICE_TYPE_D3D11VA };
 #else
-		return { AV_HWDEVICE_TYPE_CUDA };
+		// NVDEC on NVIDIA GPUs, where it is there; Vulkan Video otherwise,
+		// which is how the GPUs of Intel and AMD decode. A machine without
+		// the CUDA driver fails to create the first device and goes on to the
+		// second.
+		return { AV_HWDEVICE_TYPE_CUDA, AV_HWDEVICE_TYPE_VULKAN };
 #endif
 	}
 
