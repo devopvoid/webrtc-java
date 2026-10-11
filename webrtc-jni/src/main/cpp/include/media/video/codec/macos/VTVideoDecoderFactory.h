@@ -28,15 +28,17 @@
 namespace jni
 {
 	// Creates the VideoToolbox decoders that WebRTC's own decoders for macOS
-	// do not offer: VP9, in profile 0, the format the software factory
-	// offers first. H.264 is decoded through VideoToolbox by the default
-	// decoders already.
+	// do not offer, for the codecs this Mac decodes in hardware: VP9 in
+	// profile 0, the format the software factory offers first, AV1 in
+	// profile 0 (Apple M3 and newer), and H.265 in the Main profile, which
+	// has no software decoder. H.264 is decoded through VideoToolbox by the
+	// default decoders already.
 	class VTVideoDecoderFactory : public webrtc::VideoDecoderFactory
 	{
 		public:
 			// Returns a factory, or null if this Mac has no hardware decoder
-			// for VP9. The decoder VideoToolbox has for VP9 has to be
-			// registered first; this does it, once for the process.
+			// for any of these codecs. The decoder VideoToolbox has for VP9
+			// has to be registered first; this does it, once for the process.
 			static std::unique_ptr<VTVideoDecoderFactory> Create();
 
 			~VTVideoDecoderFactory() override = default;
@@ -46,7 +48,10 @@ namespace jni
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
-			VTVideoDecoderFactory() = default;
+			explicit VTVideoDecoderFactory(std::vector<webrtc::SdpVideoFormat> formats);
+
+		private:
+			const std::vector<webrtc::SdpVideoFormat> formats;
 	};
 }
 

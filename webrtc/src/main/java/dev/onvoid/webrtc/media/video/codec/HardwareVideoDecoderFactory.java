@@ -44,21 +44,23 @@ import java.util.Objects;
  * decoder that fails to start, or fails while decoding, is replaced by the
  * software decoder of the same codec, which starts with the next key frame.
  * On macOS, H.264 is decoded through VideoToolbox by the {@link
- * DefaultVideoDecoderFactory} already, and this factory adds VP9 (profile 0)
- * through the VP9 decoder of VideoToolbox, on Macs that have one; streams it
- * cannot decode, such as those with spatial layers, go to libvpx. Where there
- * is no hardware decoder, this factory decodes like a {@link
- * DefaultVideoDecoderFactory}.
+ * DefaultVideoDecoderFactory} already. This factory adds the hardware
+ * decoders of VideoToolbox for VP9 (profile 0) and H.265 (Main profile), on
+ * Macs that have them, and for AV1 (profile 0), on Apple M3 and newer. VP9
+ * and AV1 streams they cannot decode, such as those with spatial layers, go
+ * to libvpx and dav1d. Where there is no hardware decoder, this factory
+ * decodes like a {@link DefaultVideoDecoderFactory}.
  * <p>
  * On Linux, H.264 and VP9 (profile 0) are decoded on NVIDIA GPUs with NVDEC,
  * loaded from the NVIDIA driver when the factory is made; a machine without
  * the driver is not affected. Streams with spatial layers go to libvpx.
  * Decoding with VA-API, on the GPUs of Intel and AMD, is not there yet.
  * <p>
- * The hardware decoders take over only codecs the software decoders have too,
- * so the supported codecs are the same as those of a {@link
- * DefaultVideoDecoderFactory}, and what a peer connection negotiates does not
- * depend on the GPU.
+ * The supported codecs are those of a {@link DefaultVideoDecoderFactory}, in
+ * the same order. H.265 comes after them, only where the hardware decodes it:
+ * there is no software decoder for it to fall back to, and it is never
+ * decoded in software, so an H.265 stream the hardware cannot decode is not
+ * decoded at all.
  *
  * @author Alex Andres
  */
