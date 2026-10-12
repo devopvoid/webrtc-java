@@ -43,7 +43,7 @@ runs:
     # tools/clang/scripts/update.py of the webrtc.branch set in
     # webrtc-jni/pom.xml. Update it whenever that branch changes.
     - name: Select the Chromium Clang package
-      run: echo "CLANG_PACKAGE=clang-llvmorg-23-init-19482-g53d18800-1.tar.xz" >> "$GITHUB_ENV"
+      run: echo "CLANG_PACKAGE=clang-llvmorg-24-init-7747-g62397f8b-27.tar.xz" >> "$GITHUB_ENV"
       shell: bash
 
     - name: Cache the Chromium Clang package

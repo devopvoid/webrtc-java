@@ -12,6 +12,27 @@ runs:
         python -m pip install meson
       shell: powershell
 
+    # The Windows toolchain of the WebRTC branch set in webrtc-jni/pom.xml
+    # only accepts the SDK pinned by SDK_VERSION in build/vs_toolchain.py of
+    # that branch, and gn fails without it. Update it whenever that changes.
+    - name: Install the Windows SDK
+      run: |
+        $version = "10.0.28000.0"
+        if (-not (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\10\Include\$version\um")) {
+          $installer = "$env:RUNNER_TEMP\winsdksetup.exe"
+          Invoke-WebRequest -Uri "https://download.microsoft.com/download/06fc99ac-527e-451e-a536-8866695a2e7e/KIT_BUNDLE_WINDOWSSDK_MEDIACREATION/winsdksetup.exe" -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne "02988EA51EAB2A2DB53E19735E51C97A6D221ADA74B9174FA0868870B9403BA0") {
+            throw "The Windows SDK installer does not match its checksum"
+          }
+          # The x64 and ARM64 libraries for both targets, and the debugging
+          # tools for dbghelp.dll, which the toolchain setup requires.
+          $process = Start-Process -FilePath $installer -Wait -PassThru -ArgumentList "/features OptionId.DesktopCPPx64 OptionId.DesktopCPParm64 OptionId.WindowsDesktopDebuggers /quiet /norestart /ceip off"
+          if ($process.ExitCode -ne 0) {
+            throw "The Windows SDK installer failed with exit code $($process.ExitCode)"
+          }
+        }
+      shell: powershell
+
     - name: Install MSYS2 and the FFmpeg build tools
       run: |
         # FFmpeg's configure and makefiles are shell scripts, so building it
