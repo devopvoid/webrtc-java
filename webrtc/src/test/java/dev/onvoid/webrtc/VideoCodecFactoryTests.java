@@ -109,6 +109,18 @@ class VideoCodecFactoryTests extends TestBase {
 	}
 
 	@Test
+	void hardwareDecodesNoH264High444() {
+		// GPU decoders take 4:2:0 only, so H.264 High 4:4:4 Predictive (profile
+		// 0xf4) stays with the software decoder.
+		for (VideoCodecInfo codec : new HardwareVideoDecoderFactory().getHardwareCodecs()) {
+			String profileLevelId = codec.getParameters().getOrDefault("profile-level-id", "");
+
+			assertFalse("H264".equalsIgnoreCase(codec.getName()) && profileLevelId.startsWith("f4"),
+					codec.toString());
+		}
+	}
+
+	@Test
 	void defaultFactoryCreatesNativeCodecs() {
 		DefaultVideoEncoderFactory factory = new DefaultVideoEncoderFactory();
 

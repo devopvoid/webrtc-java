@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/nvdec/NvdecVideoDecoderFactory.h"
+#include "media/video/codec/H264Format.h"
 #include "media/video/codec/H265Format.h"
 #include "media/video/codec/nvdec/NvdecVideoDecoder.h"
 
@@ -44,7 +45,7 @@ namespace jni
 		std::vector<webrtc::SdpVideoFormat> formats;
 
 		if (library.SupportsH264()) {
-			formats = webrtc::SupportedH264DecoderCodecs();
+			formats = CreateH264HardwareDecoderFormats();
 		}
 		if (library.SupportsH265()) {
 			formats.push_back(CreateH265MainFormat());

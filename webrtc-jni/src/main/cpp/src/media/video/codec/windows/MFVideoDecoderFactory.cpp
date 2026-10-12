@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/windows/MFVideoDecoderFactory.h"
+#include "media/video/codec/H264Format.h"
 #include "media/video/codec/H265Format.h"
 #include "media/video/codec/windows/MFDecoderUtils.h"
 #include "media/video/codec/windows/MFVideoDecoder.h"
@@ -123,7 +124,7 @@ namespace jni
 		std::vector<webrtc::SdpVideoFormat> formats;
 
 		if (h264) {
-			formats = webrtc::SupportedH264DecoderCodecs();
+			formats = CreateH264HardwareDecoderFormats();
 		}
 		if (h265) {
 			formats.push_back(CreateH265MainFormat());

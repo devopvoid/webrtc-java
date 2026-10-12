@@ -61,7 +61,8 @@ import java.util.Objects;
  * has not been tested on such a GPU yet.
  * <p>
  * The supported codecs are those of a {@link DefaultVideoDecoderFactory}, in
- * the same order. H.265 comes after them, only where the hardware decodes it:
+ * the same order. On Windows and Linux, H.264 High 4:4:4 Predictive,
+ * which GPU decoders do not take, is decoded in software. H.265 comes after them, only where the hardware decodes it:
  * there is no software decoder for it to fall back to, and it is never
  * decoded in software, so an H.265 stream the hardware cannot decode is not
  * decoded at all.
