@@ -453,9 +453,14 @@ execute_command(
 )
 
 message(STATUS "WebRTC: compile")
+# WebRTC builds with Siso, and plain Ninja is no longer supported. autoninja
+# picks the tool the output directory is set up for: Siso for a new one (run
+# offline, as no remote execution is configured), Ninja for one that Ninja
+# built until "gn clean" is run on it. depot_tools' ninja wrapper refuses an
+# output directory that Siso built.
 if(APPLE)
     execute_command(
-        COMMAND ninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
+        COMMAND autoninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
         WORKING_DIRECTORY "${WEBRTC_SRC}"
         RESULT_VARIABLE NINJA_RESULT
     )
@@ -468,7 +473,7 @@ if(APPLE)
     )
 else()
     execute_command(
-        COMMAND ninja -C "${WEBRTC_BUILD}"
+        COMMAND autoninja -C "${WEBRTC_BUILD}"
         WORKING_DIRECTORY "${WEBRTC_SRC}"
         RESULT_VARIABLE NINJA_RESULT
     )
@@ -477,7 +482,7 @@ else()
     # graph since their move out of media/base; build them explicitly so
     # their symbols exist for the shared library link.
     execute_command(
-        COMMAND ninja -C "${WEBRTC_BUILD}" api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
+        COMMAND autoninja -C "${WEBRTC_BUILD}" api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
         WORKING_DIRECTORY "${WEBRTC_SRC}"
         RESULT_VARIABLE NINJA_UTIL_RESULT
     )
@@ -500,12 +505,12 @@ if(WIN32)
 endif()
 
 if(LINUX)
-        # Ninja only schedules libc++/libc++abi for the target toolchain when
+        # The build only schedules libc++/libc++abi for the target toolchain when
         # a linked output needs them; a static archive only cross build never
         # does, so the object globs below would come up empty and produce
         # hollow archives. Request the archives explicitly.
         execute_command(
-            COMMAND ninja -C "${WEBRTC_BUILD}" obj/buildtools/third_party/libc++/libc++.a obj/buildtools/third_party/libc++abi/libc++abi.a
+            COMMAND autoninja -C "${WEBRTC_BUILD}" obj/buildtools/third_party/libc++/libc++.a obj/buildtools/third_party/libc++abi/libc++abi.a
             WORKING_DIRECTORY "${WEBRTC_SRC}"
         )
 
@@ -581,7 +586,7 @@ if(GN_RESULT EQUAL 0 AND NINJA_RESULT EQUAL 0 AND NINJA_UTIL_RESULT EQUAL 0 AND 
 
     install(FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/${WEBRTC_ARGS_FILE}" DESTINATION "${WEBRTC_INSTALL_DIR}")
 else()
-    message(WARNING "WebRTC: the build failed (gn ${GN_RESULT}, ninja ${NINJA_RESULT}, ${NINJA_UTIL_RESULT}); "
+    message(WARNING "WebRTC: the build failed (gn ${GN_RESULT}, autoninja ${NINJA_RESULT}, ${NINJA_UTIL_RESULT}); "
         "its GN args are not recorded, so the next configure builds it again")
 endif()
 
