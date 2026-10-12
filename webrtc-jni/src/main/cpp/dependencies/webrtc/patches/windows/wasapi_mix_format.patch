@@ -29,10 +29,17 @@
  #include "rtc_base/checks.h"
  #include "rtc_base/logging.h"
  #include "rtc_base/platform_thread.h"
-@@ -77,6 +82,225 @@
+@@ -77,6 +82,231 @@
  
  enum { kAecCaptureStreamIndex = 0, kAecRenderStreamIndex = 1 };
  
++// Fractional bits of the fixed-point coefficients of a channel mix. Firefox's
++// cubeb mixer takes 15, which its 32-bit sums require. Sums here are 64-bit,
++// so they can take 24: a float coefficient from 1/2 to 1 fits them exactly,
++// a smaller one to within 2^-25, and a row of WebRTC's 7.1 downmix, which
++// sums to about 6, keeps the sum of full-scale input below 2^42.
++constexpr int kCoefficientBits = 24;
++
 +// Returns the channel layout of a WASAPI format, mapping the speaker masks
 +// the way Chrome's ChannelConfigToChannelLayout() does. A mask that is not
 +// one of these, or that does not match the channel count, is treated as
@@ -149,26 +156,27 @@
 +  for (size_t out = 0; out < matrix.size(); ++out) {
 +    int64_t sum = 0;
 +    for (size_t in = 0; in < matrix[out].size(); ++in) {
-+      const int32_t coefficient =
-+          static_cast<int32_t>(std::lrintf(matrix[out][in] * 32768));
++      const int32_t coefficient = static_cast<int32_t>(
++          std::lrintf(matrix[out][in] * (1 << kCoefficientBits)));
 +      if (coefficient != 0) {
 +        conversion->terms[out].emplace_back(in, coefficient);
 +        sum += std::abs(coefficient);
 +      }
 +    }
 +    // Full-scale input on every term would leave the 16-bit range.
-+    if (sum > 32768) {
++    if (sum > (int64_t{1} << kCoefficientBits)) {
 +      conversion->clipping = true;
 +    }
 +  }
 +  return true;
 +}
 +
-+// Rounds a sum of Q15 terms to a 16-bit sample, as Firefox's cubeb mixer
-+// does, and clamps it when `kClamp`.
++// Rounds a sum of terms to a 16-bit sample, as Firefox's cubeb mixer does,
++// and clamps it when `kClamp`.
 +template <bool kClamp>
-+int16_t RoundQ15(int64_t sum) {
-+  int64_t sample = (sum + 16384) >> 15;
++int16_t RoundSum(int64_t sum) {
++  int64_t sample =
++      (sum + (int64_t{1} << (kCoefficientBits - 1))) >> kCoefficientBits;
 +  if (kClamp) {
 +    sample = std::clamp<int64_t>(sample, -32768, 32767);
 +  }
@@ -177,9 +185,7 @@
 +
 +// Mixes `frames` interleaved frames with the terms of `conversion`, one output
 +// channel at a time and with loops for the usual numbers of terms, as
-+// Firefox's cubeb mixer does. Sums are taken in 64 bits: cubeb's 32-bit sums
-+// can overflow when several full-scale inputs mix into one channel, as in a
-+// downmix of 7.1.
++// Firefox's cubeb mixer does.
 +template <bool kClamp>
 +void MixTerms(const CoreAudioChannelConversion& conversion,
 +              const int16_t* input,
@@ -201,7 +207,7 @@
 +        const int64_t ca = terms[0].second;
 +        for (size_t frame = 0; frame < frames; ++frame) {
 +          dest[frame * output_channels] =
-+              RoundQ15<kClamp>(ca * a[frame * input_channels]);
++              RoundSum<kClamp>(ca * a[frame * input_channels]);
 +        }
 +        break;
 +      }
@@ -211,7 +217,7 @@
 +        const int64_t ca = terms[0].second;
 +        const int64_t cb = terms[1].second;
 +        for (size_t frame = 0; frame < frames; ++frame) {
-+          dest[frame * output_channels] = RoundQ15<kClamp>(
++          dest[frame * output_channels] = RoundSum<kClamp>(
 +              ca * a[frame * input_channels] + cb * b[frame * input_channels]);
 +        }
 +        break;
@@ -223,7 +229,7 @@
 +          for (const auto& [channel, coefficient] : terms) {
 +            sum += int64_t{coefficient} * in[channel];
 +          }
-+          dest[frame * output_channels] = RoundQ15<kClamp>(sum);
++          dest[frame * output_channels] = RoundSum<kClamp>(sum);
 +        }
 +        break;
 +    }
@@ -255,7 +261,7 @@
  // An implementation of IMediaBuffer, as required for
  // IMediaObject::ProcessOutput(). After consuming data provided by
  // ProcessOutput(), call SetLength() to update the buffer availability.
-@@ -1822,6 +2046,8 @@
+@@ -1822,6 +2052,8 @@
    HRESULT hr = S_OK;
    WAVEFORMATEX* pWfxOut = NULL;
    WAVEFORMATEX Wfx = WAVEFORMATEX();
@@ -264,7 +270,7 @@
    WAVEFORMATEX* pWfxClosestMatch = NULL;
    UINT bufferFrameCount = 0;
    constexpr int freqs[] = {48000, 44100, 16000, 96000, 32000, 8000};
-@@ -1901,6 +2127,7 @@
+@@ -1901,6 +2133,7 @@
    // TODO(andrew): what happens in the event of failure in the above loop?
    //   Is _ptrClientOut->Initialize expected to fail?
    //   Same in InitRecording().
@@ -272,7 +278,7 @@
    if (hr == S_OK) {
      _playAudioFrameSize = Wfx.nBlockAlign;
      // Block size is the number of samples each channel in 10ms.
-@@ -1924,6 +2151,29 @@
+@@ -1924,6 +2157,29 @@
      RTC_LOG(LS_VERBOSE) << "_playAudioFrameSize: " << _playAudioFrameSize;
      RTC_LOG(LS_VERBOSE) << "_playBlockSize     : " << _playBlockSize;
      RTC_LOG(LS_VERBOSE) << "_playChannels      : " << _playChannels;
@@ -302,7 +308,7 @@
    }
  
    // Create a rendering stream.
-@@ -1959,7 +2209,7 @@
+@@ -1959,7 +2215,7 @@
        hnsBufferDuration,  // requested buffer capacity as a time value (in
                            // 100-nanosecond units)
        0,                  // periodicity
@@ -311,7 +317,7 @@
        NULL);              // session GUID
  
    if (FAILED(hr)) {
-@@ -2056,6 +2306,7 @@
+@@ -2056,6 +2312,7 @@
    ptrWav->cbSize = 0;
  
    // Set the VoE format equal to the AEC output format.
@@ -319,7 +325,7 @@
    _recAudioFrameSize = ptrWav->nBlockAlign;
    _recSampleRate = ptrWav->nSamplesPerSec;
    _recBlockSize = ptrWav->nSamplesPerSec / 100;
-@@ -2136,6 +2387,8 @@
+@@ -2136,6 +2393,8 @@
    HRESULT hr = S_OK;
    WAVEFORMATEX* pWfxIn = NULL;
    WAVEFORMATEXTENSIBLE Wfx = WAVEFORMATEXTENSIBLE();
@@ -328,7 +334,7 @@
    WAVEFORMATEX* pWfxClosestMatch = NULL;
    UINT bufferFrameCount = 0;
    constexpr int freqs[6] = {48000, 44100, 16000, 96000, 32000, 8000};
-@@ -2216,6 +2469,7 @@
+@@ -2216,6 +2475,7 @@
        break;
    }
  
@@ -336,7 +342,7 @@
    if (hr == S_OK) {
      _recAudioFrameSize = Wfx.Format.nBlockAlign;
      _recSampleRate = Wfx.Format.nSamplesPerSec;
-@@ -2236,6 +2490,25 @@
+@@ -2236,6 +2496,25 @@
      RTC_LOG(LS_VERBOSE) << "_recAudioFrameSize: " << _recAudioFrameSize;
      RTC_LOG(LS_VERBOSE) << "_recBlockSize     : " << _recBlockSize;
      RTC_LOG(LS_VERBOSE) << "_recChannels      : " << _recChannels;
@@ -362,7 +368,7 @@
    }
  
    // Create a capturing stream.
-@@ -2246,10 +2519,10 @@
+@@ -2246,10 +2525,10 @@
            AUDCLNT_STREAMFLAGS_NOPERSIST,   // volume and mute settings for an
                                             // audio session will not persist
                                             // across system restarts
@@ -377,7 +383,7 @@
  
    if (hr != S_OK) {
      RTC_LOG(LS_ERROR) << "IAudioClient::Initialize() failed:";
-@@ -2832,7 +3105,14 @@
+@@ -2832,7 +3111,14 @@
            }
  
            // Get the actual (stored) data
@@ -393,7 +399,7 @@
          }
  
          DWORD dwFlags(0);
-@@ -3221,7 +3501,13 @@
+@@ -3221,7 +3507,13 @@
  
          RTC_DCHECK_NE(framesAvailable, 0);
  
@@ -428,7 +434,7 @@
 +// another, built from a channel mixing matrix. A matrix that only routes
 +// channels becomes a channel map, and the samples are copied, as Chrome's
 +// ChannelMixer does. Any other matrix becomes the list of non-zero terms of
-+// each output channel, with Q15 coefficients, as Firefox's cubeb mixer
++// each output channel, with integer coefficients, as Firefox's cubeb mixer
 +// applies it to 16-bit audio.
 +struct CoreAudioChannelConversion {
 +  // Channels per input frame; 0 when there is nothing to convert.
@@ -436,8 +442,8 @@
 +  // For a matrix that only routes channels: the input channel of each output
 +  // channel, or -1 for silence. Empty otherwise.
 +  std::vector<int> channel_map;
-+  // For any other matrix: the (input channel, Q15 coefficient) pairs of each
-+  // output channel.
++  // For any other matrix: the (input channel, coefficient) pairs of each
++  // output channel, the coefficients in fixed point with 24 fractional bits.
 +  std::vector<std::vector<std::pair<size_t, int32_t>>> terms;
 +  // Whether a sum of terms can leave the 16-bit range, and must be clamped.
 +  bool clipping = false;
