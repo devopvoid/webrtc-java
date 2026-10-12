@@ -100,9 +100,11 @@ public final class HardwareVideoEncoderFactory implements VideoEncoderFactory {
 	/**
 	 * Returns the supported codecs that are encoded on the GPU, in the order
 	 * of {@link #getSupportedCodecs()}. A codec counts when a hardware encoder
-	 * of the machine takes it, as found when the factory was created; on
-	 * macOS that includes H.264, which VideoToolbox encodes. The other
-	 * supported codecs are encoded in software.
+	 * of the machine takes it; on macOS that includes H.264, which
+	 * VideoToolbox encodes. The other supported codecs are encoded in
+	 * software. The hardware is probed once per process, and again only for
+	 * a new setting of the system properties that turn hardware codecs on, so
+	 * a GPU or driver that changes later is seen by a new process only.
 	 * <p>
 	 * A hardware encoder is tried first, not guaranteed: one that fails to
 	 * start or gives up while encoding is replaced by the software encoder of

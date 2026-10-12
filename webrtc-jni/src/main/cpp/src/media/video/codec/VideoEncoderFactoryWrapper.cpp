@@ -30,9 +30,7 @@ namespace jni
 {
 	VideoEncoderFactoryWrapper::VideoEncoderFactoryWrapper(JNIEnv * env, jobject factory) :
 		factory(env, factory),
-		javaClass(JavaClasses::get<JavaVideoEncoderFactoryClass>(env)),
-		defaultFactory(CreateDefaultVideoEncoderFactory()),
-		hardwareFactory(CreateHardwareVideoEncoderFactory())
+		javaClass(JavaClasses::get<JavaVideoEncoderFactoryClass>(env))
 	{
 		JavaLocalRef<jobject> codecs(env, env->CallObjectMethod(factory, javaClass->getSupportedCodecs));
 
@@ -70,9 +68,8 @@ namespace jni
 			if (env->IsInstanceOf(encoder, javaClass->nativeEncoderClass)) {
 				JavaLocalRef<jobject> nativeInfo(env, env->GetObjectField(encoder, javaClass->nativeEncoderCodecInfo));
 				const bool hardware = env->GetBooleanField(encoder, javaClass->nativeEncoderHardwareAcceleration) == JNI_TRUE;
-				webrtc::VideoEncoderFactory & builtIn = hardware ? *hardwareFactory : *defaultFactory;
 
-				return builtIn.Create(environment, VideoCodecInfo::toNative(env, nativeInfo));
+				return BuiltInFactory(hardware).Create(environment, VideoCodecInfo::toNative(env, nativeInfo));
 			}
 
 			return std::make_unique<VideoEncoderWrapper>(env, encoder, format);
@@ -84,6 +81,19 @@ namespace jni
 		}
 
 		return nullptr;
+	}
+
+	webrtc::VideoEncoderFactory & VideoEncoderFactoryWrapper::BuiltInFactory(bool hardware)
+	{
+		std::lock_guard<std::mutex> lock(builtInMutex);
+
+		std::unique_ptr<webrtc::VideoEncoderFactory> & factory = hardware ? hardwareFactory : defaultFactory;
+
+		if (!factory) {
+			factory = hardware ? CreateHardwareVideoEncoderFactory() : CreateDefaultVideoEncoderFactory();
+		}
+
+		return *factory;
 	}
 
 	VideoEncoderFactoryWrapper::JavaVideoEncoderFactoryClass::JavaVideoEncoderFactoryClass(JNIEnv * env)

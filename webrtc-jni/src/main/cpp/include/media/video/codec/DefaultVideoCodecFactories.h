@@ -33,13 +33,15 @@ namespace jni
 
 	// The default encoders, with the encoders of the GPU in front of them
 	// where the platform has them, falling back to the software ones. On
-	// macOS the default encoders already use VideoToolbox.
+	// macOS the default encoders already use VideoToolbox. The hardware is
+	// probed once per process and setting of the hardware codec options.
 	std::unique_ptr<webrtc::VideoEncoderFactory> CreateHardwareVideoEncoderFactory();
 	std::unique_ptr<webrtc::VideoDecoderFactory> CreateDefaultVideoDecoderFactory();
 
 	// The default decoders, with the decoders of the GPU in front of them
 	// where the platform has them, falling back to the software ones. On
-	// macOS the default decoders already use VideoToolbox.
+	// macOS the default decoders already use VideoToolbox. The hardware is
+	// probed once per process and setting of the hardware codec options.
 	std::unique_ptr<webrtc::VideoDecoderFactory> CreateHardwareVideoDecoderFactory();
 
 	// The supported formats of the factory, in their order, that it encodes

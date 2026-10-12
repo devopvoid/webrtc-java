@@ -51,6 +51,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -85,6 +86,9 @@ class VideoCodecFactoryTests extends TestBase {
 	/** What precedes the payload in the slice of an H.265 test access unit. */
 	private static final String H265_MARKER = "WRTC:";
 
+	/** The RTP capabilities WebRTC adds that are no media codec. */
+	private static final List<String> RTP_ONLY_CODECS = Arrays.asList("rtx", "red", "ulpfec", "flexfec-03");
+
 
 	@Test
 	void defaultFactoriesListBuiltInCodecs() {
@@ -106,6 +110,30 @@ class VideoCodecFactoryTests extends TestBase {
 				encoders.getSupportedCodecs(), encoders.getHardwareCodecs());
 		assertHardwareCodecs(new DefaultVideoDecoderFactory().getSupportedCodecs(),
 				decoders.getSupportedCodecs(), decoders.getHardwareCodecs());
+	}
+
+	@Test
+	void builtFactoryUsesHardwareCodecs() {
+		// The hardware factories are made natively, without their Java
+		// objects; what is negotiated has to be what those list.
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
+		HardwareVideoDecoderFactory decoders = new HardwareVideoDecoderFactory();
+
+		PeerConnectionFactory built = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(encoders)
+				.setVideoDecoderFactory(decoders)
+				.build();
+
+		try {
+			assertEquals(names(encoders.getSupportedCodecs()),
+					mediaCodecNames(built.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs()));
+			assertEquals(names(decoders.getSupportedCodecs()),
+					mediaCodecNames(built.getRtpReceiverCapabilities(MediaType.VIDEO).getCodecs()));
+		}
+		finally {
+			built.dispose();
+		}
 	}
 
 	@Test
@@ -453,6 +481,16 @@ class VideoCodecFactoryTests extends TestBase {
 		}
 
 		assertThrows(UnsupportedOperationException.class, () -> hardware.add(new VideoCodecInfo(TEST_CODEC)));
+	}
+
+	/**
+	 * The names of the media codecs among RTP capabilities, without those
+	 * WebRTC adds for retransmission, redundancy and error correction.
+	 */
+	private static List<String> mediaCodecNames(List<RTCRtpCodecCapability> capabilities) {
+		return names(capabilities).stream()
+				.filter(name -> !RTP_ONLY_CODECS.contains(name.toLowerCase(Locale.ROOT)))
+				.collect(Collectors.toList());
 	}
 
 	private static List<String> names(List<?> codecs) {

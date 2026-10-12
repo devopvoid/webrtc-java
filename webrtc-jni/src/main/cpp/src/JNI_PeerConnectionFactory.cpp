@@ -55,7 +55,7 @@
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 (JNIEnv * env, jobject caller, jobject jFieldTrials, jobject audioModule, jobject audioProcessing,
-	jobject jVideoEncoderFactory, jobject jVideoDecoderFactory)
+	jobject jVideoEncoderFactory, jobject jVideoDecoderFactory, jboolean hardwareEncoders, jboolean hardwareDecoders)
 {
 	webrtc::AudioDeviceModule * audioDevModule = (audioModule != nullptr)
 		? GetHandle<webrtc::AudioDeviceModule>(env, audioModule)
@@ -82,13 +82,18 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			: std::make_unique<jni::FieldTrialsView>(std::move(fieldTrialsMap));
 
 		// Asks the Java factories for their codecs, which is where a broken
-		// factory surfaces, before anything else is set up.
+		// factory surfaces, before anything else is set up. Without a Java
+		// factory, the built-in codecs are used directly.
 		std::unique_ptr<webrtc::VideoEncoderFactory> videoEncoderFactory = (jVideoEncoderFactory != nullptr)
 			? std::make_unique<jni::VideoEncoderFactoryWrapper>(env, jVideoEncoderFactory)
-			: jni::CreateDefaultVideoEncoderFactory();
+			: hardwareEncoders
+				? jni::CreateHardwareVideoEncoderFactory()
+				: jni::CreateDefaultVideoEncoderFactory();
 		std::unique_ptr<webrtc::VideoDecoderFactory> videoDecoderFactory = (jVideoDecoderFactory != nullptr)
 			? std::make_unique<jni::VideoDecoderFactoryWrapper>(env, jVideoDecoderFactory)
-			: jni::CreateDefaultVideoDecoderFactory();
+			: hardwareDecoders
+				? jni::CreateHardwareVideoDecoderFactory()
+				: jni::CreateDefaultVideoDecoderFactory();
 
 		auto networkThread = webrtc::Thread::CreateWithSocketServer();
 		networkThread->SetName("webrtc_jni_network_thread", nullptr);

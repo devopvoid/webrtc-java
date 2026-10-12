@@ -39,8 +39,12 @@ namespace jni
 	class HardwareVideoEncoderFactory : public webrtc::VideoEncoderFactory
 	{
 		public:
+			// The hardware factories. They hold nothing but what probing for
+			// them found, so several factories, on any thread, can share them.
+			using HardwareFactories = std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>>;
+
 			// The hardware factories are in order of preference.
-			HardwareVideoEncoderFactory(std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware,
+			HardwareVideoEncoderFactory(std::shared_ptr<const HardwareFactories> hardware,
 				std::unique_ptr<webrtc::VideoEncoderFactory> software);
 			~HardwareVideoEncoderFactory() override = default;
 
@@ -57,7 +61,7 @@ namespace jni
 				std::optional<webrtc::Resolution> resolution) const override;
 
 		private:
-			const std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware;
+			const std::shared_ptr<const HardwareFactories> hardware;
 			const std::unique_ptr<webrtc::VideoEncoderFactory> software;
 	};
 

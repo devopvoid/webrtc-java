@@ -85,7 +85,7 @@ Which decoder a stream uses shows in the `decoderImplementation` statistic of it
 
 ### Listing Hardware Codecs
 
-Both hardware factories tell which of their codecs the GPU of the machine handles. `getHardwareCodecs()` returns those of `getSupportedCodecs()`, in the same order, that a hardware encoder or decoder takes, as found when the factory was created; on macOS that includes H.264 through VideoToolbox. The other supported codecs are encoded or decoded in software:
+Both hardware factories tell which of their codecs the GPU of the machine handles. `getHardwareCodecs()` returns those of `getSupportedCodecs()`, in the same order, that a hardware encoder or decoder takes; on macOS that includes H.264 through VideoToolbox. The other supported codecs are encoded or decoded in software. The hardware is probed once per process, which every factory then shares, and again only when one of the system properties above is set differently; a GPU, driver or codec extension installed while the process runs is seen by the next one:
 
 ```java
 HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();

@@ -36,6 +36,8 @@ import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecStatus;
 import dev.onvoid.webrtc.media.video.codec.VideoDecoder;
 import dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoEncoder;
+import dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -394,6 +396,39 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		}
 		finally {
 			hardware.dispose();
+		}
+	}
+
+	@Test
+	void delegatingFactoryEncodesInHardware() throws Exception {
+		// A factory of one's own that hands out the hardware encoders goes
+		// through Java, unlike the hardware factory itself, and gets the
+		// built-in hardware encoders made the first time one is asked for.
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware encoders are implemented on Windows and Linux only");
+
+		HardwareVideoEncoderFactory builtIn = new HardwareVideoEncoderFactory();
+		PeerConnectionFactory delegating = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new VideoEncoderFactory() {
+
+					@Override
+					public List<VideoCodecInfo> getSupportedCodecs() {
+						return builtIn.getSupportedCodecs();
+					}
+
+					@Override
+					public VideoEncoder createEncoder(VideoCodecInfo info) {
+						return builtIn.createEncoder(info);
+					}
+				})
+				.build();
+
+		try {
+			assertHardware(encoderImplementation(delegating, H264), HARDWARE_REQUIRED);
+		}
+		finally {
+			delegating.dispose();
 		}
 	}
 
