@@ -14,12 +14,13 @@
      "../../rtc_base:buffer",
 --- a/modules/audio_device/win/audio_device_core_win.cc
 +++ b/modules/audio_device/win/audio_device_core_win.cc
-@@ -25,9 +25,13 @@
+@@ -25,9 +25,14 @@
  #include <uuids.h>
  #include <windows.h>
  
 +#include <algorithm>
 +#include <cmath>
++#include <cstdlib>
  #include <iomanip>
  
 +#include "api/audio/channel_layout.h"
@@ -28,7 +29,7 @@
  #include "rtc_base/checks.h"
  #include "rtc_base/logging.h"
  #include "rtc_base/platform_thread.h"
-@@ -77,6 +81,159 @@
+@@ -77,6 +82,225 @@
  
  enum { kAecCaptureStreamIndex = 0, kAecRenderStreamIndex = 1 };
  
@@ -81,20 +82,16 @@
 +// rate of the device's shared-mode mix format. The audio engine converts
 +// 16-bit PCM to its float mix format itself, but not the channel count or
 +// the rate, so these must match the mix format. Chrome and Firefox open such
-+// devices the same way and convert the channels themselves. `matrix` gets the
-+// conversion from `client_channels` to the device (render) or back
-+// (capture), and stays empty when the channel counts match. When the matrix
-+// only routes channels, `channel_map` gets the input channel of each output
-+// channel, or -1 for silence, and stays empty otherwise. Returns false if the
-+// mix format cannot be used.
++// devices the same way and convert the channels themselves. `conversion` gets
++// the conversion from `client_channels` to the device (render) or back
++// (capture), and stays empty when the channel counts match. Returns false if
++// the mix format cannot be used.
 +bool MixFormatForClient(const WAVEFORMATEX* mix_format,
 +                        uint16_t client_channels,
 +                        bool render,
 +                        WAVEFORMATEXTENSIBLE* format,
-+                        std::vector<std::vector<float>>* matrix,
-+                        std::vector<int>* channel_map) {
-+  matrix->clear();
-+  channel_map->clear();
++                        CoreAudioChannelConversion* conversion) {
++  *conversion = CoreAudioChannelConversion();
 +  // WebRTC exchanges audio in 10 ms blocks of whole frames.
 +  if (mix_format->nChannels == 0 || mix_format->nSamplesPerSec % 100 != 0) {
 +    return false;
@@ -126,69 +123,139 @@
 +  const ChannelLayout client_layout = GuessChannelLayout(client_channels);
 +  const ChannelLayout device_layout =
 +      WaveFormatToChannelLayout(&format->Format);
++  std::vector<std::vector<float>> matrix;
 +  const bool remapping =
 +      render ? ChannelMixingMatrix(client_layout, client_channels,
 +                                   device_layout, format->Format.nChannels)
-+                   .CreateTransformationMatrix(matrix)
++                   .CreateTransformationMatrix(&matrix)
 +             : ChannelMixingMatrix(device_layout, format->Format.nChannels,
 +                                   client_layout, client_channels)
-+                   .CreateTransformationMatrix(matrix);
++                   .CreateTransformationMatrix(&matrix);
++  conversion->input_channels = matrix[0].size();
 +  if (remapping) {
 +    // Each output channel takes one input channel as it is, or none.
-+    channel_map->assign(matrix->size(), -1);
-+    for (size_t out = 0; out < matrix->size(); ++out) {
-+      for (size_t in = 0; in < (*matrix)[out].size(); ++in) {
-+        if ((*matrix)[out][in] > 0) {
-+          (*channel_map)[out] = static_cast<int>(in);
++    conversion->channel_map.assign(matrix.size(), -1);
++    for (size_t out = 0; out < matrix.size(); ++out) {
++      for (size_t in = 0; in < matrix[out].size(); ++in) {
++        if (matrix[out][in] > 0) {
++          conversion->channel_map[out] = static_cast<int>(in);
 +          break;
 +        }
 +      }
++    }
++    return true;
++  }
++  conversion->terms.resize(matrix.size());
++  for (size_t out = 0; out < matrix.size(); ++out) {
++    int64_t sum = 0;
++    for (size_t in = 0; in < matrix[out].size(); ++in) {
++      const int32_t coefficient =
++          static_cast<int32_t>(std::lrintf(matrix[out][in] * 32768));
++      if (coefficient != 0) {
++        conversion->terms[out].emplace_back(in, coefficient);
++        sum += std::abs(coefficient);
++      }
++    }
++    // Full-scale input on every term would leave the 16-bit range.
++    if (sum > 32768) {
++      conversion->clipping = true;
 +    }
 +  }
 +  return true;
 +}
 +
-+// Copies `frames` interleaved frames by channel: `channel_map` names the input
-+// channel of each output channel, or -1 for silence.
-+void RemapChannels(const std::vector<int>& channel_map,
-+                   size_t input_channels,
-+                   const int16_t* input,
-+                   int16_t* output,
-+                   size_t frames) {
-+  const size_t output_channels = channel_map.size();
-+  for (size_t frame = 0; frame < frames; ++frame) {
-+    for (size_t out = 0; out < output_channels; ++out) {
-+      *output++ = channel_map[out] < 0 ? 0 : input[channel_map[out]];
++// Rounds a sum of Q15 terms to a 16-bit sample, as Firefox's cubeb mixer
++// does, and clamps it when `kClamp`.
++template <bool kClamp>
++int16_t RoundQ15(int64_t sum) {
++  int64_t sample = (sum + 16384) >> 15;
++  if (kClamp) {
++    sample = std::clamp<int64_t>(sample, -32768, 32767);
++  }
++  return static_cast<int16_t>(sample);
++}
++
++// Mixes `frames` interleaved frames with the terms of `conversion`, one output
++// channel at a time and with loops for the usual numbers of terms, as
++// Firefox's cubeb mixer does. Sums are taken in 64 bits: cubeb's 32-bit sums
++// can overflow when several full-scale inputs mix into one channel, as in a
++// downmix of 7.1.
++template <bool kClamp>
++void MixTerms(const CoreAudioChannelConversion& conversion,
++              const int16_t* input,
++              int16_t* output,
++              size_t frames) {
++  const size_t input_channels = conversion.input_channels;
++  const size_t output_channels = conversion.terms.size();
++  for (size_t out = 0; out < output_channels; ++out) {
++    const auto& terms = conversion.terms[out];
++    int16_t* dest = output + out;
++    switch (terms.size()) {
++      case 0:
++        for (size_t frame = 0; frame < frames; ++frame) {
++          dest[frame * output_channels] = 0;
++        }
++        break;
++      case 1: {
++        const int16_t* a = input + terms[0].first;
++        const int64_t ca = terms[0].second;
++        for (size_t frame = 0; frame < frames; ++frame) {
++          dest[frame * output_channels] =
++              RoundQ15<kClamp>(ca * a[frame * input_channels]);
++        }
++        break;
++      }
++      case 2: {
++        const int16_t* a = input + terms[0].first;
++        const int16_t* b = input + terms[1].first;
++        const int64_t ca = terms[0].second;
++        const int64_t cb = terms[1].second;
++        for (size_t frame = 0; frame < frames; ++frame) {
++          dest[frame * output_channels] = RoundQ15<kClamp>(
++              ca * a[frame * input_channels] + cb * b[frame * input_channels]);
++        }
++        break;
++      }
++      default:
++        for (size_t frame = 0; frame < frames; ++frame) {
++          const int16_t* in = input + frame * input_channels;
++          int64_t sum = 0;
++          for (const auto& [channel, coefficient] : terms) {
++            sum += int64_t{coefficient} * in[channel];
++          }
++          dest[frame * output_channels] = RoundQ15<kClamp>(sum);
++        }
++        break;
 +    }
-+    input += input_channels;
 +  }
 +}
 +
-+// Converts `frames` interleaved frames with `matrix`, which has one row per
-+// output channel and one column per input channel.
-+void MixChannels(const std::vector<std::vector<float>>& matrix,
-+                 const int16_t* input,
-+                 int16_t* output,
-+                 size_t frames) {
-+  const size_t output_channels = matrix.size();
-+  const size_t input_channels = matrix[0].size();
-+  for (size_t frame = 0; frame < frames; ++frame) {
-+    for (size_t out = 0; out < output_channels; ++out) {
-+      float sample = 0.f;
-+      for (size_t in = 0; in < input_channels; ++in) {
-+        sample += matrix[out][in] * input[in];
++// Converts `frames` interleaved frames with `conversion`: copies them by
++// channel when it only routes channels, and mixes them otherwise.
++void ConvertChannels(const CoreAudioChannelConversion& conversion,
++                     const int16_t* input,
++                     int16_t* output,
++                     size_t frames) {
++  if (!conversion.channel_map.empty()) {
++    const size_t output_channels = conversion.channel_map.size();
++    for (size_t frame = 0; frame < frames; ++frame) {
++      for (size_t out = 0; out < output_channels; ++out) {
++        const int in = conversion.channel_map[out];
++        *output++ = in < 0 ? 0 : input[in];
 +      }
-+      *output++ = static_cast<int16_t>(
-+          std::clamp(std::lrintf(sample), -32768l, 32767l));
++      input += conversion.input_channels;
 +    }
-+    input += input_channels;
++  } else if (conversion.clipping) {
++    MixTerms<true>(conversion, input, output, frames);
++  } else {
++    MixTerms<false>(conversion, input, output, frames);
 +  }
 +}
 +
  // An implementation of IMediaBuffer, as required for
  // IMediaObject::ProcessOutput(). After consuming data provided by
  // ProcessOutput(), call SetLength() to update the buffer availability.
-@@ -1822,6 +1979,8 @@
+@@ -1822,6 +2046,8 @@
    HRESULT hr = S_OK;
    WAVEFORMATEX* pWfxOut = NULL;
    WAVEFORMATEX Wfx = WAVEFORMATEX();
@@ -197,22 +264,21 @@
    WAVEFORMATEX* pWfxClosestMatch = NULL;
    UINT bufferFrameCount = 0;
    constexpr int freqs[] = {48000, 44100, 16000, 96000, 32000, 8000};
-@@ -1901,6 +2060,8 @@
+@@ -1901,6 +2127,7 @@
    // TODO(andrew): what happens in the event of failure in the above loop?
    //   Is _ptrClientOut->Initialize expected to fail?
    //   Same in InitRecording().
-+  _playMixMatrix.clear();
-+  _playChannelMap.clear();
++  _playConversion = CoreAudioChannelConversion();
    if (hr == S_OK) {
      _playAudioFrameSize = Wfx.nBlockAlign;
      // Block size is the number of samples each channel in 10ms.
-@@ -1924,6 +2085,29 @@
+@@ -1924,6 +2151,29 @@
      RTC_LOG(LS_VERBOSE) << "_playAudioFrameSize: " << _playAudioFrameSize;
      RTC_LOG(LS_VERBOSE) << "_playBlockSize     : " << _playBlockSize;
      RTC_LOG(LS_VERBOSE) << "_playChannels      : " << _playChannels;
-+  } else if (pWfxOut && MixFormatForClient(pWfxOut, _playChannelsPrioList[0],
-+                                           /*render=*/true, &WfxMix,
-+                                           &_playMixMatrix, &_playChannelMap)) {
++  } else if (pWfxOut &&
++             MixFormatForClient(pWfxOut, _playChannelsPrioList[0],
++                                /*render=*/true, &WfxMix, &_playConversion)) {
 +    // None of the formats above is supported. This happens when the mix
 +    // format has more than two channels, as with gaming headsets that mix in
 +    // 7.1, since a shared-mode stream must have the channel count of the mix
@@ -236,7 +302,7 @@
    }
  
    // Create a rendering stream.
-@@ -1959,7 +2143,7 @@
+@@ -1959,7 +2209,7 @@
        hnsBufferDuration,  // requested buffer capacity as a time value (in
                            // 100-nanosecond units)
        0,                  // periodicity
@@ -245,16 +311,15 @@
        NULL);              // session GUID
  
    if (FAILED(hr)) {
-@@ -2056,6 +2240,8 @@
+@@ -2056,6 +2306,7 @@
    ptrWav->cbSize = 0;
  
    // Set the VoE format equal to the AEC output format.
-+  _recMixMatrix.clear();
-+  _recChannelMap.clear();
++  _recConversion = CoreAudioChannelConversion();
    _recAudioFrameSize = ptrWav->nBlockAlign;
    _recSampleRate = ptrWav->nSamplesPerSec;
    _recBlockSize = ptrWav->nSamplesPerSec / 100;
-@@ -2136,6 +2322,8 @@
+@@ -2136,6 +2387,8 @@
    HRESULT hr = S_OK;
    WAVEFORMATEX* pWfxIn = NULL;
    WAVEFORMATEXTENSIBLE Wfx = WAVEFORMATEXTENSIBLE();
@@ -263,22 +328,21 @@
    WAVEFORMATEX* pWfxClosestMatch = NULL;
    UINT bufferFrameCount = 0;
    constexpr int freqs[6] = {48000, 44100, 16000, 96000, 32000, 8000};
-@@ -2216,6 +2404,8 @@
+@@ -2216,6 +2469,7 @@
        break;
    }
  
-+  _recMixMatrix.clear();
-+  _recChannelMap.clear();
++  _recConversion = CoreAudioChannelConversion();
    if (hr == S_OK) {
      _recAudioFrameSize = Wfx.Format.nBlockAlign;
      _recSampleRate = Wfx.Format.nSamplesPerSec;
-@@ -2236,6 +2426,25 @@
+@@ -2236,6 +2490,25 @@
      RTC_LOG(LS_VERBOSE) << "_recAudioFrameSize: " << _recAudioFrameSize;
      RTC_LOG(LS_VERBOSE) << "_recBlockSize     : " << _recBlockSize;
      RTC_LOG(LS_VERBOSE) << "_recChannels      : " << _recChannels;
-+  } else if (pWfxIn && MixFormatForClient(pWfxIn, _recChannelsPrioList[0],
-+                                          /*render=*/false, &WfxMix,
-+                                          &_recMixMatrix, &_recChannelMap)) {
++  } else if (pWfxIn &&
++             MixFormatForClient(pWfxIn, _recChannelsPrioList[0],
++                                /*render=*/false, &WfxMix, &_recConversion)) {
 +    // None of the formats above is supported; see InitPlayout(). Open the
 +    // stream in the mix format and convert it to WebRTC's channel count in
 +    // the capture thread. `_recAudioFrameSize` stays the size of a frame in
@@ -298,7 +362,7 @@
    }
  
    // Create a capturing stream.
-@@ -2246,10 +2455,10 @@
+@@ -2246,10 +2519,10 @@
            AUDCLNT_STREAMFLAGS_NOPERSIST,   // volume and mute settings for an
                                             // audio session will not persist
                                             // across system restarts
@@ -313,75 +377,88 @@
  
    if (hr != S_OK) {
      RTC_LOG(LS_ERROR) << "IAudioClient::Initialize() failed:";
-@@ -2832,7 +3041,20 @@
+@@ -2832,7 +3105,14 @@
            }
  
            // Get the actual (stored) data
 -          nSamples = _ptrAudioBuffer->GetPlayoutData((int8_t*)pData);
-+          if (_playMixMatrix.empty()) {
++          if (_playConversion.empty()) {
 +            nSamples = _ptrAudioBuffer->GetPlayoutData((int8_t*)pData);
 +          } else {
 +            nSamples =
 +                _ptrAudioBuffer->GetPlayoutData(_playConvertBuffer.data());
-+            if (!_playChannelMap.empty()) {
-+              RemapChannels(_playChannelMap, _playChannels,
-+                            _playConvertBuffer.data(),
++            ConvertChannels(_playConversion, _playConvertBuffer.data(),
 +                            reinterpret_cast<int16_t*>(pData), _playBlockSize);
-+            } else {
-+              MixChannels(_playMixMatrix, _playConvertBuffer.data(),
-+                          reinterpret_cast<int16_t*>(pData), _playBlockSize);
-+            }
 +          }
          }
  
          DWORD dwFlags(0);
-@@ -3221,7 +3443,18 @@
+@@ -3221,7 +3501,13 @@
  
          RTC_DCHECK_NE(framesAvailable, 0);
  
 -        if (pData) {
-+        if (pData && !_recChannelMap.empty()) {
-+          RemapChannels(_recChannelMap, _recMixMatrix[0].size(),
-+                        reinterpret_cast<const int16_t*>(pData),
-+                        reinterpret_cast<int16_t*>(
-+                            &syncBuffer[syncBufIndex * _recAudioFrameSize]),
-+                        framesAvailable);
-+        } else if (pData && !_recMixMatrix.empty()) {
-+          MixChannels(_recMixMatrix, reinterpret_cast<const int16_t*>(pData),
-+                      reinterpret_cast<int16_t*>(
-+                          &syncBuffer[syncBufIndex * _recAudioFrameSize]),
-+                      framesAvailable);
++        if (pData && !_recConversion.empty()) {
++          ConvertChannels(_recConversion,
++                          reinterpret_cast<const int16_t*>(pData),
++                          reinterpret_cast<int16_t*>(
++                              &syncBuffer[syncBufIndex * _recAudioFrameSize]),
++                          framesAvailable);
 +        } else if (pData) {
            CopyMemory(&syncBuffer[syncBufIndex * _recAudioFrameSize], pData,
                       framesAvailable * _recAudioFrameSize);
          } else {
 --- a/modules/audio_device/win/audio_device_core_win.h
 +++ b/modules/audio_device/win/audio_device_core_win.h
-@@ -21,6 +21,8 @@
+@@ -21,6 +21,9 @@
  #include <mediaobj.h>     // IMediaObject
  #include <mmdeviceapi.h>  // MMDevice
  
++#include <utility>
 +#include <vector>
 +
  #include "api/scoped_refptr.h"
  #include "modules/audio_device/audio_device_generic.h"
  #include "rtc_base/synchronization/mutex.h"
-@@ -270,6 +272,20 @@
+@@ -43,6 +46,27 @@
+ const uint16_t CORE_SPEAKER_VOLUME_STEP_SIZE = 1;
+ const uint16_t CORE_MICROPHONE_VOLUME_STEP_SIZE = 1;
+ 
++// A conversion of interleaved 16-bit audio from one channel count to
++// another, built from a channel mixing matrix. A matrix that only routes
++// channels becomes a channel map, and the samples are copied, as Chrome's
++// ChannelMixer does. Any other matrix becomes the list of non-zero terms of
++// each output channel, with Q15 coefficients, as Firefox's cubeb mixer
++// applies it to 16-bit audio.
++struct CoreAudioChannelConversion {
++  // Channels per input frame; 0 when there is nothing to convert.
++  size_t input_channels = 0;
++  // For a matrix that only routes channels: the input channel of each output
++  // channel, or -1 for silence. Empty otherwise.
++  std::vector<int> channel_map;
++  // For any other matrix: the (input channel, Q15 coefficient) pairs of each
++  // output channel.
++  std::vector<std::vector<std::pair<size_t, int32_t>>> terms;
++  // Whether a sum of terms can leave the 16-bit range, and must be clamped.
++  bool clipping = false;
++
++  bool empty() const { return input_channels == 0; }
++};
++
+ class AudioDeviceWindowsCore : public AudioDeviceGeneric {
+  public:
+   AudioDeviceWindowsCore();
+@@ -270,6 +294,15 @@
    uint16_t _recChannelsPrioList[3];
    uint16_t _playChannelsPrioList[2];
  
 +  // Channel conversion for a device that is opened in its own mix format,
-+  // because it accepts none of the formats above. Each matrix maps WebRTC's
-+  // mono or stereo to the device's channels (render), or back (capture), and
-+  // is empty when no conversion is needed. When a matrix only routes
-+  // channels, the channel map names the input channel of each output channel
-+  // (-1 for silence) and the samples are copied instead of mixed, as Chrome's
-+  // ChannelMixer does; it is empty otherwise. `_playConvertBuffer` holds one
-+  // 10 ms block in WebRTC's channel count before it is converted.
-+  std::vector<std::vector<float>> _playMixMatrix;
-+  std::vector<std::vector<float>> _recMixMatrix;
-+  std::vector<int> _playChannelMap;
-+  std::vector<int> _recChannelMap;
++  // because it accepts none of the formats above: from WebRTC's mono or
++  // stereo to the device's channels (render), or back (capture). Empty when
++  // no conversion is needed. `_playConvertBuffer` holds one 10 ms block in
++  // WebRTC's channel count before it is converted.
++  CoreAudioChannelConversion _playConversion;
++  CoreAudioChannelConversion _recConversion;
 +  std::vector<int16_t> _playConvertBuffer;
 +
    LARGE_INTEGER _perfCounterFreq;
