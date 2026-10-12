@@ -19,6 +19,11 @@
 #include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
 
+#include "api/video/video_codec_type.h"
+#include "api/video_codecs/video_codec.h"
+
+#include <optional>
+
 #ifdef __APPLE__
 #include "sdk/objc/components/video_codec/RTCDefaultVideoDecoderFactory.h"
 #include "sdk/objc/components/video_codec/RTCDefaultVideoEncoderFactory.h"
@@ -39,6 +44,20 @@
 
 namespace jni
 {
+	namespace
+	{
+		// WebRTC's Objective-C factories encode and decode H.264 with
+		// VideoToolbox, but do not report it as power efficient.
+		bool IsDefaultHardwareFormat(const webrtc::SdpVideoFormat & format)
+		{
+#ifdef __APPLE__
+			return webrtc::PayloadStringToCodecType(format.name) == webrtc::kVideoCodecH264;
+#else
+			return false;
+#endif
+		}
+	}
+
 	std::unique_ptr<webrtc::VideoEncoderFactory> CreateDefaultVideoEncoderFactory()
 	{
 #ifdef __APPLE__
@@ -85,5 +104,33 @@ namespace jni
 		}
 
 		return std::make_unique<HardwareVideoDecoderFactory>(std::move(hardware), CreateDefaultVideoDecoderFactory());
+	}
+
+	std::vector<webrtc::SdpVideoFormat> GetHardwareVideoEncoderFormats(const webrtc::VideoEncoderFactory & factory)
+	{
+		std::vector<webrtc::SdpVideoFormat> formats;
+
+		for (const webrtc::SdpVideoFormat & format : factory.GetSupportedFormats()) {
+			if (IsDefaultHardwareFormat(format)
+				|| factory.QueryCodecSupport(format, std::nullopt).is_power_efficient) {
+				formats.push_back(format);
+			}
+		}
+
+		return formats;
+	}
+
+	std::vector<webrtc::SdpVideoFormat> GetHardwareVideoDecoderFormats(const webrtc::VideoDecoderFactory & factory)
+	{
+		std::vector<webrtc::SdpVideoFormat> formats;
+
+		for (const webrtc::SdpVideoFormat & format : factory.GetSupportedFormats()) {
+			if (IsDefaultHardwareFormat(format)
+				|| factory.QueryCodecSupport(format, false).is_power_efficient) {
+				formats.push_back(format);
+			}
+		}
+
+		return formats;
 	}
 }

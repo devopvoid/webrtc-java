@@ -34,6 +34,8 @@ import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.EncodedImage;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.NativeVideoEncoder;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecStatus;
@@ -93,6 +95,17 @@ class VideoCodecFactoryTests extends TestBase {
 		assertTrue(encoders.contains("VP9"), encoders.toString());
 		assertTrue(decoders.contains("VP8"), decoders.toString());
 		assertTrue(decoders.contains("VP9"), decoders.toString());
+	}
+
+	@Test
+	void hardwareFactoriesListHardwareCodecs() {
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
+		HardwareVideoDecoderFactory decoders = new HardwareVideoDecoderFactory();
+
+		assertHardwareCodecs(new DefaultVideoEncoderFactory().getSupportedCodecs(),
+				encoders.getSupportedCodecs(), encoders.getHardwareCodecs());
+		assertHardwareCodecs(new DefaultVideoDecoderFactory().getSupportedCodecs(),
+				decoders.getSupportedCodecs(), decoders.getHardwareCodecs());
 	}
 
 	@Test
@@ -400,6 +413,34 @@ class VideoCodecFactoryTests extends TestBase {
 				.setVideoEncoderFactory(encoderFactory)
 				.setVideoDecoderFactory(decoderFactory)
 				.build();
+	}
+
+	/**
+	 * Checks the hardware codecs of a hardware factory against its supported
+	 * codecs and those of the matching default factory. Which codecs the
+	 * hardware takes depends on the machine; that the codecs without a
+	 * software implementation are among them does not.
+	 */
+	private static void assertHardwareCodecs(List<VideoCodecInfo> software,
+			List<VideoCodecInfo> supported, List<VideoCodecInfo> hardware) {
+		// Supported codecs, in the same order.
+		int next = 0;
+
+		for (VideoCodecInfo codec : hardware) {
+			int index = supported.subList(next, supported.size()).indexOf(codec);
+
+			assertTrue(index >= 0, codec + " is not supported or out of order: " + supported);
+
+			next += index + 1;
+		}
+
+		for (VideoCodecInfo codec : supported) {
+			if (!software.contains(codec)) {
+				assertTrue(hardware.contains(codec), codec + " has no software codec: " + hardware);
+			}
+		}
+
+		assertThrows(UnsupportedOperationException.class, () -> hardware.add(new VideoCodecInfo(TEST_CODEC)));
 	}
 
 	private static List<String> names(List<?> codecs) {

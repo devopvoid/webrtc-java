@@ -18,11 +18,14 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_HARDWARE_VIDEO_ENCODER_FACTORY_H_
 
 #include "api/environment/environment.h"
+#include "api/video/resolution.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_encoder.h"
 #include "api/video_codecs/video_encoder_factory.h"
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace jni
@@ -44,6 +47,14 @@ namespace jni
 			std::vector<webrtc::SdpVideoFormat> GetSupportedFormats() const override;
 			std::unique_ptr<webrtc::VideoEncoder> Create(const webrtc::Environment & env,
 				const webrtc::SdpVideoFormat & format) override;
+
+			using webrtc::VideoEncoderFactory::QueryCodecSupport;
+
+			// A supported format is power efficient when a hardware factory
+			// supports it, since that factory's encoder is the one tried first.
+			CodecSupport QueryCodecSupport(const webrtc::SdpVideoFormat & format,
+				std::optional<std::string> scalability_mode,
+				std::optional<webrtc::Resolution> resolution) const override;
 
 		private:
 			const std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware;

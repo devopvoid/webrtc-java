@@ -82,18 +82,43 @@ public final class HardwareVideoDecoderFactory implements VideoDecoderFactory {
 
 	private final List<VideoCodecInfo> supportedCodecs;
 
+	private final List<VideoCodecInfo> hardwareCodecs;
+
 
 	/**
 	 * Creates a factory for the hardware video decoders.
 	 */
 	public HardwareVideoDecoderFactory() {
-		supportedCodecs = Collections.unmodifiableList(
-				Arrays.asList(getSupportedCodecsInternal()));
+		VideoCodecInfo[][] codecs = getCodecsInternal();
+
+		supportedCodecs = Collections.unmodifiableList(Arrays.asList(codecs[0]));
+		hardwareCodecs = Collections.unmodifiableList(Arrays.asList(codecs[1]));
 	}
 
 	@Override
 	public List<VideoCodecInfo> getSupportedCodecs() {
 		return supportedCodecs;
+	}
+
+	/**
+	 * Returns the supported codecs that are decoded on the GPU, in the order
+	 * of {@link #getSupportedCodecs()}. A codec counts when a hardware decoder
+	 * of the machine takes it, as found when the factory was created; on
+	 * macOS that includes H.264, which VideoToolbox decodes. The other
+	 * supported codecs are decoded in software.
+	 * <p>
+	 * A hardware decoder is tried first, not guaranteed: one that fails to
+	 * start, or fails while decoding, is replaced by the software decoder of
+	 * the same codec, and streams the hardware cannot decode, such as VP9 and AV1 with
+	 * spatial layers, are decoded in software. The stats of a running
+	 * connection tell which decoder a stream uses, in the
+	 * {@code powerEfficientDecoder} attribute of its inbound RTP stats.
+	 *
+	 * @return The hardware codecs, unmodifiable; empty if the machine has no
+	 *         hardware decoder this library supports.
+	 */
+	public List<VideoCodecInfo> getHardwareCodecs() {
+		return hardwareCodecs;
 	}
 
 	/**
@@ -118,6 +143,10 @@ public final class HardwareVideoDecoderFactory implements VideoDecoderFactory {
 		return null;
 	}
 
-	private static native VideoCodecInfo[] getSupportedCodecsInternal();
+	/**
+	 * Returns the supported codecs and the hardware codecs, from one native
+	 * factory, as creating one probes the hardware.
+	 */
+	private static native VideoCodecInfo[][] getCodecsInternal();
 
 }

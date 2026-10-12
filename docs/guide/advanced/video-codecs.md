@@ -81,6 +81,22 @@ AV1 is decoded by VideoToolbox on Macs with an AV1 decoder, which are those with
 
 Which decoder a stream uses shows in the `decoderImplementation` statistic of its `inbound-rtp` stats, e.g. `MediaFoundation (Microsoft H264 Video Decoder MFT)`, `MediaFoundation (AV1VideoExtension)`, `VideoToolbox (VP9)`, `VideoToolbox (H.265)`, `VideoToolbox (AV1)` or `NVDEC (NVIDIA GeForce RTX 4070)`.
 
+### Listing Hardware Codecs
+
+Both hardware factories tell which of their codecs the GPU of the machine handles. `getHardwareCodecs()` returns those of `getSupportedCodecs()`, in the same order, that a hardware encoder or decoder takes, as found when the factory was created; on macOS that includes H.264 through VideoToolbox. The other supported codecs are encoded or decoded in software:
+
+```java
+HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
+List<VideoCodecInfo> hardware = encoders.getHardwareCodecs();
+
+for (VideoCodecInfo codec : encoders.getSupportedCodecs()) {
+    String where = hardware.contains(codec) ? "hardware" : "software";
+    System.out.println(codec.getName() + " " + codec.getParameters() + ": " + where);
+}
+```
+
+The list is per format: on Windows, for example, Media Foundation encoders take H.264 Constrained Baseline and Baseline with packetization mode 1, so the Main profile and packetization mode 0 are listed as software. A hardware codec is the one tried first, not a guarantee: a stream that falls back to software, as described above, or asks for what the hardware does not do, such as SVC, is encoded or decoded in software. The `powerEfficientEncoder` and `powerEfficientDecoder` statistics of the `outbound-rtp` and `inbound-rtp` stats tell what a running stream uses.
+
 ### Native Codecs
 
 The encoders and decoders these factories create are `NativeVideoEncoder`s and `NativeVideoDecoder`s. They are placeholders that make WebRTC create the built-in codec, which then runs entirely inside WebRTC, so their methods are not to be called from Java.
@@ -248,7 +264,7 @@ Whatever an encoder, decoder or factory method throws is logged and treated as `
 - `VideoEncoderFactory`, `VideoDecoderFactory` — create the codecs of a factory.
 - `VideoEncoder`, `VideoDecoder`, `EncodedImage` — codecs implemented in Java.
 - `DefaultVideoEncoderFactory`, `DefaultVideoDecoderFactory` — the built-in codecs.
-- `HardwareVideoEncoderFactory`, `HardwareVideoDecoderFactory` — the built-in codecs, on the GPU where possible.
+- `HardwareVideoEncoderFactory`, `HardwareVideoDecoderFactory` — the built-in codecs, on the GPU where possible; `getHardwareCodecs()` lists those the GPU handles.
 - `RTCRtpTransceiver.setCodecPreferences()` — chooses among the negotiated codecs.
 
 For the full API, see the JavaDoc of the `dev.onvoid.webrtc.media.video.codec` package.

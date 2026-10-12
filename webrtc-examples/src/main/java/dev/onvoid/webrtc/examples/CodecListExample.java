@@ -23,8 +23,6 @@ import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCRtpCapabilities;
 import dev.onvoid.webrtc.RTCRtpCodecCapability;
 import dev.onvoid.webrtc.media.MediaType;
-import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
-import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
@@ -35,15 +33,14 @@ import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
  * This example shows how to:
  * <ul>
  *   <li>Create a PeerConnectionFactory that encodes and decodes video on the GPU where it can</li>
+ *   <li>List the video codecs of the hardware factories, marking those the GPU handles</li>
  *   <li>Get the supported codecs for both sending and receiving audio and video</li>
  *   <li>Display detailed information about each codec</li>
- *   <li>Compare the codecs of the default and the hardware video codec factories</li>
  * </ul>
  * <p>
- * The hardware factories support the codecs of the default factories, in the same order, and add
- * those the GPU handles that have no software implementation (H.265). Whether a codec that both
- * support is encoded or decoded on the GPU is decided per stream, and shows in the stats of a
- * running connection ({@code powerEfficientEncoder} and {@code powerEfficientDecoder}).
+ * A hardware codec is tried first, not guaranteed: a stream falls back to software when the
+ * hardware fails or cannot do what the stream asks for. The stats of a running connection tell
+ * which one a stream uses ({@code powerEfficientEncoder} and {@code powerEfficientDecoder}).
  *
  * @author Alex Andres
  */
@@ -59,17 +56,17 @@ public class CodecListExample {
                 .build();
 
         try {
-            // Compare the video codecs of the default and the hardware factories.
+            // List the video codecs of the hardware factories and which of them the GPU handles.
             System.out.println("\nVIDEO CODEC FACTORIES:");
             System.out.println("---------------------");
 
             System.out.println("\nVideo Encoders:");
-            printFactoryCodecs(new DefaultVideoEncoderFactory().getSupportedCodecs(),
-                    hardwareEncoderFactory.getSupportedCodecs());
+            printFactoryCodecs(hardwareEncoderFactory.getSupportedCodecs(),
+                    hardwareEncoderFactory.getHardwareCodecs());
 
             System.out.println("\nVideo Decoders:");
-            printFactoryCodecs(new DefaultVideoDecoderFactory().getSupportedCodecs(),
-                    hardwareDecoderFactory.getSupportedCodecs());
+            printFactoryCodecs(hardwareDecoderFactory.getSupportedCodecs(),
+                    hardwareDecoderFactory.getHardwareCodecs());
 
             // Get receiver capabilities for audio and video.
             System.out.println("\nRECEIVER CAPABILITIES:");
@@ -102,21 +99,21 @@ public class CodecListExample {
     }
 
     /**
-     * Prints the codecs of a hardware video codec factory, marking those the default factory does
-     * not have, which are only available in hardware.
+     * Prints the codecs of a hardware video codec factory, marking each as encoded or decoded in
+     * hardware or in software.
      *
-     * @param defaultCodecs  The codecs of the default factory.
-     * @param hardwareCodecs The codecs of the hardware factory.
+     * @param supportedCodecs The codecs the factory supports.
+     * @param hardwareCodecs  The supported codecs the GPU handles.
      */
-    private static void printFactoryCodecs(List<VideoCodecInfo> defaultCodecs,
+    private static void printFactoryCodecs(List<VideoCodecInfo> supportedCodecs,
                                            List<VideoCodecInfo> hardwareCodecs) {
-        if (hardwareCodecs.isEmpty()) {
+        if (supportedCodecs.isEmpty()) {
             System.out.println("  No codecs found.");
             return;
         }
 
-        for (int i = 0; i < hardwareCodecs.size(); i++) {
-            VideoCodecInfo codec = hardwareCodecs.get(i);
+        for (int i = 0; i < supportedCodecs.size(); i++) {
+            VideoCodecInfo codec = supportedCodecs.get(i);
             StringBuilder sb = new StringBuilder();
 
             sb.append("  Codec #").append(i + 1).append(": ");
@@ -132,30 +129,10 @@ public class CodecListExample {
                 sb.append(" | Scalability Modes: ").append(scalabilityModes.size());
             }
 
-            if (!containsCodec(defaultCodecs, codec)) {
-                sb.append(" | HARDWARE ONLY");
-            }
+            sb.append(" | ").append(hardwareCodecs.contains(codec) ? "HARDWARE" : "SOFTWARE");
 
             System.out.println(sb);
         }
-    }
-
-    /**
-     * Checks whether the list holds a codec with the same name and format parameters.
-     *
-     * @param codecs The codecs to search.
-     * @param codec  The codec to look for.
-     *
-     * @return true if the list holds the codec.
-     */
-    private static boolean containsCodec(List<VideoCodecInfo> codecs, VideoCodecInfo codec) {
-        for (VideoCodecInfo other : codecs) {
-            if (other.getName().equalsIgnoreCase(codec.getName())
-                    && other.getParameters().equals(codec.getParameters())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

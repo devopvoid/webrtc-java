@@ -17,10 +17,12 @@
 #ifndef JNI_WEBRTC_MEDIA_VIDEO_CODEC_DEFAULT_VIDEO_CODEC_FACTORIES_H_
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_DEFAULT_VIDEO_CODEC_FACTORIES_H_
 
+#include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_decoder_factory.h"
 #include "api/video_codecs/video_encoder_factory.h"
 
 #include <memory>
+#include <vector>
 
 namespace jni
 {
@@ -39,6 +41,16 @@ namespace jni
 	// where the platform has them, falling back to the software ones. On
 	// macOS the default decoders already use VideoToolbox.
 	std::unique_ptr<webrtc::VideoDecoderFactory> CreateHardwareVideoDecoderFactory();
+
+	// The supported formats of the factory, in their order, that it encodes
+	// on the GPU first: those it reports as power efficient, and on macOS
+	// H.264, which the default encoders encode with VideoToolbox.
+	std::vector<webrtc::SdpVideoFormat> GetHardwareVideoEncoderFormats(const webrtc::VideoEncoderFactory & factory);
+
+	// The supported formats of the factory, in their order, that it decodes
+	// on the GPU first, picked the way GetHardwareVideoEncoderFormats picks
+	// them.
+	std::vector<webrtc::SdpVideoFormat> GetHardwareVideoDecoderFormats(const webrtc::VideoDecoderFactory & factory);
 }
 
 #endif

@@ -62,6 +62,23 @@ namespace jni
 		return formats;
 	}
 
+	webrtc::VideoEncoderFactory::CodecSupport HardwareVideoEncoderFactory::QueryCodecSupport(
+		const webrtc::SdpVideoFormat & format, std::optional<std::string> scalability_mode,
+		std::optional<webrtc::Resolution> resolution) const
+	{
+		CodecSupport support = webrtc::VideoEncoderFactory::QueryCodecSupport(format, scalability_mode, resolution);
+
+		if (!support.is_supported) {
+			return support;
+		}
+
+		support.is_power_efficient = std::any_of(hardware.begin(), hardware.end(), [&](const auto & factory) {
+			return factory->QueryCodecSupport(format, scalability_mode, resolution).is_supported;
+		}) || software->QueryCodecSupport(format, scalability_mode, resolution).is_power_efficient;
+
+		return support;
+	}
+
 	std::unique_ptr<webrtc::VideoEncoder> HardwareVideoEncoderFactory::Create(const webrtc::Environment & env,
 		const webrtc::SdpVideoFormat & format)
 	{

@@ -382,13 +382,15 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		assumeTrue(OS.contains("win") || OS.contains("linux"),
 				"hardware encoders are implemented on Windows and Linux only");
 
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
-				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.setVideoEncoderFactory(encoders)
 				.build();
 
 		try {
 			assertHardware(encoderImplementation(hardware, H264), HARDWARE_REQUIRED);
+			assertListedAsHardware(encoders, "H264");
 		}
 		finally {
 			hardware.dispose();
@@ -400,15 +402,17 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		assumeTrue(OS.contains("win") || OS.contains("linux"),
 				"hardware encoders are implemented on Windows and Linux only");
 
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
-				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.setVideoEncoderFactory(encoders)
 				.build();
 
 		try {
 			// Frames arrive either way: from the GPU, or from libaom where the
 			// GPU has no AV1 encoder.
 			assertHardware(encoderImplementation(hardware, AV1), HARDWARE_AV1_REQUIRED);
+			assertListedAsHardware(encoders, "AV1");
 		}
 		finally {
 			hardware.dispose();
@@ -607,6 +611,17 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		else {
 			assumeTrue(hardwareUsed, "no hardware encoder: " + implementation);
 		}
+	}
+
+	/**
+	 * Checks that a codec the GPU was seen to encode is among the hardware
+	 * codecs of the factory.
+	 */
+	private static void assertListedAsHardware(HardwareVideoEncoderFactory factory, String codec) {
+		List<VideoCodecInfo> hardware = factory.getHardwareCodecs();
+
+		assertTrue(hardware.stream().anyMatch(info -> codec.equalsIgnoreCase(info.getName())),
+				codec + " is not listed as hardware: " + hardware);
 	}
 
 	/**

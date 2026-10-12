@@ -35,7 +35,7 @@ The [`CodecListExample`](https://github.com/devopvoid/webrtc-java/blob/master/we
 - Creating a `PeerConnectionFactory` with the `HardwareVideoEncoderFactory` and `HardwareVideoDecoderFactory`
 - Getting the supported codecs for both sending and receiving audio and video
 - Displaying detailed information about each codec
-- Comparing the codecs of the default and the hardware video codec factories, and marking those only available in hardware (H.265)
+- Listing the video codecs of the hardware factories and marking those the GPU encodes or decodes, with `getHardwareCodecs()`
 
 This example is useful for understanding what codecs are available on the current system, which can help with debugging compatibility issues or optimizing media quality.
 

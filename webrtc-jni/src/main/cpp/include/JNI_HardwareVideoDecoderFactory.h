@@ -24,10 +24,10 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_codec_HardwareVideoDecoderFactory
-	 * Method:    getSupportedCodecsInternal
-	 * Signature: ()[Ldev/onvoid/webrtc/media/video/codec/VideoCodecInfo;
+	 * Method:    getCodecsInternal
+	 * Signature: ()[[Ldev/onvoid/webrtc/media/video/codec/VideoCodecInfo;
 	 */
-	JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_video_codec_HardwareVideoDecoderFactory_getSupportedCodecsInternal
+	JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_video_codec_HardwareVideoDecoderFactory_getCodecsInternal
 	(JNIEnv *, jclass);
 
 #ifdef __cplusplus
