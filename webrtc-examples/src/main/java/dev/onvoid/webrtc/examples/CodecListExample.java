@@ -23,25 +23,54 @@ import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCRtpCapabilities;
 import dev.onvoid.webrtc.RTCRtpCodecCapability;
 import dev.onvoid.webrtc.media.MediaType;
+import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
 
 /**
  * Example demonstrating how to list all supported codecs with the WebRTC peer-connection-factory.
  * <p>
  * This example shows how to:
  * <ul>
- *   <li>Create a PeerConnectionFactory</li>
+ *   <li>Create a PeerConnectionFactory that encodes and decodes video on the GPU where it can</li>
  *   <li>Get the supported codecs for both sending and receiving audio and video</li>
  *   <li>Display detailed information about each codec</li>
+ *   <li>Compare the codecs of the default and the hardware video codec factories</li>
  * </ul>
- * 
+ * <p>
+ * The hardware factories support the codecs of the default factories, in the same order, and add
+ * those the GPU handles that have no software implementation (H.265). Whether a codec that both
+ * support is encoded or decoded on the GPU is decided per stream, and shows in the stats of a
+ * running connection ({@code powerEfficientEncoder} and {@code powerEfficientDecoder}).
+ *
  * @author Alex Andres
  */
 public class CodecListExample {
 
     public static void main(String[] args) {
-        PeerConnectionFactory factory = new PeerConnectionFactory();
+        HardwareVideoEncoderFactory hardwareEncoderFactory = new HardwareVideoEncoderFactory();
+        HardwareVideoDecoderFactory hardwareDecoderFactory = new HardwareVideoDecoderFactory();
+
+        PeerConnectionFactory factory = PeerConnectionFactory.builder()
+                .setVideoEncoderFactory(hardwareEncoderFactory)
+                .setVideoDecoderFactory(hardwareDecoderFactory)
+                .build();
 
         try {
+            // Compare the video codecs of the default and the hardware factories.
+            System.out.println("\nVIDEO CODEC FACTORIES:");
+            System.out.println("---------------------");
+
+            System.out.println("\nVideo Encoders:");
+            printFactoryCodecs(new DefaultVideoEncoderFactory().getSupportedCodecs(),
+                    hardwareEncoderFactory.getSupportedCodecs());
+
+            System.out.println("\nVideo Decoders:");
+            printFactoryCodecs(new DefaultVideoDecoderFactory().getSupportedCodecs(),
+                    hardwareDecoderFactory.getSupportedCodecs());
+
             // Get receiver capabilities for audio and video.
             System.out.println("\nRECEIVER CAPABILITIES:");
             System.out.println("---------------------");
@@ -70,6 +99,63 @@ public class CodecListExample {
             // Dispose the factory when done.
             factory.dispose();
         }
+    }
+
+    /**
+     * Prints the codecs of a hardware video codec factory, marking those the default factory does
+     * not have, which are only available in hardware.
+     *
+     * @param defaultCodecs  The codecs of the default factory.
+     * @param hardwareCodecs The codecs of the hardware factory.
+     */
+    private static void printFactoryCodecs(List<VideoCodecInfo> defaultCodecs,
+                                           List<VideoCodecInfo> hardwareCodecs) {
+        if (hardwareCodecs.isEmpty()) {
+            System.out.println("  No codecs found.");
+            return;
+        }
+
+        for (int i = 0; i < hardwareCodecs.size(); i++) {
+            VideoCodecInfo codec = hardwareCodecs.get(i);
+            StringBuilder sb = new StringBuilder();
+
+            sb.append("  Codec #").append(i + 1).append(": ");
+            sb.append("Name: ").append(codec.getName());
+
+            Map<String, String> parameters = codec.getParameters();
+            if (!parameters.isEmpty()) {
+                sb.append(" | Params: ").append(parameters);
+            }
+
+            List<String> scalabilityModes = codec.getScalabilityModes();
+            if (!scalabilityModes.isEmpty()) {
+                sb.append(" | Scalability Modes: ").append(scalabilityModes.size());
+            }
+
+            if (!containsCodec(defaultCodecs, codec)) {
+                sb.append(" | HARDWARE ONLY");
+            }
+
+            System.out.println(sb);
+        }
+    }
+
+    /**
+     * Checks whether the list holds a codec with the same name and format parameters.
+     *
+     * @param codecs The codecs to search.
+     * @param codec  The codec to look for.
+     *
+     * @return true if the list holds the codec.
+     */
+    private static boolean containsCodec(List<VideoCodecInfo> codecs, VideoCodecInfo codec) {
+        for (VideoCodecInfo other : codecs) {
+            if (other.getName().equalsIgnoreCase(codec.getName())
+                    && other.getParameters().equals(codec.getParameters())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
