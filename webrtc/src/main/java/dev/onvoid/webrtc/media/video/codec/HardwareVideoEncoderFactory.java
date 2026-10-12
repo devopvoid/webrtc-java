@@ -79,18 +79,45 @@ public final class HardwareVideoEncoderFactory implements VideoEncoderFactory {
 
 	private final List<VideoCodecInfo> supportedCodecs;
 
+	private final List<VideoCodecInfo> hardwareCodecs;
+
 
 	/**
 	 * Creates a factory for the hardware video encoders.
 	 */
 	public HardwareVideoEncoderFactory() {
-		supportedCodecs = Collections.unmodifiableList(
-				Arrays.asList(getSupportedCodecsInternal()));
+		VideoCodecInfo[][] codecs = getCodecsInternal();
+
+		supportedCodecs = Collections.unmodifiableList(Arrays.asList(codecs[0]));
+		hardwareCodecs = Collections.unmodifiableList(Arrays.asList(codecs[1]));
 	}
 
 	@Override
 	public List<VideoCodecInfo> getSupportedCodecs() {
 		return supportedCodecs;
+	}
+
+	/**
+	 * Returns the supported codecs that are encoded on the GPU, in the order
+	 * of {@link #getSupportedCodecs()}. A codec counts when a hardware encoder
+	 * of the machine takes it; on macOS that includes H.264, which
+	 * VideoToolbox encodes. The other supported codecs are encoded in
+	 * software. The hardware is probed once per process, and again only for
+	 * a new setting of the system properties that turn hardware codecs on, so
+	 * a GPU or driver that changes later is seen by a new process only.
+	 * <p>
+	 * A hardware encoder is tried first, not guaranteed: one that fails to
+	 * start or gives up while encoding is replaced by the software encoder of
+	 * the same codec, and a stream that asks for what the hardware does not
+	 * do, such as SVC, is encoded in software. The stats of a running
+	 * connection tell which encoder a stream uses, in the
+	 * {@code powerEfficientEncoder} attribute of its outbound RTP stats.
+	 *
+	 * @return The hardware codecs, unmodifiable; empty if the machine has no
+	 *         hardware encoder this library supports.
+	 */
+	public List<VideoCodecInfo> getHardwareCodecs() {
+		return hardwareCodecs;
 	}
 
 	/**
@@ -115,6 +142,10 @@ public final class HardwareVideoEncoderFactory implements VideoEncoderFactory {
 		return null;
 	}
 
-	private static native VideoCodecInfo[] getSupportedCodecsInternal();
+	/**
+	 * Returns the supported codecs and the hardware codecs, from one native
+	 * factory, as creating one probes the hardware.
+	 */
+	private static native VideoCodecInfo[][] getCodecsInternal();
 
 }

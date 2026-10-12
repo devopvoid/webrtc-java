@@ -16,8 +16,17 @@
 
 #include "media/video/codec/DefaultVideoCodecFactories.h"
 
+#include "media/video/codec/HardwareCodecOptions.h"
 #include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
+
+#include "api/video/video_codec_type.h"
+#include "api/video_codecs/video_codec.h"
+
+#include <map>
+#include <mutex>
+#include <optional>
+#include <utility>
 
 #ifdef __APPLE__
 #include "sdk/objc/components/video_codec/RTCDefaultVideoDecoderFactory.h"
@@ -39,6 +48,48 @@
 
 namespace jni
 {
+	namespace
+	{
+		// WebRTC's Objective-C factories encode and decode H.264 with
+		// VideoToolbox, but do not report it as power efficient.
+		bool IsDefaultHardwareFormat(const webrtc::SdpVideoFormat & format)
+		{
+#ifdef __APPLE__
+			return webrtc::PayloadStringToCodecType(format.name) == webrtc::kVideoCodecH264;
+#else
+			return false;
+#endif
+		}
+
+		// Probes for the hardware factories of the platform once for each
+		// setting of the options that change what is found, and shares what
+		// it found: a probe takes tens of milliseconds, and so every factory
+		// works with the same codecs. A GPU, driver or codec installed or
+		// removed later is noticed only by a new process.
+		template <typename Factories>
+		std::shared_ptr<const Factories> GetPlatformHardwareFactories(Factories (*probe)())
+		{
+			using Options = std::pair<bool, bool>;
+
+			static std::mutex mutex;
+			// Never destroyed: the factories use libraries that may be gone
+			// by the time static objects are destroyed as the process exits.
+			static auto * cache = new std::map<Options, std::shared_ptr<const Factories>>();
+
+			const Options options(IsHardwareVp9EncoderEnabled(), IsExperimentalVaapiEnabled());
+
+			std::lock_guard<std::mutex> lock(mutex);
+
+			std::shared_ptr<const Factories> & factories = (*cache)[options];
+
+			if (!factories) {
+				factories = std::make_shared<const Factories>(probe());
+			}
+
+			return factories;
+		}
+	}
+
 	std::unique_ptr<webrtc::VideoEncoderFactory> CreateDefaultVideoEncoderFactory()
 	{
 #ifdef __APPLE__
@@ -54,9 +105,9 @@ namespace jni
 
 	std::unique_ptr<webrtc::VideoEncoderFactory> CreateHardwareVideoEncoderFactory()
 	{
-		std::vector<std::unique_ptr<webrtc::VideoEncoderFactory>> hardware = CreatePlatformHardwareVideoEncoderFactories();
+		auto hardware = GetPlatformHardwareFactories(&CreatePlatformHardwareVideoEncoderFactories);
 
-		if (hardware.empty()) {
+		if (hardware->empty()) {
 			return CreateDefaultVideoEncoderFactory();
 		}
 
@@ -78,12 +129,40 @@ namespace jni
 
 	std::unique_ptr<webrtc::VideoDecoderFactory> CreateHardwareVideoDecoderFactory()
 	{
-		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> hardware = CreatePlatformHardwareVideoDecoderFactories();
+		auto hardware = GetPlatformHardwareFactories(&CreatePlatformHardwareVideoDecoderFactories);
 
-		if (hardware.empty()) {
+		if (hardware->empty()) {
 			return CreateDefaultVideoDecoderFactory();
 		}
 
 		return std::make_unique<HardwareVideoDecoderFactory>(std::move(hardware), CreateDefaultVideoDecoderFactory());
+	}
+
+	std::vector<webrtc::SdpVideoFormat> GetHardwareVideoEncoderFormats(const webrtc::VideoEncoderFactory & factory)
+	{
+		std::vector<webrtc::SdpVideoFormat> formats;
+
+		for (const webrtc::SdpVideoFormat & format : factory.GetSupportedFormats()) {
+			if (IsDefaultHardwareFormat(format)
+				|| factory.QueryCodecSupport(format, std::nullopt).is_power_efficient) {
+				formats.push_back(format);
+			}
+		}
+
+		return formats;
+	}
+
+	std::vector<webrtc::SdpVideoFormat> GetHardwareVideoDecoderFormats(const webrtc::VideoDecoderFactory & factory)
+	{
+		std::vector<webrtc::SdpVideoFormat> formats;
+
+		for (const webrtc::SdpVideoFormat & format : factory.GetSupportedFormats()) {
+			if (IsDefaultHardwareFormat(format)
+				|| factory.QueryCodecSupport(format, false).is_power_efficient) {
+				formats.push_back(format);
+			}
+		}
+
+		return formats;
 	}
 }

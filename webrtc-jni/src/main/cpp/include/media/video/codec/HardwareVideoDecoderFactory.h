@@ -18,11 +18,13 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_HARDWARE_VIDEO_DECODER_FACTORY_H_
 
 #include "api/environment/environment.h"
+#include "api/video/resolution.h"
 #include "api/video_codecs/sdp_video_format.h"
 #include "api/video_codecs/video_decoder.h"
 #include "api/video_codecs/video_decoder_factory.h"
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace jni
@@ -34,8 +36,12 @@ namespace jni
 	class HardwareVideoDecoderFactory : public webrtc::VideoDecoderFactory
 	{
 		public:
+			// The hardware factories. They hold nothing but what probing for
+			// them found, so several factories, on any thread, can share them.
+			using HardwareFactories = std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>>;
+
 			// The hardware factories are in order of preference.
-			HardwareVideoDecoderFactory(std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> hardware,
+			HardwareVideoDecoderFactory(std::shared_ptr<const HardwareFactories> hardware,
 				std::unique_ptr<webrtc::VideoDecoderFactory> software);
 			~HardwareVideoDecoderFactory() override = default;
 
@@ -43,8 +49,15 @@ namespace jni
 			std::unique_ptr<webrtc::VideoDecoder> Create(const webrtc::Environment & env,
 				const webrtc::SdpVideoFormat & format) override;
 
+			using webrtc::VideoDecoderFactory::QueryCodecSupport;
+
+			// A supported format is power efficient when a hardware factory
+			// supports it, since that factory's decoder is the one tried first.
+			CodecSupport QueryCodecSupport(const webrtc::SdpVideoFormat & format, bool reference_scaling,
+				std::optional<webrtc::Resolution> resolution) const override;
+
 		private:
-			const std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> hardware;
+			const std::shared_ptr<const HardwareFactories> hardware;
 			const std::unique_ptr<webrtc::VideoDecoderFactory> software;
 	};
 

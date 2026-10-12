@@ -28,6 +28,7 @@
 #include <jni.h>
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace jni
@@ -49,6 +50,12 @@ namespace jni
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
+			// The built-in encoders, with the GPU's in front if hardware is
+			// true, made the first time a NativeVideoEncoder asks for them:
+			// a factory that never hands one out probes no hardware.
+			webrtc::VideoEncoderFactory & BuiltInFactory(bool hardware);
+
+		private:
 			class JavaVideoEncoderFactoryClass : public JavaClass
 			{
 				public:
@@ -66,8 +73,9 @@ namespace jni
 			const JavaGlobalRef<jobject> factory;
 			const std::shared_ptr<JavaVideoEncoderFactoryClass> javaClass;
 			// The built-in encoders, and those with the GPU's in front.
-			const std::unique_ptr<webrtc::VideoEncoderFactory> defaultFactory;
-			const std::unique_ptr<webrtc::VideoEncoderFactory> hardwareFactory;
+			std::mutex builtInMutex;
+			std::unique_ptr<webrtc::VideoEncoderFactory> defaultFactory;
+			std::unique_ptr<webrtc::VideoEncoderFactory> hardwareFactory;
 
 			std::vector<webrtc::SdpVideoFormat> supportedFormats;
 	};

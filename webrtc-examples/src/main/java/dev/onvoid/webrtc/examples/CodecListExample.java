@@ -23,25 +23,51 @@ import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCRtpCapabilities;
 import dev.onvoid.webrtc.RTCRtpCodecCapability;
 import dev.onvoid.webrtc.media.MediaType;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
 
 /**
  * Example demonstrating how to list all supported codecs with the WebRTC peer-connection-factory.
  * <p>
  * This example shows how to:
  * <ul>
- *   <li>Create a PeerConnectionFactory</li>
+ *   <li>Create a PeerConnectionFactory that encodes and decodes video on the GPU where it can</li>
+ *   <li>List the video codecs of the hardware factories, marking those the GPU handles</li>
  *   <li>Get the supported codecs for both sending and receiving audio and video</li>
  *   <li>Display detailed information about each codec</li>
  * </ul>
- * 
+ * <p>
+ * A hardware codec is tried first, not guaranteed: a stream falls back to software when the
+ * hardware fails or cannot do what the stream asks for. The stats of a running connection tell
+ * which one a stream uses ({@code powerEfficientEncoder} and {@code powerEfficientDecoder}).
+ *
  * @author Alex Andres
  */
 public class CodecListExample {
 
     public static void main(String[] args) {
-        PeerConnectionFactory factory = new PeerConnectionFactory();
+        HardwareVideoEncoderFactory hardwareEncoderFactory = new HardwareVideoEncoderFactory();
+        HardwareVideoDecoderFactory hardwareDecoderFactory = new HardwareVideoDecoderFactory();
+
+        PeerConnectionFactory factory = PeerConnectionFactory.builder()
+                .setVideoEncoderFactory(hardwareEncoderFactory)
+                .setVideoDecoderFactory(hardwareDecoderFactory)
+                .build();
 
         try {
+            // List the video codecs of the hardware factories and which of them the GPU handles.
+            System.out.println("\nVIDEO CODEC FACTORIES:");
+            System.out.println("---------------------");
+
+            System.out.println("\nVideo Encoders:");
+            printFactoryCodecs(hardwareEncoderFactory.getSupportedCodecs(),
+                    hardwareEncoderFactory.getHardwareCodecs());
+
+            System.out.println("\nVideo Decoders:");
+            printFactoryCodecs(hardwareDecoderFactory.getSupportedCodecs(),
+                    hardwareDecoderFactory.getHardwareCodecs());
+
             // Get receiver capabilities for audio and video.
             System.out.println("\nRECEIVER CAPABILITIES:");
             System.out.println("---------------------");
@@ -69,6 +95,43 @@ public class CodecListExample {
         finally {
             // Dispose the factory when done.
             factory.dispose();
+        }
+    }
+
+    /**
+     * Prints the codecs of a hardware video codec factory, marking each as encoded or decoded in
+     * hardware or in software.
+     *
+     * @param supportedCodecs The codecs the factory supports.
+     * @param hardwareCodecs  The supported codecs the GPU handles.
+     */
+    private static void printFactoryCodecs(List<VideoCodecInfo> supportedCodecs,
+                                           List<VideoCodecInfo> hardwareCodecs) {
+        if (supportedCodecs.isEmpty()) {
+            System.out.println("  No codecs found.");
+            return;
+        }
+
+        for (int i = 0; i < supportedCodecs.size(); i++) {
+            VideoCodecInfo codec = supportedCodecs.get(i);
+            StringBuilder sb = new StringBuilder();
+
+            sb.append("  Codec #").append(i + 1).append(": ");
+            sb.append("Name: ").append(codec.getName());
+
+            Map<String, String> parameters = codec.getParameters();
+            if (!parameters.isEmpty()) {
+                sb.append(" | Params: ").append(parameters);
+            }
+
+            List<String> scalabilityModes = codec.getScalabilityModes();
+            if (!scalabilityModes.isEmpty()) {
+                sb.append(" | Scalability Modes: ").append(scalabilityModes.size());
+            }
+
+            sb.append(" | ").append(hardwareCodecs.contains(codec) ? "HARDWARE" : "SOFTWARE");
+
+            System.out.println(sb);
         }
     }
 

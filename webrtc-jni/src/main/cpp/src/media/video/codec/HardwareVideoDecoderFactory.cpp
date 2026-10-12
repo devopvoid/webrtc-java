@@ -34,7 +34,7 @@ namespace jni
 	}
 
 	HardwareVideoDecoderFactory::HardwareVideoDecoderFactory(
-		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> hardware,
+		std::shared_ptr<const HardwareFactories> hardware,
 		std::unique_ptr<webrtc::VideoDecoderFactory> software) :
 		hardware(std::move(hardware)),
 		software(std::move(software))
@@ -47,7 +47,7 @@ namespace jni
 		// does not change what a peer connection negotiates.
 		std::vector<webrtc::SdpVideoFormat> formats = software->GetSupportedFormats();
 
-		for (const auto & factory : hardware) {
+		for (const auto & factory : *hardware) {
 			for (const webrtc::SdpVideoFormat & format : factory->GetSupportedFormats()) {
 				bool listed = std::any_of(formats.begin(), formats.end(), [&](const webrtc::SdpVideoFormat & other) {
 					return other.IsSameCodec(format);
@@ -62,6 +62,23 @@ namespace jni
 		return formats;
 	}
 
+	webrtc::VideoDecoderFactory::CodecSupport HardwareVideoDecoderFactory::QueryCodecSupport(
+		const webrtc::SdpVideoFormat & format, bool reference_scaling,
+		std::optional<webrtc::Resolution> resolution) const
+	{
+		CodecSupport support = webrtc::VideoDecoderFactory::QueryCodecSupport(format, reference_scaling, resolution);
+
+		if (!support.is_supported) {
+			return support;
+		}
+
+		support.is_power_efficient = std::any_of(hardware->begin(), hardware->end(), [&](const auto & factory) {
+			return factory->QueryCodecSupport(format, reference_scaling, resolution).is_supported;
+		}) || software->QueryCodecSupport(format, reference_scaling, resolution).is_power_efficient;
+
+		return support;
+	}
+
 	std::unique_ptr<webrtc::VideoDecoder> HardwareVideoDecoderFactory::Create(const webrtc::Environment & env,
 		const webrtc::SdpVideoFormat & format)
 	{
@@ -73,7 +90,7 @@ namespace jni
 
 		// Built from the back, so that the most preferred decoder comes first
 		// and each one falls back to the chain behind it.
-		for (auto factory = hardware.rbegin(); factory != hardware.rend(); ++factory) {
+		for (auto factory = hardware->rbegin(); factory != hardware->rend(); ++factory) {
 			if (!Supports(**factory, format)) {
 				continue;
 			}

@@ -73,6 +73,8 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 On Linux, NVDEC needs an NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1`; both are loaded when the factory is made, so a machine without the driver is not affected. Streams with spatial layers are decoded in software.
 
+On Windows and Linux, H.264 is decoded in hardware in its 4:2:0 profiles. High 4:4:4 Predictive, which GPU decoders do not take, is decoded in software.
+
 AV1 on Windows needs the *AV1 Video Extension*, which Windows 11 includes, and VP9 the *VP9 Video Extensions*, a free component of the Microsoft Store that a system may not have; without it, VP9 is decoded in software. H.265 needs the *HEVC Video Extensions* of the Microsoft Store, or an HEVC decoder of the GPU vendor; without one, H.265 is not offered, since it has no software decoder. Streams with spatial layers (SVC) are decoded in software too, since their layers reach a decoder without the index that says where each ends. Decoded frames are copied from GPU memory back to system memory, where WebRTC's frames are, so hardware decoding pays off mostly at high resolutions and with many streams; at low resolutions WebRTC's software decoders are about as cheap. A hardware decoder that fails, or turns out to decode in software, is replaced by the software decoder, which starts with the next key frame.
 
 On macOS, VP9 decoding in hardware saves CPU: in a measurement on an Apple M2 it took a fraction of the processor time libvpx needs, but multi-threaded libvpx was about as fast on the clock. VideoToolbox decodes VP9 in hardware only where the Mac has a decoder for it, which Apple silicon does; a Mac without one decodes VP9 with libvpx as before. Profile 2 (10 bit), sizes below 64x64 or above 4096x4096, and streams with spatial layers (SVC) are decoded with libvpx too.
@@ -80,6 +82,22 @@ On macOS, VP9 decoding in hardware saves CPU: in a measurement on an Apple M2 it
 AV1 is decoded by VideoToolbox on Macs with an AV1 decoder, which are those with Apple M3 and newer, and by dav1d elsewhere. High bit depth, monochrome streams and streams with spatial layers go to dav1d as well. H.265 is decoded by VideoToolbox in hardware only, never in software: a Mac without a hardware HEVC decoder does not offer H.265, and an H.265 stream the hardware cannot decode is not decoded.
 
 Which decoder a stream uses shows in the `decoderImplementation` statistic of its `inbound-rtp` stats, e.g. `MediaFoundation (Microsoft H264 Video Decoder MFT)`, `MediaFoundation (AV1VideoExtension)`, `VideoToolbox (VP9)`, `VideoToolbox (H.265)`, `VideoToolbox (AV1)` or `NVDEC (NVIDIA GeForce RTX 4070)`.
+
+### Listing Hardware Codecs
+
+Both hardware factories tell which of their codecs the GPU of the machine handles. `getHardwareCodecs()` returns those of `getSupportedCodecs()`, in the same order, that a hardware encoder or decoder takes; on macOS that includes H.264 through VideoToolbox. The other supported codecs are encoded or decoded in software. The hardware is probed once per process, which every factory then shares, and again only when one of the system properties above is set differently; a GPU, driver or codec extension installed while the process runs is seen by the next one:
+
+```java
+HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
+List<VideoCodecInfo> hardware = encoders.getHardwareCodecs();
+
+for (VideoCodecInfo codec : encoders.getSupportedCodecs()) {
+    String where = hardware.contains(codec) ? "hardware" : "software";
+    System.out.println(codec.getName() + " " + codec.getParameters() + ": " + where);
+}
+```
+
+The list is per format: on Windows, for example, Media Foundation encoders take H.264 Constrained Baseline and Baseline with packetization mode 1, so the Main profile and packetization mode 0 are listed as software. A hardware codec is the one tried first, not a guarantee: a stream that falls back to software, as described above, or asks for what the hardware does not do, such as SVC, is encoded or decoded in software. The `powerEfficientEncoder` and `powerEfficientDecoder` statistics of the `outbound-rtp` and `inbound-rtp` stats tell what a running stream uses.
 
 ### Native Codecs
 
@@ -248,7 +266,7 @@ Whatever an encoder, decoder or factory method throws is logged and treated as `
 - `VideoEncoderFactory`, `VideoDecoderFactory` — create the codecs of a factory.
 - `VideoEncoder`, `VideoDecoder`, `EncodedImage` — codecs implemented in Java.
 - `DefaultVideoEncoderFactory`, `DefaultVideoDecoderFactory` — the built-in codecs.
-- `HardwareVideoEncoderFactory`, `HardwareVideoDecoderFactory` — the built-in codecs, on the GPU where possible.
+- `HardwareVideoEncoderFactory`, `HardwareVideoDecoderFactory` — the built-in codecs, on the GPU where possible; `getHardwareCodecs()` lists those the GPU handles.
 - `RTCRtpTransceiver.setCodecPreferences()` — chooses among the negotiated codecs.
 
 For the full API, see the JavaDoc of the `dev.onvoid.webrtc.media.video.codec` package.

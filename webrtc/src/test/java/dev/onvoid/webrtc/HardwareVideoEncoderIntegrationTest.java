@@ -36,6 +36,8 @@ import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecStatus;
 import dev.onvoid.webrtc.media.video.codec.VideoDecoder;
 import dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoEncoder;
+import dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -382,16 +384,51 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		assumeTrue(OS.contains("win") || OS.contains("linux"),
 				"hardware encoders are implemented on Windows and Linux only");
 
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
-				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.setVideoEncoderFactory(encoders)
 				.build();
 
 		try {
 			assertHardware(encoderImplementation(hardware, H264), HARDWARE_REQUIRED);
+			assertListedAsHardware(encoders, "H264");
 		}
 		finally {
 			hardware.dispose();
+		}
+	}
+
+	@Test
+	void delegatingFactoryEncodesInHardware() throws Exception {
+		// A factory of one's own that hands out the hardware encoders goes
+		// through Java, unlike the hardware factory itself, and gets the
+		// built-in hardware encoders made the first time one is asked for.
+		assumeTrue(OS.contains("win") || OS.contains("linux"),
+				"hardware encoders are implemented on Windows and Linux only");
+
+		HardwareVideoEncoderFactory builtIn = new HardwareVideoEncoderFactory();
+		PeerConnectionFactory delegating = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new VideoEncoderFactory() {
+
+					@Override
+					public List<VideoCodecInfo> getSupportedCodecs() {
+						return builtIn.getSupportedCodecs();
+					}
+
+					@Override
+					public VideoEncoder createEncoder(VideoCodecInfo info) {
+						return builtIn.createEncoder(info);
+					}
+				})
+				.build();
+
+		try {
+			assertHardware(encoderImplementation(delegating, H264), HARDWARE_REQUIRED);
+		}
+		finally {
+			delegating.dispose();
 		}
 	}
 
@@ -400,15 +437,17 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		assumeTrue(OS.contains("win") || OS.contains("linux"),
 				"hardware encoders are implemented on Windows and Linux only");
 
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
-				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.setVideoEncoderFactory(encoders)
 				.build();
 
 		try {
 			// Frames arrive either way: from the GPU, or from libaom where the
 			// GPU has no AV1 encoder.
 			assertHardware(encoderImplementation(hardware, AV1), HARDWARE_AV1_REQUIRED);
+			assertListedAsHardware(encoders, "AV1");
 		}
 		finally {
 			hardware.dispose();
@@ -607,6 +646,17 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		else {
 			assumeTrue(hardwareUsed, "no hardware encoder: " + implementation);
 		}
+	}
+
+	/**
+	 * Checks that a codec the GPU was seen to encode is among the hardware
+	 * codecs of the factory.
+	 */
+	private static void assertListedAsHardware(HardwareVideoEncoderFactory factory, String codec) {
+		List<VideoCodecInfo> hardware = factory.getHardwareCodecs();
+
+		assertTrue(hardware.stream().anyMatch(info -> codec.equalsIgnoreCase(info.getName())),
+				codec + " is not listed as hardware: " + hardware);
 	}
 
 	/**

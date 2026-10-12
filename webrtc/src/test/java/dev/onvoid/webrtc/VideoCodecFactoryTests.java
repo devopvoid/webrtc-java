@@ -34,6 +34,8 @@ import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.EncodedImage;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.NativeVideoEncoder;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecStatus;
@@ -49,6 +51,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -83,6 +86,9 @@ class VideoCodecFactoryTests extends TestBase {
 	/** What precedes the payload in the slice of an H.265 test access unit. */
 	private static final String H265_MARKER = "WRTC:";
 
+	/** The RTP capabilities WebRTC adds that are no media codec. */
+	private static final List<String> RTP_ONLY_CODECS = Arrays.asList("rtx", "red", "ulpfec", "flexfec-03");
+
 
 	@Test
 	void defaultFactoriesListBuiltInCodecs() {
@@ -93,6 +99,53 @@ class VideoCodecFactoryTests extends TestBase {
 		assertTrue(encoders.contains("VP9"), encoders.toString());
 		assertTrue(decoders.contains("VP8"), decoders.toString());
 		assertTrue(decoders.contains("VP9"), decoders.toString());
+	}
+
+	@Test
+	void hardwareFactoriesListHardwareCodecs() {
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
+		HardwareVideoDecoderFactory decoders = new HardwareVideoDecoderFactory();
+
+		assertHardwareCodecs(new DefaultVideoEncoderFactory().getSupportedCodecs(),
+				encoders.getSupportedCodecs(), encoders.getHardwareCodecs());
+		assertHardwareCodecs(new DefaultVideoDecoderFactory().getSupportedCodecs(),
+				decoders.getSupportedCodecs(), decoders.getHardwareCodecs());
+	}
+
+	@Test
+	void builtFactoryUsesHardwareCodecs() {
+		// The hardware factories are made natively, without their Java
+		// objects; what is negotiated has to be what those list.
+		HardwareVideoEncoderFactory encoders = new HardwareVideoEncoderFactory();
+		HardwareVideoDecoderFactory decoders = new HardwareVideoDecoderFactory();
+
+		PeerConnectionFactory built = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(encoders)
+				.setVideoDecoderFactory(decoders)
+				.build();
+
+		try {
+			assertEquals(names(encoders.getSupportedCodecs()),
+					mediaCodecNames(built.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs()));
+			assertEquals(names(decoders.getSupportedCodecs()),
+					mediaCodecNames(built.getRtpReceiverCapabilities(MediaType.VIDEO).getCodecs()));
+		}
+		finally {
+			built.dispose();
+		}
+	}
+
+	@Test
+	void hardwareDecodesNoH264High444() {
+		// GPU decoders take 4:2:0 only, so H.264 High 4:4:4 Predictive (profile
+		// 0xf4) stays with the software decoder.
+		for (VideoCodecInfo codec : new HardwareVideoDecoderFactory().getHardwareCodecs()) {
+			String profileLevelId = codec.getParameters().getOrDefault("profile-level-id", "");
+
+			assertFalse("H264".equalsIgnoreCase(codec.getName()) && profileLevelId.startsWith("f4"),
+					codec.toString());
+		}
 	}
 
 	@Test
@@ -400,6 +453,44 @@ class VideoCodecFactoryTests extends TestBase {
 				.setVideoEncoderFactory(encoderFactory)
 				.setVideoDecoderFactory(decoderFactory)
 				.build();
+	}
+
+	/**
+	 * Checks the hardware codecs of a hardware factory against its supported
+	 * codecs and those of the matching default factory. Which codecs the
+	 * hardware takes depends on the machine; that the codecs without a
+	 * software implementation are among them does not.
+	 */
+	private static void assertHardwareCodecs(List<VideoCodecInfo> software,
+			List<VideoCodecInfo> supported, List<VideoCodecInfo> hardware) {
+		// Supported codecs, in the same order.
+		int next = 0;
+
+		for (VideoCodecInfo codec : hardware) {
+			int index = supported.subList(next, supported.size()).indexOf(codec);
+
+			assertTrue(index >= 0, codec + " is not supported or out of order: " + supported);
+
+			next += index + 1;
+		}
+
+		for (VideoCodecInfo codec : supported) {
+			if (!software.contains(codec)) {
+				assertTrue(hardware.contains(codec), codec + " has no software codec: " + hardware);
+			}
+		}
+
+		assertThrows(UnsupportedOperationException.class, () -> hardware.add(new VideoCodecInfo(TEST_CODEC)));
+	}
+
+	/**
+	 * The names of the media codecs among RTP capabilities, without those
+	 * WebRTC adds for retransmission, redundancy and error correction.
+	 */
+	private static List<String> mediaCodecNames(List<RTCRtpCodecCapability> capabilities) {
+		return names(capabilities).stream()
+				.filter(name -> !RTP_ONLY_CODECS.contains(name.toLowerCase(Locale.ROOT)))
+				.collect(Collectors.toList());
 	}
 
 	private static List<String> names(List<?> codecs) {

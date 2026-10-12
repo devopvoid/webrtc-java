@@ -32,9 +32,10 @@ This example is useful for applications that need to receive media streams from 
 The [`CodecListExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/CodecListExample.java) demonstrates how to list all supported codecs with the WebRTC peer-connection-factory.
 
 **Key features demonstrated:**
-- Creating a `PeerConnectionFactory`
+- Creating a `PeerConnectionFactory` with the `HardwareVideoEncoderFactory` and `HardwareVideoDecoderFactory`
 - Getting the supported codecs for both sending and receiving audio and video
 - Displaying detailed information about each codec
+- Listing the video codecs of the hardware factories and marking those the GPU encodes or decodes, with `getHardwareCodecs()`
 
 This example is useful for understanding what codecs are available on the current system, which can help with debugging compatibility issues or optimizing media quality.
 
