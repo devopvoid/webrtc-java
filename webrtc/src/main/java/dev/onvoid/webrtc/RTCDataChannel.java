@@ -249,15 +249,15 @@ public class RTCDataChannel extends DisposableNativeObject {
 	 * returns, without changing its position or limit.
 	 * <p>
 	 * The observer is called once when the operation completes or is discarded
-	 * during channel shutdown. It normally runs on the native network thread;
-	 * a discarded operation can report failure on the thread that destroys it.
-	 * The callback may run before this method returns. It must not block or
-	 * call other WebRTC methods synchronously. Dispatch further work to an
-	 * application executor. No callback is guaranteed during JVM shutdown.
+	 * during channel shutdown. It runs on a native callback thread that all
+	 * send and DTLS transport observers share, in the order the results arrive,
+	 * and may run before this method returns. It may call other WebRTC methods,
+	 * but should not block, since that holds up the other observers. No
+	 * callback is guaranteed during JVM shutdown.
 	 * <p>
 	 * Invalid arguments and failures preparing the native operation are thrown
 	 * on the calling thread. If preparation fails, the observer is not called.
-	 * Exceptions thrown by the observer are printed and cleared on its native
+	 * Exceptions thrown by the observer are printed and cleared on the callback
 	 * thread; they do not propagate to the sender.
 	 *
 	 * @param buffer The buffer to be queued for transmission.

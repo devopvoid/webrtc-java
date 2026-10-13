@@ -8,10 +8,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 
 import org.junit.jupiter.api.Test;
 
@@ -107,6 +112,48 @@ class RTCDataChannelSendCompletionTests extends TestBase {
 			assertTrue(entered.await(5, TimeUnit.SECONDS), "Observer was not called");
 			assertRejected(pair.sender);
 			uncaught.assertReceived("Send failure observer test exception");
+		}
+	}
+
+	@Test
+	void observerCanUseRtpSender() throws Exception {
+		// WebRTC completes sends on the network thread, which is also the
+		// worker thread. Getting a sender's parameters blocks the signaling
+		// thread on the worker thread, which deadlocks should the observer
+		// run on that thread.
+		TestPeerConnection caller = new TestPeerConnection(factory);
+		TestPeerConnection callee = new TestPeerConnection(factory);
+		try (TestDataChannelPair pair = new TestDataChannelPair(factory)) {
+			AudioTrackSource source = factory.createAudioSource(new AudioOptions());
+			AudioTrack track = factory.createAudioTrack("audioTrack", source);
+			RTCRtpSender audioSender = caller.getPeerConnection()
+					.addTrack(track, Collections.singletonList("stream1"));
+
+			caller.setRemotePeerConnection(callee);
+			callee.setRemotePeerConnection(caller);
+			callee.setRemoteDescription(caller.createOffer());
+			caller.setRemoteDescription(callee.createAnswer());
+
+			pair.connect();
+
+			CompletableFuture<RTCRtpSendParameters> parameters = new CompletableFuture<>();
+			RTCDataChannelBuffer buffer = new RTCDataChannelBuffer(ByteBuffer.allocate(1), true);
+			pair.sender.sendAsync(buffer, new RTCDataChannelSendObserver() {
+				@Override
+				public void onSuccess() {
+					parameters.complete(audioSender.getParameters());
+				}
+
+				@Override
+				public void onFailure(String error) {
+					parameters.completeExceptionally(new IllegalStateException(error));
+				}
+			});
+			assertNotNull(parameters.get(5, TimeUnit.SECONDS));
+		}
+		finally {
+			caller.close();
+			callee.close();
 		}
 	}
 

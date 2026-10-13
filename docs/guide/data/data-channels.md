@@ -203,7 +203,7 @@ dataChannel.sendAsync(binaryChannelBuffer, new RTCDataChannelSendObserver() {
 });
 ```
 
-The observer is called exactly once, normally on the native network thread, and with a failure if the operation is discarded while the channel shuts down. Success means the message was queued locally, not that the peer received it. Do not block in the callbacks or call other WebRTC methods from them synchronously; dispatch further work to an executor of your own. Without an observer, `sendAsync` logs failures and reports nothing to the caller.
+The observer is called exactly once, with a failure if the operation is discarded while the channel shuts down. Success means the message was queued locally, not that the peer received it. Callbacks run on a native callback thread shared with other send and DTLS transport observers; they may call other WebRTC methods, but should not block, so dispatch long work to an executor of your own. Without an observer, `sendAsync` logs failures and reports nothing to the caller.
 
 ### Receiving Data
 
