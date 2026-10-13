@@ -19,8 +19,8 @@ package dev.onvoid.webrtc;
 /**
  * Receives events from an {@link RTCDtlsTransport}.
  * <p>
- * The events arrive in order on a native callback thread that all DTLS
- * transport and data channel send observers share. An observer may call other
+ * The events arrive in order on a native callback thread shared with other
+ * WebRTC observers. An observer may call other
  * WebRTC methods, but should not block, since that holds up the other
  * observers. Once {@link RTCDtlsTransport#unregisterObserver()} returns, the
  * observer receives no more events.

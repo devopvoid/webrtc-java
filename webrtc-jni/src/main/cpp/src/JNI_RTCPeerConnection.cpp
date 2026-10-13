@@ -195,6 +195,46 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceive
 	return nullptr;
 }
 
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceiverOfType
+(JNIEnv * env, jobject caller, jobject jMediaType, jobject jTransceiverInit)
+{
+	if (jMediaType == nullptr) {
+		env->Throw(jni::JavaNullPointerException(env, "MediaType must not be null"));
+		return nullptr;
+	}
+
+	webrtc::PeerConnectionInterface * pc = GetHandle<webrtc::PeerConnectionInterface>(env, caller);
+	CHECK_HANDLEV(pc, nullptr);
+
+	try {
+		auto mediaType = jni::JavaEnums::toNative<webrtc::MediaType>(env, jMediaType);
+
+		webrtc::RTCErrorOr<webrtc::scoped_refptr<webrtc::RtpTransceiverInterface>> result;
+
+		if (jTransceiverInit != nullptr) {
+			auto init = jni::RTCRtpTransceiverInit::toNative(env, jni::JavaLocalRef<jobject>(env, jTransceiverInit));
+
+			result = pc->AddTransceiver(mediaType, init);
+		}
+		else {
+			result = pc->AddTransceiver(mediaType);
+		}
+
+		if (result.ok()) {
+			auto transceiver = result.MoveValue();
+
+			return jni::JavaFactories::create(env, transceiver.release()).release();
+		}
+
+		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result.error()).c_str()));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+
+	return nullptr;
+}
+
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_createDataChannel
 (JNIEnv * env, jobject caller, jstring jLabel, jobject jDict)
 {

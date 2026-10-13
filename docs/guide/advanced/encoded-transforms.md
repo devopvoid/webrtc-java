@@ -9,6 +9,7 @@ This guide explains how to read and change the encoded frames of a call as they 
 - Asking for key frames
 - End-to-end encryption as a worked example
 - Threading and performance
+- Sending frames that are already encoded through an injector
 
 A sender's transform sees every frame after the encoder and before the packetizer; a receiver's sees every frame after the depacketizer and before the decoder. Everything between the two, whether that is the network, a TURN server or an SFU, only ever carries what the transform produced. That is what makes end-to-end encryption possible, and also frame metadata, watermarks, or analysis of the encoded stream.
 
@@ -104,3 +105,33 @@ The transform never runs on a thread that carries media. Each sender and receive
 - a transform that falls several seconds behind has frames dropped until it catches up, rather than having them queue up in memory.
 
 Per frame, the cost is one small Java object and, only if the payload is read, one copy into a buffer that is reused from frame to frame. Senders and receivers without a transform are not touched at all.
+
+## Injecting Encoded Frames
+
+A sender can also send frames that are already encoded, such as a camera's H.264 stream or a recording, without WebRTC encoding anything. An injector takes the place of the sender's track, so it is created for a sender without one, for example from a transceiver added by media type:
+
+```java
+RTCRtpTransceiverInit init = new RTCRtpTransceiverInit();
+init.direction = RTCRtpTransceiverDirection.SEND_ONLY;
+
+RTCRtpTransceiver transceiver = peerConnection.addTransceiver(MediaType.VIDEO, init);
+RTCEncodedVideoFrameInjector injector = transceiver.getSender()
+        .createEncodedVideoFrameInjector(new RTCEncodedVideoFrameInjectorObserver() {
+            @Override
+            public void onKeyFrameRequest() {
+                // Inject a key frame next.
+            }
+
+            @Override
+            public void onBitrateChange(int allocatedBitrate, int availableOutgoingBitrate) {
+                // Adapt the source's bitrate.
+            }
+        });
+
+// After negotiation, for every frame:
+injector.injectFrame(frameData, rtpTimestamp, keyFrame, width, height);
+```
+
+The frames must be in the codec the sender negotiated, which `setCodecPreferences` on the transceiver can make sure of, and the RTP timestamp runs on the 90 kHz video clock. An audio sender takes an `RTCEncodedAudioFrameInjector` the same way, whose frames carry the payload type of their codec, from the sender's `getParameters().codecs`. Do not inject audio through a factory that sends audio captured by its audio device module, as WebRTC feeds captured audio to every audio sender.
+
+Giving the sender a track through `replaceTrack` ends the injection, and `dispose()` releases the injector. The observer runs on a callback thread shared with other WebRTC observers, so it may call back into WebRTC but should not block.

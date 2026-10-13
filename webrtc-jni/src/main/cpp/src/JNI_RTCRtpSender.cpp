@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCRtpSender.h"
+#include "api/EncodedFrameInjectorObserver.h"
 #include "api/RTCRtpSenderObserver.h"
 #include "api/RTCRtpSendParameters.h"
 #include "api/WebRTCUtils.h"
@@ -158,6 +159,80 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_generateKeyFrame
 	if (!result.ok()) {
 		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result).c_str()));
 	}
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createVideoFrameInjector
+(JNIEnv * env, jobject caller, jobject jObserver)
+{
+	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	CHECK_HANDLEV(sender, nullptr);
+
+	try {
+		std::unique_ptr<jni::EncodedFrameInjectorObserver> observer;
+		webrtc::KeyFrameCallback keyFrameCallback;
+		webrtc::BitrateInfoCallback bitrateCallback;
+
+		if (jObserver != nullptr) {
+			observer = jni::EncodedFrameInjectorObserver::ForVideo(env, jni::JavaLocalRef<jobject>(env, jObserver));
+			keyFrameCallback = observer->CreateKeyFrameCallback();
+			bitrateCallback = observer->CreateBitrateInfoCallback();
+		}
+
+		auto injector = sender->CreateEncodedVideoFrameInjector(std::move(keyFrameCallback), std::move(bitrateCallback));
+
+		// WebRTC refuses the injector for a stopped sender, a sender with a
+		// track, an audio sender, and a sender that has one already.
+		if (!injector) {
+			return nullptr;
+		}
+
+		auto jInjector = jni::JavaFactories::create(env, injector.release());
+
+		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
+
+		return jInjector.release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+
+	return nullptr;
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createAudioFrameInjector
+(JNIEnv * env, jobject caller, jobject jObserver)
+{
+	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	CHECK_HANDLEV(sender, nullptr);
+
+	try {
+		std::unique_ptr<jni::EncodedFrameInjectorObserver> observer;
+		webrtc::TargetBitrateCallback bitrateCallback;
+
+		if (jObserver != nullptr) {
+			observer = jni::EncodedFrameInjectorObserver::ForAudio(env, jni::JavaLocalRef<jobject>(env, jObserver));
+			bitrateCallback = observer->CreateTargetBitrateCallback();
+		}
+
+		auto injector = sender->CreateEncodedAudioFrameInjector(std::move(bitrateCallback));
+
+		// WebRTC refuses the injector for a stopped sender, a sender with a
+		// track, a video sender, and a sender that has one already.
+		if (!injector) {
+			return nullptr;
+		}
+
+		auto jInjector = jni::JavaFactories::create(env, injector.release());
+
+		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
+
+		return jInjector.release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+
+	return nullptr;
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getId

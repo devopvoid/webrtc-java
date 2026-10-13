@@ -26,6 +26,8 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
+#include "api/encoded_audio_frame_injector_interface.h"
+#include "api/encoded_video_frame_injector_interface.h"
 #include "api/environment/environment_factory.h"
 #include "api/peer_connection_interface.h"
 #include "api/priority.h"
@@ -112,6 +114,8 @@ namespace jni
 		JavaFactories::add<webrtc::MediaStreamInterface>(env, PKG_MEDIA"MediaStream");
 		JavaFactories::add<webrtc::DataChannelInterface>(env, PKG"RTCDataChannel");
 		JavaFactories::add<webrtc::DtlsTransportInterface>(env, PKG"RTCDtlsTransport");
+		JavaFactories::add<webrtc::EncodedAudioFrameInjectorInterface>(env, PKG"RTCEncodedAudioFrameInjector");
+		JavaFactories::add<webrtc::EncodedVideoFrameInjectorInterface>(env, PKG"RTCEncodedVideoFrameInjector");
 		JavaFactories::add<webrtc::IceTransportInterface>(env, PKG"RTCIceTransport");
 		JavaFactories::add<webrtc::PeerConnectionInterface>(env, PKG"RTCPeerConnection");
 		JavaFactories::add<webrtc::RtpReceiverInterface>(env, PKG"RTCRtpReceiver");

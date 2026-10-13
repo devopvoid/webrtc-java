@@ -81,6 +81,22 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCRtpSender
+	 * Method:    createVideoFrameInjector
+	 * Signature: (Ldev/onvoid/webrtc/RTCEncodedVideoFrameInjectorObserver;)Ldev/onvoid/webrtc/RTCEncodedVideoFrameInjector;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createVideoFrameInjector
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpSender
+	 * Method:    createAudioFrameInjector
+	 * Signature: (Ldev/onvoid/webrtc/RTCEncodedAudioFrameInjectorObserver;)Ldev/onvoid/webrtc/RTCEncodedAudioFrameInjector;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createAudioFrameInjector
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpSender
 	 * Method:    getId
 	 * Signature: ()Ljava/lang/String;
 	 */
