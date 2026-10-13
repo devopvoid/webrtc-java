@@ -26,6 +26,8 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <system_error>
+
 #define UDEV_SUBSYSTEM "video4linux"
 #define UDEV_ADD "add"
 #define UDEV_REMOVE "remove"
