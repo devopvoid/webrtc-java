@@ -171,13 +171,29 @@ elseif(LINUX)
     endif()
 endif()
 
+# Targets outside the default build graph whose objects the JNI code needs,
+# built and linked explicitly: the api/video utility classes
+# (AdaptedVideoTrackSource, VideoAdapter, VideoBroadcaster), which fell out of
+# it when they moved out of media/base, and the frame factory that encoded
+# frame injectors are fed through. On Linux and Windows the shared library link
+# would leave their symbols undefined and loading would fail at runtime. The
+# Apple archive is assembled from an object glob and only needs them built.
+set(WEBRTC_EXTRA_TARGETS
+    api/video:adapted_video_track_source
+    api/video:video_adapter
+    api/video:video_broadcaster
+    api:frame_transformer_factory
+)
+
 # Written next to a compiled WebRTC, in the build tree and in the install
-# directory, naming the GN args it was built with. A build without it, or with
-# other args, is not used and WebRTC is built again: it would lack what the
-# args enable (H.265 for one), or have defines, and with them struct layouts,
-# that differ from those the JNI code is compiled with below. Changing an arg
-# here thus rebuilds WebRTC on its own; CI's cache key covers this file.
+# directory, naming the GN args and the extra targets it was built with. A
+# build without it, or with other args or targets, is not used and WebRTC is
+# built again: it would lack what the args enable (H.265 for one) or a target's
+# library, or have defines, and with them struct layouts, that differ from those
+# the JNI code is compiled with below. Changing an arg or a target here thus
+# rebuilds WebRTC on its own; CI's cache key covers this file.
 set(WEBRTC_ARGS_FILE "webrtc-java-gn-args.txt")
+set(WEBRTC_BUILD_RECORD "${COMPILE_ARGS} extra_targets=\"${WEBRTC_EXTRA_TARGETS}\"")
 
 function(webrtc_args_match DIRECTORY RESULT)
     set(MATCHES FALSE)
@@ -185,7 +201,7 @@ function(webrtc_args_match DIRECTORY RESULT)
     if(EXISTS "${DIRECTORY}/${WEBRTC_ARGS_FILE}")
         file(READ "${DIRECTORY}/${WEBRTC_ARGS_FILE}" RECORDED_ARGS)
 
-        if(RECORDED_ARGS STREQUAL COMPILE_ARGS)
+        if(RECORDED_ARGS STREQUAL WEBRTC_BUILD_RECORD)
             set(MATCHES TRUE)
         endif()
     endif()
@@ -199,23 +215,22 @@ webrtc_args_match("${WEBRTC_SRC}/${WEBRTC_BUILD}" WEBRTC_BUILT_ARGS_MATCH)
 if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}" AND NOT WEBRTC_INSTALLED_ARGS_MATCH)
     # Out of the way, so that nothing links it before the new build replaces
     # it on install.
-    message(STATUS "WebRTC: the installed build has other GN args, building again")
+    message(STATUS "WebRTC: the installed build has other GN args or targets, building again")
     file(REMOVE "${WEBRTC_LIB_PATH_INSTALLED}")
 endif()
 
+# The libraries of the extra targets, re-archived flat under obj/ by the build
+# below.
+set(EXTRA_LIB_NAMES "")
+foreach(EXTRA_TARGET ${WEBRTC_EXTRA_TARGETS})
+    string(REGEX REPLACE "^.*:" "" EXTRA_TARGET_NAME "${EXTRA_TARGET}")
 
-# The api/video utility classes (AdaptedVideoTrackSource, VideoAdapter,
-# VideoBroadcaster) fell out of the default build graph when they moved out
-# of media/base, so their objects no longer reach the monolithic archive.
-# On Linux and Windows the shared library link leaves their symbols
-# undefined and loading fails at runtime; they are built and linked
-# explicitly. The Apple archive is assembled from an object glob and only
-# needs them built.
-if(WIN32)
-    set(VIDEO_UTIL_LIB_NAMES adapted_video_track_source.lib video_adapter.lib video_broadcaster.lib)
-else()
-    set(VIDEO_UTIL_LIB_NAMES libadapted_video_track_source.a libvideo_adapter.a libvideo_broadcaster.a)
-endif()
+    if(WIN32)
+        list(APPEND EXTRA_LIB_NAMES "${EXTRA_TARGET_NAME}.lib")
+    else()
+        list(APPEND EXTRA_LIB_NAMES "lib${EXTRA_TARGET_NAME}.a")
+    endif()
+endforeach()
 
 if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
     set(TARGET_INC_DIR ${WEBRTC_INSTALL_DIR}/include)
@@ -224,7 +239,7 @@ if(EXISTS "${WEBRTC_LIB_PATH_INSTALLED}")
     set(TARGET_LIBCPP_BUILDTOOLS_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/)
     set(TARGET_LIBCPP_INC_DIR ${TARGET_INC_DIR}/third_party/libc++/include)
     set(TARGET_LIBCPP_ABI_INC_DIR ${TARGET_INC_DIR}/third_party/libc++abi/include)
-    set(VIDEO_UTIL_LIB_DIR ${WEBRTC_INSTALL_DIR}/lib)
+    set(EXTRA_LIB_DIR ${WEBRTC_INSTALL_DIR}/lib)
 else()
     set(TARGET_INC_DIR ${WEBRTC_SRC})
     set(TARGET_LINK_LIB ${WEBRTC_LIB_PATH})
@@ -234,13 +249,13 @@ else()
     set(TARGET_LIBCPP_ABI_INC_DIR ${WEBRTC_SRC}/third_party/libc++abi/src/include)
     # The flat re-archives; gn's originals are thin archives that break
     # when copied away from their object files.
-    set(VIDEO_UTIL_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj)
+    set(EXTRA_LIB_DIR ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj)
 endif()
 
-set(VIDEO_UTIL_LINK_LIBS "")
+set(EXTRA_LINK_LIBS "")
 if(NOT APPLE)
-    foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
-        list(APPEND VIDEO_UTIL_LINK_LIBS "${VIDEO_UTIL_LIB_DIR}/${VIDEO_UTIL_LIB}")
+    foreach(EXTRA_LIB ${EXTRA_LIB_NAMES})
+        list(APPEND EXTRA_LINK_LIBS "${EXTRA_LIB_DIR}/${EXTRA_LIB}")
     endforeach()
 endif()
 
@@ -268,7 +283,7 @@ target_include_directories(${PROJECT_NAME}
         ${TARGET_INC_DIR}/third_party/abseil-cpp
         ${TARGET_INC_DIR}/third_party/libyuv/include
 )
-target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB} ${VIDEO_UTIL_LINK_LIBS})
+target_link_libraries(${PROJECT_NAME} ${TARGET_LINK_LIB} ${EXTRA_LINK_LIBS})
 
 # rtc_use_h265=true makes gn define RTC_ENABLE_H265 for WebRTC; the JNI code
 # needs it as well, for the H.265 parts of WebRTC's headers it uses (the H.265
@@ -460,7 +475,7 @@ message(STATUS "WebRTC: compile")
 # output directory that Siso built.
 if(APPLE)
     execute_command(
-        COMMAND autoninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
+        COMMAND autoninja -C "${WEBRTC_BUILD}" :default api/audio_codecs:builtin_audio_decoder_factory api/task_queue:default_task_queue_factory sdk:native_api sdk:default_codec_factory_objc pc:peer_connection sdk:videocapture_objc ${WEBRTC_EXTRA_TARGETS}
         WORKING_DIRECTORY "${WEBRTC_SRC}"
         RESULT_VARIABLE NINJA_RESULT
     )
@@ -478,11 +493,10 @@ else()
         RESULT_VARIABLE NINJA_RESULT
     )
 
-    # The api/video utility targets are not reachable from the default
-    # graph since their move out of media/base; build them explicitly so
-    # their symbols exist for the shared library link.
+    # The extra targets are not reachable from the default graph; build them
+    # explicitly so their symbols exist for the shared library link.
     execute_command(
-        COMMAND autoninja -C "${WEBRTC_BUILD}" api/video:adapted_video_track_source api/video:video_adapter api/video:video_broadcaster
+        COMMAND autoninja -C "${WEBRTC_BUILD}" ${WEBRTC_EXTRA_TARGETS}
         WORKING_DIRECTORY "${WEBRTC_SRC}"
         RESULT_VARIABLE NINJA_UTIL_RESULT
     )
@@ -494,12 +508,14 @@ if(WIN32)
     # without the object tree; a cold build never notices because the
     # objects still sit beside the archives. Re-archive them in regular
     # form with the toolchain librarian, mirroring the Linux path below.
-    foreach(VIDEO_UTIL_TARGET adapted_video_track_source video_adapter video_broadcaster)
-        file(GLOB_RECURSE VIDEO_UTIL_OBJS
-            ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video/${VIDEO_UTIL_TARGET}/*.obj
+    foreach(EXTRA_TARGET ${WEBRTC_EXTRA_TARGETS})
+        string(REPLACE ":" "/" EXTRA_TARGET_DIR "${EXTRA_TARGET}")
+        string(REGEX REPLACE "^.*:" "" EXTRA_TARGET_NAME "${EXTRA_TARGET}")
+        file(GLOB_RECURSE EXTRA_TARGET_OBJS
+            ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${EXTRA_TARGET_DIR}/*.obj
         )
         execute_command(
-            COMMAND ${WEBRTC_SRC}/third_party/llvm-build/Release+Asserts/bin/lld-link.exe /lib /OUT:${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${VIDEO_UTIL_TARGET}.lib ${VIDEO_UTIL_OBJS}
+            COMMAND ${WEBRTC_SRC}/third_party/llvm-build/Release+Asserts/bin/lld-link.exe /lib /OUT:${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${EXTRA_TARGET_NAME}.lib ${EXTRA_TARGET_OBJS}
         )
     endforeach()
 endif()
@@ -516,13 +532,15 @@ if(LINUX)
 
         # gn emits thin archives whose members reference objects by relative
         # path, so they break once copied to the install tree. Re-archive the
-        # api/video utility objects into regular archives, like libc++ below.
-        foreach(VIDEO_UTIL_TARGET adapted_video_track_source video_adapter video_broadcaster)
-            file(GLOB_RECURSE VIDEO_UTIL_OBJS
-                ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/api/video/${VIDEO_UTIL_TARGET}/*.o
+        # extra targets' objects into regular archives, like libc++ below.
+        foreach(EXTRA_TARGET ${WEBRTC_EXTRA_TARGETS})
+            string(REPLACE ":" "/" EXTRA_TARGET_DIR "${EXTRA_TARGET}")
+            string(REGEX REPLACE "^.*:" "" EXTRA_TARGET_NAME "${EXTRA_TARGET}")
+            file(GLOB_RECURSE EXTRA_TARGET_OBJS
+                ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${EXTRA_TARGET_DIR}/*.o
             )
             execute_command(
-                COMMAND ${CMAKE_AR} rcs ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/lib${VIDEO_UTIL_TARGET}.a ${VIDEO_UTIL_OBJS}
+                COMMAND ${CMAKE_AR} rcs ${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/lib${EXTRA_TARGET_NAME}.a ${EXTRA_TARGET_OBJS}
             )
         endforeach()
 
@@ -564,16 +582,16 @@ if(LINUX)
 endif()
 
 if(LINUX)
-    foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
+    foreach(EXTRA_LIB ${EXTRA_LIB_NAMES})
         install(
-            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${VIDEO_UTIL_LIB}"
+            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${EXTRA_LIB}"
             DESTINATION "${WEBRTC_INSTALL_DIR}/lib"
         )
     endforeach()
 elseif(WIN32)
-    foreach(VIDEO_UTIL_LIB ${VIDEO_UTIL_LIB_NAMES})
+    foreach(EXTRA_LIB ${EXTRA_LIB_NAMES})
         install(
-            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${VIDEO_UTIL_LIB}"
+            FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/obj/${EXTRA_LIB}"
             DESTINATION "${WEBRTC_INSTALL_DIR}/lib"
         )
     endforeach()
@@ -582,7 +600,7 @@ endif()
 # The record of the GN args, once the build has succeeded, in the build tree
 # and, with the library, in the install directory.
 if(GN_RESULT EQUAL 0 AND NINJA_RESULT EQUAL 0 AND NINJA_UTIL_RESULT EQUAL 0 AND EXISTS "${WEBRTC_LIB_PATH}")
-    file(WRITE "${WEBRTC_SRC}/${WEBRTC_BUILD}/${WEBRTC_ARGS_FILE}" "${COMPILE_ARGS}")
+    file(WRITE "${WEBRTC_SRC}/${WEBRTC_BUILD}/${WEBRTC_ARGS_FILE}" "${WEBRTC_BUILD_RECORD}")
 
     install(FILES "${WEBRTC_SRC}/${WEBRTC_BUILD}/${WEBRTC_ARGS_FILE}" DESTINATION "${WEBRTC_INSTALL_DIR}")
 else()

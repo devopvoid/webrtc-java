@@ -57,6 +57,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
+	 * Method:    addTransceiverOfType
+	 * Signature: (Ldev/onvoid/webrtc/media/MediaType;Ldev/onvoid/webrtc/RTCRtpTransceiverInit;)Ldev/onvoid/webrtc/RTCRtpTransceiver;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceiverOfType
+	(JNIEnv *, jobject, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
 	 * Method:    createDataChannel
 	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/RTCDataChannelInit;)Ldev/onvoid/webrtc/RTCDataChannel;
 	 */

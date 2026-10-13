@@ -184,6 +184,64 @@ public class RTCRtpSender extends DisposableNativeObject {
 	public native void generateKeyFrame();
 
 	/**
+	 * Creates an injector that sends video frames that are already encoded
+	 * on this sender, in place of a track.
+	 *
+	 * @param observer The observer for the sender's key frame requests and
+	 *                 bitrate changes, or {@code null} for none.
+	 *
+	 * @return The injector, to be disposed when no longer used.
+	 *
+	 * @throws IllegalStateException If this is not a video sender, or it is
+	 *                               stopped, has a track or has an injector.
+	 */
+	public RTCEncodedVideoFrameInjector createEncodedVideoFrameInjector(
+			RTCEncodedVideoFrameInjectorObserver observer) {
+		RTCEncodedVideoFrameInjector injector = createVideoFrameInjector(observer);
+
+		if (injector == null) {
+			throw new IllegalStateException("An encoded video frame injector needs a video sender that is "
+					+ "not stopped and has no track and no injector");
+		}
+
+		return injector;
+	}
+
+	/**
+	 * Creates an injector that sends audio frames that are already encoded
+	 * on this sender, in place of a track.
+	 * <p>
+	 * Do not inject audio through a factory that sends audio captured by its
+	 * audio device module: WebRTC passes captured audio to every audio sender
+	 * that sends, and it would drive the injecting sender as well.
+	 *
+	 * @param observer The observer for the sender's target bitrate changes,
+	 *                 or {@code null} for none.
+	 *
+	 * @return The injector, to be disposed when no longer used.
+	 *
+	 * @throws IllegalStateException If this is not an audio sender, or it is
+	 *                               stopped, has a track or has an injector.
+	 */
+	public RTCEncodedAudioFrameInjector createEncodedAudioFrameInjector(
+			RTCEncodedAudioFrameInjectorObserver observer) {
+		RTCEncodedAudioFrameInjector injector = createAudioFrameInjector(observer);
+
+		if (injector == null) {
+			throw new IllegalStateException("An encoded audio frame injector needs an audio sender that is "
+					+ "not stopped and has no track and no injector");
+		}
+
+		return injector;
+	}
+
+	private native RTCEncodedVideoFrameInjector createVideoFrameInjector(
+			RTCEncodedVideoFrameInjectorObserver observer);
+
+	private native RTCEncodedAudioFrameInjector createAudioFrameInjector(
+			RTCEncodedAudioFrameInjectorObserver observer);
+
+	/**
 	 * Releases the native reference held by this RTCRtpSender instance.
 	 * <p>
 	 * An RTCRtpSender is not exclusively owned by this instance: the

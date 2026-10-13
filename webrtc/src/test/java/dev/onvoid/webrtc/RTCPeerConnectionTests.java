@@ -18,6 +18,8 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import dev.onvoid.webrtc.media.MediaStreamTrack;
+import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
@@ -211,7 +213,10 @@ class RTCPeerConnectionTests extends TestBase {
 	@Test
 	void addTransceiverNullParams() {
 		assertThrows(NullPointerException.class, () -> {
-			peerConnection.addTransceiver(null, null);
+			peerConnection.addTransceiver((MediaStreamTrack) null, null);
+		});
+		assertThrows(NullPointerException.class, () -> {
+			peerConnection.addTransceiver((MediaType) null, null);
 		});
 	}
 

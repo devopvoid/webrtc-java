@@ -199,7 +199,7 @@ public class RTCDataChannel extends DisposableNativeObject {
 	 * limit, an array offset) must never reach the wire. Reads through a
 	 * duplicate, so the caller's position is left untouched.
 	 */
-	private static byte[] copyWindow(ByteBuffer data) {
+	static byte[] copyWindow(ByteBuffer data) {
 		if (data.hasArray() && data.arrayOffset() == 0 && data.position() == 0
 				&& data.remaining() == data.array().length) {
 			return data.array();
@@ -249,8 +249,8 @@ public class RTCDataChannel extends DisposableNativeObject {
 	 * returns, without changing its position or limit.
 	 * <p>
 	 * The observer is called once when the operation completes or is discarded
-	 * during channel shutdown. It runs on a native callback thread that all
-	 * send and DTLS transport observers share, in the order the results arrive,
+	 * during channel shutdown. It runs on a native callback thread shared with
+	 * other WebRTC observers, in the order the results arrive,
 	 * and may run before this method returns. It may call other WebRTC methods,
 	 * but should not block, since that holds up the other observers. No
 	 * callback is guaranteed during JVM shutdown.

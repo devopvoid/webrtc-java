@@ -21,6 +21,7 @@ import static java.util.Objects.nonNull;
 
 import dev.onvoid.webrtc.internal.NativeObject;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
+import dev.onvoid.webrtc.media.MediaType;
 
 import java.util.List;
 
@@ -159,6 +160,23 @@ public class RTCPeerConnection extends NativeObject {
 		}
 
 		return addTransceiverInternal(track, init);
+	}
+
+	/**
+	 * Create a new RTCRtpTransceiver of the given media type, without a track,
+	 * and add it to the set of transceivers. Its sender sends nothing until it
+	 * gets a track through {@link RTCRtpSender#replaceTrack} or frames through
+	 * an encoded frame injector.
+	 *
+	 * @param mediaType The media type of the transceiver, audio or video.
+	 * @param init      The transceiver configuration options, or null for the
+	 *                  defaults.
+	 *
+	 * @return The RTCRtpTransceiver which will be used to transmit and receive
+	 * the media data.
+	 */
+	public RTCRtpTransceiver addTransceiver(MediaType mediaType, RTCRtpTransceiverInit init) {
+		return addTransceiverOfType(mediaType, init);
 	}
 
 	/**
@@ -520,6 +538,9 @@ public class RTCPeerConnection extends NativeObject {
 
 	private native RTCRtpSender addTrackInternal(MediaStreamTrack track,
 			List<String> streamIds);
+
+	private native RTCRtpTransceiver addTransceiverOfType(MediaType mediaType,
+			RTCRtpTransceiverInit init);
 
 	private native RTCRtpTransceiver addTransceiverInternal(
 			MediaStreamTrack track, RTCRtpTransceiverInit init);
