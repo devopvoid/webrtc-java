@@ -21,7 +21,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import dev.onvoid.webrtc.media.audio.AudioOptions;
@@ -122,6 +125,56 @@ class RTCDtlsTransportTests extends TestBase {
 
 		assertEquals(firstCallsAfterReplace, firstObserverCalls.get(),
 				"The replaced observer must not receive further events");
+	}
+
+	@Test
+	void observerCanUseRtpSender() throws Exception {
+		// WebRTC reports DTLS states on the network thread, which is also the
+		// worker thread. Getting a sender's parameters blocks the signaling
+		// thread on the worker thread, which deadlocks should the observer
+		// run on that thread.
+		TestPeerConnection offerer = new TestPeerConnection(factory);
+		TestPeerConnection answerer = new TestPeerConnection(factory);
+
+		try {
+			AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+			AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+			RTCRtpSender audioSender = offerer.getPeerConnection()
+					.addTrack(audioTrack, Collections.singletonList("stream1"));
+
+			offerer.setRemotePeerConnection(answerer);
+			answerer.setRemotePeerConnection(offerer);
+
+			RTCSessionDescription offer = offerer.createOffer();
+			RTCDtlsTransport dtlsTransport = audioSender.getTransport();
+			assertNotNull(dtlsTransport);
+
+			CompletableFuture<RTCRtpSendParameters> parameters = new CompletableFuture<>();
+			dtlsTransport.registerObserver(new RTCDtlsTransportObserver() {
+				@Override
+				public void onStateChange(RTCDtlsTransportState state) {
+					if (state == RTCDtlsTransportState.CONNECTED) {
+						parameters.complete(audioSender.getParameters());
+					}
+				}
+
+				@Override
+				public void onError(String error) {
+					parameters.completeExceptionally(new IllegalStateException(error));
+				}
+			});
+
+			answerer.setRemoteDescription(offer);
+			offerer.setRemoteDescription(answerer.createAnswer());
+
+			assertNotNull(parameters.get(10, TimeUnit.SECONDS));
+
+			dtlsTransport.unregisterObserver();
+		}
+		finally {
+			offerer.close();
+			answerer.close();
+		}
 	}
 
 }

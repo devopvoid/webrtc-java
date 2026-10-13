@@ -1,7 +1,13 @@
 #include "api/RTCDataChannelSendObserver.h"
+#include "api/JavaCallbackThread.h"
 #include "api/WebRTCUtils.h"
 #include "JavaString.h"
 #include "JNI_WebRTC.h"
+
+#include "rtc_base/logging.h"
+
+#include <optional>
+#include <string>
 
 namespace jni
 {
@@ -43,21 +49,30 @@ namespace jni
 		if (!callback.get()) {
 			return;
 		}
-		JNIEnv * env = AttachCurrentThread();
-		if (env == nullptr) {
-			return;
-		}
-		if (error == nullptr) {
-			env->CallVoidMethod(callback.get(), javaClass->onSuccess);
-		}
-		else {
-			JavaLocalRef<jstring> message(env, env->NewStringUTF(error));
-			if (!env->ExceptionCheck()) {
-				env->CallVoidMethod(callback.get(), javaClass->onFailure, message.get());
+		try {
+			std::optional<std::string> message;
+			if (error != nullptr) {
+				message = error;
 			}
+			// WebRTC completes sends on its network thread, where the Java observer must not run.
+			JavaCallbackThread::Post([callback = std::move(callback), javaClass = javaClass,
+					message = std::move(message)](JNIEnv * env) {
+				if (!message) {
+					env->CallVoidMethod(callback.get(), javaClass->onSuccess);
+				}
+				else {
+					JavaLocalRef<jstring> jMessage(env, env->NewStringUTF(message->c_str()));
+					if (!env->ExceptionCheck()) {
+						env->CallVoidMethod(callback.get(), javaClass->onFailure, jMessage.get());
+					}
+				}
+				// A Java exception must not escape into the next callback.
+				ReportPendingException(env);
+			});
 		}
-		// A Java exception must not escape into WebRTC's network task or a destructor.
-		ReportPendingException(env);
+		catch (...) {
+			RTC_LOG(LS_ERROR) << "Could not report a data channel send result";
+		}
 	}
 
 	RTCDataChannelSendObserver::JavaSendObserverClass::JavaSendObserverClass(JNIEnv * env)

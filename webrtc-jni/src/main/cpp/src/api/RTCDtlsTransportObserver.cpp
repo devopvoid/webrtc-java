@@ -15,6 +15,7 @@
  */
 
 #include "api/RTCDtlsTransportObserver.h"
+#include "api/JavaCallbackThread.h"
 #include "api/WebRTCUtils.h"
 #include "JavaEnums.h"
 #include "JavaRef.h"
@@ -25,49 +26,67 @@
 namespace jni
 {
 	RTCDtlsTransportObserver::RTCDtlsTransportObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
-		observer(observer),
-		javaClass(JavaClasses::get<JavaRTCDtlsTransportObserverClass>(env))
+		target(std::make_shared<Target>(observer, JavaClasses::get<JavaRTCDtlsTransportObserverClass>(env)))
 	{
+	}
+
+	RTCDtlsTransportObserver::Target::Target(const JavaGlobalRef<jobject> & observer,
+		std::shared_ptr<JavaRTCDtlsTransportObserverClass> javaClass) :
+		active(true),
+		observer(observer),
+		javaClass(std::move(javaClass))
+	{
+	}
+
+	RTCDtlsTransportObserver::~RTCDtlsTransportObserver()
+	{
+		std::lock_guard<std::recursive_mutex> lock(target->mutex);
+
+		target->active = false;
 	}
 
 	void RTCDtlsTransportObserver::OnStateChange(webrtc::DtlsTransportInformation info)
 	{
-		JNIEnv * env = AttachCurrentThread();
+		JavaCallbackThread::Post([target = target, state = info.state()](JNIEnv * env) {
+			std::lock_guard<std::recursive_mutex> lock(target->mutex);
 
-		if (env == nullptr) {
-			return;
-		}
+			if (!target->active) {
+				return;
+			}
 
-		try {
-			auto state = JavaEnums::toJava(env, info.state());
+			try {
+				auto jState = JavaEnums::toJava(env, state);
 
-			env->CallVoidMethod(observer, javaClass->onStateChange, state.get());
-		}
-		catch (...) {
-			ThrowCxxJavaException(env);
-		}
+				env->CallVoidMethod(target->observer, target->javaClass->onStateChange, jState.get());
+			}
+			catch (...) {
+				ThrowCxxJavaException(env);
+			}
 
-		ReportPendingException(env);
+			ReportPendingException(env);
+		});
 	}
 
 	void RTCDtlsTransportObserver::OnError(webrtc::RTCError error)
 	{
-		JNIEnv * env = AttachCurrentThread();
+		JavaCallbackThread::Post([target = target, message = RTCErrorToString(error)](JNIEnv * env) {
+			std::lock_guard<std::recursive_mutex> lock(target->mutex);
 
-		if (env == nullptr) {
-			return;
-		}
+			if (!target->active) {
+				return;
+			}
 
-		try {
-			JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
+			try {
+				JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, message);
 
-			env->CallVoidMethod(observer, javaClass->onError, errorMessage.get());
-		}
-		catch (...) {
-			ThrowCxxJavaException(env);
-		}
+				env->CallVoidMethod(target->observer, target->javaClass->onError, errorMessage.get());
+			}
+			catch (...) {
+				ThrowCxxJavaException(env);
+			}
 
-		ReportPendingException(env);
+			ReportPendingException(env);
+		});
 	}
 
 	RTCDtlsTransportObserver::JavaRTCDtlsTransportObserverClass::JavaRTCDtlsTransportObserverClass(JNIEnv * env)

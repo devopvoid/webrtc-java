@@ -24,14 +24,20 @@
 
 #include <jni.h>
 #include <memory>
+#include <mutex>
 
 namespace jni
 {
+	// WebRTC notifies this observer on its network thread; the Java observer is
+	// called on the JavaCallbackThread instead.
 	class RTCDtlsTransportObserver : public webrtc::DtlsTransportObserverInterface
 	{
 		public:
 			explicit RTCDtlsTransportObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer);
-			~RTCDtlsTransportObserver() = default;
+
+			// Waits for a Java call in progress, so the Java observer hears
+			// nothing more once this returns.
+			~RTCDtlsTransportObserver();
 
 			// DtlsTransportObserverInterface implementation.
 			void OnStateChange(webrtc::DtlsTransportInformation info) override;
@@ -47,10 +53,21 @@ namespace jni
 					jmethodID onError;
 			};
 
-		private:
-			JavaGlobalRef<jobject> observer;
+			// Shared with the queued calls, which may outlive this observer.
+			struct Target
+			{
+				Target(const JavaGlobalRef<jobject> & observer,
+					std::shared_ptr<JavaRTCDtlsTransportObserverClass> javaClass);
 
-			const std::shared_ptr<JavaRTCDtlsTransportObserverClass> javaClass;
+				// Recursive, so that a Java observer may unregister itself.
+				std::recursive_mutex mutex;
+				bool active;
+				const JavaGlobalRef<jobject> observer;
+				const std::shared_ptr<JavaRTCDtlsTransportObserverClass> javaClass;
+			};
+
+		private:
+			const std::shared_ptr<Target> target;
 	};
 }
 
