@@ -94,11 +94,18 @@ jobs:
         env:
           OUTPUT: CHANGELOG.md
 
-      - name: Commit CHANGELOG.md
+      # The docs' versions go into this commit, so that the tagged tree already
+      # names the version it releases.
+      - name: Commit CHANGELOG.md and the docs' versions
         env:
           RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.release-version.outputs.version }}
+          DEVELOPMENT_VERSION: ${{ inputs.developmentVersion }}
         run: |
-          git add CHANGELOG.md
+          sed -i -e "s/VERSION: '.*'/VERSION: '$RELEASE_VERSION'/" \
+            -e "s/VERSION_SNAPSHOT: '.*'/VERSION_SNAPSHOT: '$DEVELOPMENT_VERSION'/" docs/.vitepress/versions.ts
+
+          git add CHANGELOG.md docs/.vitepress/versions.ts
           git commit -m "chore(release): Update CHANGELOG.md for $RELEASE_TAG"
 
       - name: Set up Java
@@ -112,7 +119,7 @@ jobs:
       # caches, only for the platform jobs below to build the tagged tree again.
       #
       # A dry run transforms the poms and writes release.properties, but creates no
-      # commit and no tag, so there is nothing to amend or push below.
+      # commit and no tag, so there is nothing to push below.
       - name: Prepare release
         env:
           DEVELOPMENT_VERSION: ${{ inputs.developmentVersion }}
@@ -131,25 +138,13 @@ jobs:
             echo "::error::release:prepare chose version '$RELEASE_VERSION', expected '$EXPECTED_VERSION'"
             exit 1
           fi
-          echo "RELEASE_VERSION=$RELEASE_VERSION" >> "$GITHUB_ENV"
 
+      # The branch and the tag land together or not at all.
       - name: Push release commits and tag
         if: ${{ !inputs.dryRun }}
         env:
-          DEVELOPMENT_VERSION: ${{ inputs.developmentVersion }}
           RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
-        run: |
-          # Update versions.ts file
-          echo "Updating versions.ts with release version: $RELEASE_VERSION and development version: $DEVELOPMENT_VERSION"
-          sed -i "s/VERSION: '.*'/VERSION: '$RELEASE_VERSION'/g" docs/.vitepress/versions.ts
-          sed -i "s/VERSION_SNAPSHOT: '.*'/VERSION_SNAPSHOT: '$DEVELOPMENT_VERSION'/g" docs/.vitepress/versions.ts
-
-          # Add the updated file to the existing commit
-          git add docs/.vitepress/versions.ts
-          git commit --amend --no-edit
-
-          # The branch and the tag land together or not at all.
-          git push --atomic origin HEAD:main "refs/tags/$RELEASE_TAG"
+        run: git push --atomic origin HEAD:main "refs/tags/$RELEASE_TAG"
 
   # The tag prepare-release pushed. A dry run pushes none and builds the
   # dispatched commit instead.
