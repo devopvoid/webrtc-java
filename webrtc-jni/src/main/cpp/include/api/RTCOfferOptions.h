@@ -37,6 +37,7 @@ namespace jni
 				jmethodID ctor;
 				jfieldID vad;
 				jfieldID iceRestart;
+				jfieldID restrictToStableOrHaveLocalOffer;
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::PeerConnectionInterface::RTCOfferAnswerOptions & nativeType);

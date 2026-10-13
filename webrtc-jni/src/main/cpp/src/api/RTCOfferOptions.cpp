@@ -34,6 +34,8 @@ namespace jni
 
 			env->SetBooleanField(obj, javaClass->vad, nativeType.voice_activity_detection);
 			env->SetBooleanField(obj, javaClass->iceRestart, nativeType.ice_restart);
+			env->SetBooleanField(obj, javaClass->restrictToStableOrHaveLocalOffer,
+				nativeType.restrict_offer_to_stable_or_have_local_offer);
 
 			return JavaLocalRef<jobject>(env, obj);
 		}
@@ -47,6 +49,8 @@ namespace jni
 			webrtc::PeerConnectionInterface::RTCOfferAnswerOptions options;
 			options.voice_activity_detection = obj.getBoolean(javaClass->vad);
 			options.ice_restart = obj.getBoolean(javaClass->iceRestart);
+			options.restrict_offer_to_stable_or_have_local_offer =
+				obj.getBoolean(javaClass->restrictToStableOrHaveLocalOffer);
 
 			return options;
 		}
@@ -59,6 +63,7 @@ namespace jni
 
 			vad = GetFieldID(env, cls, "voiceActivityDetection", "Z");
 			iceRestart = GetFieldID(env, cls, "iceRestart", "Z");
+			restrictToStableOrHaveLocalOffer = GetFieldID(env, cls, "restrictToStableOrHaveLocalOffer", "Z");
 		}
 	}
 }

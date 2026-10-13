@@ -35,6 +35,7 @@ namespace jni
 
 			// RtpReceiverObserverInterface implementation.
 			void OnFirstPacketReceived(webrtc::MediaType media_type) override;
+			void OnSourceChanged(bool ssrc_changed, bool csrc_changed) override;
 
 		private:
 			class JavaRTCRtpReceiverObserverClass : public JavaClass
@@ -43,6 +44,7 @@ namespace jni
 					explicit JavaRTCRtpReceiverObserverClass(JNIEnv * env);
 
 					jmethodID onFirstPacketReceived;
+					jmethodID onSourceChanged;
 			};
 
 		private:
