@@ -32,10 +32,16 @@ features:
     details: Record what a peer connection sends or receives into MKV, WebM or MP4 files. Encoded frames go into the file as they are, without re-encoding, so recording costs next to no CPU and keeps the exact quality of the call.
   - title: End-to-End Encryption
     details: Encoded transforms let Java code read, change or drop every encoded frame between encoder and network, like insertable streams in the browser; the building block for end-to-end encryption, frame metadata and stream analysis.
+  - title: Send Pre-encoded Media
+    details: Encoded frame injectors take the place of a sender's track and send frames that are already encoded, such as an IP camera's H.264 stream or a recording, with no encoding in WebRTC.
+  - title: Hardware Video Codecs
+    details: Encode and decode H.264, H.265, VP9 and AV1 on the GPU through NVENC and NVDEC, Media Foundation, VA-API and VideoToolbox. A stream the hardware cannot take falls back to software without dropping the call.
   - title: Custom Video Codecs
     details: Plug video encoders and decoders written in Java into WebRTC, next to the built-in VP8, VP9, AV1 and H.264, to bring in a codec of your own or a hardware encoder from another library.
   - title: Screen Sharing
     details: Share application windows or the full desktop with minimal setup; integrate screen capture streams like any other media stream.
+  - title: Video Processing
+    details: Put a video processor between a camera or desktop source and its tracks to change, replace or drop each frame before it is sent, for background blur, overlays, mirroring or hiding part of the screen.
   - title: Data Channels
     details: Reliable and unordered/ordered SCTP data channels for arbitrary messaging, file transfer, and app signaling.
   - title: Statistics API for monitoring
