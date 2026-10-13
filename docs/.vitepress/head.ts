@@ -1,4 +1,5 @@
 import { HeadConfig } from "vitepress/types/shared";
+import { IS_NEXT } from "./channel";
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -10,6 +11,11 @@ const head: HeadConfig[] = [
 	['link', { rel: "manifest", href: "/site.webmanifest" }],
 	['meta', { name: "apple-mobile-web-app-title", content: "JRTC" }],
 ]
+
+// Searches should lead to the docs of what can be installed.
+if (IS_NEXT) {
+	head.push(['meta', { name: "robots", content: "noindex" }])
+}
 
 if (isProd) {
 	head.push([

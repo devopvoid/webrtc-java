@@ -1,14 +1,28 @@
 name: Deploy Documentation to Pages
 
+# The site holds two builds of the docs:
+#   /        the latest published GitHub release, so that the docs match what can
+#            be installed. A release/X.Y.x branch of that release, if there is one,
+#            is built instead of its tag, to fix those docs without a new release.
+#   /next/   main, which documents what has not been released yet.
+#
+# Publishing a release (the release workflow leaves it as a draft) moves the root
+# to it. Pushes made by the release workflow itself trigger no workflows.
+#
+# The github-pages environment deploys from main only, so a release or a push to
+# a release branch runs this workflow again on main, which builds both anyway.
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
     paths:
       - 'docs/**'
 
+  release:
+    types: [published]
+
   # PRs only build the site, so that a broken build shows up before the merge.
   pull_request:
-    branches: [main]
+    branches: [main, 'release/**']
     paths:
       - 'docs/**'
       - '.github/workflows/pages.yml'
@@ -25,11 +39,57 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  redeploy:
+    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref != 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Run on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+
   build:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
+      # All branches and tags, to build the release's docs from another tree.
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A PR stands in for the tree it targets, so that its build is the one checked.
+      - name: Determine what to build
+        id: refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          release_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          version="${release_tag#v}"
+          maintenance="release/${version%.*}.x"
+
+          stable="$release_tag"
+          if git rev-parse -q --verify "refs/remotes/origin/$maintenance" >/dev/null; then
+            stable="origin/$maintenance"
+          fi
+          next="origin/main"
+
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
+            if [ "$BASE_REF" == "main" ]; then next="HEAD"; else stable="HEAD"; fi
+          fi
+
+          snapshot=$(git show "$next:pom.xml" | sed -n '0,/<version>/s|.*<version>\([^<]*\)</version>.*|\1|p')
+
+          echo "Latest release: $version, built from $stable; unreleased: $snapshot, built from $next"
+          {
+            echo "stable=$stable"
+            echo "next=$next"
+            echo "version=$version"
+            echo "snapshot=$snapshot"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -42,21 +102,39 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v6
 
-      - name: Install dependencies
-        run: |
-          cd docs
-          npm ci
-
+      # Both builds are told the same versions. The tree of a release tag still
+      # carries the versions of the release before it, which was how the release
+      # workflow used to write them.
       - name: Build with VitePress
+        env:
+          STABLE_REF: ${{ steps.refs.outputs.stable }}
+          NEXT_REF: ${{ steps.refs.outputs.next }}
+          VERSION: ${{ steps.refs.outputs.version }}
+          SNAPSHOT: ${{ steps.refs.outputs.snapshot }}
         run: |
-          cd docs
-          npm run build
+          build() {
+            local ref="$1" tree="$2" channel="$3" out="$4"
+            git worktree add --detach "$tree" "$ref"
+            (
+              cd "$tree/docs"
+              sed -i -e "s/VERSION: '.*'/VERSION: '$VERSION'/" \
+                -e "s/VERSION_SNAPSHOT: '.*'/VERSION_SNAPSHOT: '$SNAPSHOT'/" .vitepress/versions.ts
+              npm ci
+              DOCS_CHANNEL="$channel" npm run build
+            )
+            mkdir -p "$out"
+            cp -r "$tree/docs/.vitepress/dist/." "$out"
+          }
+
+          site="$RUNNER_TEMP/site"
+          build "$STABLE_REF" "$RUNNER_TEMP/stable" stable "$site"
+          build "$NEXT_REF" "$RUNNER_TEMP/next" next "$site/next"
 
       - name: Upload artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
-          path: docs/.vitepress/dist
+          path: ${{ runner.temp }}/site
 
   deploy:
     if: github.event_name != 'pull_request'
