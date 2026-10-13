@@ -16,8 +16,30 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import dev.onvoid.webrtc.RTCRtpPacketInfo;
+
 public interface AudioTrackSink {
 
 	void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames);
+
+	/**
+	 * Receives audio along with the RTP packets it was assembled from, which
+	 * tell who sent and contributed to it and how loud each was. A sink that
+	 * implements this method is called with it instead of the one without
+	 * packets; the packets are only collected for such a sink.
+	 * <p>
+	 * Audio of a local track has no packets, so the array is empty for it.
+	 *
+	 * @param data          The audio samples.
+	 * @param bitsPerSample The size of a sample in bits.
+	 * @param sampleRate    The sample rate in Hz.
+	 * @param channels      The number of channels.
+	 * @param frames        The number of frames, samples per channel.
+	 * @param packetInfos   The packets the audio was assembled from.
+	 */
+	default void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames,
+			RTCRtpPacketInfo[] packetInfos) {
+		onData(data, bitsPerSample, sampleRate, channels, frames);
+	}
 
 }

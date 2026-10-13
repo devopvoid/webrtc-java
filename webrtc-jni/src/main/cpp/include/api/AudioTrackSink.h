@@ -21,31 +21,47 @@
 #include "JavaRef.h"
 
 #include "api/media_stream_interface.h"
+#include "api/rtp_packet_infos.h"
 
 #include <jni.h>
+#include <memory>
+#include <optional>
 
 namespace jni
 {
 	class AudioTrackSink : public webrtc::AudioTrackSinkInterface
 	{
 		public:
-			AudioTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink);
+			// With packetInfos, the Java sink is called with the RTP packets
+			// the audio was assembled from.
+			AudioTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink, bool packetInfos);
 			~AudioTrackSink() = default;
 
-			// AudioTrackSinkInterface implementation.
+			// AudioTrackSinkInterface implementation. WebRTC calls the variant
+			// its source knows the most for.
 			void OnData(const void * data, int bitsPerSample, int sampleRate, size_t channels, size_t frames) override;
+			void OnData(const void * data, int bitsPerSample, int sampleRate, size_t channels, size_t frames,
+				std::optional<int64_t> absoluteCaptureTimestampMs) override;
+			void OnData(const void * data, int bitsPerSample, int sampleRate, size_t channels, size_t frames,
+				std::optional<int64_t> absoluteCaptureTimestampMs, const webrtc::RtpPacketInfos & packetInfos) override;
 
 		private:
+			void Deliver(const void * data, int bitsPerSample, int sampleRate, size_t channels, size_t frames,
+				const webrtc::RtpPacketInfos * infos);
+
 			class JavaAudioTrackSinkClass : public JavaClass
 			{
 				public:
 					explicit JavaAudioTrackSinkClass(JNIEnv * env);
 
 					jmethodID onData;
+					jmethodID onDataWithPacketInfos;
 			};
 
 		private:
 			JavaGlobalRef<jobject> sink;
+
+			const bool packetInfos;
 
 			const std::shared_ptr<JavaAudioTrackSinkClass> javaClass;
 	};

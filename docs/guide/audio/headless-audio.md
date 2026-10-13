@@ -54,6 +54,29 @@ finally {
 - If you only need the audio pipeline to be ready when remote audio arrives, you may delay playout initialization until after creating your RTCPeerConnection.
 :::
 
+### Who sent the received audio
+
+A sink can also learn which RTP packets the audio was assembled from: their SSRC, contributing sources (CSRCs) and audio level. It implements the second `onData` method of `AudioTrackSink`, and is then called with it instead of the first; the packets are collected only for such a sink:
+
+```java
+AudioTrackSink sink = new AudioTrackSink() {
+    @Override
+    public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames) {
+        // Not called for this sink.
+    }
+
+    @Override
+    public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames,
+            RTCRtpPacketInfo[] packetInfos) {
+        for (RTCRtpPacketInfo info : packetInfos) {
+            System.out.println(info.ssrc + " level " + info.audioLevel);
+        }
+    }
+};
+```
+
+A receiver learns its sources as playout pulls the audio too, so `RTCRtpReceiver.getSynchronizationSources()`, `getContributingSources()` and `RTCRtpReceiverObserver.onSourceChanged` stay empty for audio while playout is not running.
+
 
 ## Sending audio
 

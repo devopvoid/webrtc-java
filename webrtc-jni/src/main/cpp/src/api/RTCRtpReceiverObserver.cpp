@@ -49,10 +49,25 @@ namespace jni
 		ReportPendingException(env);
 	}
 
+	void RTCRtpReceiverObserver::OnSourceChanged(bool ssrc_changed, bool csrc_changed)
+	{
+		JNIEnv * env = AttachCurrentThread();
+
+		if (env == nullptr) {
+			return;
+		}
+
+		env->CallVoidMethod(observer, javaClass->onSourceChanged,
+			static_cast<jboolean>(ssrc_changed), static_cast<jboolean>(csrc_changed));
+
+		ReportPendingException(env);
+	}
+
 	RTCRtpReceiverObserver::JavaRTCRtpReceiverObserverClass::JavaRTCRtpReceiverObserverClass(JNIEnv * env)
 	{
 		jclass cls = FindClass(env, PKG"RTCRtpReceiverObserver");
 
 		onFirstPacketReceived = GetMethod(env, cls, "onFirstPacketReceived", "(L" PKG_MEDIA "MediaType;)V");
+		onSourceChanged = GetMethod(env, cls, "onSourceChanged", "(ZZ)V");
 	}
 }

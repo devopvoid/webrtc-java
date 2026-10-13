@@ -20,10 +20,11 @@ import dev.onvoid.webrtc.media.MediaType;
 
 /**
  * Callback interface to learn when an {@link RTCRtpReceiver} receives its
- * first RTP packet, for example to show media only once it actually flows.
+ * first RTP packet, for example to show media only once it actually flows,
+ * and when the sources of its media change.
  * <p>
- * The callback runs on the peer connection's signaling thread. An exception
- * thrown by it is reported to the thread's uncaught exception handler.
+ * The callbacks run on the peer connection's signaling thread. An exception
+ * thrown by one is reported to the thread's uncaught exception handler.
  *
  * @author Alex Andres
  *
@@ -38,5 +39,19 @@ public interface RTCRtpReceiverObserver {
 	 * @param mediaType The media type of the receiver.
 	 */
 	void onFirstPacketReceived(MediaType mediaType);
+
+	/**
+	 * The synchronization or contributing sources of the received media have
+	 * changed, so {@link RTCRtpReceiver#getSynchronizationSources()} or
+	 * {@link RTCRtpReceiver#getContributingSources()} return something new.
+	 * When the observer is set after sources are known, this is called right
+	 * away. Does nothing unless implemented.
+	 *
+	 * @param ssrcChanged Whether the synchronization source has changed.
+	 * @param csrcChanged Whether the set of contributing sources has changed.
+	 */
+	default void onSourceChanged(boolean ssrcChanged, boolean csrcChanged) {
+
+	}
 
 }

@@ -35,6 +35,15 @@ public class RTCOfferOptions extends RTCOfferAnswerOptions {
 	 */
 	public boolean iceRestart;
 
+	/**
+	 * When set to {@code true}, creating an offer fails unless the signaling
+	 * state is {@link RTCSignalingState#STABLE} or
+	 * {@link RTCSignalingState#HAVE_LOCAL_OFFER}, as the WebRTC specification's
+	 * createOffer() requires. When {@code false}, an offer can be created in any
+	 * state but closed, as JSEP allows.
+	 */
+	public boolean restrictToStableOrHaveLocalOffer;
+
 
 	/**
 	 * Creates an instance of RTCOfferOptions.
@@ -43,6 +52,7 @@ public class RTCOfferOptions extends RTCOfferAnswerOptions {
 		super();
 
 		iceRestart = false;
+		restrictToStableOrHaveLocalOffer = false;
 	}
 
 }

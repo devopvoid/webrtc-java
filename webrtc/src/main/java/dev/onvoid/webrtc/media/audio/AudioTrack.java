@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.audio;
 import static java.util.Objects.isNull;
 import static java.util.Objects.nonNull;
 
+import dev.onvoid.webrtc.RTCRtpPacketInfo;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
 import java.util.IdentityHashMap;
@@ -57,9 +58,23 @@ public class AudioTrack extends MediaStreamTrack {
 			return;
 		}
 
-		final long nativeSink = addSinkInternal(sink);
+		final long nativeSink = addSinkInternal(sink, takesPacketInfos(sink));
 
 		sinks.put(sink, nativeSink);
+	}
+
+	/**
+	 * Whether the sink implements the method that receives the RTP packets,
+	 * which are only collected for a sink that does.
+	 */
+	private static boolean takesPacketInfos(AudioTrackSink sink) {
+		try {
+			return sink.getClass().getMethod("onData", byte[].class, int.class, int.class, int.class,
+					int.class, RTCRtpPacketInfo[].class).getDeclaringClass() != AudioTrackSink.class;
+		}
+		catch (NoSuchMethodException e) {
+			return false;
+		}
 	}
 
 	/**
@@ -106,7 +121,7 @@ public class AudioTrack extends MediaStreamTrack {
 
 	private native void setVolumeInternal(double volume);
 
-	private native long addSinkInternal(AudioTrackSink sink);
+	private native long addSinkInternal(AudioTrackSink sink, boolean packetInfos);
 
 	private native void removeSinkInternal(long sinkHandle);
 
