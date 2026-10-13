@@ -138,8 +138,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		// send stream.
 		auto proxy = jni::ProxyAudioDeviceModule::Create(adm);
 
-		// The worker thread is left to the factory, which creates and owns one
-		// when PeerConnectionFactoryDependencies::worker_thread is not set.
+		// No worker thread is supplied: WebRTC is removing support for one that
+		// is distinct from the network thread, and without one the factory
+		// uses the network thread as its worker thread.
 		webrtc::PeerConnectionFactoryDependencies dependencies;
 		dependencies.network_thread = networkThread.get();
 		dependencies.signaling_thread = signalingThread.get();
