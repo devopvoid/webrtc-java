@@ -59,20 +59,26 @@ namespace jni
 		return false;
 	}
 
-	bool VaapiEncodeSession::Create(VAProfile profile, VAEntrypoint entrypoint, uint32_t surfaceWidth,
-		uint32_t surfaceHeight)
+	bool VaapiEncodeSession::Create(VAProfile profile, VAEntrypoint entrypoint, uint32_t pictureWidth,
+		uint32_t pictureHeight, uint32_t surfaceWidth, uint32_t surfaceHeight, uint32_t packedHeaders)
 	{
 		Destroy();
 
 		VADisplay display = library.Display();
 
-		VAConfigAttrib attributes[2] = {};
+		VAConfigAttrib attributes[3] = {};
 		attributes[0].type = VAConfigAttribRTFormat;
 		attributes[0].value = VA_RT_FORMAT_YUV420;
 		attributes[1].type = VAConfigAttribRateControl;
 		attributes[1].value = VA_RC_CBR;
+		attributes[2].type = VAConfigAttribEncPackedHeaders;
+		attributes[2].value = packedHeaders;
 
-		if (!Check(va.CreateConfig(display, profile, entrypoint, attributes, 2, &config), "creating the configuration")) {
+		const int attributeCount = packedHeaders != VA_ENC_PACKED_HEADER_NONE ? 3 : 2;
+
+		if (!Check(va.CreateConfig(display, profile, entrypoint, attributes, attributeCount, &config),
+			"creating the configuration"))
+		{
 			config = VA_INVALID_ID;
 			return false;
 		}
@@ -87,7 +93,7 @@ namespace jni
 			return false;
 		}
 
-		if (!Check(va.CreateContext(display, config, surfaceWidth, surfaceHeight, VA_PROGRESSIVE, surfaces, 3, &context),
+		if (!Check(va.CreateContext(display, config, pictureWidth, pictureHeight, VA_PROGRESSIVE, surfaces, 3, &context),
 			"creating the context"))
 		{
 			context = VA_INVALID_ID;
@@ -241,6 +247,18 @@ namespace jni
 		std::memcpy(header->data, data, size);
 
 		return AddBuffer(VAEncMiscParameterBufferType, buffer.data(), buffer.size());
+	}
+
+	bool VaapiEncodeSession::AddPackedHeader(VAEncPackedHeaderType type, const std::vector<uint8_t> & data,
+		size_t bits)
+	{
+		VAEncPackedHeaderParameterBuffer parameters = {};
+		parameters.type = type;
+		parameters.bit_length = static_cast<uint32_t>(bits);
+		parameters.has_emulation_bytes = 1;
+
+		return AddBuffer(VAEncPackedHeaderParameterBufferType, &parameters, sizeof(parameters))
+			&& AddBuffer(VAEncPackedHeaderDataBufferType, const_cast<uint8_t *>(data.data()), data.size());
 	}
 
 	bool VaapiEncodeSession::AddRateControl(uint32_t bitrateBps, uint32_t framerate, uint32_t initialQp)

@@ -18,6 +18,7 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_VAAPI_H264_ENCODER_H_
 
 #include "media/video/codec/EncoderOutputProcessor.h"
+#include "media/video/codec/linux/NalUnitWriter.h"
 #include "media/video/codec/linux/VaapiLibrary.h"
 
 #include "api/video/video_frame.h"
@@ -38,11 +39,14 @@ namespace jni
 	// as Intel and AMD drivers provide it on Linux.
 	//
 	// Encoding is synchronous, with one reference frame and P-frames only, so
-	// each frame is encoded before Encode() returns. The driver writes the
-	// parameter sets and slice headers itself from the parameters it is given.
-	// A driver that leaves the parameter sets out of a key frame, which WebRTC
-	// cannot send without them, makes the encoder give up, as does anything
-	// else that fails, so that the software encoder takes over.
+	// each frame is encoded before Encode() returns. The encoder writes the
+	// parameter sets and slice headers itself and hands them to the driver as
+	// packed headers, as FFmpeg does, since Intel's iHD driver writes none of
+	// its own; a driver that takes no packed headers writes them from the
+	// parameters it is given. A driver that leaves the parameter sets out of a
+	// key frame, which WebRTC cannot send without them, makes the encoder give
+	// up, as does anything else that fails, so that the software encoder takes
+	// over.
 	class VaapiH264Encoder : public webrtc::VideoEncoder
 	{
 		public:
@@ -65,11 +69,17 @@ namespace jni
 
 			bool AddBuffer(VABufferType type, void * data, size_t size);
 			bool AddMiscParameter(VAEncMiscParameterType type, const void * data, size_t size);
+			bool AddPackedHeader(VAEncPackedHeaderType type, const std::vector<uint8_t> & data, size_t bits);
 			void DestroyFrameBuffers();
 
 			void FillSequence(VAEncSequenceParameterBufferH264 & sequence) const;
 			void FillPicture(VAEncPictureParameterBufferH264 & picture, bool idr) const;
 			void FillSlice(VAEncSliceParameterBufferH264 & slice, bool idr) const;
+
+			// The SPS and PPS, and the header of the slice, matching the
+			// parameters above. Each returns the bits it appended.
+			size_t WriteParameterSets(std::vector<uint8_t> & output) const;
+			size_t WriteSliceHeader(std::vector<uint8_t> & output, bool idr) const;
 
 			bool Check(VAStatus status, const char * operation) const;
 
@@ -79,6 +89,8 @@ namespace jni
 			const std::string implementationName;
 
 			VAConfigID config;
+			// The VA_ENC_PACKED_HEADER_* the driver takes from the encoder.
+			uint32_t packedHeaders;
 			VAContextID context;
 			VASurfaceID inputSurface;
 			// The frame being encoded, and the one it refers to.
