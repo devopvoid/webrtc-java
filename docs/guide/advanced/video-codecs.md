@@ -40,7 +40,7 @@ System.setProperty("webrtc.hardware.vp9Encoder", "true");
 
 Where the GPU has no VP9 encoder, or the stream asks for SVC, VP9 is still encoded with libvpx.
 
-On Linux, H.265 is encoded with the VA-API encoder of Intel and AMD drivers where the driver encodes H.265 Main. It is offered only for sending: Intel and AMD GPUs do not decode H.265 here yet, so the other end has to.
+On Linux, H.265 is encoded with the VA-API encoder of Intel and AMD drivers where the driver encodes H.265 Main. Receiving it needs a hardware H.265 decoder too, since there is no software one: on Intel and AMD GPUs that is the VA-API decoder (see below).
 
 NVENC needs an NVIDIA driver of version 522 or newer on Windows, 520 or newer on Linux. VA-API needs libva 2 and a driver that encodes H.264, such as Intel's `intel-media-va-driver` (iHD) or Mesa's `mesa-va-drivers` for AMD, and access to a render node in `/dev/dri`. All of them are loaded at run time, so nothing needs to be installed on machines without them.
 
@@ -62,7 +62,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Platform | Hardware decoding |
 |---|---|
 | Windows | H.264, H.265 (Main profile), AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
-| Linux | H.264, H.265 (Main profile), VP9 and AV1 (profile 0) on NVIDIA GPUs that decode them, through NVDEC; VP9 (profile 0) on Intel and AMD GPUs through VA-API, when turned on with `webrtc.hardware.vaapiExperimental` |
+| Linux | H.264, H.265 (Main profile), VP9 and AV1 (profile 0) on NVIDIA GPUs that decode them, through NVDEC; VP9 (profile 0) and H.265 (Main profile) on Intel and AMD GPUs through VA-API |
 | macOS | H.264 through VideoToolbox, as with `DefaultVideoDecoderFactory`; VP9 (profile 0) and H.265 (Main profile) through the decoders of VideoToolbox, on Macs that have them, and AV1 (profile 0) on Apple M3 and newer |
 
 On Linux, NVDEC needs an NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1`; both are loaded when the factory is made, so a machine without the driver is not affected. Streams with spatial layers are decoded in software.

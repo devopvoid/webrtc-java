@@ -62,25 +62,23 @@ namespace jni
 		}
 
 		// Probes for the hardware factories of the platform once for each
-		// setting of the options that change what is found, and shares what
+		// setting of the option that changes what is found, and shares what
 		// it found: a probe takes tens of milliseconds, and so every factory
 		// works with the same codecs. A GPU, driver or codec installed or
 		// removed later is noticed only by a new process.
 		template <typename Factories>
 		std::shared_ptr<const Factories> GetPlatformHardwareFactories(Factories (*probe)())
 		{
-			using Options = std::pair<bool, bool>;
-
 			static std::mutex mutex;
 			// Never destroyed: the factories use libraries that may be gone
 			// by the time static objects are destroyed as the process exits.
-			static auto * cache = new std::map<Options, std::shared_ptr<const Factories>>();
+			static auto * cache = new std::map<bool, std::shared_ptr<const Factories>>();
 
-			const Options options(IsHardwareVp9EncoderEnabled(), IsExperimentalVaapiEnabled());
+			const bool vp9Encoder = IsHardwareVp9EncoderEnabled();
 
 			std::lock_guard<std::mutex> lock(mutex);
 
-			std::shared_ptr<const Factories> & factories = (*cache)[options];
+			std::shared_ptr<const Factories> & factories = (*cache)[vp9Encoder];
 
 			if (!factories) {
 				factories = std::make_shared<const Factories>(probe());

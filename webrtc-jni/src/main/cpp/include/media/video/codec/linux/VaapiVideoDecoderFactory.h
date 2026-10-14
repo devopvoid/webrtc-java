@@ -30,8 +30,7 @@
 namespace jni
 {
 	// Creates VA-API decoders on the GPUs of Intel and AMD, for VP9 profile 0
-	// where the driver decodes it, the format WebRTC's software decoder
-	// offers too.
+	// and H.265 Main where the driver decodes them.
 	class VaapiVideoDecoderFactory : public webrtc::VideoDecoderFactory
 	{
 		public:
@@ -46,10 +45,12 @@ namespace jni
 				const webrtc::SdpVideoFormat & format) override;
 
 		private:
-			explicit VaapiVideoDecoderFactory(VaapiLibrary & library);
+			VaapiVideoDecoderFactory(VaapiLibrary & library, bool vp9, bool h265);
 
 		private:
 			VaapiLibrary & library;
+			const bool vp9;
+			const bool h265;
 	};
 }
 
