@@ -85,9 +85,6 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	/** The property that turns on hardware VP9 encoding, which is off by default. */
 	private static final String VP9_ENCODER_PROPERTY = "webrtc.hardware.vp9Encoder";
 
-	/** The property that turns on VA-API's codecs beyond H.264, off by default. */
-	private static final String VAAPI_EXPERIMENTAL_PROPERTY = "webrtc.hardware.vaapiExperimental";
-
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
 
 	/**
@@ -329,50 +326,37 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		assumeTrue(OS.contains("win") || OS.contains("linux"),
 				"hardware encoders are implemented on Windows and Linux only");
 
-		// On Linux, VA-API's H.265 encoder is there only when turned on.
-		String previous = System.setProperty(VAAPI_EXPERIMENTAL_PROPERTY, "true");
+		// The receiver needs no H.265 decoder of its own: a Java decoder
+		// checks what arrives, so that a GPU that encodes but does not
+		// decode H.265 is tested as well.
+		boolean available = offersH265(new HardwareVideoEncoderFactory().getSupportedCodecs());
 
-		try {
-			// The receiver needs no H.265 decoder of its own: a Java decoder
-			// checks what arrives, so that a GPU that encodes but does not
-			// decode H.265 is tested as well.
-			boolean available = offersH265(new HardwareVideoEncoderFactory().getSupportedCodecs());
+		if (HARDWARE_H265_REQUIRED) {
+			assertTrue(available, "no hardware H.265 encoder");
+		}
+		else {
+			assumeTrue(available, "no hardware H.265 encoder");
+		}
 
-			if (HARDWARE_H265_REQUIRED) {
-				assertTrue(available, "no hardware H.265 encoder");
-			}
-			else {
-				assumeTrue(available, "no hardware H.265 encoder");
-			}
+		H265CheckingDecoderFactory decoders = new H265CheckingDecoderFactory();
+		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
+				.setVideoDecoderFactory(decoders)
+				.build();
 
-			H265CheckingDecoderFactory decoders = new H265CheckingDecoderFactory();
-			PeerConnectionFactory hardware = PeerConnectionFactory.builder()
-					.setAudioDeviceModule(audioDevModule)
-					.setVideoEncoderFactory(new HardwareVideoEncoderFactory())
-					.setVideoDecoderFactory(decoders)
-					.build();
+		// 640x360, which hardware H.265 encoders take (see above).
+		try (Run run = new Run(hardware, H265, 640, 360)) {
+			run.awaitFrames(10);
 
-			// 640x360, which hardware H.265 encoders take (see above).
-			try (Run run = new Run(hardware, H265, 640, 360)) {
-				run.awaitFrames(10);
-
-				assertHardware(run.implementation(), true);
-			}
-			finally {
-				hardware.dispose();
-			}
-
-			assertNull(decoders.problem.get(), decoders.problem.get());
-			assertTrue(decoders.keyFrames.get() > 0, "no key frame arrived");
+			assertHardware(run.implementation(), true);
 		}
 		finally {
-			if (previous == null) {
-				System.clearProperty(VAAPI_EXPERIMENTAL_PROPERTY);
-			}
-			else {
-				System.setProperty(VAAPI_EXPERIMENTAL_PROPERTY, previous);
-			}
+			hardware.dispose();
 		}
+
+		assertNull(decoders.problem.get(), decoders.problem.get());
+		assertTrue(decoders.keyFrames.get() > 0, "no key frame arrived");
 	}
 
 	private static boolean offersH265(List<VideoCodecInfo> codecs) {

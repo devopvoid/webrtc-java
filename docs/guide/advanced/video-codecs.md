@@ -27,7 +27,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Platform | H.264 | H.265 | AV1 |
 |---|---|---|---|
 | Windows | NVENC on NVIDIA GPUs, otherwise the Media Foundation encoder of the GPU driver (AMD, Intel) | NVENC on NVIDIA GPUs, otherwise Media Foundation on GPUs that encode H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise Media Foundation on GPUs that encode AV1 (e.g. AMD RDNA3 and newer, Intel Arc) |
-| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs; VA-API (Intel, AMD) when turned on, see below | NVENC on NVIDIA RTX 40 and newer |
+| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) where it encodes H.265 | NVENC on NVIDIA RTX 40 and newer |
 | macOS | VideoToolbox, as with `DefaultVideoEncoderFactory` | VideoToolbox, on Macs with a hardware HEVC encoder, such as all with Apple silicon | Software |
 
 Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
@@ -40,13 +40,7 @@ System.setProperty("webrtc.hardware.vp9Encoder", "true");
 
 Where the GPU has no VP9 encoder, or the stream asks for SVC, VP9 is still encoded with libvpx.
 
-On Linux, H.265 can be encoded with the VA-API encoder of Intel and AMD drivers, also off by default until it has been tested on such GPUs:
-
-```java
-System.setProperty("webrtc.hardware.vaapiExperimental", "true");
-```
-
-It is offered only where the driver encodes H.265 Main, and only for sending: Intel and AMD GPUs do not decode H.265 here yet, so the other end has to.
+On Linux, H.265 is encoded with the VA-API encoder of Intel and AMD drivers where the driver encodes H.265 Main. It is offered only for sending: Intel and AMD GPUs do not decode H.265 here yet, so the other end has to.
 
 NVENC needs an NVIDIA driver of version 522 or newer on Windows, 520 or newer on Linux. VA-API needs libva 2 and a driver that encodes H.264, such as Intel's `intel-media-va-driver` (iHD) or Mesa's `mesa-va-drivers` for AMD, and access to a render node in `/dev/dri`. All of them are loaded at run time, so nothing needs to be installed on machines without them.
 

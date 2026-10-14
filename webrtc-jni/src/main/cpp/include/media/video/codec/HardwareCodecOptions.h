@@ -24,9 +24,8 @@ namespace jni
 	// tested on one.
 	constexpr const char * kHardwareVp9EncoderProperty = "webrtc.hardware.vp9Encoder";
 
-	// The Java system property that turns on the VA-API codecs beyond H.264
-	// encoding, which are off by default: they have not been tested on an
-	// Intel or AMD GPU under Linux yet.
+	// The Java system property that turns on VA-API decoding, which is off by
+	// default: it has not been tested on an Intel or AMD GPU under Linux yet.
 	constexpr const char * kExperimentalVaapiProperty = "webrtc.hardware.vaapiExperimental";
 
 	// Whether hardware VP9 encoding is turned on: the Java system property
@@ -34,7 +33,7 @@ namespace jni
 	// false where Java cannot be asked, for one with an exception pending.
 	bool IsHardwareVp9EncoderEnabled();
 
-	// Whether the experimental VA-API codecs are turned on, the same way.
+	// Whether VA-API decoding is turned on, the same way.
 	bool IsExperimentalVaapiEnabled();
 }
 
