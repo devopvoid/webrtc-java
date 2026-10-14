@@ -48,9 +48,9 @@ namespace jni
 	// the same previous picture ("low delay B"), as FFmpeg does. The block
 	// sizes and coding tools are those the driver says it takes, as FFmpeg's
 	// VA-API encoder chooses them. The frame size is kept to a multiple of the
-	// smallest coding block; the coded picture is that aligned to 16, which
-	// AMD's encoder needs, and cropped to the frame by the conformance window
-	// of the SPS. There is no software H.265 to fall back to: anything that
+	// smallest coding block; the coded picture is that aligned to 16 and at
+	// least 384x128, which AMD's encoder needs, and cropped to the frame by
+	// the conformance window of the SPS. There is no software H.265 to fall back to: anything that
 	// fails, including a driver that writes no parameter sets into key
 	// frames, is an error, upon which WebRTC switches to the next codec it
 	// negotiated.
