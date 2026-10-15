@@ -9,9 +9,11 @@ const isNext = computed(() => site.value.base === NEXT_BASE)
 </script>
 
 <template>
+  <!-- target="_self" keeps the router of this site from handling the link, as
+       the root is another site. -->
   <div v-if="isNext" class="next-banner">
     These docs describe the unreleased development version {{ PROJECT_VARS.VERSION_SNAPSHOT }}.
-    See the docs of the <a :href="SITE_URL">latest release, {{ PROJECT_VARS.VERSION }}</a>.
+    See the docs of the <a :href="SITE_URL" target="_self">latest release, {{ PROJECT_VARS.VERSION }}</a>.
   </div>
 </template>
 
