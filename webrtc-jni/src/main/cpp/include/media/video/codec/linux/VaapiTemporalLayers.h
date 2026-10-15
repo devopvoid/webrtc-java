@@ -18,10 +18,12 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_VAAPI_TEMPORAL_LAYERS_H_
 
 #include "media/video/codec/linux/VaapiEncodeSession.h"
+#include "media/video/codec/linux/VaapiLibrary.h"
 
 #include "api/video/video_bitrate_allocation.h"
 #include "api/video_codecs/scalability_mode.h"
 #include "api/video_codecs/video_encoder.h"
+#include "modules/video_coding/svc/scalability_mode_util.h"
 #include "modules/video_coding/svc/scalable_video_controller.h"
 
 #include <array>
@@ -36,7 +38,10 @@ namespace jni
 	// it replaces, as WebRTC's structure of the mode says, each buffer of the
 	// structure being the slot of the same number; which reconstructed surface
 	// each slot holds; and the rate control of each layer, without which
-	// AMD's driver gives the upper layers next to no bits.
+	// AMD's driver gives the upper layers next to no bits, where the driver
+	// says it has one and the encoder wants it. Intel's H.264 and H.265
+	// encoders say not, and refuse the layer structure that goes with it;
+	// their rate control treats every layer alike.
 	class VaapiTemporalLayers
 	{
 		public:
@@ -52,17 +57,28 @@ namespace jni
 				// The slots of its references, the first being its last frame,
 				// the second, if any, its golden frame.
 				std::vector<int> references;
+				// The slots it replaces, all for a key frame, and of those the
+				// ones WebRTC's structure goes on to use: a key frame leaves
+				// the others empty, which nothing refers to then, and which a
+				// codec would otherwise keep as references for good.
 				uint8_t refreshFlags = 0;
+				uint8_t keptFlags = 0;
 				// The reconstructed surface it is encoded into.
 				int surface = -1;
 			};
 
 			VaapiTemporalLayers();
 
+			// Whether the driver's encoder of the profile has a rate control
+			// of each temporal layer, for as many layers as given.
+			static bool LayerRateControl(VaapiLibrary & library, VAProfile profile, VAEntrypoint entrypoint,
+				int layers);
+
 			// Starts over in the mode, splitting the bitrate across the layers
-			// until WebRTC gives its own split. Returns false for a mode other
-			// than L1T1, L1T2 and L1T3.
-			bool Configure(webrtc::ScalabilityMode mode, uint32_t bitrateBps);
+			// until WebRTC gives its own split, for a rate control of each layer
+			// where there is one. Returns false for a mode other than L1T1, L1T2
+			// and L1T3.
+			bool Configure(webrtc::ScalabilityMode mode, uint32_t bitrateBps, bool layerRateControl);
 
 			// The number of temporal layers, one without layers.
 			int Count() const;
@@ -74,6 +90,8 @@ namespace jni
 				const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame) const;
 			// Takes the frame, once encoded, into the slots it replaces.
 			void Commit(const Frame & frame);
+			// Empties a slot whose picture the decoder no longer keeps.
+			void Forget(int slot);
 
 			// The slots kept, and the reconstructed surface each holds, -1 for
 			// none. A key frame fills the slots beyond too, but no frame refers
@@ -93,6 +111,7 @@ namespace jni
 
 		private:
 			int count;
+			bool layerRateControl;
 			std::array<int, 2> slots;
 			// The bitrate of each layer, counting the layers below it.
 			std::vector<uint32_t> bitratesBps;

@@ -35,6 +35,7 @@ namespace jni
 		constexpr uint8_t kSliceTypeB = 0;
 		constexpr uint8_t kSliceTypeP = 1;
 		constexpr uint8_t kSliceTypeI = 2;
+		constexpr uint8_t kNalTrailN = 0;
 		constexpr uint8_t kNalTrailR = 1;
 		constexpr uint8_t kNalIdrWRadl = 19;
 		constexpr uint8_t kNalVps = 32;
@@ -142,7 +143,8 @@ namespace jni
 		framerate(30),
 		ratesChanged(false),
 		pictureOrder(0),
-		current(0),
+		slotOrders{ 0, 0 },
+		slotTemporalIds{ 0, 0 },
 		referenceValid(false),
 		callback(nullptr),
 		outputProcessor(webrtc::kVideoCodecH265, format)
@@ -220,6 +222,16 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 
+		// Temporal layers, where the encoder writes the slice headers, which
+		// carry the layers; spatial ones are left to the next codec.
+		const webrtc::ScalabilityMode mode = settings->GetScalabilityMode().value_or(webrtc::ScalabilityMode::kL1T1);
+
+		if (mode != webrtc::ScalabilityMode::kL1T1 && (packedHeaders != kPackedHeaders
+			|| (mode != webrtc::ScalabilityMode::kL1T2 && mode != webrtc::ScalabilityMode::kL1T3)))
+		{
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
+
 		Release();
 
 		const uint32_t ctbSize = 1u << log2CtbSize;
@@ -238,14 +250,19 @@ namespace jni
 		framerate = std::max(1u, codecSettings.maxFramerate);
 		ratesChanged = true;
 		pictureOrder = 0;
-		current = 0;
 		referenceValid = false;
 		outputProcessor.Reset();
+		layers.Configure(mode, bitrateBps, VaapiTemporalLayers::LayerRateControl(library, VAProfileHEVCMain,
+			entrypoint, webrtc::ScalabilityModeToNumTemporalLayers(mode)));
+
+		if (!outputProcessor.SetScalabilityMode(mode)) {
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
 
 		// Surfaces of whole coding tree blocks, which the driver may write all
 		// of.
 		if (!session.Create(VAProfileHEVCMain, entrypoint, codedWidth, codedHeight, widthInCtbs << log2CtbSize,
-			heightInCtbs << log2CtbSize, packedHeaders))
+			heightInCtbs << log2CtbSize, packedHeaders, VaapiTemporalLayers::kReconstructedSurfaces))
 		{
 			Release();
 			return WEBRTC_VIDEO_CODEC_ERROR;
@@ -254,7 +271,8 @@ namespace jni
 		initialized = true;
 
 		RTC_LOG(LS_INFO) << implementationName << " H.265 initialized: " << codecSettings.width << "x"
-			<< codecSettings.height << " at " << bitrateBps << " bps, CTB " << ctbSize << ", min CB " << alignment;
+			<< codecSettings.height << " at " << bitrateBps << " bps, CTB " << ctbSize << ", min CB " << alignment << ", "
+			<< webrtc::ScalabilityModeToString(mode);
 
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
@@ -295,13 +313,29 @@ namespace jni
 			pictureOrder = 0;
 		}
 
+		const auto layerFrame = outputProcessor.NextFrameConfig(idr);
+
+		// No layer is encoded now, as when WebRTC gives none a bitrate.
+		if (!layerFrame) {
+			return WEBRTC_VIDEO_CODEC_OK;
+		}
+
+		const auto layerPlan = layers.Plan(idr, *layerFrame);
+
+		if (!layerPlan) {
+			RTC_LOG(LS_WARNING) << implementationName << " H.265: a picture refers to a slot that holds none";
+			return WEBRTC_VIDEO_CODEC_ERROR;
+		}
+
 		const int alignment = 1 << log2MinCbSize;
 		std::vector<uint8_t> output;
 
 		const bool encoded = session.Upload(frame, static_cast<int>(codecSettings.width),
-			static_cast<int>(codecSettings.height), alignment - 1) && Submit(idr) && session.ReadOutput(output);
+			static_cast<int>(codecSettings.height), alignment - 1) && Submit(idr, *layerPlan)
+			&& session.ReadOutput(output);
 
 		session.DropBuffers();
+
 
 		if (!encoded) {
 			return WEBRTC_VIDEO_CODEC_ERROR;
@@ -319,14 +353,27 @@ namespace jni
 
 		// A driver that writes no parameter sets into key frames makes a
 		// stream nothing can decode.
-		if (!outputProcessor.Process(output, idr, image, info)) {
+		if (!outputProcessor.Process(output, idr, *layerFrame, image, info)) {
 			RTC_LOG(LS_WARNING) << implementationName << " H.265: the driver wrote no parameter sets";
 			return WEBRTC_VIDEO_CODEC_ERROR;
 		}
 
-		// The frame just encoded is the reference of the next one.
+		// The slots the picture replaces hold it now.
+		layers.Commit(*layerPlan);
+
+		for (int slot = 0; slot < layers.SlotCount(); slot++) {
+			if (layerPlan->keptFlags & (1 << slot)) {
+				slotOrders[slot] = pictureOrder;
+				slotTemporalIds[slot] = layerPlan->temporalId;
+			}
+			else if (slotTemporalIds[slot] > layerPlan->temporalId) {
+				// Left out of the picture's reference picture set, so gone from
+				// the decoder's.
+				layers.Forget(slot);
+			}
+		}
+
 		referenceValid = true;
-		current = 1 - current;
 		pictureOrder++;
 		ratesChanged = false;
 
@@ -335,7 +382,7 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool VaapiH265Encoder::Submit(bool idr)
+	bool VaapiH265Encoder::Submit(bool idr, const VaapiTemporalLayers::Frame & frame)
 	{
 		if (idr) {
 			VAEncSequenceParameterBufferHEVC sequence = {};
@@ -346,15 +393,23 @@ namespace jni
 			}
 		}
 
-		if ((idr || ratesChanged) && !session.AddRateControl(bitrateBps, framerate, kInitialQp)) {
-			return false;
+		if (idr || ratesChanged) {
+			// Without layers, from the initial QP the encoder has always
+			// started from.
+			const bool added = layers.Count() == 1
+				? session.AddRateControl(bitrateBps, framerate, kInitialQp)
+				: layers.AddRateControl(session, bitrateBps, framerate, idr);
+
+			if (!added) {
+				return false;
+			}
 		}
 
 		VAEncPictureParameterBufferHEVC picture = {};
-		FillPicture(picture, idr);
+		FillPicture(picture, idr, frame);
 
 		VAEncSliceParameterBufferHEVC slice = {};
-		FillSlice(slice, idr);
+		FillSlice(slice, idr, frame);
 
 		if (!session.AddBuffer(VAEncPictureParameterBufferType, &picture, sizeof(picture))) {
 			return false;
@@ -371,7 +426,7 @@ namespace jni
 
 		if (packedHeaders & VA_ENC_PACKED_HEADER_SLICE) {
 			std::vector<uint8_t> sliceHeader;
-			const size_t bits = WriteSliceHeader(sliceHeader, idr);
+			const size_t bits = WriteSliceHeader(sliceHeader, idr, frame);
 
 			if (!session.AddPackedHeader(VAEncPackedHeaderSlice, sliceHeader, bits)) {
 				return false;
@@ -415,20 +470,55 @@ namespace jni
 		sequence.vui_time_scale = framerate;
 	}
 
-	VAPictureHEVC VaapiH265Encoder::Reference() const
+	std::vector<VaapiH265Encoder::ReferencePicture> VaapiH265Encoder::ReferencePictureSet(
+		const VaapiTemporalLayers::Frame & frame) const
 	{
-		VAPictureHEVC reference = {};
-		reference.picture_id = session.Reconstructed(1 - current);
-		reference.pic_order_cnt = pictureOrder - 1;
-		// A short-term reference before the current picture.
-		reference.flags = VA_PICTURE_HEVC_RPS_ST_CURR_BEFORE;
+		std::vector<ReferencePicture> set;
 
-		return reference;
+		for (int slot = 0; slot < layers.SlotCount(); slot++) {
+			// A picture of a higher layer, which a receiver without that layer
+			// does not have.
+			if (layers.Surface(slot) < 0 || slotTemporalIds[slot] > frame.temporalId) {
+				continue;
+			}
+
+			const bool used = std::find(frame.references.begin(), frame.references.end(), slot)
+				!= frame.references.end();
+			auto same = std::find_if(set.begin(), set.end(), [&](const ReferencePicture & picture) {
+				return layers.Surface(picture.slot) == layers.Surface(slot);
+			});
+
+			if (same != set.end()) {
+				same->used |= used;
+			}
+			else {
+				set.push_back({ slot, slotOrders[slot], used });
+			}
+		}
+
+		std::sort(set.begin(), set.end(), [](const ReferencePicture & a, const ReferencePicture & b) {
+			return a.pictureOrder > b.pictureOrder;
+		});
+
+		return set;
 	}
 
-	void VaapiH265Encoder::FillPicture(VAEncPictureParameterBufferHEVC & picture, bool idr) const
+	VAPictureHEVC VaapiH265Encoder::Picture(const ReferencePicture & reference) const
 	{
-		picture.decoded_curr_pic.picture_id = session.Reconstructed(current);
+		VAPictureHEVC picture = {};
+		picture.picture_id = session.Reconstructed(layers.Surface(reference.slot));
+		picture.pic_order_cnt = reference.pictureOrder;
+		// A short-term reference before the current picture, which the
+		// current one refers to or keeps for later.
+		picture.flags = reference.used ? VA_PICTURE_HEVC_RPS_ST_CURR_BEFORE : 0;
+
+		return picture;
+	}
+
+	void VaapiH265Encoder::FillPicture(VAEncPictureParameterBufferHEVC & picture, bool idr,
+		const VaapiTemporalLayers::Frame & frame) const
+	{
+		picture.decoded_curr_pic.picture_id = session.Reconstructed(frame.surface);
 		picture.decoded_curr_pic.pic_order_cnt = pictureOrder;
 		picture.decoded_curr_pic.flags = 0;
 
@@ -437,7 +527,11 @@ namespace jni
 		}
 
 		if (!idr) {
-			picture.reference_frames[0] = Reference();
+			const std::vector<ReferencePicture> set = ReferencePictureSet(frame);
+
+			for (size_t i = 0; i < set.size(); i++) {
+				picture.reference_frames[i] = Picture(set[i]);
+			}
 		}
 
 		picture.coded_buf = session.CodedBuffer();
@@ -453,18 +547,22 @@ namespace jni
 		picture.num_ref_idx_l0_default_active_minus1 = 0;
 		picture.num_ref_idx_l1_default_active_minus1 = 0;
 		picture.slice_pic_parameter_set_id = 0;
-		picture.nal_unit_type = idr ? kNalIdrWRadl : kNalTrailR;
+		// A picture no other refers to, as of the top layer, is a sub-layer
+		// non-reference picture.
+		const bool reference = idr || frame.refreshFlags != 0;
+		picture.nal_unit_type = idr ? kNalIdrWRadl : (reference ? kNalTrailR : kNalTrailN);
 
 		picture.pic_fields.bits.idr_pic_flag = idr ? 1 : 0;
 		picture.pic_fields.bits.coding_type = idr ? kCodingTypeI : kCodingTypeP;
-		picture.pic_fields.bits.reference_pic_flag = 1;
+		picture.pic_fields.bits.reference_pic_flag = reference ? 1 : 0;
 		picture.pic_fields.bits.sign_data_hiding_enabled_flag = signDataHiding ? 1 : 0;
 		picture.pic_fields.bits.transform_skip_enabled_flag = transformSkip ? 1 : 0;
 		// Needed for the rate control to change the QP within a picture.
 		picture.pic_fields.bits.cu_qp_delta_enabled_flag = cuQpDelta ? 1 : 0;
 	}
 
-	void VaapiH265Encoder::FillSlice(VAEncSliceParameterBufferHEVC & slice, bool idr) const
+	void VaapiH265Encoder::FillSlice(VAEncSliceParameterBufferHEVC & slice, bool idr,
+		const VaapiTemporalLayers::Frame & frame) const
 	{
 		slice.slice_segment_address = 0;
 		slice.num_ctu_in_slice = widthInCtbs * heightInCtbs;
@@ -481,10 +579,16 @@ namespace jni
 		}
 
 		if (!idr) {
-			slice.ref_pic_list0[0] = Reference();
+			// The one picture the current one refers to.
+			for (const ReferencePicture & reference : ReferencePictureSet(frame)) {
+				if (reference.used) {
+					slice.ref_pic_list0[0] = Picture(reference);
 
-			if (lowDelayB) {
-				slice.ref_pic_list1[0] = Reference();
+					if (lowDelayB) {
+						slice.ref_pic_list1[0] = Picture(reference);
+					}
+					break;
+				}
 			}
 		}
 
@@ -519,6 +623,20 @@ namespace jni
 		writer.Bits(0, 32);
 		writer.Bits(0, 12);
 		writer.Bits(LevelIdc(codedWidth * codedHeight, framerate), 8);
+
+		// No profile or level of their own for the sub-layers.
+		const int maxSubLayersMinus1 = layers.Count() - 1;
+
+		for (int i = 0; i < maxSubLayersMinus1; i++) {
+			writer.Flag(false);
+			writer.Flag(false);
+		}
+
+		if (maxSubLayersMinus1 > 0) {
+			for (int i = maxSubLayersMinus1; i < 8; i++) {
+				writer.Bits(0, 2);
+			}
+		}
 	}
 
 	size_t VaapiH265Encoder::WriteParameterSets(std::vector<uint8_t> & output) const
@@ -530,6 +648,15 @@ namespace jni
 			writer.Bits(1, 3);
 		};
 
+		// A sub-layer for each temporal layer. Without layers, the current
+		// picture and one reference picture are decoded at a time; with
+		// them, the current one and those of the two reference slots. There
+		// is no reordering. The temporal id nesting flag is set without
+		// layers, as the standard has it then, and left clear with them.
+		const uint32_t maxSubLayersMinus1 = static_cast<uint32_t>(layers.Count() - 1);
+		const uint32_t maxDecPicBufferingMinus1 = layers.Count() > 1 ? 2 : 1;
+		const bool temporalIdNesting = layers.Count() == 1;
+
 		// The VPS (7.3.2.1).
 		NalUnitWriter vps;
 		nalHeader(vps, kNalVps);
@@ -537,14 +664,13 @@ namespace jni
 		vps.Flag(true);
 		vps.Flag(true);
 		vps.Bits(0, 6);
-		vps.Bits(0, 3);
-		vps.Flag(true);
+		vps.Bits(maxSubLayersMinus1, 3);
+		vps.Flag(temporalIdNesting);
 		vps.Bits(0xFFFF, 16);
 		WriteProfileTierLevel(vps);
-		// One sub-layer, decoding with the current and one reference
-		// picture, without reordering.
+		// The ordering information of the highest sub-layer stands for all.
 		vps.Flag(false);
-		vps.Ue(1);
+		vps.Ue(maxDecPicBufferingMinus1);
 		vps.Ue(0);
 		vps.Ue(0);
 		vps.Bits(0, 6);
@@ -557,8 +683,8 @@ namespace jni
 		NalUnitWriter sps;
 		nalHeader(sps, kNalSps);
 		sps.Bits(0, 4);
-		sps.Bits(0, 3);
-		sps.Flag(true);
+		sps.Bits(maxSubLayersMinus1, 3);
+		sps.Flag(temporalIdNesting);
 		WriteProfileTierLevel(sps);
 		sps.Ue(0);
 		sps.Ue(1);
@@ -583,7 +709,7 @@ namespace jni
 		sps.Ue(0);
 		sps.Ue(kLog2MaxPicOrderCntLsb - 4);
 		sps.Flag(false);
-		sps.Ue(1);
+		sps.Ue(maxDecPicBufferingMinus1);
 		sps.Ue(0);
 		sps.Ue(0);
 		sps.Ue(log2MinCbSize - 3);
@@ -664,15 +790,19 @@ namespace jni
 		return vps.AppendTo(output) + sps.AppendTo(output) + pps.AppendTo(output);
 	}
 
-	size_t VaapiH265Encoder::WriteSliceHeader(std::vector<uint8_t> & output, bool idr) const
+	size_t VaapiH265Encoder::WriteSliceHeader(std::vector<uint8_t> & output, bool idr,
+		const VaapiTemporalLayers::Frame & frame) const
 	{
 		// The slice segment header (7.3.6.1) of FillSlice(), up to the slice
-		// data, which the driver writes.
+		// data, which the driver writes, in a NAL unit of the picture's
+		// temporal layer.
+		const bool reference = idr || frame.refreshFlags != 0;
+
 		NalUnitWriter header;
 		header.Bits(0, 1);
-		header.Bits(idr ? kNalIdrWRadl : kNalTrailR, 6);
+		header.Bits(idr ? kNalIdrWRadl : (reference ? kNalTrailR : kNalTrailN), 6);
 		header.Bits(0, 6);
-		header.Bits(1, 3);
+		header.Bits(static_cast<uint32_t>(frame.temporalId + 1), 3);
 
 		header.Flag(true);
 
@@ -686,13 +816,22 @@ namespace jni
 		if (!idr) {
 			header.Bits(static_cast<uint32_t>(pictureOrder) & ((1u << kLog2MaxPicOrderCntLsb) - 1),
 				kLog2MaxPicOrderCntLsb);
-			// st_ref_pic_set(0) here, not in the SPS: the previous picture,
-			// used by this one.
+			// st_ref_pic_set(0) here, not in the SPS: the pictures of the
+			// reference slots, before this one, of which it uses one. Those it
+			// keeps for later may be missing at a receiver without the upper
+			// layers, which the standard allows.
+			const std::vector<ReferencePicture> set = ReferencePictureSet(frame);
+			int32_t previous = pictureOrder;
+
 			header.Flag(false);
-			header.Ue(1);
+			header.Ue(static_cast<uint32_t>(set.size()));
 			header.Ue(0);
-			header.Ue(0);
-			header.Flag(true);
+
+			for (const ReferencePicture & reference : set) {
+				header.Ue(static_cast<uint32_t>(previous - reference.pictureOrder - 1));
+				header.Flag(reference.used);
+				previous = reference.pictureOrder;
+			}
 		}
 
 		if (sao) {
@@ -728,6 +867,8 @@ namespace jni
 		}
 
 		bitrateBps = bitrate;
+		outputProcessor.OnRatesUpdated(parameters.bitrate);
+		layers.OnRatesUpdated(parameters.bitrate);
 
 		if (parameters.framerate_fps >= 1.0) {
 			framerate = static_cast<uint32_t>(parameters.framerate_fps + 0.5);
@@ -747,6 +888,8 @@ namespace jni
 		info.scaling_settings = outputProcessor.GetScalingSettings();
 		// Whole coding blocks, so that the coded picture is the frame.
 		info.requested_resolution_alignment = 1 << log2MinCbSize;
+
+		layers.FillFpsAllocation(info);
 
 		return info;
 	}

@@ -17,15 +17,11 @@
 #include "media/video/codec/linux/VaapiH264Encoder.h"
 
 #include "api/video/encoded_image.h"
-#include "api/video/i420_buffer.h"
 #include "modules/video_coding/include/video_codec_interface.h"
 #include "modules/video_coding/include/video_error_codes.h"
 #include "rtc_base/logging.h"
-#include "third_party/libyuv/include/libyuv/convert_from.h"
 
 #include <algorithm>
-#include <cstring>
-#include <span>
 
 namespace jni
 {
@@ -44,7 +40,7 @@ namespace jni
 		constexpr uint8_t kSliceTypeI = 2;
 
 		// H.264 NAL unit types (table 7-1), and the nal_ref_idc of everything
-		// the encoder writes, all of which is used for reference.
+		// the encoder writes that is used for reference.
 		constexpr uint32_t kNalSlice = 1;
 		constexpr uint32_t kNalIdrSlice = 5;
 		constexpr uint32_t kNalSps = 7;
@@ -60,10 +56,10 @@ namespace jni
 
 		constexpr uint32_t kInitialQp = 26;
 
-		// How many seconds of video the rate control may buffer, as a
-		// multiple of the bitrate.
-		constexpr uint32_t kHrdBufferNumerator = 3;
-		constexpr uint32_t kHrdBufferDenominator = 2;
+		// modification_of_pic_nums_idc: subtract from the predicted picture
+		// number, or end the list of modifications.
+		constexpr uint32_t kSubtractPicNum = 0;
+		constexpr uint32_t kEndModifications = 3;
 
 		// The lowest H.264 level whose limits a stream fits in, going by its
 		// frame size and macroblock rate, per table A-1 of the standard.
@@ -107,43 +103,37 @@ namespace jni
 
 	VaapiH264Encoder::VaapiH264Encoder(VaapiLibrary & library, const webrtc::SdpVideoFormat & format) :
 		library(library),
-		va(library.Api()),
 		implementationName("VA-API (" + library.Vendor() + ")"),
-		config(VA_INVALID_ID),
-		packedHeaders(0),
-		context(VA_INVALID_ID),
-		inputSurface(VA_INVALID_SURFACE),
-		reconstructed{ VA_INVALID_SURFACE, VA_INVALID_SURFACE },
-		codedBuffer(VA_INVALID_ID),
+		session(library, "VA-API H.264"),
+		packedHeaders(VA_ENC_PACKED_HEADER_NONE),
+		initialized(false),
 		codecSettings(),
 		widthInMbs(0),
 		heightInMbs(0),
 		bitrateBps(0),
 		framerate(30),
 		ratesChanged(false),
-		frameNum(0),
+		previousReferenceFrameNum(0),
 		idrPicId(0),
-		current(0),
+		slotFrameNums{ 0, 0 },
 		referenceValid(false),
 		callback(nullptr),
 		outputProcessor(webrtc::kVideoCodecH264, format)
 	{
+		VAConfigAttrib packed = {};
+		packed.type = VAConfigAttribEncPackedHeaders;
+
+		if (library.Api().GetConfigAttributes(library.Display(), VAProfileH264ConstrainedBaseline, library.Entrypoint(),
+			&packed, 1) == VA_STATUS_SUCCESS && packed.value != VA_ATTRIB_NOT_SUPPORTED
+			&& (packed.value & kPackedHeaders) == kPackedHeaders)
+		{
+			packedHeaders = kPackedHeaders;
+		}
 	}
 
 	VaapiH264Encoder::~VaapiH264Encoder()
 	{
 		Release();
-	}
-
-	bool VaapiH264Encoder::Check(VAStatus status, const char * operation) const
-	{
-		if (status == VA_STATUS_SUCCESS) {
-			return true;
-		}
-
-		RTC_LOG(LS_WARNING) << "VA-API: " << operation << " failed: " << library.ErrorString(status);
-
-		return false;
 	}
 
 	int32_t VaapiH264Encoder::InitEncode(const webrtc::VideoCodec * settings, const Settings & encoderSettings)
@@ -165,6 +155,16 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 
+		// Temporal layers, where the encoder writes the slice headers, which
+		// carry what makes the layers; the rest is left to OpenH264.
+		const webrtc::ScalabilityMode mode = settings->GetScalabilityMode().value_or(webrtc::ScalabilityMode::kL1T1);
+
+		if (mode != webrtc::ScalabilityMode::kL1T1 && (packedHeaders != kPackedHeaders
+			|| (mode != webrtc::ScalabilityMode::kL1T2 && mode != webrtc::ScalabilityMode::kL1T3)))
+		{
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
+
 		Release();
 
 		codecSettings = *settings;
@@ -175,89 +175,35 @@ namespace jni
 		bitrateBps = std::max(1u, codecSettings.startBitrate) * 1000;
 		framerate = std::max(1u, codecSettings.maxFramerate);
 		ratesChanged = true;
-		frameNum = 0;
-		current = 0;
+		previousReferenceFrameNum = 0;
 		referenceValid = false;
 		outputProcessor.Reset();
+		// One rate control for all layers, which then treats them alike:
+		// Intel's driver has none of each layer for H.264, and AMD's, which
+		// says it has, overshoots the bitrate by half again with it.
+		layers.Configure(mode, bitrateBps, false);
 
-		if (!CreateSession()) {
+		if (!outputProcessor.SetScalabilityMode(mode)) {
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
+
+		// Whole macroblocks; the stream is cropped to the frame size.
+		const uint32_t width = widthInMbs * 16;
+		const uint32_t height = heightInMbs * 16;
+
+		if (!session.Create(VAProfileH264ConstrainedBaseline, library.Entrypoint(), width, height, width, height,
+			packedHeaders, VaapiTemporalLayers::kReconstructedSurfaces))
+		{
 			Release();
 			return WEBRTC_VIDEO_CODEC_ERROR;
 		}
 
+		initialized = true;
+
 		RTC_LOG(LS_INFO) << implementationName << " initialized: " << codecSettings.width << "x"
-			<< codecSettings.height << " at " << bitrateBps << " bps";
+			<< codecSettings.height << " at " << bitrateBps << " bps, " << webrtc::ScalabilityModeToString(mode);
 
 		return WEBRTC_VIDEO_CODEC_OK;
-	}
-
-	bool VaapiH264Encoder::CreateSession()
-	{
-		VADisplay display = library.Display();
-
-		VAConfigAttrib packed = {};
-		packed.type = VAConfigAttribEncPackedHeaders;
-
-		packedHeaders = 0;
-
-		if (va.GetConfigAttributes(display, VAProfileH264ConstrainedBaseline, library.Entrypoint(), &packed, 1) ==
-			VA_STATUS_SUCCESS && packed.value != VA_ATTRIB_NOT_SUPPORTED
-			&& (packed.value & kPackedHeaders) == kPackedHeaders)
-		{
-			packedHeaders = kPackedHeaders;
-		}
-
-		VAConfigAttrib attributes[3] = {};
-		attributes[0].type = VAConfigAttribRTFormat;
-		attributes[0].value = VA_RT_FORMAT_YUV420;
-		attributes[1].type = VAConfigAttribRateControl;
-		attributes[1].value = VA_RC_CBR;
-		attributes[2].type = VAConfigAttribEncPackedHeaders;
-		attributes[2].value = packedHeaders;
-
-		const int attributeCount = packedHeaders != 0 ? 3 : 2;
-
-		if (!Check(va.CreateConfig(display, VAProfileH264ConstrainedBaseline, library.Entrypoint(), attributes,
-			attributeCount, &config), "creating the configuration"))
-		{
-			config = VA_INVALID_ID;
-			return false;
-		}
-
-		// Whole macroblocks; the stream is cropped to the frame size.
-		const unsigned int width = widthInMbs * 16;
-		const unsigned int height = heightInMbs * 16;
-
-		VASurfaceID surfaces[3] = { VA_INVALID_SURFACE, VA_INVALID_SURFACE, VA_INVALID_SURFACE };
-
-		if (!Check(va.CreateSurfaces(display, VA_RT_FORMAT_YUV420, width, height, surfaces, 3, nullptr, 0),
-			"creating surfaces"))
-		{
-			return false;
-		}
-
-		inputSurface = surfaces[0];
-		reconstructed[0] = surfaces[1];
-		reconstructed[1] = surfaces[2];
-
-		if (!Check(va.CreateContext(display, config, width, height, VA_PROGRESSIVE, surfaces, 3, &context),
-			"creating the context"))
-		{
-			context = VA_INVALID_ID;
-			return false;
-		}
-
-		// Room for a frame that does not compress at all.
-		const unsigned int codedSize = width * height * 3 / 2 + 64 * 1024;
-
-		if (!Check(va.CreateBuffer(display, context, VAEncCodedBufferType, codedSize, 1, nullptr, &codedBuffer),
-			"creating the output buffer"))
-		{
-			codedBuffer = VA_INVALID_ID;
-			return false;
-		}
-
-		return true;
 	}
 
 	int32_t VaapiH264Encoder::RegisterEncodeCompleteCallback(webrtc::EncodedImageCallback * encodeCallback)
@@ -269,48 +215,18 @@ namespace jni
 
 	int32_t VaapiH264Encoder::Release()
 	{
-		DestroySession();
+		session.Destroy();
+
+		initialized = false;
+		referenceValid = false;
 
 		return WEBRTC_VIDEO_CODEC_OK;
-	}
-
-	void VaapiH264Encoder::DestroySession()
-	{
-		VADisplay display = library.Display();
-
-		DestroyFrameBuffers();
-
-		if (codedBuffer != VA_INVALID_ID) {
-			va.DestroyBuffer(display, codedBuffer);
-			codedBuffer = VA_INVALID_ID;
-		}
-		if (context != VA_INVALID_ID) {
-			va.DestroyContext(display, context);
-			context = VA_INVALID_ID;
-		}
-
-		VASurfaceID surfaces[3] = { inputSurface, reconstructed[0], reconstructed[1] };
-
-		if (inputSurface != VA_INVALID_SURFACE) {
-			va.DestroySurfaces(display, surfaces, 3);
-		}
-
-		inputSurface = VA_INVALID_SURFACE;
-		reconstructed[0] = VA_INVALID_SURFACE;
-		reconstructed[1] = VA_INVALID_SURFACE;
-
-		if (config != VA_INVALID_ID) {
-			va.DestroyConfig(display, config);
-			config = VA_INVALID_ID;
-		}
-
-		referenceValid = false;
 	}
 
 	int32_t VaapiH264Encoder::Encode(const webrtc::VideoFrame & frame,
 		const std::vector<webrtc::VideoFrameType> * frameTypes)
 	{
-		if (context == VA_INVALID_ID || callback == nullptr) {
+		if (!initialized || callback == nullptr) {
 			return WEBRTC_VIDEO_CODEC_UNINITIALIZED;
 		}
 
@@ -322,18 +238,42 @@ namespace jni
 			});
 		}
 
-		if (idr) {
-			frameNum = 0;
+		const auto layerFrame = outputProcessor.NextFrameConfig(idr);
+
+		// No layer is encoded now, as when WebRTC gives none a bitrate.
+		if (!layerFrame) {
+			return WEBRTC_VIDEO_CODEC_OK;
 		}
 
-		std::vector<uint8_t> output;
+		const auto layerPlan = layers.Plan(idr, *layerFrame);
 
-		if (!Upload(frame) || !Submit(idr) || !ReadOutput(output)) {
-			DestroyFrameBuffers();
+		if (!layerPlan) {
+			RTC_LOG(LS_WARNING) << implementationName << " H.264: a frame refers to a slot that holds none";
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
-		DestroyFrameBuffers();
+		// frame_num goes up after each reference picture only, so that a
+		// receiver misses no frame_num for a picture of the top layer it goes
+		// without.
+		Picture picture;
+		picture.frame = *layerPlan;
+		picture.reference = idr || layerPlan->refreshFlags != 0;
+		picture.frameNum = idr ? 0 : (previousReferenceFrameNum + 1) % kMaxFrameNum;
+
+		std::vector<uint8_t> output;
+
+		// WebRTC initializes the encoder again when the frame size changes,
+		// so a frame of another size is one that raced with that. An odd frame
+		// is cropped to the even size the encoder took, which needs no copy.
+		const bool encoded = session.Upload(frame, static_cast<int>(codecSettings.width),
+			static_cast<int>(codecSettings.height), 1) && Submit(idr, picture) && session.ReadOutput(output);
+
+		session.DropBuffers();
+
+
+		if (!encoded) {
+			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+		}
 
 		webrtc::EncodedImage image;
 		image._encodedWidth = codecSettings.width;
@@ -347,14 +287,24 @@ namespace jni
 
 		// A driver that writes no parameter sets into key frames makes a
 		// stream nothing can decode; better in software then.
-		if (!outputProcessor.Process(output, idr, image, info)) {
+		if (!outputProcessor.Process(output, idr, *layerFrame, image, info)) {
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
-		// The frame just encoded is the reference of the next one.
+		// The slots the frame replaces hold it now.
+		layers.Commit(*layerPlan);
+
+		for (int slot = 0; slot < layers.SlotCount(); slot++) {
+			if (layerPlan->keptFlags & (1 << slot)) {
+				slotFrameNums[slot] = picture.frameNum;
+			}
+		}
+
+		if (picture.reference) {
+			previousReferenceFrameNum = picture.frameNum;
+		}
+
 		referenceValid = true;
-		current = 1 - current;
-		frameNum = (frameNum + 1) % kMaxFrameNum;
 		ratesChanged = false;
 
 		if (idr) {
@@ -366,120 +316,36 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool VaapiH264Encoder::Upload(const webrtc::VideoFrame & frame)
-	{
-		webrtc::scoped_refptr<webrtc::I420BufferInterface> i420 = frame.video_frame_buffer()->ToI420();
-
-		if (!i420) {
-			return false;
-		}
-
-		const int width = static_cast<int>(codecSettings.width);
-		const int height = static_cast<int>(codecSettings.height);
-
-		// WebRTC initializes the encoder again when the frame size changes,
-		// so a frame of another size is one that raced with that. An odd frame
-		// is cropped to the even size the encoder took, which needs no copy.
-		const bool cropped = i420->width() - width >= 0 && i420->width() - width <= 1
-			&& i420->height() - height >= 0 && i420->height() - height <= 1;
-
-		if (!cropped) {
-			webrtc::scoped_refptr<webrtc::I420Buffer> scaled = webrtc::I420Buffer::Create(width, height);
-			scaled->ScaleFrom(*i420);
-			i420 = scaled;
-		}
-
-		VADisplay display = library.Display();
-		VAImage image = {};
-		image.image_id = VA_INVALID_ID;
-
-		// Writing into the surface directly where the driver allows it,
-		// otherwise into an image that is copied into the surface.
-		bool derived = va.DeriveImage(display, inputSurface, &image) == VA_STATUS_SUCCESS
-			&& image.format.fourcc == VA_FOURCC_NV12;
-
-		if (!derived) {
-			if (image.image_id != VA_INVALID_ID) {
-				va.DestroyImage(display, image.image_id);
-			}
-
-			VAImageFormat format = {};
-			format.fourcc = VA_FOURCC_NV12;
-			format.byte_order = VA_LSB_FIRST;
-			format.bits_per_pixel = 12;
-
-			if (!Check(va.CreateImage(display, &format, width, height, &image), "creating an image")) {
-				return false;
-			}
-		}
-
-		void * data = nullptr;
-		bool uploaded = Check(va.MapBuffer(display, image.buf, &data), "mapping an image");
-
-		if (uploaded) {
-			uint8_t * base = static_cast<uint8_t *>(data);
-
-			libyuv::I420ToNV12(i420->DataY(), i420->StrideY(), i420->DataU(), i420->StrideU(),
-				i420->DataV(), i420->StrideV(),
-				base + image.offsets[0], static_cast<int>(image.pitches[0]),
-				base + image.offsets[1], static_cast<int>(image.pitches[1]),
-				width, height);
-
-			va.UnmapBuffer(display, image.buf);
-
-			if (!derived) {
-				uploaded = Check(va.PutImage(display, inputSurface, image.image_id, 0, 0, width, height,
-					0, 0, width, height), "copying an image");
-			}
-		}
-
-		va.DestroyImage(display, image.image_id);
-
-		return uploaded;
-	}
-
-	bool VaapiH264Encoder::Submit(bool idr)
+	bool VaapiH264Encoder::Submit(bool idr, const Picture & picture)
 	{
 		if (idr) {
 			VAEncSequenceParameterBufferH264 sequence = {};
 			FillSequence(sequence);
 
-			if (!AddBuffer(VAEncSequenceParameterBufferType, &sequence, sizeof(sequence))) {
+			if (!session.AddBuffer(VAEncSequenceParameterBufferType, &sequence, sizeof(sequence))) {
 				return false;
 			}
 		}
 
 		if (idr || ratesChanged) {
-			VAEncMiscParameterRateControl rateControl = {};
-			rateControl.bits_per_second = bitrateBps;
-			rateControl.target_percentage = 100;
-			rateControl.window_size = 1000;
-			rateControl.initial_qp = kInitialQp;
+			// Without layers, from the initial QP the encoder has always
+			// started from.
+			const bool added = layers.Count() == 1
+				? session.AddRateControl(bitrateBps, framerate, kInitialQp)
+				: layers.AddRateControl(session, bitrateBps, framerate, idr);
 
-			VAEncMiscParameterFrameRate frameRate = {};
-			// The numerator in the low 16 bits, the denominator in the high.
-			frameRate.framerate = framerate | (1u << 16);
-
-			VAEncMiscParameterHRD hrd = {};
-			hrd.buffer_size = static_cast<uint32_t>(
-				static_cast<uint64_t>(bitrateBps) * kHrdBufferNumerator / kHrdBufferDenominator);
-			hrd.initial_buffer_fullness = hrd.buffer_size / 2;
-
-			if (!AddMiscParameter(VAEncMiscParameterTypeRateControl, &rateControl, sizeof(rateControl)) ||
-				!AddMiscParameter(VAEncMiscParameterTypeFrameRate, &frameRate, sizeof(frameRate)) ||
-				!AddMiscParameter(VAEncMiscParameterTypeHRD, &hrd, sizeof(hrd)))
-			{
+			if (!added) {
 				return false;
 			}
 		}
 
-		VAEncPictureParameterBufferH264 picture = {};
-		FillPicture(picture, idr);
+		VAEncPictureParameterBufferH264 parameters = {};
+		FillPicture(parameters, idr, picture);
 
 		VAEncSliceParameterBufferH264 slice = {};
-		FillSlice(slice, idr);
+		FillSlice(slice, idr, picture);
 
-		if (!AddBuffer(VAEncPictureParameterBufferType, &picture, sizeof(picture))) {
+		if (!session.AddBuffer(VAEncPictureParameterBufferType, &parameters, sizeof(parameters))) {
 			return false;
 		}
 
@@ -487,117 +353,21 @@ namespace jni
 			std::vector<uint8_t> parameterSets;
 			const size_t bits = WriteParameterSets(parameterSets);
 
-			if (!AddPackedHeader(VAEncPackedHeaderSequence, parameterSets, bits)) {
+			if (!session.AddPackedHeader(VAEncPackedHeaderSequence, parameterSets, bits)) {
 				return false;
 			}
 		}
 
 		if (packedHeaders & VA_ENC_PACKED_HEADER_SLICE) {
 			std::vector<uint8_t> sliceHeader;
-			const size_t bits = WriteSliceHeader(sliceHeader, idr);
+			const size_t bits = WriteSliceHeader(sliceHeader, idr, picture);
 
-			if (!AddPackedHeader(VAEncPackedHeaderSlice, sliceHeader, bits)) {
+			if (!session.AddPackedHeader(VAEncPackedHeaderSlice, sliceHeader, bits)) {
 				return false;
 			}
 		}
 
-		if (!AddBuffer(VAEncSliceParameterBufferType, &slice, sizeof(slice))) {
-			return false;
-		}
-
-		VADisplay display = library.Display();
-
-		if (!Check(va.BeginPicture(display, context, inputSurface), "beginning a picture")) {
-			return false;
-		}
-
-		bool rendered = Check(va.RenderPicture(display, context, frameBuffers.data(),
-			static_cast<int>(frameBuffers.size())), "rendering a picture");
-
-		// A picture that was begun has to be ended.
-		bool ended = Check(va.EndPicture(display, context), "ending a picture");
-
-		return rendered && ended && Check(va.SyncSurface(display, inputSurface), "waiting for a picture");
-	}
-
-	bool VaapiH264Encoder::ReadOutput(std::vector<uint8_t> & output)
-	{
-		VADisplay display = library.Display();
-		void * data = nullptr;
-
-		if (!Check(va.MapBuffer(display, codedBuffer, &data), "mapping the output")) {
-			return false;
-		}
-
-		bool complete = true;
-
-		for (auto * segment = static_cast<VACodedBufferSegment *>(data); segment != nullptr;
-			segment = static_cast<VACodedBufferSegment *>(segment->next))
-		{
-			if (segment->status & VA_CODED_BUF_STATUS_SLICE_OVERFLOW_MASK) {
-				complete = false;
-			}
-
-			const uint8_t * bytes = static_cast<const uint8_t *>(segment->buf);
-			output.insert(output.end(), bytes, bytes + segment->size);
-		}
-
-		va.UnmapBuffer(display, codedBuffer);
-
-		if (!complete || output.empty()) {
-			RTC_LOG(LS_WARNING) << "VA-API: a frame did not fit the output buffer";
-			return false;
-		}
-
-		return true;
-	}
-
-	bool VaapiH264Encoder::AddBuffer(VABufferType type, void * data, size_t size)
-	{
-		VABufferID buffer = VA_INVALID_ID;
-
-		if (!Check(va.CreateBuffer(library.Display(), context, type, static_cast<unsigned int>(size), 1, data,
-			&buffer), "creating a parameter buffer"))
-		{
-			return false;
-		}
-
-		frameBuffers.push_back(buffer);
-
-		return true;
-	}
-
-	bool VaapiH264Encoder::AddMiscParameter(VAEncMiscParameterType type, const void * data, size_t size)
-	{
-		// A VAEncMiscParameterBuffer: the type, followed by the parameter.
-		std::vector<uint8_t> buffer(sizeof(VAEncMiscParameterBuffer) + size);
-
-		auto * header = reinterpret_cast<VAEncMiscParameterBuffer *>(buffer.data());
-		header->type = type;
-		std::memcpy(header->data, data, size);
-
-		return AddBuffer(VAEncMiscParameterBufferType, buffer.data(), buffer.size());
-	}
-
-	bool VaapiH264Encoder::AddPackedHeader(VAEncPackedHeaderType type, const std::vector<uint8_t> & data,
-		size_t bits)
-	{
-		VAEncPackedHeaderParameterBuffer parameters = {};
-		parameters.type = type;
-		parameters.bit_length = static_cast<uint32_t>(bits);
-		parameters.has_emulation_bytes = 1;
-
-		return AddBuffer(VAEncPackedHeaderParameterBufferType, &parameters, sizeof(parameters))
-			&& AddBuffer(VAEncPackedHeaderDataBufferType, const_cast<uint8_t *>(data.data()), data.size());
-	}
-
-	void VaapiH264Encoder::DestroyFrameBuffers()
-	{
-		for (VABufferID buffer : frameBuffers) {
-			va.DestroyBuffer(library.Display(), buffer);
-		}
-
-		frameBuffers.clear();
+		return session.AddBuffer(VAEncSliceParameterBufferType, &slice, sizeof(slice)) && session.Encode();
 	}
 
 	void VaapiH264Encoder::FillSequence(VAEncSequenceParameterBufferH264 & sequence) const
@@ -608,7 +378,8 @@ namespace jni
 		sequence.intra_idr_period = kIntraPeriod;
 		sequence.ip_period = 1;
 		sequence.bits_per_second = bitrateBps;
-		sequence.max_num_ref_frames = 1;
+		// The pictures of both reference slots with layers.
+		sequence.max_num_ref_frames = layers.Count() > 1 ? 2 : 1;
 		sequence.picture_width_in_mbs = static_cast<uint16_t>(widthInMbs);
 		sequence.picture_height_in_mbs = static_cast<uint16_t>(heightInMbs);
 
@@ -636,47 +407,75 @@ namespace jni
 		sequence.time_scale = framerate * 2;
 	}
 
-	void VaapiH264Encoder::FillPicture(VAEncPictureParameterBufferH264 & picture, bool idr) const
+	int32_t VaapiH264Encoder::OrderCount(uint32_t frameNum, bool reference)
 	{
-		picture.CurrPic.picture_id = reconstructed[current];
-		picture.CurrPic.frame_idx = frameNum;
-		picture.CurrPic.flags = 0;
-		picture.CurrPic.TopFieldOrderCnt = static_cast<int32_t>(frameNum * 2);
-		picture.CurrPic.BottomFieldOrderCnt = picture.CurrPic.TopFieldOrderCnt;
+		// Twice frame_num for a reference picture, one less for another.
+		return static_cast<int32_t>(frameNum * 2) - (reference ? 0 : 1);
+	}
 
-		for (VAPictureH264 & reference : picture.ReferenceFrames) {
+	VAPictureH264 VaapiH264Encoder::Reference(int slot) const
+	{
+		VAPictureH264 reference = {};
+		reference.picture_id = session.Reconstructed(layers.Surface(slot));
+		reference.frame_idx = slotFrameNums[slot];
+		reference.flags = VA_PICTURE_H264_SHORT_TERM_REFERENCE;
+		reference.TopFieldOrderCnt = OrderCount(slotFrameNums[slot], true);
+		reference.BottomFieldOrderCnt = reference.TopFieldOrderCnt;
+
+		return reference;
+	}
+
+	void VaapiH264Encoder::FillPicture(VAEncPictureParameterBufferH264 & parameters, bool idr,
+		const Picture & picture) const
+	{
+		parameters.CurrPic.picture_id = session.Reconstructed(picture.frame.surface);
+		parameters.CurrPic.frame_idx = picture.frameNum;
+		parameters.CurrPic.flags = 0;
+		parameters.CurrPic.TopFieldOrderCnt = OrderCount(picture.frameNum, picture.reference);
+		parameters.CurrPic.BottomFieldOrderCnt = parameters.CurrPic.TopFieldOrderCnt;
+
+		for (VAPictureH264 & reference : parameters.ReferenceFrames) {
 			InvalidatePicture(reference);
 		}
 
 		if (!idr) {
-			const uint32_t previous = (frameNum + kMaxFrameNum - 1) % kMaxFrameNum;
+			// The pictures the decoder keeps: the one referred to, and with
+			// layers the other slot's too.
+			int count = 0;
 
-			VAPictureH264 & reference = picture.ReferenceFrames[0];
-			reference.picture_id = reconstructed[1 - current];
-			reference.frame_idx = previous;
-			reference.flags = VA_PICTURE_H264_SHORT_TERM_REFERENCE;
-			reference.TopFieldOrderCnt = static_cast<int32_t>(previous * 2);
-			reference.BottomFieldOrderCnt = reference.TopFieldOrderCnt;
+			for (int slot = 0; slot < layers.SlotCount(); slot++) {
+				const bool referred = slot == picture.frame.references[0];
+				const bool kept = layers.Count() > 1 && layers.Surface(slot) >= 0;
+				bool listed = false;
+
+				for (int i = 0; i < count; i++) {
+					listed |= parameters.ReferenceFrames[i].picture_id == session.Reconstructed(layers.Surface(slot));
+				}
+
+				if ((referred || kept) && !listed) {
+					parameters.ReferenceFrames[count++] = Reference(slot);
+				}
+			}
 		}
 
-		picture.coded_buf = codedBuffer;
-		picture.pic_parameter_set_id = 0;
-		picture.seq_parameter_set_id = 0;
-		picture.last_picture = 0;
-		picture.frame_num = static_cast<uint16_t>(frameNum);
-		picture.pic_init_qp = kInitialQp;
-		picture.num_ref_idx_l0_active_minus1 = 0;
-		picture.num_ref_idx_l1_active_minus1 = 0;
+		parameters.coded_buf = session.CodedBuffer();
+		parameters.pic_parameter_set_id = 0;
+		parameters.seq_parameter_set_id = 0;
+		parameters.last_picture = 0;
+		parameters.frame_num = static_cast<uint16_t>(picture.frameNum);
+		parameters.pic_init_qp = kInitialQp;
+		parameters.num_ref_idx_l0_active_minus1 = 0;
+		parameters.num_ref_idx_l1_active_minus1 = 0;
 
-		picture.pic_fields.bits.idr_pic_flag = idr ? 1 : 0;
-		picture.pic_fields.bits.reference_pic_flag = 1;
+		parameters.pic_fields.bits.idr_pic_flag = idr ? 1 : 0;
+		parameters.pic_fields.bits.reference_pic_flag = picture.reference ? 1 : 0;
 		// CAVLC: Constrained Baseline has no CABAC.
-		picture.pic_fields.bits.entropy_coding_mode_flag = 0;
-		picture.pic_fields.bits.transform_8x8_mode_flag = 0;
-		picture.pic_fields.bits.deblocking_filter_control_present_flag = 1;
+		parameters.pic_fields.bits.entropy_coding_mode_flag = 0;
+		parameters.pic_fields.bits.transform_8x8_mode_flag = 0;
+		parameters.pic_fields.bits.deblocking_filter_control_present_flag = 1;
 	}
 
-	void VaapiH264Encoder::FillSlice(VAEncSliceParameterBufferH264 & slice, bool idr) const
+	void VaapiH264Encoder::FillSlice(VAEncSliceParameterBufferH264 & slice, bool idr, const Picture & picture) const
 	{
 		slice.macroblock_address = 0;
 		slice.num_macroblocks = widthInMbs * heightInMbs;
@@ -696,14 +495,7 @@ namespace jni
 		}
 
 		if (!idr) {
-			const uint32_t previous = (frameNum + kMaxFrameNum - 1) % kMaxFrameNum;
-
-			VAPictureH264 & reference = slice.RefPicList0[0];
-			reference.picture_id = reconstructed[1 - current];
-			reference.frame_idx = previous;
-			reference.flags = VA_PICTURE_H264_SHORT_TERM_REFERENCE;
-			reference.TopFieldOrderCnt = static_cast<int32_t>(previous * 2);
-			reference.BottomFieldOrderCnt = reference.TopFieldOrderCnt;
+			slice.RefPicList0[0] = Reference(picture.frame.references[0]);
 		}
 
 		slice.slice_qp_delta = 0;
@@ -712,6 +504,8 @@ namespace jni
 
 	size_t VaapiH264Encoder::WriteParameterSets(std::vector<uint8_t> & output) const
 	{
+		const bool layered = layers.Count() > 1;
+
 		// The SPS (7.3.2.1.1) of FillSequence().
 		NalUnitWriter sps;
 		sps.Bits(0, 1);
@@ -726,8 +520,10 @@ namespace jni
 		sps.Ue(0);
 		sps.Ue(kLog2MaxFrameNum - 4);
 		sps.Ue(2);
-		sps.Ue(1);
-		sps.Flag(false);
+		// max_num_ref_frames, and gaps_in_frame_num_value_allowed_flag, which
+		// a receiver without the upper layers needs.
+		sps.Ue(layered ? 2 : 1);
+		sps.Flag(layered);
 		sps.Ue(widthInMbs - 1);
 		sps.Ue(heightInMbs - 1);
 		sps.Flag(true);
@@ -790,38 +586,54 @@ namespace jni
 		return sps.AppendTo(output) + pps.AppendTo(output);
 	}
 
-	size_t VaapiH264Encoder::WriteSliceHeader(std::vector<uint8_t> & output, bool idr) const
+	size_t VaapiH264Encoder::WriteSliceHeader(std::vector<uint8_t> & output, bool idr, const Picture & picture) const
 	{
 		// The slice header (7.3.3) of FillSlice(), which the driver goes on
 		// from with the slice data.
 		NalUnitWriter header;
 		header.Bits(0, 1);
-		header.Bits(kNalRefIdc, 2);
+		header.Bits(picture.reference ? kNalRefIdc : 0, 2);
 		header.Bits(idr ? kNalIdrSlice : kNalSlice, 5);
 
 		header.Ue(0);
 		header.Ue(idr ? kSliceTypeI : kSliceTypeP);
 		header.Ue(0);
-		header.Bits(frameNum, kLog2MaxFrameNum);
+		header.Bits(picture.frameNum, kLog2MaxFrameNum);
 
 		if (idr) {
 			header.Ue(idrPicId);
 		}
 		else {
-			// num_ref_idx_active_override_flag and
-			// ref_pic_list_modification_flag_l0.
+			// num_ref_idx_active_override_flag.
 			header.Flag(false);
-			header.Flag(false);
+
+			// ref_pic_list_modification(): with layers, the picture referred
+			// to goes first in the list, which would otherwise start with the
+			// newest reference picture.
+			const bool layered = layers.Count() > 1;
+
+			header.Flag(layered);
+
+			if (layered) {
+				const uint32_t referenceFrameNum = slotFrameNums[picture.frame.references[0]];
+				const uint32_t difference = (picture.frameNum + kMaxFrameNum - referenceFrameNum) % kMaxFrameNum;
+
+				header.Ue(kSubtractPicNum);
+				header.Ue(difference - 1);
+				header.Ue(kEndModifications);
+			}
 		}
 
-		// dec_ref_pic_marking(): no_output_of_prior_pics_flag and
-		// long_term_reference_flag, or adaptive_ref_pic_marking_mode_flag.
-		if (idr) {
-			header.Flag(false);
-			header.Flag(false);
-		}
-		else {
-			header.Flag(false);
+		// dec_ref_pic_marking() of a reference picture: no_output_of_prior_pics_flag
+		// and long_term_reference_flag, or adaptive_ref_pic_marking_mode_flag.
+		if (picture.reference) {
+			if (idr) {
+				header.Flag(false);
+				header.Flag(false);
+			}
+			else {
+				header.Flag(false);
+			}
 		}
 
 		header.Se(0);
@@ -844,6 +656,8 @@ namespace jni
 		}
 
 		bitrateBps = bitrate;
+		outputProcessor.OnRatesUpdated(parameters.bitrate);
+		layers.OnRatesUpdated(parameters.bitrate);
 
 		if (parameters.framerate_fps >= 1.0) {
 			framerate = static_cast<uint32_t>(parameters.framerate_fps + 0.5);
@@ -863,6 +677,8 @@ namespace jni
 		info.scaling_settings = outputProcessor.GetScalingSettings();
 		// NV12 needs even dimensions.
 		info.requested_resolution_alignment = 2;
+
+		layers.FillFpsAllocation(info);
 
 		return info;
 	}

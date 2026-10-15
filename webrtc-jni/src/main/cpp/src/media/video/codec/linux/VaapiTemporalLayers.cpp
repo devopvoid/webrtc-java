@@ -35,12 +35,32 @@ namespace jni
 	}
 
 	VaapiTemporalLayers::VaapiTemporalLayers() :
-		count(1)
+		count(1),
+		layerRateControl(false)
 	{
 		slots.fill(-1);
 	}
 
-	bool VaapiTemporalLayers::Configure(webrtc::ScalabilityMode mode, uint32_t bitrateBps)
+	bool VaapiTemporalLayers::LayerRateControl(VaapiLibrary & library, VAProfile profile, VAEntrypoint entrypoint,
+		int layers)
+	{
+		VAConfigAttrib attribute = {};
+		attribute.type = VAConfigAttribEncRateControlExt;
+
+		if (library.Api().GetConfigAttributes(library.Display(), profile, entrypoint, &attribute, 1)
+			!= VA_STATUS_SUCCESS || attribute.value == VA_ATTRIB_NOT_SUPPORTED)
+		{
+			return false;
+		}
+
+		VAConfigAttribValEncRateControlExt extension;
+		extension.value = attribute.value;
+
+		return extension.bits.temporal_layer_bitrate_control_flag
+			&& static_cast<int>(extension.bits.max_num_temporal_layers_minus1) + 1 >= layers;
+	}
+
+	bool VaapiTemporalLayers::Configure(webrtc::ScalabilityMode mode, uint32_t bitrateBps, bool layerRates)
 	{
 		switch (mode) {
 			case webrtc::ScalabilityMode::kL1T1:
@@ -57,6 +77,7 @@ namespace jni
 		}
 
 		slots.fill(-1);
+		layerRateControl = layerRates;
 		bitratesBps.clear();
 
 		for (int layer = 0; layer < count && count > 1; layer++) {
@@ -86,6 +107,12 @@ namespace jni
 
 		if (frame.surface < 0) {
 			return std::nullopt;
+		}
+
+		for (const webrtc::CodecBufferUsage & buffer : layerFrame.Buffers()) {
+			if (buffer.updated && buffer.id >= 0 && buffer.id < static_cast<int>(slots.size())) {
+				frame.keptFlags |= static_cast<uint8_t>(1 << buffer.id);
+			}
 		}
 
 		// A key frame replaces every slot.
@@ -120,10 +147,18 @@ namespace jni
 	void VaapiTemporalLayers::Commit(const Frame & frame)
 	{
 		for (int slot = 0; slot < static_cast<int>(slots.size()); slot++) {
-			if (frame.refreshFlags & (1 << slot)) {
+			if (frame.keptFlags & (1 << slot)) {
 				slots[slot] = frame.surface;
 			}
+			else if (frame.refreshFlags == 0xFF) {
+				slots[slot] = -1;
+			}
 		}
+	}
+
+	void VaapiTemporalLayers::Forget(int slot)
+	{
+		slots[slot] = -1;
 	}
 
 	int VaapiTemporalLayers::SlotCount() const
@@ -151,7 +186,7 @@ namespace jni
 	bool VaapiTemporalLayers::AddRateControl(VaapiEncodeSession & session, uint32_t bitrateBps, uint32_t framerate,
 		bool keyFrame) const
 	{
-		if (count == 1) {
+		if (count == 1 || !layerRateControl) {
 			return session.AddRateControl(bitrateBps, framerate, 0);
 		}
 

@@ -35,8 +35,7 @@ namespace jni
 	// parameter buffers of a frame, uploading a frame as NV12, encoding it
 	// and reading what came out. The codec's encoder fills in the parameters.
 	//
-	// Used by the H.265 and VP9 encoders; the H.264 one keeps its own, older
-	// copy of the same.
+	// Used by every VA-API encoder.
 	class VaapiEncodeSession
 	{
 		public:

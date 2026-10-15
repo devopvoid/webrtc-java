@@ -48,9 +48,9 @@ namespace jni
 	// or the sequence header of AV1. Encoders put them in front of the first
 	// key frame, not necessarily in front of every one, so they are kept and
 	// put back where missing. The frame dependencies WebRTC needs for AV1 and
-	// H.265 are those of a stream without layers, unless an AV1 or VP9 encoder
-	// that makes temporal layers sets its scalability mode and asks for the
-	// layer of each frame before it encodes it. VP9 frames go out as they
+	// H.265 are those of a stream without layers, unless an encoder that
+	// makes temporal layers sets its scalability mode and asks for the layer
+	// of each frame before it encodes it. VP9 frames go out as they
 	// come, with the VP9 information of a single layer, as the Java encoders
 	// get it, or with temporal layers in flexible mode, as libvpx gives it.
 	class EncoderOutputProcessor
@@ -61,8 +61,8 @@ namespace jni
 			// Forgets the parameter sets, for a stream that starts over.
 			void Reset();
 
-			// Sets the layers of the stream, temporal ones of AV1 and VP9 only,
-			// as in L1T3. Returns false for a mode WebRTC has no structure of.
+			// Sets the layers of the stream, temporal ones only, as in L1T3.
+			// Returns false for a mode WebRTC has no structure of.
 			bool SetScalabilityMode(webrtc::ScalabilityMode mode);
 			// Lets the layers follow the bitrate WebRTC gives each.
 			void OnRatesUpdated(const webrtc::VideoBitrateAllocation & bitrates);

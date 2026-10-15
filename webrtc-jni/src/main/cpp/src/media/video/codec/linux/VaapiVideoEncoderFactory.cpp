@@ -72,7 +72,14 @@ namespace jni
 		};
 
 		if (h265) {
-			formats.push_back(CreateH265MainFormat());
+			// H.265 has no software encoder whose format would say which
+			// scalability modes WebRTC may ask for: the temporal layers the
+			// encoder makes.
+			webrtc::SdpVideoFormat format = CreateH265MainFormat();
+			format.scalability_modes = {
+				webrtc::ScalabilityMode::kL1T1, webrtc::ScalabilityMode::kL1T2, webrtc::ScalabilityMode::kL1T3
+			};
+			formats.push_back(format);
 		}
 		if (vp9) {
 			formats.push_back(webrtc::SdpVideoFormat::VP9Profile0());

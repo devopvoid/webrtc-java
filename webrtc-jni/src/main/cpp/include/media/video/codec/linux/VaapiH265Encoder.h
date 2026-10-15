@@ -21,6 +21,7 @@
 #include "media/video/codec/linux/NalUnitWriter.h"
 #include "media/video/codec/linux/VaapiEncodeSession.h"
 #include "media/video/codec/linux/VaapiLibrary.h"
+#include "media/video/codec/linux/VaapiTemporalLayers.h"
 
 #include "api/video/video_frame.h"
 #include "api/video_codecs/sdp_video_format.h"
@@ -30,6 +31,7 @@
 #include <va/va.h>
 #include <va/va_enc_hevc.h>
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -45,7 +47,13 @@ namespace jni
 	// headers for a driver that takes them, as Intel's and AMD's do. A driver
 	// that predicts only with both reference lists filled, as Intel's
 	// low-power encoder, gets each P-frame as a B-frame whose two lists hold
-	// the same previous picture ("low delay B"), as FFmpeg does. The block
+	// the same previous picture ("low delay B"), as FFmpeg does. With
+	// temporal layers (L1T2, L1T3), which need a driver that takes the slice
+	// headers, a picture refers to the one of its layer or a lower one that
+	// WebRTC's structure of the mode names, its slice NAL unit carries its
+	// temporal id, and its reference picture set keeps the pictures of the
+	// reference slots of its layer and below, so that a receiver without the
+	// upper layers misses none of them. The block
 	// sizes and coding tools are those the driver says it takes, as FFmpeg's
 	// VA-API encoder chooses them. The frame size is kept to a multiple of the
 	// smallest coding block; the coded picture is that aligned to 16 and at
@@ -70,21 +78,31 @@ namespace jni
 		private:
 			// What the driver says about the HEVC encoder it has.
 			void QueryCapabilities();
-			bool Submit(bool idr);
+			bool Submit(bool idr, const VaapiTemporalLayers::Frame & frame);
 
 			void FillSequence(VAEncSequenceParameterBufferHEVC & sequence) const;
-			void FillPicture(VAEncPictureParameterBufferHEVC & picture, bool idr) const;
-			void FillSlice(VAEncSliceParameterBufferHEVC & slice, bool idr) const;
+			void FillPicture(VAEncPictureParameterBufferHEVC & picture, bool idr,
+				const VaapiTemporalLayers::Frame & frame) const;
+			void FillSlice(VAEncSliceParameterBufferHEVC & slice, bool idr, const VaapiTemporalLayers::Frame & frame) const;
 
 			// The VPS, SPS and PPS, and the slice segment header, matching
 			// the parameters above. Each returns the bits it appended.
 			size_t WriteParameterSets(std::vector<uint8_t> & output) const;
-			size_t WriteSliceHeader(std::vector<uint8_t> & output, bool idr) const;
+			size_t WriteSliceHeader(std::vector<uint8_t> & output, bool idr, const VaapiTemporalLayers::Frame & frame) const;
 			void WriteProfileTierLevel(NalUnitWriter & writer) const;
 			// diff_cu_qp_delta_depth.
 			uint32_t CuQpDeltaDepth() const;
-			// The picture the current one refers to.
-			VAPictureHEVC Reference() const;
+			// The pictures the reference slots hold, newest first, each once,
+			// and whether the current frame refers to it: its reference
+			// picture set.
+			struct ReferencePicture
+			{
+				int slot;
+				int32_t pictureOrder;
+				bool used;
+			};
+			std::vector<ReferencePicture> ReferencePictureSet(const VaapiTemporalLayers::Frame & frame) const;
+			VAPictureHEVC Picture(const ReferencePicture & reference) const;
 
 		private:
 			VaapiLibrary & library;
@@ -122,10 +140,13 @@ namespace jni
 			uint32_t framerate;
 			bool ratesChanged;
 
-			// The picture order count since the last IDR picture, and which of
-			// the reconstructed surfaces holds the current picture.
+			// The picture order count since the last IDR picture, the temporal
+			// layers, and the picture order count and temporal id of the
+			// picture each of their reference slots holds.
 			int32_t pictureOrder;
-			int current;
+			VaapiTemporalLayers layers;
+			std::array<int32_t, 2> slotOrders;
+			std::array<int, 2> slotTemporalIds;
 			bool referenceValid;
 
 			webrtc::EncodedImageCallback * callback;
