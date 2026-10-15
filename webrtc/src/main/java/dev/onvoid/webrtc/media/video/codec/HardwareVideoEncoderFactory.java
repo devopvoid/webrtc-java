@@ -37,17 +37,18 @@ import java.util.Objects;
  * H.264 is encoded on an NVIDIA GPU with NVENC, on Windows and Linux. On
  * other GPUs it is encoded with the Media Foundation encoder of the driver on
  * Windows, and with its VA-API encoder on Linux. AV1 is encoded on GPUs that
- * have an AV1 encoder, with NVENC, Media Foundation or VA-API, as a single
- * layer, or with VA-API in temporal layers too (L1T2, L1T3); a stream that
- * asks for other SVC modes is encoded in software. H.265 (Main profile) is
- * encoded with NVENC or Media Foundation on GPUs that have an H.265 encoder.
+ * have an AV1 encoder, with NVENC, Media Foundation or VA-API. H.265 (Main
+ * profile) is encoded with NVENC or Media Foundation on GPUs that have an
+ * H.265 encoder.
  * VP9 (profile 0) is encoded on GPUs that have a VP9 encoder, which are
  * Intel's: with VA-API on Linux, and with Media Foundation on Windows only
  * with the system property {@code webrtc.hardware.vp9Encoder} set to
  * {@code true} when the factory is created, since that encoder has not been
- * tested on such a GPU yet. With VA-API, VP9 is encoded in temporal layers
- * too (L1T2, L1T3). Otherwise VP9 is encoded with libvpx. On Linux, H.265 is encoded with NVENC on NVIDIA
+ * tested on such a GPU yet. Otherwise VP9 is encoded with libvpx. On Linux, H.265 is encoded with NVENC on NVIDIA
  * GPUs and with VA-API on the GPUs of Intel and AMD whose driver encodes it.
+ * Hardware encoders produce a single layer, but for the VA-API encoders, which
+ * encode temporal layers (L1T2, L1T3) too; a stream that asks for other SVC
+ * modes is encoded in software.
  * A hardware encoder that fails to start, for example because the GPU has no
  * encoder sessions left, or fails while encoding, is replaced by the next one
  * in line, and finally by the software encoder of the same codec, so a stream

@@ -54,6 +54,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -524,7 +525,7 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	@Test
 	void av1EncodesTemporalLayers() throws Exception {
-		assertEncodesTemporalLayers(AV1, HARDWARE_AV1_REQUIRED);
+		assertEncodesTemporalLayers(this::hardwareFactory, AV1, HARDWARE_AV1_REQUIRED);
 	}
 
 	@Test
@@ -532,20 +533,40 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		// VA-API encodes VP9 in temporal layers, Media Foundation does not.
 		assumeTrue(OS.contains("linux"), "hardware VP9 encodes temporal layers on Linux only");
 
-		assertEncodesTemporalLayers(VP9, HARDWARE_VP9_REQUIRED);
+		assertEncodesTemporalLayers(this::hardwareFactory, VP9, HARDWARE_VP9_REQUIRED);
+	}
+
+	@Test
+	void h264EncodesTemporalLayers() throws Exception {
+		// VA-API encodes H.264 in temporal layers; NVENC and Media Foundation
+		// leave them to OpenH264. Received with the hardware decoders, which
+		// decode the layers too.
+		assumeTrue(OS.contains("linux"), "hardware H.264 encodes temporal layers on Linux only");
+
+		assertEncodesTemporalLayers(this::hardwareCallFactory, H264, HARDWARE_REQUIRED);
+	}
+
+	@Test
+	void h265EncodesTemporalLayers() throws Exception {
+		// There is no software H.265 to receive it, so the hardware decoders do.
+		assumeTrue(OS.contains("linux"), "hardware H.265 encodes temporal layers on Linux only");
+		assumeH265();
+
+		assertEncodesTemporalLayers(this::hardwareCallFactory, H265, true);
 	}
 
 	/**
-	 * Sends the codec in L1T2 and then L1T3, and checks that the hardware
-	 * encodes the layers, rather than handing them to the software encoder.
+	 * Sends the codec in L1T2 and then L1T3, each on a call of a factory the
+	 * supplier makes, and checks that the hardware encodes the layers, rather
+	 * than handing them to the software encoder.
 	 * Temporal layers are references between frames of one size, which a
 	 * hardware encoder can make; an SFU can then forward a lower frame rate
 	 * without asking for key frames.
 	 */
-	private void assertEncodesTemporalLayers(Predicate<RTCRtpCodecCapability> codec, boolean required)
-			throws Exception {
+	private void assertEncodesTemporalLayers(Supplier<PeerConnectionFactory> factory,
+			Predicate<RTCRtpCodecCapability> codec, boolean required) throws Exception {
 		for (String mode : new String[] { "L1T2", "L1T3" }) {
-			PeerConnectionFactory hardware = hardwareFactory();
+			PeerConnectionFactory hardware = factory.get();
 			CountDownLatch received = new CountDownLatch(30);
 
 			try (TestMediaCall call = new TestMediaCall(hardware, true, false, codec)) {

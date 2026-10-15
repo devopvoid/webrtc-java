@@ -394,12 +394,28 @@ namespace jni
 			info.codecSpecific.H264.temporal_idx = webrtc::kNoTemporalIdx;
 			info.codecSpecific.H264.base_layer_sync = false;
 			info.codecSpecific.H264.idr_frame = keyFrame;
-			return;
+
+			if (scalabilityMode == webrtc::ScalabilityMode::kL1T1) {
+				return;
+			}
+
+			// With temporal layers, the layer, and whether an upper layer frame
+			// refers to the base layer only, as OpenH264 gives them; the frame
+			// dependencies follow below. The base layer is buffer 0 in WebRTC's
+			// structures.
+			bool baseOnly = true;
+
+			for (const webrtc::CodecBufferUsage & buffer : layerFrame.Buffers()) {
+				baseOnly &= !buffer.referenced || buffer.id == 0;
+			}
+
+			info.codecSpecific.H264.temporal_idx = static_cast<uint8_t>(layerFrame.TemporalId());
+			info.codecSpecific.H264.base_layer_sync = layerFrame.TemporalId() > 0 && baseOnly;
 		}
 
 		// AV1 and H.265 have no codec specific information; WebRTC sends
-		// their frame dependencies, and those of VP9, from these, in the
-		// dependency descriptor.
+		// their frame dependencies, and those of VP9 and of H.264 with layers,
+		// from these, in the dependency descriptor.
 		info.generic_frame_info = svcController->OnEncodeDone(layerFrame);
 		info.scalability_mode = scalabilityMode;
 

@@ -350,7 +350,8 @@ namespace jni
 		referenceValid = false;
 		frameNumber = 0;
 		outputProcessor.Reset();
-		layers.Configure(mode, bitrateBps);
+		layers.Configure(mode, bitrateBps, VaapiTemporalLayers::LayerRateControl(library, VAProfileAV1Profile0,
+			entrypoint, webrtc::ScalabilityModeToNumTemporalLayers(mode)));
 
 		if (!outputProcessor.SetScalabilityMode(mode)) {
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
@@ -435,6 +436,7 @@ namespace jni
 			&& session.ReadOutput(output);
 
 		session.DropBuffers();
+
 
 		if (!encoded) {
 			return kEncodeFailed;
