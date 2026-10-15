@@ -524,14 +524,31 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	@Test
 	void av1EncodesTemporalLayers() throws Exception {
-		// Temporal layers are references between frames of one size, which a
-		// hardware encoder can make; an SFU can then forward a lower frame
-		// rate without asking for key frames.
+		assertEncodesTemporalLayers(AV1, HARDWARE_AV1_REQUIRED);
+	}
+
+	@Test
+	void vp9EncodesTemporalLayers() throws Exception {
+		// VA-API encodes VP9 in temporal layers, Media Foundation does not.
+		assumeTrue(OS.contains("linux"), "hardware VP9 encodes temporal layers on Linux only");
+
+		assertEncodesTemporalLayers(VP9, HARDWARE_VP9_REQUIRED);
+	}
+
+	/**
+	 * Sends the codec in L1T2 and then L1T3, and checks that the hardware
+	 * encodes the layers, rather than handing them to the software encoder.
+	 * Temporal layers are references between frames of one size, which a
+	 * hardware encoder can make; an SFU can then forward a lower frame rate
+	 * without asking for key frames.
+	 */
+	private void assertEncodesTemporalLayers(Predicate<RTCRtpCodecCapability> codec, boolean required)
+			throws Exception {
 		for (String mode : new String[] { "L1T2", "L1T3" }) {
 			PeerConnectionFactory hardware = hardwareFactory();
 			CountDownLatch received = new CountDownLatch(30);
 
-			try (TestMediaCall call = new TestMediaCall(hardware, true, false, AV1)) {
+			try (TestMediaCall call = new TestMediaCall(hardware, true, false, codec)) {
 				call.setVideoSize(640, 360);
 				call.negotiate();
 
@@ -560,7 +577,7 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 				track.removeSink(sink);
 				receiver.dispose();
 
-				assertHardware(String.valueOf(outbound.get("encoderImplementation")), HARDWARE_AV1_REQUIRED);
+				assertHardware(String.valueOf(outbound.get("encoderImplementation")), required);
 				assertEquals(mode, outbound.get("scalabilityMode"));
 				assertTrue(!(pliCount instanceof Number) || ((Number) pliCount).longValue() <= 1,
 						"key frames requested: " + pliCount);

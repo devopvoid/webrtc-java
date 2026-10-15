@@ -20,6 +20,7 @@
 #include "media/video/codec/EncoderOutputProcessor.h"
 #include "media/video/codec/linux/VaapiEncodeSession.h"
 #include "media/video/codec/linux/VaapiLibrary.h"
+#include "media/video/codec/linux/VaapiTemporalLayers.h"
 
 #include "api/video/video_frame.h"
 #include "api/video_codecs/sdp_video_format.h"
@@ -36,15 +37,16 @@
 namespace jni
 {
 	// Encodes VP9 profile 0 with the GPU driver's VA-API encoder, as Intel
-	// drivers provide it on Linux. Like hardware VP9 encoding on Windows, it
-	// has not run on such a GPU yet, and is used only where it is turned on.
+	// drivers provide it on Linux.
 	//
-	// It works as the H.265 one does: synchronous, one reference frame, inter
-	// frames only, the driver writing the uncompressed frame header from the
-	// parameters it is given, as FFmpeg's VA-API encoder sets them without
-	// B-frames. Every frame refreshes all eight reference slots, so that the
-	// next one can refer to it as the last frame whichever slot it names.
-	// Anything that fails is an error, upon which libvpx takes over.
+	// It works as the H.265 one does: synchronous, inter frames only, the
+	// driver writing the uncompressed frame header from the parameters it is
+	// given, as FFmpeg's VA-API encoder sets them without B-frames. Each frame
+	// refers to one frame before it: without layers the frame just before;
+	// with temporal layers (L1T2, L1T3) the one of the same layer or a lower
+	// one that WebRTC's structure of the mode names, so that a receiver can do
+	// without the upper layers. Spatial layers, and anything that fails, are
+	// left to libvpx.
 	class VaapiVp9Encoder : public webrtc::VideoEncoder
 	{
 		public:
@@ -59,10 +61,11 @@ namespace jni
 			EncoderInfo GetEncoderInfo() const override;
 
 		private:
-			bool Submit(bool keyFrame);
+			bool Submit(bool keyFrame, const VaapiTemporalLayers::Frame & frame);
 
 			void FillSequence(VAEncSequenceParameterBufferVP9 & sequence) const;
-			void FillPicture(VAEncPictureParameterBufferVP9 & picture, bool keyFrame) const;
+			void FillPicture(VAEncPictureParameterBufferVP9 & picture, bool keyFrame,
+				const VaapiTemporalLayers::Frame & frame) const;
 
 		private:
 			VaapiLibrary & library;
@@ -76,8 +79,7 @@ namespace jni
 			uint32_t framerate;
 			bool ratesChanged;
 
-			// Which of the reconstructed surfaces holds the current frame.
-			int current;
+			VaapiTemporalLayers layers;
 			bool referenceValid;
 
 			webrtc::EncodedImageCallback * callback;

@@ -22,6 +22,7 @@
 #include "common_video/h265/h265_common.h"
 #include "modules/video_coding/codecs/interface/common_constants.h"
 #include "modules/video_coding/svc/create_scalability_structure.h"
+#include "modules/video_coding/svc/scalability_mode_util.h"
 #include "modules/video_coding/svc/scalable_video_controller_no_layering.h"
 #include "modules/video_coding/utility/vp9_uncompressed_header_parser.h"
 #include "rtc_base/logging.h"
@@ -409,7 +410,10 @@ namespace jni
 			};
 		}
 
-		if (codec == webrtc::kVideoCodecVP9) {
+		if (codec == webrtc::kVideoCodecVP9 && scalabilityMode != webrtc::ScalabilityMode::kL1T1) {
+			FillVp9TemporalLayers(image, keyFrame, layerFrame, info);
+		}
+		else if (codec == webrtc::kVideoCodecVP9) {
 			// VP9 has its own RTP header, which WebRTC fills from these: one
 			// spatial and one temporal layer, the group of frames sent with
 			// every key frame.
@@ -433,6 +437,77 @@ namespace jni
 				info.codecSpecific.VP9.height[0] = image._encodedHeight;
 				info.codecSpecific.VP9.gof.CopyGofInfoVP9(gof);
 			}
+		}
+	}
+
+	void EncoderOutputProcessor::FillVp9TemporalLayers(const webrtc::EncodedImage & image, bool keyFrame,
+		const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame, webrtc::CodecSpecificInfo & info)
+	{
+		// One spatial layer and temporal ones, in flexible mode, as libvpx
+		// describes them: each picture names the pictures it refers to, by
+		// how many pictures back they are.
+		vp9Picture = keyFrame ? 0 : vp9Picture + 1;
+
+		webrtc::CodecSpecificInfoVP9 & vp9 = info.codecSpecific.VP9;
+		vp9.first_frame_in_picture = true;
+		vp9.flexible_mode = true;
+		vp9.ss_data_available = keyFrame;
+		vp9.non_ref_for_inter_layer_pred = true;
+		vp9.temporal_idx = static_cast<uint8_t>(layerFrame.TemporalId());
+		vp9.inter_layer_predicted = false;
+		vp9.gof_idx = webrtc::kNoGofIdx;
+		vp9.num_spatial_layers = 1;
+		vp9.first_active_layer = 0;
+		vp9.spatial_layer_resolution_present = keyFrame;
+		vp9.num_ref_pics = 0;
+
+		if (!keyFrame) {
+			for (const webrtc::CodecBufferUsage & buffer : layerFrame.Buffers()) {
+				if (!buffer.referenced || buffer.id < 0 || buffer.id >= webrtc::kMaxEncoderBuffers) {
+					continue;
+				}
+
+				const size_t pDiff = vp9Picture - vp9BufferPictures[buffer.id];
+				bool listed = false;
+
+				for (uint8_t i = 0; i < vp9.num_ref_pics; i++) {
+					listed |= vp9.p_diff[i] == pDiff;
+				}
+
+				if (!listed && pDiff > 0 && vp9.num_ref_pics < webrtc::kMaxVp9RefPics) {
+					vp9.p_diff[vp9.num_ref_pics++] = static_cast<uint8_t>(pDiff);
+				}
+			}
+		}
+
+		vp9.inter_pic_predicted = !keyFrame && vp9.num_ref_pics > 0;
+
+		// A switch up to a higher layer is possible where all layers above
+		// this one are switch points, as libvpx works it out.
+		const int temporalLayers = webrtc::ScalabilityModeToNumTemporalLayers(scalabilityMode);
+		vp9.temporal_up_switch = true;
+
+		for (int layer = layerFrame.TemporalId() + 1; layer < temporalLayers && info.generic_frame_info; layer++) {
+			const auto & indications = info.generic_frame_info->decode_target_indications;
+
+			vp9.temporal_up_switch &= layer < static_cast<int>(indications.size())
+				&& indications[layer] == webrtc::DecodeTargetIndication::kSwitch;
+		}
+
+		if (keyFrame) {
+			vp9.width[0] = image._encodedWidth;
+			vp9.height[0] = image._encodedHeight;
+			vp9.gof.num_frames_in_gof = 0;
+		}
+
+		for (const webrtc::CodecBufferUsage & buffer : layerFrame.Buffers()) {
+			if ((buffer.updated || keyFrame) && buffer.id >= 0 && buffer.id < webrtc::kMaxEncoderBuffers) {
+				vp9BufferPictures[buffer.id] = vp9Picture;
+			}
+		}
+
+		if (keyFrame) {
+			vp9BufferPictures.fill(0);
 		}
 	}
 
