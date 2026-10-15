@@ -74,8 +74,8 @@ namespace jni
 		uint32_t height = 0;
 
 		bool allowHighPrecisionMv = false;
-		// The interpolation filter as coded, 0 to 3, or 4 for switchable,
-		// which is what VA-API takes.
+		// The interpolation filter as coded (smooth, regular, sharp,
+		// bilinear), or 4 for switchable.
 		uint8_t interpolationFilter = 0;
 
 		bool refreshFrameContext = false;
