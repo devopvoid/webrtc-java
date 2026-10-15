@@ -32,8 +32,8 @@ namespace jni
 	// Creates VA-API encoders on the GPU whose driver encodes H.264, as Intel
 	// and AMD drivers do. It offers H.264 in the profiles WebRTC's software
 	// encoder offers too, and only with packetization mode 1: mode 0 needs
-	// each NAL unit to fit a packet. It offers H.265 Main and VP9 profile 0
-	// as well where the driver encodes them.
+	// each NAL unit to fit a packet. It offers H.265 Main, VP9 profile 0 and
+	// AV1 profile 0 as well where the driver encodes them.
 	class VaapiVideoEncoderFactory : public webrtc::VideoEncoderFactory
 	{
 		public:
@@ -49,7 +49,7 @@ namespace jni
 
 		private:
 			VaapiVideoEncoderFactory(VaapiLibrary & library, bool h265, VAEntrypoint h265Entrypoint, bool vp9,
-				VAEntrypoint vp9Entrypoint);
+				VAEntrypoint vp9Entrypoint, bool av1, VAEntrypoint av1Entrypoint);
 
 		private:
 			VaapiLibrary & library;
@@ -57,6 +57,8 @@ namespace jni
 			const VAEntrypoint h265Entrypoint;
 			const bool vp9;
 			const VAEntrypoint vp9Entrypoint;
+			const bool av1;
+			const VAEntrypoint av1Entrypoint;
 	};
 }
 

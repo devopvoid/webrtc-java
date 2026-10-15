@@ -424,6 +424,21 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	void hardwareFollowsResolutionChange() throws Exception {
 		assumeVp9Platform();
 
+		assertFollowsResolutionChange(VP9, HardwareVideoDecoderIntegrationTest::expectVp9Hardware);
+	}
+
+	@Test
+	void hardwareFollowsAv1ResolutionChange() throws Exception {
+		assertFollowsResolutionChange(AV1, implementation -> expectHardware(implementation, HARDWARE_AV1_REQUIRED));
+	}
+
+	/**
+	 * Receives video that halves its size during the call, and checks that the
+	 * hardware decoder follows it, rather than handing over to the software
+	 * decoder.
+	 */
+	private void assertFollowsResolutionChange(Predicate<RTCRtpCodecCapability> codec,
+			Consumer<String> expectHardware) throws Exception {
 		PeerConnectionFactory hardware = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
 				.setVideoDecoderFactory(new HardwareVideoDecoderFactory())
@@ -432,7 +447,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		CountDownLatch full = new CountDownLatch(10);
 		CountDownLatch half = new CountDownLatch(10);
 
-		try (TestMediaCall call = new TestMediaCall(hardware, true, false, VP9)) {
+		try (TestMediaCall call = new TestMediaCall(hardware, true, false, codec)) {
 			// Large enough that half the size is still one every hardware
 			// decoder takes: NVDEC does not decode VP9 below 128 pixels on the
 			// shorter side, and falls back to libvpx for such a stream.
@@ -462,7 +477,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 			String implementation = decoderImplementationOf(call);
 
-			expectVp9Hardware(implementation);
+			expectHardware.accept(implementation);
 
 			// The sender restarts at half the size, with a key frame; the
 			// decoder has to start a session for it.
@@ -529,6 +544,28 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		// superframe index, which VideoToolbox does not decode, and which a
 		// Media Foundation or NVDEC decoder is not known to.
 		assertFalse(isHardware(result.decoder), result.decoder);
+	}
+
+	@Test
+	void av1NeedsNoKeyFrames() throws Exception {
+		CallResult result = receiveVideo(hardwareFactory(), AV1, 320, 240, null, 60);
+
+		expectHardware(result.decoder, HARDWARE_AV1_REQUIRED);
+
+		// As with VP9: a stream that is decoded has the one key frame it
+		// started with.
+		assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+		assertTrue(result.keyFrames <= 2, "key frames decoded: " + result.keyFrames);
+	}
+
+	@Test
+	void av1TemporalLayers() throws Exception {
+		// Temporal layers are one spatial layer, which the hardware decodes.
+		CallResult result = receiveVideo(hardwareFactory(), AV1, 320, 240, "L1T3", 60);
+
+		expectHardware(result.decoder, HARDWARE_AV1_REQUIRED);
+
+		assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
 	}
 
 	private PeerConnectionFactory hardwareFactory() {

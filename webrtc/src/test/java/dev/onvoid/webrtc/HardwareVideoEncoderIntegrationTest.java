@@ -18,6 +18,7 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
@@ -41,6 +42,7 @@ import dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -436,6 +438,187 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		finally {
 			hardware.dispose();
 		}
+	}
+
+	@Test
+	void av1EncodesOddSize() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		// AMD's encoder pads the width to a multiple of 8, so the encoder asks
+		// for frames of that alignment, rather than sending the padding.
+		try (Run run = new Run(hardware, AV1, 641, 361)) {
+			run.awaitFrames(10);
+
+			assertAv1(run);
+			assertEquals(0, run.width.get() % 8, "width " + run.width.get());
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1FollowsResolutionChange() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try (Run run = new Run(hardware, AV1, 640, 360)) {
+			run.awaitFrames(10);
+
+			// A new size starts the encoder over, with a new session and a
+			// key frame with a new sequence header.
+			run.call.setVideoSize(960, 540);
+			run.awaitWidth(960);
+
+			run.call.setVideoSize(640, 360);
+			run.awaitWidth(640);
+
+			assertAv1(run);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1FollowsBitrateCap() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try (Run run = new Run(hardware, AV1, 640, 360)) {
+			run.awaitFrames(10);
+
+			// The encoder is reconfigured in place, without a new session or
+			// a lost stream.
+			run.setMaxBitrate(150_000);
+			run.awaitTargetBitrate(150_000);
+			run.awaitMoreFrames(10);
+
+			run.setMaxBitrate(2_000_000);
+			run.awaitMoreFrames(10);
+
+			assertAv1(run);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1RestartsCleanly() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try {
+			// A session left behind by each call would run the hardware out of
+			// sessions, and the later calls would be encoded by libaom.
+			for (int i = 0; i < 10; i++) {
+				try (Run run = new Run(hardware, AV1, 640, 360)) {
+					run.awaitFrames(5);
+
+					assertAv1(run);
+				}
+			}
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1EncodesTemporalLayers() throws Exception {
+		// Temporal layers are references between frames of one size, which a
+		// hardware encoder can make; an SFU can then forward a lower frame
+		// rate without asking for key frames.
+		for (String mode : new String[] { "L1T2", "L1T3" }) {
+			PeerConnectionFactory hardware = hardwareFactory();
+			CountDownLatch received = new CountDownLatch(30);
+
+			try (TestMediaCall call = new TestMediaCall(hardware, true, false, AV1)) {
+				call.setVideoSize(640, 360);
+				call.negotiate();
+
+				RTCRtpReceiver receiver = call.getReceiver("video");
+				VideoTrack track = (VideoTrack) receiver.getTrack();
+				VideoTrackSink sink = frame -> {
+					frame.release();
+					received.countDown();
+				};
+				track.addSink(sink);
+
+				call.awaitConnected();
+
+				RTCRtpSendParameters parameters = call.getVideoSender().getParameters();
+				parameters.encodings.get(0).scalabilityMode = mode;
+				call.getVideoSender().setParameters(parameters);
+
+				call.startMedia();
+
+				assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received in " + mode);
+
+				Map<String, Object> outbound = awaitOutboundStats(call, "encoderImplementation", "scalabilityMode");
+				Map<String, Object> inbound = call.getInboundVideoStats();
+				Object pliCount = inbound == null ? null : inbound.get("pliCount");
+
+				track.removeSink(sink);
+				receiver.dispose();
+
+				assertHardware(String.valueOf(outbound.get("encoderImplementation")), HARDWARE_AV1_REQUIRED);
+				assertEquals(mode, outbound.get("scalabilityMode"));
+				assertTrue(!(pliCount instanceof Number) || ((Number) pliCount).longValue() <= 1,
+						"key frames requested: " + pliCount);
+			}
+			finally {
+				hardware.dispose();
+			}
+		}
+	}
+
+	/**
+	 * Returns the outbound video statistics once they have all the given
+	 * members, which come shortly after the encoder.
+	 */
+	private static Map<String, Object> awaitOutboundStats(TestMediaCall call, String... members)
+			throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+		Map<String, Object> outbound = null;
+
+		while (System.nanoTime() < deadline) {
+			outbound = call.getOutboundVideoStats();
+
+			if (outbound != null && Arrays.stream(members).allMatch(outbound::containsKey)) {
+				return outbound;
+			}
+
+			Thread.sleep(100);
+		}
+
+		assertNotNull(outbound, "no outbound statistics");
+		return outbound;
+	}
+
+	@Test
+	void av1BelowHardwareMinimumStaysAv1() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		// Smaller than AMD's AV1 encoder takes (320x128); libaom encodes it
+		// there, and the stream goes on in AV1 either way.
+		try (Run run = new Run(hardware, AV1, 160, 90)) {
+			run.awaitFrames(10);
+
+			assertEquals("video/AV1", run.codec());
+			assertEquals(160, run.width.get());
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	/**
+	 * Checks that the call is still in AV1 and, where the GPU encodes AV1, is
+	 * encoded in hardware, rather than handed over to libaom; skips the test
+	 * elsewhere, unless hardware is required.
+	 */
+	private static void assertAv1(Run run) throws InterruptedException {
+		assertEquals("video/AV1", run.codec());
+		assertHardware(run.implementation(), HARDWARE_AV1_REQUIRED);
 	}
 
 	@Test
