@@ -55,10 +55,8 @@ import java.util.Objects;
  * are decoded on NVIDIA GPUs with NVDEC, each where the GPU decodes it (AV1
  * since Ampere), loaded from the NVIDIA driver when the factory is made; a
  * machine without the driver is not affected. Streams with spatial layers go
- * to libvpx and dav1d. VP9 (profile 0) is decoded with VA-API on the GPUs of
- * Intel and AMD only with the system property
- * {@code webrtc.hardware.vaapiExperimental} set to {@code true}: the decoder
- * has not been tested on such a GPU yet.
+ * to libvpx and dav1d. On the GPUs of Intel and AMD, VP9 (profile 0) and
+ * H.265 (Main profile) are decoded with VA-API, where the driver decodes them.
  * <p>
  * The supported codecs are those of a {@link DefaultVideoDecoderFactory}, in
  * the same order. On Windows and Linux, H.264 High 4:4:4 Predictive,

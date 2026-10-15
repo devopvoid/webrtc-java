@@ -70,9 +70,4 @@ namespace jni
 	{
 		return JavaBooleanProperty(kHardwareVp9EncoderProperty);
 	}
-
-	bool IsExperimentalVaapiEnabled()
-	{
-		return JavaBooleanProperty(kExperimentalVaapiProperty);
-	}
 }

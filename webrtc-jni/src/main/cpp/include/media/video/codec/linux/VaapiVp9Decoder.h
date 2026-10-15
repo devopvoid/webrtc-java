@@ -35,8 +35,7 @@
 namespace jni
 {
 	// Decodes VP9 profile 0 with the GPU driver's VA-API decoder, as Intel and
-	// AMD drivers provide it on Linux. Experimental: it has not run on such a
-	// GPU yet, and is used only where it is turned on.
+	// AMD drivers provide it on Linux.
 	//
 	// VA-API leaves the parsing of the stream to the application: the frame
 	// headers are parsed here, the driver decodes the rest, the compressed

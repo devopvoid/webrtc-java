@@ -45,6 +45,12 @@ namespace jni
 		// blocks and leaves the conformance window to the SPS it is given.
 		constexpr uint32_t kPictureAlignment = 16;
 
+		// AMD's encoder takes no picture narrower than 384 or lower than 128
+		// luma samples; a smaller frame is coded in a picture of that size and
+		// cropped, as WebRTC scales frames down that far.
+		constexpr uint32_t kMinPictureWidth = 384;
+		constexpr uint32_t kMinPictureHeight = 128;
+
 		// slice_pic_order_cnt_lsb has 8 bits.
 		constexpr uint32_t kLog2MaxPicOrderCntLsb = 8;
 
@@ -222,8 +228,10 @@ namespace jni
 		codecSettings.width -= codecSettings.width % alignment;
 		codecSettings.height -= codecSettings.height % alignment;
 		const uint32_t pictureAlignment = std::max(alignment, kPictureAlignment);
-		codedWidth = (codecSettings.width + pictureAlignment - 1) / pictureAlignment * pictureAlignment;
-		codedHeight = (codecSettings.height + pictureAlignment - 1) / pictureAlignment * pictureAlignment;
+		codedWidth = std::max((codecSettings.width + pictureAlignment - 1) / pictureAlignment * pictureAlignment,
+			kMinPictureWidth);
+		codedHeight = std::max((codecSettings.height + pictureAlignment - 1) / pictureAlignment * pictureAlignment,
+			kMinPictureHeight);
 		widthInCtbs = (codedWidth + ctbSize - 1) / ctbSize;
 		heightInCtbs = (codedHeight + ctbSize - 1) / ctbSize;
 		bitrateBps = std::max(1u, codecSettings.startBitrate) * 1000;

@@ -24,17 +24,10 @@ namespace jni
 	// tested on one.
 	constexpr const char * kHardwareVp9EncoderProperty = "webrtc.hardware.vp9Encoder";
 
-	// The Java system property that turns on VA-API decoding, which is off by
-	// default: it has not been tested on an Intel or AMD GPU under Linux yet.
-	constexpr const char * kExperimentalVaapiProperty = "webrtc.hardware.vaapiExperimental";
-
 	// Whether hardware VP9 encoding is turned on: the Java system property
 	// above is "true", as Boolean.getBoolean has it. Callable from any thread;
 	// false where Java cannot be asked, for one with an exception pending.
 	bool IsHardwareVp9EncoderEnabled();
-
-	// Whether VA-API decoding is turned on, the same way.
-	bool IsExperimentalVaapiEnabled();
 }
 
 #endif

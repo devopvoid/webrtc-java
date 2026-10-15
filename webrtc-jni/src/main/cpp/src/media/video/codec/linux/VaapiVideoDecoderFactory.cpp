@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
+
 #include "media/video/codec/linux/VaapiVideoDecoderFactory.h"
+#include "media/video/codec/H265Format.h"
+#include "media/video/codec/linux/VaapiH265Decoder.h"
 #include "media/video/codec/linux/VaapiVp9Decoder.h"
 
 #include "rtc_base/logging.h"
@@ -30,29 +33,49 @@ namespace jni
 		}
 
 		const bool vp9 = library->Decodes(VAProfileVP9Profile0);
+		const bool h265 = library->Decodes(VAProfileHEVCMain);
 
-		RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") VP9 decoding: " << vp9;
+		RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") VP9 decoding: " << vp9 << ", H.265 decoding: "
+			<< h265;
 
-		if (!vp9) {
+		if (!vp9 && !h265) {
 			return nullptr;
 		}
 
-		return std::unique_ptr<VaapiVideoDecoderFactory>(new VaapiVideoDecoderFactory(*library));
+		return std::unique_ptr<VaapiVideoDecoderFactory>(new VaapiVideoDecoderFactory(*library, vp9, h265));
 	}
 
-	VaapiVideoDecoderFactory::VaapiVideoDecoderFactory(VaapiLibrary & library) :
-		library(library)
+	VaapiVideoDecoderFactory::VaapiVideoDecoderFactory(VaapiLibrary & library, bool vp9, bool h265) :
+		library(library),
+		vp9(vp9),
+		h265(h265)
 	{
 	}
 
 	std::vector<webrtc::SdpVideoFormat> VaapiVideoDecoderFactory::GetSupportedFormats() const
 	{
-		return { webrtc::SdpVideoFormat::VP9Profile0() };
+		std::vector<webrtc::SdpVideoFormat> formats;
+
+		if (vp9) {
+			formats.push_back(webrtc::SdpVideoFormat::VP9Profile0());
+		}
+		if (h265) {
+			formats.push_back(CreateH265MainFormat());
+		}
+
+		return formats;
 	}
 
 	std::unique_ptr<webrtc::VideoDecoder> VaapiVideoDecoderFactory::Create(const webrtc::Environment & env,
 		const webrtc::SdpVideoFormat & format)
 	{
-		return std::make_unique<VaapiVp9Decoder>(library);
+		if (h265 && format.IsSameCodec(CreateH265MainFormat())) {
+			return std::make_unique<VaapiH265Decoder>(library);
+		}
+		if (vp9 && format.IsSameCodec(webrtc::SdpVideoFormat::VP9Profile0())) {
+			return std::make_unique<VaapiVp9Decoder>(library);
+		}
+
+		return nullptr;
 	}
 }
