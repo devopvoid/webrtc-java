@@ -65,21 +65,6 @@ namespace jni
 		// and other state carry over from.
 		constexpr uint8_t kPrimaryRefLast = 0;
 
-		// The slots of the two reference buffers L1T3 has, and the frame being
-		// encoded.
-		constexpr int kReconstructedSurfaces = 3;
-
-		// The layers of the frames after a key frame, as
-		// VAEncMiscParameterTemporalLayerStructure takes them, of L1T2 and
-		// L1T3 as WebRTC's structures make them: L1T3 is 0, 2, 1, 2.
-		const std::vector<uint32_t> kL1T2Pattern = { 1, 0 };
-		const std::vector<uint32_t> kL1T3Pattern = { 2, 1, 2, 0 };
-
-		// The share of the bitrate up to each layer until WebRTC gives its
-		// own, as WebRTC splits it for temporal layers.
-		constexpr double kL1T2Shares[] = { 0.6, 1.0 };
-		constexpr double kL1T3Shares[] = { 0.4, 0.6, 1.0 };
-
 		// What a frame that cannot be encoded returns: libaom takes over the
 		// stream, which stays in AV1, rather than WebRTC changing the codec.
 		constexpr int32_t kEncodeFailed = WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
@@ -128,6 +113,22 @@ namespace jni
 
 		// The level of a stream that fits none.
 		constexpr uint8_t kMaxParametersLevel = 31;
+
+		// ref_frame_idx: every reference frame names the first reference of
+		// the frame, but golden, which names the second where there is one.
+		std::array<uint8_t, kRefsPerFrame> RefFrameIdx(const VaapiTemporalLayers::Frame & frame)
+		{
+			std::array<uint8_t, kRefsPerFrame> refFrameIdx = {};
+
+			if (!frame.references.empty()) {
+				refFrameIdx.fill(static_cast<uint8_t>(frame.references[0]));
+			}
+			if (frame.references.size() > 1) {
+				refFrameIdx[kGoldenIndex] = static_cast<uint8_t>(frame.references[1]);
+			}
+
+			return refFrameIdx;
+		}
 
 		uint32_t Align(uint32_t value, uint32_t alignment)
 		{
@@ -253,7 +254,6 @@ namespace jni
 		ratesChanged(false),
 		obuSizeLength(0),
 		txMode(0),
-		temporalLayers(1),
 		referenceValid(false),
 		frameNumber(0),
 		callback(nullptr),
@@ -347,18 +347,10 @@ namespace jni
 		bitrateBps = std::max(1u, codecSettings.startBitrate) * 1000;
 		framerate = std::max(1u, codecSettings.maxFramerate);
 		ratesChanged = true;
-		temporalLayers = mode == webrtc::ScalabilityMode::kL1T3 ? 3 : mode == webrtc::ScalabilityMode::kL1T2 ? 2 : 1;
-		slots.fill(-1);
 		referenceValid = false;
 		frameNumber = 0;
 		outputProcessor.Reset();
-
-		layerBitratesBps.clear();
-
-		for (int layer = 0; layer < temporalLayers && temporalLayers > 1; layer++) {
-			const double share = temporalLayers == 3 ? kL1T3Shares[layer] : kL1T2Shares[layer];
-			layerBitratesBps.push_back(static_cast<uint32_t>(bitrateBps * share));
-		}
+		layers.Configure(mode, bitrateBps);
 
 		if (!outputProcessor.SetScalabilityMode(mode)) {
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
@@ -368,7 +360,7 @@ namespace jni
 		const uint32_t surfaceHeight = Align(codecSettings.height, kSuperblockSize);
 
 		if (!session.Create(VAProfileAV1Profile0, entrypoint, codecSettings.width, codecSettings.height, surfaceWidth,
-			surfaceHeight, kPackedHeaders, kReconstructedSurfaces))
+			surfaceHeight, kPackedHeaders, VaapiTemporalLayers::kReconstructedSurfaces))
 		{
 			Release();
 			return WEBRTC_VIDEO_CODEC_ERROR;
@@ -427,10 +419,9 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_OK;
 		}
 
-		FrameReferences references;
-		const int surface = FreeSurface();
+		const auto layerPlan = layers.Plan(keyFrame, *layerFrame);
 
-		if (surface < 0 || !PlanReferences(keyFrame, *layerFrame, references)) {
+		if (!layerPlan) {
 			RTC_LOG(LS_WARNING) << implementationName << " AV1: a frame refers to a slot that holds no frame";
 			return kEncodeFailed;
 		}
@@ -440,7 +431,7 @@ namespace jni
 		// A frame up to the alignment larger is cropped; one of another size,
 		// which raced with a change of size, is scaled.
 		const bool encoded = session.Upload(frame, static_cast<int>(codecSettings.width),
-			static_cast<int>(codecSettings.height), kSizeAlignment - 1) && Submit(keyFrame, references, surface)
+			static_cast<int>(codecSettings.height), kSizeAlignment - 1) && Submit(keyFrame, *layerPlan)
 			&& session.ReadOutput(output);
 
 		session.DropBuffers();
@@ -463,12 +454,7 @@ namespace jni
 			return kEncodeFailed;
 		}
 
-		// The slots the frame replaces hold it now.
-		for (int slot = 0; slot < static_cast<int>(slots.size()); slot++) {
-			if (references.refreshFrameFlags & (1 << slot)) {
-				slots[slot] = surface;
-			}
-		}
+		layers.Commit(*layerPlan);
 
 		referenceValid = true;
 		frameNumber++;
@@ -479,81 +465,11 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool VaapiAv1Encoder::PlanReferences(bool keyFrame,
-		const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame, FrameReferences & references) const
-	{
-		references.temporalId = layerFrame.TemporalId();
-
-		// A key frame replaces every slot.
-		if (keyFrame) {
-			references.refreshFrameFlags = 0xFF;
-			return true;
-		}
-
-		std::vector<int> referenced;
-
-		for (const webrtc::CodecBufferUsage & buffer : layerFrame.Buffers()) {
-			if (buffer.id < 0 || buffer.id >= static_cast<int>(slots.size())) {
-				return false;
-			}
-			if (buffer.referenced) {
-				if (slots[buffer.id] < 0) {
-					return false;
-				}
-
-				referenced.push_back(buffer.id);
-			}
-			if (buffer.updated) {
-				references.refreshFrameFlags |= static_cast<uint8_t>(1 << buffer.id);
-			}
-		}
-
-		if (referenced.empty()) {
-			return false;
-		}
-
-		// Every reference frame names the first reference, but golden, which
-		// names the second where there is one.
-		references.refFrameIdx.fill(static_cast<uint8_t>(referenced[0]));
-
-		if (referenced.size() > 1) {
-			references.refFrameIdx[kGoldenIndex] = static_cast<uint8_t>(referenced[1]);
-			references.golden = true;
-		}
-
-		return true;
-	}
-
-	bool VaapiAv1Encoder::AddRateControl(bool keyFrame)
-	{
-		// No initial quantizer: the rate control picks its own, as FFmpeg
-		// leaves it.
-		if (temporalLayers == 1) {
-			return session.AddRateControl(bitrateBps, framerate, 0);
-		}
-
-		// Without a rate control of each layer, AMD's driver gives the upper
-		// layers next to no bits.
-		return session.AddLayerRateControl(layerBitratesBps, framerate,
-			temporalLayers == 3 ? kL1T3Pattern : kL1T2Pattern, keyFrame);
-	}
-
-	int VaapiAv1Encoder::FreeSurface() const
-	{
-		for (int surface = 0; surface < kReconstructedSurfaces; surface++) {
-			if (std::find(slots.begin(), slots.end(), surface) == slots.end()) {
-				return surface;
-			}
-		}
-
-		return -1;
-	}
-
-	bool VaapiAv1Encoder::Submit(bool keyFrame, const FrameReferences & references, int surface)
+	bool VaapiAv1Encoder::Submit(bool keyFrame, const VaapiTemporalLayers::Frame & frame)
 	{
 		const uint32_t sbCols = Align(codecSettings.width, kSuperblockSize) / kSuperblockSize;
 		const uint32_t sbRows = Align(codecSettings.height, kSuperblockSize) / kSuperblockSize;
-		const bool layered = temporalLayers > 1;
+		const bool layered = layers.Count() > 1;
 
 		if (keyFrame) {
 			VAEncSequenceParameterBufferAV1 sequence = {};
@@ -574,20 +490,20 @@ namespace jni
 			}
 		}
 
-		if ((keyFrame || ratesChanged) && !AddRateControl(keyFrame)) {
+		if ((keyFrame || ratesChanged) && !layers.AddRateControl(session, bitrateBps, framerate, keyFrame)) {
 			return false;
 		}
 
 		std::vector<uint8_t> frameHeader;
 		FrameHeaderLayout layout;
-		WriteFrameHeader(frameHeader, layout, keyFrame, references);
+		WriteFrameHeader(frameHeader, layout, keyFrame, frame);
 
 		VAEncPictureParameterBufferAV1 picture = {};
 		picture.frame_width_minus_1 = static_cast<uint16_t>(codecSettings.width - 1);
 		picture.frame_height_minus_1 = static_cast<uint16_t>(codecSettings.height - 1);
-		picture.reconstructed_frame = session.Reconstructed(surface);
+		picture.reconstructed_frame = session.Reconstructed(frame.surface);
 		picture.coded_buf = session.CodedBuffer();
-		picture.refresh_frame_flags = references.refreshFrameFlags;
+		picture.refresh_frame_flags = frame.refreshFlags;
 
 		for (VASurfaceID & reference : picture.reference_frames) {
 			reference = VA_INVALID_SURFACE;
@@ -599,18 +515,19 @@ namespace jni
 			picture.picture_flags.bits.error_resilient_mode = 1;
 		}
 		else {
-			for (int slot = 0; slot < static_cast<int>(slots.size()); slot++) {
-				if (slots[slot] >= 0) {
-					picture.reference_frames[slot] = session.Reconstructed(slots[slot]);
+			for (int slot = 0; slot < layers.SlotCount(); slot++) {
+				if (layers.Surface(slot) >= 0) {
+					picture.reference_frames[slot] = session.Reconstructed(layers.Surface(slot));
 				}
 			}
 
-			std::copy(references.refFrameIdx.begin(), references.refFrameIdx.end(), picture.ref_frame_idx);
+			const std::array<uint8_t, kRefsPerFrame> refFrameIdx = RefFrameIdx(frame);
+			std::copy(refFrameIdx.begin(), refFrameIdx.end(), picture.ref_frame_idx);
 
 			picture.primary_ref_frame = kPrimaryRefLast;
 			picture.ref_frame_ctrl_l0.fields.search_idx0 = kLastFrame;
 
-			if (references.golden) {
+			if (frame.references.size() > 1) {
 				picture.ref_frame_ctrl_l0.fields.search_idx1 = kGoldenFrame;
 			}
 
@@ -618,10 +535,10 @@ namespace jni
 		}
 
 		if (layered) {
-			picture.temporal_id = static_cast<uint8_t>(references.temporalId);
-			picture.hierarchical_level_plus1 = static_cast<uint8_t>(references.temporalId + 1);
+			picture.temporal_id = static_cast<uint8_t>(frame.temporalId);
+			picture.hierarchical_level_plus1 = static_cast<uint8_t>(frame.temporalId + 1);
 			picture.tile_group_obu_hdr_info.bits.obu_extension_flag = 1;
-			picture.tile_group_obu_hdr_info.bits.temporal_id = static_cast<uint8_t>(references.temporalId);
+			picture.tile_group_obu_hdr_info.bits.temporal_id = static_cast<uint8_t>(frame.temporalId);
 		}
 
 		picture.order_hint = static_cast<uint8_t>(frameNumber);
@@ -678,6 +595,8 @@ namespace jni
 		// point for each, from all layers down to the lowest. Then
 		// operating_point_idc, of spatial layer 0 and those temporal layers,
 		// seq_level_idx, and seq_tier above level 3.3.
+		const int temporalLayers = layers.Count();
+
 		writer.Put(temporalLayers - 1, 5);
 
 		for (int point = 0; point < temporalLayers; point++) {
@@ -731,11 +650,12 @@ namespace jni
 	}
 
 	void VaapiAv1Encoder::WriteFrameHeader(std::vector<uint8_t> & obu, FrameHeaderLayout & layout, bool keyFrame,
-		const FrameReferences & references) const
+		const VaapiTemporalLayers::Frame & frame) const
 	{
 		// uncompressed_header, section 5.9, as FFmpeg's VA-API encoder writes
 		// it, for the sequence header above.
-		const bool layered = temporalLayers > 1;
+		const bool layered = layers.Count() > 1;
+		const std::array<uint8_t, kRefsPerFrame> refFrameIdx = RefFrameIdx(frame);
 		const uint32_t miCols = 2 * ((codecSettings.width + 7) >> 3);
 		const uint32_t miRows = 2 * ((codecSettings.height + 7) >> 3);
 		const uint32_t sbCols = (miCols + 15) >> 4;
@@ -762,12 +682,12 @@ namespace jni
 		if (!keyFrame) {
 			// primary_ref_frame, refresh_frame_flags.
 			writer.Put(kPrimaryRefLast, 3);
-			writer.Put(references.refreshFrameFlags, 8);
+			writer.Put(frame.refreshFlags, 8);
 			// frame_refs_short_signaling, then ref_frame_idx.
 			writer.Put(0, 1);
 
 			for (int i = 0; i < kRefsPerFrame; i++) {
-				writer.Put(references.refFrameIdx[i], 3);
+				writer.Put(refFrameIdx[i], 3);
 			}
 		}
 
@@ -849,7 +769,7 @@ namespace jni
 		writer.TrailingBits();
 
 		obu = MakeObu(kObuFrameHeader, writer.Bytes(), obuSizeLength,
-			layered ? std::optional<int>(references.temporalId) : std::nullopt);
+			layered ? std::optional<int>(frame.temporalId) : std::nullopt);
 		layout.size = static_cast<uint32_t>(obu.size() * 8);
 	}
 
@@ -882,16 +802,7 @@ namespace jni
 
 		bitrateBps = bitrate;
 		outputProcessor.OnRatesUpdated(parameters.bitrate);
-
-		// The bitrate of each temporal layer, counting those below it.
-		uint32_t sum = 0;
-
-		for (int layer = 0; layer < static_cast<int>(layerBitratesBps.size()); layer++) {
-			sum += parameters.bitrate.GetBitrate(0, layer);
-			// A layer WebRTC gives no bitrate is not encoded; it keeps the
-			// rate of the one below, which the driver takes.
-			layerBitratesBps[layer] = std::max(sum, 1u);
-		}
+		layers.OnRatesUpdated(parameters.bitrate);
 
 		if (parameters.framerate_fps >= 1.0) {
 			framerate = static_cast<uint32_t>(parameters.framerate_fps + 0.5);
@@ -911,13 +822,7 @@ namespace jni
 		info.scaling_settings = outputProcessor.GetScalingSettings();
 		info.requested_resolution_alignment = kSizeAlignment;
 
-		// With temporal layers, the share of the frame rate up to each.
-		if (temporalLayers > 1) {
-			for (int layer = 0; layer < temporalLayers; layer++) {
-				info.fps_allocation[0].push_back(static_cast<uint8_t>(
-					EncoderInfo::kMaxFramerateFraction >> (temporalLayers - 1 - layer)));
-			}
-		}
+		layers.FillFpsAllocation(info);
 
 		return info;
 	}

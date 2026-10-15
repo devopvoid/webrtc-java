@@ -46,8 +46,13 @@ namespace jni
 		constexpr uint8_t kFilterLevel = 16;
 		constexpr uint8_t kSharpnessLevel = 4;
 
-		// The reference slot the next frame refers to as its last frame.
-		constexpr uint32_t kLastSlot = 0;
+		// The reference frames LAST and GOLDEN in ref_frame_ctrl_l0.
+		constexpr uint32_t kLastFrame = 1;
+		constexpr uint32_t kGoldenFrame = 2;
+
+		// What a frame that cannot be encoded returns: libvpx takes over the
+		// stream, which stays in VP9, rather than WebRTC changing the codec.
+		constexpr int32_t kEncodeFailed = WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 
 		uint32_t Align(uint32_t value, uint32_t alignment)
 		{
@@ -66,7 +71,6 @@ namespace jni
 		bitrateBps(0),
 		framerate(30),
 		ratesChanged(false),
-		current(0),
 		referenceValid(false),
 		callback(nullptr),
 		outputProcessor(webrtc::kVideoCodecVP9, format)
@@ -86,8 +90,19 @@ namespace jni
 		if (settings->numberOfSimulcastStreams > 1) {
 			return WEBRTC_VIDEO_CODEC_ERR_SIMULCAST_PARAMETERS_NOT_SUPPORTED;
 		}
-		// One spatial and one temporal layer is all this encoder produces.
-		if (settings->VP9().numberOfSpatialLayers > 1 || settings->VP9().numberOfTemporalLayers > 1) {
+		// Temporal layers; spatial ones are left to libvpx.
+		if (settings->VP9().numberOfSpatialLayers > 1) {
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
+
+		const int temporalLayers = settings->VP9().numberOfTemporalLayers;
+		const webrtc::ScalabilityMode mode = settings->GetScalabilityMode().value_or(temporalLayers == 3
+			? webrtc::ScalabilityMode::kL1T3
+			: temporalLayers == 2 ? webrtc::ScalabilityMode::kL1T2 : webrtc::ScalabilityMode::kL1T1);
+
+		if (mode != webrtc::ScalabilityMode::kL1T1 && mode != webrtc::ScalabilityMode::kL1T2
+			&& mode != webrtc::ScalabilityMode::kL1T3)
+		{
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 
@@ -97,14 +112,19 @@ namespace jni
 		bitrateBps = std::max(1u, codecSettings.startBitrate) * 1000;
 		framerate = std::max(1u, codecSettings.maxFramerate);
 		ratesChanged = true;
-		current = 0;
 		referenceValid = false;
 		outputProcessor.Reset();
+		layers.Configure(mode, bitrateBps);
+
+		if (!outputProcessor.SetScalabilityMode(mode)) {
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
 
 		const uint32_t surfaceWidth = Align(codecSettings.width, kSurfaceAlignment);
 		const uint32_t surfaceHeight = Align(codecSettings.height, kSurfaceAlignment);
 
-		if (!session.Create(VAProfileVP9Profile0, entrypoint, surfaceWidth, surfaceHeight, surfaceWidth, surfaceHeight))
+		if (!session.Create(VAProfileVP9Profile0, entrypoint, surfaceWidth, surfaceHeight, surfaceWidth, surfaceHeight,
+			VA_ENC_PACKED_HEADER_NONE, VaapiTemporalLayers::kReconstructedSurfaces))
 		{
 			Release();
 			return WEBRTC_VIDEO_CODEC_ERROR;
@@ -113,7 +133,7 @@ namespace jni
 		initialized = true;
 
 		RTC_LOG(LS_INFO) << implementationName << " VP9 initialized: " << codecSettings.width << "x"
-			<< codecSettings.height << " at " << bitrateBps << " bps";
+			<< codecSettings.height << " at " << bitrateBps << " bps, " << webrtc::ScalabilityModeToString(mode);
 
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
@@ -150,17 +170,31 @@ namespace jni
 			});
 		}
 
+		const auto layerFrame = outputProcessor.NextFrameConfig(keyFrame);
+
+		// No layer is encoded now, as when WebRTC gives none a bitrate.
+		if (!layerFrame) {
+			return WEBRTC_VIDEO_CODEC_OK;
+		}
+
+		const auto layerPlan = layers.Plan(keyFrame, *layerFrame);
+
+		if (!layerPlan) {
+			RTC_LOG(LS_WARNING) << implementationName << " VP9: a frame refers to a slot that holds no frame";
+			return kEncodeFailed;
+		}
+
 		std::vector<uint8_t> output;
 
 		// VP9 codes any size, so the frame is taken as it is, and scaled only
 		// if it raced with a change of size.
 		const bool encoded = session.Upload(frame, static_cast<int>(codecSettings.width),
-			static_cast<int>(codecSettings.height), 0) && Submit(keyFrame) && session.ReadOutput(output);
+			static_cast<int>(codecSettings.height), 0) && Submit(keyFrame, *layerPlan) && session.ReadOutput(output);
 
 		session.DropBuffers();
 
 		if (!encoded) {
-			return WEBRTC_VIDEO_CODEC_ERROR;
+			return kEncodeFailed;
 		}
 
 		webrtc::EncodedImage image;
@@ -173,13 +207,12 @@ namespace jni
 
 		webrtc::CodecSpecificInfo info;
 
-		if (!outputProcessor.Process(output, keyFrame, image, info)) {
-			return WEBRTC_VIDEO_CODEC_ERROR;
+		if (!outputProcessor.Process(output, keyFrame, *layerFrame, image, info)) {
+			return kEncodeFailed;
 		}
 
-		// The frame just encoded is the reference of the next one.
+		layers.Commit(*layerPlan);
 		referenceValid = true;
-		current = 1 - current;
 		ratesChanged = false;
 
 		callback->OnEncodedImage(image, &info);
@@ -187,7 +220,7 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool VaapiVp9Encoder::Submit(bool keyFrame)
+	bool VaapiVp9Encoder::Submit(bool keyFrame, const VaapiTemporalLayers::Frame & frame)
 	{
 		if (keyFrame) {
 			VAEncSequenceParameterBufferVP9 sequence = {};
@@ -198,14 +231,12 @@ namespace jni
 			}
 		}
 
-		// No initial quantizer: VP9 rate control picks its own, as FFmpeg
-		// leaves it.
-		if ((keyFrame || ratesChanged) && !session.AddRateControl(bitrateBps, framerate, 0)) {
+		if ((keyFrame || ratesChanged) && !layers.AddRateControl(session, bitrateBps, framerate, keyFrame)) {
 			return false;
 		}
 
 		VAEncPictureParameterBufferVP9 picture = {};
-		FillPicture(picture, keyFrame);
+		FillPicture(picture, keyFrame, frame);
 
 		return session.AddBuffer(VAEncPictureParameterBufferType, &picture, sizeof(picture)) && session.Encode();
 	}
@@ -222,13 +253,14 @@ namespace jni
 		sequence.bits_per_second = bitrateBps;
 	}
 
-	void VaapiVp9Encoder::FillPicture(VAEncPictureParameterBufferVP9 & picture, bool keyFrame) const
+	void VaapiVp9Encoder::FillPicture(VAEncPictureParameterBufferVP9 & picture, bool keyFrame,
+		const VaapiTemporalLayers::Frame & frame) const
 	{
 		picture.frame_width_src = codecSettings.width;
 		picture.frame_height_src = codecSettings.height;
 		picture.frame_width_dst = codecSettings.width;
 		picture.frame_height_dst = codecSettings.height;
-		picture.reconstructed_frame = session.Reconstructed(current);
+		picture.reconstructed_frame = session.Reconstructed(frame.surface);
 		picture.coded_buf = session.CodedBuffer();
 
 		for (VASurfaceID & reference : picture.reference_frames) {
@@ -240,16 +272,36 @@ namespace jni
 			picture.pic_flags.bits.frame_type = kKeyFrameType;
 		}
 		else {
-			picture.reference_frames[kLastSlot] = session.Reconstructed(1 - current);
-			// The last frame is the only reference, in list 0.
-			picture.ref_flags.bits.ref_frame_ctrl_l0 = 1;
-			picture.ref_flags.bits.ref_last_idx = kLastSlot;
+			for (int slot = 0; slot < layers.SlotCount(); slot++) {
+				if (layers.Surface(slot) >= 0) {
+					picture.reference_frames[slot] = session.Reconstructed(layers.Surface(slot));
+				}
+			}
+
+			// The first reference is the last frame, a second one golden; both
+			// in list 0.
+			picture.ref_flags.bits.ref_frame_ctrl_l0 = kLastFrame;
+			picture.ref_flags.bits.ref_last_idx = static_cast<uint32_t>(frame.references[0]);
+
+			if (frame.references.size() > 1) {
+				picture.ref_flags.bits.ref_frame_ctrl_l0 |= kGoldenFrame;
+				picture.ref_flags.bits.ref_gf_idx = static_cast<uint32_t>(frame.references[1]);
+			}
+
 			picture.pic_flags.bits.frame_type = kInterFrameType;
 		}
 
+		picture.ref_flags.bits.temporal_id = static_cast<uint32_t>(frame.temporalId);
 		picture.pic_flags.bits.show_frame = 1;
-		// Every slot holds this frame afterwards.
-		picture.refresh_frame_flags = 0xFF;
+
+		// VP9 takes motion vectors from the frame decoded before, and carries
+		// probabilities from frame to frame, neither of which a receiver
+		// without the upper layers has; error resilience leaves both out, as
+		// libvpx does with layers.
+		if (layers.Count() > 1) {
+			picture.pic_flags.bits.error_resilient_mode = 1;
+		}
+		picture.refresh_frame_flags = frame.refreshFlags;
 
 		picture.luma_ac_qindex = kQIndex;
 		picture.filter_level = kFilterLevel;
@@ -266,6 +318,8 @@ namespace jni
 		}
 
 		bitrateBps = bitrate;
+		outputProcessor.OnRatesUpdated(parameters.bitrate);
+		layers.OnRatesUpdated(parameters.bitrate);
 
 		if (parameters.framerate_fps >= 1.0) {
 			framerate = static_cast<uint32_t>(parameters.framerate_fps + 0.5);
@@ -283,6 +337,8 @@ namespace jni
 		info.supports_native_handle = false;
 		info.supports_simulcast = false;
 		info.scaling_settings = outputProcessor.GetScalingSettings();
+
+		layers.FillFpsAllocation(info);
 
 		return info;
 	}

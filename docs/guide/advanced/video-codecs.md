@@ -30,7 +30,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) where it encodes H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise the VA-API encoder of the GPU driver where it encodes AV1 (e.g. AMD RDNA3 and newer) |
 | macOS | VideoToolbox, as with `DefaultVideoEncoderFactory` | VideoToolbox, on Macs with a hardware HEVC encoder, such as all with Apple silicon | Software |
 
-Hardware encoders produce a single layer, but for the VA-API AV1 encoder, which encodes temporal layers too (`L1T2` and `L1T3`), with a rate control of each layer, so that an SFU can forward a lower frame rate. A stream that asks for spatial layers, or for temporal layers from another hardware encoder, is encoded in software. AMD's VA-API encoder takes AV1 from 320x128 up; smaller streams are encoded by libaom.
+Hardware encoders produce a single layer, but for the VA-API encoders of AV1 and VP9, which encode temporal layers too (`L1T2` and `L1T3`), with a rate control of each layer, so that an SFU can forward a lower frame rate. A stream that asks for spatial layers, or for temporal layers from another hardware encoder, is encoded in software. AMD's VA-API encoder takes AV1 from 320x128 up; smaller streams are encoded by libaom.
 
 VP9 can be encoded in hardware too, with the VP9 encoder of the GPU driver, which Intel GPUs have: through VA-API on Linux, and through Media Foundation on Windows. On Windows it is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
 

@@ -20,6 +20,7 @@
 #include "media/video/codec/EncoderOutputProcessor.h"
 #include "media/video/codec/linux/VaapiEncodeSession.h"
 #include "media/video/codec/linux/VaapiLibrary.h"
+#include "media/video/codec/linux/VaapiTemporalLayers.h"
 
 #include "api/video/video_frame.h"
 #include "api/video_codecs/sdp_video_format.h"
@@ -80,32 +81,11 @@ namespace jni
 			// Reads which headers the driver takes and how it codes them.
 			void QueryCapabilities();
 
-			// What a frame refers to: the slot each of the seven reference
-			// frames names, the second reference, if any, being golden; the
-			// slots the frame replaces; and its temporal layer.
-			struct FrameReferences
-			{
-				std::array<uint8_t, 7> refFrameIdx = {};
-				bool golden = false;
-				uint8_t refreshFrameFlags = 0;
-				int temporalId = 0;
-			};
-
-			// Turns the buffers of the layer frame into reference slots.
-			// Returns false if it refers to a slot that holds no frame, or to
-			// one beyond those kept.
-			bool PlanReferences(bool keyFrame, const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame,
-				FrameReferences & references) const;
-			// A reconstructed surface that no reference slot holds.
-			int FreeSurface() const;
-			// Adds the rate control of the stream, or of each temporal layer.
-			bool AddRateControl(bool keyFrame);
-
-			bool Submit(bool keyFrame, const FrameReferences & references, int surface);
+			bool Submit(bool keyFrame, const VaapiTemporalLayers::Frame & frame);
 
 			void WriteSequenceHeader(std::vector<uint8_t> & obu) const;
 			void WriteFrameHeader(std::vector<uint8_t> & obu, FrameHeaderLayout & layout, bool keyFrame,
-				const FrameReferences & references) const;
+				const VaapiTemporalLayers::Frame & frame) const;
 			// The seq_level_idx the stream's size, frame rate and bitrate fit.
 			uint8_t Level() const;
 
@@ -128,16 +108,7 @@ namespace jni
 			// The sequence header, kept for the key frames.
 			std::vector<uint8_t> sequenceHeader;
 
-			// The temporal layers, one without layers, and the bitrate of each,
-			// counting the layers below it.
-			int temporalLayers;
-			std::vector<uint32_t> layerBitratesBps;
-
-			// The reconstructed surface each reference slot holds, -1 for
-			// none: those of the two buffers WebRTC's structures use, up to
-			// L1T3. A key frame fills the other six slots too, but no frame
-			// refers to them.
-			std::array<int, 2> slots;
+			VaapiTemporalLayers layers;
 			bool referenceValid;
 			// The frames since the last key frame, whose low bits are the
 			// order hint.
