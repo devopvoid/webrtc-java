@@ -36,7 +36,7 @@ Which GPUs encode which codec, by platform and interface:
 | | **Software fallback** | | OpenH264 | none (3) | libvpx | libaom |
 
 1. VP9 through Media Foundation has not been tested on such a GPU yet and is off by default; turn it on with a system property before the factory is created: `System.setProperty("webrtc.hardware.vp9Encoder", "true");`
-2. Single layer, `L1T2` or `L1T3`, with a rate control of each layer where the driver has one that works (AMD's for H.265 and AV1, Intel's for VP9), otherwise one for all layers. AMD's AV1 encoder takes 320x128 and up; smaller streams are encoded by libaom.
+2. Single layer, `L1T2` or `L1T3`, with a rate control of each layer where the driver has one that works (AMD's for H.265 and AV1, Intel's for VP9), otherwise one for all layers, which treats them alike. AMD's AV1 encoder takes 320x128 and up; smaller streams are encoded by libaom.
 3. H.265 has no software encoder. It is offered after the other codecs, only where the hardware encodes it, and a call uses it only if it is preferred (e.g. with `RTCRtpTransceiver.setCodecPreferences()`) and the other end decodes it. On macOS, VideoToolbox never falls back to its software HEVC encoder.
 
 The hardware encoders take over formats the software encoders offer too, so encoding in hardware never changes what is negotiated:
