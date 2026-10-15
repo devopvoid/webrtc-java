@@ -114,7 +114,8 @@ namespace jni
 		ratesChanged = true;
 		referenceValid = false;
 		outputProcessor.Reset();
-		layers.Configure(mode, bitrateBps);
+		layers.Configure(mode, bitrateBps, VaapiTemporalLayers::LayerRateControl(library, VAProfileVP9Profile0,
+			entrypoint, webrtc::ScalabilityModeToNumTemporalLayers(mode)));
 
 		if (!outputProcessor.SetScalabilityMode(mode)) {
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
@@ -192,6 +193,7 @@ namespace jni
 			static_cast<int>(codecSettings.height), 0) && Submit(keyFrame, *layerPlan) && session.ReadOutput(output);
 
 		session.DropBuffers();
+
 
 		if (!encoded) {
 			return kEncodeFailed;
