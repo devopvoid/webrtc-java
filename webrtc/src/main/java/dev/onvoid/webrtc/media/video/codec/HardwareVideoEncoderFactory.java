@@ -38,7 +38,8 @@ import java.util.Objects;
  * other GPUs it is encoded with the Media Foundation encoder of the driver on
  * Windows, and with its VA-API encoder on Linux. AV1 is encoded on GPUs that
  * have an AV1 encoder, with NVENC, Media Foundation or VA-API, as a single
- * layer; a stream that asks for SVC is encoded in software. H.265 (Main profile) is
+ * layer, or with VA-API in temporal layers too (L1T2, L1T3); a stream that
+ * asks for other SVC modes is encoded in software. H.265 (Main profile) is
  * encoded with NVENC or Media Foundation on GPUs that have an H.265 encoder.
  * VP9 (profile 0) is encoded on GPUs that have a VP9 encoder, which are
  * Intel's: with VA-API on Linux, and with Media Foundation on Windows only

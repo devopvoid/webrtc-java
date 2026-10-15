@@ -18,6 +18,7 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
@@ -41,6 +42,7 @@ import dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -518,6 +520,78 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 		finally {
 			hardware.dispose();
 		}
+	}
+
+	@Test
+	void av1EncodesTemporalLayers() throws Exception {
+		// Temporal layers are references between frames of one size, which a
+		// hardware encoder can make; an SFU can then forward a lower frame
+		// rate without asking for key frames.
+		for (String mode : new String[] { "L1T2", "L1T3" }) {
+			PeerConnectionFactory hardware = hardwareFactory();
+			CountDownLatch received = new CountDownLatch(30);
+
+			try (TestMediaCall call = new TestMediaCall(hardware, true, false, AV1)) {
+				call.setVideoSize(640, 360);
+				call.negotiate();
+
+				RTCRtpReceiver receiver = call.getReceiver("video");
+				VideoTrack track = (VideoTrack) receiver.getTrack();
+				VideoTrackSink sink = frame -> {
+					frame.release();
+					received.countDown();
+				};
+				track.addSink(sink);
+
+				call.awaitConnected();
+
+				RTCRtpSendParameters parameters = call.getVideoSender().getParameters();
+				parameters.encodings.get(0).scalabilityMode = mode;
+				call.getVideoSender().setParameters(parameters);
+
+				call.startMedia();
+
+				assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received in " + mode);
+
+				Map<String, Object> outbound = awaitOutboundStats(call, "encoderImplementation", "scalabilityMode");
+				Map<String, Object> inbound = call.getInboundVideoStats();
+				Object pliCount = inbound == null ? null : inbound.get("pliCount");
+
+				track.removeSink(sink);
+				receiver.dispose();
+
+				assertHardware(String.valueOf(outbound.get("encoderImplementation")), HARDWARE_AV1_REQUIRED);
+				assertEquals(mode, outbound.get("scalabilityMode"));
+				assertTrue(!(pliCount instanceof Number) || ((Number) pliCount).longValue() <= 1,
+						"key frames requested: " + pliCount);
+			}
+			finally {
+				hardware.dispose();
+			}
+		}
+	}
+
+	/**
+	 * Returns the outbound video statistics once they have all the given
+	 * members, which come shortly after the encoder.
+	 */
+	private static Map<String, Object> awaitOutboundStats(TestMediaCall call, String... members)
+			throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+		Map<String, Object> outbound = null;
+
+		while (System.nanoTime() < deadline) {
+			outbound = call.getOutboundVideoStats();
+
+			if (outbound != null && Arrays.stream(members).allMatch(outbound::containsKey)) {
+				return outbound;
+			}
+
+			Thread.sleep(100);
+		}
+
+		assertNotNull(outbound, "no outbound statistics");
+		return outbound;
 	}
 
 	@Test
