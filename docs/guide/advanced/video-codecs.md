@@ -24,27 +24,31 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
         .build();
 ```
 
-| Platform | H.264 | H.265 | AV1 |
-|---|---|---|---|
-| Windows | NVENC on NVIDIA GPUs, otherwise the Media Foundation encoder of the GPU driver (AMD, Intel) | NVENC on NVIDIA GPUs, otherwise Media Foundation on GPUs that encode H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise Media Foundation on GPUs that encode AV1 (e.g. AMD RDNA3 and newer, Intel Arc) |
-| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) where it encodes H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise the VA-API encoder of the GPU driver where it encodes AV1 (e.g. AMD RDNA3 and newer) |
-| macOS | VideoToolbox, as with `DefaultVideoEncoderFactory` | VideoToolbox, on Macs with a hardware HEVC encoder, such as all with Apple silicon | Software |
+Which GPUs encode which codec, by platform and interface:
 
-Hardware encoders produce a single layer, but for the VA-API encoders, which encode temporal layers too (`L1T2` and `L1T3`) in every codec, so that an SFU can forward a lower frame rate. Each layer gets a rate control of its own where the driver has one that works (AMD's for H.265 and AV1, Intel's for VP9); otherwise the layers share one, which treats them alike. A stream that asks for spatial layers, or for temporal layers from another hardware encoder, is encoded in software. AMD's VA-API encoder takes AV1 from 320x128 up; smaller streams are encoded by libaom.
+| Platform | Interface | GPUs | H.264 | H.265 | VP9 | AV1 |
+|---|---|---|---|---|---|---|
+| Windows | NVENC | NVIDIA | ✓ | ✓ | – | RTX 40 and newer |
+| Windows | Media Foundation | AMD, Intel | ✓ | where the GPU encodes it | Intel, opt-in (1) | AMD RDNA3 and newer, Intel Arc |
+| Linux | NVENC | NVIDIA | ✓ | ✓ | – | RTX 40 and newer |
+| Linux | VA-API | Intel, AMD | ✓ (2) | where the driver encodes it (2) | Intel (2) | AMD RDNA3 and newer (2) |
+| macOS | VideoToolbox | Apple | ✓ | Macs with a hardware HEVC encoder | – | – |
+| | **Software fallback** | | OpenH264 | none (3) | libvpx | libaom |
 
-VP9 can be encoded in hardware too, with the VP9 encoder of the GPU driver, which Intel GPUs have: through VA-API on Linux, and through Media Foundation on Windows. On Windows it is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
+1. VP9 through Media Foundation has not been tested on such a GPU yet and is off by default; turn it on with a system property before the factory is created: `System.setProperty("webrtc.hardware.vp9Encoder", "true");`
+2. Single layer, `L1T2` or `L1T3`, with a rate control of each layer where the driver has one that works (AMD's for H.265 and AV1, Intel's for VP9), otherwise one for all layers, which treats them alike. AMD's AV1 encoder takes 320x128 and up; smaller streams are encoded by libaom.
+3. H.265 has no software encoder. It is offered after the other codecs, only where the hardware encodes it, and a call uses it only if it is preferred (e.g. with `RTCRtpTransceiver.setCodecPreferences()`) and the other end decodes it. On macOS, VideoToolbox never falls back to its software HEVC encoder.
 
-```java
-System.setProperty("webrtc.hardware.vp9Encoder", "true");
-```
+The hardware encoders take over formats the software encoders offer too, so encoding in hardware never changes what is negotiated:
 
-Where the GPU has no VP9 encoder, or the stream asks for SVC, VP9 is still encoded with libvpx.
+| Codec | Formats encoded in hardware |
+|---|---|
+| H.264 | Constrained Baseline and Baseline, packetization mode 1 |
+| H.265 | Main profile |
+| VP9 | Profile 0 |
+| AV1 | Profile 0 |
 
-On Linux, H.265 is encoded with the VA-API encoder of Intel and AMD drivers where the driver encodes H.265 Main. Receiving it needs a hardware H.265 decoder too, since there is no software one: on Intel and AMD GPUs that is the VA-API decoder (see below).
-
-NVENC needs an NVIDIA driver of version 522 or newer on Windows, 520 or newer on Linux. VA-API needs libva 2 and a driver that encodes H.264, such as Intel's `intel-media-va-driver` (iHD) or Mesa's `mesa-va-drivers` for AMD, and access to a render node in `/dev/dri`. All of them are loaded at run time, so nothing needs to be installed on machines without them.
-
-The hardware encoders take over H.264 Constrained Baseline and Baseline with packetization mode 1, and AV1 profile 0, formats the software encoders offer too, so encoding these in hardware never changes what is negotiated. H.265 (Main profile) has no software encoder: it is offered after the other codecs, only where the hardware encodes it, so the codec a peer connection prefers stays the same, and a call uses H.265 only if it is preferred (e.g. with `RTCRtpTransceiver.setCodecPreferences()`) and the other end decodes it. On macOS, VideoToolbox is required to encode H.265 in hardware, and never falls back to its software encoder; a Mac without a hardware HEVC encoder does not offer H.265. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (e.g. from NVENC to Media Foundation on Windows), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
+Hardware encoders produce a single layer, but for the VA-API encoders, which encode temporal layers too (`L1T2` and `L1T3`) in every codec, so that an SFU can forward a lower frame rate. A stream that asks for spatial layers, or for temporal layers from another hardware encoder, is encoded in software. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (e.g. from NVENC to Media Foundation on Windows), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
 
 Which encoder a stream uses shows in the `encoderImplementation` statistic of its `outbound-rtp` stats, e.g. `NVENC (NVIDIA GeForce RTX 4070)`, `MediaFoundation (AMDav1Encoder)`, `VA-API (Intel iHD driver ...)`, `VideoToolbox (H.265)`, `OpenH264` or `libaom`.
 
@@ -59,23 +63,48 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
         .build();
 ```
 
-| Platform | Hardware decoding |
+Which GPUs decode which codec, by platform and interface; each where the GPU or driver decodes it:
+
+| Platform | Interface | GPUs | H.264 | H.265 | VP9 | AV1 |
+|---|---|---|---|---|---|---|
+| Windows | Media Foundation (DXVA) | any | ✓ | with the HEVC Video Extensions (1) | with the VP9 Video Extensions (1) | with the AV1 Video Extension (1) |
+| Linux | NVDEC | NVIDIA | ✓ | ✓ | ✓ | Ampere and newer |
+| Linux | VA-API | Intel, AMD | ✓ | ✓ | ✓ | ✓ (2) |
+| macOS | VideoToolbox | Apple | ✓ | Macs with a hardware HEVC decoder | Apple silicon | Apple M3 and newer |
+| | **Software fallback** | | FFmpeg (4) | none (3) | libvpx | dav1d |
+
+1. The *HEVC Video Extensions* and *VP9 Video Extensions* come from the Microsoft Store (or, for H.265, an HEVC decoder of the GPU vendor); the *AV1 Video Extension* is part of Windows 11. Without the VP9 one, VP9 is decoded in software; without an HEVC decoder, H.265 is not offered.
+2. In 8 bit 4:2:0; see below for the streams that go to dav1d.
+3. H.265 has no software decoder, so a stream the hardware cannot decode is not decoded.
+4. On macOS, `DefaultVideoDecoderFactory` decodes H.264 through VideoToolbox already.
+
+Some streams are decoded in software even where the GPU decodes their codec:
+
+| Stream | Decoded by |
 |---|---|
-| Windows | H.264, H.265 (Main profile), AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
-| Linux | H.264, H.265 (Main profile), VP9 and AV1 (profile 0) on NVIDIA GPUs that decode them, through NVDEC; H.264, VP9 (profile 0), H.265 (Main profile) and AV1 (profile 0) on Intel and AMD GPUs through VA-API, where the driver decodes them |
-| macOS | H.264 through VideoToolbox, as with `DefaultVideoDecoderFactory`; VP9 (profile 0) and H.265 (Main profile) through the decoders of VideoToolbox, on Macs that have them, and AV1 (profile 0) on Apple M3 and newer |
+| Any codec with spatial layers (SVC) | the software decoder |
+| H.264 High 4:4:4 Predictive (Windows, Linux) | FFmpeg |
+| Interlaced H.264 (VA-API) | FFmpeg |
+| VP9 profile 2, or below 64x64 or above 4096x4096 (macOS) | libvpx |
+| AV1 with high bit depth or monochrome (macOS, VA-API) | dav1d |
+| AV1 with film grain or superres (VA-API) | dav1d |
 
-On Linux, NVDEC needs an NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1`; both are loaded when the factory is made, so a machine without the driver is not affected. Streams with spatial layers are decoded in software. Through VA-API, AV1 is decoded in 8 bit 4:2:0; streams with film grain, superres, a higher bit depth or a single plane are decoded by dav1d.
+Temporal layers alone, as in `L1T3`, are a single spatial layer, and are decoded in hardware like any other stream.
 
-On Windows and Linux, H.264 is decoded in hardware in its 4:2:0 profiles. High 4:4:4 Predictive, which GPU decoders do not take, is decoded in software.
+A hardware decoder that fails, or turns out to decode in software, is replaced by the software decoder, which starts with the next key frame. Decoded frames are copied from GPU memory back to system memory, where WebRTC's frames are, so hardware decoding pays off mostly at high resolutions and with many streams; at low resolutions WebRTC's software decoders are about as cheap. On an Apple M2, for example, VP9 in hardware took a fraction of the processor time libvpx needs, while multi-threaded libvpx was about as fast on the clock.
 
-AV1 on Windows needs the *AV1 Video Extension*, which Windows 11 includes, and VP9 the *VP9 Video Extensions*, a free component of the Microsoft Store that a system may not have; without it, VP9 is decoded in software. H.265 needs the *HEVC Video Extensions* of the Microsoft Store, or an HEVC decoder of the GPU vendor; without one, H.265 is not offered, since it has no software decoder. Streams with spatial layers (SVC) are decoded in software too, since their layers reach a decoder without the index that says where each ends. Decoded frames are copied from GPU memory back to system memory, where WebRTC's frames are, so hardware decoding pays off mostly at high resolutions and with many streams; at low resolutions WebRTC's software decoders are about as cheap. A hardware decoder that fails, or turns out to decode in software, is replaced by the software decoder, which starts with the next key frame.
+Which decoder a stream uses shows in the `decoderImplementation` statistic of its `inbound-rtp` stats, e.g. `MediaFoundation (Microsoft H264 Video Decoder MFT)`, `MediaFoundation (AV1VideoExtension)`, `VideoToolbox (VP9)`, `VideoToolbox (H.265)`, `VideoToolbox (AV1)`, `NVDEC (NVIDIA GeForce RTX 4070)` or `VA-API (Mesa Gallium driver ...)`.
 
-On macOS, VP9 decoding in hardware saves CPU: in a measurement on an Apple M2 it took a fraction of the processor time libvpx needs, but multi-threaded libvpx was about as fast on the clock. VideoToolbox decodes VP9 in hardware only where the Mac has a decoder for it, which Apple silicon does; a Mac without one decodes VP9 with libvpx as before. Profile 2 (10 bit), sizes below 64x64 or above 4096x4096, and streams with spatial layers (SVC) are decoded with libvpx too.
+### Requirements
 
-AV1 is decoded by VideoToolbox on Macs with an AV1 decoder, which are those with Apple M3 and newer, and by dav1d elsewhere. High bit depth, monochrome streams and streams with spatial layers go to dav1d as well. H.265 is decoded by VideoToolbox in hardware only, never in software: a Mac without a hardware HEVC decoder does not offer H.265, and an H.265 stream the hardware cannot decode is not decoded.
+| Interface | Needs |
+|---|---|
+| NVENC | NVIDIA driver 522 or newer on Windows, 520 or newer on Linux |
+| NVDEC | NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1` |
+| VA-API | libva 2, a driver such as Intel's `intel-media-va-driver` (iHD) or Mesa's `mesa-va-drivers` for AMD that encodes H.264, and access to a render node in `/dev/dri` |
+| Media Foundation | for decoding, the codec extensions above |
 
-Which decoder a stream uses shows in the `decoderImplementation` statistic of its `inbound-rtp` stats, e.g. `MediaFoundation (Microsoft H264 Video Decoder MFT)`, `MediaFoundation (AV1VideoExtension)`, `VideoToolbox (VP9)`, `VideoToolbox (H.265)`, `VideoToolbox (AV1)` or `NVDEC (NVIDIA GeForce RTX 4070)`.
+All of them are loaded at run time, so nothing needs to be installed on machines without them, and a machine without them encodes and decodes in software.
 
 ### Listing Hardware Codecs
 
