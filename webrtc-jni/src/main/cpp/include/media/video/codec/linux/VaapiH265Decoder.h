@@ -18,6 +18,7 @@
 #define JNI_WEBRTC_MEDIA_VIDEO_CODEC_VAAPI_H265_DECODER_H_
 
 #include "media/video/codec/linux/H265Parser.h"
+#include "media/video/codec/linux/VaapiDecodeSession.h"
 #include "media/video/codec/linux/VaapiLibrary.h"
 
 #include "api/video/encoded_image.h"
@@ -132,20 +133,15 @@ namespace jni
 			void DestroySession();
 			int FreeSurface() const;
 
-			bool Check(VAStatus status, const char * operation) const;
-
 		private:
 			VaapiLibrary & library;
-			const VaapiFunctions & va;
 			const std::string implementationName;
 
 			webrtc::DecodedImageCallback * callback;
 
 			H265Parser parser;
 
-			VAConfigID config;
-			VAContextID context;
-			std::vector<VASurfaceID> surfaces;
+			VaapiDecodeSession session;
 			uint32_t codedWidth;
 			uint32_t codedHeight;
 			uint32_t maxDecPicBuffering;
@@ -155,7 +151,6 @@ namespace jni
 			uint32_t cropY;
 			uint32_t width;
 			uint32_t height;
-			VAImage downloadImage;
 
 			// The decoded picture buffer, and the surfaces of the pictures the
 			// current one refers to, by the subset of its reference picture

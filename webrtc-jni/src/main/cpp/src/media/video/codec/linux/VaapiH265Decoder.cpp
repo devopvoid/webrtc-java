@@ -16,12 +16,10 @@
 
 #include "media/video/codec/linux/VaapiH265Decoder.h"
 
-#include "api/video/i420_buffer.h"
 #include "api/video/video_frame.h"
 #include "common_video/h265/h265_common.h"
 #include "modules/video_coding/include/video_error_codes.h"
 #include "rtc_base/logging.h"
-#include "third_party/libyuv/include/libyuv/convert.h"
 
 #include <algorithm>
 
@@ -79,11 +77,9 @@ namespace jni
 
 	VaapiH265Decoder::VaapiH265Decoder(VaapiLibrary & library) :
 		library(library),
-		va(library.Api()),
 		implementationName("VA-API (" + library.Vendor() + ")"),
 		callback(nullptr),
-		config(VA_INVALID_ID),
-		context(VA_INVALID_ID),
+		session(library, implementationName + " H.265"),
 		codedWidth(0),
 		codedHeight(0),
 		maxDecPicBuffering(0),
@@ -92,30 +88,16 @@ namespace jni
 		cropY(0),
 		width(0),
 		height(0),
-		downloadImage(),
 		prevTid0Poc(0),
 		skipRasl(false),
 		started(false),
 		failed(false)
 	{
-		downloadImage.image_id = VA_INVALID_ID;
 	}
 
 	VaapiH265Decoder::~VaapiH265Decoder()
 	{
 		Release();
-	}
-
-	bool VaapiH265Decoder::Check(VAStatus status, const char * operation) const
-	{
-		if (status == VA_STATUS_SUCCESS) {
-			return true;
-		}
-
-		RTC_LOG(LS_WARNING) << implementationName << " H.265: " << operation << " failed: "
-			<< library.ErrorString(status);
-
-		return false;
 	}
 
 	bool VaapiH265Decoder::Configure(const Settings & settings)
@@ -346,7 +328,7 @@ namespace jni
 
 			const uint32_t spsMaxDecPicBuffering = sps->maxDecPicBufferingMinus1 + 1;
 
-			if (context == VA_INVALID_ID || sps->width != codedWidth || sps->height != codedHeight
+			if (!session.IsCreated() || sps->width != codedWidth || sps->height != codedHeight
 				|| spsMaxDecPicBuffering != maxDecPicBuffering || sps->maxNumReorderPics != maxNumReorder)
 			{
 				if (!CreateSession(*sps)) {
@@ -604,7 +586,7 @@ namespace jni
 	void VaapiH265Decoder::FillPicture(VAPictureParameterBufferHEVC & parameters, const H265Sps & sps,
 		const H265Pps & pps, const H265SliceHeader & header, int surface) const
 	{
-		parameters.CurrPic.picture_id = surfaces[surface];
+		parameters.CurrPic.picture_id = session.Surface(surface);
 		parameters.CurrPic.flags = 0;
 
 		for (VAPictureHEVC & reference : parameters.ReferenceFrames) {
@@ -620,7 +602,7 @@ namespace jni
 
 			const int index = dpb[j].surface;
 			VAPictureHEVC & reference = parameters.ReferenceFrames[count++];
-			reference.picture_id = surfaces[dpb[j].surface];
+			reference.picture_id = session.Surface(dpb[j].surface);
 			reference.pic_order_cnt = dpb[j].poc;
 			reference.flags = dpb[j].longTerm ? VA_PICTURE_HEVC_LONG_TERM_REFERENCE : 0;
 
@@ -838,47 +820,16 @@ namespace jni
 		const std::vector<VASliceParameterBufferHEVC> & sliceParameters, const std::vector<Slice> & slices,
 		int surface)
 	{
-		VADisplay display = library.Display();
-		std::vector<VABufferID> buffers;
-
-		const auto create = [&](VABufferType type, size_t size, const void * data, const char * operation) {
-			VABufferID buffer = VA_INVALID_ID;
-
-			if (!Check(va.CreateBuffer(display, context, type, static_cast<unsigned int>(size), 1,
-				const_cast<void *>(data), &buffer), operation))
-			{
-				return false;
-			}
-
-			buffers.push_back(buffer);
-
-			return true;
+		std::vector<VaapiDecodeSession::Buffer> buffers = {
+			{ VAPictureParameterBufferType, &picture, sizeof(picture) }
 		};
 
-		bool created = create(VAPictureParameterBufferType, sizeof(picture), &picture, "creating the picture parameters");
-
-		for (size_t i = 0; created && i < slices.size(); i++) {
-			created = create(VASliceParameterBufferType, sizeof(sliceParameters[i]), &sliceParameters[i],
-				"creating the slice parameters")
-				&& create(VASliceDataBufferType, slices[i].nal.size(), slices[i].nal.data(), "creating the slice data");
+		for (size_t i = 0; i < slices.size(); i++) {
+			buffers.push_back({ VASliceParameterBufferType, &sliceParameters[i], sizeof(sliceParameters[i]) });
+			buffers.push_back({ VASliceDataBufferType, slices[i].nal.data(), slices[i].nal.size() });
 		}
 
-		bool decoded = false;
-
-		if (created && Check(va.BeginPicture(display, context, surfaces[surface]), "beginning a picture")) {
-			const bool rendered = Check(va.RenderPicture(display, context, buffers.data(),
-				static_cast<int>(buffers.size())), "rendering a picture");
-			// A picture that was begun has to be ended.
-			const bool ended = Check(va.EndPicture(display, context), "ending a picture");
-
-			decoded = rendered && ended && Check(va.SyncSurface(display, surfaces[surface]), "waiting for a picture");
-		}
-
-		for (VABufferID buffer : buffers) {
-			va.DestroyBuffer(display, buffer);
-		}
-
-		return decoded;
+		return session.Decode(surface, buffers);
 	}
 
 	bool VaapiH265Decoder::Bump(uint32_t keep)
@@ -922,61 +873,10 @@ namespace jni
 
 	bool VaapiH265Decoder::Output(const Picture & picture)
 	{
-		VADisplay display = library.Display();
-		const int frameWidth = static_cast<int>(width);
-		const int frameHeight = static_cast<int>(height);
+		webrtc::scoped_refptr<webrtc::I420Buffer> i420 = session.Download(picture.surface, cropX, cropY, width,
+			height);
 
-		VAImage mapped = {};
-		mapped.image_id = VA_INVALID_ID;
-		bool derived = false;
-		size_t offsetY = 0;
-		size_t offsetUv = 0;
-
-		if (downloadImage.image_id != VA_INVALID_ID
-			&& downloadImage.width == width && downloadImage.height == height
-			&& va.GetImage(display, surfaces[picture.surface], static_cast<int>(cropX), static_cast<int>(cropY),
-				width, height, downloadImage.image_id) == VA_STATUS_SUCCESS)
-		{
-			mapped = downloadImage;
-		}
-		else if (va.DeriveImage(display, surfaces[picture.surface], &mapped) == VA_STATUS_SUCCESS) {
-			derived = true;
-
-			if (mapped.format.fourcc != VA_FOURCC_NV12) {
-				RTC_LOG(LS_WARNING) << implementationName << " H.265: the decoded surface is not NV12";
-				va.DestroyImage(display, mapped.image_id);
-				return false;
-			}
-
-			// The conformance window within the whole surface.
-			offsetY = cropY * mapped.pitches[0] + cropX;
-			offsetUv = (cropY / 2) * mapped.pitches[1] + cropX;
-		}
-		else {
-			RTC_LOG(LS_WARNING) << implementationName << " H.265: the decoded surface cannot be read";
-			return false;
-		}
-
-		void * data = nullptr;
-		bool converted = false;
-		webrtc::scoped_refptr<webrtc::I420Buffer> i420 = webrtc::I420Buffer::Create(frameWidth, frameHeight);
-
-		if (Check(va.MapBuffer(display, mapped.buf, &data), "mapping a decoded picture")) {
-			const uint8_t * base = static_cast<const uint8_t *>(data);
-
-			converted = libyuv::NV12ToI420(base + mapped.offsets[0] + offsetY, static_cast<int>(mapped.pitches[0]),
-				base + mapped.offsets[1] + offsetUv, static_cast<int>(mapped.pitches[1]),
-				i420->MutableDataY(), i420->StrideY(), i420->MutableDataU(), i420->StrideU(),
-				i420->MutableDataV(), i420->StrideV(), frameWidth, frameHeight) == 0;
-
-			va.UnmapBuffer(display, mapped.buf);
-		}
-
-		if (derived) {
-			va.DestroyImage(display, mapped.image_id);
-		}
-
-		if (!converted) {
+		if (!i420) {
 			return false;
 		}
 
@@ -997,55 +897,9 @@ namespace jni
 	{
 		DestroySession();
 
-		VADisplay display = library.Display();
-
-		VAConfigAttrib attribute = {};
-		attribute.type = VAConfigAttribRTFormat;
-		attribute.value = VA_RT_FORMAT_YUV420;
-
-		if (!Check(va.CreateConfig(display, VAProfileHEVCMain, VAEntrypointVLD, &attribute, 1, &config),
-			"creating the configuration"))
-		{
-			config = VA_INVALID_ID;
-			return false;
-		}
-
 		// The pictures the stream keeps, and the one being decoded.
-		const uint32_t count = sps.maxDecPicBufferingMinus1 + 2;
-
-		surfaces.assign(count, VA_INVALID_SURFACE);
-
-		if (!Check(va.CreateSurfaces(display, VA_RT_FORMAT_YUV420, sps.width, sps.height, surfaces.data(),
-			count, nullptr, 0), "creating surfaces"))
-		{
-			surfaces.clear();
-			DestroySession();
+		if (!session.Create(VAProfileHEVCMain, sps.width, sps.height, sps.maxDecPicBufferingMinus1 + 2)) {
 			return false;
-		}
-
-		if (!Check(va.CreateContext(display, config, static_cast<int>(sps.width), static_cast<int>(sps.height),
-			VA_PROGRESSIVE, surfaces.data(), static_cast<int>(count), &context), "creating the context"))
-		{
-			context = VA_INVALID_ID;
-			DestroySession();
-			return false;
-		}
-
-		const uint32_t frameWidth = sps.width - sps.cropLeft - sps.cropRight;
-		const uint32_t frameHeight = sps.height - sps.cropTop - sps.cropBottom;
-
-		// Copying a surface into an image reads it from cached memory, which
-		// mapping it directly does not. Where the driver does not copy, the
-		// surface is mapped.
-		VAImageFormat format = {};
-		format.fourcc = VA_FOURCC_NV12;
-		format.byte_order = VA_LSB_FIRST;
-		format.bits_per_pixel = 12;
-
-		if (va.CreateImage(display, &format, static_cast<int>(frameWidth), static_cast<int>(frameHeight),
-			&downloadImage) != VA_STATUS_SUCCESS)
-		{
-			downloadImage.image_id = VA_INVALID_ID;
 		}
 
 		codedWidth = sps.width;
@@ -1053,31 +907,15 @@ namespace jni
 		maxDecPicBuffering = sps.maxDecPicBufferingMinus1 + 1;
 		maxNumReorder = sps.maxNumReorderPics;
 
-		RTC_LOG(LS_INFO) << implementationName << " H.265 decoding " << frameWidth << "x" << frameHeight;
+		RTC_LOG(LS_INFO) << implementationName << " H.265 decoding " << sps.width - sps.cropLeft - sps.cropRight
+			<< "x" << sps.height - sps.cropTop - sps.cropBottom;
 
 		return true;
 	}
 
 	void VaapiH265Decoder::DestroySession()
 	{
-		VADisplay display = library.Display();
-
-		if (downloadImage.image_id != VA_INVALID_ID) {
-			va.DestroyImage(display, downloadImage.image_id);
-			downloadImage.image_id = VA_INVALID_ID;
-		}
-		if (context != VA_INVALID_ID) {
-			va.DestroyContext(display, context);
-			context = VA_INVALID_ID;
-		}
-		if (!surfaces.empty()) {
-			va.DestroySurfaces(display, surfaces.data(), static_cast<int>(surfaces.size()));
-			surfaces.clear();
-		}
-		if (config != VA_INVALID_ID) {
-			va.DestroyConfig(display, config);
-			config = VA_INVALID_ID;
-		}
+		session.Destroy();
 
 		codedWidth = 0;
 		codedHeight = 0;
@@ -1091,7 +929,7 @@ namespace jni
 
 	int VaapiH265Decoder::FreeSurface() const
 	{
-		for (int surface = 0; surface < static_cast<int>(surfaces.size()); surface++) {
+		for (int surface = 0; surface < session.SurfaceCount(); surface++) {
 			const bool used = std::any_of(dpb.begin(), dpb.end(), [surface](const Picture & picture) {
 				return picture.surface == surface;
 			});
