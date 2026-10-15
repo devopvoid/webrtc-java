@@ -30,8 +30,8 @@
 namespace jni
 {
 	// What every VA-API encoder of a single codec needs: a configuration and
-	// a context with an input surface and two reconstructed ones (the frame
-	// being encoded and the one it refers to), the output buffer, the
+	// a context with an input surface and reconstructed ones (by default two:
+	// the frame being encoded and the one it refers to), the output buffer, the
 	// parameter buffers of a frame, uploading a frame as NV12, encoding it
 	// and reading what came out. The codec's encoder fills in the parameters.
 	//
@@ -49,12 +49,14 @@ namespace jni
 
 			// Creates the session for 4:2:0 at constant bitrate, for pictures
 			// of the given size, in surfaces of the given size, which is that
-			// of the picture aligned as the codec needs, and with the
-			// VA_ENC_PACKED_HEADER_* the encoder hands the driver. Mesa takes
-			// the size of the coded picture from the context, so the context
-			// has the picture's.
+			// of the picture aligned as the codec needs, with the
+			// VA_ENC_PACKED_HEADER_* the encoder hands the driver, and with
+			// the given number of reconstructed surfaces. Mesa takes the size
+			// of the coded picture from the context, so the context has the
+			// picture's.
 			bool Create(VAProfile profile, VAEntrypoint entrypoint, uint32_t pictureWidth, uint32_t pictureHeight,
-				uint32_t surfaceWidth, uint32_t surfaceHeight, uint32_t packedHeaders = VA_ENC_PACKED_HEADER_NONE);
+				uint32_t surfaceWidth, uint32_t surfaceHeight, uint32_t packedHeaders = VA_ENC_PACKED_HEADER_NONE,
+				int reconstructedCount = 2);
 			void Destroy();
 
 			VASurfaceID InputSurface() const;
@@ -75,6 +77,12 @@ namespace jni
 			// The rate control, frame rate and HRD parameters, for constant
 			// bitrate with the given initial quantizer.
 			bool AddRateControl(uint32_t bitrateBps, uint32_t framerate, uint32_t initialQp);
+			// The same, with a rate control of each temporal layer: their
+			// bitrates, each counting the layers below it too, and the layer
+			// of each frame after a key frame, a pattern that repeats, which
+			// the driver is told along with the rate control of a key frame.
+			bool AddLayerRateControl(const std::vector<uint32_t> & bitratesBps, uint32_t framerate,
+				const std::vector<uint32_t> & pattern, bool keyFrame);
 
 			// Encodes the input surface with the parameter buffers added, and
 			// waits for it.
@@ -92,7 +100,8 @@ namespace jni
 
 			VAConfigID config;
 			VAContextID context;
-			VASurfaceID surfaces[3];
+			// The input surface, then the reconstructed ones.
+			std::vector<VASurfaceID> surfaces;
 			VABufferID codedBuffer;
 			std::vector<VABufferID> frameBuffers;
 	};

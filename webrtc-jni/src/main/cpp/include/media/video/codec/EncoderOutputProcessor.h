@@ -26,9 +26,13 @@
 #include "modules/video_coding/codecs/h264/include/h264_globals.h"
 #include "modules/video_coding/codecs/vp9/include/vp9_globals.h"
 #include "modules/video_coding/include/video_codec_interface.h"
-#include "modules/video_coding/svc/scalable_video_controller_no_layering.h"
+#include "api/video/video_bitrate_allocation.h"
+#include "api/video_codecs/scalability_mode.h"
+#include "modules/video_coding/svc/scalable_video_controller.h"
 
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -43,9 +47,10 @@ namespace jni
 	// or the sequence header of AV1. Encoders put them in front of the first
 	// key frame, not necessarily in front of every one, so they are kept and
 	// put back where missing. The frame dependencies WebRTC needs for AV1 and
-	// H.265 are those of a stream without layers, which is all hardware
-	// encoders produce here. VP9 frames go out as they come, with the VP9
-	// information of a single layer, as the Java encoders get it.
+	// H.265 are those of a stream without layers, unless an AV1 encoder that
+	// makes temporal layers sets its scalability mode and asks for the layer
+	// of each frame before it encodes it. VP9 frames go out as they come, with
+	// the VP9 information of a single layer, as the Java encoders get it.
 	class EncoderOutputProcessor
 	{
 		public:
@@ -53,6 +58,15 @@ namespace jni
 
 			// Forgets the parameter sets, for a stream that starts over.
 			void Reset();
+
+			// Sets the layers of the stream, temporal ones of AV1 only, as in
+			// L1T3. Returns false for a mode WebRTC has no structure of.
+			bool SetScalabilityMode(webrtc::ScalabilityMode mode);
+			// Lets the layers follow the bitrate WebRTC gives each.
+			void OnRatesUpdated(const webrtc::VideoBitrateAllocation & bitrates);
+			// The layer of the next frame, which buffers it refers to and which
+			// it replaces, or nothing if no layer is to be encoded now.
+			std::optional<webrtc::ScalableVideoController::LayerFrameConfig> NextFrameConfig(bool keyFrame);
 
 			// Fills the image with the bitstream of one frame, and the codec
 			// specific information WebRTC needs to send it. The caller sets
@@ -63,6 +77,10 @@ namespace jni
 			// bitstream cannot be parsed, or a key
 			// frame lacks parameter sets and there are none to put back.
 			bool Process(std::span<const uint8_t> bitstream, bool keyFrame, webrtc::EncodedImage & image,
+				webrtc::CodecSpecificInfo & info);
+			// Does what the above does, for a frame encoded as the given layer.
+			bool Process(std::span<const uint8_t> bitstream, bool keyFrame,
+				const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame, webrtc::EncodedImage & image,
 				webrtc::CodecSpecificInfo & info);
 
 			// The quality scaling settings that suit the codec: the thresholds
@@ -77,7 +95,7 @@ namespace jni
 			bool ProcessAv1(std::span<const uint8_t> bitstream, bool keyFrame, std::vector<uint8_t> & output);
 
 			void FillCodecSpecificInfo(const webrtc::EncodedImage & image, bool keyFrame,
-				webrtc::CodecSpecificInfo & info);
+				const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame, webrtc::CodecSpecificInfo & info);
 
 		private:
 			const webrtc::VideoCodecType codec;
@@ -89,7 +107,8 @@ namespace jni
 
 			webrtc::H264BitstreamParser h264Parser;
 			webrtc::H265BitstreamParser h265Parser;
-			webrtc::ScalableVideoControllerNoLayering svcController;
+			webrtc::ScalabilityMode scalabilityMode;
+			std::unique_ptr<webrtc::ScalableVideoController> svcController;
 
 			// The group of frames VP9 describes: one layer, every frame
 			// referring to the one before.

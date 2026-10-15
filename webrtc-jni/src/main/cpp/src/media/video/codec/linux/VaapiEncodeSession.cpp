@@ -38,7 +38,6 @@ namespace jni
 		name(std::move(name)),
 		config(VA_INVALID_ID),
 		context(VA_INVALID_ID),
-		surfaces{ VA_INVALID_SURFACE, VA_INVALID_SURFACE, VA_INVALID_SURFACE },
 		codedBuffer(VA_INVALID_ID)
 	{
 	}
@@ -60,7 +59,8 @@ namespace jni
 	}
 
 	bool VaapiEncodeSession::Create(VAProfile profile, VAEntrypoint entrypoint, uint32_t pictureWidth,
-		uint32_t pictureHeight, uint32_t surfaceWidth, uint32_t surfaceHeight, uint32_t packedHeaders)
+		uint32_t pictureHeight, uint32_t surfaceWidth, uint32_t surfaceHeight, uint32_t packedHeaders,
+		int reconstructedCount)
 	{
 		Destroy();
 
@@ -83,18 +83,18 @@ namespace jni
 			return false;
 		}
 
-		if (!Check(va.CreateSurfaces(display, VA_RT_FORMAT_YUV420, surfaceWidth, surfaceHeight, surfaces, 3, nullptr, 0),
-			"creating surfaces"))
-		{
-			for (VASurfaceID & surface : surfaces) {
-				surface = VA_INVALID_SURFACE;
-			}
+		const int surfaceCount = 1 + reconstructedCount;
+		surfaces.assign(surfaceCount, VA_INVALID_SURFACE);
 
+		if (!Check(va.CreateSurfaces(display, VA_RT_FORMAT_YUV420, surfaceWidth, surfaceHeight, surfaces.data(),
+			surfaceCount, nullptr, 0), "creating surfaces"))
+		{
+			surfaces.clear();
 			return false;
 		}
 
-		if (!Check(va.CreateContext(display, config, pictureWidth, pictureHeight, VA_PROGRESSIVE, surfaces, 3, &context),
-			"creating the context"))
+		if (!Check(va.CreateContext(display, config, pictureWidth, pictureHeight, VA_PROGRESSIVE, surfaces.data(),
+			surfaceCount, &context), "creating the context"))
 		{
 			context = VA_INVALID_ID;
 			return false;
@@ -127,12 +127,9 @@ namespace jni
 			va.DestroyContext(display, context);
 			context = VA_INVALID_ID;
 		}
-		if (surfaces[0] != VA_INVALID_SURFACE) {
-			va.DestroySurfaces(display, surfaces, 3);
-		}
-
-		for (VASurfaceID & surface : surfaces) {
-			surface = VA_INVALID_SURFACE;
+		if (!surfaces.empty()) {
+			va.DestroySurfaces(display, surfaces.data(), static_cast<int>(surfaces.size()));
+			surfaces.clear();
 		}
 
 		if (config != VA_INVALID_ID) {
@@ -281,6 +278,52 @@ namespace jni
 		return AddMiscParameter(VAEncMiscParameterTypeRateControl, &rateControl, sizeof(rateControl))
 			&& AddMiscParameter(VAEncMiscParameterTypeFrameRate, &frameRate, sizeof(frameRate))
 			&& AddMiscParameter(VAEncMiscParameterTypeHRD, &hrd, sizeof(hrd));
+	}
+
+	bool VaapiEncodeSession::AddLayerRateControl(const std::vector<uint32_t> & bitratesBps, uint32_t framerate,
+		const std::vector<uint32_t> & pattern, bool keyFrame)
+	{
+		const uint32_t layers = static_cast<uint32_t>(bitratesBps.size());
+
+		if (keyFrame) {
+			VAEncMiscParameterTemporalLayerStructure structure = {};
+			structure.number_of_layers = layers;
+			structure.periodicity = static_cast<uint32_t>(pattern.size());
+
+			for (size_t i = 0; i < pattern.size() && i < 32; i++) {
+				structure.layer_id[i] = pattern[i];
+			}
+
+			if (!AddMiscParameter(VAEncMiscParameterTypeTemporalLayerStructure, &structure, sizeof(structure))) {
+				return false;
+			}
+		}
+
+		for (uint32_t layer = 0; layer < layers; layer++) {
+			VAEncMiscParameterRateControl rateControl = {};
+			rateControl.bits_per_second = bitratesBps[layer];
+			rateControl.target_percentage = 100;
+			rateControl.window_size = 1000;
+			rateControl.rc_flags.bits.temporal_id = layer;
+
+			// Each layer down has half the frame rate of the one above it.
+			VAEncMiscParameterFrameRate frameRate = {};
+			frameRate.framerate = framerate | ((1u << (layers - 1 - layer)) << 16);
+			frameRate.framerate_flags.bits.temporal_id = layer;
+
+			if (!AddMiscParameter(VAEncMiscParameterTypeRateControl, &rateControl, sizeof(rateControl))
+				|| !AddMiscParameter(VAEncMiscParameterTypeFrameRate, &frameRate, sizeof(frameRate)))
+			{
+				return false;
+			}
+		}
+
+		VAEncMiscParameterHRD hrd = {};
+		hrd.buffer_size = static_cast<uint32_t>(
+			static_cast<uint64_t>(bitratesBps.back()) * kHrdBufferNumerator / kHrdBufferDenominator);
+		hrd.initial_buffer_fullness = hrd.buffer_size / 2;
+
+		return AddMiscParameter(VAEncMiscParameterTypeHRD, &hrd, sizeof(hrd));
 	}
 
 	bool VaapiEncodeSession::Encode()

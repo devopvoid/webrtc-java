@@ -21,6 +21,8 @@
 #include "common_video/h264/h264_common.h"
 #include "common_video/h265/h265_common.h"
 #include "modules/video_coding/codecs/interface/common_constants.h"
+#include "modules/video_coding/svc/create_scalability_structure.h"
+#include "modules/video_coding/svc/scalable_video_controller_no_layering.h"
 #include "modules/video_coding/utility/vp9_uncompressed_header_parser.h"
 #include "rtc_base/logging.h"
 
@@ -119,7 +121,9 @@ namespace jni
 
 	EncoderOutputProcessor::EncoderOutputProcessor(webrtc::VideoCodecType codec, const webrtc::SdpVideoFormat & format) :
 		codec(codec),
-		packetizationMode(webrtc::H264PacketizationMode::NonInterleaved)
+		packetizationMode(webrtc::H264PacketizationMode::NonInterleaved),
+		scalabilityMode(webrtc::ScalabilityMode::kL1T1),
+		svcController(std::make_unique<webrtc::ScalableVideoControllerNoLayering>())
 	{
 		auto mode = format.parameters.find("packetization-mode");
 
@@ -136,8 +140,49 @@ namespace jni
 		gofIndex = 0;
 	}
 
+	bool EncoderOutputProcessor::SetScalabilityMode(webrtc::ScalabilityMode mode)
+	{
+		std::unique_ptr<webrtc::ScalableVideoController> controller = webrtc::CreateScalabilityStructure(mode);
+
+		if (!controller) {
+			return false;
+		}
+
+		scalabilityMode = mode;
+		svcController = std::move(controller);
+
+		return true;
+	}
+
+	void EncoderOutputProcessor::OnRatesUpdated(const webrtc::VideoBitrateAllocation & bitrates)
+	{
+		svcController->OnRatesUpdated(bitrates);
+	}
+
+	std::optional<webrtc::ScalableVideoController::LayerFrameConfig> EncoderOutputProcessor::NextFrameConfig(
+		bool keyFrame)
+	{
+		auto layerFrames = svcController->NextFrameConfig(/*restart=*/keyFrame);
+
+		if (layerFrames.empty()) {
+			return std::nullopt;
+		}
+
+		return layerFrames[0];
+	}
+
 	bool EncoderOutputProcessor::Process(std::span<const uint8_t> bitstream, bool keyFrame,
 		webrtc::EncodedImage & image, webrtc::CodecSpecificInfo & info)
+	{
+		// A stream without layers has a frame for every one encoded.
+		auto layerFrame = NextFrameConfig(keyFrame);
+
+		return layerFrame && Process(bitstream, keyFrame, *layerFrame, image, info);
+	}
+
+	bool EncoderOutputProcessor::Process(std::span<const uint8_t> bitstream, bool keyFrame,
+		const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame, webrtc::EncodedImage & image,
+		webrtc::CodecSpecificInfo & info)
 	{
 		std::vector<uint8_t> output;
 		bool processed;
@@ -189,7 +234,11 @@ namespace jni
 			image.qp_ = -1;
 		}
 
-		FillCodecSpecificInfo(image, keyFrame, info);
+		if (scalabilityMode != webrtc::ScalabilityMode::kL1T1) {
+			image.SetTemporalIndex(layerFrame.TemporalId());
+		}
+
+		FillCodecSpecificInfo(image, keyFrame, layerFrame, info);
 
 		return true;
 	}
@@ -335,7 +384,7 @@ namespace jni
 	}
 
 	void EncoderOutputProcessor::FillCodecSpecificInfo(const webrtc::EncodedImage & image, bool keyFrame,
-		webrtc::CodecSpecificInfo & info)
+		const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame, webrtc::CodecSpecificInfo & info)
 	{
 		info.codecType = codec;
 
@@ -350,12 +399,11 @@ namespace jni
 		// AV1 and H.265 have no codec specific information; WebRTC sends
 		// their frame dependencies, and those of VP9, from these, in the
 		// dependency descriptor.
-		auto layerFrames = svcController.NextFrameConfig(/*restart=*/keyFrame);
-		info.generic_frame_info = svcController.OnEncodeDone(layerFrames[0]);
-		info.scalability_mode = webrtc::ScalabilityMode::kL1T1;
+		info.generic_frame_info = svcController->OnEncodeDone(layerFrame);
+		info.scalability_mode = scalabilityMode;
 
 		if (keyFrame) {
-			info.template_structure = svcController.DependencyStructure();
+			info.template_structure = svcController->DependencyStructure();
 			info.template_structure->resolutions = {
 				webrtc::RenderResolution(image._encodedWidth, image._encodedHeight)
 			};

@@ -23,6 +23,7 @@
 #include "rtc_base/logging.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace jni
 {
@@ -55,7 +56,33 @@ namespace jni
 
 		constexpr int kRefsPerFrame = 7;
 		constexpr uint8_t kPrimaryRefNone = 7;
+		// The reference frames LAST and GOLDEN, and their index among the
+		// seven.
 		constexpr uint32_t kLastFrame = 1;
+		constexpr uint32_t kGoldenFrame = 4;
+		constexpr int kGoldenIndex = 3;
+		// LAST is the first reference of a frame, and the one its probabilities
+		// and other state carry over from.
+		constexpr uint8_t kPrimaryRefLast = 0;
+
+		// The slots of the two reference buffers L1T3 has, and the frame being
+		// encoded.
+		constexpr int kReconstructedSurfaces = 3;
+
+		// The layers of the frames after a key frame, as
+		// VAEncMiscParameterTemporalLayerStructure takes them, of L1T2 and
+		// L1T3 as WebRTC's structures make them: L1T3 is 0, 2, 1, 2.
+		const std::vector<uint32_t> kL1T2Pattern = { 1, 0 };
+		const std::vector<uint32_t> kL1T3Pattern = { 2, 1, 2, 0 };
+
+		// The share of the bitrate up to each layer until WebRTC gives its
+		// own, as WebRTC splits it for temporal layers.
+		constexpr double kL1T2Shares[] = { 0.6, 1.0 };
+		constexpr double kL1T3Shares[] = { 0.4, 0.6, 1.0 };
+
+		// What a frame that cannot be encoded returns: libaom takes over the
+		// stream, which stays in AV1, rather than WebRTC changing the codec.
+		constexpr int32_t kEncodeFailed = WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		constexpr uint32_t kOrderHintBits = 8;
 
 		// TxMode: largest, or chosen per block.
@@ -180,13 +207,20 @@ namespace jni
 				uint32_t count = 0;
 		};
 
-		// An OBU of the payload: the header, without an extension, and
-		// obu_size as a leb128 of the given fixed length, which is what the
-		// driver rewrites the size of the frame header OBU as.
-		std::vector<uint8_t> MakeObu(uint8_t type, const std::vector<uint8_t> & payload, uint32_t sizeLength)
+		// An OBU of the payload: the header, with the extension that names
+		// the temporal layer if there is one, and obu_size as a leb128 of the
+		// given fixed length, which is what the driver rewrites the size of
+		// the frame header OBU as.
+		std::vector<uint8_t> MakeObu(uint8_t type, const std::vector<uint8_t> & payload, uint32_t sizeLength,
+			std::optional<int> temporalId = std::nullopt)
 		{
 			std::vector<uint8_t> obu;
-			obu.push_back(static_cast<uint8_t>((type << 3) | 0x02));
+			obu.push_back(static_cast<uint8_t>((type << 3) | (temporalId ? 0x04 : 0) | 0x02));
+
+			if (temporalId) {
+				// temporal_id, and spatial_id 0.
+				obu.push_back(static_cast<uint8_t>(*temporalId << 5));
+			}
 
 			const uint32_t size = static_cast<uint32_t>(payload.size());
 
@@ -219,7 +253,7 @@ namespace jni
 		ratesChanged(false),
 		obuSizeLength(0),
 		txMode(0),
-		current(0),
+		temporalLayers(1),
 		referenceValid(false),
 		frameNumber(0),
 		callback(nullptr),
@@ -279,8 +313,12 @@ namespace jni
 		if (settings->numberOfSimulcastStreams > 1) {
 			return WEBRTC_VIDEO_CODEC_ERR_SIMULCAST_PARAMETERS_NOT_SUPPORTED;
 		}
-		// A single layer; spatial or temporal layers are left to libaom.
-		if (settings->GetScalabilityMode().value_or(webrtc::ScalabilityMode::kL1T1) != webrtc::ScalabilityMode::kL1T1) {
+		// Temporal layers; spatial ones are left to libaom.
+		const webrtc::ScalabilityMode mode = settings->GetScalabilityMode().value_or(webrtc::ScalabilityMode::kL1T1);
+
+		if (mode != webrtc::ScalabilityMode::kL1T1 && mode != webrtc::ScalabilityMode::kL1T2
+			&& mode != webrtc::ScalabilityMode::kL1T3)
+		{
 			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
 		}
 		if (obuSizeLength == 0) {
@@ -309,16 +347,28 @@ namespace jni
 		bitrateBps = std::max(1u, codecSettings.startBitrate) * 1000;
 		framerate = std::max(1u, codecSettings.maxFramerate);
 		ratesChanged = true;
-		current = 0;
+		temporalLayers = mode == webrtc::ScalabilityMode::kL1T3 ? 3 : mode == webrtc::ScalabilityMode::kL1T2 ? 2 : 1;
+		slots.fill(-1);
 		referenceValid = false;
 		frameNumber = 0;
 		outputProcessor.Reset();
+
+		layerBitratesBps.clear();
+
+		for (int layer = 0; layer < temporalLayers && temporalLayers > 1; layer++) {
+			const double share = temporalLayers == 3 ? kL1T3Shares[layer] : kL1T2Shares[layer];
+			layerBitratesBps.push_back(static_cast<uint32_t>(bitrateBps * share));
+		}
+
+		if (!outputProcessor.SetScalabilityMode(mode)) {
+			return WEBRTC_VIDEO_CODEC_ERR_PARAMETER;
+		}
 
 		const uint32_t surfaceWidth = Align(codecSettings.width, kSuperblockSize);
 		const uint32_t surfaceHeight = Align(codecSettings.height, kSuperblockSize);
 
 		if (!session.Create(VAProfileAV1Profile0, entrypoint, codecSettings.width, codecSettings.height, surfaceWidth,
-			surfaceHeight, kPackedHeaders))
+			surfaceHeight, kPackedHeaders, kReconstructedSurfaces))
 		{
 			Release();
 			return WEBRTC_VIDEO_CODEC_ERROR;
@@ -329,7 +379,7 @@ namespace jni
 		initialized = true;
 
 		RTC_LOG(LS_INFO) << implementationName << " AV1 initialized: " << codecSettings.width << "x"
-			<< codecSettings.height << " at " << bitrateBps << " bps";
+			<< codecSettings.height << " at " << bitrateBps << " bps, " << webrtc::ScalabilityModeToString(mode);
 
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
@@ -370,18 +420,33 @@ namespace jni
 			frameNumber = 0;
 		}
 
+		const auto layerFrame = outputProcessor.NextFrameConfig(keyFrame);
+
+		// No layer is encoded now, as when WebRTC gives none a bitrate.
+		if (!layerFrame) {
+			return WEBRTC_VIDEO_CODEC_OK;
+		}
+
+		FrameReferences references;
+		const int surface = FreeSurface();
+
+		if (surface < 0 || !PlanReferences(keyFrame, *layerFrame, references)) {
+			RTC_LOG(LS_WARNING) << implementationName << " AV1: a frame refers to a slot that holds no frame";
+			return kEncodeFailed;
+		}
+
 		std::vector<uint8_t> output;
 
 		// A frame up to the alignment larger is cropped; one of another size,
 		// which raced with a change of size, is scaled.
 		const bool encoded = session.Upload(frame, static_cast<int>(codecSettings.width),
-			static_cast<int>(codecSettings.height), kSizeAlignment - 1) && Submit(keyFrame)
+			static_cast<int>(codecSettings.height), kSizeAlignment - 1) && Submit(keyFrame, references, surface)
 			&& session.ReadOutput(output);
 
 		session.DropBuffers();
 
 		if (!encoded) {
-			return WEBRTC_VIDEO_CODEC_ERROR;
+			return kEncodeFailed;
 		}
 
 		webrtc::EncodedImage image;
@@ -394,13 +459,18 @@ namespace jni
 
 		webrtc::CodecSpecificInfo info;
 
-		if (!outputProcessor.Process(output, keyFrame, image, info)) {
-			return WEBRTC_VIDEO_CODEC_ERROR;
+		if (!outputProcessor.Process(output, keyFrame, *layerFrame, image, info)) {
+			return kEncodeFailed;
 		}
 
-		// The frame just encoded is the reference of the next one.
+		// The slots the frame replaces hold it now.
+		for (int slot = 0; slot < static_cast<int>(slots.size()); slot++) {
+			if (references.refreshFrameFlags & (1 << slot)) {
+				slots[slot] = surface;
+			}
+		}
+
 		referenceValid = true;
-		current = 1 - current;
 		frameNumber++;
 		ratesChanged = false;
 
@@ -409,13 +479,81 @@ namespace jni
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
 
-	bool VaapiAv1Encoder::Submit(bool keyFrame)
+	bool VaapiAv1Encoder::PlanReferences(bool keyFrame,
+		const webrtc::ScalableVideoController::LayerFrameConfig & layerFrame, FrameReferences & references) const
+	{
+		references.temporalId = layerFrame.TemporalId();
+
+		// A key frame replaces every slot.
+		if (keyFrame) {
+			references.refreshFrameFlags = 0xFF;
+			return true;
+		}
+
+		std::vector<int> referenced;
+
+		for (const webrtc::CodecBufferUsage & buffer : layerFrame.Buffers()) {
+			if (buffer.id < 0 || buffer.id >= static_cast<int>(slots.size())) {
+				return false;
+			}
+			if (buffer.referenced) {
+				if (slots[buffer.id] < 0) {
+					return false;
+				}
+
+				referenced.push_back(buffer.id);
+			}
+			if (buffer.updated) {
+				references.refreshFrameFlags |= static_cast<uint8_t>(1 << buffer.id);
+			}
+		}
+
+		if (referenced.empty()) {
+			return false;
+		}
+
+		// Every reference frame names the first reference, but golden, which
+		// names the second where there is one.
+		references.refFrameIdx.fill(static_cast<uint8_t>(referenced[0]));
+
+		if (referenced.size() > 1) {
+			references.refFrameIdx[kGoldenIndex] = static_cast<uint8_t>(referenced[1]);
+			references.golden = true;
+		}
+
+		return true;
+	}
+
+	bool VaapiAv1Encoder::AddRateControl(bool keyFrame)
+	{
+		// No initial quantizer: the rate control picks its own, as FFmpeg
+		// leaves it.
+		if (temporalLayers == 1) {
+			return session.AddRateControl(bitrateBps, framerate, 0);
+		}
+
+		// Without a rate control of each layer, AMD's driver gives the upper
+		// layers next to no bits.
+		return session.AddLayerRateControl(layerBitratesBps, framerate,
+			temporalLayers == 3 ? kL1T3Pattern : kL1T2Pattern, keyFrame);
+	}
+
+	int VaapiAv1Encoder::FreeSurface() const
+	{
+		for (int surface = 0; surface < kReconstructedSurfaces; surface++) {
+			if (std::find(slots.begin(), slots.end(), surface) == slots.end()) {
+				return surface;
+			}
+		}
+
+		return -1;
+	}
+
+	bool VaapiAv1Encoder::Submit(bool keyFrame, const FrameReferences & references, int surface)
 	{
 		const uint32_t sbCols = Align(codecSettings.width, kSuperblockSize) / kSuperblockSize;
 		const uint32_t sbRows = Align(codecSettings.height, kSuperblockSize) / kSuperblockSize;
-		// The slot of the frame this one refers to, which the reconstructed
-		// surfaces stand for.
-		const int referenceSlot = 1 - current;
+		const bool layered = temporalLayers > 1;
 
 		if (keyFrame) {
 			VAEncSequenceParameterBufferAV1 sequence = {};
@@ -425,6 +563,7 @@ namespace jni
 			// Key frames only where asked for.
 			sequence.intra_period = kKeyFrameInterval;
 			sequence.ip_period = 1;
+			sequence.hierarchical_flag = layered ? 1 : 0;
 			sequence.bits_per_second = bitrateBps;
 			sequence.seq_fields.bits.enable_order_hint = 1;
 			sequence.seq_fields.bits.enable_cdef = 1;
@@ -435,21 +574,20 @@ namespace jni
 			}
 		}
 
-		// No initial quantizer: the rate control picks its own, as FFmpeg
-		// leaves it.
-		if ((keyFrame || ratesChanged) && !session.AddRateControl(bitrateBps, framerate, 0)) {
+		if ((keyFrame || ratesChanged) && !AddRateControl(keyFrame)) {
 			return false;
 		}
 
 		std::vector<uint8_t> frameHeader;
 		FrameHeaderLayout layout;
-		WriteFrameHeader(frameHeader, layout, keyFrame);
+		WriteFrameHeader(frameHeader, layout, keyFrame, references);
 
 		VAEncPictureParameterBufferAV1 picture = {};
 		picture.frame_width_minus_1 = static_cast<uint16_t>(codecSettings.width - 1);
 		picture.frame_height_minus_1 = static_cast<uint16_t>(codecSettings.height - 1);
-		picture.reconstructed_frame = session.Reconstructed(current);
+		picture.reconstructed_frame = session.Reconstructed(surface);
 		picture.coded_buf = session.CodedBuffer();
+		picture.refresh_frame_flags = references.refreshFrameFlags;
 
 		for (VASurfaceID & reference : picture.reference_frames) {
 			reference = VA_INVALID_SURFACE;
@@ -457,23 +595,33 @@ namespace jni
 
 		if (keyFrame) {
 			picture.primary_ref_frame = kPrimaryRefNone;
-			picture.refresh_frame_flags = 0xFF;
 			picture.picture_flags.bits.frame_type = kKeyFrameType;
 			picture.picture_flags.bits.error_resilient_mode = 1;
 		}
 		else {
-			picture.reference_frames[referenceSlot] = session.Reconstructed(referenceSlot);
-
-			for (int i = 0; i < kRefsPerFrame; i++) {
-				picture.ref_frame_idx[i] = static_cast<uint8_t>(referenceSlot);
+			for (int slot = 0; slot < static_cast<int>(slots.size()); slot++) {
+				if (slots[slot] >= 0) {
+					picture.reference_frames[slot] = session.Reconstructed(slots[slot]);
+				}
 			}
 
-			// Every reference frame names the same slot, so any of them is
-			// the primary one; FFmpeg takes the index of the slot.
-			picture.primary_ref_frame = static_cast<uint8_t>(referenceSlot);
-			picture.refresh_frame_flags = static_cast<uint8_t>(1 << current);
+			std::copy(references.refFrameIdx.begin(), references.refFrameIdx.end(), picture.ref_frame_idx);
+
+			picture.primary_ref_frame = kPrimaryRefLast;
 			picture.ref_frame_ctrl_l0.fields.search_idx0 = kLastFrame;
+
+			if (references.golden) {
+				picture.ref_frame_ctrl_l0.fields.search_idx1 = kGoldenFrame;
+			}
+
 			picture.picture_flags.bits.frame_type = kInterFrameType;
+		}
+
+		if (layered) {
+			picture.temporal_id = static_cast<uint8_t>(references.temporalId);
+			picture.hierarchical_level_plus1 = static_cast<uint8_t>(references.temporalId + 1);
+			picture.tile_group_obu_hdr_info.bits.obu_extension_flag = 1;
+			picture.tile_group_obu_hdr_info.bits.temporal_id = static_cast<uint8_t>(references.temporalId);
 		}
 
 		picture.order_hint = static_cast<uint8_t>(frameNumber);
@@ -496,7 +644,8 @@ namespace jni
 		picture.bit_offset_cdef_params = layout.cdefOffset;
 		picture.size_in_bits_cdef_params = layout.cdefSize;
 		picture.size_in_bits_frame_hdr_obu = layout.size;
-		picture.byte_offset_frame_hdr_obu_size = (keyFrame ? static_cast<uint32_t>(sequenceHeader.size()) : 0) + 1;
+		picture.byte_offset_frame_hdr_obu_size = (keyFrame ? static_cast<uint32_t>(sequenceHeader.size()) : 0)
+			+ (layered ? 2 : 1);
 
 		VAEncTileGroupBufferAV1 tileGroup = {};
 		tileGroup.tg_start = 0;
@@ -522,17 +671,24 @@ namespace jni
 		writer.Put(0, 3);
 		writer.Put(0, 1);
 		writer.Put(0, 1);
-		// timing_info_present_flag, initial_display_delay_present_flag,
-		// operating_points_cnt_minus_1, operating_point_idc[0].
+		// timing_info_present_flag, initial_display_delay_present_flag.
 		writer.Put(0, 1);
 		writer.Put(0, 1);
-		writer.Put(0, 5);
-		writer.Put(0, 12);
-		// seq_level_idx[0], and seq_tier[0] above level 3.3.
-		writer.Put(level, 5);
+		// operating_points_cnt_minus_1: with temporal layers, an operating
+		// point for each, from all layers down to the lowest. Then
+		// operating_point_idc, of spatial layer 0 and those temporal layers,
+		// seq_level_idx, and seq_tier above level 3.3.
+		writer.Put(temporalLayers - 1, 5);
 
-		if (level > 7) {
-			writer.Put(0, 1);
+		for (int point = 0; point < temporalLayers; point++) {
+			const uint32_t idc = temporalLayers > 1 ? 0x100 | ((1u << (temporalLayers - point)) - 1) : 0;
+
+			writer.Put(idc, 12);
+			writer.Put(level, 5);
+
+			if (level > 7) {
+				writer.Put(0, 1);
+			}
 		}
 
 		writer.Put(widthBits - 1, 4);
@@ -574,17 +730,18 @@ namespace jni
 		obu = MakeObu(kObuSequenceHeader, writer.Bytes(), obuSizeLength);
 	}
 
-	void VaapiAv1Encoder::WriteFrameHeader(std::vector<uint8_t> & obu, FrameHeaderLayout & layout, bool keyFrame) const
+	void VaapiAv1Encoder::WriteFrameHeader(std::vector<uint8_t> & obu, FrameHeaderLayout & layout, bool keyFrame,
+		const FrameReferences & references) const
 	{
 		// uncompressed_header, section 5.9, as FFmpeg's VA-API encoder writes
 		// it, for the sequence header above.
-		const int referenceSlot = 1 - current;
+		const bool layered = temporalLayers > 1;
 		const uint32_t miCols = 2 * ((codecSettings.width + 7) >> 3);
 		const uint32_t miRows = 2 * ((codecSettings.height + 7) >> 3);
 		const uint32_t sbCols = (miCols + 15) >> 4;
 		const uint32_t sbRows = (miRows + 15) >> 4;
-		// The OBU header and obu_size come before the payload.
-		const uint32_t payloadOffset = (1 + obuSizeLength) * 8;
+		// The OBU header, its extension, and obu_size come before the payload.
+		const uint32_t payloadOffset = ((layered ? 2 : 1) + obuSizeLength) * 8;
 
 		BitWriter writer;
 		// show_existing_frame, frame_type, show_frame.
@@ -604,14 +761,13 @@ namespace jni
 
 		if (!keyFrame) {
 			// primary_ref_frame, refresh_frame_flags.
-			writer.Put(referenceSlot, 3);
-			writer.Put(1u << current, 8);
-			// frame_refs_short_signaling, then ref_frame_idx: every reference
-			// is the frame before.
+			writer.Put(kPrimaryRefLast, 3);
+			writer.Put(references.refreshFrameFlags, 8);
+			// frame_refs_short_signaling, then ref_frame_idx.
 			writer.Put(0, 1);
 
 			for (int i = 0; i < kRefsPerFrame; i++) {
-				writer.Put(referenceSlot, 3);
+				writer.Put(references.refFrameIdx[i], 3);
 			}
 		}
 
@@ -692,7 +848,8 @@ namespace jni
 
 		writer.TrailingBits();
 
-		obu = MakeObu(kObuFrameHeader, writer.Bytes(), obuSizeLength);
+		obu = MakeObu(kObuFrameHeader, writer.Bytes(), obuSizeLength,
+			layered ? std::optional<int>(references.temporalId) : std::nullopt);
 		layout.size = static_cast<uint32_t>(obu.size() * 8);
 	}
 
@@ -724,6 +881,17 @@ namespace jni
 		}
 
 		bitrateBps = bitrate;
+		outputProcessor.OnRatesUpdated(parameters.bitrate);
+
+		// The bitrate of each temporal layer, counting those below it.
+		uint32_t sum = 0;
+
+		for (int layer = 0; layer < static_cast<int>(layerBitratesBps.size()); layer++) {
+			sum += parameters.bitrate.GetBitrate(0, layer);
+			// A layer WebRTC gives no bitrate is not encoded; it keeps the
+			// rate of the one below, which the driver takes.
+			layerBitratesBps[layer] = std::max(sum, 1u);
+		}
 
 		if (parameters.framerate_fps >= 1.0) {
 			framerate = static_cast<uint32_t>(parameters.framerate_fps + 0.5);
@@ -742,6 +910,14 @@ namespace jni
 		info.supports_simulcast = false;
 		info.scaling_settings = outputProcessor.GetScalingSettings();
 		info.requested_resolution_alignment = kSizeAlignment;
+
+		// With temporal layers, the share of the frame rate up to each.
+		if (temporalLayers > 1) {
+			for (int layer = 0; layer < temporalLayers; layer++) {
+				info.fps_allocation[0].push_back(static_cast<uint8_t>(
+					EncoderInfo::kMaxFramerateFraction >> (temporalLayers - 1 - layer)));
+			}
+		}
 
 		return info;
 	}
