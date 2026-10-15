@@ -34,6 +34,14 @@ namespace jni
 
 		// The frame type of an inter frame; a key frame is 0.
 		constexpr uint32_t kInterFrame = 1;
+
+		// VA-API takes the interpolation filter in libvpx's order, which has
+		// regular and smooth the other way round than the bitstream, as
+		// FFmpeg maps it.
+		uint32_t InterpolationFilter(uint8_t coded)
+		{
+			return coded <= 1 ? coded ^ 1u : coded;
+		}
 	}
 
 	VaapiVp9Decoder::VaapiVp9Decoder(VaapiLibrary & library) :
@@ -329,7 +337,7 @@ namespace jni
 		fields.error_resilient_mode = header.errorResilient ? 1 : 0;
 		fields.intra_only = header.intraOnly ? 1 : 0;
 		fields.allow_high_precision_mv = header.allowHighPrecisionMv ? 1 : 0;
-		fields.mcomp_filter_type = header.interpolationFilter;
+		fields.mcomp_filter_type = InterpolationFilter(header.interpolationFilter);
 		fields.frame_parallel_decoding_mode = header.frameParallelDecoding ? 1 : 0;
 		fields.reset_frame_context = header.resetFrameContext;
 		fields.refresh_frame_context = header.refreshFrameContext ? 1 : 0;

@@ -23,14 +23,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import dev.onvoid.webrtc.media.video.I420Buffer;
+import dev.onvoid.webrtc.media.video.VideoFrame;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 import dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory;
+import dev.onvoid.webrtc.media.video.codec.EncodedImage;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.VideoCodecInfo;
+import dev.onvoid.webrtc.media.video.codec.VideoCodecStatus;
+import dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory;
+import dev.onvoid.webrtc.media.video.codec.VideoEncoder;
+import dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -501,6 +512,205 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 		finally {
 			hardware.dispose();
 		}
+	}
+
+	/**
+	 * Decodes a VP9 stream with a fixed interpolation filter (regular, as
+	 * Intel's VA-API encoder codes it), whose numbering in the bitstream
+	 * differs from VA-API's. Its frames zoom, so that a wrong filter drifts
+	 * from frame to frame: the last frame must match libvpx's.
+	 */
+	@Test
+	void hardwareDecodesVp9FixedInterpolationFilter() throws Exception {
+		assumeVp9Platform();
+
+		List<ByteBuffer> stream = readIvf("vp9-fixed-filter.ivf");
+
+		byte[] hardware = lastVp9Frame(new HardwareVideoDecoderFactory(), stream,
+				HardwareVideoDecoderIntegrationTest::expectVp9Hardware);
+		byte[] software = lastVp9Frame(new DefaultVideoDecoderFactory(), stream, implementation -> {});
+
+		double psnr = psnr(hardware, software);
+
+		assertTrue(psnr > 45, "the last frame differs from libvpx's: " + String.format(Locale.ROOT, "%.1f dB", psnr));
+	}
+
+	/**
+	 * Sends the recorded VP9 frames through a call whose receiver decodes
+	 * with the given factory, and returns the luma of the last frame.
+	 */
+	private byte[] lastVp9Frame(VideoDecoderFactory decoders, List<ByteBuffer> stream,
+			Consumer<String> expectHardware) throws Exception {
+		final int width = 320;
+		final int height = 180;
+
+		PeerConnectionFactory factory = PeerConnectionFactory.builder()
+				.setAudioDeviceModule(audioDevModule)
+				.setVideoEncoderFactory(new ReplayEncoderFactory(stream, width, height))
+				.setVideoDecoderFactory(decoders)
+				.build();
+
+		CountDownLatch received = new CountDownLatch(stream.size());
+		AtomicReference<byte[]> last = new AtomicReference<>();
+		String implementation;
+
+		try (TestMediaCall call = new TestMediaCall(factory, true, false, VP9)) {
+			call.setVideoSize(width, height);
+			call.negotiate();
+
+			RTCRtpReceiver receiver = call.getReceiver("video");
+			VideoTrack track = (VideoTrack) receiver.getTrack();
+			VideoTrackSink sink = frame -> {
+				if (received.getCount() == 1) {
+					I420Buffer buffer = frame.buffer.toI420();
+					byte[] luma = new byte[width * height];
+
+					for (int row = 0; row < height; row++) {
+						ByteBuffer line = buffer.getDataY().duplicate();
+						line.position(row * buffer.getStrideY());
+						line.get(luma, row * width, width);
+					}
+
+					last.set(luma);
+				}
+
+				frame.release();
+				received.countDown();
+			};
+			track.addSink(sink);
+
+			call.awaitConnected();
+			call.startMedia();
+
+			assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
+
+			implementation = decoderImplementationOf(call);
+
+			track.removeSink(sink);
+			receiver.dispose();
+		}
+		finally {
+			factory.dispose();
+		}
+
+		expectHardware.accept(implementation);
+
+		return last.get();
+	}
+
+	private static List<ByteBuffer> readIvf(String name) throws Exception {
+		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+		try (InputStream input = HardwareVideoDecoderIntegrationTest.class.getResourceAsStream(name)) {
+			byte[] chunk = new byte[8192];
+			int read;
+
+			while ((read = input.read(chunk)) > 0) {
+				bytes.write(chunk, 0, read);
+			}
+		}
+
+		byte[] file = bytes.toByteArray();
+
+		ByteBuffer data = ByteBuffer.wrap(file).order(ByteOrder.LITTLE_ENDIAN);
+		List<ByteBuffer> frames = new ArrayList<>();
+		int position = data.getShort(6);
+
+		while (position + 12 <= file.length) {
+			int size = data.getInt(position);
+			frames.add(ByteBuffer.wrap(file, position + 12, size).slice());
+			position += 12 + size;
+		}
+
+		return frames;
+	}
+
+	private static double psnr(byte[] a, byte[] b) {
+		double error = 0;
+
+		for (int i = 0; i < a.length; i++) {
+			int difference = (a[i] & 0xff) - (b[i] & 0xff);
+			error += difference * difference;
+		}
+
+		return error == 0 ? Double.POSITIVE_INFINITY : 10 * Math.log10(255.0 * 255.0 * a.length / error);
+	}
+
+	/**
+	 * Offers VP9 as the built-in factory does, and "encodes" each frame into
+	 * the next one of a recorded stream; frames after the end produce nothing.
+	 */
+	private static final class ReplayEncoderFactory implements VideoEncoderFactory {
+
+		private final DefaultVideoEncoderFactory builtIn = new DefaultVideoEncoderFactory();
+
+		private final List<ByteBuffer> stream;
+
+		private final int width;
+
+		private final int height;
+
+
+		ReplayEncoderFactory(List<ByteBuffer> stream, int width, int height) {
+			this.stream = stream;
+			this.width = width;
+			this.height = height;
+		}
+
+		@Override
+		public List<VideoCodecInfo> getSupportedCodecs() {
+			return builtIn.getSupportedCodecs();
+		}
+
+		@Override
+		public VideoEncoder createEncoder(VideoCodecInfo info) {
+			if (!"VP9".equalsIgnoreCase(info.getName())) {
+				return builtIn.createEncoder(info);
+			}
+
+			return new VideoEncoder() {
+
+				private Callback callback;
+
+				private int next;
+
+				@Override
+				public VideoCodecStatus initEncode(Settings settings, Callback callback) {
+					this.callback = callback;
+					return VideoCodecStatus.OK;
+				}
+
+				@Override
+				public VideoCodecStatus release() {
+					return VideoCodecStatus.OK;
+				}
+
+				@Override
+				public VideoCodecStatus encode(VideoFrame frame, EncodeInfo info) {
+					if (next < stream.size()) {
+						ByteBuffer payload = ByteBuffer.allocateDirect(stream.get(next).remaining());
+						payload.put(stream.get(next).duplicate()).flip();
+
+						callback.onEncodedFrame(EncodedImage.builder()
+								.setBuffer(payload)
+								.setEncodedWidth(width)
+								.setEncodedHeight(height)
+								.setCaptureTimeNs(frame.timestampNs)
+								.setFrameType(next == 0 ? EncodedImage.FrameType.KEY : EncodedImage.FrameType.DELTA)
+								.build());
+						next++;
+					}
+
+					return VideoCodecStatus.OK;
+				}
+
+				@Override
+				public VideoCodecStatus setRates(RateControlParameters parameters) {
+					return VideoCodecStatus.OK;
+				}
+			};
+		}
+
 	}
 
 	@Test
