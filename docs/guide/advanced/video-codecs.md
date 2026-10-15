@@ -31,7 +31,7 @@ Which GPUs encode which codec, by platform and interface:
 | Windows | NVENC | NVIDIA | ✓ | ✓ | – | RTX 40 and newer |
 | Windows | Media Foundation | AMD, Intel | ✓ | where the GPU encodes it | Intel, opt-in (1) | AMD RDNA3 and newer, Intel Arc |
 | Linux | NVENC | NVIDIA | ✓ | ✓ | – | RTX 40 and newer |
-| Linux | VA-API | Intel, AMD | ✓ | where the driver encodes it | Intel | AMD RDNA3 and newer, also in temporal layers (2) |
+| Linux | VA-API | Intel, AMD | ✓ | where the driver encodes it | Intel, also in temporal layers (2) | AMD RDNA3 and newer, also in temporal layers (2) |
 | macOS | VideoToolbox | Apple | ✓ | Macs with a hardware HEVC encoder | – | – |
 | | **Software fallback** | | OpenH264 | none (3) | libvpx | libaom |
 
@@ -48,7 +48,7 @@ The hardware encoders take over formats the software encoders offer too, so enco
 | VP9 | Profile 0 |
 | AV1 | Profile 0 |
 
-Hardware encoders produce a single layer, but for the VA-API AV1 encoder, which encodes temporal layers too (`L1T2` and `L1T3`), so that an SFU can forward a lower frame rate. A stream that asks for spatial layers, or for temporal layers from another hardware encoder, is encoded in software. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (e.g. from NVENC to Media Foundation on Windows), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
+Hardware encoders produce a single layer, but for the VA-API encoders of AV1 and VP9, which encode temporal layers too (`L1T2` and `L1T3`), so that an SFU can forward a lower frame rate. A stream that asks for spatial layers, or for temporal layers from another hardware encoder, is encoded in software. When a hardware encoder fails to start, for example because the GPU has no encoder sessions left, or fails while encoding, the stream switches to the next encoder in line (e.g. from NVENC to Media Foundation on Windows), and finally to the software encoder, and continues with a key frame. On a machine without a hardware encoder, the factory encodes like `DefaultVideoEncoderFactory`.
 
 Which encoder a stream uses shows in the `encoderImplementation` statistic of its `outbound-rtp` stats, e.g. `NVENC (NVIDIA GeForce RTX 4070)`, `MediaFoundation (AMDav1Encoder)`, `VA-API (Intel iHD driver ...)`, `VideoToolbox (H.265)`, `OpenH264` or `libaom`.
 
