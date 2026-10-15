@@ -43,6 +43,21 @@ namespace jni
 		constexpr uint8_t kSliceTypeP = 0;
 		constexpr uint8_t kSliceTypeI = 2;
 
+		// H.264 NAL unit types (table 7-1), and the nal_ref_idc of everything
+		// the encoder writes, all of which is used for reference.
+		constexpr uint32_t kNalSlice = 1;
+		constexpr uint32_t kNalIdrSlice = 5;
+		constexpr uint32_t kNalSps = 7;
+		constexpr uint32_t kNalPps = 8;
+		constexpr uint32_t kNalRefIdc = 3;
+
+		// Constrained Baseline: Baseline with constraint_set1_flag.
+		constexpr uint32_t kProfileIdcBaseline = 66;
+
+		// The packed headers the encoder writes where the driver takes both:
+		// its slice headers go with its parameter sets only.
+		constexpr uint32_t kPackedHeaders = VA_ENC_PACKED_HEADER_SEQUENCE | VA_ENC_PACKED_HEADER_SLICE;
+
 		constexpr uint32_t kInitialQp = 26;
 
 		// How many seconds of video the rate control may buffer, as a
@@ -95,6 +110,7 @@ namespace jni
 		va(library.Api()),
 		implementationName("VA-API (" + library.Vendor() + ")"),
 		config(VA_INVALID_ID),
+		packedHeaders(0),
 		context(VA_INVALID_ID),
 		inputSurface(VA_INVALID_SURFACE),
 		reconstructed{ VA_INVALID_SURFACE, VA_INVALID_SURFACE },
@@ -179,14 +195,30 @@ namespace jni
 	{
 		VADisplay display = library.Display();
 
-		VAConfigAttrib attributes[2] = {};
+		VAConfigAttrib packed = {};
+		packed.type = VAConfigAttribEncPackedHeaders;
+
+		packedHeaders = 0;
+
+		if (va.GetConfigAttributes(display, VAProfileH264ConstrainedBaseline, library.Entrypoint(), &packed, 1) ==
+			VA_STATUS_SUCCESS && packed.value != VA_ATTRIB_NOT_SUPPORTED
+			&& (packed.value & kPackedHeaders) == kPackedHeaders)
+		{
+			packedHeaders = kPackedHeaders;
+		}
+
+		VAConfigAttrib attributes[3] = {};
 		attributes[0].type = VAConfigAttribRTFormat;
 		attributes[0].value = VA_RT_FORMAT_YUV420;
 		attributes[1].type = VAConfigAttribRateControl;
 		attributes[1].value = VA_RC_CBR;
+		attributes[2].type = VAConfigAttribEncPackedHeaders;
+		attributes[2].value = packedHeaders;
 
-		if (!Check(va.CreateConfig(display, VAProfileH264ConstrainedBaseline, library.Entrypoint(), attributes, 2,
-			&config), "creating the configuration"))
+		const int attributeCount = packedHeaders != 0 ? 3 : 2;
+
+		if (!Check(va.CreateConfig(display, VAProfileH264ConstrainedBaseline, library.Entrypoint(), attributes,
+			attributeCount, &config), "creating the configuration"))
 		{
 			config = VA_INVALID_ID;
 			return false;
@@ -447,9 +479,29 @@ namespace jni
 		VAEncSliceParameterBufferH264 slice = {};
 		FillSlice(slice, idr);
 
-		if (!AddBuffer(VAEncPictureParameterBufferType, &picture, sizeof(picture)) ||
-			!AddBuffer(VAEncSliceParameterBufferType, &slice, sizeof(slice)))
-		{
+		if (!AddBuffer(VAEncPictureParameterBufferType, &picture, sizeof(picture))) {
+			return false;
+		}
+
+		if (idr && (packedHeaders & VA_ENC_PACKED_HEADER_SEQUENCE)) {
+			std::vector<uint8_t> parameterSets;
+			const size_t bits = WriteParameterSets(parameterSets);
+
+			if (!AddPackedHeader(VAEncPackedHeaderSequence, parameterSets, bits)) {
+				return false;
+			}
+		}
+
+		if (packedHeaders & VA_ENC_PACKED_HEADER_SLICE) {
+			std::vector<uint8_t> sliceHeader;
+			const size_t bits = WriteSliceHeader(sliceHeader, idr);
+
+			if (!AddPackedHeader(VAEncPackedHeaderSlice, sliceHeader, bits)) {
+				return false;
+			}
+		}
+
+		if (!AddBuffer(VAEncSliceParameterBufferType, &slice, sizeof(slice))) {
 			return false;
 		}
 
@@ -525,6 +577,18 @@ namespace jni
 		std::memcpy(header->data, data, size);
 
 		return AddBuffer(VAEncMiscParameterBufferType, buffer.data(), buffer.size());
+	}
+
+	bool VaapiH264Encoder::AddPackedHeader(VAEncPackedHeaderType type, const std::vector<uint8_t> & data,
+		size_t bits)
+	{
+		VAEncPackedHeaderParameterBuffer parameters = {};
+		parameters.type = type;
+		parameters.bit_length = static_cast<uint32_t>(bits);
+		parameters.has_emulation_bytes = 1;
+
+		return AddBuffer(VAEncPackedHeaderParameterBufferType, &parameters, sizeof(parameters))
+			&& AddBuffer(VAEncPackedHeaderDataBufferType, const_cast<uint8_t *>(data.data()), data.size());
 	}
 
 	void VaapiH264Encoder::DestroyFrameBuffers()
@@ -644,6 +708,130 @@ namespace jni
 
 		slice.slice_qp_delta = 0;
 		slice.disable_deblocking_filter_idc = 0;
+	}
+
+	size_t VaapiH264Encoder::WriteParameterSets(std::vector<uint8_t> & output) const
+	{
+		// The SPS (7.3.2.1.1) of FillSequence().
+		NalUnitWriter sps;
+		sps.Bits(0, 1);
+		sps.Bits(kNalRefIdc, 2);
+		sps.Bits(kNalSps, 5);
+
+		sps.Bits(kProfileIdcBaseline, 8);
+		// constraint_set0_flag and constraint_set1_flag, the other four and
+		// reserved_zero_2bits not.
+		sps.Bits(0b11000000, 8);
+		sps.Bits(LevelIdc(widthInMbs * heightInMbs, framerate), 8);
+		sps.Ue(0);
+		sps.Ue(kLog2MaxFrameNum - 4);
+		sps.Ue(2);
+		sps.Ue(1);
+		sps.Flag(false);
+		sps.Ue(widthInMbs - 1);
+		sps.Ue(heightInMbs - 1);
+		sps.Flag(true);
+		sps.Flag(true);
+
+		const uint32_t croppedRight = widthInMbs * 16 - codecSettings.width;
+		const uint32_t croppedBottom = heightInMbs * 16 - codecSettings.height;
+		const bool cropped = croppedRight > 0 || croppedBottom > 0;
+
+		sps.Flag(cropped);
+
+		if (cropped) {
+			sps.Ue(0);
+			sps.Ue(croppedRight / 2);
+			sps.Ue(0);
+			sps.Ue(croppedBottom / 2);
+		}
+
+		// VUI (E.1.1) with the timing only.
+		sps.Flag(true);
+		sps.Flag(false);
+		sps.Flag(false);
+		sps.Flag(false);
+		sps.Flag(false);
+		sps.Flag(true);
+		sps.Bits(1, 32);
+		sps.Bits(framerate * 2, 32);
+		sps.Flag(false);
+		sps.Flag(false);
+		sps.Flag(false);
+		sps.Flag(false);
+		sps.Flag(false);
+		sps.AlignWithStopBit();
+
+		// The PPS (7.3.2.2) of FillPicture().
+		NalUnitWriter pps;
+		pps.Bits(0, 1);
+		pps.Bits(kNalRefIdc, 2);
+		pps.Bits(kNalPps, 5);
+
+		pps.Ue(0);
+		pps.Ue(0);
+		// CAVLC.
+		pps.Flag(false);
+		pps.Flag(false);
+		pps.Ue(0);
+		pps.Ue(0);
+		pps.Ue(0);
+		pps.Flag(false);
+		pps.Bits(0, 2);
+		pps.Se(static_cast<int32_t>(kInitialQp) - 26);
+		pps.Se(0);
+		pps.Se(0);
+		// deblocking_filter_control_present_flag.
+		pps.Flag(true);
+		pps.Flag(false);
+		pps.Flag(false);
+		pps.AlignWithStopBit();
+
+		return sps.AppendTo(output) + pps.AppendTo(output);
+	}
+
+	size_t VaapiH264Encoder::WriteSliceHeader(std::vector<uint8_t> & output, bool idr) const
+	{
+		// The slice header (7.3.3) of FillSlice(), which the driver goes on
+		// from with the slice data.
+		NalUnitWriter header;
+		header.Bits(0, 1);
+		header.Bits(kNalRefIdc, 2);
+		header.Bits(idr ? kNalIdrSlice : kNalSlice, 5);
+
+		header.Ue(0);
+		header.Ue(idr ? kSliceTypeI : kSliceTypeP);
+		header.Ue(0);
+		header.Bits(frameNum, kLog2MaxFrameNum);
+
+		if (idr) {
+			header.Ue(idrPicId);
+		}
+		else {
+			// num_ref_idx_active_override_flag and
+			// ref_pic_list_modification_flag_l0.
+			header.Flag(false);
+			header.Flag(false);
+		}
+
+		// dec_ref_pic_marking(): no_output_of_prior_pics_flag and
+		// long_term_reference_flag, or adaptive_ref_pic_marking_mode_flag.
+		if (idr) {
+			header.Flag(false);
+			header.Flag(false);
+		}
+		else {
+			header.Flag(false);
+		}
+
+		header.Se(0);
+		// disable_deblocking_filter_idc, slice_alpha_c0_offset_div2 and
+		// slice_beta_offset_div2.
+		header.Ue(0);
+		header.Se(0);
+		header.Se(0);
+
+		return header.AppendTo(output);
 	}
 
 	void VaapiH264Encoder::SetRates(const RateControlParameters & parameters)

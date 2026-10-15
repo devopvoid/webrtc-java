@@ -101,8 +101,10 @@ namespace jni
 		referenceValid = false;
 		outputProcessor.Reset();
 
-		if (!session.Create(VAProfileVP9Profile0, entrypoint, Align(codecSettings.width, kSurfaceAlignment),
-			Align(codecSettings.height, kSurfaceAlignment)))
+		const uint32_t surfaceWidth = Align(codecSettings.width, kSurfaceAlignment);
+		const uint32_t surfaceHeight = Align(codecSettings.height, kSurfaceAlignment);
+
+		if (!session.Create(VAProfileVP9Profile0, entrypoint, surfaceWidth, surfaceHeight, surfaceWidth, surfaceHeight))
 		{
 			Release();
 			return WEBRTC_VIDEO_CODEC_ERROR;

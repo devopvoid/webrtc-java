@@ -47,10 +47,14 @@ namespace jni
 			VaapiEncodeSession(const VaapiEncodeSession &) = delete;
 			VaapiEncodeSession & operator=(const VaapiEncodeSession &) = delete;
 
-			// Creates the session for 4:2:0 at constant bitrate, with surfaces
-			// of the given size, which is that of the frame aligned as the
-			// codec needs.
-			bool Create(VAProfile profile, VAEntrypoint entrypoint, uint32_t surfaceWidth, uint32_t surfaceHeight);
+			// Creates the session for 4:2:0 at constant bitrate, for pictures
+			// of the given size, in surfaces of the given size, which is that
+			// of the picture aligned as the codec needs, and with the
+			// VA_ENC_PACKED_HEADER_* the encoder hands the driver. Mesa takes
+			// the size of the coded picture from the context, so the context
+			// has the picture's.
+			bool Create(VAProfile profile, VAEntrypoint entrypoint, uint32_t pictureWidth, uint32_t pictureHeight,
+				uint32_t surfaceWidth, uint32_t surfaceHeight, uint32_t packedHeaders = VA_ENC_PACKED_HEADER_NONE);
 			void Destroy();
 
 			VASurfaceID InputSurface() const;
@@ -65,6 +69,9 @@ namespace jni
 
 			bool AddBuffer(VABufferType type, void * data, size_t size);
 			bool AddMiscParameter(VAEncMiscParameterType type, const void * data, size_t size);
+			// A header the encoder wrote, of the given length in bits, with
+			// start codes and emulation prevention bytes.
+			bool AddPackedHeader(VAEncPackedHeaderType type, const std::vector<uint8_t> & data, size_t bits);
 			// The rate control, frame rate and HRD parameters, for constant
 			// bitrate with the given initial quantizer.
 			bool AddRateControl(uint32_t bitrateBps, uint32_t framerate, uint32_t initialQp);

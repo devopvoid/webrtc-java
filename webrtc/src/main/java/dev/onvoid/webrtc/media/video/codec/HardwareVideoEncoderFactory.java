@@ -45,10 +45,8 @@ import java.util.Objects;
  * with the system property
  * {@code webrtc.hardware.vp9Encoder} set to {@code true} when the factory is
  * created: the encoder has not been tested on such a GPU yet. Without it, VP9
- * is encoded with libvpx. On Linux, H.265 is encoded with VA-API on the GPUs
- * of Intel and AMD only with the system property
- * {@code webrtc.hardware.vaapiExperimental} set to {@code true}, for the same
- * reason; NVENC encodes it regardless.
+ * is encoded with libvpx. On Linux, H.265 is encoded with NVENC on NVIDIA
+ * GPUs and with VA-API on the GPUs of Intel and AMD whose driver encodes it.
  * A hardware encoder that fails to start, for example because the GPU has no
  * encoder sessions left, or fails while encoding, is replaced by the next one
  * in line, and finally by the software encoder of the same codec, so a stream
