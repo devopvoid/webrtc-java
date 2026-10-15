@@ -27,10 +27,10 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Platform | H.264 | H.265 | AV1 |
 |---|---|---|---|
 | Windows | NVENC on NVIDIA GPUs, otherwise the Media Foundation encoder of the GPU driver (AMD, Intel) | NVENC on NVIDIA GPUs, otherwise Media Foundation on GPUs that encode H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise Media Foundation on GPUs that encode AV1 (e.g. AMD RDNA3 and newer, Intel Arc) |
-| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) where it encodes H.265 | NVENC on NVIDIA RTX 40 and newer |
+| Linux | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) | NVENC on NVIDIA GPUs, otherwise the VA-API encoder of the GPU driver (Intel, AMD) where it encodes H.265 | NVENC on NVIDIA RTX 40 and newer, otherwise the VA-API encoder of the GPU driver where it encodes AV1 (e.g. AMD RDNA3 and newer) |
 | macOS | VideoToolbox, as with `DefaultVideoEncoderFactory` | VideoToolbox, on Macs with a hardware HEVC encoder, such as all with Apple silicon | Software |
 
-Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
+Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software. AMD's VA-API encoder takes AV1 from 320x128 up; smaller streams are encoded by libaom.
 
 VP9 can be encoded in hardware too, with the VP9 encoder of the GPU driver, which Intel GPUs have: through VA-API on Linux, and through Media Foundation on Windows. On Windows it is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
 

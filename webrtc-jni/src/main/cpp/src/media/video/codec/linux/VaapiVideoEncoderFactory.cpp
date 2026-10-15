@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/linux/VaapiVideoEncoderFactory.h"
+#include "media/video/codec/linux/VaapiAv1Encoder.h"
 #include "media/video/codec/linux/VaapiH264Encoder.h"
 #include "media/video/codec/linux/VaapiH265Encoder.h"
 #include "media/video/codec/linux/VaapiVp9Encoder.h"
@@ -41,20 +42,25 @@ namespace jni
 		VAEntrypoint vp9Entrypoint = VAEntrypointEncSlice;
 		const bool vp9 = library->EncodeEntrypoint(VAProfileVP9Profile0, &vp9Entrypoint);
 
-		RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") H.265 encoding: " << h265 << ", VP9 encoding: "
-			<< vp9;
+		VAEntrypoint av1Entrypoint = VAEntrypointEncSlice;
+		const bool av1 = library->EncodeEntrypoint(VAProfileAV1Profile0, &av1Entrypoint);
 
-		return std::unique_ptr<VaapiVideoEncoderFactory>(
-			new VaapiVideoEncoderFactory(*library, h265, h265Entrypoint, vp9, vp9Entrypoint));
+		RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") H.265 encoding: " << h265 << ", VP9 encoding: "
+			<< vp9 << ", AV1 encoding: " << av1;
+
+		return std::unique_ptr<VaapiVideoEncoderFactory>(new VaapiVideoEncoderFactory(*library, h265, h265Entrypoint,
+			vp9, vp9Entrypoint, av1, av1Entrypoint));
 	}
 
 	VaapiVideoEncoderFactory::VaapiVideoEncoderFactory(VaapiLibrary & library, bool h265, VAEntrypoint h265Entrypoint,
-		bool vp9, VAEntrypoint vp9Entrypoint) :
+		bool vp9, VAEntrypoint vp9Entrypoint, bool av1, VAEntrypoint av1Entrypoint) :
 		library(library),
 		h265(h265),
 		h265Entrypoint(h265Entrypoint),
 		vp9(vp9),
-		vp9Entrypoint(vp9Entrypoint)
+		vp9Entrypoint(vp9Entrypoint),
+		av1(av1),
+		av1Entrypoint(av1Entrypoint)
 	{
 	}
 
@@ -71,6 +77,9 @@ namespace jni
 		if (vp9) {
 			formats.push_back(webrtc::SdpVideoFormat::VP9Profile0());
 		}
+		if (av1) {
+			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());
+		}
 
 		return formats;
 	}
@@ -85,6 +94,9 @@ namespace jni
 		}
 		if (codec == webrtc::kVideoCodecVP9) {
 			return std::make_unique<VaapiVp9Encoder>(library, vp9Entrypoint, format);
+		}
+		if (codec == webrtc::kVideoCodecAV1) {
+			return std::make_unique<VaapiAv1Encoder>(library, av1Entrypoint, format);
 		}
 
 		return std::make_unique<VaapiH264Encoder>(library, format);
