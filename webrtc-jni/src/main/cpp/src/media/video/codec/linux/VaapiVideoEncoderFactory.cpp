@@ -27,7 +27,7 @@
 
 namespace jni
 {
-	std::unique_ptr<VaapiVideoEncoderFactory> VaapiVideoEncoderFactory::Create(bool vp9Enabled)
+	std::unique_ptr<VaapiVideoEncoderFactory> VaapiVideoEncoderFactory::Create()
 	{
 		VaapiLibrary * library = VaapiLibrary::Get();
 
@@ -39,13 +39,10 @@ namespace jni
 		const bool h265 = library->EncodeEntrypoint(VAProfileHEVCMain, &h265Entrypoint);
 
 		VAEntrypoint vp9Entrypoint = VAEntrypointEncSlice;
-		const bool vp9 = vp9Enabled && library->EncodeEntrypoint(VAProfileVP9Profile0, &vp9Entrypoint);
+		const bool vp9 = library->EncodeEntrypoint(VAProfileVP9Profile0, &vp9Entrypoint);
 
-		RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") H.265 encoding: " << h265;
-
-		if (vp9Enabled) {
-			RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") VP9 encoding: " << vp9;
-		}
+		RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") H.265 encoding: " << h265 << ", VP9 encoding: "
+			<< vp9;
 
 		return std::unique_ptr<VaapiVideoEncoderFactory>(
 			new VaapiVideoEncoderFactory(*library, h265, h265Entrypoint, vp9, vp9Entrypoint));

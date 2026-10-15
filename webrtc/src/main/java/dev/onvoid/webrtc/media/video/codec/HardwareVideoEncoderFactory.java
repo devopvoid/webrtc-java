@@ -41,11 +41,10 @@ import java.util.Objects;
  * stream that asks for SVC is encoded in software. H.265 (Main profile) is
  * encoded with NVENC or Media Foundation on GPUs that have an H.265 encoder.
  * VP9 (profile 0) is encoded on GPUs that have a VP9 encoder, which are
- * Intel's, with Media Foundation on Windows and VA-API on Linux, but only
- * with the system property
- * {@code webrtc.hardware.vp9Encoder} set to {@code true} when the factory is
- * created: the encoder has not been tested on such a GPU yet. Without it, VP9
- * is encoded with libvpx. On Linux, H.265 is encoded with NVENC on NVIDIA
+ * Intel's: with VA-API on Linux, and with Media Foundation on Windows only
+ * with the system property {@code webrtc.hardware.vp9Encoder} set to
+ * {@code true} when the factory is created, since that encoder has not been
+ * tested on such a GPU yet. Otherwise VP9 is encoded with libvpx. On Linux, H.265 is encoded with NVENC on NVIDIA
  * GPUs and with VA-API on the GPUs of Intel and AMD whose driver encodes it.
  * A hardware encoder that fails to start, for example because the GPU has no
  * encoder sessions left, or fails while encoding, is replaced by the next one

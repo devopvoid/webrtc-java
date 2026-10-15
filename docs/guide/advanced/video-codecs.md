@@ -32,7 +32,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 
 Hardware encoders produce a single layer. A stream that asks for SVC, such as an AV1 stream with a scalability mode like `L1T3`, is encoded in software.
 
-VP9 can be encoded in hardware too, with the VP9 encoder of the GPU driver, which Intel GPUs have: through Media Foundation on Windows and VA-API on Linux. It is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
+VP9 can be encoded in hardware too, with the VP9 encoder of the GPU driver, which Intel GPUs have: through VA-API on Linux, and through Media Foundation on Windows. On Windows it is off by default, since it has not been tested on such a GPU yet; turn it on with a system property before the factory is created:
 
 ```java
 System.setProperty("webrtc.hardware.vp9Encoder", "true");
@@ -62,7 +62,7 @@ PeerConnectionFactory factory = PeerConnectionFactory.builder()
 | Platform | Hardware decoding |
 |---|---|
 | Windows | H.264, H.265 (Main profile), AV1 and VP9 (profile 0), on GPUs that decode them, through the Media Foundation decoders of Windows on Direct3D 11 (DXVA) |
-| Linux | H.264, H.265 (Main profile), VP9 and AV1 (profile 0) on NVIDIA GPUs that decode them, through NVDEC; VP9 (profile 0), H.265 (Main profile) and AV1 (profile 0) on Intel and AMD GPUs through VA-API, where the driver decodes them |
+| Linux | H.264, H.265 (Main profile), VP9 and AV1 (profile 0) on NVIDIA GPUs that decode them, through NVDEC; H.264, VP9 (profile 0), H.265 (Main profile) and AV1 (profile 0) on Intel and AMD GPUs through VA-API, where the driver decodes them |
 | macOS | H.264 through VideoToolbox, as with `DefaultVideoDecoderFactory`; VP9 (profile 0) and H.265 (Main profile) through the decoders of VideoToolbox, on Macs that have them, and AV1 (profile 0) on Apple M3 and newer |
 
 On Linux, NVDEC needs an NVIDIA driver, which provides `libcuda.so.1` and `libnvcuvid.so.1`; both are loaded when the factory is made, so a machine without the driver is not affected. Streams with spatial layers are decoded in software. Through VA-API, AV1 is decoded in 8 bit 4:2:0; streams with film grain, superres, a higher bit depth or a single plane are decoded by dav1d.

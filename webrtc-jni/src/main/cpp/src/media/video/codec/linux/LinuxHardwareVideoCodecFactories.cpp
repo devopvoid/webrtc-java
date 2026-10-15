@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "media/video/codec/HardwareCodecOptions.h"
 #include "media/video/codec/HardwareVideoDecoderFactory.h"
 #include "media/video/codec/HardwareVideoEncoderFactory.h"
 #include "media/video/codec/linux/VaapiVideoDecoderFactory.h"
@@ -33,10 +32,7 @@ namespace jni
 		if (auto nvenc = NvencVideoEncoderFactory::Create()) {
 			factories.push_back(std::move(nvenc));
 		}
-		// VP9 only if asked for: it has not been tested on an Intel GPU yet.
-		auto vaapi = VaapiVideoEncoderFactory::Create(IsHardwareVp9EncoderEnabled());
-
-		if (vaapi) {
+		if (auto vaapi = VaapiVideoEncoderFactory::Create()) {
 			factories.push_back(std::move(vaapi));
 		}
 
@@ -48,7 +44,7 @@ namespace jni
 		std::vector<std::unique_ptr<webrtc::VideoDecoderFactory>> factories;
 
 		// NVDEC on NVIDIA GPUs, for H.264, H.265, VP9 and AV1; VA-API for the
-		// GPUs of Intel and AMD, for VP9, H.265 and AV1.
+		// GPUs of Intel and AMD, for H.264, VP9, H.265 and AV1.
 		if (auto nvdec = NvdecVideoDecoderFactory::Create()) {
 			factories.push_back(std::move(nvdec));
 		}
