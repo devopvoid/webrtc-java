@@ -18,6 +18,7 @@
 #include "media/video/codec/linux/VaapiVideoDecoderFactory.h"
 #include "media/video/codec/H264Format.h"
 #include "media/video/codec/H265Format.h"
+#include "media/video/codec/linux/VaapiAv1Decoder.h"
 #include "media/video/codec/linux/VaapiH264Decoder.h"
 #include "media/video/codec/linux/VaapiH265Decoder.h"
 #include "media/video/codec/linux/VaapiVp9Decoder.h"
@@ -38,22 +39,26 @@ namespace jni
 		const bool h264 = library->Decodes(VAProfileH264High);
 		const bool vp9 = library->Decodes(VAProfileVP9Profile0);
 		const bool h265 = library->Decodes(VAProfileHEVCMain);
+		const bool av1 = library->Decodes(VAProfileAV1Profile0);
 
 		RTC_LOG(LS_INFO) << "VA-API (" << library->Vendor() << ") H.264 decoding: " << h264 << ", VP9 decoding: "
-			<< vp9 << ", H.265 decoding: " << h265;
+			<< vp9 << ", H.265 decoding: " << h265 << ", AV1 decoding: " << av1;
 
-		if (!h264 && !vp9 && !h265) {
+		if (!h264 && !vp9 && !h265 && !av1) {
 			return nullptr;
 		}
 
-		return std::unique_ptr<VaapiVideoDecoderFactory>(new VaapiVideoDecoderFactory(*library, h264, vp9, h265));
+		return std::unique_ptr<VaapiVideoDecoderFactory>(
+			new VaapiVideoDecoderFactory(*library, h264, vp9, h265, av1));
 	}
 
-	VaapiVideoDecoderFactory::VaapiVideoDecoderFactory(VaapiLibrary & library, bool h264, bool vp9, bool h265) :
+	VaapiVideoDecoderFactory::VaapiVideoDecoderFactory(VaapiLibrary & library, bool h264, bool vp9, bool h265,
+		bool av1) :
 		library(library),
 		h264(h264),
 		vp9(vp9),
-		h265(h265)
+		h265(h265),
+		av1(av1)
 	{
 	}
 
@@ -70,6 +75,9 @@ namespace jni
 		if (h265) {
 			formats.push_back(CreateH265MainFormat());
 		}
+		if (av1) {
+			formats.push_back(webrtc::SdpVideoFormat::AV1Profile0());
+		}
 
 		return formats;
 	}
@@ -85,6 +93,9 @@ namespace jni
 		}
 		if (vp9 && format.IsSameCodec(webrtc::SdpVideoFormat::VP9Profile0())) {
 			return std::make_unique<VaapiVp9Decoder>(library);
+		}
+		if (av1 && format.IsSameCodec(webrtc::SdpVideoFormat::AV1Profile0())) {
+			return std::make_unique<VaapiAv1Decoder>(library);
 		}
 
 		return nullptr;
