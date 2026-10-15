@@ -439,6 +439,115 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 	}
 
 	@Test
+	void av1EncodesOddSize() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		// AMD's encoder pads the width to a multiple of 8, so the encoder asks
+		// for frames of that alignment, rather than sending the padding.
+		try (Run run = new Run(hardware, AV1, 641, 361)) {
+			run.awaitFrames(10);
+
+			assertAv1(run);
+			assertEquals(0, run.width.get() % 8, "width " + run.width.get());
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1FollowsResolutionChange() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try (Run run = new Run(hardware, AV1, 640, 360)) {
+			run.awaitFrames(10);
+
+			// A new size starts the encoder over, with a new session and a
+			// key frame with a new sequence header.
+			run.call.setVideoSize(960, 540);
+			run.awaitWidth(960);
+
+			run.call.setVideoSize(640, 360);
+			run.awaitWidth(640);
+
+			assertAv1(run);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1FollowsBitrateCap() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try (Run run = new Run(hardware, AV1, 640, 360)) {
+			run.awaitFrames(10);
+
+			// The encoder is reconfigured in place, without a new session or
+			// a lost stream.
+			run.setMaxBitrate(150_000);
+			run.awaitTargetBitrate(150_000);
+			run.awaitMoreFrames(10);
+
+			run.setMaxBitrate(2_000_000);
+			run.awaitMoreFrames(10);
+
+			assertAv1(run);
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1RestartsCleanly() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		try {
+			// A session left behind by each call would run the hardware out of
+			// sessions, and the later calls would be encoded by libaom.
+			for (int i = 0; i < 10; i++) {
+				try (Run run = new Run(hardware, AV1, 640, 360)) {
+					run.awaitFrames(5);
+
+					assertAv1(run);
+				}
+			}
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	@Test
+	void av1BelowHardwareMinimumStaysAv1() throws Exception {
+		PeerConnectionFactory hardware = hardwareFactory();
+
+		// Smaller than AMD's AV1 encoder takes (320x128); libaom encodes it
+		// there, and the stream goes on in AV1 either way.
+		try (Run run = new Run(hardware, AV1, 160, 90)) {
+			run.awaitFrames(10);
+
+			assertEquals("video/AV1", run.codec());
+			assertEquals(160, run.width.get());
+		}
+		finally {
+			hardware.dispose();
+		}
+	}
+
+	/**
+	 * Checks that the call is still in AV1 and, where the GPU encodes AV1, is
+	 * encoded in hardware, rather than handed over to libaom; skips the test
+	 * elsewhere, unless hardware is required.
+	 */
+	private static void assertAv1(Run run) throws InterruptedException {
+		assertEquals("video/AV1", run.codec());
+		assertHardware(run.implementation(), HARDWARE_AV1_REQUIRED);
+	}
+
+	@Test
 	void hardwareEncodes1080p() throws Exception {
 		assumeNvenc();
 
