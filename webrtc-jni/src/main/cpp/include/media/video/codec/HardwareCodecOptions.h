@@ -19,9 +19,10 @@
 
 namespace jni
 {
-	// The Java system property that turns on hardware VP9 encoding, which is
-	// off by default: only Intel GPUs encode VP9, and the encoder has not been
-	// tested on one.
+	// The Java system property that turns on hardware VP9 encoding on
+	// Windows, which is off by default: only Intel GPUs encode VP9, and the
+	// Media Foundation encoder has not been tested on one. VA-API encodes VP9
+	// on Linux regardless.
 	constexpr const char * kHardwareVp9EncoderProperty = "webrtc.hardware.vp9Encoder";
 
 	// Whether hardware VP9 encoding is turned on: the Java system property

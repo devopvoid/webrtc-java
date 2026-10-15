@@ -275,8 +275,8 @@ class HardwareVideoEncoderIntegrationTest extends TestBase {
 
 	@Test
 	void vp9HardwareEncodingIsOptIn() throws Exception {
-		assumeTrue(OS.contains("win") || OS.contains("linux"),
-				"hardware encoders are implemented on Windows and Linux only");
+		// On Linux, VA-API encodes VP9 without it.
+		assumeTrue(OS.contains("win"), "hardware VP9 encoding is opt-in on Windows only");
 		assumeTrue(System.getProperty(VP9_ENCODER_PROPERTY) == null, VP9_ENCODER_PROPERTY + " is set");
 
 		PeerConnectionFactory hardware = hardwareFactory();
