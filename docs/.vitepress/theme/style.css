@@ -119,6 +119,34 @@
 }
 
 /**
+ * Component: Home features
+ * -------------------------------------------------------------------------- */
+
+.VPFeature .icon {
+  color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-brand-soft);
+}
+
+.VPFeature .icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.VPFeature.link {
+  transition: border-color 0.25s, transform 0.25s;
+}
+
+.VPFeature.link:hover {
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPFeature.link:hover {
+    transform: none;
+  }
+}
+
+/**
  * Component: Custom Block
  * -------------------------------------------------------------------------- */
 
