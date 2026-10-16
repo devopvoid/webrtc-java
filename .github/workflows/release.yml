@@ -1,4 +1,4 @@
-name: Release
+name: Prepare release
 
 on:
   workflow_dispatch:
@@ -13,13 +13,13 @@ on:
         type: boolean
         default: false
 
-# Only the jobs that push commits, tags or the GitHub release get write access.
+# Preparation pushes commits/tags and dispatches publication; dry-run jobs stay read-only.
 permissions:
   contents: read
 
 # Two releases at once would race on the pushed commits and tags.
 concurrency:
-  group: release
+  group: release-prepare
   cancel-in-progress: false
 
 jobs:
@@ -29,23 +29,25 @@ jobs:
   # way leaves main untouched, so the release can simply be dispatched again.
   prepare-release:
     name: Prepare release
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+      actions: write
     outputs:
-      release_tag: ${{ steps.release-version.outputs.tag }}
       release_version: ${{ steps.release-version.outputs.version }}
-      release_body: ${{ steps.git-cliff.outputs.content }}
     steps:
       # The full history, for git-cliff.
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
+      # Maven release:prepare needs a named branch, pinned to the dispatched SHA.
       - name: Git config
         run: |
+          git switch -C main
           git config --global user.name "${{ github.actor }}"
           git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
 
@@ -59,6 +61,10 @@ jobs:
         run: |
           version=$(sed -n '0,/<version>/s|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml)
           version="${version%-SNAPSHOT}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The release version must look like 1.2.3"
+            exit 1
+          fi
           echo "Release version: $version, next development version: $DEVELOPMENT_VERSION"
 
           if ! [[ "$DEVELOPMENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-SNAPSHOT$ ]]; then
@@ -76,16 +82,6 @@ jobs:
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
-
-      # Written outside the checkout, which release:prepare requires to be clean.
-      - name: Generate the release notes
-        uses: orhun/git-cliff-action@v4
-        id: git-cliff
-        with:
-          config: .github/changelog/cliff-release.toml
-          args: -v -u --strip footer --tag ${{ steps.release-version.outputs.tag }} --use-branch-tags
-        env:
-          OUTPUT: ${{ runner.temp }}/release-notes.md
 
       - name: Update CHANGELOG.md
         uses: orhun/git-cliff-action@v4
@@ -147,18 +143,26 @@ jobs:
           RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
         run: git push --atomic origin HEAD:main "refs/tags/$RELEASE_TAG"
 
-  # The tag prepare-release pushed. A dry run pushes none and builds the
-  # dispatched commit instead.
+      # Explicit dispatch is supported with GITHUB_TOKEN, unlike push events.
+      # --ref makes the new run's github.sha the release commit itself.
+      - name: Start publication on the release tag
+        if: ${{ !inputs.dryRun }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release-version.outputs.tag }}
+        run: gh workflow run release-publish.yml --ref "$RELEASE_TAG"
+
   platforms:
     needs: prepare-release
+    if: inputs.dryRun
     uses: ./.github/workflows/platforms.yml
     with:
-      ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
       retention-days: 7
-      version: ${{ inputs.dryRun && needs.prepare-release.outputs.release_version || '' }}
+      version: ${{ needs.prepare-release.outputs.release_version }}
 
   publish-central:
-    name: Publish to Maven Central
+    name: Assemble dry-run deployment bundle
+    if: inputs.dryRun
     needs: [prepare-release, platforms]
     runs-on: ubuntu-22.04
 
@@ -166,7 +170,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.platforms.outputs.sha }}
+          ref: ${{ github.sha }}
 
       - name: Set up Maven cache
         uses: actions/cache@v6
@@ -188,47 +192,33 @@ jobs:
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-      - name: Determine the version to publish
-        id: release-version
+      - name: Set the release dry-run version
         env:
-          RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
-        run: |
-          version="${RELEASE_TAG#v}"
-          if [ "${{ inputs.dryRun }}" == "true" ]; then
-            # Exercise release bundling rather than the snapshot deployment path.
-            mvn -B versions:set -DnewVersion="$version" -DgenerateBackupPoms=false
-          fi
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.release_version }}
+        run: mvn -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
 
-          echo "Version to publish: $version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      # skipUpload stages and bundles the release, then stops before uploading.
-      # As a second line of defence the Central credentials are replaced by
-      # a placeholder during a dry run: should the upload ever happen regardless, it
-      # fails on authentication instead of publishing a release. Signing does run, so
-      # the GPG passphrase stays intact.
+      # Sign and assemble the real release bundle, but never upload it. The
+      # placeholder credentials also prevent publication if skipUpload regresses.
       - name: Deploy
         uses: ./.github/actions/publish
         env:
-          MAVEN_USERNAME: ${{ inputs.dryRun && 'dry-run-must-not-upload' || secrets.MAVEN_USERNAME }}
-          MAVEN_TOKEN: ${{ inputs.dryRun && 'dry-run-must-not-upload' || secrets.MAVEN_TOKEN }}
+          MAVEN_USERNAME: dry-run-must-not-upload
+          MAVEN_TOKEN: dry-run-must-not-upload
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
         with:
-          version: ${{ steps.release-version.outputs.version }}
+          version: ${{ needs.prepare-release.outputs.release_version }}
           profiles: release
-          skip-upload: ${{ inputs.dryRun }}
+          skip-upload: true
 
       - name: Verify the dry-run deployment bundle exists
-        if: ${{ inputs.dryRun }}
         run: test -s target/central-publishing/central-bundle.zip
 
       - name: Summarize what would have been published
-        if: ${{ inputs.dryRun }}
         run: |
           {
             echo "## Dry run — nothing was published"
             echo
-            echo "Version: \`${{ steps.release-version.outputs.version }}\`"
+            echo "Version: \`${{ needs.prepare-release.outputs.release_version }}\`"
             echo
             echo "Artifacts destined for the deployment bundle:"
             echo '```'
@@ -239,7 +229,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the deployment bundle for inspection
-        if: ${{ inputs.dryRun }}
         uses: actions/upload-artifact@v7
         with:
           name: deployment-bundle-dry-run
@@ -254,28 +243,3 @@ jobs:
             natives/*.asc
           if-no-files-found: error
           retention-days: 7
-
-  publish-release:
-    name: Publish GitHub release
-    needs: [prepare-release, publish-central]
-    if: ${{ !inputs.dryRun }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-
-      # The notes are commit subjects, so they go through the environment and a file
-      # rather than into the script, where a quote or a backtick would be run.
-      # --verify-tag fails instead of creating a tag that release:prepare did not.
-      - name: Publish
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_VERSION: ${{ needs.prepare-release.outputs.release_tag }}
-          RELEASE_BODY: ${{ needs.prepare-release.outputs.release_body }}
-        run: |
-          printf '%s\n' "$RELEASE_BODY" > release-notes.md
-          gh release create "$RELEASE_VERSION" --draft --verify-tag \
-            -t "Release $RELEASE_VERSION" -F release-notes.md
