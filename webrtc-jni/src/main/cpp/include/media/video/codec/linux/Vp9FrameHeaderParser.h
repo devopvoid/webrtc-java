@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace jni
@@ -122,6 +123,10 @@ namespace jni
 			// The frames of a superframe, or the frame itself, as spans of
 			// the data.
 			static std::vector<std::span<const uint8_t>> SplitSuperframe(std::span<const uint8_t> data);
+
+			// The size a frame codes itself, without the state of the stream;
+			// none for an inter frame that takes the size of a reference.
+			static std::optional<std::pair<uint32_t, uint32_t>> FrameSize(std::span<const uint8_t> frame);
 
 		private:
 			// What the specification calls setup_past_independence.

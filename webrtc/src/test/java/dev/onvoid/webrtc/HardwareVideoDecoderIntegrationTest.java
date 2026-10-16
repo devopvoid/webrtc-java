@@ -750,10 +750,115 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 		assumeTrue(result.scalability.startsWith("L2"), "no spatial layers were encoded: " + result.scalability);
 
-		// The frames arrive, from libvpx: the layers of a frame come without a
-		// superframe index, which VideoToolbox does not decode, and which a
-		// Media Foundation or NVDEC decoder is not known to.
-		assertFalse(isHardware(result.decoder), result.decoder);
+		if (OS.contains("linux") && result.decoder.startsWith("VA-API")) {
+			// VA-API uses the layer sizes WebRTC supplies to decode the layers
+			// in order, including references at a different resolution.
+			assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+		}
+		else {
+			assertFalse(isHardware(result.decoder), result.decoder);
+		}
+	}
+
+	@Test
+	void vaapiDecodesThreeSpatialLayers() throws Exception {
+		assumeTrue(OS.contains("linux"), "VA-API is available on Linux only");
+		for (String mode : new String[] { "L3T3", "L3T3_KEY" }) {
+			CallResult result = receiveVideo(hardwareFactory(), VP9, 1280, 720, mode, 90);
+			assertEquals(mode, result.scalability);
+			expectVp9Hardware(result.decoder);
+			assertTrue(result.decoder.startsWith("VA-API"), result.decoder);
+			assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+		}
+	}
+
+	@Test
+	void vaapiFollowsSpatialLayerChanges() throws Exception {
+		assertSpatialLayerChanges("L3T3", 1280, false);
+	}
+
+	@Test
+	void vaapiFollowsTwoSpatialLayerChanges() throws Exception {
+		assertSpatialLayerChanges("L2T2", 640, false);
+	}
+
+	@Test
+	void vaapiFollowsKeySpatialLayerChanges() throws Exception {
+		assertSpatialLayerChanges("L3T3_KEY", 1280, false);
+	}
+
+	@Test
+	void vaapiAddsSpatialLayersAfterStartingAtBaseLayer() throws Exception {
+		assertSpatialLayerChanges("L3T3", 1280, true);
+	}
+
+	/** Changes the bitrate budget without resizing the source or changing the SVC mode. */
+	private void assertSpatialLayerChanges(String mode, int fullWidth, boolean startAtBase) throws Exception {
+		assumeTrue(OS.contains("linux"), "VA-API is available on Linux only");
+		PeerConnectionFactory hardware = hardwareFactory();
+		AtomicInteger expectedWidth = new AtomicInteger(startAtBase ? 320 : fullWidth);
+		AtomicReference<CountDownLatch> frames = new AtomicReference<>(new CountDownLatch(10));
+
+		try (TestMediaCall call = new TestMediaCall(hardware, true, false, VP9)) {
+			call.setVideoSize(fullWidth, fullWidth * 9 / 16);
+			call.negotiate();
+			RTCRtpReceiver receiver = call.getReceiver("video");
+			VideoTrack track = (VideoTrack) receiver.getTrack();
+			VideoTrackSink sink = frame -> {
+				int width = expectedWidth.get();
+				if (frame.buffer.getWidth() == width && frame.buffer.getHeight() == width * 9 / 16) {
+					frames.get().countDown();
+				}
+				frame.release();
+			};
+			track.addSink(sink);
+			try {
+				call.awaitConnected();
+				RTCRtpSender sender = call.getVideoSender();
+				RTCRtpSendParameters parameters = sender.getParameters();
+				parameters.degradationPreference = RTCDegradationPreference.MAINTAIN_RESOLUTION;
+				parameters.encodings.get(0).scalabilityMode = mode;
+				parameters.encodings.get(0).minBitrate = startAtBase ? 30_000 : 2_000_000;
+				parameters.encodings.get(0).maxBitrate = startAtBase ? 100_000 : 3_000_000;
+				sender.setParameters(parameters);
+				call.startMedia();
+				assertTrue(frames.get().await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no initial spatial layer");
+				String implementation = decoderImplementationOf(call);
+				expectVp9Hardware(implementation);
+				assumeTrue(implementation.startsWith("VA-API"), implementation);
+				assertEquals(mode, call.getOutboundVideoStats().get("scalabilityMode"));
+
+				// Keep the source and SVC mode unchanged. The bitrate allocator
+				// disables upper spatial layers, then enables them again.
+				int[] widths = fullWidth == 1280
+						? new int[] { 640, 320, 640, 1280, 320, 1280 }
+						: new int[] { 320, 640, 320, 640 };
+				for (int width : widths) {
+					expectedWidth.set(width);
+					CountDownLatch received = new CountDownLatch(10);
+					frames.set(received);
+					parameters = sender.getParameters();
+					parameters.encodings.get(0).minBitrate = width == 320 ? 30_000
+							: width == fullWidth ? 2_000_000 : 400_000;
+					parameters.encodings.get(0).maxBitrate = width == 320 ? 100_000
+							: width == fullWidth ? 3_000_000 : 500_000;
+					sender.setParameters(parameters);
+					assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no frames at width " + width);
+					assertEquals(implementation, decoderImplementationOf(call));
+				}
+				// Starting with only the base layer may require new surfaces as
+				// upper layers arrive. At most one request per growth step.
+				long pliCount = count(call.getInboundVideoStats(), "pliCount");
+				assertTrue(pliCount <= (startAtBase ? 3 : 2), "key frames requested: " + pliCount);
+			}
+			finally {
+				track.removeSink(sink);
+				receiver.dispose();
+			}
+		}
+		finally {
+			hardware.dispose();
+		}
 	}
 
 	@Test
