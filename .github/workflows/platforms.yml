@@ -17,6 +17,10 @@ on:
         description: "The commit, branch or tag to build. Empty for the one that triggered the caller."
         type: string
         default: ''
+      version:
+        description: "Optional local project version override for a release dry run."
+        type: string
+        default: ''
       retention-days:
         description: "How long the natives artifacts are kept."
         type: number
@@ -77,6 +81,13 @@ jobs:
       - name: Prepare build
         if: runner.os == 'macOS'
         uses: ./.github/actions/prepare-macos
+
+      - name: Set the release dry-run version
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: mvn -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+        shell: bash
 
       - name: Maven build
         uses: ./.github/actions/build
@@ -149,3 +160,4 @@ jobs:
           profile: ${{ matrix.platform.classifier }}
           java-distribution: ${{ matrix.platform.java-distribution }}
           java-architecture: ${{ matrix.platform.java-architecture }}
+          version: ${{ inputs.version }}

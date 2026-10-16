@@ -16,7 +16,7 @@ inputs:
     required: false
     default: ''
 
-  skip-publishing:
+  skip-upload:
     description: 'Build, sign and bundle everything, but upload nothing.'
     required: false
     default: 'false'
@@ -70,8 +70,8 @@ runs:
       shell: bash
 
     # natives.dir makes webrtc and webrtc-java-media attach the jars of all
-    # platforms instead of the host's. skipPublishing suppresses both the
-    # bundling and the upload.
+    # platforms instead of the host's. skipUpload still stages and bundles the
+    # release, but stops before uploading it.
     #
     # Since Maven 3.10, credentials are only sent to the origins of the
     # repository with the server's id. The server is "central", which is also
@@ -81,11 +81,11 @@ runs:
     - name: Deploy
       env:
         PROFILES: ${{ inputs.profiles }}
-        SKIP_PUBLISHING: ${{ inputs.skip-publishing }}
+        SKIP_UPLOAD: ${{ inputs.skip-upload }}
       run: >
         mvn -B deploy -pl .,webrtc,webrtc-java-media -DskipTests
         -Dmaven.repository.credentialScope=id
         ${PROFILES:+-P$PROFILES}
         -Dnatives.dir="$PWD/natives"
-        -DskipPublishing="$SKIP_PUBLISHING"
+        -DskipUpload="$SKIP_UPLOAD"
       shell: bash
