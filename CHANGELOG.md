@@ -2,6 +2,107 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.0] - 2026-10-16
+
+### Features
+- Decode VP9 spatial layers with VA-API by @devopvoid in [#388](https://github.com/devopvoid/webrtc-java/pull/388)
+- Encode H.264 and H.265 temporal layers with VA-API by @devopvoid in [#381](https://github.com/devopvoid/webrtc-java/pull/381)
+- Encode VP9 temporal layers with VA-API by @devopvoid in [#380](https://github.com/devopvoid/webrtc-java/pull/380)
+- Encode AV1 temporal layers with VA-API by @devopvoid in [#379](https://github.com/devopvoid/webrtc-java/pull/379)
+- Encode AV1 with VA-API on Linux by @devopvoid in [#377](https://github.com/devopvoid/webrtc-java/pull/377)
+- Decode AV1 with VA-API on Linux by @devopvoid in [#376](https://github.com/devopvoid/webrtc-java/pull/376)
+- Decode H.264 with VA-API on Linux by @devopvoid in [#375](https://github.com/devopvoid/webrtc-java/pull/375)
+- Encode VP9 with VA-API on Linux without turning it on by @devopvoid in [#374](https://github.com/devopvoid/webrtc-java/pull/374)
+- Decode H.265 with VA-API on Linux by @devopvoid in [#372](https://github.com/devopvoid/webrtc-java/pull/372)
+- Let the audio codecs of a factory be limited and ordered by @devopvoid in [#340](https://github.com/devopvoid/webrtc-java/pull/340)
+- Report receiver source changes and audio packet infos by @devopvoid in [#366](https://github.com/devopvoid/webrtc-java/pull/366)
+- Send encoded frames through RTP sender injectors by @devopvoid in [#365](https://github.com/devopvoid/webrtc-java/pull/365)
+- List the hardware codecs of the hardware video codec factories by @devopvoid in [#359](https://github.com/devopvoid/webrtc-java/pull/359)
+- Decode H.265 and AV1 with NVDEC on Linux by @devopvoid in [#353](https://github.com/devopvoid/webrtc-java/pull/353)
+- Encode H.265 and VP9 and decode VP9 with VA-API on Linux, when turned on by @devopvoid in [#352](https://github.com/devopvoid/webrtc-java/pull/352)
+- Encode VP9 in hardware on Windows, when turned on by @devopvoid in [#348](https://github.com/devopvoid/webrtc-java/pull/348)
+- Encode and decode H.265 in hardware on Windows by @devopvoid in [#347](https://github.com/devopvoid/webrtc-java/pull/347)
+- Build WebRTC with H.265 by @devopvoid in [#346](https://github.com/devopvoid/webrtc-java/pull/346)
+- Decode with Vulkan Video on Linux in the media player by @devopvoid in [#345](https://github.com/devopvoid/webrtc-java/pull/345)
+- Decode HEVC and AV1 in hardware in the media player by @devopvoid in [#331](https://github.com/devopvoid/webrtc-java/pull/331)
+- Let a video processor change camera and desktop frames by @devopvoid in [#342](https://github.com/devopvoid/webrtc-java/pull/342)
+- Add first-packet observers, sender and receiver IDs, and track volume by @devopvoid in [#338](https://github.com/devopvoid/webrtc-java/pull/338)
+- Add the missing peer connection signaling and control calls by @devopvoid in [#334](https://github.com/devopvoid/webrtc-java/pull/334)
+- Decode H.264 and VP9 with NVDEC on NVIDIA GPUs on Linux by @devopvoid in [#321](https://github.com/devopvoid/webrtc-java/pull/321)
+- Decode video in hardware in the media player by @devopvoid in [#320](https://github.com/devopvoid/webrtc-java/pull/320)
+- Decode VP9 on the GPU with Media Foundation on Windows by @devopvoid in [#319](https://github.com/devopvoid/webrtc-java/pull/319)
+- Decode VP9 with VideoToolbox on macOS by @devopvoid in [#318](https://github.com/devopvoid/webrtc-java/pull/318)
+- Add a hardware video decoder factory, with Media Foundation on Windows by @devopvoid in [#315](https://github.com/devopvoid/webrtc-java/pull/315)
+- Encode AV1 on the GPU with Media Foundation and NVENC by @devopvoid in [#314](https://github.com/devopvoid/webrtc-java/pull/314)
+- Encode H.264 with VA-API on Intel and AMD GPUs on Linux by @devopvoid in [#313](https://github.com/devopvoid/webrtc-java/pull/313)
+- Encode H.264 with NVENC on NVIDIA GPUs, on Windows and Linux by @devopvoid in [#312](https://github.com/devopvoid/webrtc-java/pull/312)
+- Add a hardware video encoder factory, with Media Foundation H.264 by @devopvoid in [#310](https://github.com/devopvoid/webrtc-java/pull/310)
+- Add custom video codec factories by @devopvoid in [#303](https://github.com/devopvoid/webrtc-java/pull/303)
+- Map the remaining peer connection configuration fields by @devopvoid in [#317](https://github.com/devopvoid/webrtc-java/pull/317)
+- Map the remaining sender encoding parameters by @devopvoid in [#316](https://github.com/devopvoid/webrtc-java/pull/316)
+
+### Bug Fixes
+- Restore version and changelog before 0.20.0 release by @devopvoid in [#392](https://github.com/devopvoid/webrtc-java/pull/392)
+- Map the VP9 interpolation filter to VA-API's order by @devopvoid in [#383](https://github.com/devopvoid/webrtc-java/pull/383)
+- Write the H.264 and H.265 headers for VA-API drivers that need them by @devopvoid in [#371](https://github.com/devopvoid/webrtc-java/pull/371)
+- Call network thread observers on a callback thread by @devopvoid in [#364](https://github.com/devopvoid/webrtc-java/pull/364)
+- Play and record on Windows devices that mix in more than two channels by @devopvoid in [#358](https://github.com/devopvoid/webrtc-java/pull/358)
+- Capture screens with ScreenCaptureKit on macOS by @devopvoid in [#354](https://github.com/devopvoid/webrtc-java/pull/354)
+- Mark encoded frames as the end of their temporal unit by @devopvoid in [#356](https://github.com/devopvoid/webrtc-java/pull/356)
+- Dispose a MediaStream from onAddTrack as a view, and return its ID by @devopvoid in [#343](https://github.com/devopvoid/webrtc-java/pull/343)
+- Keep camera hotplug and track views from crashing or releasing shared tracks by @devopvoid in [#341](https://github.com/devopvoid/webrtc-java/pull/341)
+- Stop exceptions from callbacks unwinding through WebRTC by @devopvoid in [#335](https://github.com/devopvoid/webrtc-java/pull/335)
+- Keep audio device change handling from aborting or corrupting state by @devopvoid in [#337](https://github.com/devopvoid/webrtc-java/pull/337)
+- Keep exceptions inside the audio device change callbacks by @Yml-0 in [#333](https://github.com/devopvoid/webrtc-java/pull/333)
+- Fall back from a failed hardware video decoder without losing or damaging pictures by @devopvoid in [#329](https://github.com/devopvoid/webrtc-java/pull/329)
+- Keep a seek near the end of the source and the position after seeking back by @devopvoid in [#328](https://github.com/devopvoid/webrtc-java/pull/328)
+- Keep hardware encoders for sources whose first frame has an odd size by @devopvoid in [#324](https://github.com/devopvoid/webrtc-java/pull/324)
+
+### Refactor
+- Let the PeerConnectionFactory own its worker thread by @devopvoid in [#355](https://github.com/devopvoid/webrtc-java/pull/355)
+
+### Documentation
+- Link the unreleased docs from the README and release notes by @devopvoid in [#386](https://github.com/devopvoid/webrtc-java/pull/386)
+- Note that VP9 cannot be injected by @devopvoid in [#385](https://github.com/devopvoid/webrtc-java/pull/385)
+- Add icons and links to the home page features by @devopvoid in [#384](https://github.com/devopvoid/webrtc-java/pull/384)
+- List the hardware codecs in tables by @devopvoid in [#378](https://github.com/devopvoid/webrtc-java/pull/378)
+- Open the other channel's docs in the same tab by @devopvoid in [#382](https://github.com/devopvoid/webrtc-java/pull/382)
+- List hardware codecs, video processing and frame injection as features by @devopvoid in [#369](https://github.com/devopvoid/webrtc-java/pull/369)
+
+### Performance
+- Cut the processor time of hardware decoding on Windows by @devopvoid in [#326](https://github.com/devopvoid/webrtc-java/pull/326)
+
+### Testing
+- Play real sizes and formats the GPU refuses in the media player by @devopvoid in [#325](https://github.com/devopvoid/webrtc-java/pull/325)
+- Cover the lifecycle of hardware decoding in the media player by @devopvoid in [#323](https://github.com/devopvoid/webrtc-java/pull/323)
+- Check that hardware decoders crop padded frames to the picture by @devopvoid in [#322](https://github.com/devopvoid/webrtc-java/pull/322)
+
+### Miscellaneous Tasks
+- Bump @vue/server-renderer and vue in /docs by @dependabot[bot] in [#363](https://github.com/devopvoid/webrtc-java/pull/363)
+- Bump source-map-js from 1.2.1 to 1.2.2 in /docs by @dependabot[bot] in [#362](https://github.com/devopvoid/webrtc-java/pull/362)
+- Publish the docs of the latest release, and main's under /next/ by @devopvoid in [#361](https://github.com/devopvoid/webrtc-java/pull/361)
+- Send Central credentials again under Maven 3.10 by @devopvoid in [#339](https://github.com/devopvoid/webrtc-java/pull/339)
+- Bump the github-actions group across 3 directories with 3 updates by @dependabot[bot] in [#309](https://github.com/devopvoid/webrtc-java/pull/309)
+- Share one platform matrix and deploy snapshots once by @devopvoid in [#306](https://github.com/devopvoid/webrtc-java/pull/306)
+- Add Dependabot and trim caches and artifacts by @devopvoid in [#304](https://github.com/devopvoid/webrtc-java/pull/304)
+- Harden the release workflow and keep native caches warm by @devopvoid in [#302](https://github.com/devopvoid/webrtc-java/pull/302)
+
+### Other
+- Fix Central release bundling and dry runs by @devopvoid in [#391](https://github.com/devopvoid/webrtc-java/pull/391)
+- Fix badge link text formatting in README.md by @devopvoid in [#390](https://github.com/devopvoid/webrtc-java/pull/390)
+- Update documentation badge for next version by @devopvoid in [#389](https://github.com/devopvoid/webrtc-java/pull/389)
+- Bump the maven-dependencies group with 3 updates by @dependabot[bot] in [#370](https://github.com/devopvoid/webrtc-java/pull/370)
+- Update WebRTC branch from 7977 to 8059 (M155) by @devopvoid in [#360](https://github.com/devopvoid/webrtc-java/pull/360)
+- Build WebRTC with autoninja by @devopvoid in [#357](https://github.com/devopvoid/webrtc-java/pull/357)
+- Patch FFmpeg so that Direct3D 12 decoding works on AMD and Intel by @devopvoid in [#330](https://github.com/devopvoid/webrtc-java/pull/330)
+- Bump the maven-dependencies group with 7 updates by @dependabot[bot] in [#308](https://github.com/devopvoid/webrtc-java/pull/308)
+- Bump the maven-plugins group with 9 updates by @dependabot[bot] in [#307](https://github.com/devopvoid/webrtc-java/pull/307)
+- Bump com.fasterxml.jackson.core:jackson-databind by @dependabot[bot] in [#301](https://github.com/devopvoid/webrtc-java/pull/301)
+- Prepare for next development iteration by @devopvoid
+
+## New Contributors
+* @Yml-0 made their first contribution in [#333](https://github.com/devopvoid/webrtc-java/pull/333)
+
 ## [0.19.0] - 2026-09-27
 
 ### Features
@@ -16,9 +117,11 @@ All notable changes to this project will be documented in this file.
 - Give AudioTrackSource a dispose() to release its native reference by @devopvoid in [#287](https://github.com/devopvoid/webrtc-java/pull/287)
 
 ### Miscellaneous Tasks
+- Update CHANGELOG.md for v0.19.0 by @github-actions[bot]
 - Cache the FFmpeg build of the macOS x86_64 target by @devopvoid in [#295](https://github.com/devopvoid/webrtc-java/pull/295)
 
 ### Other
+- Prepare release v0.19.0 by @devopvoid
 - Sync the WebRTC checkout without git history by @devopvoid in [#298](https://github.com/devopvoid/webrtc-java/pull/298)
 - Cross compile the macOS x86_64 target natively on Apple Silicon by @devopvoid in [#296](https://github.com/devopvoid/webrtc-java/pull/296)
 - Build FFmpeg on every platform and make the media module part of the normal build by @devopvoid in [#292](https://github.com/devopvoid/webrtc-java/pull/292)
