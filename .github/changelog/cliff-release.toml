@@ -35,6 +35,10 @@ body = """
       [#{{ contributor.pr_number }}]({{ self::remote_url() }}/pull/{{ contributor.pr_number }}) \
     {%- endif %}
 {%- endfor %}\n
+
+## Documentation
+- [jrtc.dev](https://jrtc.dev) describes this release
+- [jrtc.dev/next](https://jrtc.dev/next/) describes the main branch, with what is not released yet
 """
 # A Tera template to be rendered as the changelog's footer.
 # See https://keats.github.io/tera/docs/#introduction

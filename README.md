@@ -1,5 +1,6 @@
 [![Build Status](https://img.shields.io/github/actions/workflow/status/devopvoid/webrtc-java/build.yml?label=Build&logo=github)](https://github.com/devopvoid/webrtc-java/actions)
 [![Maven Central](https://img.shields.io/maven-central/v/dev.onvoid.webrtc/webrtc-java?label=Maven%20Central&logo=apache-maven)](https://search.maven.org/artifact/dev.onvoid.webrtc/webrtc-java)
+[![Docs](https://img.shields.io/badge/Docs-unreleased-orange)](https://jrtc.dev/next/)
 
 <p align="center">
   <img alt="webrtc-java" width="100px" src="https://jrtc.dev/logo.png" />
@@ -40,6 +41,7 @@ For more detailed information, check out the documentation:
 - [Encoded Transforms](https://jrtc.dev/guide/advanced/encoded-transforms) - Reading and changing encoded frames, e.g. for end-to-end encryption
 - [Video Codecs](https://jrtc.dev/guide/advanced/video-codecs) - Adding video codecs implemented in Java, or limiting the built-in ones
 - [Build Notes](https://jrtc.dev/guide/build) - Instructions for building the library from source
+- [Unreleased Docs](https://jrtc.dev/next/) - Documentation of the main branch, including features not released yet
 
 ## License
 
