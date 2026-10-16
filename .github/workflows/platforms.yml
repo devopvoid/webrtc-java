@@ -14,7 +14,7 @@ on:
   workflow_call:
     inputs:
       ref:
-        description: "The commit, branch or tag to build. Empty for the one that triggered the caller."
+        description: "Release tag on main to build (vX.Y.Z). Empty for the commit that triggered the caller."
         type: string
         default: ''
       version:
@@ -25,13 +25,62 @@ on:
         description: "How long the natives artifacts are kept."
         type: number
         default: 1
+    outputs:
+      sha:
+        description: "The validated commit built and tested by this workflow."
+        value: ${{ jobs.resolve-ref.outputs.sha }}
 
 env:
   # The default webrtc.install.dir of webrtc-jni/pom.xml, below the home directory.
   WEBRTC_INSTALL_FOLDER: webrtc/build
 
 jobs:
+  # Resolve once, before any repository code runs or caches are accessed. A
+  # release may build the tag just pushed by prepare-release, but only if its
+  # commit is already in main. All consumers use the resulting immutable SHA.
+  resolve-ref:
+    name: Resolve build commit
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Fetch release history
+        if: inputs.ref != ''
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate and resolve the build commit
+        id: resolve
+        env:
+          REQUESTED_REF: ${{ inputs.ref }}
+          TRIGGER_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          if [ -z "$REQUESTED_REF" ]; then
+            echo "sha=$TRIGGER_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! [[ "$REQUESTED_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::ref must be a release tag of the form vX.Y.Z"
+            exit 1
+          fi
+
+          release_sha=$(git rev-parse --verify "refs/tags/$REQUESTED_REF^{commit}")
+          if ! git merge-base --is-ancestor "$release_sha" refs/remotes/origin/main; then
+            echo "::error::The release tag must point to a commit on main"
+            exit 1
+          fi
+
+          echo "sha=$release_sha" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: resolve-ref
     name: build (${{ matrix.platform.name }})
     strategy:
       fail-fast: false
@@ -66,7 +115,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.resolve-ref.outputs.sha }}
           # The media module builds FFmpeg from its third-party submodule.
           submodules: true
 
@@ -102,7 +151,7 @@ jobs:
   # be loaded on the runner that built them.
   test-natives:
     name: test-natives (${{ matrix.platform.name }})
-    needs: build
+    needs: [resolve-ref, build]
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -150,7 +199,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ needs.resolve-ref.outputs.sha }}
 
       - name: Test natives
         uses: ./.github/actions/test-natives

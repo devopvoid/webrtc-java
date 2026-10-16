@@ -166,7 +166,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
+          ref: ${{ needs.platforms.outputs.sha }}
 
       - name: Set up Maven cache
         uses: actions/cache@v6
