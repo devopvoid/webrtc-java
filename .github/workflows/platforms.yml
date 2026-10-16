@@ -7,16 +7,12 @@ name: Platforms
 # from all platforms together, because Maven Central publishes a version as one
 # bundle.
 #
-# Called by build.yml for every push and PR, and by release.yml for the tag it
-# releases, so that both build exactly the same way.
+# Called by build.yml for every push and PR, and by release-publish.yml for the tag it
+# releases (and release.yml for dry runs), so that both build exactly the same way.
 
 on:
   workflow_call:
     inputs:
-      ref:
-        description: "The commit, branch or tag to build. Empty for the one that triggered the caller."
-        type: string
-        default: ''
       version:
         description: "Optional local project version override for a release dry run."
         type: string
@@ -66,7 +62,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
           # The media module builds FFmpeg from its third-party submodule.
           submodules: true
 
@@ -150,7 +146,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.sha }}
 
       - name: Test natives
         uses: ./.github/actions/test-natives

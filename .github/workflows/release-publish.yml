@@ -1,0 +1,138 @@
+name: Publish release
+
+# GITHUB_TOKEN pushes do not trigger push workflows. release.yml explicitly
+# dispatches this workflow on the tag after its atomic push. A maintainer can
+# also dispatch it on that tag to retry, or push a release tag directly.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-version:
+    name: Validate release tag
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # No repository actions, build tools or caches are used until the tag is
+      # checked against both the triggering SHA and the trusted main history.
+      - name: Validate the tag and project version
+        id: version
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          if ! [[ "$RELEASE_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Publish release must run on a vX.Y.Z tag"
+            exit 1
+          fi
+          if [ "$(git rev-parse --verify "$RELEASE_REF^{commit}")" != "$RELEASE_SHA" ]; then
+            echo "::error::The release tag no longer points to the triggering commit"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$RELEASE_SHA" refs/remotes/origin/main; then
+            echo "::error::The release commit must be on main"
+            exit 1
+          fi
+
+          version="${RELEASE_REF#refs/tags/v}"
+          project_version=$(sed -n '0,/<version>/s|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml)
+          if [ "$project_version" != "$version" ]; then
+            echo "::error::The release tag does not match the project version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  platforms:
+    needs: release-version
+    uses: ./.github/workflows/platforms.yml
+    with:
+      retention-days: 7
+
+  publish-central:
+    name: Publish to Maven Central
+    needs: [release-version, platforms]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Maven cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/dev/onvoid/webrtc
+          key: maven-publish-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-publish-
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: central
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_TOKEN
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Deploy
+        uses: ./.github/actions/publish
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_TOKEN: ${{ secrets.MAVEN_TOKEN }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        with:
+          version: ${{ needs.release-version.outputs.version }}
+          profiles: release
+
+  publish-release:
+    name: Publish GitHub release
+    needs: publish-central
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate the release notes
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: .github/changelog/cliff-release.toml
+          args: -v --current --strip footer --use-branch-tags
+        env:
+          OUTPUT: ${{ runner.temp }}/release-notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" --draft --verify-tag \
+            -t "Release $RELEASE_TAG" -F "$RUNNER_TEMP/release-notes.md"
