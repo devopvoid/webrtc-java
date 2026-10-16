@@ -34,6 +34,7 @@ jobs:
       contents: write
     outputs:
       release_tag: ${{ steps.release-version.outputs.tag }}
+      release_version: ${{ steps.release-version.outputs.version }}
       release_body: ${{ steps.git-cliff.outputs.content }}
     steps:
       # The full history, for git-cliff.
@@ -154,6 +155,7 @@ jobs:
     with:
       ref: ${{ !inputs.dryRun && needs.prepare-release.outputs.release_tag || '' }}
       retention-days: 7
+      version: ${{ inputs.dryRun && needs.prepare-release.outputs.release_version || '' }}
 
   publish-central:
     name: Publish to Maven Central
@@ -191,18 +193,17 @@ jobs:
         env:
           RELEASE_TAG: ${{ needs.prepare-release.outputs.release_tag }}
         run: |
+          version="${RELEASE_TAG#v}"
           if [ "${{ inputs.dryRun }}" == "true" ]; then
-            version=$(mvn -B -q -N help:evaluate -Dexpression=project.version -DforceStdout)
-          else
-            version="${RELEASE_TAG#v}"
+            # Exercise release bundling rather than the snapshot deployment path.
+            mvn -B versions:set -DnewVersion="$version" -DgenerateBackupPoms=false
           fi
 
           echo "Version to publish: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # skipPublishing suppresses both the bundling and the upload, so a dry run
-      # still builds, signs and attaches everything without anything leaving the
-      # runner. As a second line of defence the Central credentials are replaced by
+      # skipUpload stages and bundles the release, then stops before uploading.
+      # As a second line of defence the Central credentials are replaced by
       # a placeholder during a dry run: should the upload ever happen regardless, it
       # fails on authentication instead of publishing a release. Signing does run, so
       # the GPG passphrase stays intact.
@@ -215,7 +216,11 @@ jobs:
         with:
           version: ${{ steps.release-version.outputs.version }}
           profiles: release
-          skip-publishing: ${{ inputs.dryRun }}
+          skip-upload: ${{ inputs.dryRun }}
+
+      - name: Verify the dry-run deployment bundle exists
+        if: ${{ inputs.dryRun }}
+        run: test -s target/central-publishing/central-bundle.zip
 
       - name: Summarize what would have been published
         if: ${{ inputs.dryRun }}
@@ -239,7 +244,7 @@ jobs:
         with:
           name: deployment-bundle-dry-run
           path: |
-            target/central-*/**
+            target/central-publishing/central-bundle.zip
             webrtc/target/central-*/**
             webrtc/target/*.jar
             webrtc/target/*.asc
@@ -247,7 +252,7 @@ jobs:
             webrtc-java-media/target/*.jar
             webrtc-java-media/target/*.asc
             natives/*.asc
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
   publish-release:

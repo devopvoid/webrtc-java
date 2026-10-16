@@ -15,6 +15,11 @@ inputs:
     description: 'The Maven profile that selects the classifier.'
     required: true
 
+  version:
+    description: 'Optional local project version override for a release dry run.'
+    required: false
+    default: ''
+
   java-version:
     description: 'The Java version.'
     required: true
@@ -71,6 +76,13 @@ runs:
         java-version: ${{ inputs.java-version }}
         distribution: ${{ inputs.java-distribution }}
         architecture: ${{ inputs.java-architecture }}
+
+    - name: Set the release dry-run version
+      if: inputs.version != ''
+      env:
+        RELEASE_VERSION: ${{ inputs.version }}
+      run: mvn -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+      shell: bash
 
     - name: Install the natives into the local repository
       run: |
