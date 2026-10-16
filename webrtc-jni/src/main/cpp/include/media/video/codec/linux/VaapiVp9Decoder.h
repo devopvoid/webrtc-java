@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace jni
@@ -71,8 +72,8 @@ namespace jni
 			bool DecodeFrame(const Vp9FrameHeader & header, std::span<const uint8_t> frame, int surface);
 			// Hands the frame in the surface to WebRTC.
 			bool Output(int surface, const webrtc::EncodedImage & image, int64_t renderTimeMs);
-			// A surface that no reference slot holds.
-			int FreeSurface() const;
+			// A surface that no reference slot holds, other than the given one.
+			int FreeSurface(int keep) const;
 
 			bool Check(VAStatus status, const char * operation) const;
 
@@ -88,8 +89,12 @@ namespace jni
 			VAConfigID config;
 			VAContextID context;
 			std::vector<VASurfaceID> surfaces;
+			// The size of the surfaces, the largest frame they take.
 			uint32_t width;
 			uint32_t height;
+			// The size of the frame decoded into each surface, which may be
+			// smaller: the lower spatial layers, or a stream that scaled down.
+			std::vector<std::pair<uint32_t, uint32_t>> frameSizes;
 
 			// The image a decoded surface is copied into, where the driver
 			// copies surfaces at all.
@@ -102,6 +107,9 @@ namespace jni
 			// then failed for good.
 			bool started;
 			bool failed;
+			// Whether the stream has spatial layers, whose surfaces stay large
+			// enough for all of them.
+			bool layered;
 	};
 }
 

@@ -55,7 +55,8 @@ namespace jni
 		height(0),
 		downloadImage(),
 		started(false),
-		failed(false)
+		failed(false),
+		layered(false)
 	{
 		downloadImage.image_id = VA_INVALID_ID;
 		slots.fill(-1);
@@ -103,19 +104,54 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
-		// The layers of a VP9 frame with spatial layers reach a decoder back to
-		// back, without the superframe index that tells where one ends.
-		if (image.SpatialIndex().value_or(0) > 0 || image.SpatialLayerFrameSize(1).has_value()) {
-			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
-		}
-
 		// Decoding starts with a key frame. Until one has come, WebRTC is
 		// asked for it.
 		if (!started && image.FrameType() != webrtc::VideoFrameType::kVideoFrameKey) {
 			return WEBRTC_VIDEO_CODEC_ERROR;
 		}
 
-		const auto frames = Vp9FrameHeaderParser::SplitSuperframe(std::span<const uint8_t>(image.data(), image.size()));
+		const std::span<const uint8_t> data(image.data(), image.size());
+		const int topLayer = image.SpatialIndex().value_or(0);
+		std::vector<std::span<const uint8_t>> frames;
+
+		// The spatial layers of a frame come back to back, without the
+		// superframe index that would tell where one ends; WebRTC gives the
+		// size of each instead, and none for a layer the encoder left out.
+		if (topLayer > 0) {
+			layered = true;
+
+			size_t offset = 0;
+
+			for (int layer = 0; layer <= topLayer; layer++) {
+				const std::optional<size_t> size = image.SpatialLayerFrameSize(layer);
+
+				if (!size || *size == 0) {
+					continue;
+				}
+				if (*size > data.size() - offset) {
+					RTC_LOG(LS_WARNING) << implementationName << " VP9: spatial layers larger than the frame";
+					failed = true;
+
+					return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+				}
+
+				for (std::span<const uint8_t> frame : Vp9FrameHeaderParser::SplitSuperframe(data.subspan(offset, *size))) {
+					frames.push_back(frame);
+				}
+
+				offset += *size;
+			}
+
+			if (offset != data.size()) {
+				RTC_LOG(LS_WARNING) << implementationName << " VP9: spatial layers that do not add up to the frame";
+				failed = true;
+
+				return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+			}
+		}
+		else {
+			frames = Vp9FrameHeaderParser::SplitSuperframe(data);
+		}
 
 		if (frames.empty()) {
 			RTC_LOG(LS_WARNING) << implementationName << " VP9: a superframe with a broken index";
@@ -123,6 +159,10 @@ namespace jni
 
 			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
+
+		// Of the frames shown, the last is the picture: the highest spatial
+		// layer, as libvpx shows it.
+		int shown = -1;
 
 		for (std::span<const uint8_t> frame : frames) {
 			const std::optional<Vp9FrameHeader> header = parser.Parse(frame);
@@ -136,40 +176,68 @@ namespace jni
 			}
 
 			if (header->showExistingFrame) {
-				if (slots[header->frameToShow] < 0 || !Output(slots[header->frameToShow], image, renderTimeMs)) {
+				if (slots[header->frameToShow] < 0) {
 					failed = true;
 
 					return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 				}
 
+				shown = slots[header->frameToShow];
 				continue;
 			}
 
-			const bool sizeChanged = header->width != width || header->height != height;
+			if (header->keyFrame) {
+				// The surfaces take the largest frame of the picture, so that
+				// the spatial layers above a key frame fit.
+				uint32_t largestWidth = header->width;
+				uint32_t largestHeight = header->height;
 
-			if (header->keyFrame && (context == VA_INVALID_ID || sizeChanged)) {
-				if (!CreateSession(header->width, header->height)) {
-					failed = true;
+				for (std::span<const uint8_t> other : frames) {
+					std::optional<std::pair<uint32_t, uint32_t>> size = Vp9FrameHeaderParser::FrameSize(other);
 
-					return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+					if (size) {
+						largestWidth = std::max(largestWidth, size->first);
+						largestHeight = std::max(largestHeight, size->second);
+					}
+				}
+
+				// With spatial layers, surfaces that take the picture stay, so
+				// that a layer WebRTC adds back later fits without a key frame.
+				const bool fits = layered && largestWidth <= width && largestHeight <= height;
+
+				if (context == VA_INVALID_ID || (!fits && (largestWidth != width || largestHeight != height))) {
+					if (!CreateSession(largestWidth, largestHeight)) {
+						failed = true;
+
+						return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+					}
 				}
 			}
-			else if (context == VA_INVALID_ID || sizeChanged) {
-				// Inter frames that scale their references are left to libvpx.
-				RTC_LOG(LS_INFO) << implementationName << " VP9: an inter frame changes the size to "
-					<< header->width << "x" << header->height;
+			else if (context == VA_INVALID_ID) {
 				failed = true;
 
 				return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 			}
+			else if (header->width > width || header->height > height) {
+				// A spatial layer that WebRTC adds without a key frame, larger
+				// than the surfaces. The key frame WebRTC is asked for carries
+				// all layers, and the surfaces are made to take them.
+				RTC_LOG(LS_INFO) << implementationName << " VP9: a spatial layer of " << header->width << "x"
+					<< header->height << " does not fit, asking for a key frame";
 
-			const int surface = FreeSurface();
+				return WEBRTC_VIDEO_CODEC_ERROR;
+			}
+			// The hardware scales references of another size.
+
+			const int surface = FreeSurface(shown);
 
 			if (surface < 0 || !DecodeFrame(*header, frame, surface)) {
 				failed = true;
 
 				return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 			}
+
+			frameSizes[surface] = { header->width, header->height };
 
 			for (int slot = 0; slot < 8; slot++) {
 				if (header->refreshFrameFlags & (1 << slot)) {
@@ -179,11 +247,15 @@ namespace jni
 
 			started = true;
 
-			if (header->showFrame && !Output(surface, image, renderTimeMs)) {
-				failed = true;
-
-				return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
+			if (header->showFrame) {
+				shown = surface;
 			}
+		}
+
+		if (shown >= 0 && !Output(shown, image, renderTimeMs)) {
+			failed = true;
+
+			return WEBRTC_VIDEO_CODEC_FALLBACK_SOFTWARE;
 		}
 
 		return WEBRTC_VIDEO_CODEC_OK;
@@ -203,6 +275,7 @@ namespace jni
 		parser.Reset();
 		started = false;
 		failed = false;
+		layered = false;
 
 		return WEBRTC_VIDEO_CODEC_OK;
 	}
@@ -272,6 +345,7 @@ namespace jni
 
 		width = frameWidth;
 		height = frameHeight;
+		frameSizes.assign(kSurfaceCount, { frameWidth, frameHeight });
 
 		RTC_LOG(LS_INFO) << implementationName << " VP9 decoding " << width << "x" << height;
 
@@ -301,13 +375,14 @@ namespace jni
 
 		width = 0;
 		height = 0;
+		frameSizes.clear();
 		slots.fill(-1);
 	}
 
-	int VaapiVp9Decoder::FreeSurface() const
+	int VaapiVp9Decoder::FreeSurface(int keep) const
 	{
 		for (int surface = 0; surface < static_cast<int>(surfaces.size()); surface++) {
-			if (std::find(slots.begin(), slots.end(), surface) == slots.end()) {
+			if (surface != keep && std::find(slots.begin(), slots.end(), surface) == slots.end()) {
 				return surface;
 			}
 		}
@@ -422,15 +497,16 @@ namespace jni
 	bool VaapiVp9Decoder::Output(int surface, const webrtc::EncodedImage & image, int64_t renderTimeMs)
 	{
 		VADisplay display = library.Display();
-		const int frameWidth = static_cast<int>(width);
-		const int frameHeight = static_cast<int>(height);
+		const int frameWidth = static_cast<int>(frameSizes[surface].first);
+		const int frameHeight = static_cast<int>(frameSizes[surface].second);
 
 		VAImage mapped = {};
 		mapped.image_id = VA_INVALID_ID;
 		bool derived = false;
 
 		if (downloadImage.image_id != VA_INVALID_ID
-			&& va.GetImage(display, surfaces[surface], 0, 0, width, height, downloadImage.image_id)
+			&& va.GetImage(display, surfaces[surface], 0, 0, frameSizes[surface].first,
+				frameSizes[surface].second, downloadImage.image_id)
 				== VA_STATUS_SUCCESS)
 		{
 			mapped = downloadImage;

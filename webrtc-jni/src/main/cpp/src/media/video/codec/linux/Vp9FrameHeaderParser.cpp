@@ -411,6 +411,62 @@ namespace jni
 		}
 	}
 
+	std::optional<std::pair<uint32_t, uint32_t>> Vp9FrameHeaderParser::FrameSize(std::span<const uint8_t> frame)
+	{
+		webrtc::BitstreamReader reader(frame);
+
+		// Frame marker and profile 0; a frame that shows an earlier one codes
+		// no size.
+		if (reader.ReadBits(2) != 2 || reader.ReadBits(2) != 0 || reader.Read<bool>()) {
+			return std::nullopt;
+		}
+
+		const bool keyFrame = !reader.Read<bool>();
+		const bool showFrame = reader.Read<bool>();
+		const bool errorResilient = reader.Read<bool>();
+
+		if (keyFrame) {
+			if (reader.ReadBits(24) != kFrameSyncCode) {
+				return std::nullopt;
+			}
+			// The color space and range of profile 0.
+			reader.ConsumeBits(4);
+		}
+		else {
+			const bool intraOnly = showFrame ? false : reader.Read<bool>();
+
+			if (!errorResilient) {
+				reader.ConsumeBits(2);
+			}
+
+			if (intraOnly) {
+				if (reader.ReadBits(24) != kFrameSyncCode) {
+					return std::nullopt;
+				}
+				reader.ConsumeBits(8);
+			}
+			else {
+				// The refresh flags, then three references with a sign bias.
+				reader.ConsumeBits(8 + 3 * 4);
+
+				for (int i = 0; i < 3; i++) {
+					if (reader.Read<bool>()) {
+						return std::nullopt;
+					}
+				}
+			}
+		}
+
+		const uint32_t width = static_cast<uint32_t>(reader.Read<uint16_t>()) + 1;
+		const uint32_t height = static_cast<uint32_t>(reader.Read<uint16_t>()) + 1;
+
+		if (!reader.Ok()) {
+			return std::nullopt;
+		}
+
+		return std::make_pair(width, height);
+	}
+
 	std::vector<std::span<const uint8_t>> Vp9FrameHeaderParser::SplitSuperframe(std::span<const uint8_t> data)
 	{
 		std::vector<std::span<const uint8_t>> frames;

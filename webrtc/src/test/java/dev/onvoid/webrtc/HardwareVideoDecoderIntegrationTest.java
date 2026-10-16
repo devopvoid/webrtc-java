@@ -750,10 +750,26 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 		assumeTrue(result.scalability.startsWith("L2"), "no spatial layers were encoded: " + result.scalability);
 
-		// The frames arrive, from libvpx: the layers of a frame come without a
-		// superframe index, which VideoToolbox does not decode, and which a
-		// Media Foundation or NVDEC decoder is not known to.
-		assertFalse(isHardware(result.decoder), result.decoder);
+		if (OS.contains("linux") && result.decoder.startsWith("VA-API")) {
+			// VA-API uses the layer sizes WebRTC supplies to decode the layers
+			// in order, including references at a different resolution.
+			assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+		}
+		else {
+			assertFalse(isHardware(result.decoder), result.decoder);
+		}
+	}
+
+	@Test
+	void vaapiDecodesThreeSpatialLayers() throws Exception {
+		assumeTrue(OS.contains("linux"), "VA-API is available on Linux only");
+		for (String mode : new String[] { "L3T3", "L3T3_KEY" }) {
+			CallResult result = receiveVideo(hardwareFactory(), VP9, 1280, 720, mode, 90);
+			assertEquals(mode, result.scalability);
+			expectVp9Hardware(result.decoder);
+			assertTrue(result.decoder.startsWith("VA-API"), result.decoder);
+			assertTrue(result.pliCount <= 1, "key frames requested: " + result.pliCount);
+		}
 	}
 
 	@Test
