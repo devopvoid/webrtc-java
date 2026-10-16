@@ -132,6 +132,6 @@ RTCEncodedVideoFrameInjector injector = transceiver.getSender()
 injector.injectFrame(frameData, rtpTimestamp, keyFrame, width, height);
 ```
 
-The frames must be in the codec the sender negotiated, which `setCodecPreferences` on the transceiver can make sure of, and the RTP timestamp runs on the 90 kHz video clock. An audio sender takes an `RTCEncodedAudioFrameInjector` the same way, whose frames carry the payload type of their codec, from the sender's `getParameters().codecs`. Do not inject audio through a factory that sends audio captured by its audio device module, as WebRTC feeds captured audio to every audio sender.
+The frames must be in the codec the sender negotiated, which `setCodecPreferences` on the transceiver can make sure of, and the RTP timestamp runs on the 90 kHz video clock. VP9 cannot be injected: WebRTC sends injected frames without the scalability structure a VP9 receiver needs with every key frame, so the receiver drops them. H.264, H.265 and AV1 frames arrive. An audio sender takes an `RTCEncodedAudioFrameInjector` the same way, whose frames carry the payload type of their codec, from the sender's `getParameters().codecs`. Do not inject audio through a factory that sends audio captured by its audio device module, as WebRTC feeds captured audio to every audio sender.
 
 Giving the sender a track through `replaceTrack` ends the injection, and `dispose()` releases the injector. The observer runs on a callback thread shared with other WebRTC observers, so it may call back into WebRTC but should not block.

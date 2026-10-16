@@ -33,6 +33,10 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
  * {@link RTCRtpSender#replaceTrack(dev.onvoid.webrtc.media.MediaStreamTrack)
  * giving the sender a track} ends the injection.
  * <p>
+ * VP9 cannot be injected: WebRTC sends injected frames without the
+ * scalability structure a VP9 receiver needs with every key frame, so the
+ * receiver drops them. H.264, H.265 and AV1 frames arrive.
+ * <p>
  * Frames can be injected from any thread.
  *
  * @author Alex Andres
