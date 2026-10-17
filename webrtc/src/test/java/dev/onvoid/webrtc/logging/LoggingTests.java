@@ -31,9 +31,8 @@ class LoggingTests {
 
 	@Test
 	void logToDebug() {
-		Logging.logToDebug(Severity.ERROR);
-		Logging.error("logToDebug at ERROR");
 		Logging.logToDebug(Severity.INFO);
+		Logging.info("logToDebug at INFO");
 		Logging.logToDebug(Severity.NONE);
 		Logging.info("logToDebug at NONE must not print this");
 	}
