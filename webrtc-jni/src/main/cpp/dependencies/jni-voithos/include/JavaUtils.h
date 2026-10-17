@@ -42,13 +42,18 @@
 		}																				\
 	} while(0)
 
+// Throws the requested Java exception without replacing an already pending one.
+// Uses JNI directly, so reporting an allocation failure needs no C++ allocation.
+void ThrowJavaException(JNIEnv * env, const char * className, const char * message) noexcept;
 void ThrowCxxJavaException(JNIEnv * env);
 JNIEnv * AttachCurrentThread();
 bool ExceptionCheck(JNIEnv * env);
 jclass FindClass(JNIEnv * env, const char * name);
 jmethodID GetMethod(JNIEnv * env, jclass cls, const char * name, const char * sig);
 jmethodID GetStaticMethod(JNIEnv * env, jclass cls, const char * name, const char * sig);
-jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName);
+// Specify the declaring class when subclasses may hide a handle field.
+jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName,
+	const char * declaringClass = nullptr);
 jfieldID GetFieldID(JNIEnv * env, jobject obj, const std::string & fieldName, const char * type);
 jfieldID GetFieldID(JNIEnv * env, jclass cls, const std::string & fieldName, const char * type);
 
@@ -78,9 +83,10 @@ jlong GetHandleLong(JNIEnv * env, jobject obj)
 }
 
 template<typename T>
-T * GetHandle(JNIEnv * env, jobject obj, const std::string & handleName)
+T * GetHandle(JNIEnv * env, jobject obj, const std::string & handleName,
+	const char * declaringClass = nullptr)
 {
-	jfieldID field = GetHandleField(env, obj, handleName);
+	jfieldID field = GetHandleField(env, obj, handleName, declaringClass);
 
 	if (!field) {
 		ExceptionCheck(env);
@@ -97,9 +103,10 @@ T * GetHandle(JNIEnv * env, jobject obj)
 }
 
 template<typename T>
-void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t)
+void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t,
+	const char * declaringClass = nullptr)
 {
-	jfieldID field = GetHandleField(env, obj, handleName);
+	jfieldID field = GetHandleField(env, obj, handleName, declaringClass);
 
 	if (!field) {
 		ExceptionCheck(env);

@@ -36,6 +36,19 @@ bool ExceptionCheck(JNIEnv * env)
 	return false;
 }
 
+void ThrowJavaException(JNIEnv * env, const char * className, const char * message) noexcept
+{
+	if (env->ExceptionCheck()) {
+		return;
+	}
+
+	jni::JavaLocalRef<jclass> cls(env, env->FindClass(className));
+
+	if (cls.get() != nullptr) {
+		env->ThrowNew(cls.get(), message);
+	}
+}
+
 void ThrowCxxJavaException(JNIEnv * env)
 {
 	std::exception_ptr eptr = std::current_exception();
@@ -105,9 +118,21 @@ jmethodID GetStaticMethod(JNIEnv * env, jclass cls, const char * name, const cha
 	return method;
 }
 
-jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName)
+jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName,
+	const char * declaringClass)
 {
-	return GetFieldID(env, obj, fieldName, "J");
+	if (declaringClass == nullptr) {
+		return GetFieldID(env, obj, fieldName, "J");
+	}
+
+	auto cls = jni::ClassLoaderGetClass(env, declaringClass);
+
+	if (cls.get() == nullptr) {
+		ExceptionCheck(env);
+		return nullptr;
+	}
+
+	return GetFieldID(env, cls.get(), fieldName, "J");
 }
 
 jfieldID GetFieldID(JNIEnv * env, jobject obj, const std::string & fieldName, const char * type)
