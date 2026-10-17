@@ -1,0 +1,11 @@
+--- a/common_audio/vad/webrtc_vad.c
++++ b/common_audio/vad/webrtc_vad.c
+@@ -23,5 +23,8 @@
+
+ VadInst* WebRtcVad_Create(void) {
+   VadInstT* self = (VadInstT*)malloc(sizeof(VadInstT));
++  if (self == NULL) {
++    return NULL;
++  }
+
+   self->init_flag = 0;

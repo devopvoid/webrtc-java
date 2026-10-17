@@ -1,104 +1,153 @@
-# Voice Activity Detector
+# Voice Activity Detection
 
-The Voice Activity Detector (VAD) helps you determine when speech is present in an audio stream. It analyzes short chunks of PCM audio and returns the probability that the chunk contains voice.
+Two WebRTC detectors are available. Choose according to the result your
+application needs; neither is guaranteed to classify every recording better.
+Both analyze mono signed 16-bit PCM and maintain state across audio frames.
 
-This can be used to:
-- Drive push-to-talk or auto-mute logic
-- Skip encoding/sending silence to save bandwidth
-- Trigger UI indicators when the user is speaking
+| API | Native implementation | Result | Input frames |
+| --- | --- | --- | --- |
+| `VoiceActivityDetector` | Combined standalone and pitch-based detector | Estimated probability from 0 to 1 | 10 ms |
+| `StandaloneVoiceActivityDetector` | Standalone WebRTC VAD directly | Boolean speech decision | 10, 20 or 30 ms |
 
-API: `dev.onvoid.webrtc.media.audio.VoiceActivityDetector`
+The existing `VoiceActivityDetector.process()` and `getLastVoiceProbability()`
+methods remain available with the original probability estimator. No migration
+is required. The standalone detector is an additional class, with its own state.
 
-## Overview
+## Probability estimator
 
-`VoiceActivityDetector` exposes a minimal API:
-- `process(byte[] audio, int samplesPerChannel, int sampleRate)`: Analyze one audio frame.
-- `getLastVoiceProbability()`: Retrieve the probability (0.0..1.0) that the last processed frame contained voice.
-- `dispose()`: Release native resources. Always call this when done.
-
-Internally, VAD uses a native implementation optimized for real-time analysis. The class itself does not perform resampling or channel mixing, so provide audio matching the given `sampleRate` and expected format.
-
-## Audio format expectations
-
-- PCM signed 16-bit little-endian (typical Java byte[] from microphone capture via this library)
-- Mono is recommended. If you have stereo, downmix to mono before calling `process` or pass samples-per-channel accordingly
-- Frame size: commonly 10 ms per call (e.g., 160 samples at 16 kHz for 10 ms)
-- Supported sample rates: 8 kHz, 16 kHz, 32 kHz, 48 kHz (use one of these for best results)
-
-## Basic usage
+`dev.onvoid.webrtc.media.audio.VoiceActivityDetector` combines the standalone VAD
+with pitch and spectral features. Your application chooses a threshold on the
+returned probability. The result is delayed by a few chunks and is not updated
+on every call. WebRTC initially returns `1.0` until enough audio has arrived;
+do not interpret that initial value as observed speech.
 
 ```java
 import dev.onvoid.webrtc.media.audio.VoiceActivityDetector;
 
-// Create the detector
 VoiceActivityDetector vad = new VoiceActivityDetector();
-
 try {
-    // Example parameters
-    int sampleRate = 16000;                 // 16 kHz
-    int frameMs = 10;                       // 10 ms frames
-    int samplesPerChannel = sampleRate * frameMs / 1000; // 160 samples
-
-    // audioFrame must contain 16-bit PCM data for one frame (mono)
-    byte[] audioFrame = new byte[samplesPerChannel * 2]; // 2 bytes per sample
-
-    // Fill audioFrame from your audio source here
-    // ...
-
-    // Analyze frame
-    vad.process(audioFrame, samplesPerChannel, sampleRate);
-
-    // Query probability of voice in the last frame
-    float prob = vad.getLastVoiceProbability(); // 0.0 .. 1.0
-
-    boolean isSpeaking = prob >= 0.5f; // choose a threshold that works for your app
-
+    byte[] frame = new byte[320]; // 10 ms, mono signed 16-bit PCM at 16 kHz
+    // In your audio loop, fill frame from the source, then:
+    vad.process(frame, 160, 16000);
+    float probability = vad.getLastVoiceProbability();
+    // After the initial buffering period, apply your application's threshold.
+    boolean speech = probability > 0.7f; // Example threshold, not a universal setting.
 }
 finally {
-    // Always release resources
     vad.dispose();
 }
 ```
 
-## Continuous processing loop
+Pass exactly `sampleRate / 100` samples per call. The byte buffer must contain at
+least twice that many bytes; trailing bytes are ignored. Samples are mono signed
+16-bit PCM in native byte order, matching the library's audio callbacks. Supported
+sample rates are 8000, 16000, 32000 and 48000 Hz; this detector resamples to 16 kHz
+internally. Downmix stereo before calling `process()`.
+
+Keep one instance per continuous stream and create a new instance when beginning
+a new stream or changing sample rates. The standalone detector's `Mode` setting
+does not configure this estimator. Its probability is a model estimate, not a
+guarantee that a given percentage of frames will be classified correctly.
+
+## Standalone detector
+
+`dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector` provides direct
+boolean decisions and four aggressiveness modes. It does not expose a probability
+score, perform channel mixing, or resample input.
 
 ```java
-VoiceActivityDetector vad = new VoiceActivityDetector();
+import dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector;
 
+StandaloneVoiceActivityDetector vad = new StandaloneVoiceActivityDetector(
+        StandaloneVoiceActivityDetector.Mode.AGGRESSIVE);
 try {
-    int sampleRate = 16000;
-    int frameMs = 10;
-    int samplesPerChannel = sampleRate * frameMs / 1000; // 160 samples
-    byte[] audioFrame = new byte[samplesPerChannel * 2];
-
-    while (running) {
-        // Read PCM frame from your capture pipeline into audioFrame
-        // ...
-
-        vad.process(audioFrame, samplesPerChannel, sampleRate);
-        float prob = vad.getLastVoiceProbability();
-
-        if (prob > 0.8f) {
-            // High confidence of speech
-            // e.g., enable VU meter, unmute, or mark active speaker
-        }
-        else {
-            // Likely silence or noise
-        }
-    }
+    short[] frame = new short[160]; // 10 ms of mono audio at 16 kHz
+    // Fill frame with PCM samples from your audio source.
+    boolean speech = vad.isSpeech(frame, 16000);
 }
 finally {
     vad.dispose();
 }
 ```
 
-## Tips and best practices
+Provide one mono PCM frame in a `short[]` with exactly one of these lengths:
 
-- Threshold selection: Start with 0.5–0.8 and tune for your environment.
-- Frame size consistency: Use a consistent frame duration and sample rate.
-- Resource management: VAD holds native resources; ensure `dispose()` is called.
-- Preprocessing: Consider using `AudioProcessing` (noise suppression, gain control) before VAD for improved robustness in noisy environments. See the Audio Processing guide.
+| Sample rate | 10 ms | 20 ms | 30 ms |
+| --- | --- | --- | --- |
+| 8000 Hz | 80 | 160 | 240 |
+| 16000 Hz | 160 | 320 | 480 |
+| 32000 Hz | 320 | 640 | 960 |
+| 48000 Hz | 480 | 960 | 1440 |
+
+Lengths are sample counts, not bytes. Numeric `short` values have no byte order;
+when decoding a PCM `byte[]`, use the source's byte order.
+
+Modes are `QUALITY` (the default), `LOW_BITRATE`, `AGGRESSIVE`, and
+`VERY_AGGRESSIVE`. Higher aggressiveness rejects more noise and can miss more
+speech. `setMode(mode)` changes aggressiveness without clearing history.
+
+Keep one detector per independent stream and feed frames in order. Do not reset
+between frames: the detector uses adaptive state and built-in hangover, so a few
+frames after speech ends can still be classified as speech. Call `reset()` when
+starting a new stream or changing sample rates; it preserves the selected mode.
+
+Downmix stereo and resample unsupported rates before detection. The
+[Audio Converter](/tools/audio/audio-converter) accepts 10 ms frames and can do
+both operations. Split larger callbacks or buffer partial callbacks into complete
+frames.
+
+## Lifecycle and concurrency
+
+Both constructors load the platform native library. A `PeerConnectionFactory` is
+not required. Include the matching native classifier jar as usual.
+
+Calls, including `dispose()`, are serialized on each detector. Callers must still
+preserve stream order and avoid modifying an input array during detection.
+Disposal is idempotent. Processing or querying a disposed detector throws
+`IllegalStateException`, as do standalone configuration/reset calls after disposal.
+Invalid frame lengths/rates throw `IllegalArgumentException`; null input buffers
+or standalone modes throw `NullPointerException`.
+
+The standalone detector reports failure to allocate its native instance as
+`OutOfMemoryError`. The probability estimator retains WebRTC's native
+allocation-failure behavior; catching Java exceptions does not guarantee recovery
+from native memory exhaustion.
+
+A probability detector and a standalone detector do not share history, even when
+they receive the same audio. Feeding, configuring, resetting, or disposing one
+does not update the other. Neither API automatically changes encoding, DTX, mute
+state, or transmitted audio.
+
+## Audio track integration
+
+The examples module includes `VoiceActivityExample`, an `AudioTrackSink` adapter
+using `StandaloneVoiceActivityDetector`. It buffers callback data into 10 ms
+frames, converts mono or stereo input to 16 kHz mono with `AudioConverter`, and
+reports each boolean decision. It also supports 44.1 kHz input.
+
+```java
+import dev.onvoid.webrtc.examples.VoiceActivityExample;
+
+VoiceActivityExample sink = new VoiceActivityExample(speech -> {
+    // Enqueue the decision for your application/UI; return promptly.
+});
+track.addSink(sink);
+try {
+    // Keep the sink attached while receiving audio.
+}
+finally {
+    track.removeSink(sink);
+    sink.close();
+}
+```
+
+The adapter invokes the consumer on the audio callback thread. Keep work there
+short. Apply application-level timing to produce stable speech-start/speech-end
+events, rather than toggling a UI or recording for every frame. Audio format
+changes clear the adapter's partial frame and reset its detector.
 
 ## Related guides
 
 - [Audio Processing](/guide/audio/audio-processing)
+- [Audio Converter](/tools/audio/audio-converter)
+- [Audio Recorder](/tools/audio/audio-recorder)

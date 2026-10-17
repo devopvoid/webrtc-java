@@ -17,16 +17,28 @@
 package dev.onvoid.webrtc.media.audio;
 
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
+import dev.onvoid.webrtc.internal.NativeLoader;
 
 /**
  * A voice activity detector that analyzes audio data chunks to determine the probability of voice presence in the
  * audio stream.
  * <p>
- * This class provides native methods to process audio and retrieve the probability of voice activity.
+ * Each instance belongs to one continuous mono signed 16-bit PCM stream. Calls,
+ * including disposal, are serialized; callers must still preserve stream order.
+ * No peer connection factory is required.
  *
  * @author Alex Andres
  */
 public class VoiceActivityDetector extends DisposableNativeObject {
+
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
 
 	/**
 	 * Constructs a new {@code VoiceActivityDetector} instance.
@@ -36,26 +48,27 @@ public class VoiceActivityDetector extends DisposableNativeObject {
 	}
 
 	/**
-	 * Processes audio data to detect voice activity.
+	 * Processes one 10 ms frame of mono signed 16-bit PCM in native byte order.
+	 * Supported sample rates are 8000, 16000, 32000 and 48000 Hz.
 	 *
 	 * @param audio             The audio data to process.
 	 * @param samplesPerChannel The number of samples in the audio chunk.
 	 * @param sampleRate        The sample rate of the audio data in Hz.
 	 */
-	public native void process(byte[] audio, int samplesPerChannel, int sampleRate);
+	public synchronized native void process(byte[] audio, int samplesPerChannel, int sampleRate);
 
 	/**
 	 * Gets the probability of voice presence from the last processed audio data.
 	 *
 	 * @return A value between 0.0 and 1.0 representing the probability of voice presence.
 	 */
-	public native float getLastVoiceProbability();
+	public synchronized native float getLastVoiceProbability();
 
 	/**
-	 * Releases native resources held by this object.
+	 * Releases native resources held by this object. Repeated calls are harmless.
 	 */
 	@Override
-	public native void dispose();
+	public synchronized native void dispose();
 
 	/**
 	 * Initializes the native resources for the voice activity detector. This method is called during construction and
