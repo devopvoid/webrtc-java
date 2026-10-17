@@ -44,14 +44,12 @@ try {
 
 ### Configuring Logging Behavior
 
-You can configure various aspects of the logging system:
+Thread IDs are included in log messages by default. You can configure the output
+severity and enable timestamps:
 
 ```java
 // Configure logging to debug output with minimum severity level
 Logging.logToDebug(Logging.Severity.INFO);
-
-// Enable/disable thread ID in log messages
-Logging.logThreads(true);
 
 // Enable/disable timestamps in log messages
 Logging.logTimestamps(true);

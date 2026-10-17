@@ -103,12 +103,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logToDebug
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logThreads
-(JNIEnv * env, jclass caller, jboolean enable)
-{
-	webrtc::LogMessage::LogThreads(static_cast<bool>(enable));
-}
-
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logTimestamps
 (JNIEnv * env, jclass caller, jboolean enable)
 {
