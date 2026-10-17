@@ -33,14 +33,6 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_logging_Logging
-	 * Method:    logThreads
-	 * Signature: (Z)V
-	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logThreads
-	(JNIEnv *, jclass, jboolean);
-
-	/*
-	 * Class:     dev_onvoid_webrtc_logging_Logging
 	 * Method:    logTimestamps
 	 * Signature: (Z)V
 	 */

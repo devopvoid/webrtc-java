@@ -69,8 +69,6 @@ public class Logging {
 
 	public static native void logToDebug(Severity severity);
 
-	public static native void logThreads(boolean enable);
-
 	public static native void logTimestamps(boolean enable);
 
 	public static void verbose(String message) {

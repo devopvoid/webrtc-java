@@ -39,6 +39,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM * vm, void * reserved)
 	// can log, so nothing is written unless the application asks for it through
 	// Logging.logToDebug or a log sink.
 	webrtc::LoggingConfig loggingConfig;
+	loggingConfig.set_log_thread(true);
 	loggingConfig.set_min_severity(webrtc::LS_NONE);
 	loggingConfig.set_debug_severity(webrtc::LS_NONE);
 	webrtc::InitializeLogging(std::move(loggingConfig));
