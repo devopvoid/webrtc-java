@@ -17,14 +17,16 @@
 package dev.onvoid.webrtc.examples.web.client;
 
 import java.net.URI;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.onvoid.webrtc.RTCIceCandidate;
+import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
+import dev.onvoid.webrtc.client.SignalMessage;
+import dev.onvoid.webrtc.client.Signaling;
 
 import dev.onvoid.webrtc.examples.web.model.*;
 
@@ -32,22 +34,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Manages WebSocket signaling for WebRTC connections.
+ * Carries a peer's signaling over a WebSocket, to and from the browser client.
  * <p>
- * This class handles the communication between peers during WebRTC connection establishment.
- * It manages sending and receiving:
- * <ul>
- *   <li>Session descriptions (offers and answers)</li>
- *   <li>ICE candidates</li>
- *   <li>Join messages for room-based signaling</li>
- * </ul>
- * <p>
- * The manager connects to a signaling server via WebSocket and translates WebRTC-related
- * objects to JSON messages that can be transmitted over the signaling channel.
+ * The browser client and the server speak a message format of their own, which
+ * names the sender and the receiver of each message and wraps the session
+ * description or ICE candidate in a {@code data} object:
+ * <pre>{@code
+ * {"type":"offer","from":"java-client","to":"web-client","data":{"sdp":"v=0..."}}
+ * {"type":"ice-candidate","from":"web-client","to":"java-client","data":{"candidate":"...","sdpMid":"0","sdpMLineIndex":0}}
+ * }</pre>
+ * This class translates between that format and the {@link SignalMessage}s of the
+ * client API. As a {@link Signaling}, it sends a peer's messages and hands the
+ * peer the ones the browser sends. It also sends and receives the join and leave
+ * messages of the room.
  *
  * @author Alex Andres
  */
-public class SignalingManager {
+public class SignalingManager implements Signaling {
 
     private static final Logger LOG = LoggerFactory.getLogger(SignalingManager.class);
 
@@ -57,14 +60,8 @@ public class SignalingManager {
     /** JSON mapper for serializing and deserializing signaling messages. */
     private final ObjectMapper jsonMapper;
 
-    /** Callback that is triggered when an offer message is received from a remote peer. */
-    private Consumer<SessionDescriptionMessage> onOfferReceived;
-
-    /** Callback that is triggered when an answer message is received from a remote peer. */
-    private Consumer<SessionDescriptionMessage> onAnswerReceived;
-
-    /** Callback that is triggered when an ICE candidate is received from a remote peer. */
-    private Consumer<IceCandidateMessage> onCandidateReceived;
+    /** The peer that receives the session descriptions and candidates of the browser. */
+    private volatile Consumer<SignalMessage> inbound;
 
     /** Callback that is triggered when a join message is received. */
     private Consumer<JoinMessage> onJoinReceived;
@@ -73,6 +70,7 @@ public class SignalingManager {
     private Consumer<LeaveMessage> onLeaveReceived;
 
     private String userId = "java-client";
+
     private String remotePeerId = "web-client";
 
 
@@ -80,7 +78,7 @@ public class SignalingManager {
      * Creates a new SignalingManager with the specified URI and subprotocol.
      *
      * @param signalingUri The URI of the signaling server.
-     * @param subprotocol The WebSocket subprotocol to use.
+     * @param subprotocol  The WebSocket subprotocol to use.
      */
     public SignalingManager(URI signalingUri, String subprotocol) {
         this.signaling = new WebSocketClient(signalingUri, subprotocol);
@@ -98,28 +96,13 @@ public class SignalingManager {
      */
     public boolean connect() {
         try {
-            CountDownLatch connectLatch = new CountDownLatch(1);
-
-            signaling.connect()
-                    .thenAccept(ws -> {
-                        LOG.info("Connected to signaling server");
-                        connectLatch.countDown();
-                    })
-                    .exceptionally(e -> {
-                        LOG.error("Failed to connect to signaling server", e);
-                        connectLatch.countDown();
-                        return null;
-                    });
-
-            // Wait for connection.
-            connectLatch.await(5, TimeUnit.SECONDS);
-
-            return signaling.isConnected();
+            signaling.connect().get(5, TimeUnit.SECONDS);
         }
         catch (Exception e) {
-            LOG.error("Error connecting to signaling server", e);
-            return false;
+            LOG.error("Failed to connect to signaling server", e);
         }
+
+        return signaling.isConnected();
     }
 
     /**
@@ -134,150 +117,66 @@ public class SignalingManager {
     }
 
     /**
-     * Sends a join message to the signaling server.
+     * Sends a join message to the signaling server to join a specific room.
      *
-     * @param roomId The ID of the room to join.
+     * @param roomId The identifier of the room to join.
      */
     public void sendJoin(String roomId) {
-        try {
-            JoinMessage joinMessage = new JoinMessage(userId, roomId, "Java Client");
+        send(new JoinMessage(userId, roomId, "Java Client"));
 
-            // Convert to JSON and send.
-            String joinMessageJson = jsonMapper.writeValueAsString(joinMessage);
-            signaling.sendMessage(joinMessageJson);
-
-            LOG.info("Sent join message for room: {}", roomId);
-        }
-        catch (Exception e) {
-            LOG.error("Error creating JSON join message", e);
-        }
+        LOG.info("Sent join message for room: {}", roomId);
     }
 
     /**
-     * Sends a session description (offer or answer) to the remote peer.
+     * Sends a message of a peer to the browser. Called on the peer's event thread, in order.
      *
-     * @param sdp The session description to send.
+     * @param message The session description or candidate to send.
      */
-    public void sendSessionDescription(RTCSessionDescription sdp) {
-        String type = sdp.sdpType.toString().toLowerCase();
+    @Override
+    public void send(SignalMessage message) {
+        switch (message.type()) {
+            case OFFER, ANSWER -> {
+                String type = message.type() == SignalMessage.Type.OFFER ? "offer" : "answer";
 
-        try {
-            SessionDescriptionMessage message = new SessionDescriptionMessage(
-                    type,
-                    userId,
-                    remotePeerId,
-                    sdp.sdp
-            );
-
-            String messageJson = jsonMapper.writeValueAsString(message);
-            signaling.sendMessage(messageJson);
-
-            LOG.info("Sent {} to remote peer", type);
-        }
-        catch (Exception e) {
-            LOG.error("Error creating JSON message", e);
-        }
-    }
-
-    /**
-     * Sends an ICE candidate to the remote peer.
-     *
-     * @param candidate The ICE candidate to send.
-     */
-    public void sendIceCandidate(RTCIceCandidate candidate) {
-        try {
-            IceCandidateMessage message = new IceCandidateMessage(
-                    userId,
-                    remotePeerId,
-                    candidate.sdp,
-                    candidate.sdpMid,
-                    candidate.sdpMLineIndex
-            );
-
-            String candidateJson = jsonMapper.writeValueAsString(message);
-            signaling.sendMessage(candidateJson);
-
-            LOG.info("Sent ICE candidate to remote peer");
-        }
-        catch (Exception e) {
-            LOG.error("Error creating JSON message", e);
-        }
-    }
-
-    /**
-     * Sets up the WebSocket signaling to handle incoming messages.
-     */
-    private void setupSignaling() {
-        signaling.addMessageListener(message -> {
-            try {
-                // Parse the message to extract the type.
-                String type = jsonMapper.readTree(message).path("type").asText();
-                MessageType messageType = MessageType.fromString(type);
-
-                switch (messageType) {
-                    case OFFER -> handleOfferMessage(message);
-                    case ANSWER -> handleAnswerMessage(message);
-                    case ICE_CANDIDATE -> handleIceCandidateMessage(message);
-                    case JOIN -> handleJoinMessage(message);
-                    case LEAVE -> handleLeaveMessage(message);
-                    case HEARTBEAT_ACK -> LOG.info("Received: {}", type);
-                    default -> LOG.info("Received message with unknown type: {}", type);
-                }
+                send(new SessionDescriptionMessage(type, userId, remotePeerId, message.description().sdp));
+                LOG.info("Sent {} to remote peer", type);
             }
-            catch (Exception e) {
-                LOG.error("Error parsing message type", e);
+            case CANDIDATE -> {
+                RTCIceCandidate candidate = message.candidate();
+
+                send(new IceCandidateMessage(userId, remotePeerId, candidate.sdp, candidate.sdpMid,
+                        candidate.sdpMLineIndex));
             }
-        });
-
-        signaling.addCloseListener(() -> {
-            LOG.info("Signaling connection closed");
-        });
-
-        signaling.addErrorListener(error -> {
-            LOG.error("Signaling error", error);
-        });
+            default -> {
+                // The browser client expects no end of candidates.
+            }
+        }
     }
 
     /**
-     * Sets a callback to be invoked when an offer is received.
+     * Called when a peer is created with this signaling. The browser's messages go to
+     * the peer created last, which replaces the one before.
      *
-     * @param callback The callback to invoke.
+     * @param inbound Takes the messages the browser sends.
      */
-    public void setOnOfferReceived(Consumer<SessionDescriptionMessage> callback) {
-        this.onOfferReceived = callback;
+    @Override
+    public void attach(Consumer<SignalMessage> inbound) {
+        this.inbound = inbound;
     }
 
     /**
-     * Sets a callback to be invoked when an answer is received.
+     * Sets the callback for join messages.
      *
-     * @param callback The callback to invoke.
-     */
-    public void setOnAnswerReceived(Consumer<SessionDescriptionMessage> callback) {
-        this.onAnswerReceived = callback;
-    }
-
-    /**
-     * Sets a callback to be invoked when an ICE candidate is received.
-     *
-     * @param callback The callback to invoke.
-     */
-    public void setOnCandidateReceived(Consumer<IceCandidateMessage> callback) {
-        this.onCandidateReceived = callback;
-    }
-
-    /**
-     * Sets a callback to be invoked when a join message is received.
-     *
-     * @param callback The callback to invoke.
+     * @param callback The function to be called when a join message is received.
      */
     public void setOnJoinReceived(Consumer<JoinMessage> callback) {
         this.onJoinReceived = callback;
     }
 
     /**
-     * Sets a callback to be invoked when a leave message is received.
+     * Sets the callback for leave messages.
      *
-     * @param callback The callback to invoke.
+     * @param callback The function to be called when a leave message is received.
      */
     public void setOnLeaveReceived(Consumer<LeaveMessage> callback) {
         this.onLeaveReceived = callback;
@@ -293,7 +192,7 @@ public class SignalingManager {
     }
 
     /**
-     * Sets the remote peer ID.
+     * Sets the remote peer ID that this client is communicating with.
      *
      * @param remotePeerId The remote peer ID to set.
      */
@@ -302,114 +201,92 @@ public class SignalingManager {
     }
 
     /**
-     * Gets the user ID for this client.
-     *
-     * @return The user ID.
+     * @return The user ID of this client.
      */
     public String getUserId() {
         return userId;
     }
 
     /**
-     * Gets the remote peer ID.
-     *
-     * @return The remote peer ID.
+     * @return The ID of the remote peer this client communicates with.
      */
     public String getRemotePeerId() {
         return remotePeerId;
     }
 
     /**
-     * Checks if the signaling connection is established.
-     *
-     * @return true if connected, false otherwise.
+     * @return true if connected to the signaling server.
      */
     public boolean isConnected() {
         return signaling != null && signaling.isConnected();
     }
 
     /**
-     * Handles an incoming offer message.
-     *
-     * @param message The JSON message containing an offer.
+     * Sets up the listeners of the WebSocket client.
      */
-    private void handleOfferMessage(String message) {
-        if (onOfferReceived != null) {
+    private void setupSignaling() {
+        signaling.addMessageListener(message -> {
             try {
-                SessionDescriptionMessage sdpMessage = jsonMapper.readValue(message, SessionDescriptionMessage.class);
-                onOfferReceived.accept(sdpMessage);
+                String type = jsonMapper.readTree(message).path("type").asText();
+
+                switch (MessageType.fromString(type)) {
+                    case OFFER -> receiveDescription(RTCSdpType.OFFER, message);
+                    case ANSWER -> receiveDescription(RTCSdpType.ANSWER, message);
+                    case ICE_CANDIDATE -> receiveCandidate(message);
+                    case JOIN -> notify(onJoinReceived, jsonMapper.readValue(message, JoinMessage.class));
+                    case LEAVE -> notify(onLeaveReceived, jsonMapper.readValue(message, LeaveMessage.class));
+                    case HEARTBEAT_ACK -> LOG.debug("Received: {}", type);
+                    default -> LOG.info("Received message with unknown type: {}", type);
+                }
             }
             catch (Exception e) {
-                LOG.error("Error parsing offer message", e);
+                LOG.error("Error handling signaling message", e);
             }
+        });
+
+        signaling.addCloseListener(() -> LOG.info("Signaling connection closed"));
+        signaling.addErrorListener(error -> LOG.error("Signaling error", error));
+    }
+
+    private void receiveDescription(RTCSdpType type, String json) throws Exception {
+        SessionDescriptionMessage message = jsonMapper.readValue(json, SessionDescriptionMessage.class);
+
+        receive(SignalMessage.of(new RTCSessionDescription(type, message.getSdp())));
+    }
+
+    private void receiveCandidate(String json) throws Exception {
+        IceCandidateMessage.IceCandidateData data = jsonMapper.readValue(json, IceCandidateMessage.class).getData();
+
+        receive(SignalMessage.of(new RTCIceCandidate(data.getSdpMid(), data.getSdpMLineIndex(), data.getCandidate())));
+    }
+
+    private void receive(SignalMessage message) {
+        Consumer<SignalMessage> peer = inbound;
+
+        if (peer != null) {
+            peer.accept(message);
+        }
+        else {
+            LOG.warn("Dropped a {} that arrived before there was a peer", message.type());
         }
     }
 
-    /**
-     * Handles an incoming answer message.
-     *
-     * @param message The JSON message containing an answer.
-     */
-    private void handleAnswerMessage(String message) {
-        if (onAnswerReceived != null) {
-            try {
-                SessionDescriptionMessage sdpMessage = jsonMapper.readValue(message, SessionDescriptionMessage.class);
-                onAnswerReceived.accept(sdpMessage);
-            }
-            catch (Exception e) {
-                LOG.error("Error parsing answer message", e);
-            }
+    private void send(SignalingMessage message) {
+        try {
+            signaling.sendMessage(jsonMapper.writeValueAsString(message))
+                    .exceptionally(error -> {
+                        LOG.error("Failed to send a {} message", message.getType(), error);
+                        return null;
+                    });
+        }
+        catch (Exception e) {
+            LOG.error("Error creating a JSON {} message", message.getType(), e);
         }
     }
 
-    /**
-     * Handles an incoming ICE candidate message.
-     *
-     * @param message The JSON message containing an ICE candidate.
-     */
-    private void handleIceCandidateMessage(String message) {
-        if (onCandidateReceived != null) {
-            try {
-                IceCandidateMessage iceMessage = jsonMapper.readValue(message, IceCandidateMessage.class);
-                onCandidateReceived.accept(iceMessage);
-            }
-            catch (Exception e) {
-                LOG.error("Error parsing ICE candidate message", e);
-            }
-        }
-    }
-
-    /**
-     * Handles an incoming join message.
-     *
-     * @param message The JSON message containing join information.
-     */
-    private void handleJoinMessage(String message) {
-        if (onJoinReceived != null) {
-            try {
-                JoinMessage joinMessage = jsonMapper.readValue(message, JoinMessage.class);
-                onJoinReceived.accept(joinMessage);
-            }
-            catch (Exception e) {
-                LOG.error("Error parsing join message", e);
-            }
-        }
-    }
-
-    /**
-     * Handles an incoming leave message.
-     *
-     * @param message The JSON message indicating a peer has left.
-     */
-    private void handleLeaveMessage(String message) {
-        if (onLeaveReceived != null) {
-            try {
-                LeaveMessage leaveMessage = jsonMapper.readValue(message, LeaveMessage.class);
-                onLeaveReceived.accept(leaveMessage);
-            }
-            catch (Exception e) {
-                LOG.error("Error parsing join message", e);
-            }
+    private static <T> void notify(Consumer<T> callback, T message) {
+        if (callback != null) {
+            callback.accept(message);
         }
     }
 }

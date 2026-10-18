@@ -16,15 +16,18 @@
 
 package dev.onvoid.webrtc.examples.util;
 
-import dev.onvoid.webrtc.media.audio.AudioTrackSink;
+import java.util.function.Consumer;
+
+import dev.onvoid.webrtc.client.AudioChunk;
 import dev.onvoid.webrtc.media.video.VideoFrame;
-import dev.onvoid.webrtc.media.video.VideoTrackSink;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Utility class for logging audio and video frame information.
+ * Utility class for logging audio and video frame information, as handlers of
+ * the client API's {@code RemoteAudio.onAudio} and {@code RemoteVideo.onFrame}.
+ * Each logger writes a summary once a second.
  *
  * @author Alex Andres
  */
@@ -32,82 +35,81 @@ public class MediaFrameLogger {
 
     private static final Logger LOG = LoggerFactory.getLogger(MediaFrameLogger.class);
 
+    private static final long LOG_INTERVAL_MS = 1000;
+
 
     /**
-     * Creates a new audio track sink that logs information about received audio data.
+     * Creates a handler that logs information about received audio.
      *
-     * @return An AudioTrackSink that logs audio frame information.
+     * @return A handler for {@code RemoteAudio.onAudio}.
      */
-    public static AudioTrackSink createAudioLogger() {
+    public static Consumer<AudioChunk> createAudioLogger() {
         return new AudioFrameLogger();
     }
 
     /**
-     * Creates a new video track sink that logs information about received video frames.
+     * Creates a handler that logs information about received video frames.
      *
-     * @return A VideoTrackSink that logs video frame information.
+     * @return A handler for {@code RemoteVideo.onFrame}.
      */
-    public static VideoTrackSink createVideoLogger() {
+    public static Consumer<VideoFrame> createVideoLogger() {
         return new VideoFrameLogger();
     }
 
 
 
     /**
-     * A simple implementation of AudioTrackSink that logs information about received audio data.
+     * Logs the number of audio chunks received per second and the format of the last one.
+     * The client API calls it on one thread, in order.
      */
-    private static class AudioFrameLogger implements AudioTrackSink {
-        
-        private static final long LOG_INTERVAL_MS = 1000; // Log every second
-        private int frameCount = 0;
+    private static class AudioFrameLogger implements Consumer<AudioChunk> {
+
+        private int chunkCount = 0;
+
         private long lastLogTime = System.currentTimeMillis();
-        
+
+
         @Override
-        public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames) {
-            frameCount++;
-            
+        public void accept(AudioChunk chunk) {
+            chunkCount++;
+
             long now = System.currentTimeMillis();
+
             if (now - lastLogTime >= LOG_INTERVAL_MS) {
-                LOG.info(String.format("Received %d audio frames in the last %.1f seconds",
-                        frameCount, (now - lastLogTime) / 1000.0));
-                LOG.info(String.format("Last audio data: %d bytes, %d bits/sample, %d Hz, %d channels, %d frames",
-                        data.length, bitsPerSample, sampleRate, channels, frames));
-                
-                frameCount = 0;
+                LOG.info(String.format("Received %d audio chunks in the last %.1f seconds, the last one %s",
+                        chunkCount, (now - lastLogTime) / 1000.0, chunk));
+
+                chunkCount = 0;
                 lastLogTime = now;
             }
         }
     }
 
-
-
     /**
-     * A simple implementation of VideoTrackSink that logs information about received frames.
+     * Logs the number of video frames received per second and the size of the last one.
+     * The frame is released by the client API once the handler returned.
      */
-    private static class VideoFrameLogger implements VideoTrackSink {
-        
-        private static final long LOG_INTERVAL_MS = 1000; // Log every second
+    private static class VideoFrameLogger implements Consumer<VideoFrame> {
+
         private int frameCount = 0;
+
         private long lastLogTime = System.currentTimeMillis();
-        
+
+
         @Override
-        public void onVideoFrame(VideoFrame frame) {
+        public void accept(VideoFrame frame) {
             frameCount++;
-            
+
             long now = System.currentTimeMillis();
+
             if (now - lastLogTime >= LOG_INTERVAL_MS) {
-                LOG.info(String.format("Received %d video frames in the last %.1f seconds",
-                        frameCount, (now - lastLogTime) / 1000.0));
-                LOG.info(String.format("Last frame: %dx%d, rotation: %d, timestamp: %dms",
-                        frame.buffer.getWidth(), frame.buffer.getHeight(), frame.rotation,
-                        frame.timestampNs / 1000000));
-                
+                LOG.info(String.format("Received %d video frames in the last %.1f seconds, the last one %dx%d, rotation %d",
+                        frameCount, (now - lastLogTime) / 1000.0, frame.buffer.getWidth(),
+                        frame.buffer.getHeight(), frame.rotation));
+
                 frameCount = 0;
                 lastLogTime = now;
             }
-            
-            // Release the native resources associated with this frame to prevent memory leaks.
-            frame.release();
         }
     }
 }

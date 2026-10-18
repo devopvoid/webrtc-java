@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import dev.onvoid.webrtc.media.video.CustomVideoSource;
+import dev.onvoid.webrtc.client.CustomVideo;
+
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
@@ -46,8 +47,8 @@ public class VideoGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(VideoGenerator.class);
 
-    /** The custom video source that receives generated video frames. */
-    private final CustomVideoSource customVideoSource;
+    /** The track that receives the generated frames. */
+    private final CustomVideo track;
 
     /** Flag indicating whether the video generator is running. */
     private final AtomicBoolean generatorRunning = new AtomicBoolean(false);
@@ -69,17 +70,17 @@ public class VideoGenerator {
 
 
     /**
-     * Creates a new VideoGenerator that will push frames to the specified video source.
+     * Creates a new VideoGenerator that will push frames to the specified track.
      *
-     * @param videoSource The custom video source to receive the generated frames.
+     * @param track The track to receive the generated frames.
      */
-    public VideoGenerator(CustomVideoSource videoSource) {
-        customVideoSource = videoSource;
+    public VideoGenerator(CustomVideo track) {
+        this.track = track;
     }
 
     /**
      * Starts the video frame generator thread that pushes video frames
-     * to the custom video source at the specified frame rate.
+     * to the track at the specified frame rate.
      */
     public void start() {
         if (generatorRunning.get()) {
@@ -99,8 +100,8 @@ public class VideoGenerator {
                 // Create a new video frame with a color pattern.
                 VideoFrame frame = generateVideoFrame();
                 
-                // Push the frame to the custom video source.
-                customVideoSource.pushFrame(frame);
+                // Push the frame to the track.
+                track.push(frame);
                 
                 // Release the frame after pushing it.
                 frame.release();

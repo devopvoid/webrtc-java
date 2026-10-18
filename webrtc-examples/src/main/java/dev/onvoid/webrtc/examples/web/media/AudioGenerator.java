@@ -22,7 +22,8 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.client.CustomAudio;
+import dev.onvoid.webrtc.client.PcmFormat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,9 +31,10 @@ import org.slf4j.LoggerFactory;
 /**
  * A generator that produces synthetic audio samples as a continuous sine wave.
  * <p>
- * This class creates a 440 Hz (A4 note) sine wave and delivers audio frames
- * at regular 10 ms intervals. The generated audio is stereo with 16-bit samples
- * at a 48 kHz sample rate. The audio generator runs on a dedicated scheduled
+ * This class creates a 440 Hz (A4 note) sine wave and pushes 100 ms of it every
+ * 100 ms. The track cuts the audio into the 10 ms chunks WebRTC sends, so the
+ * generator need not keep 10 ms time itself. The generated audio is stereo with
+ * 16-bit samples at a 48 kHz sample rate. The audio generator runs on a dedicated scheduled
  * thread that can be started and stopped on demand.
  * </p>
  * <p>
@@ -46,8 +48,8 @@ public class AudioGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(AudioGenerator.class);
 
-    /** The custom audio source that receives generated audio frames. */
-    private final CustomAudioSource customAudioSource;
+    /** The track that receives the generated audio. */
+    private final CustomAudio track;
 
     /** Flag indicating whether the audio generator is running. */
     private final AtomicBoolean generatorRunning = new AtomicBoolean(false);
@@ -62,7 +64,8 @@ public class AudioGenerator {
     private static final int DEFAULT_BITS_PER_SAMPLE = 16;
     private static final int DEFAULT_SAMPLE_RATE = 48000;
     private static final int DEFAULT_CHANNELS = 2;
-    private static final int DEFAULT_FRAME_COUNT = 480; // 10ms at 48kHz
+    private static final int DEFAULT_FRAME_COUNT = 4800; // 100 ms at 48 kHz
+    private static final PcmFormat FORMAT = PcmFormat.of(DEFAULT_SAMPLE_RATE, DEFAULT_CHANNELS);
     
     /** 
      * Sine wave phase tracking for audio generation.
@@ -71,13 +74,13 @@ public class AudioGenerator {
     private double sinePhase = 0.0;
 
 
-    public AudioGenerator(CustomAudioSource audioSource) {
-        customAudioSource = audioSource;
+    public AudioGenerator(CustomAudio track) {
+        this.track = track;
     }
 
     /**
-     * Starts the audio sample generator thread that pushes audio frames
-     * to the custom audio source every 10 ms.
+     * Starts the audio sample generator thread that pushes 100 ms of audio
+     * to the track every 100 ms.
      */
     public void start() {
         if (generatorRunning.get()) {
@@ -122,19 +125,13 @@ public class AudioGenerator {
                     }
                 }
 
-                // Push the audio data to the custom audio source.
-                customAudioSource.pushAudio(
-                        audioData,
-                        DEFAULT_BITS_PER_SAMPLE,
-                        DEFAULT_SAMPLE_RATE,
-                        DEFAULT_CHANNELS,
-                        DEFAULT_FRAME_COUNT
-                );
+                // Queue the audio; the track sends it in 10 ms chunks.
+                track.push(audioData, FORMAT);
             }
             catch (Exception e) {
                 LOG.error("Error in audio generator thread", e);
             }
-        }, 0, 10, TimeUnit.MILLISECONDS);
+        }, 0, 100, TimeUnit.MILLISECONDS);
 
         LOG.info("Audio generator started");
     }

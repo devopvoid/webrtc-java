@@ -136,15 +136,15 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.EncryptedRecordingExa
 
 ## Web Client
 
-The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) demonstrates how to combine WebSocket signaling with WebRTC peer connections for real-time communication between web and Java clients.
+The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) calls a browser from Java over WebSocket signaling, with the [Client API](/guide/client-api). The browser client is served by the example's `WebServer`.
 
 **Key features demonstrated:**
 - Connecting to a signaling server using WebSockets
-- Setting up audio and video media tracks
-- Creating and managing WebRTC peer connections
-- Handling signaling messages (offers, answers, ICE candidates)
-- Joining and leaving rooms for multi-user communication
-- Using custom audio sources for audio streaming
+- Implementing a `Signaling` over the application's own message format, which also names the sender and receiver of each message
+- Sending generated audio and video, pushed into tracks of the runtime
+- Letting the peer negotiate by itself, and starting a new peer whenever the browser joins the room
+- Joining and leaving rooms
+- Logging the audio and video the browser sends
 
 This example is valuable for applications that need to establish WebRTC connections between Java clients and web browsers, enabling cross-platform real-time communication with audio and video.
 

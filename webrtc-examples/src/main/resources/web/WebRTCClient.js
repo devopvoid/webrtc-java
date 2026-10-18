@@ -151,6 +151,11 @@ class WebRTCClient {
         const userId = message.data.userInfo.userId;
         this.setStatus('User joined: ' + userId);
 
+        // A remote peer that joins anew calls with a new connection.
+        if (userId === this.peerConnectionManager.getRemotePeerId()) {
+            this.resetPeerConnection();
+        }
+
         // Add user to participants map if not already present.
         if (!this.participants.has(userId)) {
             const userInfo = message.data.userInfo || { userId: userId };
@@ -164,7 +169,11 @@ class WebRTCClient {
     handleUserLeft(message) {
         const userId = message.from;
         this.setStatus('User left: ' + userId);
-        
+
+        if (userId === this.peerConnectionManager.getRemotePeerId()) {
+            this.resetPeerConnection();
+        }
+
         // Remove user from participants map if present
         if (this.participants.has(userId)) {
             this.participants.delete(userId);
@@ -221,7 +230,11 @@ class WebRTCClient {
     }
 
     async startWebRTC() {
-        this.peerConnectionManager.initialize();
+        // A later offer renegotiates the connection there is, for example when
+        // the Java client adds a track; only the first one creates it.
+        if (!this.peerConnectionManager.peerConnection) {
+            this.peerConnectionManager.initialize();
+        }
         
         // Add local media if available
         // const mediaAdded = await this.peerConnectionManager.addLocalMedia();
@@ -238,6 +251,16 @@ class WebRTCClient {
         // catch (error) {
         //     this.setStatus('Failed to create offer: ' + error);
         // }
+    }
+
+    resetPeerConnection() {
+        this.peerConnectionManager.close();
+
+        if (this.remoteVideo.srcObject) {
+            this.remoteVideo.srcObject = null;
+        }
+
+        this.videoContainer.style.display = 'none';
     }
 
     handleTrack(event) {
