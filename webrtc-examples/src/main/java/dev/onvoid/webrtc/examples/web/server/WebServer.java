@@ -21,9 +21,8 @@ import java.security.KeyStore;
 
 import dev.onvoid.webrtc.examples.web.WebClientExample;
 
-import org.eclipse.jetty.http.pathmap.PathSpec;
 import org.eclipse.jetty.server.*;
-import org.eclipse.jetty.server.handler.PathMappingsHandler;
+import org.eclipse.jetty.server.handler.ContextHandler;
 import org.eclipse.jetty.server.handler.ResourceHandler;
 import org.eclipse.jetty.util.resource.ResourceFactory;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
@@ -77,8 +76,11 @@ public class WebServer {
         // Add only HTTPS connector.
         server.addConnector(httpsConnector);
 
+        // Since Jetty 12.1 the handlers need a context; without one every request fails.
+        ContextHandler context = new ContextHandler("/");
+
         // Create WebSocket upgrade handler.
-        WebSocketUpgradeHandler wsHandler = WebSocketUpgradeHandler.from(server, container -> {
+        WebSocketUpgradeHandler wsHandler = WebSocketUpgradeHandler.from(server, context, container -> {
             container.addMapping("/ws", (upgradeRequest, upgradeResponse, callback) -> {
                 if (upgradeRequest.getSubProtocols().contains("ws-signaling")) {
                     upgradeResponse.setAcceptedSubProtocol("ws-signaling");
@@ -93,12 +95,12 @@ public class WebServer {
         ResourceFactory resourceFactory = ResourceFactory.of(resourceHandler);
         resourceHandler.setBaseResource(resourceFactory.newClassLoaderResource("/resources/web/"));
 
-        // Create a path mappings handler to combine WebSocket and static content.
-        PathMappingsHandler pathHandler = new PathMappingsHandler();
-        pathHandler.addMapping(PathSpec.from("/ws/*"), wsHandler);
-        pathHandler.addMapping(PathSpec.from("/"), resourceHandler);
+        // The upgrade handler takes the WebSocket requests to its mappings and
+        // hands every other request to the static content.
+        wsHandler.setHandler(resourceHandler);
 
-        server.setHandler(pathHandler);
+        context.setHandler(wsHandler);
+        server.setHandler(context);
         server.start();
 
         LOG.info("HTTPS: https://localhost:{}", PORT);
