@@ -2,6 +2,26 @@
 
 This section provides an overview of the example applications included in the `webrtc-examples` Maven module. These examples demonstrate various features and capabilities of the webrtc-java library.
 
+## Client API
+
+The [`ClientApiExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ClientApiExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends video, audio and chat messages from one to the other. It needs no audio or video hardware and no server.
+
+**Key features demonstrated:**
+- Creating a headless `WebRtc` runtime, which needs no microphone or speakers
+- Connecting two peers through a signaling that carries JSON text, as a WebSocket would
+- Letting perfect negotiation run the offer and answer exchange, with one polite peer
+- Pushing video frames, and audio in pieces of any length
+- Receiving remote tracks, their frames and their audio
+- Exchanging messages on a data channel
+- Reading the connection's statistics once a second
+- Closing the peers, tracks and factory by closing the runtime
+
+This example is the shortest way to see a complete call working, and a starting point for applications built on the client API.
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ClientApiExample" -D"exec.args=10"
+```
+
 ## PeerConnection
 
 The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) demonstrates how to set up a peer connection with audio and video tracks to be able to send and receive media.

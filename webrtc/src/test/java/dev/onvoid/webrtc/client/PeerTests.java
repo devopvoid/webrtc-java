@@ -159,6 +159,20 @@ class PeerTests extends ClientTestBase {
 
 		assertInstanceOf(BlockingCallException.class, await(refused));
 
+		// On Java 9 and later, so do the futures derived from them.
+		CompletableFuture<Throwable> derivedRefused = new CompletableFuture<>();
+		peers[1].onStateChange(state -> {
+			try {
+				peers[1].whenClosed().thenApply(ignored -> state).join();
+				derivedRefused.complete(null);
+			}
+			catch (Throwable e) {
+				derivedRefused.complete(e);
+			}
+		});
+
+		assertInstanceOf(BlockingCallException.class, await(derivedRefused));
+
 		// A future that is done may be read anywhere.
 		CompletableFuture<Object> doneRead = new CompletableFuture<>();
 		peers[0].createChannel("chat");

@@ -116,6 +116,10 @@ implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VER
 
 ## Basic Setup
 
+::: tip
+This guide uses the core API, which mirrors WebRTC's own. The [Client API](/guide/client-api) builds on it: it negotiates by itself, keeps your handlers off WebRTC's threads, and closes everything it created with one call. Most applications are simpler with it.
+:::
+
 ### Initialize the WebRTC Library
 
 First, create a `PeerConnectionFactory` which is the entry point for most WebRTC operations:
