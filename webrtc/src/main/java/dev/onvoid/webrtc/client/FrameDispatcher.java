@@ -25,8 +25,10 @@ import dev.onvoid.webrtc.media.video.VideoTrackSink;
 /**
  * Hands the frames of a video track to a handler on a thread of its own, so
  * that a slow handler holds up neither WebRTC nor any other subscription.
- * Frames that wait are retained; those dropped when the queue is full, and
- * those the handler got, are released.
+ * <p>
+ * The native sink hands over one reference to each frame, which this object
+ * owns: it releases a frame once the handler returned, when the queue is full
+ * and the frame is dropped, or when the subscription closed.
  */
 final class FrameDispatcher implements VideoTrackSink {
 
@@ -59,18 +61,18 @@ final class FrameDispatcher implements VideoTrackSink {
 
 		synchronized (queue) {
 			if (closed) {
-				return;
+				dropped = frame;
 			}
+			else {
+				queue.add(frame);
 
-			frame.retain();
-			queue.add(frame);
-
-			if (queue.size() > capacity) {
-				dropped = queue.poll();
-			}
-			if (!scheduled) {
-				scheduled = true;
-				executor.execute(this::drain);
+				if (queue.size() > capacity) {
+					dropped = queue.poll();
+				}
+				if (!scheduled) {
+					scheduled = true;
+					executor.execute(this::drain);
+				}
 			}
 		}
 

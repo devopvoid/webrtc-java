@@ -20,9 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -182,6 +187,44 @@ class MediaTests extends ClientTestBase {
 		await(sender.configure(Encoding.builder().maxBitrate(300_000).maxFrameRate(15).build()));
 
 		assertThrows(IllegalArgumentException.class, () -> sender.replaceTrack(rtc.media().customAudio("audio")));
+	}
+
+	@Test
+	void deliveredFramesReleased() throws Exception {
+		Path status = Paths.get("/proc/self/status");
+		assumeTrue(Files.isReadable(status), "Needs /proc to read the resident memory");
+
+		CustomVideo video = rtc.media().customVideo("video");
+		int count = 300;
+		CountDownLatch delivered = new CountDownLatch(count);
+
+		// Queues every frame, so that each of them reaches the handler.
+		Subscription subscription = video.onFrame(frame -> delivered.countDown());
+		long before = residentBytes(status);
+
+		NativeI420Buffer buffer = NativeI420Buffer.allocate(1280, 720);
+		for (int i = 0; i < count; i++) {
+			VideoFrame frame = new VideoFrame(buffer, System.nanoTime());
+			video.push(frame);
+			Thread.sleep(2);
+		}
+		buffer.release();
+
+		delivered.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		subscription.close();
+
+		// Each delivered frame is a copy of about 1.4 MB; keeping them all would hold over 400 MB.
+		long grown = residentBytes(status) - before;
+		assertTrue(grown < 150L * 1024 * 1024, () -> "Resident memory grew by " + grown / (1024 * 1024) + " MB");
+	}
+
+	private static long residentBytes(Path status) throws Exception {
+		for (String line : Files.readAllLines(status)) {
+			if (line.startsWith("VmRSS:")) {
+				return Long.parseLong(line.replaceAll("[^0-9]", "")) * 1024;
+			}
+		}
+		throw new IllegalStateException("No VmRSS in " + status);
 	}
 
 	@Test
