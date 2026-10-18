@@ -6,6 +6,7 @@ module webrtc.java {
 	requires java.desktop;
 
 	exports dev.onvoid.webrtc;
+	exports dev.onvoid.webrtc.client;
 	exports dev.onvoid.webrtc.logging;
 	exports dev.onvoid.webrtc.media;
 	exports dev.onvoid.webrtc.media.audio;
