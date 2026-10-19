@@ -18,6 +18,14 @@ package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -25,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -43,7 +52,15 @@ abstract class ClientTestBase {
 
 
 	@BeforeEach
-	void createRuntime() {
+	void createRuntime(TestInfo test) throws IOException {
+		// A native crash ends the test JVM before any report names the test
+		// that ran; the last line of this file does.
+		Path log = Paths.get("target", "surefire-reports", "client-tests.log");
+		Files.createDirectories(log.getParent());
+		Files.write(log, Collections.singletonList(LocalTime.now() + " " + getClass().getSimpleName()
+				+ "." + test.getTestMethod().map(Method::getName).orElse("?")),
+				StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+
 		rtc = WebRtc.builder()
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)

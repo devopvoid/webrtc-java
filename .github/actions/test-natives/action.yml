@@ -151,6 +151,10 @@ runs:
       uses: actions/upload-artifact@v7
       with:
         name: test-reports-native-${{ inputs.platform-name }}
-        path: '**/target/surefire-reports/'
+        # A native crash ends the test JVM with a report of its own beside the
+        # module, which names the thread that crashed and what it ran.
+        path: |
+          **/target/surefire-reports/
+          **/hs_err_pid*.log
         if-no-files-found: ignore
         retention-days: 7
