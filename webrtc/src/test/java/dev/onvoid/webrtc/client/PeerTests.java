@@ -258,19 +258,19 @@ class PeerTests extends ClientTestBase {
 
 	@Test
 	void politePeerResolvesCollision() throws Exception {
-		Peer[] peers = pair();
+		HeldSignaling link = new HeldSignaling();
+		Peer caller = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
+		Peer callee = rtc.createPeer(PeerOptions.builder().signaling(link.second()).polite(true).build());
 		CompletableFuture<String> atCaller = new CompletableFuture<>();
 		CompletableFuture<String> atCallee = new CompletableFuture<>();
 
-		// Both create a channel at once, so both send an offer at once.
-		DataChannel fromCaller = peers[0].createChannel("from-caller");
-		DataChannel fromCallee = peers[1].createChannel("from-callee");
+		caller.onChannel(channel -> channel.onMessage(message -> atCaller.complete(message.text())));
+		callee.onChannel(channel -> channel.onMessage(message -> atCallee.complete(message.text())));
 
-		peers[0].onChannel(channel -> channel.onMessage(message -> atCaller.complete(message.text())));
-		peers[1].onChannel(channel -> channel.onMessage(message -> atCallee.complete(message.text())));
-
-		fromCaller.send("hello callee");
-		fromCallee.send("hello caller");
+		// Both send an offer before either sees the other's.
+		caller.createChannel("from-caller").send("hello callee");
+		callee.createChannel("from-callee").send("hello caller");
+		link.releaseWhenBothOffered(TIMEOUT_SECONDS);
 
 		assertEquals("hello callee", await(atCallee));
 		assertEquals("hello caller", await(atCaller));
@@ -279,7 +279,7 @@ class PeerTests extends ClientTestBase {
 
 	@Test
 	void impoliteCollisionReported() throws Exception {
-		SignalingPair link = Signaling.loopback();
+		HeldSignaling link = new HeldSignaling();
 		Peer first = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
 		Peer second = rtc.createPeer(PeerOptions.builder().signaling(link.second()).build());
 
@@ -287,8 +287,10 @@ class PeerTests extends ClientTestBase {
 		first.onError(error::complete);
 		second.onError(error::complete);
 
+		// Both send an offer before either sees the other's, and neither gives way.
 		first.createChannel("a");
 		second.createChannel("b");
+		link.releaseWhenBothOffered(TIMEOUT_SECONDS);
 
 		WebRtcException reported = error.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
