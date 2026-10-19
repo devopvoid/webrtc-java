@@ -627,7 +627,7 @@ Peer peer = rtc.createPeer(options);
 peer.onStateChange(state -> statusLabel.setText(state.toString()));   // on the EDT
 peer.onTrack(track -> {
     if (track.isVideo()) {
-        track.asVideo().onFrame(remoteView);   // VideoView, phase 2: converts off the EDT, paints on it
+        track.asVideo().onFrame(remoteView);   // VideoView: converts off the EDT, paints on it
     }
 });
 
@@ -799,5 +799,5 @@ Every test also fails if anything reached the runtime's error handler, including
 
 Next:
 - a guide page and an example;
-- `Whip`/`Whep` and `VideoView`;
+- `Whip`/`Whep` (`VideoView` is done, in `dev.onvoid.webrtc.client.swing`);
 - porting the existing examples (phases 2 and 3).

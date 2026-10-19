@@ -217,6 +217,27 @@ hangUpButton.addActionListener(event -> peer.close());   // never blocks the EDT
 
 The order of each peer's events is kept with any executor, including a thread pool. Frame handlers stay on their own threads even then, since frames come far too often for a UI thread.
 
+`VideoView` in `dev.onvoid.webrtc.client.swing` shows video in a Swing window. It converts each frame on the frame's own thread and leaves only the painting to the EDT. It keeps the picture's aspect ratio and rotation, and can mirror a local camera preview:
+
+```java
+import dev.onvoid.webrtc.client.swing.VideoView;
+
+VideoView remoteView = new VideoView();
+VideoView preview = new VideoView();
+preview.setMirrored(true);
+
+peer.onTrack(track -> {
+    if (track.isVideo()) {
+        track.asVideo().onFrame(remoteView);
+    }
+});
+camera.onFrame(preview);
+
+frame.add(remoteView, BorderLayout.CENTER);
+```
+
+`snapshot()` returns a copy of the picture shown, for saving a still or for tests.
+
 ### Don't Wait in a Handler
 
 A future of the client API completes on the event thread of its peer. A handler that waits for one would wait for its own thread, so `join()` and `get()` there throw a `BlockingCallException` instead of hanging. Chain the next step instead:
