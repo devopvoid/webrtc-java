@@ -30,8 +30,6 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
  */
 class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 
-	private final VideoTrack track;
-
 	// Guarded by this.
 
 	private final List<FrameDispatcher> dispatchers = new ArrayList<>();
@@ -39,8 +37,6 @@ class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 
 	LocalVideoImpl(LocalMediaImpl media, VideoTrack track, Runnable releaseSource) {
 		super(media, track, MediaKind.VIDEO, releaseSource);
-
-		this.track = track;
 	}
 
 	@Override
@@ -56,7 +52,7 @@ class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 			}
 
 			dispatchers.add(dispatcher);
-			track.addSink(dispatcher);
+			videoTrack().addSink(dispatcher);
 		}
 
 		return () -> {
@@ -64,7 +60,7 @@ class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 
 			synchronized (LocalVideoImpl.this) {
 				if (dispatchers.remove(dispatcher) && isLive()) {
-					track.removeSink(dispatcher);
+					videoTrack().removeSink(dispatcher);
 				}
 			}
 		};
@@ -80,8 +76,25 @@ class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 		}
 
 		for (FrameDispatcher dispatcher : attached) {
-			track.removeSink(dispatcher);
+			videoTrack().removeSink(dispatcher);
 			dispatcher.close();
 		}
+	}
+
+	/**
+	 * Moves the preview handlers from a track that was replaced to the
+	 * current one. Called under this object's lock.
+	 */
+	void moveSinks(VideoTrack from) {
+		VideoTrack to = videoTrack();
+
+		for (FrameDispatcher dispatcher : dispatchers) {
+			from.removeSink(dispatcher);
+			to.addSink(dispatcher);
+		}
+	}
+
+	private VideoTrack videoTrack() {
+		return (VideoTrack) nativeTrack();
 	}
 }

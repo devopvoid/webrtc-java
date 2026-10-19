@@ -282,6 +282,32 @@ final class SenderImpl implements Sender {
 	}
 
 	/**
+	 * Sends the native track a local track uses now, after it replaced the one
+	 * before, without renegotiating.
+	 *
+	 * @return a future that completes once the sender sends the new track.
+	 */
+	CompletableFuture<Void> trackReplaced(LocalTrackImpl replacedIn) {
+		CompletableFuture<Void> done = new CompletableFuture<>();
+
+		peer.control.execute(() -> {
+			try {
+				if (!removed && sender != null && track == replacedIn && !peer.isClosed()) {
+					sender.replaceTrack(replacedIn.nativeTrack());
+				}
+			}
+			catch (Throwable e) {
+				peer.rtc.reportError(e);
+			}
+			finally {
+				done.complete(null);
+			}
+		});
+
+		return done;
+	}
+
+	/**
 	 * Lets go of the native sender while the peer closes, on its control
 	 * executor.
 	 */

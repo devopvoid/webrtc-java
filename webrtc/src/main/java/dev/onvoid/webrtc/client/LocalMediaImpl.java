@@ -84,12 +84,12 @@ final class LocalMediaImpl implements LocalMedia {
 	}
 
 	@Override
-	public LocalVideo camera() {
+	public LocalCamera camera() {
 		return camera(CameraOptions.builder().build());
 	}
 
 	@Override
-	public LocalVideo camera(CameraOptions options) {
+	public LocalCamera camera(CameraOptions options) {
 		requireNonNull(options, "options");
 		rtc.checkOpen();
 
@@ -111,7 +111,7 @@ final class LocalMediaImpl implements LocalMedia {
 		try {
 			VideoTrack track = rtc.factory.createVideoTrack(newId("camera"), camera.source);
 
-			return register(new LocalVideoImpl(this, track, () -> releaseCamera(camera)));
+			return register(new LocalCameraImpl(this, track, camera));
 		}
 		catch (RuntimeException e) {
 			releaseCamera(camera);
@@ -293,7 +293,7 @@ final class LocalMediaImpl implements LocalMedia {
 		return track;
 	}
 
-	private SharedCamera openCamera(CameraOptions options) {
+	SharedCamera openCamera(CameraOptions options) {
 		String key = options.device.getDescriptor();
 
 		synchronized (cameras) {
@@ -337,7 +337,13 @@ final class LocalMediaImpl implements LocalMedia {
 		}
 	}
 
-	private void releaseCamera(SharedCamera camera) {
+	boolean isOnlyUser(SharedCamera camera) {
+		synchronized (cameras) {
+			return camera.users == 1;
+		}
+	}
+
+	void releaseCamera(SharedCamera camera) {
 		synchronized (cameras) {
 			if (--camera.users > 0) {
 				return;
@@ -384,7 +390,7 @@ final class LocalMediaImpl implements LocalMedia {
 
 
 
-	private static final class SharedCamera {
+	static final class SharedCamera {
 
 		final String key;
 

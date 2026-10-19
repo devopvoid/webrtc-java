@@ -42,7 +42,7 @@ public interface LocalMedia {
 	 *
 	 * @throws MediaException if there is no camera or it cannot be opened.
 	 */
-	LocalVideo camera();
+	LocalCamera camera();
 
 	/**
 	 * Opens a camera. A camera that is already open is shared when the options
@@ -55,7 +55,7 @@ public interface LocalMedia {
 	 * @throws MediaException if the camera cannot be opened, or is already open
 	 *                        with other options.
 	 */
-	LocalVideo camera(CameraOptions options);
+	LocalCamera camera(CameraOptions options);
 
 	/**
 	 * Captures the microphone selected in {@link Devices}, with echo

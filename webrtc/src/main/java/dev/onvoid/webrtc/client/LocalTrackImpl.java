@@ -38,13 +38,15 @@ abstract class LocalTrackImpl implements LocalTrack {
 
 	final LocalMediaImpl media;
 
-	private final MediaStreamTrack track;
+	/** Replaced when a camera switches; guarded by this, read by senders. */
+	private volatile MediaStreamTrack track;
 
 	private final MediaKind kind;
 
 	private final String id;
 
-	private final Runnable releaseSource;
+	/** Guarded by this. */
+	private Runnable releaseSource;
 
 	private final CompletableFuture<Void> closed = new CompletableFuture<>();
 
@@ -136,6 +138,27 @@ abstract class LocalTrackImpl implements LocalTrack {
 		return track;
 	}
 
+	/**
+	 * Puts another native track in place of the current one, keeping whether
+	 * it is enabled.
+	 *
+	 * @return the track and release replaced, and the senders that send it now;
+	 * null once the track ended.
+	 */
+	synchronized Replaced replaceNative(MediaStreamTrack next, Runnable nextRelease) {
+		if (ended) {
+			return null;
+		}
+
+		Replaced replaced = new Replaced(track, releaseSource, new ArrayList<>(senders));
+
+		next.setEnabled(enabled);
+		track = next;
+		releaseSource = nextRelease;
+
+		return replaced;
+	}
+
 	synchronized boolean register(SenderImpl sender) {
 		if (ended) {
 			return false;
@@ -192,8 +215,17 @@ abstract class LocalTrackImpl implements LocalTrack {
 	private void release() {
 		try {
 			beforeRelease();
-			track.dispose();
-			releaseSource.run();
+
+			MediaStreamTrack last;
+			Runnable lastRelease;
+
+			synchronized (this) {
+				last = track;
+				lastRelease = releaseSource;
+			}
+
+			last.dispose();
+			lastRelease.run();
 		}
 		catch (Throwable e) {
 			rtc.reportError(e);
@@ -219,5 +251,24 @@ abstract class LocalTrackImpl implements LocalTrack {
 		}
 
 		closed.complete(null);
+	}
+
+
+
+	/** What {@link #replaceNative} replaced. */
+	static final class Replaced {
+
+		final MediaStreamTrack track;
+
+		final Runnable release;
+
+		final List<SenderImpl> senders;
+
+
+		Replaced(MediaStreamTrack track, Runnable release, List<SenderImpl> senders) {
+			this.track = track;
+			this.release = release;
+			this.senders = senders;
+		}
 	}
 }

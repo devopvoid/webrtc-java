@@ -264,7 +264,7 @@ A UI thread used as event executor is the same: waiting on it for a future of th
 ```java
 LocalMedia media = rtc.media();
 
-LocalVideo camera = media.camera(CameraOptions.builder()
+LocalCamera camera = media.camera(CameraOptions.builder()
         .device(media.devices().cameras().get(0))
         .resolution(1280, 720)
         .frameRate(30)
@@ -277,7 +277,7 @@ Sender audioSender = peer.addTrack(microphone);
 
 | Method | Track |
 |---|---|
-| `camera()`, `camera(CameraOptions)` | A camera. The supported capability nearest to the requested resolution and frame rate is used. |
+| `camera()`, `camera(CameraOptions)` | A camera, as a `LocalCamera` that can switch cameras. The supported capability nearest to the requested resolution and frame rate is used. |
 | `microphone()`, `microphone(AudioOptions)` | The microphone, with echo cancellation, noise suppression and gain control unless `AudioOptions` say otherwise. `DEVICES` mode only. |
 | `screen(ScreenOptions)` | A screen or a window, as the [Desktop Video](/guide/video/desktop-capture) guide describes. |
 | `customVideo(String)` | Frames you push. |
@@ -356,6 +356,20 @@ audioSender.sendTones("*99,1", Duration.ofMillis(200), Duration.ofMillis(100));
 ```
 
 The characters 0 to 9, A to D, `#` and `*` are tones, and a comma is a pause of 2 seconds. Tones still queued from an earlier call are replaced, and that call's future is cancelled. A video sender, or one whose remote peer accepts no telephone events, fails the future with an `IllegalStateException`. The [DTMF Sender](/guide/audio/dtmf-sender) guide has the details.
+
+### Switching Cameras
+
+A `LocalCamera` switches to another camera without renegotiating. Every peer that sends it keeps sending it, and preview handlers keep getting frames:
+
+```java
+LocalCamera camera = media.camera();
+peer.addTrack(camera);
+
+camera.switchCamera(media.devices().cameras().get(1))
+        .thenRun(() -> System.out.println("Now sending " + camera.device().getName()));
+```
+
+The new camera keeps the resolution and frame rate of the old one, as far as it supports them. The switch opens the new camera before it closes the old one, so that the peers see no gap. Some devices cannot capture with two cameras at once, such as the two sensors of a laptop camera; then the old camera closes first, and the switch takes about half a second. If the new camera cannot be opened, the future fails with a `MediaException`, and the track keeps sending the camera it had.
 
 ### Devices
 

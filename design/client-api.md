@@ -758,8 +758,12 @@ How the threading model is built:
 
 Where the code differs from the API above:
 
-- `LocalVideo.switchCamera()` is left for later: a WebRTC track cannot change its source, so it
-  needs a new native track behind the same `LocalVideo`, replaced on every sender.
+- `camera()` returns a `LocalCamera`, a `LocalVideo` with `device()` and `switchCamera(device)`;
+  other video tracks cannot switch. A WebRTC track cannot change its source, so a switch puts a new
+  native track over the new camera behind the same `LocalCamera`, on every sender. It opens the new
+  camera first, and when that fails, as with two sensors of one camera that cannot stream at once,
+  closes the current one before opening the new one, and reopens the current one if the new one
+  fails too. `CameraIntegrationTest` covers it with a real camera and skips without one.
 - DTMF is `Sender.sendTones()` and `Sender.onTone()` instead of a `DtmfSender` object; the future
   completes once the tones have been sent.
 - `Devices.screens()` and `windows()` ask the system on every call; only the camera, microphone and
