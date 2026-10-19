@@ -298,6 +298,7 @@ One track may be sent on any number of peers. Opening a camera that is already o
 The media module plays files and RTSP streams into sources of the core API. `videoTrack` and `audioTrack` put them on peers like any other track:
 
 ```java
+WebRtc rtc = WebRtc.builder().audio(AudioMode.HEADLESS).build();   // first: it loads the native library
 MediaFileSource file = new MediaFileSource(Paths.get("movie.mp4"));
 
 peer.addTrack(rtc.media().videoTrack("movie", file.getVideoSource()));
@@ -305,7 +306,7 @@ peer.addTrack(rtc.media().audioTrack("movie", file.getAudioSource()));
 file.play();
 ```
 
-The sources belong to the `MediaFileSource`, not to the tracks: close the runtime, or the tracks, before the file. The file's audio source is pushed audio, so the runtime needs the `CUSTOM` or `HEADLESS` audio mode.
+Create the runtime before the file: the runtime loads the native library that the file's sources need. The sources belong to the `MediaFileSource`, not to the tracks, so close the runtime, or the tracks, before the file. The file's audio source is pushed audio, so the runtime needs the `CUSTOM` or `HEADLESS` audio mode.
 
 ### Pushing Video and Audio
 
