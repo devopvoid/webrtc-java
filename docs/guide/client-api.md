@@ -282,6 +282,7 @@ Sender audioSender = peer.addTrack(microphone);
 | `screen(ScreenOptions)` | A screen or a window, as the [Desktop Video](/guide/video/desktop-capture) guide describes. |
 | `customVideo(String)` | Frames you push. |
 | `customAudio(String)` | Audio you push. `CUSTOM` and `HEADLESS` modes only. |
+| `videoTrack(String, VideoTrackSource)`, `audioTrack(String, AudioTrackSource)` | A source of the core API, such as one the [media module](/guide/media/media-files) feeds. The source stays yours. |
 
 ```java
 Devices devices = media.devices();
@@ -291,6 +292,20 @@ LocalVideo screen = media.screen(ScreenOptions.screen(devices.screens().get(0)).
 Tracks added without stream ids share one stream per peer, so that a browser plays their audio and video in sync. Pass ids to `addTrack(track, streamIds...)` to group them yourself.
 
 One track may be sent on any number of peers. Opening a camera that is already open shares its capture when the options are the same, and fails with a `MediaException` when they differ.
+
+### Sending a Media File
+
+The media module plays files and RTSP streams into sources of the core API. `videoTrack` and `audioTrack` put them on peers like any other track:
+
+```java
+MediaFileSource file = new MediaFileSource(Paths.get("movie.mp4"));
+
+peer.addTrack(rtc.media().videoTrack("movie", file.getVideoSource()));
+peer.addTrack(rtc.media().audioTrack("movie", file.getAudioSource()));
+file.play();
+```
+
+The sources belong to the `MediaFileSource`, not to the tracks: close the runtime, or the tracks, before the file. The file's audio source is pushed audio, so the runtime needs the `CUSTOM` or `HEADLESS` audio mode.
 
 ### Pushing Video and Audio
 

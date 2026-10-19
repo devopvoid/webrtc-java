@@ -799,7 +799,11 @@ Every test also fails if anything reached the runtime's error handler, including
 
 Next:
 - a guide page and an example;
-- phase 2 is done except the media module bridge and recording: `Whip.to(...).publish(rtc)` and
+- `LocalMedia.videoTrack(label, source)` and `audioTrack(label, source)` wrap sources of the core
+  API, such as those of the media module's `MediaFileSource`, which stay the caller's. Recording a
+  peer with `MediaRecorder` needs its native senders and receivers, which the client API keeps to
+  itself; that bridge is still open.
+- phase 2 is done except recording: `Whip.to(...).publish(rtc)` and
   `Whep.from(...).play(rtc)` return sessions over `HttpURLConnection` (Java 8), and `VideoView` is in
   `dev.onvoid.webrtc.client.swing`;
 - porting the existing examples (phases 2 and 3).

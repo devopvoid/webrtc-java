@@ -41,6 +41,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import dev.onvoid.webrtc.RTCStats;
 import dev.onvoid.webrtc.RTCStatsType;
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
@@ -289,6 +291,54 @@ class MediaTests extends ClientTestBase {
 		ExecutionException refused = assertThrows(ExecutionException.class,
 				() -> videoSender.sendTones("1").get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
 		assertInstanceOf(IllegalStateException.class, refused.getCause());
+	}
+
+	@Test
+	void tracksOverOwnSources() throws Exception {
+		Peer[] peers = pair();
+		CustomVideoSource videoSource = new CustomVideoSource();
+		CustomAudioSource audioSource = new CustomAudioSource();
+
+		try {
+			LocalVideo video = rtc.media().videoTrack("own-video", videoSource);
+			LocalAudio audio = rtc.media().audioTrack("own-audio", audioSource);
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			CompletableFuture<Void> ended = new CompletableFuture<>();
+
+			peers[1].onTrack(track -> {
+				if (track.isVideo()) {
+					track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth()));
+				}
+			});
+			peers[0].addTrack(video);
+			peers[0].addTrack(audio);
+
+			feeder.scheduleAtFixedRate(() -> {
+				VideoFrame frame = new VideoFrame(NativeI420Buffer.allocate(160, 120), System.nanoTime());
+				videoSource.pushFrame(frame);
+				frame.release();
+			}, 0, 33, TimeUnit.MILLISECONDS);
+
+			assertEquals(160, (int) await(width));
+
+			video.onEnded(() -> ended.complete(null));
+			video.close();
+			await(ended);
+
+			// The source is still the test's, and still takes frames.
+			VideoFrame frame = new VideoFrame(NativeI420Buffer.allocate(160, 120), System.nanoTime());
+			videoSource.pushFrame(frame);
+			frame.release();
+		}
+		finally {
+			feeder.shutdownNow();
+			feeder.awaitTermination(5, TimeUnit.SECONDS);
+
+			// Sources outlive the tracks over them.
+			rtc.close();
+			videoSource.dispose();
+			audioSource.dispose();
+		}
 	}
 
 	@Test

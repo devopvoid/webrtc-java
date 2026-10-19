@@ -40,6 +40,7 @@ import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 import dev.onvoid.webrtc.media.video.VideoDevice;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.media.video.VideoTrackSource;
 
 /**
  * The {@link LocalMedia} of a {@link WebRtc} runtime. It keeps every track it
@@ -199,6 +200,41 @@ final class LocalMediaImpl implements LocalMedia {
 			source.dispose();
 			throw e;
 		}
+	}
+
+	@Override
+	public LocalVideo videoTrack(String label, VideoTrackSource source) {
+		requireNonNull(label, "label");
+		requireNonNull(source, "source");
+		rtc.checkOpen();
+
+		VideoTrack track = rtc.factory.createVideoTrack(label, source);
+
+		// The source is the caller's, and outlives the track.
+		return register(new LocalVideoImpl(this, track, () -> { }));
+	}
+
+	@Override
+	public LocalAudio audioTrack(String label, AudioTrackSource source) {
+		requireNonNull(label, "label");
+		requireNonNull(source, "source");
+		rtc.checkOpen();
+
+		boolean pushed = source instanceof CustomAudioSource;
+
+		if (pushed && rtc.audioMode == AudioMode.DEVICES) {
+			throw new ConfigurationException("A CustomAudioSource needs a runtime built with AudioMode.CUSTOM or "
+					+ "AudioMode.HEADLESS; this one captures the microphone");
+		}
+		if (!pushed && rtc.audioMode != AudioMode.DEVICES) {
+			throw new ConfigurationException("A captured audio source needs a runtime built with AudioMode.DEVICES; "
+					+ "this one was built with AudioMode." + rtc.audioMode);
+		}
+
+		AudioTrack track = rtc.factory.createAudioTrack(label, source);
+
+		// The source is the caller's, and outlives the track.
+		return register(new LocalAudioImpl(this, track, () -> { }));
 	}
 
 	@Override

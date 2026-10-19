@@ -17,6 +17,9 @@
 package dev.onvoid.webrtc.client;
 
 import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.video.VideoTrackSource;
 
 /**
  * Creates the tracks a runtime sends, from {@link WebRtc#media()}. Every track
@@ -94,6 +97,38 @@ public interface LocalMedia {
 	 * @return the track.
 	 */
 	CustomVideo customVideo(String label);
+
+	/**
+	 * Creates a track over a video source of the low-level API, such as the
+	 * video source of a {@code MediaFileSource} of the media module. The
+	 * source stays the caller's: closing the track does not dispose it, and it
+	 * must outlive the track.
+	 *
+	 * @param label  the track label.
+	 * @param source the source that feeds the track.
+	 *
+	 * @return the track.
+	 */
+	LocalVideo videoTrack(String label, VideoTrackSource source);
+
+	/**
+	 * Creates a track over an audio source of the low-level API, such as the
+	 * audio source of a {@code MediaFileSource} of the media module. The
+	 * source stays the caller's: closing the track does not dispose it, and it
+	 * must outlive the track.
+	 *
+	 * @param label  the track label.
+	 * @param source the source that feeds the track. A {@link CustomAudioSource}
+	 *               needs a runtime built with {@link AudioMode#CUSTOM} or
+	 *               {@link AudioMode#HEADLESS}, any other source {@link
+	 *               AudioMode#DEVICES}.
+	 *
+	 * @return the track.
+	 *
+	 * @throws ConfigurationException if the source does not fit the runtime's
+	 *                                {@link AudioMode}.
+	 */
+	LocalAudio audioTrack(String label, AudioTrackSource source);
 
 	/**
 	 * Creates an audio track fed with audio the application pushes.
