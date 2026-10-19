@@ -363,9 +363,12 @@ class PeerTests extends ClientTestBase {
 
 		rtc.close();
 
-		assertTrue(peers[0].whenClosed().isDone());
-		assertTrue(peers[1].whenClosed().isDone());
+		// Closed once close() returns; the futures and the CLOSED events follow
+		// on the event threads.
+		assertEquals(PeerState.CLOSED, peers[0].state());
 		assertEquals(PeerState.CLOSED, peers[1].state());
+		await(peers[0].whenClosed());
+		await(peers[1].whenClosed());
 		assertThrows(PeerClosedException.class, this::pair);
 	}
 

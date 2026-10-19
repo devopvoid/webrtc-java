@@ -551,7 +551,7 @@ You close what you created, and closing an owner closes what it owns:
 
 `Peer.close()` and every other `close()` except the runtime's return at once, may be called more than once, and are fine inside a handler. After a peer closed, its only event is the `CLOSED` state. Operations that were pending fail with a `PeerClosedException`, and so do those called later. `closeAsync()` returns a future for callers that want to wait.
 
-`WebRtc.close()` is the one close that waits, for up to the close timeout, which makes it fit for try-with-resources.
+`WebRtc.close()` is the one close that waits, for up to the close timeout, which makes it fit for try-with-resources. Once it returns, every peer's `state()` is `CLOSED`; the `whenClosed` futures and `CLOSED` events follow on the peers' event threads, since waiting for them could never end when `close()` is called on an event thread.
 
 ## Errors
 

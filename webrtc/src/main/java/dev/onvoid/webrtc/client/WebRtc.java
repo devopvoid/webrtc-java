@@ -292,6 +292,11 @@ public final class WebRtc implements AutoCloseable {
 	 * Closes every peer, then every track, then the factory, and stops the
 	 * threads of this API. Waits for that up to the close timeout, which is
 	 * the one wait in this API. May be called more than once.
+	 * <p>
+	 * Once it returns, every peer's {@link Peer#state()} is {@link
+	 * PeerState#CLOSED}. The peers' {@code whenClosed} futures and their
+	 * {@code CLOSED} events follow on their event threads; waiting for those
+	 * here could never end when this is called on an event thread.
 	 */
 	@Override
 	public void close() {
