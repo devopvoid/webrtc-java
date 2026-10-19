@@ -21,4 +21,8 @@ module webrtc.java {
 	// media source directly instead of carrying every frame through Java.
 	exports dev.onvoid.webrtc.internal to webrtc.java.media;
 
+	// Not API for applications either. The media module's recorder needs the
+	// encoded frames of client API senders and remote tracks.
+	exports dev.onvoid.webrtc.client.internal to webrtc.java.media;
+
 }

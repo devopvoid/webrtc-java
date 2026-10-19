@@ -29,6 +29,8 @@ import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.RTCRtpSendParameters;
 import dev.onvoid.webrtc.RTCRtpSender;
+import dev.onvoid.webrtc.client.internal.EncodedFrames;
+import dev.onvoid.webrtc.internal.NativeApi;
 
 /**
  * The {@link Sender} of a {@link PeerImpl}. The native sender is used on the
@@ -305,6 +307,37 @@ final class SenderImpl implements Sender {
 		});
 
 		return done;
+	}
+
+	/**
+	 * Hands a native extension the encoded frames of this sender, taken on the
+	 * peer's control executor, where key frames are asked for too.
+	 */
+	CompletableFuture<EncodedFrames.Source> encodedFrames() {
+		CompletableFuture<EncodedFrames.Source> result = new CompletableFuture<>();
+
+		peer.control.execute(() -> {
+			try {
+				checkUsable();
+
+				long frames = NativeApi.encodedFramesOf(sender);
+
+				if (frames == 0) {
+					throw new IllegalStateException("The sender was removed");
+				}
+
+				result.complete(new EncodedFrames.Source(frames, () -> peer.control.execute(() -> {
+					if (kind == MediaKind.VIDEO && !removed && sender != null && !peer.isClosed()) {
+						sender.generateKeyFrame();
+					}
+				})));
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e);
+			}
+		});
+
+		return result;
 	}
 
 	/**

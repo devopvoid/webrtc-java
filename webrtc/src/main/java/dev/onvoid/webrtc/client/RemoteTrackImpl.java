@@ -20,9 +20,12 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.client.internal.EncodedFrames;
+import dev.onvoid.webrtc.internal.NativeApi;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaStreamTrackMuteListener;
 
@@ -146,6 +149,40 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 				change.run();
 			}
 		});
+	}
+
+	/**
+	 * Hands a native extension the encoded frames of this track's receiver,
+	 * taken on the peer's control executor, where key frames are asked for
+	 * too.
+	 */
+	CompletableFuture<EncodedFrames.Source> encodedFrames() {
+		CompletableFuture<EncodedFrames.Source> result = new CompletableFuture<>();
+
+		peer.control.execute(() -> {
+			try {
+				if (ended) {
+					throw new IllegalStateException("The track " + id + " ended");
+				}
+
+				long frames = NativeApi.encodedFramesOf(receiver);
+
+				if (frames == 0) {
+					throw new IllegalStateException("The track " + id + " ended");
+				}
+
+				result.complete(new EncodedFrames.Source(frames, () -> onControl(() -> {
+					if (kind == MediaKind.VIDEO) {
+						receiver.requestKeyFrame();
+					}
+				})));
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e);
+			}
+		});
+
+		return result;
 	}
 
 	/** Detaches everything from the native track, on the control executor. */

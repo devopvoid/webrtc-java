@@ -432,6 +432,22 @@ Peer viewer = rtc.createPeer(PeerOptions.builder()
         .build());
 ```
 
+### Recording
+
+The media module's `MediaRecorder` records senders and remote tracks into a file as they are, without re-encoding:
+
+```java
+try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
+    recorder.addTrack(videoSender);
+    recorder.addTrack(remoteVideo);
+    recorder.start();
+    // ...
+    recorder.stop();
+}
+```
+
+Closing the peer, or removing a sender, during a recording ends that track in the file, and `stop()` still finishes it. The [Media Recording](/guide/media/media-recording) guide covers containers and the recorder's events.
+
 ## Data Channels
 
 ```java

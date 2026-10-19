@@ -57,6 +57,7 @@ import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.RTCSignalingState;
 import dev.onvoid.webrtc.SetSessionDescriptionObserver;
+import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.media.MediaStream;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
@@ -77,6 +78,12 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
  * #enqueue}, which starts one only once the one before finished.
  */
 final class PeerImpl implements Peer {
+
+	static {
+		// Senders and remote tracks come from peers, so whoever holds one
+		// finds the access to their encoded frames registered.
+		EncodedFrames.register(new EncodedFramesAccess());
+	}
 
 	/** How long an impolite peer waits for an answer after it ignored an offer. */
 	private static final long COLLISION_TIMEOUT_MS = 5000;
