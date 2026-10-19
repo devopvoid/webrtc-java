@@ -441,9 +441,40 @@ DataChannel positions = peer.createChannel("positions", ChannelOptions.builder()
 
 `negotiatedId(int)` creates a channel both peers set up themselves with the same id, without announcing it; such a channel never shows up in `onChannel`. The [Data Channels](/guide/data/data-channels) guide explains the options in detail.
 
+## WHIP and WHEP
+
+Media servers and streaming services take streams with the WebRTC HTTP Ingestion Protocol ([WHIP](https://www.rfc-editor.org/rfc/rfc9725)) and hand them out with its egress counterpart, WHEP. Both exchange one offer and one answer over HTTP. `Whip` publishes tracks, and `Whep` receives a stream:
+
+```java
+Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
+        .bearerToken(streamKey)
+        .track(rtc.media().camera())
+        .track(rtc.media().microphone())
+        .publish(rtc)
+        .get(15, TimeUnit.SECONDS);
+
+Whep.Session viewer = Whep.from(URI.create("https://example.com/live/whep"))
+        .play(rtc)
+        .get(15, TimeUnit.SECONDS);
+
+viewer.peer().onTrack(track -> System.out.println("Receiving " + track.kind()));
+```
+
+The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
+
+`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else.
+
+| Builder method | What it sets |
+|---|---|
+| `bearerToken(String)` | The token sent as `Authorization: Bearer`; for many services, the stream key. |
+| `iceServer(String...)` | A STUN or TURN server; endpoints usually name their own in the answer. |
+| `track(LocalTrack)` | A track to publish, WHIP only. The tracks share one stream. |
+| `receive(MediaKind...)` | What to receive, WHEP only; video and audio by default. |
+| `timeout(Duration)` | How long the session may take to be connected. |
+
 ## Manual Negotiation
 
-WHIP, WHEP and most SFUs dictate their own offer and answer exchange. A peer built with `Negotiation.MANUAL` leaves it to the application, through `peer.negotiator()`. Each step creates and applies a description in one go, and `Gathering.COMPLETE` waits until the description holds all local candidates, for servers that take no trickled candidates. A STUN or TURN server that cannot be reached, as on networks that block UDP, holds up the end of gathering for a long time, so `COMPLETE` waits at most for the peer's gathering timeout and then goes with the candidates it has. This WHEP client receives a stream:
+SFUs and other servers dictate an offer and answer exchange of their own. A peer built with `Negotiation.MANUAL` leaves it to the application, through `peer.negotiator()`; `Whip` and `Whep` are built on it. Each step creates and applies a description in one go, and `Gathering.COMPLETE` waits until the description holds all local candidates, for servers that take no trickled candidates. A STUN or TURN server that cannot be reached, as on networks that block UDP, holds up the end of gathering for a long time, so `COMPLETE` waits at most for the peer's gathering timeout and then goes with the candidates it has. This WHEP client does by hand what `Whep` does:
 
 ```java
 Peer viewer = rtc.createPeer(PeerOptions.builder()

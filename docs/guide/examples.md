@@ -40,11 +40,9 @@ This example provides a foundation for building WebRTC applications that need to
 The [`WhepExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/WhepExample.java) implements a client of the WebRTC HTTP Egress Protocol (WHEP), which receives a stream from a server, with the [Client API](/guide/client-api).
 
 **Key features demonstrated:**
-- Creating a receive-only peer that negotiates by hand
-- Creating an offer that already holds the local candidates, as WHEP servers expect
-- Sending the offer to a WHEP endpoint and applying the answer it returns
-- Receiving the stream's video and audio
-- Ending the session with an HTTP `DELETE` of the resource the server created
+- Receiving a stream from a WHEP endpoint with `Whep`
+- Logging the stream's video frames and audio
+- Ending the session, which deletes it on the server
 
 This example is useful for applications that need to receive media streams from WHEP-compatible servers, such as live streaming platforms. The endpoint and the number of seconds to receive are optional:
 

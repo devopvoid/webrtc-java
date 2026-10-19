@@ -799,5 +799,7 @@ Every test also fails if anything reached the runtime's error handler, including
 
 Next:
 - a guide page and an example;
-- `Whip`/`Whep` (`VideoView` is done, in `dev.onvoid.webrtc.client.swing`);
+- phase 2 is done except the media module bridge and recording: `Whip.to(...).publish(rtc)` and
+  `Whep.from(...).play(rtc)` return sessions over `HttpURLConnection` (Java 8), and `VideoView` is in
+  `dev.onvoid.webrtc.client.swing`;
 - porting the existing examples (phases 2 and 3).

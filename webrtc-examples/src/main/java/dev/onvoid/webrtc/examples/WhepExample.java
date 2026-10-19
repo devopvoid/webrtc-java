@@ -17,34 +17,27 @@
 package dev.onvoid.webrtc.examples;
 
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import dev.onvoid.webrtc.RTCSdpType;
-import dev.onvoid.webrtc.RTCSessionDescription;
-import dev.onvoid.webrtc.client.Gathering;
-import dev.onvoid.webrtc.client.MediaKind;
-import dev.onvoid.webrtc.client.Negotiation;
 import dev.onvoid.webrtc.client.Peer;
-import dev.onvoid.webrtc.client.PeerOptions;
 import dev.onvoid.webrtc.client.WebRtc;
+import dev.onvoid.webrtc.client.Whep;
 
 /**
- * Example implementation of a WebRTC HTTP Egress Protocol (WHEP) client, with the client API.
+ * Example of a WebRTC HTTP Egress Protocol (WHEP) client, with the client API.
  * <p>
  * This class demonstrates:
  * <ul>
- *   <li>Creating a receive-only peer that negotiates by hand</li>
- *   <li>Creating an offer that already holds all local candidates, as WHEP servers expect</li>
- *   <li>Sending the offer to a WHEP endpoint and applying the answer it returns</li>
- *   <li>Receiving the stream's video and audio</li>
- *   <li>Ending the session with an HTTP DELETE of the resource the server created</li>
+ *   <li>Receiving a stream from a WHEP endpoint with {@link Whep}</li>
+ *   <li>Logging the stream's video frames and audio</li>
+ *   <li>Ending the session, which deletes it on the server</li>
  * </ul>
+ * <p>
+ * {@link Whep} sends an offer with all local candidates, applies the answer and waits until
+ * the peer is connected. The Client API guide shows the same steps by hand, through the
+ * peer's negotiator, for servers that speak a protocol of their own.
  * <p>
  * Run it against a WHEP endpoint, such as one of MediaMTX, for a number of seconds:
  * <pre>
@@ -59,10 +52,6 @@ public class WhepExample {
 
     private static final String DEFAULT_ENDPOINT = "http://localhost:8889/mystream/whep";
 
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .build();
-
 
     public static void main(String[] args) throws Exception {
         URI endpoint = URI.create(args.length > 0 ? args[0] : DEFAULT_ENDPOINT);
@@ -70,15 +59,18 @@ public class WhepExample {
 
         // The runtime plays the received audio to the speakers.
         try (WebRtc rtc = WebRtc.create()) {
-            // A WHEP server dictates the exchange: one offer, one answer, over HTTP.
-            Peer viewer = rtc.createPeer(PeerOptions.builder()
-                    .name("whep")
-                    .iceServer("stun:stun.l.google.com:19302")
-                    .negotiation(Negotiation.MANUAL)
-                    .receive(MediaKind.VIDEO, MediaKind.AUDIO)
-                    .build());
+            System.out.println("Requesting the stream from " + endpoint);
 
+            // The main thread may wait for the session; a handler must not.
+            Whep.Session session = Whep.from(endpoint)
+                    .iceServer("stun:stun.l.google.com:19302")
+                    .play(rtc)
+                    .get(15, TimeUnit.SECONDS);
+
+            Peer viewer = session.peer();
             viewer.onStateChange(state -> System.out.println("Connection is " + state));
+
+            // Tracks that arrived before this handler are handed to it too.
             viewer.onTrack(track -> {
                 System.out.println("Receiving " + track.kind());
 
@@ -103,69 +95,13 @@ public class WhepExample {
                 }
             });
 
-            // The main thread may wait for the futures; a handler must not.
-            RTCSessionDescription offer = viewer.negotiator()
-                    .createOffer(Gathering.COMPLETE)
-                    .get(10, TimeUnit.SECONDS);
+            Thread.sleep(seconds * 1000L);
 
-            System.out.println("Sending the offer to " + endpoint);
+            // Deletes the session on the server, then closes the peer.
+            session.closeAsync().get(5, TimeUnit.SECONDS);
 
-            HttpResponse<String> response = post(endpoint, offer.sdp);
-            URI resource = response.headers().firstValue("Location").map(endpoint::resolve).orElse(null);
-
-            try {
-                viewer.negotiator()
-                        .applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, response.body()))
-                        .get(10, TimeUnit.SECONDS);
-                viewer.whenConnected().get(10, TimeUnit.SECONDS);
-
-                Thread.sleep(seconds * 1000L);
-            }
-            finally {
-                if (resource != null) {
-                    end(resource);
-                }
-            }
+            System.out.println("Ended the session " + session.resource());
         }
-        // The runtime closed the peer and the factory.
-    }
-
-    /**
-     * Sends the offer and returns the server's answer.
-     */
-    private static HttpResponse<String> post(URI endpoint, String sdp) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(endpoint)
-                .header("Content-Type", "application/sdp")
-                .POST(HttpRequest.BodyPublishers.ofString(sdp))
-                .timeout(Duration.ofSeconds(30))
-                .build();
-
-        HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
-
-        if (response.statusCode() != 200 && response.statusCode() != 201) {
-            throw new IllegalStateException("The WHEP endpoint answered with status " + response.statusCode()
-                    + ": " + response.body());
-        }
-
-        return response;
-    }
-
-    /**
-     * Ends the session on the server, which frees what it holds for this viewer.
-     */
-    private static void end(URI resource) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder(resource)
-                    .DELETE()
-                    .timeout(Duration.ofSeconds(5))
-                    .build();
-
-            int status = HTTP.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-
-            System.out.println("Ended the session, status " + status);
-        }
-        catch (Exception e) {
-            System.err.println("Ending the session failed: " + e);
-        }
+        // The runtime closed the factory.
     }
 }
