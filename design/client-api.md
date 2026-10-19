@@ -765,6 +765,8 @@ Where the code differs from the API above:
   `CustomAudio.queuedMillis()`/`clear()`, `Message.size()`, `Negotiator.answer(offer, gathering)`.
 - An impolite peer that ignored an offer reports the two-impolite-peers collision after 5 seconds
   without an answer.
+- `Gathering.COMPLETE` waits at most `PeerOptions.Builder.gatheringTimeout` (3 seconds by default),
+  since an unreachable STUN or TURN server holds up the end of gathering far longer.
 
 Covered by tests (`PeerTests`, `MediaTests`, `SignalMessageTests`):
 - data channel round trip;

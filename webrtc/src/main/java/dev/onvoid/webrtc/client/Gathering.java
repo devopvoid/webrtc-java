@@ -24,7 +24,12 @@ public enum Gathering {
 	/** At once. Candidates follow through the {@link Signaling}, if there is one. */
 	TRICKLE,
 
-	/** Once ICE gathering is complete, with all local candidates in the description. */
+	/**
+	 * Once ICE gathering is complete, with all local candidates in the
+	 * description, as servers that take no trickled candidates need. It waits
+	 * at most for the {@link PeerOptions.Builder#gatheringTimeout(java.time.Duration)
+	 * gathering timeout}, and then hands back the candidates gathered so far.
+	 */
 	COMPLETE
 
 }

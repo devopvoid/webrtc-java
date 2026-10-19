@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -272,6 +273,25 @@ class PeerTests extends ClientTestBase {
 		assertTrue(offer.sdp.contains("a=candidate"), "The offer has no candidates");
 		assertEquals("no trickle", await(received));
 		assertThrows(IllegalStateException.class, () -> pair()[0].negotiator());
+	}
+
+	@Test
+	void unreachableStunServerBoundsGathering() throws Exception {
+		// 192.0.2.1 is reserved for documentation and never answers, which
+		// holds up the end of gathering far beyond the timeout.
+		Peer peer = rtc.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL)
+				.iceServer("stun:192.0.2.1:3478")
+				.gatheringTimeout(Duration.ofMillis(500))
+				.receive(MediaKind.VIDEO)
+				.build());
+
+		long start = System.nanoTime();
+		RTCSessionDescription offer = await(peer.negotiator().createOffer(Gathering.COMPLETE));
+		long millis = (System.nanoTime() - start) / 1_000_000;
+
+		assertTrue(millis < 5000, () -> "Gathering took " + millis + " ms");
+		assertTrue(offer.sdp.contains("typ host"), "The offer has no host candidates");
 	}
 
 	@Test

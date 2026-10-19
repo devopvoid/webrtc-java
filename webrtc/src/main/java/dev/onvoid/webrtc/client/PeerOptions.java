@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,6 +59,8 @@ public final class PeerOptions {
 
 	final Consumer<RTCConfiguration> customizer;
 
+	final Duration gatheringTimeout;
+
 
 	private PeerOptions(Builder builder) {
 		this.name = builder.name;
@@ -69,6 +72,7 @@ public final class PeerOptions {
 		this.receive = Collections.unmodifiableSet(builder.receive.isEmpty()
 				? EnumSet.noneOf(MediaKind.class) : EnumSet.copyOf(builder.receive));
 		this.customizer = builder.customizer;
+		this.gatheringTimeout = builder.gatheringTimeout;
 	}
 
 	/**
@@ -125,6 +129,8 @@ public final class PeerOptions {
 		private Negotiation negotiation = Negotiation.AUTOMATIC;
 
 		private Consumer<RTCConfiguration> customizer;
+
+		private Duration gatheringTimeout = Duration.ofSeconds(3);
 
 
 		private Builder() {
@@ -224,6 +230,27 @@ public final class PeerOptions {
 			for (MediaKind kind : kinds) {
 				receive.add(requireNonNull(kind, "kind"));
 			}
+			return this;
+		}
+
+		/**
+		 * Sets how long {@link Gathering#COMPLETE} waits for ICE gathering to
+		 * complete; 3 seconds by default. A STUN or TURN server that cannot be
+		 * reached holds up the end of gathering for much longer, and a
+		 * description with the candidates gathered so far usually connects.
+		 *
+		 * @param timeout the longest wait.
+		 *
+		 * @return this builder.
+		 */
+		public Builder gatheringTimeout(Duration timeout) {
+			requireNonNull(timeout, "timeout");
+
+			if (timeout.isNegative() || timeout.isZero()) {
+				throw new IllegalArgumentException("The timeout must be positive, got " + timeout);
+			}
+
+			this.gatheringTimeout = timeout;
 			return this;
 		}
 

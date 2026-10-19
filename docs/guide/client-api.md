@@ -101,6 +101,7 @@ Peer peer = rtc.createPeer(PeerOptions.builder()
 | `polite(boolean)` | The role in perfect negotiation, see below. |
 | `negotiation(Negotiation)` | `AUTOMATIC` by default, or `MANUAL`, see [Manual Negotiation](#manual-negotiation). |
 | `receive(MediaKind...)` | Receives audio or video without sending any, as a viewer does. |
+| `gatheringTimeout(Duration)` | How long `Gathering.COMPLETE` waits for ICE gathering, 3 seconds by default. See [Manual Negotiation](#manual-negotiation). |
 | `configure(Consumer<RTCConfiguration>)` | Anything else the [peer connection configuration](/guide/networking/peer-connection-config) has. |
 
 ### Signaling
@@ -411,7 +412,7 @@ DataChannel positions = peer.createChannel("positions", ChannelOptions.builder()
 
 ## Manual Negotiation
 
-WHIP, WHEP and most SFUs dictate their own offer and answer exchange. A peer built with `Negotiation.MANUAL` leaves it to the application, through `peer.negotiator()`. Each step creates and applies a description in one go, and `Gathering.COMPLETE` waits until the description holds all local candidates, for servers that take no trickled candidates. This WHEP client receives a stream:
+WHIP, WHEP and most SFUs dictate their own offer and answer exchange. A peer built with `Negotiation.MANUAL` leaves it to the application, through `peer.negotiator()`. Each step creates and applies a description in one go, and `Gathering.COMPLETE` waits until the description holds all local candidates, for servers that take no trickled candidates. A STUN or TURN server that cannot be reached, as on networks that block UDP, holds up the end of gathering for a long time, so `COMPLETE` waits at most for the peer's gathering timeout and then goes with the candidates it has. This WHEP client receives a stream:
 
 ```java
 Peer viewer = rtc.createPeer(PeerOptions.builder()

@@ -813,6 +813,14 @@ final class PeerImpl implements Peer {
 		CompletableFuture<Void> future = new CompletableFuture<>();
 		gatheringWaiters.add(future);
 
+		// A STUN or TURN server that cannot be reached holds up the end of
+		// gathering for long; the description then goes with what there is.
+		rtc.timer.schedule(() -> control.execute(() -> {
+			if (gatheringWaiters.remove(future)) {
+				future.complete(null);
+			}
+		}), options.gatheringTimeout.toMillis(), TimeUnit.MILLISECONDS);
+
 		return future;
 	}
 
