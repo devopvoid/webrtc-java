@@ -26,7 +26,10 @@ import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 
 /**
  * The media devices of the system. The lists are snapshots, kept current in
- * the background, so reading them is cheap on any thread.
+ * the background, so reading them is cheap on any thread. Where the system
+ * reports no device changes, as a Linux machine without PulseAudio, they are
+ * read on each call. A kind of device the system cannot list, such as audio
+ * devices without an audio system, comes back as an empty list.
  */
 public interface Devices {
 

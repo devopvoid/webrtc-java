@@ -38,7 +38,10 @@ import dev.onvoid.webrtc.media.video.desktop.WindowCapturer;
 
 /**
  * The {@link Devices} of a runtime. The device lists are read once, then again
- * on the media executor whenever the system reports a change.
+ * on the media executor whenever the system reports a change. Where the system
+ * reports no changes, as a Linux machine without PulseAudio, the lists are
+ * read on each call instead. A list that cannot be read is empty: a machine
+ * without an audio system has no microphones to offer.
  */
 final class DevicesImpl implements Devices {
 
@@ -49,6 +52,9 @@ final class DevicesImpl implements Devices {
 	private final Handlers<Devices> handlers;
 
 	private final DeviceChangeListener listener;
+
+	/** True while the system reports changes, which keep the snapshots current. */
+	private final boolean watching;
 
 	private volatile List<VideoDevice> cameras = Collections.emptyList();
 
@@ -77,22 +83,22 @@ final class DevicesImpl implements Devices {
 			}
 		};
 
-		MediaDevices.addDeviceChangeListener(listener);
+		this.watching = watch(listener);
 	}
 
 	@Override
 	public List<VideoDevice> cameras() {
-		return cameras;
+		return watching ? cameras : read(MediaDevices::getVideoCaptureDevices);
 	}
 
 	@Override
 	public List<AudioDevice> microphones() {
-		return microphones;
+		return watching ? microphones : read(MediaDevices::getAudioCaptureDevices);
 	}
 
 	@Override
 	public List<AudioDevice> speakers() {
-		return speakers;
+		return watching ? speakers : read(MediaDevices::getAudioRenderDevices);
 	}
 
 	@Override
@@ -158,7 +164,9 @@ final class DevicesImpl implements Devices {
 	}
 
 	void dispose() {
-		MediaDevices.removeDeviceChangeListener(listener);
+		if (watching) {
+			MediaDevices.removeDeviceChangeListener(listener);
+		}
 		handlers.clear();
 	}
 
@@ -185,8 +193,19 @@ final class DevicesImpl implements Devices {
 					: Collections.unmodifiableList(new ArrayList<>(devices));
 		}
 		catch (Throwable e) {
-			media.rtc.reportError(new MediaException("Reading the devices failed", e));
+			// No device of the kind, such as without an audio system.
 			return Collections.emptyList();
+		}
+	}
+
+	private static boolean watch(DeviceChangeListener listener) {
+		try {
+			MediaDevices.addDeviceChangeListener(listener);
+			return true;
+		}
+		catch (Throwable e) {
+			// The system reports no changes, as Linux without PulseAudio.
+			return false;
 		}
 	}
 
