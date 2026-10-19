@@ -16,9 +16,15 @@
 
 package dev.onvoid.webrtc.client;
 
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import static java.util.Objects.requireNonNull;
 
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
+import dev.onvoid.webrtc.RTCDtmfSender;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.RTCRtpSendParameters;
@@ -46,11 +52,21 @@ final class SenderImpl implements Sender {
 
 	private Throwable attachError;
 
+	private RTCDtmfSender dtmf;
+
+	/** Completes once the tones sent last have been played. */
+	private CompletableFuture<Void> pendingTones;
+
+	// Confined to the peer's event executor.
+
+	private final Handlers<String> toneHandlers;
+
 
 	SenderImpl(PeerImpl peer, LocalTrackImpl track) {
 		this.peer = peer;
 		this.track = track;
 		this.kind = track.kind();
+		this.toneHandlers = new Handlers<>(peer.rtc::reportError);
 	}
 
 	void attach(RTCPeerConnection connection, List<String> streamIds) {
@@ -146,6 +162,82 @@ final class SenderImpl implements Sender {
 	}
 
 	@Override
+	public CompletableFuture<Void> sendTones(String tones) {
+		return sendTones(tones, Duration.ofMillis(100), Duration.ofMillis(70));
+	}
+
+	@Override
+	public CompletableFuture<Void> sendTones(String tones, Duration duration, Duration gap) {
+		requireNonNull(tones, "tones");
+		requireNonNull(duration, "duration");
+		requireNonNull(gap, "gap");
+
+		long durationMs = duration.toMillis();
+		long gapMs = gap.toMillis();
+
+		if (durationMs < 40 || durationMs > 6000) {
+			throw new IllegalArgumentException("A tone lasts 40 ms to 6 seconds, got " + duration);
+		}
+		if (gapMs < 30 || gapMs > Integer.MAX_VALUE) {
+			throw new IllegalArgumentException("The gap between tones is at least 30 ms, got " + gap);
+		}
+
+		CompletableFuture<Void> sent = new CompletableFuture<>();
+
+		peer.control.execute(() -> {
+			try {
+				checkUsable();
+
+				if (kind != MediaKind.AUDIO) {
+					throw new IllegalStateException("Only an audio sender sends tones");
+				}
+				if (dtmf == null) {
+					dtmf = sender.getDtmfSender();
+
+					if (dtmf == null) {
+						throw new IllegalStateException("The sender cannot send tones");
+					}
+
+					dtmf.registerObserver((tone, buffer) -> toneChanged(tone));
+				}
+				if (!dtmf.canInsertDtmf()) {
+					throw new IllegalStateException("The sender cannot send tones now. It needs a track, "
+							+ "and the remote peer must have accepted telephone events");
+				}
+				if (!dtmf.insertDtmf(tones, (int) durationMs, (int) gapMs)) {
+					throw new IllegalStateException("WebRTC refused the tones \"" + tones + "\"");
+				}
+
+				if (pendingTones != null) {
+					pendingTones.completeExceptionally(new CancellationException("Replaced by later tones"));
+				}
+
+				if (hasTone(tones)) {
+					pendingTones = sent;
+				}
+				else {
+					// Nothing to play, so no event would complete the future.
+					pendingTones = null;
+					sent.complete(null);
+				}
+			}
+			catch (Throwable e) {
+				sent.completeExceptionally(e instanceof IllegalStateException
+						? e : PeerImpl.asWebRtcException(e, "Sending tones failed"));
+			}
+		});
+
+		return peer.toPublic(sent);
+	}
+
+	@Override
+	public Subscription onTone(Consumer<String> handler) {
+		requireNonNull(handler, "handler");
+
+		return peer.subscribe(() -> toneHandlers.add(handler));
+	}
+
+	@Override
 	public CompletableFuture<Void> remove() {
 		return run(() -> {
 			connection.removeTrack(sender);
@@ -200,6 +292,16 @@ final class SenderImpl implements Sender {
 	private void release() {
 		removed = true;
 
+		if (dtmf != null) {
+			dtmf.unregisterObserver();
+			dtmf = null;
+		}
+		if (pendingTones != null) {
+			pendingTones.completeExceptionally(peer.isClosed()
+					? peer.closedError() : new IllegalStateException("The sender was removed"));
+			pendingTones = null;
+		}
+
 		if (sender != null) {
 			sender.dispose();
 			sender = null;
@@ -224,21 +326,47 @@ final class SenderImpl implements Sender {
 		return (LocalTrackImpl) replacement;
 	}
 
+	/** Called on a WebRTC thread, so it only posts. */
+	private void toneChanged(String tone) {
+		String current = tone == null ? "" : tone;
+
+		peer.control.execute(() -> {
+			if (current.isEmpty() && pendingTones != null) {
+				pendingTones.complete(null);
+				pendingTones = null;
+			}
+		});
+		peer.events.execute(() -> toneHandlers.accept(current));
+	}
+
+	private void checkUsable() {
+		if (peer.isClosed()) {
+			throw peer.closedError();
+		}
+		if (attachError != null) {
+			throw PeerImpl.asWebRtcException(attachError, "The track was never added");
+		}
+		if (removed) {
+			throw new IllegalStateException("The sender was removed");
+		}
+	}
+
+	private static boolean hasTone(String tones) {
+		for (int i = 0; i < tones.length(); i++) {
+			if ("0123456789ABCDabcd#*,".indexOf(tones.charAt(i)) >= 0) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private CompletableFuture<Void> run(Runnable operation) {
 		CompletableFuture<Void> result = new CompletableFuture<>();
 
 		peer.control.execute(() -> {
 			try {
-				if (peer.isClosed()) {
-					throw peer.closedError();
-				}
-				if (attachError != null) {
-					throw PeerImpl.asWebRtcException(attachError, "The track was never added");
-				}
-				if (removed) {
-					throw new IllegalStateException("The sender was removed");
-				}
-
+				checkUsable();
 				operation.run();
 				result.complete(null);
 			}

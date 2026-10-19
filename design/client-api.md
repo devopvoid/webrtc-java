@@ -495,7 +495,9 @@ public interface Sender {
     CompletableFuture<Void> replaceTrack(LocalTrack track);    // no renegotiation, null sends nothing
     CompletableFuture<Void> configure(Encoding encoding);      // max bitrate, max frame rate, scale down, active
     CompletableFuture<Void> remove();                          // renegotiates in AUTOMATIC mode
-    DtmfSender dtmf();                                         // audio senders only
+    CompletableFuture<Void> sendTones(String tones);           // DTMF, audio senders only
+    CompletableFuture<Void> sendTones(String tones, Duration duration, Duration gap);
+    Subscription onTone(Consumer<String> handler);
 }
 
 public interface RemoteTrack {
@@ -756,7 +758,10 @@ How the threading model is built:
 
 Where the code differs from the API above:
 
-- `Sender.dtmf()` and `LocalVideo.switchCamera()` are left for later.
+- `LocalVideo.switchCamera()` is left for later: a WebRTC track cannot change its source, so it
+  needs a new native track behind the same `LocalVideo`, replaced on every sender.
+- DTMF is `Sender.sendTones()` and `Sender.onTone()` instead of a `DtmfSender` object; the future
+  completes once the tones have been sent.
 - `Devices.screens()` and `windows()` ask the system on every call; only the camera, microphone and
   speaker lists are snapshots. The first `devices()` call reads them once, synchronously.
 - `Peer.addTrack` without stream ids puts every such track of a peer into one shared stream, so a

@@ -310,6 +310,16 @@ camera.close();                                // leaves every peer and stops th
 
 Closing a track stops sending it on every peer, without renegotiating, and then releases the capture. The senders stay, and can be given another track with `replaceTrack`.
 
+An audio sender also sends DTMF tones, for telephone systems and voice menus. The future completes once the tones have been sent, and `onTone` reports each tone as it starts, then an empty string at the end:
+
+```java
+audioSender.onTone(tone -> System.out.println(tone.isEmpty() ? "Done" : "Tone " + tone));
+audioSender.sendTones("1234#");                                       // 100 ms each
+audioSender.sendTones("*99,1", Duration.ofMillis(200), Duration.ofMillis(100));
+```
+
+The characters 0 to 9, A to D, `#` and `*` are tones, and a comma is a pause of 2 seconds. Tones still queued from an earlier call are replaced, and that call's future is cancelled. A video sender, or one whose remote peer accepts no telephone events, fails the future with an `IllegalStateException`. The [DTMF Sender](/guide/audio/dtmf-sender) guide has the details.
+
 ### Devices
 
 `media.devices()` returns the cameras, microphones and speakers. The first call reads them from the system; after that, the lists are snapshots kept current in the background, so reading them is cheap on any thread. `screens()` and `windows()` ask the system on each call.

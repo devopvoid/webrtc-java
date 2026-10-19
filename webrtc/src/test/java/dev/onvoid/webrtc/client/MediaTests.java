@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,8 +27,13 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -258,6 +264,31 @@ class MediaTests extends ClientTestBase {
 			}
 		}
 		throw new IllegalStateException("No VmRSS in " + status);
+	}
+
+	@Test
+	void tonesSent() throws Exception {
+		Peer[] peers = pair();
+		CustomAudio voice = rtc.media().customAudio("voice");
+		Sender audioSender = peers[0].addTrack(voice);
+		Sender videoSender = peers[0].addTrack(rtc.media().customVideo("video"));
+		List<String> tones = Collections.synchronizedList(new ArrayList<>());
+
+		audioSender.onTone(tones::add);
+		await(peers[0].whenConnected());
+
+		// Replaced before it sounds: its future is cancelled.
+		CompletableFuture<Void> replaced = audioSender.sendTones("999999", Duration.ofMillis(500), Duration.ofMillis(100));
+		await(audioSender.sendTones("1#", Duration.ofMillis(100), Duration.ofMillis(70)));
+
+		assertTrue(replaced.isCancelled() || replaced.isCompletedExceptionally());
+		// The last event is the empty tone, which the handler gets before the future completes.
+		assertEquals("", tones.get(tones.size() - 1));
+		assertTrue(String.join("", tones).endsWith("1#"), () -> "Tones: " + tones);
+
+		ExecutionException refused = assertThrows(ExecutionException.class,
+				() -> videoSender.sendTones("1").get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		assertInstanceOf(IllegalStateException.class, refused.getCause());
 	}
 
 	@Test

@@ -16,7 +16,9 @@
 
 package dev.onvoid.webrtc.client;
 
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Sends one track on one peer, made by {@link Peer#addTrack}.
@@ -45,6 +47,42 @@ public interface Sender {
 	 * @return a future that completes once the values are applied.
 	 */
 	CompletableFuture<Void> configure(Encoding encoding);
+
+	/**
+	 * Sends DTMF tones on an audio sender, 100 ms each with 70 ms between
+	 * them. See {@link #sendTones(String, Duration, Duration)}.
+	 *
+	 * @param tones the tones to send.
+	 *
+	 * @return a future that completes once the tones have been sent.
+	 */
+	CompletableFuture<Void> sendTones(String tones);
+
+	/**
+	 * Sends DTMF tones on an audio sender, as telephone systems expect. The
+	 * characters 0 to 9, A to D, # and * are tones, and a comma is a pause of
+	 * 2 seconds; other characters are skipped. Tones still queued from an
+	 * earlier call are replaced, and the future of that call is cancelled.
+	 *
+	 * @param tones    the tones to send.
+	 * @param duration how long each tone sounds, 40 ms to 6 seconds.
+	 * @param gap      the pause between two tones, at least 30 ms.
+	 *
+	 * @return a future that completes once the tones have been sent. It fails
+	 * with an {@link IllegalStateException} if the sender cannot send tones,
+	 * because it sends video or the remote peer does not accept them.
+	 */
+	CompletableFuture<Void> sendTones(String tones, Duration duration, Duration gap);
+
+	/**
+	 * Calls the handler as each DTMF tone starts, and with an empty string once
+	 * all queued tones have been sent.
+	 *
+	 * @param handler called on the peer's event thread.
+	 *
+	 * @return the subscription that removes the handler.
+	 */
+	Subscription onTone(Consumer<String> handler);
 
 	/**
 	 * Stops sending. With {@link Negotiation#AUTOMATIC} the peer renegotiates.
