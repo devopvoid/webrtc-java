@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
@@ -235,8 +236,10 @@ public final class WebRtc implements AutoCloseable {
 			peer.open();
 		}
 		catch (RuntimeException e) {
+			// Closed before the error goes out, so that nothing of the failed
+			// peer still runs when the runtime closes and frees WebRTC's threads.
 			peers.remove(peer);
-			peer.closeInternal();
+			peer.closeInternal().join();
 			throw e;
 		}
 
@@ -330,14 +333,24 @@ public final class WebRtc implements AutoCloseable {
 
 	private void shutdown() {
 		try {
-			List<CompletableFuture<Void>> peerCloses = new ArrayList<>();
+			// Peers and tracks created while the runtime closes are closed as
+			// well, so each is waited for until none is left.
+			boolean released = awaitAll(() -> {
+				List<CompletableFuture<Void>> closing = new ArrayList<>();
 
-			for (PeerImpl peer : new ArrayList<>(peers)) {
-				peerCloses.add(peer.closeInternal());
+				for (PeerImpl peer : new ArrayList<>(peers)) {
+					closing.add(peer.closeInternal());
+				}
+				return closing;
+			}, "peers") && awaitAll(media::closeAll, "local tracks");
+
+			if (!released) {
+				// Something may still run on WebRTC's threads, and disposing
+				// the factory would free them under it. Leaking is the lesser harm.
+				reportError(new WebRtcException("The factory of the runtime was left undisposed, "
+						+ "since not everything it created closed within " + closeTimeout));
+				return;
 			}
-
-			await(peerCloses, "peers");
-			await(media.closeAll(), "local tracks");
 
 			media.dispose();
 
@@ -366,17 +379,34 @@ public final class WebRtc implements AutoCloseable {
 		}
 	}
 
-	private void await(List<CompletableFuture<Void>> futures, String what) {
-		try {
-			CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-					.get(closeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+	/**
+	 * Closes what the supplier names, again and again, until it names nothing.
+	 *
+	 * @return false if a round did not finish within the close timeout.
+	 */
+	private boolean awaitAll(Supplier<List<CompletableFuture<Void>>> closes, String what) {
+		for (int round = 0; round < 10; round++) {
+			List<CompletableFuture<Void>> futures = closes.get();
+
+			if (futures.isEmpty()) {
+				return true;
+			}
+
+			try {
+				CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+						.get(closeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return false;
+			}
+			catch (Exception e) {
+				reportError(new WebRtcException("Closing the " + what + " did not finish within " + closeTimeout, e));
+				return false;
+			}
 		}
-		catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-		}
-		catch (Exception e) {
-			reportError(new WebRtcException("Closing the " + what + " did not finish within " + closeTimeout, e));
-		}
+
+		return closes.get().isEmpty();
 	}
 
 	private void shutdownPools() {
