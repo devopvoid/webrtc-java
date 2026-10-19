@@ -33,6 +33,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import dev.onvoid.webrtc.RTCStats;
+import dev.onvoid.webrtc.RTCStatsType;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
@@ -118,10 +120,41 @@ class MediaTests extends ClientTestBase {
 
 		await(enough);
 
-		// The connection kept up while the handler fell behind.
-		PeerStats stats = await(peers[1].stats());
-		assertTrue(stats.inboundVideo().get(0).framesPerSecond() > 10,
-				() -> "Inbound video: " + stats.inboundVideo());
+		// The decoder keeps going while the handler is busy: within the same
+		// time it gets well ahead of the handler, at whatever rate the encoder
+		// has ramped up to on this machine.
+		long decodedBefore = framesDecoded(await(peers[1].stats()));
+		int handledBefore = handled.get();
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+		long decodedMeanwhile;
+		int handledMeanwhile;
+
+		do {
+			Thread.sleep(100);
+			decodedMeanwhile = framesDecoded(await(peers[1].stats())) - decodedBefore;
+			handledMeanwhile = handled.get() - handledBefore;
+		}
+		while ((decodedMeanwhile < 10 || decodedMeanwhile < handledMeanwhile + 5) && System.nanoTime() < deadline);
+
+		long decoded = decodedMeanwhile;
+		int handledFrames = handledMeanwhile;
+
+		assertTrue(decoded >= 10 && decoded >= handledFrames + 5,
+				() -> "Meanwhile decoded " + decoded + " frames and handled " + handledFrames);
+	}
+
+	private static long framesDecoded(PeerStats stats) {
+		long frames = 0;
+
+		for (RTCStats entry : stats.report().getStats().values()) {
+			Object decoded = entry.getAttributes().get("framesDecoded");
+
+			if (entry.getType() == RTCStatsType.INBOUND_RTP && decoded instanceof Number) {
+				frames += ((Number) decoded).longValue();
+			}
+		}
+
+		return frames;
 	}
 
 	@Test
