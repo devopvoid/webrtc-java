@@ -86,8 +86,10 @@ public interface DataChannel extends AutoCloseable {
 	long bufferedAmount();
 
 	/**
-	 * Calls the handler for each message received. Messages that arrive before
-	 * the first handler is added are kept for it.
+	 * Calls the handler for each message received. Messages that arrive while
+	 * the channel has no handler are kept for the next one, up to 16 MiB;
+	 * beyond that the oldest are dropped, which is reported to the peer's
+	 * {@link Peer#onError} handlers.
 	 *
 	 * @param handler called on the peer's event thread.
 	 *

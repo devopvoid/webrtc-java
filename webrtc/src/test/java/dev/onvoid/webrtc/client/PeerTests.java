@@ -95,6 +95,46 @@ class PeerTests extends ClientTestBase {
 	}
 
 	@Test
+	void earlyMessagesBounded() throws Exception {
+		Peer[] peers = pair();
+		CompletableFuture<DataChannel> remote = new CompletableFuture<>();
+		CompletableFuture<WebRtcException> dropped = new CompletableFuture<>();
+
+		peers[1].onChannel(remote::complete);
+		peers[1].onError(dropped::complete);
+
+		// About 20 MiB while the remote channel has no message handler.
+		DataChannel channel = peers[0].createChannel("bulk");
+		int count = 100;
+		byte[] payload = new byte[200 * 1024];
+
+		for (int i = 0; i < count; i++) {
+			payload[0] = (byte) i;
+			channel.send(payload);
+		}
+		await(channel.send(new byte[] { (byte) 0xFF }));
+
+		assertTrue(await(dropped).getMessage().contains("dropped received messages"));
+
+		List<Integer> received = Collections.synchronizedList(new ArrayList<>());
+		CompletableFuture<Void> last = new CompletableFuture<>();
+		await(remote).onMessage(message -> {
+			byte[] bytes = message.bytes();
+			if (bytes.length == 1) {
+				last.complete(null);
+			}
+			else {
+				received.add(bytes[0] & 0xFF);
+			}
+		});
+		await(last);
+
+		// The newest messages were kept, in order.
+		assertTrue(received.size() < count, () -> "Kept " + received.size() + " messages");
+		assertEquals(count - 1, (int) received.get(received.size() - 1));
+	}
+
+	@Test
 	void eventsInOrderOneAtATime() throws Exception {
 		Peer[] peers = pair();
 		int count = 2000;

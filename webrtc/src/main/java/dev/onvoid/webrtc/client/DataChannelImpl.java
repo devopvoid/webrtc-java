@@ -44,6 +44,9 @@ final class DataChannelImpl implements DataChannel {
 	/** Bytes the native channel may hold before sends wait in Java. */
 	static final long HIGH_WATER_MARK = 1024 * 1024;
 
+	/** Bytes of received messages kept while there is no message handler. */
+	static final long EARLY_LIMIT = 16 * 1024 * 1024;
+
 	private final PeerImpl peer;
 
 	private final String label;
@@ -70,7 +73,11 @@ final class DataChannelImpl implements DataChannel {
 
 	private ChannelState deliveredState = ChannelState.CONNECTING;
 
-	private final List<Message> early = new ArrayList<>();
+	private final ArrayDeque<Message> early = new ArrayDeque<>();
+
+	private long earlyBytes;
+
+	private boolean earlyDropReported;
 
 	private final Handlers<Message> messageHandlers;
 
@@ -173,6 +180,7 @@ final class DataChannelImpl implements DataChannel {
 			if (!early.isEmpty()) {
 				List<Message> kept = new ArrayList<>(early);
 				early.clear();
+				earlyBytes = 0;
 
 				for (Message message : kept) {
 					peer.call(handler, message);
@@ -372,6 +380,7 @@ final class DataChannelImpl implements DataChannel {
 			messageHandlers.clear();
 			stateHandlers.clear();
 			early.clear();
+			earlyBytes = 0;
 		}
 	}
 
@@ -382,6 +391,18 @@ final class DataChannelImpl implements DataChannel {
 
 		if (messageHandlers.isEmpty()) {
 			early.add(message);
+			earlyBytes += message.size();
+
+			// Kept for a handler that may never come, so their memory is bounded.
+			while (earlyBytes > EARLY_LIMIT && early.size() > 1) {
+				earlyBytes -= early.poll().size();
+
+				if (!earlyDropReported) {
+					earlyDropReported = true;
+					peer.deliverError(new WebRtcException("The data channel " + label + " dropped received messages: "
+							+ "more than " + (EARLY_LIMIT >> 20) + " MiB arrived while it had no message handler"));
+				}
+			}
 		}
 		else {
 			messageHandlers.accept(message);

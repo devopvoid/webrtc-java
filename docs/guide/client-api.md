@@ -397,7 +397,7 @@ peer.onChannel(channel -> {                  // channels the remote peer opens
 ```
 
 - A channel may be used right away: messages sent before it opens are held until it does.
-- Messages that arrive before the first `onMessage` handler are kept for it, so none are lost while a handler is being set up.
+- Messages that arrive while a channel has no `onMessage` handler are kept for the next one, so none are lost while a handler is being set up. Up to 16 MiB are kept; beyond that the oldest are dropped, and the peer's `onError` handlers are told.
 - `send` takes a `String`, a `byte[]` or a `ByteBuffer`, and copies the data before it returns.
 - A `Message` holds a copy of the data. `isText()` tells text from binary, `text()` decodes it as UTF-8, and `bytes()` returns a copy.
 
