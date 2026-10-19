@@ -21,310 +21,151 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-import dev.onvoid.webrtc.*;
-import dev.onvoid.webrtc.media.MediaStream;
-import dev.onvoid.webrtc.media.MediaStreamTrack;
-import dev.onvoid.webrtc.media.video.VideoDeviceSource;
-import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.RTCSdpType;
+import dev.onvoid.webrtc.RTCSessionDescription;
+import dev.onvoid.webrtc.client.Gathering;
+import dev.onvoid.webrtc.client.MediaKind;
+import dev.onvoid.webrtc.client.Negotiation;
+import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.PeerOptions;
+import dev.onvoid.webrtc.client.WebRtc;
 
 /**
- * Example implementation of WebRTC HTTP Egress Protocol (WHEP) client.
+ * Example implementation of a WebRTC HTTP Egress Protocol (WHEP) client, with the client API.
  * <p>
  * This class demonstrates:
  * <ul>
- *   <li>Setting up a WebRTC peer connection</li>
- *   <li>Creating and sending an SDP offer to a WHEP endpoint</li>
- *   <li>Receiving and processing an SDP answer</li>
- *   <li>Establishing media streaming over WebRTC</li>
+ *   <li>Creating a receive-only peer that negotiates by hand</li>
+ *   <li>Creating an offer that already holds all local candidates, as WHEP servers expect</li>
+ *   <li>Sending the offer to a WHEP endpoint and applying the answer it returns</li>
+ *   <li>Receiving the stream's video and audio</li>
+ *   <li>Ending the session with an HTTP DELETE of the resource the server created</li>
  * </ul>
  * <p>
- * The example creates a receive-only peer connection that can accept
- * incoming video streams from a WHEP-compatible server.
+ * Run it against a WHEP endpoint, such as one of MediaMTX, for a number of seconds:
+ * <pre>
+ * mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.WhepExample" -D"exec.args=http://localhost:8889/mystream/whep 10"
+ * </pre>
  *
- * @see <a href="https://www.ietf.org/archive/id/draft-murillo-whep-03.html">WHEP Specification</a>
- * 
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9725">WHEP and WHIP</a>
+ *
  * @author Alex Andres
  */
 public class WhepExample {
 
-    private static final String WHEP_ENDPOINT_URL = "http://localhost:8889/mystream/whep";
+    private static final String DEFAULT_ENDPOINT = "http://localhost:8889/mystream/whep";
 
-    /** Factory for creating peer connections and media objects. */
-    private PeerConnectionFactory factory;
-
-    /** The WebRTC peer connection that handles media communication. */
-    private RTCPeerConnection peerConnection;
-
-    /** The local SDP offer to be sent to the remote endpoint. */
-    private RTCSessionDescription localOffer;
-
-    // Synchronization objects for async operations.
-    private final CountDownLatch offerCreatedLatch = new CountDownLatch(1);
-    private final CountDownLatch localDescriptionSetLatch = new CountDownLatch(1);
-    private final CountDownLatch remoteDescriptionSetLatch = new CountDownLatch(1);
+    private static final HttpClient HTTP = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
 
-    public static void main(String[] args) {
-        WhepExample example = new WhepExample();
+    public static void main(String[] args) throws Exception {
+        URI endpoint = URI.create(args.length > 0 ? args[0] : DEFAULT_ENDPOINT);
+        int seconds = args.length > 1 ? Integer.parseInt(args[1]) : 10;
 
-        try {
-            example.run();
-        }
-        catch (Exception e) {
-            Logger.getLogger("WHEPExample").log(Level.SEVERE, "Error running WHEP example", e);
-        }
-        finally {
-            example.cleanup();
-        }
-    }
+        // The runtime plays the received audio to the speakers.
+        try (WebRtc rtc = WebRtc.create()) {
+            // A WHEP server dictates the exchange: one offer, one answer, over HTTP.
+            Peer viewer = rtc.createPeer(PeerOptions.builder()
+                    .name("whep")
+                    .iceServer("stun:stun.l.google.com:19302")
+                    .negotiation(Negotiation.MANUAL)
+                    .receive(MediaKind.VIDEO, MediaKind.AUDIO)
+                    .build());
 
-    public void run() throws Exception {
-        System.out.println("Starting WebRTC Peer Connection Example");
+            viewer.onStateChange(state -> System.out.println("Connection is " + state));
+            viewer.onTrack(track -> {
+                System.out.println("Receiving " + track.kind());
 
-        initializePeerConnectionFactory();
-        createPeerConnection();
-        createOffer();
+                if (track.isVideo()) {
+                    AtomicInteger frames = new AtomicInteger();
 
-        // Wait for the offer to be created.
-        if (!offerCreatedLatch.await(5, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("Timeout waiting for offer creation.");
-        }
+                    track.asVideo().onFrame(frame -> {
+                        if (frames.incrementAndGet() % 100 == 1) {
+                            System.out.printf("Video frame %d: %dx%d%n", frames.get(),
+                                    frame.buffer.getWidth(), frame.buffer.getHeight());
+                        }
+                    });
+                }
+                else {
+                    AtomicLong millis = new AtomicLong();
 
-        // Set the local description (the offer).
-        setLocalDescription(localOffer);
-
-        // Wait for the local description to be set.
-        if (!localDescriptionSetLatch.await(5, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("Timeout waiting for local description to be set.");
-        }
-
-        System.out.println("Local offer created and set.");
-        //System.out.println("SDP Offer: " + localOffer.sdp);
-        System.out.println("Sending local offer to the remote endpoint.");
-
-        String answerSdp = sendOfferEndpoint(localOffer.sdp);
-
-        //System.out.println("SDP Answer: " + answerSdp);
-
-        // Set the remote description (the answer).
-        setRemoteDescription(new RTCSessionDescription(RTCSdpType.ANSWER, answerSdp));
-
-        // Wait for the remote description to be set.
-        if (!remoteDescriptionSetLatch.await(5, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("Timeout waiting for remote description to be set.");
-        }
-
-        System.out.println("Remote answer set. Peer connection established!");
-        System.out.println("Media should now be exchanged between peers.");
-
-        // Wait a bit to see connection state changes.
-        Thread.sleep(10000);
-
-        System.out.println("WebRTC Peer Connection Example completed.");
-    }
-
-    private void initializePeerConnectionFactory() {
-        System.out.println("Initializing PeerConnectionFactory.");
-        factory = new PeerConnectionFactory();
-    }
-
-    private void createPeerConnection() {
-        System.out.println("Creating peer connection.");
-
-        // Create ICE servers configuration.
-        RTCConfiguration config = new RTCConfiguration();
-
-        // Add Google's public STUN server.
-        RTCIceServer iceServer = new RTCIceServer();
-        iceServer.urls.add("stun:stun.l.google.com:19302");
-        config.iceServers.add(iceServer);
-
-        // Create the peer connection with our observer.
-        peerConnection = factory.createPeerConnection(config, new PeerConnectionObserverImpl());
-
-        // Create a video track from a video device source (e.g., webcam).
-        // Since we are only receiving video in this example, the source will be a dummy video source.
-        VideoDeviceSource videoSource = new VideoDeviceSource();
-        VideoTrack videoTrack = factory.createVideoTrack("videoTrack", videoSource);
-        videoTrack.addSink(videoFrame -> System.out.println("Received video frame: " + videoFrame));
-
-        // Only interested in receiving video, so we set up a transceiver for that.
-        RTCRtpTransceiverInit transceiverInit = new RTCRtpTransceiverInit();
-        transceiverInit.direction = RTCRtpTransceiverDirection.RECV_ONLY;
-
-        // Add the transceiver to the peer connection with the video track.
-        RTCRtpTransceiver transceiver = peerConnection.addTransceiver(videoTrack, transceiverInit);
-
-        // Set up a sink to handle incoming video frames.
-        RTCRtpReceiver receiver = transceiver.getReceiver();
-        MediaStreamTrack track = receiver.getTrack();
-        if (track instanceof VideoTrack vTrack) {
-            vTrack.addSink(videoFrame -> {
-                System.out.println("Received video frame: " + videoFrame);
-
-                // IMPORTANT: Always release the frame when done to prevent memory leaks
-                videoFrame.release();
+                    track.asAudio().onAudio(chunk -> {
+                        if (millis.addAndGet(chunk.frames() * 1000L / chunk.sampleRate()) % 2000 == 0) {
+                            System.out.printf("Received %d ms of audio%n", millis.get());
+                        }
+                    });
+                }
             });
+
+            // The main thread may wait for the futures; a handler must not.
+            RTCSessionDescription offer = viewer.negotiator()
+                    .createOffer(Gathering.COMPLETE)
+                    .get(10, TimeUnit.SECONDS);
+
+            System.out.println("Sending the offer to " + endpoint);
+
+            HttpResponse<String> response = post(endpoint, offer.sdp);
+            URI resource = response.headers().firstValue("Location").map(endpoint::resolve).orElse(null);
+
+            try {
+                viewer.negotiator()
+                        .applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, response.body()))
+                        .get(10, TimeUnit.SECONDS);
+                viewer.whenConnected().get(10, TimeUnit.SECONDS);
+
+                Thread.sleep(seconds * 1000L);
+            }
+            finally {
+                if (resource != null) {
+                    end(resource);
+                }
+            }
         }
-
-        // The receiver and transceiver are query results this example owns;
-        // dispose them once the track has been retrieved. The track itself
-        // is unaffected and keeps delivering frames to its sink.
-        receiver.dispose();
-        transceiver.dispose();
+        // The runtime closed the peer and the factory.
     }
 
-    private void createOffer() {
-        System.out.println("Creating offer.");
-
-        // Create offer options (use default options).
-        RTCOfferOptions options = new RTCOfferOptions();
-
-        // Create the offer.
-        peerConnection.createOffer(options, new CreateSessionDescriptionObserver() {
-            @Override
-            public void onSuccess(RTCSessionDescription description) {
-                System.out.println("Offer created successfully.");
-                localOffer = description;
-                offerCreatedLatch.countDown();
-            }
-
-            @Override
-            public void onFailure(String error) {
-                System.err.println("Failed to create offer: " + error);
-                offerCreatedLatch.countDown();
-            }
-        });
-    }
-
-    private void setLocalDescription(RTCSessionDescription description) {
-        System.out.println("Setting local description.");
-        
-        peerConnection.setLocalDescription(description, new SetSessionDescriptionObserver() {
-            @Override
-            public void onSuccess() {
-                System.out.println("Local description set successfully.");
-                localDescriptionSetLatch.countDown();
-            }
-            
-            @Override
-            public void onFailure(String error) {
-                System.err.println("Failed to set local description: " + error);
-                localDescriptionSetLatch.countDown();
-            }
-        });
-    }
-
-    private String sendOfferEndpoint(String sdpOffer) throws Exception {
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(WHEP_ENDPOINT_URL))
+    /**
+     * Sends the offer and returns the server's answer.
+     */
+    private static HttpResponse<String> post(URI endpoint, String sdp) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(endpoint)
                 .header("Content-Type", "application/sdp")
-                .POST(HttpRequest.BodyPublishers.ofString(sdpOffer))
+                .POST(HttpRequest.BodyPublishers.ofString(sdp))
                 .timeout(Duration.ofSeconds(30))
                 .build();
 
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
 
-        if (response.statusCode() == 200 || response.statusCode() == 201) {
-            System.out.println("WHEP request successful");
-            return response.body();
+        if (response.statusCode() != 200 && response.statusCode() != 201) {
+            throw new IllegalStateException("The WHEP endpoint answered with status " + response.statusCode()
+                    + ": " + response.body());
         }
-        else {
-            throw new RuntimeException("WHEP request failed with status: " + response.statusCode());
-        }
+
+        return response;
     }
-
-    private void setRemoteDescription(RTCSessionDescription description) {
-        System.out.println("Setting remote description.");
-
-        peerConnection.setRemoteDescription(description, new SetSessionDescriptionObserver() {
-            @Override
-            public void onSuccess() {
-                System.out.println("Remote description set successfully.");
-                remoteDescriptionSetLatch.countDown();
-            }
-
-            @Override
-            public void onFailure(String error) {
-                System.err.println("Failed to set remote description: " + error);
-                remoteDescriptionSetLatch.countDown();
-            }
-        });
-    }
-
-    private void cleanup() {
-        System.out.println("Cleaning up resources.");
-
-        if (peerConnection != null) {
-            peerConnection.close();
-            peerConnection = null;
-        }
-
-        if (factory != null) {
-            factory.dispose();
-            factory = null;
-        }
-    }
-
-
 
     /**
-     * Implementation of PeerConnectionObserver to handle events from the peer connection.
+     * Ends the session on the server, which frees what it holds for this viewer.
      */
-    private static class PeerConnectionObserverImpl implements PeerConnectionObserver {
+    private static void end(URI resource) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(resource)
+                    .DELETE()
+                    .timeout(Duration.ofSeconds(5))
+                    .build();
 
-        @Override
-        public void onIceCandidate(RTCIceCandidate candidate) {
-            System.out.println("ICE candidate: " + candidate.sdp);
-            // In a real application, we would send this candidate to the remote peer
+            int status = HTTP.send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+
+            System.out.println("Ended the session, status " + status);
         }
-
-        @Override
-        public void onConnectionChange(RTCPeerConnectionState state) {
-            System.out.println("Connection state changed: " + state);
-        }
-
-        @Override
-        public void onIceConnectionChange(RTCIceConnectionState state) {
-            System.out.println("ICE connection state changed: " + state);
-        }
-
-        @Override
-        public void onIceGatheringChange(RTCIceGatheringState state) {
-            System.out.println("ICE gathering state changed: " + state);
-        }
-
-        @Override
-        public void onSignalingChange(RTCSignalingState state) {
-            System.out.println("Signaling state changed: " + state);
-        }
-
-        @Override
-        public void onDataChannel(RTCDataChannel dataChannel) {
-            System.out.println("Data channel created: " + dataChannel.getLabel());
-        }
-
-        @Override
-        public void onRenegotiationNeeded() {
-            System.out.println("Renegotiation needed.");
-        }
-
-        @Override
-        public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
-            System.out.println("Track added.");
-
-            // The receiver is a query result the application owns; dispose it
-            // once it is no longer needed.
-            receiver.dispose();
+        catch (Exception e) {
+            System.err.println("Ending the session failed: " + e);
         }
     }
 }
