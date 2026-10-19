@@ -331,12 +331,15 @@ final class SenderImpl implements Sender {
 		String current = tone == null ? "" : tone;
 
 		peer.control.execute(() -> {
+			// The handlers hear of the tone before the future of the tones
+			// completes, which also goes through the event executor.
+			peer.events.execute(() -> toneHandlers.accept(current));
+
 			if (current.isEmpty() && pendingTones != null) {
 				pendingTones.complete(null);
 				pendingTones = null;
 			}
 		});
-		peer.events.execute(() -> toneHandlers.accept(current));
 	}
 
 	private void checkUsable() {
