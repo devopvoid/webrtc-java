@@ -306,7 +306,7 @@ peer.addTrack(rtc.media().audioTrack("movie", file.getAudioSource()));
 file.play();
 ```
 
-Create the runtime before the file: the runtime loads the native library that the file's sources need. The sources belong to the `MediaFileSource`, not to the tracks, so close the runtime, or the tracks, before the file. The file's audio source is pushed audio, so the runtime needs the `CUSTOM` or `HEADLESS` audio mode.
+Create the runtime before the file: the runtime loads the native library that the file's sources need. The sources belong to the `MediaFileSource`, not to the tracks, so close the runtime, or the tracks, before the file: `track.closeAsync()` returns a future that completes once the track let go of its source. The file's audio source is pushed audio, so the runtime needs the `CUSTOM` or `HEADLESS` audio mode.
 
 ### Pushing Video and Audio
 

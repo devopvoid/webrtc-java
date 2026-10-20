@@ -100,16 +100,19 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"
 
 ## Media File Player
 
-The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application that sends a media file, or a live RTSP stream, from one peer connection to another in the same process, then shows the received video and plays the received audio in sync. Start and Stop buttons set up and tear down the whole session.
+The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application built on the [Client API](/guide/client-api). It sends a media file, or a live RTSP stream, from one peer to another in the same process, then shows the received video and plays the received audio in sync, and records what is received. Start and Stop buttons set up and tear down the whole session, and Record starts and stops a recording.
 
 **Key features demonstrated:**
-- Connecting two peer connections in one application, without a signaling server
-- Using one factory with a dummy audio layer to send the file, and another with the platform audio layer to play what is received
+- Sending the sources of a `MediaFileSource` as client API tracks, with `videoTrack` and `audioTrack`
+- Connecting two peers in one application through a loopback signaling
+- Using one runtime in the `CUSTOM` audio mode, which sends the file's audio and plays what is received
+- Running the peers' handlers on the Swing event dispatch thread
 - Keeping audio and video in sync by sending both tracks in the same media stream
-- Raising the video sender's `maxBitrate` above WebRTC's default, so a high-resolution file is not held to a fraction of its size
-- Rendering received video frames in a Swing component with `VideoBufferConverter`
-- Showing the source's format, the playback position, and live receive metrics (codec, resolution, frame rate, bitrate, packet loss, jitter, audio level) read from `getStats()`
-- Releasing senders, peer connections, tracks and the source in order on Stop
+- Raising the video sender's maximum bitrate once it is connected, so a high-resolution file is not held to a fraction of its size
+- Rendering received video in the Swing `VideoView`
+- Showing the source's format, the playback position, and live receive metrics (codec, resolution, frame rate, bitrate, packet loss, jitter, audio level) read from `onStats`
+- Recording the received tracks into a Matroska file with `MediaRecorder`
+- Closing the peers, then the tracks, then the source on Stop
 
 ::: info
 Like the [Media File](#media-file) example, this one needs the `webrtc-java-media` module. The source argument is optional; a file can also be chosen from the window, or a stream URL typed into it. A stream URL's credentials are never shown, and the Loop box is disabled while a live stream plays, since it has no length to start over from.
