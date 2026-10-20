@@ -14,7 +14,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 ## Features
 
 - **Complete WebRTC API implementation** - Includes peer connections, media devices, data channels, and more
-- **Client API** - A high-level layer that negotiates by itself, keeps your code off WebRTC's threads, and closes everything with one call; with WHIP and WHEP sessions and a Swing video view
+- **Client API** - A high-level layer that negotiates by itself, keeps your code off WebRTC's threads, and closes everything with one call; with WHIP and WHEP sessions, and video views for Swing and, with the `webrtc-java-javafx` module, JavaFX
 - **Cross-platform support** - Works on Windows, macOS, and Linux (x64, ARM, ARM64)
 - **Media capabilities** - Audio and video capture from cameras and microphones
 - **Desktop capture** - Screen and application window sharing

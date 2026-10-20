@@ -53,6 +53,7 @@
 		<module>webrtc-jni</module>
 		<module>webrtc</module>
 		<module>webrtc-java-media</module>
+		<module>webrtc-java-javafx</module>
 		<module>webrtc-examples</module>
 	</modules>
 

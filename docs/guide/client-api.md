@@ -238,6 +238,35 @@ frame.add(remoteView, BorderLayout.CENTER);
 
 `snapshot()` returns a copy of the picture shown, for saving a still or for tests.
 
+For JavaFX, the `webrtc-java-javafx` module has a `VideoView` node in `dev.onvoid.webrtc.client.javafx` that works the same way. It needs Java 11 and the JavaFX your application already uses:
+
+```xml
+<dependency>
+    <groupId>dev.onvoid.webrtc</groupId>
+    <artifactId>webrtc-java-javafx</artifactId>
+    <version>{{ VERSION }}</version>
+</dependency>
+```
+
+```java
+import dev.onvoid.webrtc.client.javafx.VideoView;
+
+WebRtc rtc = WebRtc.builder()
+        .eventExecutor(Platform::runLater)    // handlers on the JavaFX Application Thread
+        .build();
+
+VideoView remoteView = new VideoView();
+peer.onTrack(track -> {
+    if (track.isVideo()) {
+        track.asVideo().onFrame(remoteView);
+    }
+});
+
+stage.setScene(new Scene(new StackPane(remoteView), 960, 540));
+```
+
+The view converts frames on their own thread and paints at most once per JavaFX pulse. `setMirrored(true)`, or its `mirroredProperty()`, flips a camera preview, and `snapshot()`, on the JavaFX Application Thread, returns a copy of the picture.
+
 ### Don't Wait in a Handler
 
 A future of the client API completes on the event thread of its peer. A handler that waits for one would wait for its own thread, so `join()` and `get()` there throw a `BlockingCallException` instead of hanging. Chain the next step instead:
