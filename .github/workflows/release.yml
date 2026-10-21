@@ -224,6 +224,7 @@ jobs:
             echo '```'
             ls -1 webrtc/target/*.jar webrtc/target/*.asc \
               webrtc-java-media/target/*.jar webrtc-java-media/target/*.asc \
+              webrtc-java-javafx/target/*.jar webrtc-java-javafx/target/*.asc \
               natives/*.asc 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -240,6 +241,9 @@ jobs:
             webrtc-java-media/target/central-*/**
             webrtc-java-media/target/*.jar
             webrtc-java-media/target/*.asc
+            webrtc-java-javafx/target/central-*/**
+            webrtc-java-javafx/target/*.jar
+            webrtc-java-javafx/target/*.asc
             natives/*.asc
           if-no-files-found: error
           retention-days: 7
