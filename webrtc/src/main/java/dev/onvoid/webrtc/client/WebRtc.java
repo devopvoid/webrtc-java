@@ -230,7 +230,16 @@ public final class WebRtc implements AutoCloseable {
 		String name = options.name != null ? options.name : "peer-" + number;
 
 		PeerImpl peer = new PeerImpl(this, options, name);
+
+		// Registered before the runtime is checked again: a runtime that
+		// begins to close either finds the peer among those it closes and
+		// waits for it before freeing the factory, or is seen closing here.
 		peers.add(peer);
+
+		if (closing.get()) {
+			peers.remove(peer);
+			throw new PeerClosedException("The runtime is closed");
+		}
 
 		try {
 			peer.open();
@@ -238,14 +247,10 @@ public final class WebRtc implements AutoCloseable {
 		catch (RuntimeException e) {
 			// Closed before the error goes out, so that nothing of the failed
 			// peer still runs when the runtime closes and frees WebRTC's threads.
-			peers.remove(peer);
-			peer.closeInternal().join();
+			// Closing removes the peer. Once the runtime has stopped its threads
+			// the close cannot run any more, and there is nothing left to wait for.
+			CompletableFuture.anyOf(peer.closeInternal(), closed).join();
 			throw e;
-		}
-
-		if (closing.get()) {
-			// The runtime began to close meanwhile and may have missed it.
-			peer.closeInternal();
 		}
 
 		return peer;
@@ -334,6 +339,14 @@ public final class WebRtc implements AutoCloseable {
 
 	boolean isClosing() {
 		return closing.get();
+	}
+
+	/**
+	 * @return a future that completes once the runtime has closed and stopped
+	 * its threads, after which no task given to them runs.
+	 */
+	CompletableFuture<Void> whenShutDown() {
+		return closed;
 	}
 
 	private void shutdown() {

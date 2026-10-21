@@ -111,7 +111,9 @@ public class MediaReader implements AutoCloseable {
 	 *
 	 * @throws IllegalStateException if this reader has been closed.
 	 */
-	public MediaInfo getInfo() {
+	public synchronized MediaInfo getInfo() {
+		// Synchronized like close, which may run on any thread: otherwise the
+		// handle read here could be freed while the native side still uses it.
 		return info(handle);
 	}
 

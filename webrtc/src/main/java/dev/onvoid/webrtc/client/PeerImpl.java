@@ -188,6 +188,13 @@ final class PeerImpl implements Peer {
 		CompletableFuture<Void> opened = new CompletableFuture<>();
 
 		control.execute(() -> {
+			if (closed) {
+				// The runtime closed the peer before this ran, and may already
+				// be freeing the factory.
+				opened.completeExceptionally(closedError());
+				return;
+			}
+
 			try {
 				connection = rtc.factory.createPeerConnection(options.toConfiguration(), new Observer());
 
@@ -218,6 +225,11 @@ final class PeerImpl implements Peer {
 				opened.completeExceptionally(e);
 			}
 		});
+
+		// A runtime that stops its threads drops the task if it has not run,
+		// and then nothing else would end the wait.
+		rtc.whenShutDown().thenRun(() -> opened.completeExceptionally(
+				new PeerClosedException("The runtime closed before " + name + " was created")));
 
 		try {
 			opened.get();
