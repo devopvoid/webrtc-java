@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.UnaryOperator;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -81,13 +82,20 @@ abstract class ClientTestBase {
 	 * polite.
 	 */
 	Peer[] pair() {
+		return pair(UnaryOperator.identity());
+	}
+
+	/**
+	 * Like {@link #pair()}, with options both peers share.
+	 */
+	Peer[] pair(UnaryOperator<PeerOptions.Builder> options) {
 		SignalingPair link = Signaling.loopback();
 
-		Peer caller = rtc.createPeer(PeerOptions.builder()
+		Peer caller = rtc.createPeer(options.apply(PeerOptions.builder())
 				.name("caller")
 				.signaling(link.first())
 				.build());
-		Peer callee = rtc.createPeer(PeerOptions.builder()
+		Peer callee = rtc.createPeer(options.apply(PeerOptions.builder())
 				.name("callee")
 				.signaling(link.second())
 				.polite(true)

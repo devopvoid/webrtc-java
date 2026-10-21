@@ -54,7 +54,9 @@ public interface DataChannel extends AutoCloseable {
 	 * @return a future that completes when the message is handed to the
 	 * transport. While a lot of data waits to be sent, the future completes
 	 * only once the backlog shrank, so a loop that waits for each send slows
-	 * down by itself.
+	 * down by itself. The future fails at once with a {@link
+	 * ChannelFullException} when the message would take the backlog beyond
+	 * {@link PeerOptions.Builder#channelSendLimit(long)}.
 	 */
 	CompletableFuture<Void> send(String text);
 
@@ -64,7 +66,7 @@ public interface DataChannel extends AutoCloseable {
 	 * @param data the message.
 	 *
 	 * @return a future that completes when the message is handed to the
-	 * transport.
+	 * transport, or fails as {@link #send(String)} describes.
 	 */
 	CompletableFuture<Void> send(byte[] data);
 
@@ -75,7 +77,7 @@ public interface DataChannel extends AutoCloseable {
 	 * @param data the message.
 	 *
 	 * @return a future that completes when the message is handed to the
-	 * transport.
+	 * transport, or fails as {@link #send(String)} describes.
 	 */
 	CompletableFuture<Void> send(ByteBuffer data);
 

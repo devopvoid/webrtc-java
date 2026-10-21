@@ -98,7 +98,8 @@ class PeerTests extends ClientTestBase {
 
 	@Test
 	void earlyMessagesBounded() throws Exception {
-		Peer[] peers = pair();
+		// The sender holds more than the receiver keeps.
+		Peer[] peers = pair(options -> options.channelSendLimit(32 * 1024 * 1024));
 		CompletableFuture<DataChannel> remote = new CompletableFuture<>();
 		CompletableFuture<WebRtcException> dropped = new CompletableFuture<>();
 
@@ -469,6 +470,36 @@ class PeerTests extends ClientTestBase {
 		finally {
 			release.countDown();
 		}
+	}
+
+	@Test
+	void sendBeyondLimitFails() throws Exception {
+		// Never negotiated, so the channel stays connecting and holds every send.
+		Peer peer = rtc.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL)
+				.channelSendLimit(1000)
+				.build());
+		DataChannel channel = peer.createChannel("bounded");
+
+		CompletableFuture<Void> first = channel.send(new byte[600]);
+		ExecutionException full = assertThrows(ExecutionException.class, () -> await(channel.send(new byte[600])));
+		CompletableFuture<Void> fitting = channel.send(new byte[400]);
+
+		assertInstanceOf(ChannelFullException.class, full.getCause());
+		assertEquals(1000, channel.bufferedAmount());
+		assertFalse(first.isDone());
+		assertFalse(fitting.isDone());
+
+		// A message larger than the limit never fits.
+		peer.close();
+		Peer other = rtc.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL)
+				.channelSendLimit(10)
+				.build());
+		ExecutionException tooLarge = assertThrows(ExecutionException.class,
+				() -> await(other.createChannel("small").send(new byte[11])));
+
+		assertInstanceOf(ChannelFullException.class, tooLarge.getCause());
 	}
 
 	private static PeerOptions manualOptions() {

@@ -102,6 +102,7 @@ Peer peer = rtc.createPeer(PeerOptions.builder()
 | `negotiation(Negotiation)` | `AUTOMATIC` by default, or `MANUAL`, see [Manual Negotiation](#manual-negotiation). |
 | `receive(MediaKind...)` | Receives audio or video without sending any, as a viewer does. |
 | `gatheringTimeout(Duration)` | How long `Gathering.COMPLETE` waits for ICE gathering, 3 seconds by default. See [Manual Negotiation](#manual-negotiation). |
+| `channelSendLimit(long)` | How many bytes each data channel may hold waiting to be sent, 16 MiB by default. See [Data Channels](#data-channels). |
 | `configure(Consumer<RTCConfiguration>)` | Anything else the [peer connection configuration](/guide/networking/peer-connection-config) has. |
 
 ### Signaling
@@ -505,6 +506,8 @@ for (byte[] chunk : chunks) {
 }
 ```
 
+A sender that does not wait still cannot fill Java memory: each channel holds at most 16 MiB waiting to be sent, and a `send` beyond that fails at once with a `ChannelFullException`. `PeerOptions.builder().channelSendLimit(bytes)` changes the limit for every channel of a peer. `bufferedAmount()` tells how much a channel holds.
+
 `ChannelOptions` set how a channel delivers:
 
 ```java
@@ -623,6 +626,7 @@ Failures arrive as exceptions, thrown or as the cause of a failed future, all of
 |---|---|
 | `NegotiationException` | A description or candidate was rejected, or two impolite peers collided. |
 | `PeerClosedException` | An operation was pending when its peer, channel or runtime closed, or came after that. |
+| `ChannelFullException` | A data channel already holds as many bytes waiting to be sent as its peer's `channelSendLimit` allows. |
 | `MediaException` | A device is missing, busy, refused access, or already open with other options. |
 | `ConfigurationException` | A call does not fit how the runtime was built, or WebRTC refused a configuration. |
 | `BlockingCallException` | A future was waited on from an event thread. |
