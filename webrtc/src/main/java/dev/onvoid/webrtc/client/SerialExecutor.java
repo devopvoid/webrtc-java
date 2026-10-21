@@ -17,7 +17,10 @@
 package dev.onvoid.webrtc.client;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 
@@ -28,6 +31,11 @@ import java.util.function.Consumer;
  * <p>
  * A task that throws does not stop the ones after it; its exception goes to
  * the error handler.
+ * <p>
+ * When the executor rejects the tasks, they are dropped, and those submitted
+ * with a fallback have it run instead, on the thread that found them
+ * rejected. A rejection by an executor that was not shut down goes to the
+ * error handler as well, since it loses work the application expects.
  */
 final class SerialExecutor implements Executor {
 
@@ -54,8 +62,6 @@ final class SerialExecutor implements Executor {
 	private final ArrayDeque<Runnable> tasks = new ArrayDeque<>();
 
 	private boolean scheduled;
-
-	private boolean shutdown;
 
 	private volatile Thread runner;
 
@@ -84,13 +90,17 @@ final class SerialExecutor implements Executor {
 		return EVENT_DEPTH.get()[0] > 0;
 	}
 
+	/**
+	 * Runs the task, or the fallback should the executor reject it, which
+	 * keeps a future the task would complete from staying open forever.
+	 */
+	void execute(Runnable task, Runnable dropped) {
+		execute(new Droppable(task, dropped));
+	}
+
 	@Override
 	public void execute(Runnable task) {
 		synchronized (tasks) {
-			if (shutdown) {
-				return;
-			}
-
 			tasks.add(task);
 
 			if (scheduled) {
@@ -110,28 +120,36 @@ final class SerialExecutor implements Executor {
 		return runner == Thread.currentThread();
 	}
 
-	/**
-	 * Drops the tasks not yet run and refuses new ones. A task running now
-	 * finishes.
-	 */
-	void shutdown() {
-		synchronized (tasks) {
-			shutdown = true;
-			tasks.clear();
-		}
-	}
-
 	private void schedule() {
 		try {
 			executor.execute(this::drain);
 		}
 		catch (RejectedExecutionException e) {
-			// The pool rejects only once the runtime has stopped it. A caller
-			// that waits on a dropped task ends its wait with the runtime's
-			// end, as PeerImpl.open does.
+			List<Runnable> dropped;
+
 			synchronized (tasks) {
 				scheduled = false;
+				dropped = new ArrayList<>(tasks);
 				tasks.clear();
+			}
+
+			// The runtime's own pools reject only once it has stopped them,
+			// and then nothing is lost that it does not fail itself.
+			if (!(executor instanceof ExecutorService && ((ExecutorService) executor).isShutdown())) {
+				errorHandler.accept(new WebRtcException("The executor rejected " + dropped.size()
+						+ " tasks, which were dropped", e));
+			}
+
+			// In order, as they would have run.
+			for (Runnable task : dropped) {
+				if (task instanceof Droppable) {
+					try {
+						((Droppable) task).dropped.run();
+					}
+					catch (Throwable error) {
+						errorHandler.accept(error);
+					}
+				}
 			}
 		}
 	}
@@ -188,6 +206,26 @@ final class SerialExecutor implements Executor {
 		if (more) {
 			// Give the other executors of the pool a turn.
 			schedule();
+		}
+	}
+
+
+
+	private static final class Droppable implements Runnable {
+
+		final Runnable task;
+
+		final Runnable dropped;
+
+
+		Droppable(Runnable task, Runnable dropped) {
+			this.task = task;
+			this.dropped = dropped;
+		}
+
+		@Override
+		public void run() {
+			task.run();
 		}
 	}
 }

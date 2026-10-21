@@ -202,6 +202,8 @@ Every method of the client API may be called from any thread, including from ins
 
 The handlers of one peer never run at the same time, and they run in the order of the events. The handlers of different peers may run at the same time. With the default executor, the event thread is named after its peer, such as `webrtc-client-events-alice`, which shows up in thread dumps.
 
+An executor of your own that rejects work, such as a bounded pool that is full, loses the events it rejects, and the rejection goes to the error handler. The futures those events would have completed complete all the same, on the thread that found them rejected. Once the runtime is closed, every future of this API that is not done fails with `PeerClosedException`, including those of calls made after the close.
+
 ### Handlers on the UI Thread
 
 Pass the UI toolkit's executor, and every handler may touch UI components directly:
