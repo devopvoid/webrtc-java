@@ -613,6 +613,8 @@ You close what you created, and closing an owner closes what it owns:
 
 `WebRtc.close()` is the one close that waits, for up to the close timeout, which makes it fit for try-with-resources. Once it returns, every peer's `state()` is `CLOSED`; the `whenClosed` futures and `CLOSED` events follow on the peers' event threads, since waiting for them could never end when `close()` is called on an event thread.
 
+When a peer or track does not close within the close timeout, the runtime leaves its factory undisposed rather than free what WebRTC's threads may still use. `WebRtc.closeAsync()` then fails with a `WebRtcException` naming the cause, and the error handler hears of it as well, which is how `close()` reports it.
+
 ## Errors
 
 Failures arrive as exceptions, thrown or as the cause of a failed future, all of them a `WebRtcException`:

@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -430,6 +431,43 @@ class PeerTests extends ClientTestBase {
 			for (Peer peer : created.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
 				assertEquals(PeerState.CLOSED, peer.state());
 			}
+		}
+	}
+
+	@Test
+	void closeFailsWhenPeerStaysOpen() throws Exception {
+		List<Throwable> closeErrors = new CopyOnWriteArrayList<>();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(closeErrors::add)
+				.closeTimeout(Duration.ofMillis(200))
+				.build();
+		PeerImpl peer = (PeerImpl) runtime.createPeer(manualOptions());
+		CountDownLatch release = new CountDownLatch(1);
+
+		// Holds the peer's control executor, so that its teardown cannot run.
+		peer.control.execute(() -> {
+			try {
+				release.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+
+		try {
+			ExecutionException e = assertThrows(ExecutionException.class,
+					() -> runtime.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+
+			assertInstanceOf(WebRtcException.class, e.getCause());
+			assertTrue(e.getCause().getMessage().contains("left undisposed"), e.getCause()::getMessage);
+
+			// The error handler hears of it once, also through close().
+			runtime.close();
+			assertEquals(Collections.singletonList(e.getCause()), closeErrors);
+		}
+		finally {
+			release.countDown();
 		}
 	}
 
