@@ -329,6 +329,10 @@ class MediaTests extends ClientTestBase {
 			VideoFrame frame = new VideoFrame(NativeI420Buffer.allocate(160, 120), System.nanoTime());
 			videoSource.pushFrame(frame);
 			frame.release();
+
+			// Once released, the source may go before the runtime does.
+			await(audio.closeAsync());
+			assertTrue(audio.isEnded());
 		}
 		finally {
 			feeder.shutdownNow();

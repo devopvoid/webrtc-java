@@ -811,4 +811,5 @@ Next:
 - phase 2 is done: `Whip.to(...).publish(rtc)` and
   `Whep.from(...).play(rtc)` return sessions over `HttpURLConnection` (Java 8), and `VideoView` is in
   `dev.onvoid.webrtc.client.swing`;
-- porting the existing examples (phases 2 and 3).
+- porting the existing examples (phases 2 and 3); `MediaFilePlayerExample` is ported, with a
+  Record button, and `LocalTrack.closeAsync()` came with it.

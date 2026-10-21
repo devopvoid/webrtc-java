@@ -125,6 +125,11 @@ abstract class LocalTrackImpl implements LocalTrack {
 	}
 
 	@Override
+	public CompletableFuture<Void> closeAsync() {
+		return closeInternal();
+	}
+
+	@Override
 	public void close() {
 		closeInternal();
 	}

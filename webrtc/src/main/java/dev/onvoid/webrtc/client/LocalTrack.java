@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.client;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * A track this side sends, made by {@link WebRtc#media()}. One track may be sent
  * on any number of peers.
@@ -59,6 +61,16 @@ public interface LocalTrack extends AutoCloseable {
 	 * @return true once the track is closed.
 	 */
 	boolean isEnded();
+
+	/**
+	 * Stops sending the track on every peer, without renegotiating, and stops
+	 * its capture.
+	 *
+	 * @return a future that completes once the native track is released, after
+	 * which a source the track was made over, with {@link
+	 * LocalMedia#videoTrack} or {@link LocalMedia#audioTrack}, may be closed.
+	 */
+	CompletableFuture<Void> closeAsync();
 
 	/**
 	 * Stops sending the track on every peer, without renegotiating, and stops

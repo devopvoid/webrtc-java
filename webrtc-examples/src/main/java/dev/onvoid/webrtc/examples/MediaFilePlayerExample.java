@@ -17,31 +17,26 @@
 package dev.onvoid.webrtc.examples;
 
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.Graphics;
-import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.awt.RenderingHints;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
 import java.io.File;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.ArrayList;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -54,71 +49,61 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JTextField;
+import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 
-import dev.onvoid.webrtc.CreateSessionDescriptionObserver;
-import dev.onvoid.webrtc.PeerConnectionFactory;
-import dev.onvoid.webrtc.PeerConnectionObserver;
-import dev.onvoid.webrtc.RTCAnswerOptions;
-import dev.onvoid.webrtc.RTCConfiguration;
-import dev.onvoid.webrtc.RTCIceCandidate;
-import dev.onvoid.webrtc.RTCOfferOptions;
-import dev.onvoid.webrtc.RTCPeerConnection;
-import dev.onvoid.webrtc.RTCPeerConnectionState;
-import dev.onvoid.webrtc.RTCRtpReceiver;
-import dev.onvoid.webrtc.RTCRtpEncodingParameters;
-import dev.onvoid.webrtc.RTCRtpSendParameters;
-import dev.onvoid.webrtc.RTCRtpSender;
-import dev.onvoid.webrtc.RTCRtpTransceiver;
-import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.RTCStats;
 import dev.onvoid.webrtc.RTCStatsReport;
 import dev.onvoid.webrtc.RTCStatsType;
-import dev.onvoid.webrtc.SetSessionDescriptionObserver;
-import dev.onvoid.webrtc.media.FourCC;
-import dev.onvoid.webrtc.media.MediaStreamTrack;
-import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
-import dev.onvoid.webrtc.media.audio.AudioLayer;
-import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.client.AudioMode;
+import dev.onvoid.webrtc.client.Encoding;
+import dev.onvoid.webrtc.client.LocalAudio;
+import dev.onvoid.webrtc.client.LocalVideo;
+import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.PeerOptions;
+import dev.onvoid.webrtc.client.PeerStats;
+import dev.onvoid.webrtc.client.RemoteTrack;
+import dev.onvoid.webrtc.client.Sender;
+import dev.onvoid.webrtc.client.Signaling;
+import dev.onvoid.webrtc.client.SignalingPair;
+import dev.onvoid.webrtc.client.WebRtc;
+import dev.onvoid.webrtc.client.swing.VideoView;
 import dev.onvoid.webrtc.media.player.MediaFileSource;
 import dev.onvoid.webrtc.media.player.MediaInfo;
 import dev.onvoid.webrtc.media.player.MediaPlayerListener;
 import dev.onvoid.webrtc.media.player.MediaPlayerState;
-import dev.onvoid.webrtc.media.video.VideoBufferConverter;
-import dev.onvoid.webrtc.media.video.VideoFrame;
-import dev.onvoid.webrtc.media.video.VideoFrameBuffer;
-import dev.onvoid.webrtc.media.video.VideoTrack;
-import dev.onvoid.webrtc.media.video.VideoTrackSink;
+import dev.onvoid.webrtc.media.recorder.MediaRecorder;
+import dev.onvoid.webrtc.media.recorder.MediaRecorderListener;
 
 /**
- * Desktop UI counterpart to {@link MediaFileExample}: plays a media file, or
- * a live stream from an {@code rtsp://} URL such as an IP camera's, through a
- * pair of peer connections that live in the same application, and shows the
- * received video while the received audio plays on the speakers.
+ * Desktop UI counterpart to {@link MediaFileExample}, built on the client API
+ * ({@code dev.onvoid.webrtc.client}): plays a media file, or a live stream
+ * from an {@code rtsp://} URL such as an IP camera's, through a pair of peers
+ * that live in the same application, shows the received video while the
+ * received audio plays on the speakers, and records what is received.
  * <p>
  * This example shows how to:
  * <ul>
- *   <li>Send a MediaFileSource over one peer connection</li>
- *   <li>Connect it to a second, receiving peer connection without a
- *       signaling server, by handing descriptions and candidates across
- *       directly</li>
- *   <li>Render received video frames in a Swing component</li>
+ *   <li>Send the sources of a MediaFileSource as tracks of the client API</li>
+ *   <li>Connect two peers in one application through a loopback signaling</li>
+ *   <li>Render received video in the Swing {@link VideoView}</li>
  *   <li>Play received audio through the default playout device</li>
- *   <li>Show what the file contains, where playback is, and what arrives
- *       at the receiver, read from its statistics</li>
- *   <li>Start and stop a session repeatedly, releasing everything in
- *       order</li>
+ *   <li>Run the peers' handlers on the Swing event dispatch thread</li>
+ *   <li>Show what the file contains, where playback is, and what arrives at
+ *       the receiver, read from its statistics</li>
+ *   <li>Record the received call with a MediaRecorder</li>
+ *   <li>Start and stop a session repeatedly, releasing everything in order</li>
  * </ul>
  * <p>
- * The two sides use two factories. The sending factory is fed pushed audio,
- * so it gets a dummy audio layer. The receiving factory gets the platform's
- * audio layer, whose playout is what makes the received audio audible.
+ * One runtime serves both peers. Its {@link AudioMode#CUSTOM} audio mode sends
+ * the file's pushed audio and plays the received audio, which is what two
+ * factories did before the client API had audio modes.
  * <p>
- * Audio and video stay in sync because both tracks are sent in the same
- * media stream: the receiver lines them up with each other before handing
- * them on, so the video sink only has to draw each frame as it arrives.
+ * Audio and video stay in sync because both tracks are sent in the same media
+ * stream: the receiver lines them up with each other before handing them on,
+ * so the view only has to draw each frame as it arrives.
  * <p>
  * Run it with an optional media file or stream URL to preselect:
  * <pre>
@@ -134,7 +119,7 @@ public class MediaFilePlayerExample {
     private static final Logger LOG = Logger.getLogger(MediaFilePlayerExample.class.getName());
 
     /** Both tracks go in this stream, which is what ties them together for lip sync. */
-    private static final List<String> STREAM_IDS = List.of("media-file");
+    private static final String STREAM_ID = "media-file";
 
     /**
      * The most the video may be sent with. Without a limit of its own, WebRTC
@@ -145,11 +130,10 @@ public class MediaFilePlayerExample {
      */
     private static final int MAX_VIDEO_BITRATE = 10_000_000;
 
-    private final AudioDeviceModule senderAudioModule;
-    private final PeerConnectionFactory senderFactory;
+    private static final DateTimeFormatter RECORDING_NAME = DateTimeFormatter.ofPattern("'recording-'yyyyMMdd-HHmmss'.mkv'");
 
-    private final AudioDeviceModule receiverAudioModule;
-    private final PeerConnectionFactory receiverFactory;
+    /** Owns the peers and tracks of every session; its handlers run on the EDT. */
+    private final WebRtc rtc;
 
     /** Setting up and tearing down a session blocks, so it stays off the EDT. */
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
@@ -163,13 +147,13 @@ public class MediaFilePlayerExample {
     private final JButton browseButton = new JButton("Browse...");
     private final JButton startButton = new JButton("Start");
     private final JButton stopButton = new JButton("Stop");
+    private final JToggleButton recordButton = new JToggleButton("Record");
     private final JCheckBox loopBox = new JCheckBox("Loop");
     private final JLabel statusLabel = new JLabel("Idle");
     private final JProgressBar timeBar = new JProgressBar(0, 1000);
-    private final VideoPanel videoPanel = new VideoPanel();
+    private final VideoView videoView = new VideoView();
     private final MetricsPanel metricsPanel = new MetricsPanel();
     private final Timer statusTimer = new Timer(250, e -> updateStatus());
-    private final Timer statsTimer = new Timer(1000, e -> requestStats());
 
     /** Only touched from the worker thread and read on the EDT for status. */
     private volatile Session session;
@@ -221,11 +205,13 @@ public class MediaFilePlayerExample {
     }
 
     private MediaFilePlayerExample() {
-        senderAudioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
-        senderFactory = new PeerConnectionFactory(senderAudioModule);
+        // Pushed audio out, played audio in, and every handler on the EDT.
+        rtc = WebRtc.builder()
+                .audio(AudioMode.CUSTOM)
+                .eventExecutor(SwingUtilities::invokeLater)
+                .build();
 
-        receiverAudioModule = new AudioDeviceModule();
-        receiverFactory = new PeerConnectionFactory(receiverAudioModule);
+        videoView.setPreferredSize(new Dimension(960, 540));
     }
 
     private void show(String file) {
@@ -235,6 +221,7 @@ public class MediaFilePlayerExample {
         browseButton.addActionListener(e -> chooseFile());
         startButton.addActionListener(e -> start());
         stopButton.addActionListener(e -> stop());
+        recordButton.addActionListener(e -> record(recordButton.isSelected()));
         loopBox.addActionListener(e -> {
             Session current = session;
             if (current != null) {
@@ -247,6 +234,7 @@ public class MediaFilePlayerExample {
         controls.add(browseButton);
         controls.add(startButton);
         controls.add(stopButton);
+        controls.add(recordButton);
         controls.add(loopBox);
 
         timeBar.setStringPainted(true);
@@ -259,7 +247,7 @@ public class MediaFilePlayerExample {
 
         frame.setLayout(new BorderLayout());
         frame.add(controls, BorderLayout.NORTH);
-        frame.add(videoPanel, BorderLayout.CENTER);
+        frame.add(videoView, BorderLayout.CENTER);
         frame.add(metricsPanel, BorderLayout.EAST);
         frame.add(statusBar, BorderLayout.SOUTH);
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -330,13 +318,14 @@ public class MediaFilePlayerExample {
     private void stop() {
         startButton.setEnabled(false);
         stopButton.setEnabled(false);
+        recordButton.setEnabled(false);
 
         worker.execute(() -> {
             closeSession();
 
             SwingUtilities.invokeLater(() -> {
                 setRunning(false);
-                videoPanel.clear();
+                videoView.clear();
                 statusLabel.setText("Stopped");
                 timeBar.setValue(0);
                 timeBar.setString("");
@@ -349,20 +338,41 @@ public class MediaFilePlayerExample {
         });
     }
 
+    /**
+     * Starts or stops recording what the receiver gets. Starting and stopping
+     * a recorder waits on the peers and on the file, so it runs on the worker.
+     */
+    private void record(boolean on) {
+        worker.execute(() -> {
+            Session current = session;
+            String message;
+
+            if (current == null) {
+                message = "Start playback to record it";
+            }
+            else if (on) {
+                message = current.startRecording();
+            }
+            else {
+                message = current.stopRecording();
+            }
+
+            SwingUtilities.invokeLater(() -> {
+                statusLabel.setText(message);
+                recordButton.setSelected(session != null && session.recorder != null);
+            });
+        });
+    }
+
     private void exit() {
         statusTimer.stop();
-        statsTimer.stop();
         frame.dispose();
 
         // Queued behind anything still running, so a session being set up
         // is closed rather than left behind.
         worker.execute(() -> {
             closeSession();
-
-            receiverFactory.dispose();
-            receiverAudioModule.dispose();
-            senderFactory.dispose();
-            senderAudioModule.dispose();
+            rtc.close();
 
             System.exit(0);
         });
@@ -380,20 +390,17 @@ public class MediaFilePlayerExample {
     private void setRunning(boolean running) {
         startButton.setEnabled(!running);
         stopButton.setEnabled(running);
+        recordButton.setEnabled(running);
         fileField.setEnabled(!running);
         browseButton.setEnabled(!running);
 
         if (!running) {
             loopBox.setEnabled(true);
-        }
-
-        if (running) {
-            statusTimer.start();
-            statsTimer.start();
+            recordButton.setSelected(false);
+            statusTimer.stop();
         }
         else {
-            statusTimer.stop();
-            statsTimer.stop();
+            statusTimer.start();
         }
     }
 
@@ -412,27 +419,15 @@ public class MediaFilePlayerExample {
                 ? formatTime(positionUs) + " / " + formatTime(durationUs)
                 : formatTime(positionUs);
 
-        statusLabel.setText(state.toString());
+        if (current.recorder == null) {
+            statusLabel.setText(state.toString());
+        }
         timeBar.setValue(durationUs > 0 ? (int) Math.min(1000, positionUs * 1000 / durationUs) : 0);
         timeBar.setString(time);
 
         metricsPanel.set("play.state", state.toString());
         metricsPanel.set("play.position", time);
-        metricsPanel.set("play.connection", current.connectionState.toString());
-    }
-
-    /**
-     * Asks the current session for its statistics. This goes through the
-     * worker, which is where sessions are closed, so a request can never
-     * reach a peer connection that is being closed at the same time.
-     */
-    private void requestStats() {
-        worker.execute(() -> {
-            Session current = session;
-            if (current != null) {
-                current.requestStats();
-            }
-        });
+        metricsPanel.set("play.connection", current.receiver.state().toString());
     }
 
     private static String formatTime(long us) {
@@ -509,7 +504,7 @@ public class MediaFilePlayerExample {
 
     /**
      * One run of the file, from Start to Stop: the source, the sending and
-     * receiving peer connections, and what connects them.
+     * receiving peers, the tracks over the file's sources, and a recording.
      */
     private class Session {
 
@@ -519,15 +514,16 @@ public class MediaFilePlayerExample {
         final Peer sender;
         final Peer receiver;
 
-        private final VideoTrack videoTrack;
-        private final AudioTrack audioTrack;
-        private RTCRtpSender videoSender;
-        private final List<RTCRtpSender> rtpSenders = new ArrayList<>();
+        private final LocalVideo videoTrack;
+        private final LocalAudio audioTrack;
 
-        volatile RTCPeerConnectionState connectionState = RTCPeerConnectionState.NEW;
+        /** What the receiver gets, kept for recording. Set on the EDT. */
+        private volatile RemoteTrack remoteVideo;
+        private volatile RemoteTrack remoteAudio;
 
-        /** The received video track, kept to detach the sink from on close. */
-        private volatile VideoTrack remoteVideoTrack;
+        /** The recording running, if any. Only touched on the worker. */
+        volatile MediaRecorder recorder;
+        private Path recording;
 
         /** Turn the byte counters of successive stats reports into bitrates. */
         private final RateMeter videoRate = new RateMeter();
@@ -538,27 +534,40 @@ public class MediaFilePlayerExample {
             source = new MediaFileSource(file);
             info = source.getInfo();
 
-            sender = new Peer(senderFactory, "sender");
-            receiver = new Peer(receiverFactory, "receiver");
+            // The peers find each other in process; across a network the
+            // messages would go over a WebSocket instead.
+            SignalingPair link = Signaling.loopback();
+            sender = rtc.createPeer(PeerOptions.builder().name("sender").signaling(link.first()).build());
+            receiver = rtc.createPeer(PeerOptions.builder().name("receiver").signaling(link.second())
+                    .polite(true).build());
 
-            sender.remote = receiver;
-            receiver.remote = sender;
+            receiver.onStateChange(state -> LOG.info("Receiver connection: " + state));
+            receiver.onTrack(this::onRemoteTrack);
+            receiver.onStats(Duration.ofSeconds(1), this::showStats);
 
             // A source with no video has no video source, and likewise for
             // audio, so each track is only made if there is something to feed
-            // it.
+            // it. The tracks wrap the file's sources, which stay the file's.
             if (source.getVideoSource() != null) {
-                videoTrack = senderFactory.createVideoTrack("video", source.getVideoSource());
-                videoSender = sender.peerConnection.addTrack(videoTrack, STREAM_IDS);
-                rtpSenders.add(videoSender);
+                videoTrack = rtc.media().videoTrack("video", source.getVideoSource());
+                Sender videoSender = sender.addTrack(videoTrack, STREAM_ID);
+
+                // Encodings exist once negotiation set the sender up.
+                sender.whenConnected()
+                        .thenCompose(connected -> videoSender.configure(
+                                Encoding.builder().maxBitrate(MAX_VIDEO_BITRATE).build()))
+                        .exceptionally(error -> {
+                            LOG.log(Level.WARNING, "Could not raise the video bitrate", error);
+                            return null;
+                        });
             }
             else {
                 videoTrack = null;
             }
 
             if (source.getAudioSource() != null) {
-                audioTrack = senderFactory.createAudioTrack("audio", source.getAudioSource());
-                rtpSenders.add(sender.peerConnection.addTrack(audioTrack, STREAM_IDS));
+                audioTrack = rtc.media().audioTrack("audio", source.getAudioSource());
+                sender.addTrack(audioTrack, STREAM_ID);
             }
             else {
                 audioTrack = null;
@@ -584,44 +593,31 @@ public class MediaFilePlayerExample {
                 }
             });
 
-            try {
-                // The offer and answer go straight across, where an application
-                // talking to a real remote peer would send them over signaling.
-                RTCSessionDescription offer = sender.createOffer();
-                receiver.setRemoteDescription(offer);
-
-                RTCSessionDescription answer = receiver.createAnswer();
-                sender.setRemoteDescription(answer);
-
-                if (videoSender != null) {
-                    raiseMaxBitrate(videoSender, MAX_VIDEO_BITRATE);
-                }
-            }
-            catch (Exception e) {
-                close();
-                throw e;
-            }
-
             // Frames are sent in real time from the moment playback starts,
             // and whatever goes out before the connection is up is dropped.
             // Starting right away keeps the example short; an application
-            // that must not lose the first second would wait for CONNECTED.
+            // that must not lose the first second would wait for
+            // receiver.whenConnected().
             source.play();
         }
 
-        /**
-         * Lets a sender use up to the given bitrate. Parameters are read,
-         * changed and written back as a whole, and only have encodings to
-         * change once negotiation has set the sender up.
-         */
-        private void raiseMaxBitrate(RTCRtpSender rtpSender, int bitrate) {
-            RTCRtpSendParameters parameters = rtpSender.getParameters();
-
-            for (RTCRtpEncodingParameters encoding : parameters.encodings) {
-                encoding.maxBitrate = bitrate;
+        /** On the EDT: shows the video, and keeps both tracks for recording. */
+        private void onRemoteTrack(RemoteTrack track) {
+            if (track.isVideo()) {
+                remoteVideo = track;
+                track.asVideo().onFrame(videoView);
             }
+            else {
+                // Nothing to do for playback: the runtime plays received audio.
+                remoteAudio = track;
+            }
+        }
 
-            rtpSender.setParameters(parameters);
+        /** On the EDT, once a second. */
+        private void showStats(PeerStats stats) {
+            if (session == this) {
+                metricsPanel.setAll(readStats(stats.report()));
+            }
         }
 
         /**
@@ -637,20 +633,66 @@ public class MediaFilePlayerExample {
             });
         }
 
-        /**
-         * Collects the receiving side's statistics and shows them once they
-         * arrive, unless the session has ended in the meantime.
-         */
-        void requestStats() {
-            receiver.peerConnection.getStats(report -> {
-                Map<String, String> values = readStats(report);
+        /** On the worker. */
+        String startRecording() {
+            if (recorder != null) {
+                return "Recording to " + recording;
+            }
+            if (remoteVideo == null && remoteAudio == null) {
+                return "Nothing received yet to record";
+            }
 
-                SwingUtilities.invokeLater(() -> {
-                    if (session == this) {
-                        metricsPanel.setAll(values);
+            Path file = Paths.get(LocalDateTime.now().format(RECORDING_NAME)).toAbsolutePath();
+
+            try {
+                MediaRecorder started = new MediaRecorder(file);
+                started.setListener(new MediaRecorderListener() {
+
+                    @Override
+                    public void onWarning(String message) {
+                        LOG.warning("Recording: " + message);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        LOG.warning("Recording failed: " + message);
                     }
                 });
-            });
+
+                // The receiver's tracks as they arrived, before decoding.
+                if (remoteVideo != null) {
+                    started.addTrack(remoteVideo);
+                }
+                if (remoteAudio != null) {
+                    started.addTrack(remoteAudio);
+                }
+
+                started.start();
+
+                recorder = started;
+                recording = file;
+
+                return "Recording to " + file;
+            }
+            catch (Exception e) {
+                LOG.log(Level.WARNING, "Could not start recording", e);
+                return "Could not record: " + e.getMessage();
+            }
+        }
+
+        /** On the worker. */
+        String stopRecording() {
+            MediaRecorder running = recorder;
+            recorder = null;
+
+            if (running == null) {
+                return "Not recording";
+            }
+
+            boolean recorded = running.stop();
+            running.close();
+
+            return recorded ? "Saved " + recording : "Nothing was recorded";
         }
 
         /**
@@ -705,177 +747,30 @@ public class MediaFilePlayerExample {
             return values;
         }
 
-        void onRemoteTrack(MediaStreamTrack track) {
-            if (track instanceof VideoTrack) {
-                remoteVideoTrack = (VideoTrack) track;
-                remoteVideoTrack.addSink(videoPanel);
-            }
-            // A received audio track needs nothing: the receiving factory's
-            // audio device module mixes it into playout on its own.
-        }
-
+        /** On the worker. */
         void close() {
-            // Stop drawing before anything goes away underneath the sink.
-            VideoTrack remoteVideo = remoteVideoTrack;
-            if (remoteVideo != null) {
-                remoteVideo.removeSink(videoPanel);
+            if (recorder != null) {
+                LOG.info(stopRecording());
             }
 
-            // Senders are not owned by the peer connection. Releasing them
-            // before it closes lets go of the tracks they carry.
-            for (RTCRtpSender rtpSender : rtpSenders) {
-                rtpSender.dispose();
-            }
+            try {
+                // The peers go first, then the tracks, which must be released
+                // before the file closes the sources they were made over.
+                sender.closeAsync().get(5, TimeUnit.SECONDS);
+                receiver.closeAsync().get(5, TimeUnit.SECONDS);
 
-            sender.close();
-            receiver.close();
-
-            // The tracks go before the source, which disposes of the media
-            // sources they were made from.
-            if (videoTrack != null) {
-                videoTrack.dispose();
+                if (videoTrack != null) {
+                    videoTrack.closeAsync().get(5, TimeUnit.SECONDS);
+                }
+                if (audioTrack != null) {
+                    audioTrack.closeAsync().get(5, TimeUnit.SECONDS);
+                }
             }
-            if (audioTrack != null) {
-                audioTrack.dispose();
+            catch (Exception e) {
+                LOG.log(Level.WARNING, "Closing the session took too long", e);
             }
 
             source.close();
-        }
-
-
-        /**
-         * One end of the in-process connection. Candidates found here are
-         * handed to the other end, held back until it has a remote
-         * description to match them against.
-         */
-        private class Peer implements PeerConnectionObserver {
-
-            final RTCPeerConnection peerConnection;
-
-            private final String name;
-
-            private final List<RTCIceCandidate> pendingCandidates = new ArrayList<>();
-
-            private boolean hasRemoteDescription;
-
-            Peer remote;
-
-
-            Peer(PeerConnectionFactory factory, String name) {
-                this.name = name;
-                this.peerConnection = factory.createPeerConnection(new RTCConfiguration(), this);
-            }
-
-            RTCSessionDescription createOffer() throws Exception {
-                CompletableFuture<RTCSessionDescription> offer = new CompletableFuture<>();
-                peerConnection.createOffer(new RTCOfferOptions(), createObserver(offer));
-
-                return setLocalDescription(offer.get());
-            }
-
-            RTCSessionDescription createAnswer() throws Exception {
-                CompletableFuture<RTCSessionDescription> answer = new CompletableFuture<>();
-                peerConnection.createAnswer(new RTCAnswerOptions(), createObserver(answer));
-
-                return setLocalDescription(answer.get());
-            }
-
-            RTCSessionDescription setLocalDescription(RTCSessionDescription description)
-                    throws Exception {
-                CompletableFuture<Void> done = new CompletableFuture<>();
-                peerConnection.setLocalDescription(description, setObserver(done));
-                done.get();
-
-                return description;
-            }
-
-            void setRemoteDescription(RTCSessionDescription description) throws Exception {
-                CompletableFuture<Void> done = new CompletableFuture<>();
-                peerConnection.setRemoteDescription(description, setObserver(done));
-                done.get();
-
-                List<RTCIceCandidate> candidates;
-                synchronized (this) {
-                    hasRemoteDescription = true;
-                    candidates = new ArrayList<>(pendingCandidates);
-                    pendingCandidates.clear();
-                }
-
-                candidates.forEach(peerConnection::addIceCandidate);
-            }
-
-            void addRemoteCandidate(RTCIceCandidate candidate) {
-                synchronized (this) {
-                    if (!hasRemoteDescription) {
-                        pendingCandidates.add(candidate);
-                        return;
-                    }
-                }
-
-                peerConnection.addIceCandidate(candidate);
-            }
-
-            void close() {
-                peerConnection.close();
-            }
-
-            @Override
-            public void onIceCandidate(RTCIceCandidate candidate) {
-                remote.addRemoteCandidate(candidate);
-            }
-
-            @Override
-            public void onConnectionChange(RTCPeerConnectionState state) {
-                LOG.info(name + " connection state: " + state);
-
-                if (this == receiver) {
-                    connectionState = state;
-                }
-            }
-
-            @Override
-            public void onTrack(RTCRtpTransceiver transceiver) {
-                RTCRtpReceiver rtpReceiver = transceiver.getReceiver();
-
-                onRemoteTrack(rtpReceiver.getTrack());
-
-                // The receiver and transceiver are query results the
-                // application owns. The track itself is unaffected and keeps
-                // delivering frames to its sink.
-                rtpReceiver.dispose();
-                transceiver.dispose();
-            }
-
-            private CreateSessionDescriptionObserver createObserver(
-                    CompletableFuture<RTCSessionDescription> future) {
-                return new CreateSessionDescriptionObserver() {
-
-                    @Override
-                    public void onSuccess(RTCSessionDescription description) {
-                        future.complete(description);
-                    }
-
-                    @Override
-                    public void onFailure(String error) {
-                        future.completeExceptionally(new Exception(name + ": " + error));
-                    }
-                };
-            }
-
-            private SetSessionDescriptionObserver setObserver(CompletableFuture<Void> future) {
-                return new SetSessionDescriptionObserver() {
-
-                    @Override
-                    public void onSuccess() {
-                        future.complete(null);
-                    }
-
-                    @Override
-                    public void onFailure(String error) {
-                        future.completeExceptionally(new Exception(name + ": " + error));
-                    }
-                };
-            }
         }
     }
 
@@ -1046,93 +941,6 @@ public class MediaFilePlayerExample {
             add(value, c);
             values.put(key, value);
             row++;
-        }
-    }
-
-
-
-    /**
-     * Draws the most recent received video frame, scaled to fit while keeping
-     * its aspect ratio.
-     * <p>
-     * Frames arrive on a WebRTC thread already timed to match the audio, so
-     * they are converted there and only the drawing is left to the EDT.
-     */
-    private static class VideoPanel extends JPanel implements VideoTrackSink {
-
-        private BufferedImage image;
-
-        private ByteBuffer pixelBuffer;
-
-
-        VideoPanel() {
-            setBackground(Color.BLACK);
-            setPreferredSize(new Dimension(960, 540));
-        }
-
-        @Override
-        public void onVideoFrame(VideoFrame frame) {
-            VideoFrameBuffer buffer = frame.buffer;
-            int width = buffer.getWidth();
-            int height = buffer.getHeight();
-
-            try {
-                synchronized (this) {
-                    if (image == null || image.getWidth() != width || image.getHeight() != height) {
-                        image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
-                        pixelBuffer = ByteBuffer.allocateDirect(width * height * 4)
-                                .order(ByteOrder.LITTLE_ENDIAN);
-                    }
-
-                    // libyuv's ARGB is B, G, R, A in memory, which read as
-                    // little-endian ints is exactly what TYPE_INT_RGB holds.
-                    pixelBuffer.clear();
-                    VideoBufferConverter.convertFromI420(buffer, pixelBuffer, FourCC.ARGB);
-                    pixelBuffer.rewind();
-
-                    int[] pixels = ((DataBufferInt) image.getRaster().getDataBuffer()).getData();
-                    pixelBuffer.asIntBuffer().get(pixels);
-                }
-            }
-            catch (Exception e) {
-                LOG.log(Level.WARNING, "Could not convert a video frame", e);
-            }
-            finally {
-                frame.release();
-            }
-
-            repaint();
-        }
-
-        void clear() {
-            synchronized (this) {
-                image = null;
-                pixelBuffer = null;
-            }
-            repaint();
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-
-            synchronized (this) {
-                if (image == null) {
-                    return;
-                }
-
-                double scale = Math.min((double) getWidth() / image.getWidth(),
-                        (double) getHeight() / image.getHeight());
-                int w = (int) (image.getWidth() * scale);
-                int h = (int) (image.getHeight() * scale);
-                int x = (getWidth() - w) / 2;
-                int y = (getHeight() - h) / 2;
-
-                Graphics2D g2 = (Graphics2D) g;
-                g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-                        RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                g2.drawImage(image, x, y, w, h, null);
-            }
         }
     }
 }
