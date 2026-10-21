@@ -126,6 +126,9 @@ final class SerialExecutor implements Executor {
 			executor.execute(this::drain);
 		}
 		catch (RejectedExecutionException e) {
+			// The pool rejects only once the runtime has stopped it. A caller
+			// that waits on a dropped task ends its wait with the runtime's
+			// end, as PeerImpl.open does.
 			synchronized (tasks) {
 				scheduled = false;
 				tasks.clear();

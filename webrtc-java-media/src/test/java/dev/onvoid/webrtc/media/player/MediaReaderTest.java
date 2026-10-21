@@ -25,6 +25,9 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 
@@ -128,6 +131,33 @@ class MediaReaderTest {
 		reader.close();
 
 		assertThrows(IllegalStateException.class, reader::getInfo);
+	}
+
+	@Test
+	void infoRacingClose() throws Exception {
+		// Close may run on any thread, so a getInfo on another one either gets
+		// the info or finds the reader closed, never a reader being freed.
+		for (int round = 0; round < 200; round++) {
+			MediaReader reader = new MediaReader(asset());
+			CountDownLatch started = new CountDownLatch(1);
+
+			CompletableFuture<Void> reading = CompletableFuture.runAsync(() -> {
+				started.countDown();
+
+				try {
+					while (true) {
+						assertNotNull(reader.getInfo());
+					}
+				}
+				catch (IllegalStateException e) {
+					// Closed, which is how the loop ends.
+				}
+			});
+
+			started.await();
+			reader.close();
+			reading.get(10, TimeUnit.SECONDS);
+		}
 	}
 
 	private static Path asset() throws Exception {

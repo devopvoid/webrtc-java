@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -370,6 +371,70 @@ class PeerTests extends ClientTestBase {
 		await(peers[0].whenClosed());
 		await(peers[1].whenClosed());
 		assertThrows(PeerClosedException.class, this::pair);
+	}
+
+	@Test
+	void openAfterShutdownFails() {
+		// A createPeer that passed its check just before the runtime closed:
+		// the runtime's threads are gone and drop the task that would create
+		// the connection, so opening has to fail rather than wait forever.
+		PeerImpl peer = new PeerImpl(rtc, manualOptions(), "late");
+
+		rtc.close();
+
+		assertThrows(PeerClosedException.class, () -> assertTimeoutPreemptively(
+				Duration.ofSeconds(TIMEOUT_SECONDS), peer::open));
+	}
+
+	@Test
+	void openAfterCloseFails() throws Exception {
+		// The closing runtime found the peer before its connection was created.
+		// It may free the factory once the peer is closed, so the connection
+		// must not be created after that.
+		PeerImpl peer = new PeerImpl(rtc, manualOptions(), "closed-first");
+
+		await(peer.closeInternal());
+
+		assertThrows(PeerClosedException.class, peer::open);
+	}
+
+	@Test
+	void createPeerRacingClose() throws Exception {
+		// A peer created while its runtime closes is either refused or closed
+		// with the runtime, and creating it never waits forever.
+		for (int round = 0; round < 50; round++) {
+			WebRtc runtime = WebRtc.builder()
+					.audio(AudioMode.HEADLESS)
+					.errorHandler(errors::add)
+					.build();
+			CountDownLatch started = new CountDownLatch(1);
+
+			CompletableFuture<List<Peer>> created = CompletableFuture.supplyAsync(() -> {
+				List<Peer> peers = new ArrayList<>();
+
+				try {
+					while (true) {
+						peers.add(runtime.createPeer(manualOptions()));
+						started.countDown();
+					}
+				}
+				catch (PeerClosedException e) {
+					return peers;
+				}
+			});
+
+			// Closed while peers are being created, not before the first.
+			started.await();
+			runtime.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+			for (Peer peer : created.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+				assertEquals(PeerState.CLOSED, peer.state());
+			}
+		}
+	}
+
+	private static PeerOptions manualOptions() {
+		return PeerOptions.builder().negotiation(Negotiation.MANUAL).build();
 	}
 
 	@Test
