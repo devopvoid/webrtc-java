@@ -288,7 +288,7 @@ Some of the formats FFmpeg decodes, such as H.264, H.265/HEVC and AAC, may be co
 
 ## Complete Example
 
-See `MediaFileExample` in the `webrtc-examples` module, which opens a file, reports what it contains, creates tracks, adds them to a peer connection and follows playback to the end.
+See `MediaFileExample` in the `webrtc-examples` module, which opens a file, reports what it contains, sends its tracks from one [Client API](/guide/client-api) peer to another and follows playback to the end.
 
 ```shell
 mvn -pl webrtc-examples compile

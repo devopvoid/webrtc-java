@@ -815,4 +815,7 @@ Next:
   `Whep.from(...).play(rtc)` return sessions over `HttpURLConnection` (Java 8), and `VideoView` is in
   `dev.onvoid.webrtc.client.swing`;
 - porting the existing examples (phases 2 and 3); `MediaFilePlayerExample` is ported, with a
-  Record button, and `LocalTrack.closeAsync()` came with it.
+  Record button, and `LocalTrack.closeAsync()` came with it. `PeerConnectionExample`,
+  `DesktopVideoExample` and `MediaFileExample` are ported too, each over a loopback signaling.
+  `CodecListExample`, `EncryptedRecordingExample` and `VoiceActivityExample` stay on the core API,
+  which they demonstrate: the factory's codecs, encoded frame transforms and voice activity.

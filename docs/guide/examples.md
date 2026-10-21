@@ -24,16 +24,21 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ClientApiExample" -D"
 
 ## PeerConnection
 
-The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) demonstrates how to set up a peer connection with audio and video tracks to be able to send and receive media.
+The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) sends the camera and the microphone from one peer to another in the same process, with the [Client API](/guide/client-api), and logs the video frames and audio that arrive.
 
 **Key features demonstrated:**
-- Creating a `PeerConnectionFactory`
-- Creating audio and video tracks
-- Setting up a peer connection
-- Adding tracks to the peer connection for sending media
-- Implementing callbacks to receive incoming audio and video frames
+- Creating a `WebRtc` runtime that captures from and plays to the audio devices
+- Listing the cameras and microphones
+- Opening the camera and the microphone as local tracks
+- Connecting two peers through a loopback signaling, in place of a server
+- Receiving the remote tracks, their frames and their audio
+- Muting a received audio track, while its audio still reaches a handler
 
-This example provides a foundation for building WebRTC applications that need to handle audio and video communication.
+This example provides a foundation for building WebRTC applications that need to handle audio and video communication. Press Enter to end the call:
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.PeerConnectionExample"
+```
 
 ## WHEP
 
@@ -64,17 +69,20 @@ This example is useful for understanding what codecs are available on the curren
 
 ## Desktop Video
 
-The [`DesktopVideoExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopVideoExample.java) demonstrates how to set up a peer connection with a desktop video source for screen or window capture.
+The [`DesktopVideoExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopVideoExample.java) shares a screen or a window from one peer to another in the same process, with the [Client API](/guide/client-api).
 
 **Key features demonstrated:**
-- Creating a `PeerConnectionFactory`
-- Getting available desktop sources (screens and windows)
-- Creating a `VideoDesktopSource` for capturing screen or window content
-- Configuring the `VideoDesktopSource` properties
-- Creating a video track with the desktop source
-- Setting up a peer connection
+- Listing the screens and windows that can be captured
+- Capturing one of them as a local video track, with a frame rate and a largest size
+- Connecting two peers through a loopback signaling, in place of a server
+- Reading the resolution and frame rate the sender encodes
 
-This example is particularly useful for applications that need to implement screen sharing or remote desktop functionality.
+This example is particularly useful for applications that need to implement screen sharing or remote desktop functionality. It shares the first screen, or the first window with `window`. Under Wayland, the system asks which one to share instead.
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopVideoExample"
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopVideoExample" -D"exec.args=window"
+```
 
 ## Media File
 
@@ -83,9 +91,10 @@ The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/master/we
 **Key features demonstrated:**
 - Opening a media file, or a live RTSP stream, with a `MediaFileSource`
 - Reading what the source contains from its `MediaInfo`
-- Creating audio and video tracks from the media sources it feeds
-- Adding those tracks to a peer connection
+- Sending the media sources it feeds as [Client API](/guide/client-api) tracks, with `videoTrack` and `audioTrack`
+- Receiving them on a second peer, connected through a loopback signaling
 - Following playback through a `MediaPlayerListener`
+- Closing the tracks before the source, which owns what they were made from
 
 This example is useful for applications that stream pre-recorded media, relay an IP camera into WebRTC, or need a dependable stand-in for a camera in testing.
 

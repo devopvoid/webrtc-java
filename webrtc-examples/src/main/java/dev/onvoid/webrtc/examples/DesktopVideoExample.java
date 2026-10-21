@@ -16,255 +16,138 @@
 
 package dev.onvoid.webrtc.examples;
 
-import java.util.ArrayList;
+import java.time.Duration;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import dev.onvoid.webrtc.PeerConnectionFactory;
-import dev.onvoid.webrtc.PeerConnectionObserver;
-import dev.onvoid.webrtc.RTCConfiguration;
-import dev.onvoid.webrtc.RTCDataChannel;
-import dev.onvoid.webrtc.RTCIceCandidate;
-import dev.onvoid.webrtc.RTCIceConnectionState;
-import dev.onvoid.webrtc.RTCIceGatheringState;
-import dev.onvoid.webrtc.RTCIceServer;
-import dev.onvoid.webrtc.RTCPeerConnection;
-import dev.onvoid.webrtc.RTCPeerConnectionState;
-import dev.onvoid.webrtc.RTCRtpReceiver;
-import dev.onvoid.webrtc.RTCRtpSender;
-import dev.onvoid.webrtc.RTCRtpTransceiver;
-import dev.onvoid.webrtc.RTCSignalingState;
-import dev.onvoid.webrtc.media.MediaStream;
-import dev.onvoid.webrtc.media.MediaStreamTrack;
-import dev.onvoid.webrtc.media.video.VideoDesktopSource;
-import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.client.AudioMode;
+import dev.onvoid.webrtc.client.Devices;
+import dev.onvoid.webrtc.client.LocalVideo;
+import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.PeerOptions;
+import dev.onvoid.webrtc.client.ScreenOptions;
+import dev.onvoid.webrtc.client.Signaling;
+import dev.onvoid.webrtc.client.SignalingPair;
+import dev.onvoid.webrtc.client.VideoStats;
+import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
-import dev.onvoid.webrtc.media.video.desktop.ScreenCapturer;
-import dev.onvoid.webrtc.media.video.desktop.WindowCapturer;
 
 /**
- * Example demonstrating how to set up a peer connection with a desktop video source.
+ * Example demonstrating how to share a screen or a window over a peer connection, with the
+ * client API.
  * <p>
  * This example shows how to:
  * <ul>
- *   <li>Create a PeerConnectionFactory</li>
- *   <li>Get available desktop sources (screens and windows)</li>
- *   <li>Create a VideoDesktopSource for capturing screen or window content</li>
- *   <li>Configure the VideoDesktopSource properties</li>
- *   <li>Create a video track with the desktop source</li>
- *   <li>Set up a peer connection</li>
+ *   <li>List the screens and windows that can be captured</li>
+ *   <li>Capture one of them as a local video track, with a frame rate and a largest size</li>
+ *   <li>Connect two peers through a loopback signaling, in place of a server</li>
+ *   <li>Send the track, and receive it on the other peer</li>
+ *   <li>Read the resolution and frame rate the sender encodes</li>
  * </ul>
  * <p>
- * Note: This example focuses only on setting up the local peer connection with
- * a desktop video source for bidirectional media transfer. In a real application,
- * you would need to establish a connection with a remote peer through a signaling
- * channel (e.g., WebSocket).
+ * Both peers run in this process, so the call connects without a server. In a real
+ * application each peer is in another process, and its {@link Signaling} carries the messages
+ * over a WebSocket or the like.
+ * <p>
+ * Under Wayland, the system asks which screen or window to share once the capture starts, and
+ * each list holds a single source without a title that stands for that choice.
+ * <p>
+ * Run it to share the first screen, or with {@code window} to share the first window, and press
+ * Enter to stop:
+ * <pre>
+ * mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopVideoExample"
+ * mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopVideoExample" -D"exec.args=window"
+ * </pre>
  *
  * @author Alex Andres
  */
 public class DesktopVideoExample {
 
-    public static void main(String[] args) {
-        // Create a PeerConnectionFactory, which is the main entry point for WebRTC.
-        PeerConnectionFactory factory = new PeerConnectionFactory();
+    public static void main(String[] args) throws Exception {
+        boolean shareWindow = args.length > 0 && args[0].equals("window");
 
-        try {
-            LocalPeer localPeer = new LocalPeer(factory);
+        // Only video is sent, so the runtime needs no audio devices.
+        try (WebRtc rtc = WebRtc.builder().audio(AudioMode.HEADLESS).build()) {
+            // Screens and windows are read from the system on every call.
+            Devices devices = rtc.media().devices();
+            List<DesktopSource> screens = devices.screens();
+            List<DesktopSource> windows = devices.windows();
 
-            // Keep the application running to observe state changes.
-            System.out.println("Press Enter to exit...");
+            System.out.println("Available screens:");
+            screens.forEach(screen -> System.out.println("  " + describe(screen)));
+
+            System.out.println("Available windows:");
+            windows.forEach(window -> System.out.println("  " + describe(window)));
+
+            List<DesktopSource> sources = shareWindow ? windows : screens;
+
+            if (sources.isEmpty()) {
+                System.out.println("There is no " + (shareWindow ? "window" : "screen") + " to share");
+                return;
+            }
+
+            DesktopSource source = sources.get(0);
+            ScreenOptions.Builder options = shareWindow
+                    ? ScreenOptions.window(source)
+                    : ScreenOptions.screen(source);
+
+            // Frames larger than 1920x1080 are scaled down, keeping their aspect ratio.
+            LocalVideo screen = rtc.media().screen(options.frameRate(30).maxSize(1920, 1080).build());
+
+            System.out.println("Sharing " + describe(source));
+
+            // The two ends of a loopback signaling hand each message to the other peer.
+            SignalingPair signaling = Signaling.loopback();
+
+            Peer sharer = rtc.createPeer(PeerOptions.builder()
+                    .name("sharer")
+                    .signaling(signaling.first())
+                    .build());
+            Peer viewer = rtc.createPeer(PeerOptions.builder()
+                    .name("viewer")
+                    .polite(true)
+                    .signaling(signaling.second())
+                    .build());
+
+            viewer.onTrack(track -> {
+                AtomicInteger frames = new AtomicInteger();
+
+                track.asVideo().onFrame(frame -> {
+                    if (frames.incrementAndGet() % 30 == 1) {
+                        System.out.printf("Viewer got frame %d, %dx%d%n", frames.get(),
+                                frame.buffer.getWidth(), frame.buffer.getHeight());
+                    }
+                });
+            });
+
+            sharer.addTrack(screen);
+
+            // The main thread may wait; a handler must not.
+            sharer.whenConnected().get(15, TimeUnit.SECONDS);
+
+            sharer.onStats(Duration.ofSeconds(5), stats -> {
+                VideoStats video = stats.outboundVideo().isEmpty() ? null : stats.outboundVideo().get(0);
+
+                // Nothing is encoded before the first frame was captured.
+                if (video != null && video.width() > 0) {
+                    System.out.printf("Sharer encodes %s %dx%d at %.0f fps, %d kbit/s%n", video.codec(),
+                            video.width(), video.height(), video.framesPerSecond(),
+                            Math.max(0, stats.outgoingBitrate()) / 1000);
+                }
+            });
+
+            System.out.println("Press Enter to stop sharing...");
             System.in.read();
+        }
+        // Closing the runtime closed the peers and stopped the capture.
 
-            // Clean up.
-            localPeer.dispose();
-        }
-        catch (Exception e) {
-            Logger.getLogger(DesktopVideoExample.class.getName())
-                    .log(Level.SEVERE, "Error in DesktopVideoExample", e);
-        }
-        finally {
-            // Dispose the factory when done.
-            factory.dispose();
-        }
+        System.out.println("Closed");
     }
 
-    /**
-     * Represents a peer connection with audio and desktop video tracks.
-     */
-    private static class LocalPeer implements PeerConnectionObserver {
+    private static String describe(DesktopSource source) {
+        String title = source.title == null || source.title.isEmpty() ? "(chosen by the system)" : source.title;
 
-        private final RTCPeerConnection peerConnection;
-        private final VideoDesktopSource videoSource;
-        private final RTCRtpSender videoSender;
-
-
-        public LocalPeer(PeerConnectionFactory factory) {
-            // Create a basic configuration for the peer connection.
-            RTCConfiguration config = new RTCConfiguration();
-
-            // Add a STUN server to help with NAT traversal.
-            RTCIceServer iceServer = new RTCIceServer();
-            iceServer.urls.add("stun:stun.l.google.com:19302");
-            config.iceServers.add(iceServer);
-
-            // Create the peer connection.
-            peerConnection = factory.createPeerConnection(config, this);
-
-            // Get available desktop sources.
-            System.out.println("Getting available desktop sources...");
-
-            // Get available screens.
-            ScreenCapturer screenCapturer = new ScreenCapturer();
-            List<DesktopSource> screens = screenCapturer.getDesktopSources();
-            System.out.println("\nAvailable screens:");
-            for (DesktopSource screen : screens) {
-                System.out.printf("  Screen: %s (ID: %d)%n", screen.title, screen.id);
-            }
-
-            // Get available windows.
-            WindowCapturer windowCapturer = new WindowCapturer();
-            List<DesktopSource> windows = windowCapturer.getDesktopSources();
-            System.out.println("\nAvailable windows:");
-            for (DesktopSource window : windows) {
-                System.out.printf("  Window: %s (ID: %d)%n", window.title, window.id);
-            }
-
-            // Clean up the capturers as we only needed them to get the sources.
-            screenCapturer.dispose();
-            windowCapturer.dispose();
-
-            // Create a desktop video source.
-            videoSource = new VideoDesktopSource();
-
-            // Configure the desktop video source.
-            // Set frame rate (e.g., 30 fps).
-            videoSource.setFrameRate(30);
-
-            // Set maximum frame size (e.g., 1920x1080).
-            videoSource.setMaxFrameSize(1920, 1080);
-
-            // Select a source to capture.
-            // For this example; we'll use the first available screen if there is one.
-            if (!screens.isEmpty()) {
-                DesktopSource selectedScreen = screens.get(0);
-                System.out.printf("%nSelected screen for capture: %s (ID: %d)%n",
-                        selectedScreen.title, selectedScreen.id);
-                videoSource.setSourceId(selectedScreen.id, false);
-            }
-            // Otherwise, use the first available window if there is one.
-            else if (!windows.isEmpty()) {
-                DesktopSource selectedWindow = windows.get(0);
-                System.out.printf("%nSelected window for capture: %s (ID: %d)%n",
-                        selectedWindow.title, selectedWindow.id);
-                videoSource.setSourceId(selectedWindow.id, true);
-            }
-            // If no sources are available, fall back to a default (primary screen).
-            else {
-                System.out.println("\nNo desktop sources found. Using default (primary screen).");
-                videoSource.setSourceId(0, false);
-            }
-
-            // Start capturing.
-            videoSource.start();
-
-            // Create a video track with the desktop source.
-            VideoTrack videoTrack = factory.createVideoTrack("video0", videoSource);
-
-            // Add the tracks to the peer connection.
-            List<String> streamIds = new ArrayList<>();
-            streamIds.add("stream1");
-            videoSender = peerConnection.addTrack(videoTrack, streamIds);
-
-            System.out.println("LocalPeer: Created with a desktop video track");
-        }
-
-        /**
-         * Closes the peer connection and releases resources.
-         */
-        public void dispose() {
-            if (videoSource != null) {
-                // Stop capturing before disposing.
-                videoSource.stop();
-                videoSource.dispose();
-            }
-            // RTCRtpSender is not owned by the peer connection; the
-            // application must dispose it once it is no longer needed.
-            if (videoSender != null) {
-                videoSender.dispose();
-            }
-            if (peerConnection != null) {
-                peerConnection.close();
-            }
-        }
-
-        // PeerConnectionObserver implementation.
-
-        @Override
-        public void onIceCandidate(RTCIceCandidate candidate) {
-            System.out.println("LocalPeer: New ICE candidate: " + candidate.sdp);
-            // In a real application, you would send this candidate to the remote peer
-            // through your signaling channel.
-        }
-
-        @Override
-        public void onConnectionChange(RTCPeerConnectionState state) {
-            System.out.println("LocalPeer: Connection state changed to: " + state);
-        }
-
-        @Override
-        public void onIceConnectionChange(RTCIceConnectionState state) {
-            System.out.println("LocalPeer: ICE connection state changed to: " + state);
-        }
-
-        @Override
-        public void onIceGatheringChange(RTCIceGatheringState state) {
-            System.out.println("LocalPeer: ICE gathering state changed to: " + state);
-        }
-
-        @Override
-        public void onSignalingChange(RTCSignalingState state) {
-            System.out.println("LocalPeer: Signaling state changed to: " + state);
-        }
-
-        @Override
-        public void onDataChannel(RTCDataChannel dataChannel) {
-            System.out.println("LocalPeer: Data channel created: " + dataChannel.getLabel());
-        }
-
-        @Override
-        public void onRenegotiationNeeded() {
-            System.out.println("LocalPeer: Renegotiation needed");
-            // In a real application, you would create an offer and set it as the local description.
-        }
-
-        @Override
-        public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
-            System.out.println("LocalPeer: Track added: " + receiver.getTrack().getKind());
-
-            // The receiver is a query result the application owns; dispose it
-            // once its track has been retrieved.
-            receiver.dispose();
-        }
-
-        @Override
-        public void onRemoveTrack(RTCRtpReceiver receiver) {
-            System.out.println("LocalPeer: Track removed: " + receiver.getTrack().getKind());
-
-            receiver.dispose();
-        }
-
-        @Override
-        public void onTrack(RTCRtpTransceiver transceiver) {
-            RTCRtpReceiver receiver = transceiver.getReceiver();
-            MediaStreamTrack track = receiver.getTrack();
-
-            System.out.println("LocalPeer: Transceiver track added: " + track.getKind());
-
-            // The receiver and transceiver are query results the application
-            // owns; dispose them once the track has been retrieved.
-            receiver.dispose();
-            transceiver.dispose();
-        }
+        return title + " (ID: " + source.id + ")";
     }
 }

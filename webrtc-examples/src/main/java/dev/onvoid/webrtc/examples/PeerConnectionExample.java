@@ -16,298 +16,170 @@
 
 package dev.onvoid.webrtc.examples;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-import dev.onvoid.webrtc.PeerConnectionFactory;
-import dev.onvoid.webrtc.PeerConnectionObserver;
-import dev.onvoid.webrtc.RTCConfiguration;
-import dev.onvoid.webrtc.RTCDataChannel;
-import dev.onvoid.webrtc.RTCIceCandidate;
-import dev.onvoid.webrtc.RTCIceConnectionState;
-import dev.onvoid.webrtc.RTCIceGatheringState;
-import dev.onvoid.webrtc.RTCIceServer;
-import dev.onvoid.webrtc.RTCPeerConnection;
-import dev.onvoid.webrtc.RTCPeerConnectionState;
-import dev.onvoid.webrtc.RTCRtpReceiver;
-import dev.onvoid.webrtc.RTCRtpSender;
-import dev.onvoid.webrtc.RTCRtpTransceiver;
-import dev.onvoid.webrtc.RTCSignalingState;
-import dev.onvoid.webrtc.media.MediaStream;
-import dev.onvoid.webrtc.media.MediaStreamTrack;
-import dev.onvoid.webrtc.media.audio.AudioOptions;
-import dev.onvoid.webrtc.media.audio.AudioTrack;
-import dev.onvoid.webrtc.media.audio.AudioTrackSink;
-import dev.onvoid.webrtc.media.audio.AudioTrackSource;
-import dev.onvoid.webrtc.media.video.VideoDeviceSource;
-import dev.onvoid.webrtc.media.video.VideoFrame;
-import dev.onvoid.webrtc.media.video.VideoTrack;
-import dev.onvoid.webrtc.media.video.VideoTrackSink;
+import dev.onvoid.webrtc.client.Devices;
+import dev.onvoid.webrtc.client.LocalAudio;
+import dev.onvoid.webrtc.client.LocalCamera;
+import dev.onvoid.webrtc.client.MediaException;
+import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.PeerOptions;
+import dev.onvoid.webrtc.client.RemoteTrack;
+import dev.onvoid.webrtc.client.Signaling;
+import dev.onvoid.webrtc.client.SignalingPair;
+import dev.onvoid.webrtc.client.WebRtc;
 
 /**
- * Example demonstrating how to set up a peer connection with audio and video tracks
- * to be able to send and receive media.
+ * Example demonstrating how to send a camera and a microphone over a peer connection, and how
+ * to receive the video frames and audio on the other side, with the client API.
  * <p>
  * This example shows how to:
  * <ul>
- *   <li>Create a PeerConnectionFactory</li>
- *   <li>Create audio and video tracks</li>
- *   <li>Set up a peer connection</li>
- *   <li>Add tracks to the peer connection for sending media</li>
- *   <li>Implement callbacks to receive incoming audio and video frames</li>
+ *   <li>Create a {@link WebRtc} runtime that captures from and plays to the audio devices</li>
+ *   <li>List the cameras and microphones</li>
+ *   <li>Open the camera and the microphone as local tracks</li>
+ *   <li>Connect two peers through a loopback signaling, in place of a server</li>
+ *   <li>Send the tracks, and receive them as remote tracks with their frames and audio</li>
+ *   <li>Mute a received audio track, while its audio still reaches a handler</li>
  * </ul>
  * <p>
- * Note: This example focuses only on setting up the local peer connection with
- * audio and video tracks for bidirectional media transfer. In a real application,
- * you would need to establish a connection with a remote peer through a signaling
- * channel (e.g., WebSocket).
+ * Both peers run in this process, so the call connects without a server. In a real
+ * application each peer is in another process, and its {@link Signaling} carries the messages
+ * over a WebSocket or the like, as the web example does. Nothing else changes.
+ * <p>
+ * Run it, and press Enter to end the call:
+ * <pre>
+ * mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.PeerConnectionExample"
+ * </pre>
  *
  * @author Alex Andres
  */
 public class PeerConnectionExample {
 
-    public static void main(String[] args) {
-        // Create a PeerConnectionFactory, which is the main entry point for WebRTC.
-        PeerConnectionFactory factory = new PeerConnectionFactory();
+    public static void main(String[] args) throws Exception {
+        // The runtime captures from the microphone and plays to the speakers selected in its
+        // devices.
+        try (WebRtc rtc = WebRtc.create()) {
+            Devices devices = rtc.media().devices();
 
-        try {
-            LocalPeer localPeer = new LocalPeer(factory);
+            devices.cameras().forEach(camera -> System.out.println("Camera: " + camera.getName()));
+            devices.microphones().forEach(mic -> System.out.println("Microphone: " + mic.getName()));
 
-            // Keep the application running to observe state changes.
-            System.out.println("Press Enter to exit...");
+            // The two ends of a loopback signaling hand each message to the other peer.
+            SignalingPair signaling = Signaling.loopback();
+
+            Peer caller = rtc.createPeer(PeerOptions.builder()
+                    .name("caller")
+                    .iceServer("stun:stun.l.google.com:19302")
+                    .signaling(signaling.first())
+                    .build());
+            Peer callee = rtc.createPeer(PeerOptions.builder()
+                    .name("callee")
+                    .iceServer("stun:stun.l.google.com:19302")
+                    .polite(true)
+                    .signaling(signaling.second())
+                    .build());
+
+            caller.onStateChange(state -> System.out.println("Caller is " + state));
+            callee.onTrack(PeerConnectionExample::receive);
+
+            boolean sending = false;
+
+            if (devices.cameras().isEmpty()) {
+                System.out.println("No camera, sending no video");
+            }
+            else {
+                try {
+                    LocalCamera camera = rtc.media().camera();
+                    caller.addTrack(camera);
+                    sending = true;
+
+                    System.out.println("Sending the camera " + camera.device().getName());
+                }
+                catch (MediaException e) {
+                    System.out.println("The camera could not be opened: " + e.getMessage());
+                }
+            }
+
+            if (devices.microphones().isEmpty()) {
+                System.out.println("No microphone, sending no audio");
+            }
+            else {
+                // Echo cancellation, noise suppression and gain control are on.
+                LocalAudio microphone = rtc.media().microphone();
+                caller.addTrack(microphone);
+                sending = true;
+
+                System.out.println("Sending the microphone");
+            }
+
+            if (!sending) {
+                System.out.println("There is nothing to send. The ClientApiExample needs no devices.");
+                return;
+            }
+
+            // Adding the tracks negotiated the call. The main thread may wait; a handler must not.
+            caller.whenConnected().get(15, TimeUnit.SECONDS);
+
+            caller.onStats(Duration.ofSeconds(5), stats -> System.out.printf(
+                    "Caller sends %d kbit/s over a %s candidate%n",
+                    Math.max(0, stats.outgoingBitrate()) / 1000, stats.candidateType()));
+
+            System.out.println("Press Enter to end the call...");
             System.in.read();
+        }
+        // Closing the runtime closed the peers, the camera and the microphone.
 
-            // Clean up.
-            localPeer.dispose();
-        }
-        catch (Exception e) {
-            Logger.getLogger(PeerConnectionExample.class.getName())
-                    .log(Level.SEVERE, "Error in PeerConnectionExample", e);
-        }
-        finally {
-            // Dispose the factory when done
-            factory.dispose();
-        }
+        System.out.println("Closed");
     }
 
     /**
-     * Represents a peer connection with audio and video tracks.
+     * Logs what the callee receives, once a second.
      */
-    private static class LocalPeer implements PeerConnectionObserver {
+    private static void receive(RemoteTrack track) {
+        String kind = track.kind().name().toLowerCase();
 
-        private final RTCPeerConnection peerConnection;
-        private final AudioTrackSource audioSource;
-        private final AudioTrack audioTrack;
-        private final VideoTrack videoTrack;
-        private final RTCRtpSender audioSender;
-        private final RTCRtpSender videoSender;
-        private final AudioFrameLogger audioFrameLogger = new AudioFrameLogger();
-        private final VideoFrameLogger videoFrameLogger = new VideoFrameLogger();
+        System.out.println("Callee receives the " + kind + " track");
 
+        if (track.isVideo()) {
+            AtomicInteger frames = new AtomicInteger();
+            AtomicLong lastLog = new AtomicLong(System.nanoTime());
 
-        public LocalPeer(PeerConnectionFactory factory) {
-            // Create a basic configuration for the peer connection.
-            RTCConfiguration config = new RTCConfiguration();
+            // The frame is released after the handler returns. A slow handler gets the newest
+            // frame next, and the frames in between are dropped.
+            track.asVideo().onFrame(frame -> {
+                int count = frames.incrementAndGet();
+                long now = System.nanoTime();
 
-            // Add a STUN server to help with NAT traversal.
-            RTCIceServer iceServer = new RTCIceServer();
-            iceServer.urls.add("stun:stun.l.google.com:19302");
-            config.iceServers.add(iceServer);
+                if (now - lastLog.get() >= TimeUnit.SECONDS.toNanos(1)) {
+                    System.out.printf("Received %d video frames, the last one %dx%d%n", count,
+                            frame.buffer.getWidth(), frame.buffer.getHeight());
 
-            // Create the peer connection.
-            peerConnection = factory.createPeerConnection(config, this);
+                    frames.set(0);
+                    lastLog.set(now);
+                }
+            });
+        }
+        else {
+            // The callee would play the microphone back to the speakers, and the microphone
+            // would pick it up again. Muting the track keeps its audio for the handler.
+            track.asAudio().setVolume(0);
 
-            // Create an audio source with options.
-            AudioOptions audioOptions = new AudioOptions();
-            audioOptions.echoCancellation = true;
-            audioOptions.autoGainControl = true;
-            audioOptions.noiseSuppression = true;
+            AtomicLong millis = new AtomicLong();
 
-            audioSource = factory.createAudioSource(audioOptions);
-            audioTrack = factory.createAudioTrack("audio0", audioSource);
+            track.asAudio().onAudio(chunk -> {
+                long total = millis.addAndGet(chunk.frames() * 1000L / chunk.sampleRate());
 
-            VideoDeviceSource videoSource = new VideoDeviceSource();
-            videoTrack = factory.createVideoTrack("video0", videoSource);
-
-            // Add the tracks to the peer connection.
-            List<String> streamIds = new ArrayList<>();
-            streamIds.add("stream1");
-            audioSender = peerConnection.addTrack(audioTrack, streamIds);
-            videoSender = peerConnection.addTrack(videoTrack, streamIds);
-
-            System.out.println("LocalPeer: Created with audio and video tracks");
+                if (total % 1000 == 0) {
+                    System.out.printf("Received %d s of audio, %d Hz, %d channel(s)%n", total / 1000,
+                            chunk.sampleRate(), chunk.channels());
+                }
+            });
         }
 
-        /**
-         * Closes the peer connection and releases resources.
-         */
-        public void dispose() {
-            if (audioTrack != null) {
-                audioTrack.removeSink(audioFrameLogger);
-            }
-            if (videoTrack != null) {
-                videoTrack.removeSink(videoFrameLogger);
-            }
-            // RTCRtpSender instances are not owned by the peer connection; the
-            // application must dispose them once they are no longer needed.
-            if (audioSender != null) {
-                audioSender.dispose();
-            }
-            if (videoSender != null) {
-                videoSender.dispose();
-            }
-            if (peerConnection != null) {
-                peerConnection.close();
-            }
-            // AudioTrackSource is ref-counted and not owned by the audio
-            // track; the application must dispose it once no longer needed.
-            if (audioSource != null) {
-                audioSource.dispose();
-            }
-        }
-
-        // PeerConnectionObserver implementation.
-
-        @Override
-        public void onIceCandidate(RTCIceCandidate candidate) {
-            System.out.println("LocalPeer: New ICE candidate: " + candidate.sdp);
-            // In a real application, you would send this candidate to the remote peer
-            // through your signaling channel.
-        }
-
-        @Override
-        public void onConnectionChange(RTCPeerConnectionState state) {
-            System.out.println("LocalPeer: Connection state changed to: " + state);
-        }
-
-        @Override
-        public void onIceConnectionChange(RTCIceConnectionState state) {
-            System.out.println("LocalPeer: ICE connection state changed to: " + state);
-        }
-
-        @Override
-        public void onIceGatheringChange(RTCIceGatheringState state) {
-            System.out.println("LocalPeer: ICE gathering state changed to: " + state);
-        }
-
-        @Override
-        public void onSignalingChange(RTCSignalingState state) {
-            System.out.println("LocalPeer: Signaling state changed to: " + state);
-        }
-
-        @Override
-        public void onDataChannel(RTCDataChannel dataChannel) {
-            System.out.println("LocalPeer: Data channel created: " + dataChannel.getLabel());
-        }
-
-        @Override
-        public void onRenegotiationNeeded() {
-            System.out.println("LocalPeer: Renegotiation needed");
-            // In a real application, you would create an offer and set it as the local description.
-        }
-
-        @Override
-        public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
-            System.out.println("LocalPeer: Track added: " + receiver.getTrack().getKind());
-
-            // The receiver is a query result the application owns; dispose it
-            // once its track has been retrieved.
-            receiver.dispose();
-        }
-
-        @Override
-        public void onRemoveTrack(RTCRtpReceiver receiver) {
-            System.out.println("LocalPeer: Track removed: " + receiver.getTrack().getKind());
-
-            receiver.dispose();
-        }
-
-        @Override
-        public void onTrack(RTCRtpTransceiver transceiver) {
-            RTCRtpReceiver receiver = transceiver.getReceiver();
-            MediaStreamTrack track = receiver.getTrack();
-            String kind = track.getKind();
-
-            if (kind.equals(MediaStreamTrack.AUDIO_TRACK_KIND)) {
-                AudioTrack audioTrack = (AudioTrack) track;
-                audioTrack.addSink(audioFrameLogger);
-            }
-            if (kind.equals(MediaStreamTrack.VIDEO_TRACK_KIND)) {
-                VideoTrack videoTrack = (VideoTrack) track;
-                videoTrack.addSink(videoFrameLogger);
-            }
-
-            System.out.println("LocalPeer: Transceiver track added: " + kind);
-
-            // The receiver and transceiver are query results the application
-            // owns; dispose them once the track has been retrieved. The track
-            // itself is unaffected and keeps delivering frames to its sink.
-            receiver.dispose();
-            transceiver.dispose();
-        }
-    }
-
-
-
-    /**
-     * A simple implementation of VideoTrackSink that logs information about received frames.
-     */
-    private static class VideoFrameLogger implements VideoTrackSink {
-
-        private static final long LOG_INTERVAL_MS = 1000; // Log every second
-        private int frameCount = 0;
-        private long lastLogTime = System.currentTimeMillis();
-
-
-        @Override
-        public void onVideoFrame(VideoFrame frame) {
-            frameCount++;
-
-            long now = System.currentTimeMillis();
-            if (now - lastLogTime >= LOG_INTERVAL_MS) {
-                System.out.printf("Received %d video frames in the last %.1f seconds%n",
-                        frameCount, (now - lastLogTime) / 1000.0);
-                System.out.printf("Last frame: %dx%d, rotation: %d, timestamp: %dms%n",
-                        frame.buffer.getWidth(), frame.buffer.getHeight(), frame.rotation,
-                        frame.timestampNs / 1000000);
-
-                frameCount = 0;
-                lastLogTime = now;
-            }
-
-            // Release the native resources associated with this frame to prevent memory leaks.
-            frame.release();
-        }
-    }
-
-
-
-    /**
-     * A simple implementation of AudioTrackSink that logs information about received audio data.
-     */
-    private static class AudioFrameLogger implements AudioTrackSink {
-
-        private static final long LOG_INTERVAL_MS = 1000; // Log every second
-        private int frameCount = 0;
-        private long lastLogTime = System.currentTimeMillis();
-
-
-        @Override
-        public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames) {
-            frameCount++;
-
-            long now = System.currentTimeMillis();
-            if (now - lastLogTime >= LOG_INTERVAL_MS) {
-                System.out.printf("Received %d audio frames in the last %.1f seconds%n",
-                        frameCount, (now - lastLogTime) / 1000.0);
-                System.out.printf("Last audio data: %d bytes, %d bits/sample, %d Hz, %d channels, %d frames%n",
-                        data.length, bitsPerSample, sampleRate, channels, frames);
-
-                frameCount = 0;
-                lastLogTime = now;
-            }
-        }
+        track.onEnded(() -> System.out.println("The " + kind + " track ended"));
     }
 }
