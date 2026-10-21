@@ -201,39 +201,48 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_dispose
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendDirectBuffer
 (JNIEnv * env, jobject caller, jobject jBuffer, jboolean isBinary)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLE(channel);
+	try {
+		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		CHECK_HANDLE(channel);
 
-	uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(jBuffer));
+		uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(jBuffer));
 
-	if (address != NULL) {
-		jlong bufferLength = env->GetDirectBufferCapacity(jBuffer);
+		if (address != NULL) {
+			jlong bufferLength = env->GetDirectBufferCapacity(jBuffer);
 
-		webrtc::CopyOnWriteBuffer data(address, static_cast<size_t>(bufferLength));
+			webrtc::CopyOnWriteBuffer data(address, static_cast<size_t>(bufferLength));
 
-		if (!channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)))) {
-			env->Throw(jni::JavaRuntimeException(env, "Data channel rejected the send"));
+			if (!channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)))) {
+				env->Throw(jni::JavaRuntimeException(env, "Data channel rejected the send"));
+			}
+		}
+		else {
+			env->Throw(jni::JavaError(env, "Non-direct buffer provided"));
 		}
 	}
-	else {
-		env->Throw(jni::JavaError(env, "Non-direct buffer provided"));
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBuffer
 (JNIEnv * env, jobject caller, jbyteArray jBufferArray, jboolean isBinary)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLE(channel);
-
-	int8_t * arrayPtr = env->GetByteArrayElements(jBufferArray, nullptr);
-	size_t arrayLength = env->GetArrayLength(jBufferArray);
-
-	webrtc::CopyOnWriteBuffer data(arrayPtr, arrayLength);
-
-	env->ReleaseByteArrayElements(jBufferArray, arrayPtr, JNI_ABORT);
-
 	try {
+		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		CHECK_HANDLE(channel);
+
+		auto releaseArray = [env, jBufferArray](jbyte * bytes) {
+			env->ReleaseByteArrayElements(jBufferArray, bytes, JNI_ABORT);
+		};
+		std::unique_ptr<jbyte, decltype(releaseArray)> bytes(
+			env->GetByteArrayElements(jBufferArray, nullptr), releaseArray);
+		if (!bytes) {
+			return;
+		}
+		webrtc::CopyOnWriteBuffer data(bytes.get(), env->GetArrayLength(jBufferArray));
+		bytes.reset();
+
 		if (!channel->Send(webrtc::DataBuffer(data, static_cast<bool>(isBinary)))) {
 			env->Throw(jni::JavaRuntimeException(env, "Data channel rejected the send"));
 		}
