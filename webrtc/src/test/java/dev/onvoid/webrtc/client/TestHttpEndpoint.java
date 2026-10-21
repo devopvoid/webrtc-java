@@ -33,7 +33,7 @@ import java.util.function.Function;
 /**
  * Just enough HTTP for WHIP and WHEP tests. A POST is answered with what the
  * handler returns for the offer, and creates a resource; a DELETE of that
- * resource returns 200.
+ * resource returns 200, unless the test sets another status.
  */
 final class TestHttpEndpoint implements AutoCloseable {
 
@@ -60,6 +60,22 @@ final class TestHttpEndpoint implements AutoCloseable {
 	}
 
 	final List<Request> requests = new CopyOnWriteArrayList<>();
+
+	/** The Location a POST is answered with. */
+	volatile String location = "/live/session/1";
+
+	/** The status a DELETE is answered with. */
+	volatile int deleteStatus = 200;
+
+	/** Where a DELETE answered with a redirect points. */
+	volatile String redirect = "/live/moved";
+
+	/**
+	 * How long the answer to a POST pauses, twice: before its status line and
+	 * after it. Each pause stays within a client's read timeout while both
+	 * together may not.
+	 */
+	volatile long stallMillis;
 
 	private final ServerSocket server;
 
@@ -133,26 +149,44 @@ final class TestHttpEndpoint implements AutoCloseable {
 
 		if (requestLine[0].equals("POST")) {
 			if (status != 201) {
-				respond(out, status + " Refused", "", "not allowed");
+				respond(out, status + " Refused", "", "not allowed", 0);
 				return;
 			}
 
 			String answer = answerer.apply(new String(body, StandardCharsets.UTF_8));
-			respond(out, "201 Created", "Location: /live/session/1\r\n", answer);
+			respond(out, "201 Created", "Location: " + location + "\r\n", answer, stallMillis);
+		}
+		else if (deleteStatus / 100 == 3) {
+			respond(out, deleteStatus + " Moved", "Location: " + redirect + "\r\n", "", 0);
 		}
 		else {
-			respond(out, "200 OK", "", "");
+			respond(out, deleteStatus + " Status", "", "", 0);
 		}
 	}
 
-	private static void respond(OutputStream out, String status, String headers, String body) throws IOException {
+	private static void respond(OutputStream out, String status, String headers, String body, long stallMillis)
+			throws IOException {
 		byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-		String head = "HTTP/1.1 " + status + "\r\nContent-Type: application/sdp\r\n" + headers
+		String head = "Content-Type: application/sdp\r\n" + headers
 				+ "Content-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n";
 
+		stall(stallMillis);
+		out.write(("HTTP/1.1 " + status + "\r\n").getBytes(StandardCharsets.US_ASCII));
+		out.flush();
+		stall(stallMillis);
 		out.write(head.getBytes(StandardCharsets.US_ASCII));
 		out.write(bytes);
 		out.flush();
+	}
+
+	private static void stall(long millis) throws IOException {
+		try {
+			Thread.sleep(millis);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IOException(e);
+		}
 	}
 
 	private static String readLine(InputStream in) throws IOException {

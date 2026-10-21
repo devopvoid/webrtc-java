@@ -537,7 +537,9 @@ viewer.peer().onTrack(track -> System.out.println("Receiving " + track.kind()));
 
 The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
 
-`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else.
+`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler.
+
+The bearer token goes to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. Redirects are not followed, since they would take the token elsewhere: a redirected request fails with its status.
 
 | Builder method | What it sets |
 |---|---|
