@@ -36,6 +36,15 @@ A sender's frames are recorded as they leave the encoder, a receiver's as they g
 Keep the senders and receivers undisposed while recording. The recorder asks them for key frames, and a disposed one cannot be asked.
 :::
 
+With the [Client API](/guide/client-api), a recorder takes its senders and remote tracks directly:
+
+```java
+recorder.addTrack(videoSender);          // a Sender from peer.addTrack
+recorder.addTrack(remoteTrack);          // a RemoteTrack from peer.onTrack
+```
+
+The peer keeps its native senders and receivers to itself and asks them for key frames on its own thread, so nothing needs to be kept undisposed: removing a sender or closing the peer ends the track in the recording, and `stop()` still finishes the file.
+
 ## Containers
 
 The container follows the file name:

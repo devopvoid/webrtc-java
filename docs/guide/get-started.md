@@ -1,6 +1,6 @@
 # Get Started
 
-This guide will help you get started with webrtc-java quickly. We'll cover installation, basic setup, and simple examples to demonstrate core functionality.
+This guide will help you get started with webrtc-java quickly. We'll cover installation, a first call with the client API, and the same steps with the core API.
 
 ## Supported Platforms
 Maven Central artifacts contain native libraries that can be loaded on the following platforms:
@@ -114,7 +114,86 @@ implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VER
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "linux-aarch32"
 ```
 
-## Basic Setup
+## Your First Call
+
+webrtc-java has two APIs. The [Client API](/guide/client-api) in `dev.onvoid.webrtc.client` negotiates by itself, keeps your code off WebRTC's threads, and closes everything it created with one call. The core API in `dev.onvoid.webrtc` mirrors WebRTC's own classes one to one, for full control. Start with the client API; [Using the Core API](#using-the-core-api) below shows the same steps with the core API.
+
+### Create the Runtime
+
+A `WebRtc` runtime owns everything the client API creates. Closing it, here at the end of the try-with-resources block, closes it all:
+
+```java
+import dev.onvoid.webrtc.client.*;
+
+try (WebRtc rtc = WebRtc.create()) {
+    // Peers, tracks and channels go here.
+}
+```
+
+`WebRtc.create()` captures the microphone and plays to the speakers. `WebRtc.builder().audio(AudioMode.HEADLESS).build()` needs no audio hardware at all, which suits servers and tests.
+
+### Connect to a Peer
+
+Two peers find each other through signaling: they exchange offers, answers and ICE candidates over a channel you provide, such as a WebSocket. The library has no transport of its own; you hand it a function that sends, and pass it what the other side sent:
+
+```java
+Peer peer = rtc.createPeer(PeerOptions.builder()
+        .iceServer("stun:stun.l.google.com:19302")
+        .polite(true)
+        .signaling(message -> socket.send(message.toJson()))
+        .build());
+
+socket.onText(text -> peer.signal(SignalMessage.fromJson(text)));
+```
+
+The peer negotiates by itself whenever its tracks or channels change. When both sides send an offer at the same moment, the polite one gives way, so set `polite(true)` on exactly one of the two peers. The JSON messages are the ones browsers use, so the other side can be a web page.
+
+### Send and Receive Media
+
+```java
+peer.addTrack(rtc.media().microphone());
+peer.addTrack(rtc.media().camera());
+
+peer.onTrack(track -> {
+    System.out.println("Receiving " + track.kind());
+
+    if (track.isVideo()) {
+        track.asVideo().onFrame(frame -> render(frame));
+    }
+});
+
+peer.onStateChange(state -> System.out.println("Call is " + state));
+```
+
+Handlers run on a thread of the peer's own, one at a time and in order. They may take their time and may call any method, so a slow handler never stalls WebRTC.
+
+### Exchange Messages
+
+```java
+DataChannel chat = peer.createChannel("chat");
+
+chat.onMessage(message -> System.out.println("Peer says: " + message.text()));
+chat.send("Hello");
+```
+
+Messages sent before the channel opens are sent once it does.
+
+### Hang Up
+
+`peer.close()` ends the call; closing the runtime ends every call and releases the camera, the microphone and the native resources. Operations return `CompletableFuture`s, which a thread such as `main` may wait for:
+
+```java
+peer.whenConnected().get(10, TimeUnit.SECONDS);
+// ...
+peer.close();
+```
+
+The [Client API](/guide/client-api) guide covers everything else: pushing your own audio and video, manual negotiation for WHIP and WHEP, statistics and errors. The [`ClientApiExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ClientApiExample.java) runs a whole call between two peers in one process, without any hardware.
+
+## Using the Core API
+
+The core API leaves negotiation, threads and the lifetime of native objects to you. The steps below make the same call with it.
+
 
 ### Initialize the WebRTC Library
 
@@ -149,7 +228,7 @@ RTCPeerConnection peerConnection = factory.createPeerConnection(config, new Peer
 });
 ```
 
-## Signaling
+### Signaling
 
 WebRTC requires a signaling mechanism to exchange connection information between peers. The library doesn't provide this, so you'll need to implement it using your preferred method (WebSockets, HTTP, etc.).
 
@@ -215,7 +294,7 @@ signalingChannel.onIceCandidate(candidateMessage -> {
 });
 ```
 
-### Letting the Peer Connection Create the Description
+#### Letting the Peer Connection Create the Description
 
 `setLocalDescription` can also be called with only an observer. It then creates the offer or the answer, whichever the signaling state calls for, and applies it in one step, so nothing can change in between. That makes it the simpler way to implement "perfect negotiation". Read the result with `getLocalDescription()` once the observer reports success:
 
@@ -233,7 +312,7 @@ peerConnection.setLocalDescription(new SetSessionDescriptionObserver() {
 });
 ```
 
-### Adding Candidates and Knowing the Outcome
+#### Adding Candidates and Knowing the Outcome
 
 `addIceCandidate(candidate)` reports nothing and fails silently when the remote description is not set yet. The form that takes an `AddIceCandidateObserver` is queued behind any pending offer/answer operation, as the standard requires, so a candidate can be added right after `setRemoteDescription()` without waiting for it, and the observer says whether it was accepted:
 
@@ -263,9 +342,9 @@ public void onSelectedCandidatePairChanged(RTCCandidatePairChangeEvent event) {
 }
 ```
 
-## Media Streams
+### Media Streams
 
-### Accessing Media Devices
+#### Accessing Media Devices
 
 To query media devices (cameras and microphones):
 
@@ -287,7 +366,7 @@ for (AudioDevice device : audioDevices) {
 }
 ```
 
-### Creating Media Tracks
+#### Creating Media Tracks
 
 To create audio and video tracks:
 
@@ -317,7 +396,7 @@ AudioTrack audioTrack = factory.createAudioTrack("audio0", audioSource);
 Audio devices can be specified via the `AudioDeviceModule`, see the guide on [Audio Devices][audio-devices] for more details.
 :::
 
-### Adding Tracks to Peer Connection
+#### Adding Tracks to Peer Connection
 
 ```java
 import java.util.ArrayList;
@@ -331,7 +410,7 @@ RTCRtpSender videoSender = peerConnection.addTrack(videoTrack, streamIds);
 RTCRtpSender audioSender = peerConnection.addTrack(audioTrack, streamIds);
 ```
 
-### Receiving Tracks
+#### Receiving Tracks
 
 A remote track arrives in `onTrack` with the transceiver that carries it. To learn when its media actually starts flowing, for example to show a video only once there is something to show, set an `RTCRtpReceiverObserver`; an `RTCRtpSenderObserver` does the same for the first packet a sender sends. Either is called right away when that has already happened:
 
@@ -353,7 +432,7 @@ public void onTrack(RTCRtpTransceiver transceiver) {
 
 An observer belongs to the `RTCRtpReceiver` or `RTCRtpSender` object it was set through, and is removed when that object is disposed. `getId()` identifies a sender or receiver, and `RTCRtpSender.getStreams()` returns the stream IDs its track was added with.
 
-## Cleanup
+### Cleanup
 
 Always properly dispose of resources when you're done:
 
@@ -381,6 +460,7 @@ factory.dispose();
 
 Now that you have a basic understanding of webrtc-java, you can explore more advanced features:
 
+- [Client API][client-api] - Everything the client API does, and how its threads work
 - [Data Channels][data-channels] - Learn more about data channels
 - [RTC Stats][rtc-stats] - Monitor connection quality
 - [Desktop Capture][desktop-capture] - Share screens and windows
@@ -388,6 +468,7 @@ Now that you have a basic understanding of webrtc-java, you can explore more adv
 
 For a complete API reference, check the [JavaDoc][javadoc].
 
+[client-api]: /guide/client-api
 [audio-devices]: /guide/audio/audio-devices
 [data-channels]: /guide/data/data-channels
 [rtc-stats]: /guide/monitoring/rtc-stats

@@ -21,13 +21,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpSender;
+import dev.onvoid.webrtc.client.RemoteTrack;
+import dev.onvoid.webrtc.client.Sender;
+import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.internal.NativeApi;
 import dev.onvoid.webrtc.media.player.FFmpeg;
 
@@ -166,6 +173,46 @@ public class MediaRecorder implements AutoCloseable {
 	}
 
 	/**
+	 * Records what a sender of the client API sends, as it comes out of the
+	 * encoder. Key frames are asked for on the sender's peer, which keeps
+	 * the sender to itself; removing the sender or closing the peer ends the
+	 * track in the recording.
+	 *
+	 * @param sender The sender to record.
+	 *
+	 * @throws IllegalStateException    If the recorder was started or closed.
+	 * @throws IllegalArgumentException If the sender was removed, or its peer
+	 *                                  closed.
+	 */
+	public void addTrack(Sender sender) {
+		Objects.requireNonNull(sender, "Sender is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+			addTrack(sourceOf(EncodedFrames.of(sender)));
+		}
+	}
+
+	/**
+	 * Records what a remote track of the client API receives, as it goes into
+	 * the decoder. Key frames are asked for on the track's peer; the track
+	 * ending, or the peer closing, ends the track in the recording.
+	 *
+	 * @param track The remote track to record.
+	 *
+	 * @throws IllegalStateException    If the recorder was started or closed.
+	 * @throws IllegalArgumentException If the track ended.
+	 */
+	public void addTrack(RemoteTrack track) {
+		Objects.requireNonNull(track, "Track is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+			addTrack(sourceOf(EncodedFrames.of(track)));
+		}
+	}
+
+	/**
 	 * Starts recording the tracks added so far.
 	 *
 	 * @throws IllegalStateException If the recorder has no tracks, or was
@@ -268,6 +315,31 @@ public class MediaRecorder implements AutoCloseable {
 	}
 
 	/** Called with the lock held, in the idle state. */
+	private void addTrack(EncodedFrames.Source source) {
+		addTrack(source.frames(), source::requestKeyFrame);
+	}
+
+	/**
+	 * Waits for the client API's peer to hand over the encoded frames. Its
+	 * control thread never takes this recorder's lock, so waiting under it
+	 * cannot deadlock.
+	 */
+	private static EncodedFrames.Source sourceOf(CompletableFuture<EncodedFrames.Source> future) {
+		try {
+			return future.get(10, TimeUnit.SECONDS);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Interrupted while adding the track", e);
+		}
+		catch (ExecutionException e) {
+			throw new IllegalArgumentException(e.getCause().getMessage(), e.getCause());
+		}
+		catch (TimeoutException e) {
+			throw new IllegalStateException("The peer did not hand over the track in time", e);
+		}
+	}
+
 	private void addTrack(long frames, Runnable keyFrameRequest) {
 		if (frames == 0) {
 			throw new IllegalArgumentException("The sender or receiver was disposed");

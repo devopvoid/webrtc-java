@@ -6,6 +6,8 @@ module webrtc.java {
 	requires java.desktop;
 
 	exports dev.onvoid.webrtc;
+	exports dev.onvoid.webrtc.client;
+	exports dev.onvoid.webrtc.client.swing;
 	exports dev.onvoid.webrtc.logging;
 	exports dev.onvoid.webrtc.media;
 	exports dev.onvoid.webrtc.media.audio;
@@ -18,5 +20,9 @@ module webrtc.java {
 	// based media module, needs NativeApi to reach the native side of a custom
 	// media source directly instead of carrying every frame through Java.
 	exports dev.onvoid.webrtc.internal to webrtc.java.media;
+
+	// Not API for applications either. The media module's recorder needs the
+	// encoded frames of client API senders and remote tracks.
+	exports dev.onvoid.webrtc.client.internal to webrtc.java.media;
 
 }

@@ -4,6 +4,8 @@ webrtc-java is a Java wrapper for the [WebRTC Native API](https://webrtc.github.
 
 The library provides a comprehensive set of Java classes that map to the WebRTC C++ API, making it possible to establish peer-to-peer connections, transmit audio and video, share screens, and exchange arbitrary data between applications.
 
+It has two APIs. The [Client API](/guide/client-api) negotiates connections by itself, keeps application code off WebRTC's threads, and releases everything it created with one call, which makes it the place to start. The core API maps WebRTC's classes one to one, for applications that need full control.
+
 ## Overview
 
 For more detailed information, check out the documentation:

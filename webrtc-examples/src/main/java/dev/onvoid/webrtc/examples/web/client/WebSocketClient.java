@@ -61,9 +61,12 @@ public class WebSocketClient {
     private final List<Runnable> closeListeners;
     private final List<Consumer<Throwable>> errorListeners;
 
-    private WebSocket webSocket;
+    private volatile WebSocket webSocket;
     private ScheduledExecutorService heartbeatExecutor;
-    private boolean connected = false;
+    private volatile boolean connected = false;
+
+    /** The send the next one waits for. */
+    private CompletableFuture<WebSocket> lastSend = CompletableFuture.completedFuture(null);
 
 
 	/**
@@ -146,15 +149,25 @@ public class WebSocketClient {
 	 *
 	 * @return A CompletableFuture that completes when the message is sent.
 	 */
-	public CompletableFuture<WebSocket> sendMessage(String message) {
-		if (!connected || webSocket == null) {
+	public synchronized CompletableFuture<WebSocket> sendMessage(String message) {
+		WebSocket socket = webSocket;
+
+		if (!connected || socket == null) {
 			return CompletableFuture.failedFuture(
 					new IllegalStateException("Not connected to WebSocket server"));
 		}
 
 		LOG.debug("Sending message: {}", message);
 
-		return webSocket.sendText(message, true);
+		// A WebSocket takes one message at a time, so each send waits for the
+		// one before it, whether that succeeded or not.
+		CompletableFuture<WebSocket> send = lastSend
+				.handle((ignored, error) -> null)
+				.thenCompose(ignored -> socket.sendText(message, true));
+
+		lastSend = send;
+
+		return send;
 	}
 
 	/**

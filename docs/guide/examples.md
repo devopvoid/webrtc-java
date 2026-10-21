@@ -2,6 +2,26 @@
 
 This section provides an overview of the example applications included in the `webrtc-examples` Maven module. These examples demonstrate various features and capabilities of the webrtc-java library.
 
+## Client API
+
+The [`ClientApiExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ClientApiExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends video, audio and chat messages from one to the other. It needs no audio or video hardware and no server.
+
+**Key features demonstrated:**
+- Creating a headless `WebRtc` runtime, which needs no microphone or speakers
+- Connecting two peers through a signaling that carries JSON text, as a WebSocket would
+- Letting perfect negotiation run the offer and answer exchange, with one polite peer
+- Pushing video frames, and audio in pieces of any length
+- Receiving remote tracks, their frames and their audio
+- Exchanging messages on a data channel
+- Reading the connection's statistics once a second
+- Closing the peers, tracks and factory by closing the runtime
+
+This example is the shortest way to see a complete call working, and a starting point for applications built on the client API.
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ClientApiExample" -D"exec.args=10"
+```
+
 ## PeerConnection
 
 The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) demonstrates how to set up a peer connection with audio and video tracks to be able to send and receive media.
@@ -17,15 +37,18 @@ This example provides a foundation for building WebRTC applications that need to
 
 ## WHEP
 
-The [`WhepExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/WhepExample.java) demonstrates an implementation of WebRTC HTTP Egress Protocol (WHEP) client, which is a standardized protocol for WebRTC ingestion.
+The [`WhepExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/WhepExample.java) implements a client of the WebRTC HTTP Egress Protocol (WHEP), which receives a stream from a server, with the [Client API](/guide/client-api).
 
 **Key features demonstrated:**
-- Setting up a WebRTC peer connection
-- Creating and sending an SDP offer to a WHEP endpoint
-- Receiving and processing an SDP answer
-- Establishing media streaming over WebRTC
+- Receiving a stream from a WHEP endpoint with `Whep`
+- Logging the stream's video frames and audio
+- Ending the session, which deletes it on the server
 
-This example is useful for applications that need to receive media streams from WHEP-compatible servers, such as live streaming platforms.
+This example is useful for applications that need to receive media streams from WHEP-compatible servers, such as live streaming platforms. The endpoint and the number of seconds to receive are optional:
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.WhepExample" -D"exec.args=http://localhost:8889/mystream/whep 10"
+```
 
 ## Codec List
 
@@ -116,15 +139,15 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.EncryptedRecordingExa
 
 ## Web Client
 
-The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) demonstrates how to combine WebSocket signaling with WebRTC peer connections for real-time communication between web and Java clients.
+The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) calls a browser from Java over WebSocket signaling, with the [Client API](/guide/client-api). The browser client is served by the example's `WebServer`.
 
 **Key features demonstrated:**
 - Connecting to a signaling server using WebSockets
-- Setting up audio and video media tracks
-- Creating and managing WebRTC peer connections
-- Handling signaling messages (offers, answers, ICE candidates)
-- Joining and leaving rooms for multi-user communication
-- Using custom audio sources for audio streaming
+- Implementing a `Signaling` over the application's own message format, which also names the sender and receiver of each message
+- Sending generated audio and video, pushed into tracks of the runtime
+- Letting the peer negotiate by itself, and starting a new peer whenever the browser joins the room
+- Joining and leaving rooms
+- Logging the audio and video the browser sends
 
 This example is valuable for applications that need to establish WebRTC connections between Java clients and web browsers, enabling cross-platform real-time communication with audio and video.
 
