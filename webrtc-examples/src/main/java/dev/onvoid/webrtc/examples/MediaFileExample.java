@@ -16,50 +16,48 @@
 
 package dev.onvoid.webrtc.examples;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.concurrent.atomic.AtomicLong;
 
-import dev.onvoid.webrtc.PeerConnectionFactory;
-import dev.onvoid.webrtc.PeerConnectionObserver;
-import dev.onvoid.webrtc.RTCConfiguration;
-import dev.onvoid.webrtc.RTCIceCandidate;
-import dev.onvoid.webrtc.RTCIceConnectionState;
-import dev.onvoid.webrtc.RTCPeerConnection;
-import dev.onvoid.webrtc.RTCRtpSender;
-import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
-import dev.onvoid.webrtc.media.audio.AudioLayer;
-import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.client.AudioMode;
+import dev.onvoid.webrtc.client.LocalTrack;
+import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.PeerOptions;
+import dev.onvoid.webrtc.client.Signaling;
+import dev.onvoid.webrtc.client.SignalingPair;
+import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.media.player.MediaFileSource;
 import dev.onvoid.webrtc.media.player.MediaInfo;
 import dev.onvoid.webrtc.media.player.MediaPlayerListener;
 import dev.onvoid.webrtc.media.player.MediaPlayerState;
-import dev.onvoid.webrtc.media.video.VideoTrack;
-
-import java.util.List;
 
 /**
  * Example demonstrating how to send a media file over a peer connection, in
- * place of a camera and a microphone.
+ * place of a camera and a microphone, with the client API.
  * <p>
  * This example shows how to:
  * <ul>
  *   <li>Open a media file, or a live RTSP stream, with a MediaFileSource</li>
  *   <li>Read what the source contains from its MediaInfo</li>
- *   <li>Create audio and video tracks from the sources it feeds</li>
- *   <li>Add those tracks to a peer connection</li>
+ *   <li>Send the sources it feeds as client API tracks, with {@code videoTrack} and
+ *       {@code audioTrack}</li>
+ *   <li>Receive them on a second peer, connected through a loopback signaling</li>
  *   <li>Follow playback through a MediaPlayerListener</li>
+ *   <li>Close the tracks before the source, which owns what they were made from</li>
  * </ul>
  * <p>
  * Decoding happens entirely in native code. Frames are paced in real time and
  * carry the presentation times of the file, so what a receiver gets keeps the
  * timing of the media rather than the timing of a Java thread.
  * <p>
- * Note: this example only sets up the local side. A real application would
- * reach a remote peer through a signaling channel, as
- * {@link PeerConnectionExample} shows.
+ * Both peers run in this process. A real application reaches its remote peer
+ * through a {@link Signaling} that carries the messages over a WebSocket or
+ * the like. {@link MediaFilePlayerExample} also shows the received video and
+ * plays the received audio.
  * <p>
  * Run it with the media file or stream URL to send:
  * <pre>
@@ -73,7 +71,7 @@ import java.util.List;
  */
 public class MediaFileExample {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         if (args.length < 1) {
             System.out.println("Usage: MediaFileExample <media-file | rtsp-url>");
             System.out.println("  for example: MediaFileExample movie.mp4");
@@ -81,66 +79,104 @@ public class MediaFileExample {
             return;
         }
 
-        // A factory that sends pushed audio must not also be capturing from a
-        // microphone, so this one is given a dummy audio layer. An application
-        // that needs both needs a second factory.
-        AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
-        PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
+        // The file's audio is pushed, so the runtime must not capture from a
+        // microphone, and a headless one needs no audio devices at all. The
+        // runtime goes first: it loads the native library the source needs.
+        try (WebRtc rtc = WebRtc.builder().audio(AudioMode.HEADLESS).build()) {
+            // Opening reads the container and picks the streams to play. A
+            // source with nothing playable in it fails here.
+            try (MediaFileSource source = new MediaFileSource(args[0])) {
+                printInfo(source.getInfo());
 
-        // Opening reads the container and picks the streams to play. A source
-        // with nothing playable in it fails here.
-        try (MediaFileSource source = new MediaFileSource(args[0])) {
-            printInfo(source.getInfo());
+                SignalingPair signaling = Signaling.loopback();
 
-            LocalPeer localPeer = new LocalPeer(factory, source);
+                Peer sender = rtc.createPeer(PeerOptions.builder()
+                        .name("sender")
+                        .signaling(signaling.first())
+                        .build());
+                Peer receiver = rtc.createPeer(PeerOptions.builder()
+                        .name("receiver")
+                        .polite(true)
+                        .signaling(signaling.second())
+                        .build());
 
-            CountDownLatch finished = new CountDownLatch(1);
+                AtomicInteger videoFrames = new AtomicInteger();
+                AtomicLong audioMillis = new AtomicLong();
 
-            source.setListener(new MediaPlayerListener() {
+                receiver.onTrack(track -> {
+                    System.out.println("Receiving " + track.kind());
 
-                @Override
-                public void onStateChanged(MediaPlayerState state) {
-                    System.out.println("Player state: " + state);
+                    if (track.isVideo()) {
+                        track.asVideo().onFrame(frame -> videoFrames.incrementAndGet());
+                    }
+                    else {
+                        track.asAudio().onAudio(chunk ->
+                                audioMillis.addAndGet(chunk.frames() * 1000L / chunk.sampleRate()));
+                    }
+                });
+
+                // A source with no video has no video source, and likewise
+                // for audio, so each track is only made if there is something
+                // to feed it. The sources stay the file source's.
+                List<LocalTrack> tracks = new ArrayList<>();
+
+                if (source.getVideoSource() != null) {
+                    tracks.add(rtc.media().videoTrack("video", source.getVideoSource()));
+                }
+                if (source.getAudioSource() != null) {
+                    tracks.add(rtc.media().audioTrack("audio", source.getAudioSource()));
                 }
 
-                @Override
-                public void onEndOfStream() {
-                    System.out.println("Reached the end of the source.");
-                    finished.countDown();
+                // Both tracks go into one stream, so a receiver plays them in sync.
+                tracks.forEach(sender::addTrack);
+
+                // The main thread may wait; a handler must not.
+                sender.whenConnected().get(15, TimeUnit.SECONDS);
+
+                CountDownLatch finished = new CountDownLatch(1);
+
+                source.setListener(new MediaPlayerListener() {
+
+                    @Override
+                    public void onStateChanged(MediaPlayerState state) {
+                        System.out.println("Player state: " + state);
+                    }
+
+                    @Override
+                    public void onEndOfStream() {
+                        System.out.println("Reached the end of the source.");
+                        finished.countDown();
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        System.out.println("Playback failed: " + message);
+                        finished.countDown();
+                    }
+                });
+
+                // Playing the source over and over is one line, and is what a
+                // stand-in for a camera usually wants:
+                // source.setLooping(true);
+
+                source.play();
+
+                // Report where playback has got to while it runs.
+                while (!finished.await(1, TimeUnit.SECONDS)) {
+                    System.out.printf("  at %.1f s, %d video frames and %.1f s of audio received%n",
+                            source.getPositionUs() / 1_000_000.0, videoFrames.get(),
+                            audioMillis.get() / 1000.0);
                 }
 
-                @Override
-                public void onError(String message) {
-                    System.out.println("Playback failed: " + message);
-                    finished.countDown();
+                // The tracks go before the source, which disposes of the media
+                // sources they were made from. Waiting for them is what makes
+                // closing the source safe.
+                for (LocalTrack track : tracks) {
+                    track.closeAsync().get(5, TimeUnit.SECONDS);
                 }
-            });
-
-            // Playing the source over and over is one line, and is what a
-            // stand-in for a camera usually wants:
-            // source.setLooping(true);
-
-            source.play();
-
-            // Report where playback has got to while it runs.
-            while (!finished.await(1, TimeUnit.SECONDS)) {
-                System.out.printf("  at %.1f s, %d video frames and %d audio chunks sent%n",
-                        source.getPositionUs() / 1_000_000.0,
-                        localPeer.videoFrames.get(), localPeer.audioChunks.get());
             }
-
-            // The tracks go before the source, which disposes of the media
-            // sources they were made from.
-            localPeer.dispose();
         }
-        catch (Exception e) {
-            Logger.getLogger(MediaFileExample.class.getName())
-                    .log(Level.SEVERE, "Error in MediaFileExample", e);
-        }
-        finally {
-            factory.dispose();
-            audioModule.dispose();
-        }
+        // Closing the runtime closed the peers.
     }
 
     private static void printInfo(MediaInfo info) {
@@ -166,81 +202,6 @@ public class MediaFileExample {
         }
         else {
             System.out.println("  audio: none");
-        }
-    }
-
-    /**
-     * A peer connection carrying the tracks a media file feeds.
-     */
-    private static class LocalPeer implements PeerConnectionObserver {
-
-        final AtomicInteger videoFrames = new AtomicInteger();
-        final AtomicInteger audioChunks = new AtomicInteger();
-
-        private final RTCPeerConnection peerConnection;
-        private final VideoTrack videoTrack;
-        private final AudioTrack audioTrack;
-        private final RTCRtpSender videoSender;
-        private final RTCRtpSender audioSender;
-
-
-        LocalPeer(PeerConnectionFactory factory, MediaFileSource source) {
-            peerConnection = factory.createPeerConnection(new RTCConfiguration(), this);
-
-            // A source with no video has no video source, and likewise for
-            // audio, so each track is only made if there is something to feed
-            // it.
-            if (source.getVideoSource() != null) {
-                videoTrack = factory.createVideoTrack("video", source.getVideoSource());
-
-                // Watching the track shows what the peer connection is being
-                // given. A real application would not need this.
-                videoTrack.addSink(frame -> videoFrames.incrementAndGet());
-
-                videoSender = peerConnection.addTrack(videoTrack, List.of("stream"));
-            }
-            else {
-                videoTrack = null;
-                videoSender = null;
-            }
-
-            if (source.getAudioSource() != null) {
-                audioTrack = factory.createAudioTrack("audio", source.getAudioSource());
-                audioTrack.addSink((data, bits, rate, channels, frames) ->
-                        audioChunks.incrementAndGet());
-
-                audioSender = peerConnection.addTrack(audioTrack, List.of("stream"));
-            }
-            else {
-                audioTrack = null;
-                audioSender = null;
-            }
-        }
-
-        void dispose() {
-            // An RTCRtpSender is not owned by the peer connection, so each one
-            // handed out by addTrack has to be released here. Doing it before
-            // the connection closes is what lets go of the tracks, and with
-            // them the media sources the file source owns.
-            if (videoSender != null) {
-                videoSender.dispose();
-            }
-            if (audioSender != null) {
-                audioSender.dispose();
-            }
-
-            peerConnection.close();
-        }
-
-        @Override
-        public void onIceCandidate(RTCIceCandidate candidate) {
-            // A real application sends this to the remote peer over its
-            // signaling channel.
-        }
-
-        @Override
-        public void onIceConnectionChange(RTCIceConnectionState state) {
-            System.out.println("ICE connection state: " + state);
         }
     }
 }
