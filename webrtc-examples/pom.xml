@@ -17,6 +17,8 @@
         <maven.install.skip>true</maven.install.skip>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jetty.version>12.1.14</jetty.version>
+        <!-- The same OpenJFX line webrtc-java-javafx is compiled against. -->
+        <javafx.version>17.0.20</javafx.version>
     </properties>
 
     <build>
@@ -90,6 +92,16 @@
             <groupId>${project.groupId}</groupId>
             <artifactId>webrtc-java-media</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>webrtc-java-javafx</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
         </dependency>
 
         <dependency>
