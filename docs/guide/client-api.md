@@ -265,7 +265,7 @@ peer.onTrack(track -> {
 stage.setScene(new Scene(new StackPane(remoteView), 960, 540));
 ```
 
-The view converts frames on their own thread and paints at most once per JavaFX pulse. `setMirrored(true)`, or its `mirroredProperty()`, flips a camera preview, and `snapshot()`, on the JavaFX Application Thread, returns a copy of the picture.
+The view converts frames on their own thread and paints at most once per JavaFX pulse. `setMirrored(true)`, or its `mirroredProperty()`, flips a camera preview, and `snapshot()`, on the JavaFX Application Thread, returns a copy of the picture. The `JavaFxCameraExample` in the [examples](/guide/examples#javafx-camera) shows a preview and a received track side by side.
 
 ### Don't Wait in a Handler
 

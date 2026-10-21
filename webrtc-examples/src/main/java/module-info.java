@@ -4,9 +4,11 @@ module webrtc.java.examples {
     requires java.desktop;
     requires java.logging;
     requires java.net.http;
+    requires javafx.controls;
     requires org.eclipse.jetty.server;
     requires org.eclipse.jetty.websocket.server;
     requires webrtc.java;
+    requires webrtc.java.javafx;
     requires webrtc.java.media;
 
     exports dev.onvoid.webrtc.examples.web.client;

@@ -122,6 +122,22 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFilePlayerExampl
 ```
 :::
 
+## JavaFX Camera
+
+The [`JavaFxCameraExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/JavaFxCameraExample.java) is a JavaFX application built on the [Client API](/guide/client-api). It sends the camera from one peer to another in the same process, and shows the camera's preview beside the video that arrives.
+
+**Key features demonstrated:**
+- Running the peers' handlers on the JavaFX Application Thread, with `Platform::runLater` as the event executor
+- Showing a local preview and a remote track in the JavaFX `VideoView` of the `webrtc-java-javafx` module
+- Mirroring the preview through the view's `mirroredProperty()`
+- Switching the camera while it is being sent, without renegotiating
+- Showing the connection state, and the encoded resolution and frame rate read from `onStats`
+- Closing the runtime off the JavaFX thread before JavaFX exits
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.JavaFxCameraExample"
+```
+
 ## Encrypted Recording
 
 The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call end to end with encoded frame transforms, and records what the receiving side decrypted into a media file. See the [Encoded Transforms](/guide/advanced/encoded-transforms) and [Media Recording](/guide/media/media-recording) guides for the APIs it uses.
