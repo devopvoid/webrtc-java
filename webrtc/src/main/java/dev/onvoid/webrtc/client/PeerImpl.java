@@ -576,6 +576,44 @@ final class PeerImpl implements Peer {
 		return result;
 	}
 
+	/**
+	 * Hands a native extension a source of encoded frames, taken on the
+	 * control executor. The future fails once the runtime has stopped the
+	 * threads that would take it, and a source that comes too late for the
+	 * future, which the caller cancelled meanwhile, is closed rather than
+	 * left with its reference.
+	 *
+	 * @param take takes the source, or throws why it cannot.
+	 */
+	CompletableFuture<EncodedFrames.Source> encodedFrames(Supplier<EncodedFrames.Source> take) {
+		CompletableFuture<EncodedFrames.Source> result = new CompletableFuture<>();
+
+		rtc.track(result, null);
+
+		control.execute(() -> {
+			if (result.isDone()) {
+				// The caller stopped waiting before this ran.
+				return;
+			}
+
+			try {
+				EncodedFrames.Source source = take.get();
+
+				if (!result.complete(source)) {
+					source.close();
+				}
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e);
+			}
+		}, () -> {
+			// A runtime that stopped its threads dropped the task.
+			result.completeExceptionally(closedError());
+		});
+
+		return result;
+	}
+
 	void deliverError(WebRtcException error) {
 		events.execute(() -> {
 			if (errorHandlers.isEmpty()) {

@@ -316,7 +316,7 @@ public class MediaRecorder implements AutoCloseable {
 
 	/** Called with the lock held, in the idle state. */
 	private void addTrack(EncodedFrames.Source source) {
-		addTrack(source.frames(), source::requestKeyFrame);
+		addTrack(source.take(), source::requestKeyFrame);
 	}
 
 	/**
@@ -324,11 +324,12 @@ public class MediaRecorder implements AutoCloseable {
 	 * control thread never takes this recorder's lock, so waiting under it
 	 * cannot deadlock.
 	 */
-	private static EncodedFrames.Source sourceOf(CompletableFuture<EncodedFrames.Source> future) {
+	static EncodedFrames.Source sourceOf(CompletableFuture<EncodedFrames.Source> future) {
 		try {
 			return future.get(10, TimeUnit.SECONDS);
 		}
 		catch (InterruptedException e) {
+			giveUp(future);
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("Interrupted while adding the track", e);
 		}
@@ -336,8 +337,19 @@ public class MediaRecorder implements AutoCloseable {
 			throw new IllegalArgumentException(e.getCause().getMessage(), e.getCause());
 		}
 		catch (TimeoutException e) {
+			giveUp(future);
 			throw new IllegalStateException("The peer did not hand over the track in time", e);
 		}
+	}
+
+	/**
+	 * Stops waiting for a source. The peer closes one that comes after the
+	 * cancellation; this closes one that came before it, since no recorder
+	 * takes it over.
+	 */
+	static void giveUp(CompletableFuture<EncodedFrames.Source> future) {
+		future.cancel(false);
+		future.thenAccept(EncodedFrames.Source::close);
 	}
 
 	private void addTrack(long frames, Runnable keyFrameRequest) {

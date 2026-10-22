@@ -56,3 +56,9 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_receiverFrames
 
 	return receiver != nullptr ? Retained(jni::EncodedFrameTransformer::Of(receiver)) : 0;
 }
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseFrames
+(JNIEnv * env, jclass caller, jlong frames)
+{
+	jni::GetExtensionApi()->encoded_frames_release(reinterpret_cast<void *>(frames));
+}

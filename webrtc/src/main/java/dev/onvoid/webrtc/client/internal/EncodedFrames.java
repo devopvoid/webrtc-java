@@ -19,9 +19,11 @@ package dev.onvoid.webrtc.client.internal;
 import static java.util.Objects.requireNonNull;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
 
 import dev.onvoid.webrtc.client.RemoteTrack;
 import dev.onvoid.webrtc.client.Sender;
+import dev.onvoid.webrtc.internal.NativeApi;
 
 /**
  * Lets a native extension, such as the media module's recorder, observe the
@@ -32,6 +34,11 @@ import dev.onvoid.webrtc.client.Sender;
  * them on the control executor of their peer. What this hands out keeps to
  * that: the handle is taken there, and key frames are asked for there, once
  * the sender or receiver is gone not at all.
+ * <p>
+ * The futures of {@link #of(Sender)} and {@link #of(RemoteTrack)} complete
+ * in any case, failed once the peer or its runtime is closed. A caller that
+ * stops waiting cancels the future and closes a source that completes it all
+ * the same, see {@link Source}.
  */
 public final class EncodedFrames {
 
@@ -55,31 +62,54 @@ public final class EncodedFrames {
 	}
 
 	/**
-	 * Where a sender's or receiver's encoded frames come from.
+	 * Where a sender's or receiver's encoded frames come from. It owns the
+	 * reference of its handle until {@link #take()} hands it over; closing it
+	 * before drops the reference, closing it after does nothing. Whoever gets
+	 * a source does one or the other, so that no reference is left behind.
 	 */
-	public static final class Source {
+	public static final class Source implements AutoCloseable {
 
-		private final long frames;
+		/** The handle, or 0 once taken or released. */
+		private final AtomicLong frames;
 
 		private final Runnable keyFrameRequest;
 
 
 		/**
 		 * @param frames          the handle of {@code NativeApi.encodedFramesOf},
-		 *                        whose reference the receiver of this source
-		 *                        drops.
+		 *                        whose reference this source takes over.
 		 * @param keyFrameRequest asks for a key frame, from any thread.
 		 */
 		public Source(long frames, Runnable keyFrameRequest) {
-			this.frames = frames;
+			this.frames = new AtomicLong(frames);
 			this.keyFrameRequest = requireNonNull(keyFrameRequest, "keyFrameRequest");
 		}
 
 		/**
-		 * @return the handle of the encoded frames, with a reference to drop.
+		 * Hands over the handle together with its reference, which the caller
+		 * drops from then on.
+		 *
+		 * @return the handle of the encoded frames.
+		 *
+		 * @throws IllegalStateException if it was taken or released before.
 		 */
-		public long frames() {
-			return frames;
+		public long take() {
+			long handle = frames.getAndSet(0);
+
+			if (handle == 0) {
+				throw new IllegalStateException("The encoded frames were taken or released");
+			}
+
+			return handle;
+		}
+
+		/**
+		 * Drops the reference of the handle, unless {@link #take()} handed it
+		 * over. Closing it again does nothing.
+		 */
+		@Override
+		public void close() {
+			NativeApi.releaseEncodedFrames(frames.getAndSet(0));
 		}
 
 		/**

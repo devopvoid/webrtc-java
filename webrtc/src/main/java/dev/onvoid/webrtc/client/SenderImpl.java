@@ -314,30 +314,21 @@ final class SenderImpl implements Sender {
 	 * peer's control executor, where key frames are asked for too.
 	 */
 	CompletableFuture<EncodedFrames.Source> encodedFrames() {
-		CompletableFuture<EncodedFrames.Source> result = new CompletableFuture<>();
+		return peer.encodedFrames(() -> {
+			checkUsable();
 
-		peer.control.execute(() -> {
-			try {
-				checkUsable();
+			long frames = NativeApi.encodedFramesOf(sender);
 
-				long frames = NativeApi.encodedFramesOf(sender);
+			if (frames == 0) {
+				throw new IllegalStateException("The sender was removed");
+			}
 
-				if (frames == 0) {
-					throw new IllegalStateException("The sender was removed");
+			return new EncodedFrames.Source(frames, () -> peer.control.execute(() -> {
+				if (kind == MediaKind.VIDEO && !removed && sender != null && !peer.isClosed()) {
+					sender.generateKeyFrame();
 				}
-
-				result.complete(new EncodedFrames.Source(frames, () -> peer.control.execute(() -> {
-					if (kind == MediaKind.VIDEO && !removed && sender != null && !peer.isClosed()) {
-						sender.generateKeyFrame();
-					}
-				})));
-			}
-			catch (Throwable e) {
-				result.completeExceptionally(e);
-			}
+			}));
 		});
-
-		return result;
 	}
 
 	/**
