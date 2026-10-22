@@ -31,17 +31,19 @@ The target/source pixel layout is selected with `dev.onvoid.webrtc.media.FourCC`
 - `FourCC.RGBA` – 4 bytes per pixel, RGBA order (commonly used with BufferedImage TYPE_4BYTE_ABGR interop, see example below)
 - `FourCC.ARGB`, `FourCC.ABGR`, `FourCC.BGRA` – other 32-bit packed variants
 - `FourCC.NV12`, `FourCC.NV21` – 4:2:0 semi-planar YUV formats
+- `FourCC.YUY2`, `FourCC.UYVY` – 4:2:2 packed YUV formats, 4 bytes per pair of pixels
 
 Consult the FourCC enum in your version for the complete list.
 
 ## Buffer sizing
 
-You must allocate destination buffers large enough for the chosen format:
-- For 32-bit RGBA-like formats: `width * height * 4` bytes
-- For NV12/NV21: `width * height * 3 / 2` bytes
-- For other layouts, compute according to their specification
+Frames are stored without row padding, except where a format groups pixels in pairs: a YUY2 or UYVY row, and an NV12 or NV21 chroma row, always ends with a whole pair, so an odd width is rounded up to the next pair. A buffer must hold at least:
+- `ARGB`, `BGRA`, `ABGR`, `RGBA`: `width * height * 4` bytes
+- `BG24`: `width * height * 3` bytes
+- `I420`, `NV12`, `NV21`: `width * height + 2 * ((width + 1) / 2) * ((height + 1) / 2)` bytes
+- `YUY2`, `UYVY`: `4 * ((width + 1) / 2) * height` bytes, `4 * ((width + 1) / 2)` per row
 
-Attempting to convert into undersized buffers will result in an error.
+Both directions use the same layout, so a frame written by `convertFromI420` reads back with `convertToI420`. Converting into or from a smaller buffer throws, and touches no byte of it.
 
 ## Example: Convert VideoFrame to BufferedImage
 
