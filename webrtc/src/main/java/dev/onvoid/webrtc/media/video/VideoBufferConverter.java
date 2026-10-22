@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.media.video;
 
 import java.nio.ByteBuffer;
 
+import dev.onvoid.webrtc.internal.NativeLoader;
 import dev.onvoid.webrtc.media.FourCC;
 
 /**
@@ -28,6 +29,15 @@ import dev.onvoid.webrtc.media.FourCC;
  * @author Alex Andres
  */
 public final class VideoBufferConverter {
+
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
 
 	/**
 	 * Convert an arbitrary {@link VideoFrameBuffer} to the specified pixel format

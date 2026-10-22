@@ -16,12 +16,23 @@
 
 package dev.onvoid.webrtc.media.video.desktop;
 
+import dev.onvoid.webrtc.internal.NativeLoader;
+
 /**
  * Power management assertions to wake the display and prevent it from going to sleep on user idle.
  *
  * @author Alex Andres
  */
 public class PowerManagement {
+
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
 
 	/**
 	 * Declares that the user is active on the system and prevents the sleep idle time-out.
