@@ -23,6 +23,8 @@
 #include "libyuv/convert.h"
 #include "libyuv/video_common.h"
 
+#include <memory>
+
 size_t CalcBufferSize(int width, int height, int fourCC) {
 	size_t bufferSize = 0;
 
@@ -79,8 +81,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I
 		const uint8_t * srcU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcU));
 		const uint8_t * srcV = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcV));
 
-		jbyte * arrayPtr = env->GetByteArrayElements(dst, nullptr);
-		uint8_t * dstPtr = reinterpret_cast<uint8_t *>(arrayPtr);
+		// Mode 0 writes the picture back when the VM handed out a copy.
+		auto releaseArray = [env, dst](jbyte * bytes) {
+			env->ReleaseByteArrayElements(dst, bytes, 0);
+		};
+		std::unique_ptr<jbyte, decltype(releaseArray)> arrayPtr(env->GetByteArrayElements(dst, nullptr), releaseArray);
+		if (!arrayPtr) {
+			return;
+		}
+		uint8_t * dstPtr = reinterpret_cast<uint8_t *>(arrayPtr.get());
 
 		const int conversionResult = libyuv::ConvertFromI420(srcY, srcStrideY, srcU, srcStrideU,
 			srcV, srcStrideV, dstPtr, 0, width, height, static_cast<uint32_t>(fourCC));
@@ -89,11 +98,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I
 			env->Throw(jni::JavaRuntimeException(env, "Failed to convert buffer to I420: %d",
 				conversionResult));
 		}
-		else {
-			env->SetByteArrayRegion(dst, 0, arrayLength, arrayPtr);
-		}
-
-		env->ReleaseByteArrayElements(dst, arrayPtr, JNI_ABORT);
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -151,8 +155,14 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_b
 		uint8_t * dstU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstU));
 		uint8_t * dstV = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstV));
 
-		jbyte * arrayPtr = env->GetByteArrayElements(src, nullptr);
-		const uint8_t * srcPtr = reinterpret_cast<uint8_t *>(arrayPtr);
+		auto releaseArray = [env, src](jbyte * bytes) {
+			env->ReleaseByteArrayElements(src, bytes, JNI_ABORT);
+		};
+		std::unique_ptr<jbyte, decltype(releaseArray)> arrayPtr(env->GetByteArrayElements(src, nullptr), releaseArray);
+		if (!arrayPtr) {
+			return;
+		}
+		const uint8_t * srcPtr = reinterpret_cast<uint8_t *>(arrayPtr.get());
 
 		const int conversionResult = libyuv::ConvertToI420(
 			srcPtr, arrayLength,
@@ -166,8 +176,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_b
 			env->Throw(jni::JavaRuntimeException(env, "Failed to convert buffer to I420: %d",
 				conversionResult));
 		}
-
-		env->ReleaseByteArrayElements(src, arrayPtr, JNI_ABORT);
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

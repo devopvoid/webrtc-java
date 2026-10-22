@@ -22,6 +22,8 @@
 
 #include "common_audio/resampler/include/push_resampler.h"
 
+#include <memory>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_dispose
 (JNIEnv * env, jobject caller)
 {
@@ -66,27 +68,30 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampl
 		webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
 		CHECK_HANDLEV(resampler, -1);
 
-		jboolean isDstCopy = JNI_FALSE;
+		auto releaseSrc = [env, samplesIn](jbyte * bytes) {
+			env->ReleaseByteArrayElements(samplesIn, bytes, JNI_ABORT);
+		};
+		std::unique_ptr<jbyte, decltype(releaseSrc)> srcPtr(env->GetByteArrayElements(samplesIn, nullptr), releaseSrc);
+		if (!srcPtr) {
+			return -1;
+		}
 
-		jbyte * srcPtr = env->GetByteArrayElements(samplesIn, nullptr);
-		jbyte * dstPtr = env->GetByteArrayElements(samplesOut, &isDstCopy);
+		// Mode 0 writes the samples back when the VM handed out a copy.
+		auto releaseDst = [env, samplesOut](jbyte * bytes) {
+			env->ReleaseByteArrayElements(samplesOut, bytes, 0);
+		};
+		std::unique_ptr<jbyte, decltype(releaseDst)> dstPtr(env->GetByteArrayElements(samplesOut, nullptr), releaseDst);
+		if (!dstPtr) {
+			return -1;
+		}
 
-		int16_t * src16Ptr = reinterpret_cast<int16_t *>(srcPtr);
-		int16_t * dst16Ptr = reinterpret_cast<int16_t*>(dstPtr);
+		int16_t * src16Ptr = reinterpret_cast<int16_t *>(srcPtr.get());
+		int16_t * dst16Ptr = reinterpret_cast<int16_t*>(dstPtr.get());
 
 		webrtc::InterleavedView<const int16_t> src(src16Ptr, srcSamplesPerChannel, channels);
 		webrtc::InterleavedView<int16_t> dst(dst16Ptr, dstSamplesPerChannel, channels);
 
 		resampler->Resample(src, dst);
-
-		if (isDstCopy == JNI_TRUE) {
-			jsize dstLength = env->GetArrayLength(samplesOut);
-
-			env->SetByteArrayRegion(samplesOut, 0, dstLength, dstPtr);
-		}
-
-		env->ReleaseByteArrayElements(samplesIn, srcPtr, JNI_ABORT);
-		env->ReleaseByteArrayElements(samplesOut, dstPtr, JNI_ABORT);
 
 		return static_cast<jint>(dstSamplesPerChannel);
 	}
