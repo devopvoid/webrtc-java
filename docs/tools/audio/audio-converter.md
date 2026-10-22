@@ -95,6 +95,7 @@ finally {
 
 ## Error handling and caveats
 
+- Sample rates must be between 100 Hz and 384 kHz and channel counts between 1 and 8, otherwise the constructor throws `IllegalArgumentException`. Remixing at high rates is bounded too: one 10 ms frame of the larger channel count must fit 7680 samples (e.g. 8 channels up to 96 kHz).
 - Frame length must be exactly 10 ms. If `src` has fewer samples than required, `convert` throws `IllegalArgumentException`.
 - Ensure `dst` is at least `getTargetBufferSize()` bytes. Otherwise, `IllegalArgumentException` is thrown.
 - Audio is assumed to be 16‑bit PCM. Do not pass float or 24‑bit samples.

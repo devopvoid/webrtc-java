@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import static java.util.Objects.requireNonNull;
+
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
@@ -27,14 +29,17 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
  */
 public class AudioConverter extends DisposableNativeObject {
 
-	/** The number of samples in a 10 ms frame for the input audio. */
+	/** The highest sampling frequency that WebRTC converts. */
+	private static final int MAX_SAMPLE_RATE = 384000;
+
+	/** The most channels that WebRTC converts. */
+	private static final int MAX_CHANNELS = 8;
+
+	/** The number of samples over all channels in a 10 ms frame for the input audio. */
 	private final int srcSamples;
 
-	/** The number of samples in a 10 ms frame for the output audio. */
+	/** The number of samples over all channels in a 10 ms frame for the output audio. */
 	private final int dstSamples;
-
-	/** The number of output samples after conversion in a 10 ms frame. */
-	private final int dstSamplesOut;
 
 
 	/**
@@ -45,12 +50,20 @@ public class AudioConverter extends DisposableNativeObject {
 	 * @param srcChannels   The number of audio channels of the input signal.
 	 * @param dstSampleRate The sampling frequency of the output signal.
 	 * @param dstChannels   The number of audio channels of the output signal.
+	 *
+	 * @throws IllegalArgumentException if a sampling frequency is not between
+	 *                                  100 Hz and 384 kHz, or a channel count
+	 *                                  not between 1 and 8.
 	 */
 	public AudioConverter(int srcSampleRate, int srcChannels, int dstSampleRate,
 			int dstChannels) {
+		checkSampleRate(srcSampleRate, "source");
+		checkSampleRate(dstSampleRate, "destination");
+		checkChannels(srcChannels, "source");
+		checkChannels(dstChannels, "destination");
+
 		this.srcSamples = srcSampleRate / 100 * srcChannels;
 		this.dstSamples = dstSampleRate / 100 * dstChannels;
-		this.dstSamplesOut = (dstSampleRate / 100) * dstChannels;
 
 		initialize(srcSampleRate, srcChannels, dstSampleRate, dstChannels);
 	}
@@ -74,12 +87,15 @@ public class AudioConverter extends DisposableNativeObject {
 	 * @param src The audio samples to convert.
 	 * @param dst The output buffer for converted audio samples.
 	 *
-	 * @return The number of converted samples.
+	 * @return The number of converted samples over all channels.
 	 *
 	 * @throws IllegalArgumentException if the buffer sizes do not match the
 	 *                                  frame sizes.
 	 */
 	public int convert(byte[] src, byte[] dst) {
+		requireNonNull(src);
+		requireNonNull(dst);
+
 		if (src.length / 2 < srcSamples) {
 			throw new IllegalArgumentException(String.format(
 					"Insufficient samples input length: %d vs. %d",
@@ -93,7 +109,7 @@ public class AudioConverter extends DisposableNativeObject {
 
 		convertInternal(src, srcSamples, dst, dstSamples);
 
-		return dstSamplesOut;
+		return dstSamples;
 	}
 
 	@Override
@@ -101,6 +117,20 @@ public class AudioConverter extends DisposableNativeObject {
 
 	private native void initialize(int srcSampleRate, int srcChannels, int dstSampleRate, int dstChannels);
 
-	public native void convertInternal(byte[] src, int nSrcSamples, byte[] dst, int nDstSamples);
+	private native void convertInternal(byte[] src, int nSrcSamples, byte[] dst, int nDstSamples);
+
+	private static void checkSampleRate(int sampleRate, String name) {
+		if (sampleRate < 100 || sampleRate > MAX_SAMPLE_RATE) {
+			throw new IllegalArgumentException("Invalid " + name + " sampling frequency: "
+					+ sampleRate + ", must be between 100 and " + MAX_SAMPLE_RATE);
+		}
+	}
+
+	private static void checkChannels(int channels, String name) {
+		if (channels <= 0 || channels > MAX_CHANNELS) {
+			throw new IllegalArgumentException("Invalid number of " + name + " channels: "
+					+ channels + ", must be between 1 and " + MAX_CHANNELS);
+		}
+	}
 
 }

@@ -30,10 +30,13 @@ namespace jni
 			AudioConverter(const AudioConverter&) = delete;
 			AudioConverter& operator=(const AudioConverter&) = delete;
 
+			// Frames are samples per channel in 10 ms. Throws std::invalid_argument for a format WebRTC cannot convert.
 			static std::unique_ptr<AudioConverter> create(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels);
 			
 			virtual ~AudioConverter() = default;
 
+			// Both sizes count interleaved samples over all channels: srcSize must be srcFrames * srcChannels,
+			// dstSize, the capacity of dst, at least dstFrames * dstChannels. Throws std::invalid_argument otherwise.
 			virtual void convert(const int16_t * src, size_t srcSize, int16_t * dst, size_t dstSize) = 0;
 
 			size_t getSrcChannels() const { return srcChannels; }
@@ -42,7 +45,6 @@ namespace jni
 			size_t getDstFrames() const { return dstFrames; }
 
 		protected:
-			AudioConverter();
 			AudioConverter(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels);
 
 			void checkSizes(size_t srcSize, size_t dstCapacity) const;

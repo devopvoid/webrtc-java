@@ -20,14 +20,29 @@
 #include "JavaUtils.h"
 
 #include <memory>
+#include <stdexcept>
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_convertInternal
 (JNIEnv * env, jobject caller, jbyteArray src, jint nSrcSamples, jbyteArray dst, jint nDstSamples)
 {
-	try {
-		jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
-		CHECK_HANDLE(converter);
+	jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
+	CHECK_HANDLE(converter);
 
+	if (src == nullptr || dst == nullptr) {
+		ThrowJavaException(env, "java/lang/NullPointerException", "Sample arrays must not be null");
+		return;
+	}
+
+	// The counts are samples over all channels. The converter checks them against its format, this the arrays.
+	const jlong bytesPerSample = sizeof(int16_t);
+
+	if (nSrcSamples < 0 || nDstSamples < 0 ||
+		env->GetArrayLength(src) < nSrcSamples * bytesPerSample || env->GetArrayLength(dst) < nDstSamples * bytesPerSample) {
+		ThrowJavaException(env, "java/lang/IllegalArgumentException", "Sample arrays too short for the requested samples");
+		return;
+	}
+
+	try {
 		auto releaseSrc = [env, src](jbyte * bytes) {
 			env->ReleaseByteArrayElements(src, bytes, JNI_ABORT);
 		};
@@ -46,6 +61,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_convert
 		}
 
 		converter->convert(reinterpret_cast<const int16_t *>(srcPtr.get()), nSrcSamples, reinterpret_cast<int16_t *>(dstPtr.get()), nDstSamples);
+	}
+	catch (const std::invalid_argument & e) {
+		ThrowJavaException(env, "java/lang/IllegalArgumentException", e.what());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -70,7 +88,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_initial
 	size_t srcFrames = webrtc::AudioProcessing::GetFrameSize(srcSampleRate);
 	size_t dstFrames = webrtc::AudioProcessing::GetFrameSize(dstSampleRate);
 
-	jni::AudioConverter * converter = jni::AudioConverter::create(srcFrames, srcChannels, dstFrames, dstChannels).release();
+	try {
+		jni::AudioConverter * converter = jni::AudioConverter::create(srcFrames, srcChannels, dstFrames, dstChannels).release();
 
-	SetHandle(env, caller, converter);
+		SetHandle(env, caller, converter);
+	}
+	catch (const std::invalid_argument & e) {
+		ThrowJavaException(env, "java/lang/IllegalArgumentException", e.what());
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
