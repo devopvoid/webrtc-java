@@ -68,7 +68,9 @@ public interface LocalTrack extends AutoCloseable {
 	 *
 	 * @return a future that completes once the native track is released, after
 	 * which a source the track was made over, with {@link
-	 * LocalMedia#videoTrack} or {@link LocalMedia#audioTrack}, may be closed.
+	 * LocalMedia#videoTrack} or {@link LocalMedia#audioTrack}, may be closed;
+	 * or fails with a {@link WebRtcException} when the track or its source
+	 * could not be released, which then fails the runtime's close as well.
 	 */
 	CompletableFuture<Void> closeAsync();
 
