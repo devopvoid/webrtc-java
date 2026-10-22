@@ -37,7 +37,8 @@ import dev.onvoid.webrtc.RTCDataChannelSendObserver;
  * <p>
  * The native channel is used on the peer's control executor, where sends wait
  * while the channel is not open or holds more than {@link #HIGH_WATER_MARK}
- * bytes. Handlers run on the peer's event executor.
+ * bytes. What waits is bounded by the peer's channel send limit, beyond which
+ * sends fail at once. Handlers run on the peer's event executor.
  */
 final class DataChannelImpl implements DataChannel {
 
@@ -50,6 +51,9 @@ final class DataChannelImpl implements DataChannel {
 	private final PeerImpl peer;
 
 	private final String label;
+
+	/** The most bytes {@link #held} may reach. */
+	private final long sendLimit;
 
 	/** Bytes sent and not yet handed to the transport. */
 	private final AtomicLong held = new AtomicLong();
@@ -93,6 +97,7 @@ final class DataChannelImpl implements DataChannel {
 	DataChannelImpl(PeerImpl peer, String label) {
 		this.peer = peer;
 		this.label = label;
+		this.sendLimit = peer.channelSendLimit();
 		this.messageHandlers = new Handlers<>(peer.rtc::reportError);
 		this.stateHandlers = new Handlers<>(peer.rtc::reportError);
 
@@ -262,8 +267,16 @@ final class DataChannelImpl implements DataChannel {
 	}
 
 	private CompletableFuture<Void> enqueue(byte[] data, boolean binary) {
+		long size = data.length;
+		long before = held.getAndUpdate(amount -> amount + size <= sendLimit ? amount + size : amount);
+
+		if (before + size > sendLimit) {
+			return peer.toPublic(ClientFuture.failed(new ChannelFullException("The data channel " + label
+					+ " holds " + before + " bytes waiting to be sent, and " + size + " more would exceed "
+					+ "its limit of " + sendLimit)));
+		}
+
 		CompletableFuture<Void> sent = new CompletableFuture<>();
-		held.addAndGet(data.length);
 
 		peer.control.execute(() -> {
 			if (released || state == ChannelState.CLOSING || state == ChannelState.CLOSED) {

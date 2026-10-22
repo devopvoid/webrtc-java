@@ -26,12 +26,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -286,8 +288,14 @@ public final class WebRtc implements AutoCloseable {
 	/**
 	 * Closes every peer, then every track, then the factory, and stops the
 	 * threads of this API.
+	 * <p>
+	 * When a peer or track does not close within the close timeout, the
+	 * factory is left undisposed, since disposing it could free what WebRTC's
+	 * threads still use. The future then fails with a {@link WebRtcException}
+	 * that names the cause, as it does when disposing fails.
 	 *
-	 * @return a future that completes once all is closed.
+	 * @return a future that completes once all is closed, or fails when not
+	 * everything could be released.
 	 */
 	public CompletableFuture<Void> closeAsync() {
 		if (closing.compareAndSet(false, true)) {
@@ -319,7 +327,10 @@ public final class WebRtc implements AutoCloseable {
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
-		catch (Exception e) {
+		catch (ExecutionException e) {
+			// Closing reported its failure already.
+		}
+		catch (TimeoutException e) {
 			reportError(new WebRtcException("The runtime did not close within " + closeTimeout, e));
 		}
 	}
@@ -370,23 +381,30 @@ public final class WebRtc implements AutoCloseable {
 	}
 
 	private void shutdown() {
+		Throwable failure = null;
+
 		try {
 			// Peers and tracks created while the runtime closes are closed as
 			// well, so each is waited for until none is left.
-			boolean released = awaitAll(() -> {
+			failure = awaitAll(() -> {
 				List<CompletableFuture<Void>> closing = new ArrayList<>();
 
 				for (PeerImpl peer : new ArrayList<>(peers)) {
 					closing.add(peer.closeInternal());
 				}
 				return closing;
-			}, "peers") && awaitAll(media::closeAll, "local tracks");
+			}, "peers");
 
-			if (!released) {
+			if (failure == null) {
+				failure = awaitAll(media::closeAll, "local tracks");
+			}
+
+			if (failure != null) {
 				// Something may still run on WebRTC's threads, and disposing
 				// the factory would free them under it. Leaking is the lesser harm.
-				reportError(new WebRtcException("The factory of the runtime was left undisposed, "
-						+ "since not everything it created closed within " + closeTimeout));
+				failure = new WebRtcException("The factory of the runtime was left undisposed, "
+						+ "since not everything it created closed", failure);
+				reportError(failure);
 				return;
 			}
 
@@ -409,12 +427,19 @@ public final class WebRtc implements AutoCloseable {
 			}
 		}
 		catch (Throwable e) {
+			failure = e;
 			reportError(e);
 		}
 		finally {
 			shutdownPools();
 			failPending();
-			closed.complete(null);
+
+			if (failure == null) {
+				closed.complete(null);
+			}
+			else {
+				closed.completeExceptionally(failure);
+			}
 		}
 	}
 
@@ -442,14 +467,14 @@ public final class WebRtc implements AutoCloseable {
 	/**
 	 * Closes what the supplier names, again and again, until it names nothing.
 	 *
-	 * @return false if a round did not finish within the close timeout.
+	 * @return null once all is closed, or why a round did not finish.
 	 */
-	private boolean awaitAll(Supplier<List<CompletableFuture<Void>>> closes, String what) {
+	private WebRtcException awaitAll(Supplier<List<CompletableFuture<Void>>> closes, String what) {
 		for (int round = 0; round < 10; round++) {
 			List<CompletableFuture<Void>> futures = closes.get();
 
 			if (futures.isEmpty()) {
-				return true;
+				return null;
 			}
 
 			try {
@@ -458,15 +483,18 @@ public final class WebRtc implements AutoCloseable {
 			}
 			catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
-				return false;
+				return new WebRtcException("Closing the " + what + " was interrupted", e);
 			}
-			catch (Exception e) {
-				reportError(new WebRtcException("Closing the " + what + " did not finish within " + closeTimeout, e));
-				return false;
+			catch (TimeoutException e) {
+				return new WebRtcException("Closing the " + what + " did not finish within " + closeTimeout, e);
+			}
+			catch (ExecutionException e) {
+				return new WebRtcException("Closing the " + what + " failed", e.getCause());
 			}
 		}
 
-		return closes.get().isEmpty();
+		return closes.get().isEmpty() ? null
+				: new WebRtcException("The " + what + " kept being created while the runtime closed");
 	}
 
 	private void shutdownPools() {

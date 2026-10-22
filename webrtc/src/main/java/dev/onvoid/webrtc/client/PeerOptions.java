@@ -61,6 +61,8 @@ public final class PeerOptions {
 
 	final Duration gatheringTimeout;
 
+	final long channelSendLimit;
+
 
 	private PeerOptions(Builder builder) {
 		this.name = builder.name;
@@ -73,6 +75,7 @@ public final class PeerOptions {
 				? EnumSet.noneOf(MediaKind.class) : EnumSet.copyOf(builder.receive));
 		this.customizer = builder.customizer;
 		this.gatheringTimeout = builder.gatheringTimeout;
+		this.channelSendLimit = builder.channelSendLimit;
 	}
 
 	/**
@@ -131,6 +134,8 @@ public final class PeerOptions {
 		private Consumer<RTCConfiguration> customizer;
 
 		private Duration gatheringTimeout = Duration.ofSeconds(3);
+
+		private long channelSendLimit = 16 * 1024 * 1024;
 
 
 		private Builder() {
@@ -251,6 +256,26 @@ public final class PeerOptions {
 			}
 
 			this.gatheringTimeout = timeout;
+			return this;
+		}
+
+		/**
+		 * Sets how many bytes each data channel of the peer may hold that were
+		 * sent and not yet handed to the transport; 16 MiB by default. A send
+		 * beyond that fails at once with a {@link ChannelFullException}
+		 * instead of letting the backlog grow without bound, and so does a
+		 * single message larger than the limit.
+		 *
+		 * @param bytes the limit, at least 1.
+		 *
+		 * @return this builder.
+		 */
+		public Builder channelSendLimit(long bytes) {
+			if (bytes < 1) {
+				throw new IllegalArgumentException("The limit must be at least 1 byte, got " + bytes);
+			}
+
+			this.channelSendLimit = bytes;
 			return this;
 		}
 
