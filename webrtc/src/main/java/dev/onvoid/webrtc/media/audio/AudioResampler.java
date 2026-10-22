@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.audio;
 import static java.util.Objects.requireNonNull;
 
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
+import dev.onvoid.webrtc.internal.NativeLoader;
 
 /**
  * Audio sampling rate converter. This resampler operates on audio frames of 10
@@ -27,6 +28,24 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
  * @author Alex Andres
  */
 public class AudioResampler extends DisposableNativeObject {
+
+	/** The most samples of one channel in 10 ms that WebRTC resamples, at 384 kHz. */
+	private static final int MAX_SAMPLES_PER_CHANNEL = 3840;
+
+	/** The most channels that WebRTC resamples at once. */
+	private static final int MAX_CHANNELS = 8;
+
+	/** Bytes of a 16-bit PCM sample. */
+	private static final int BYTES_PER_SAMPLE = 2;
+
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
 
 	/**
 	 * Creates a new {@code AudioResampler} without sampling parameters.
@@ -44,7 +63,14 @@ public class AudioResampler extends DisposableNativeObject {
 	 * @param channels         The number of audio channels to resample.
 	 */
 	public AudioResampler(int sourceSampleRate, int targetSampleRate, int channels) {
-		initialize(getSamplesPerChannel(sourceSampleRate), getSamplesPerChannel(targetSampleRate), channels);
+		int srcSamplesPerChannel = getSamplesPerChannel(sourceSampleRate);
+		int dstSamplesPerChannel = getSamplesPerChannel(targetSampleRate);
+
+		checkSamplesPerChannel(srcSamplesPerChannel, "source");
+		checkSamplesPerChannel(dstSamplesPerChannel, "destination");
+		checkChannels(channels);
+
+		initialize(srcSamplesPerChannel, dstSamplesPerChannel, channels);
 	}
 
 	/**
@@ -59,20 +85,24 @@ public class AudioResampler extends DisposableNativeObject {
 	 * @param dstSamplesPerChannel The number of samples per destination channel.
 	 * @param channels             The number of audio channels to resample.
 	 *
-	 * @return The number of converted audio samples.
+	 * @return The number of converted audio samples per channel.
+	 *
+	 * @throws IllegalArgumentException if a sample count or the channel count is out of range, or if
+	 *                                  an array holds fewer than {@code samplesPerChannel * channels}
+	 *                                  samples.
 	 */
 	public int resample(byte[] samplesIn, int srcSamplesPerChannel, byte[] samplesOut, int dstSamplesPerChannel,
 						int channels) {
 		requireNonNull(samplesIn);
 		requireNonNull(samplesOut);
 
-		final int maxSamplesOut = samplesOut.length / 2; // 16-bit PCM sample
+		checkSamplesPerChannel(srcSamplesPerChannel, "source");
+		checkSamplesPerChannel(dstSamplesPerChannel, "destination");
+		checkChannels(channels);
+		checkLength(samplesIn, srcSamplesPerChannel, channels, "input");
+		checkLength(samplesOut, dstSamplesPerChannel, channels, "output");
 
-		if (dstSamplesPerChannel > maxSamplesOut) {
-			throw new IllegalArgumentException("Insufficient samples output length");
-		}
-
-		return resampleInternal(samplesIn, srcSamplesPerChannel, samplesOut, maxSamplesOut, channels);
+		return resampleInternal(samplesIn, srcSamplesPerChannel, samplesOut, dstSamplesPerChannel, channels);
 	}
 
 	@Override
@@ -94,5 +124,29 @@ public class AudioResampler extends DisposableNativeObject {
 	 */
 	public static int getSamplesPerChannel(int sampleRate) {
 		return sampleRate / 100;
+	}
+
+	private static void checkSamplesPerChannel(int samplesPerChannel, String name) {
+		if (samplesPerChannel <= 0 || samplesPerChannel > MAX_SAMPLES_PER_CHANNEL) {
+			throw new IllegalArgumentException("Invalid number of " + name + " samples per channel: "
+					+ samplesPerChannel + ", must be between 1 and " + MAX_SAMPLES_PER_CHANNEL);
+		}
+	}
+
+	private static void checkChannels(int channels) {
+		if (channels <= 0 || channels > MAX_CHANNELS) {
+			throw new IllegalArgumentException("Invalid number of channels: " + channels
+					+ ", must be between 1 and " + MAX_CHANNELS);
+		}
+	}
+
+	private static void checkLength(byte[] samples, int samplesPerChannel, int channels, String name) {
+		// Both counts are bounded, so this cannot overflow.
+		final int required = samplesPerChannel * channels * BYTES_PER_SAMPLE;
+
+		if (samples.length < required) {
+			throw new IllegalArgumentException("Insufficient samples " + name + " length: need "
+					+ required + " bytes, but was " + samples.length);
+		}
 	}
 }

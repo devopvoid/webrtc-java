@@ -20,6 +20,7 @@
 #include "JavaUtils.h"
 
 #include "api/video/i420_buffer.h"
+#include "common_video/include/video_frame_buffer.h"
 #include "libyuv/scale.h"
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_allocate
@@ -55,6 +56,34 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_co
 		jni::JavaLocalRef<jobject> jBuffer = jni::I420Buffer::toJava(env, i420Buffer);
 
 		i420Buffer->AddRef();
+
+		return jBuffer.release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_crop
+(JNIEnv * env, jobject caller, jint cropX, jint cropY, jint cropW, jint cropH)
+{
+	webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, caller);
+	CHECK_HANDLEV(buffer, nullptr);
+
+	try {
+		webrtc::scoped_refptr<webrtc::I420BufferInterface> source(buffer);
+
+		// The cropped buffer points into the source, which it keeps alive until it is gone itself.
+		webrtc::scoped_refptr<webrtc::I420BufferInterface> cropped = webrtc::WrapI420Buffer(cropW, cropH,
+			source->DataY() + cropX + cropY * source->StrideY(), source->StrideY(),
+			source->DataU() + cropX / 2 + cropY / 2 * source->StrideU(), source->StrideU(),
+			source->DataV() + cropX / 2 + cropY / 2 * source->StrideV(), source->StrideV(),
+			[source]() {});
+
+		jni::JavaLocalRef<jobject> jBuffer = jni::I420Buffer::toJava(env, cropped);
+
+		cropped->AddRef();
 
 		return jBuffer.release();
 	}

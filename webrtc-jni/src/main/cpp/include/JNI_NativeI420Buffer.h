@@ -25,6 +25,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_NativeI420Buffer
+	 * Method:    crop
+	 * Signature: (IIII)Ldev/onvoid/webrtc/media/video/NativeI420Buffer;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_crop
+	(JNIEnv *, jobject, jint, jint, jint, jint);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_NativeI420Buffer
 	 * Method:    cropAndScale
 	 * Signature: (Ljava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;IIIIILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;III)V
 	 */

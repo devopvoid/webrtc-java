@@ -17,6 +17,8 @@
 #include "api/VideoFrame.h"
 #include "JavaObject.h"
 #include "JavaUtils.h"
+#include "JavaRuntimeException.h"
+#include "JavaWrappedException.h"
 #include "JNI_WebRTC.h"
 
 #include "api/video/i420_buffer.h"
@@ -62,6 +64,13 @@ namespace jni
 			*/
 
 			webrtc::I420BufferInterface * i420Buffer = GetHandle<webrtc::I420BufferInterface>(env, jBuffer);
+
+			// A buffer that has been released for good has no pixels left.
+			if (i420Buffer == nullptr) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The buffer of the VideoFrame has been released")));
+			}
+
 			webrtc::scoped_refptr<webrtc::I420BufferInterface> buffer(i420Buffer);
 
 			return webrtc::VideoFrame::Builder()
@@ -106,6 +115,11 @@ namespace jni
 
 			if (env->IsInstanceOf(javaBuffer, nativeClass->cls)) {
 				webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, javaBuffer);
+
+				// Released for good, so there is nothing to read.
+				if (buffer == nullptr) {
+					return nullptr;
+				}
 
 				return webrtc::scoped_refptr<webrtc::VideoFrameBuffer>(buffer);
 			}
@@ -154,9 +168,14 @@ namespace jni
 		{
 			const auto javaClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
 
-			jobject yBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataY()), static_cast<jlong>(buffer->StrideY()) * buffer->height());
-			jobject uBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataU()), static_cast<jlong>(buffer->StrideU()) * buffer->ChromaHeight());
-			jobject vBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataV()), static_cast<jlong>(buffer->StrideV()) * buffer->ChromaHeight());
+			// The last row ends at the width: a cropped buffer has no padding behind it that belongs to it.
+			auto planeSize = [](int stride, int width, int height) {
+				return static_cast<jlong>(stride) * (height - 1) + width;
+			};
+
+			jobject yBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataY()), planeSize(buffer->StrideY(), buffer->width(), buffer->height()));
+			jobject uBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataU()), planeSize(buffer->StrideU(), buffer->ChromaWidth(), buffer->ChromaHeight()));
+			jobject vBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataV()), planeSize(buffer->StrideV(), buffer->ChromaWidth(), buffer->ChromaHeight()));
 
 			jobject jBuffer = env->NewObject(javaClass->cls, javaClass->ctor, buffer->width(), buffer->height(),
 				yBuffer, buffer->StrideY(), uBuffer, buffer->StrideU(), vBuffer, buffer->StrideV());
