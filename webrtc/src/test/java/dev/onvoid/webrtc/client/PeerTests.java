@@ -36,6 +36,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -103,43 +104,85 @@ class PeerTests extends ClientTestBase {
 
 	@Test
 	void earlyMessagesBounded() throws Exception {
-		// The sender holds more than the receiver keeps.
+		// The sender holds more than the receiver keeps while it has no
+		// message handler, so the receiving channel closes.
 		Peer[] peers = pair(options -> options.channelSendLimit(32 * 1024 * 1024));
-		CompletableFuture<DataChannel> remote = new CompletableFuture<>();
-		CompletableFuture<WebRtcException> dropped = new CompletableFuture<>();
+		CompletableFuture<WebRtcException> error = new CompletableFuture<>();
+		peers[1].onError(error::complete);
 
-		peers[1].onChannel(remote::complete);
-		peers[1].onError(dropped::complete);
-
-		// About 20 MiB while the remote channel has no message handler.
 		DataChannel channel = peers[0].createChannel("bulk");
-		int count = 100;
+		CompletableFuture<Void> closed = whenClosed(channel);
 		byte[] payload = new byte[200 * 1024];
 
-		for (int i = 0; i < count; i++) {
-			payload[0] = (byte) i;
+		// About 20 MiB, beyond the default limit of 16 MiB.
+		for (int i = 0; i < 100; i++) {
 			channel.send(payload);
 		}
-		await(channel.send(new byte[] { (byte) 0xFF }));
 
-		assertTrue(await(dropped).getMessage().contains("dropped received messages"));
+		assertTrue(await(error).getMessage().contains("fell more than"), () -> error.join().getMessage());
+		await(closed);
+	}
 
-		List<Integer> received = Collections.synchronizedList(new ArrayList<>());
-		CompletableFuture<Void> last = new CompletableFuture<>();
-		await(remote).onMessage(message -> {
-			byte[] bytes = message.bytes();
-			if (bytes.length == 1) {
-				last.complete(null);
+	@Test
+	void slowHandlerClosesChannel() throws Exception {
+		// The handler blocks on the first message while more arrive than the
+		// channel may hold.
+		int limit = 64 * 1024;
+		Peer[] peers = pair(options -> options.channelReceiveLimit(limit));
+		CountDownLatch release = new CountDownLatch(1);
+		List<Integer> handled = new CopyOnWriteArrayList<>();
+		CompletableFuture<WebRtcException> error = new CompletableFuture<>();
+
+		peers[1].onError(error::complete);
+		peers[1].onChannel(remote -> remote.onMessage(message -> {
+			handled.add(message.bytes()[0] & 0xFF);
+			awaitQuietly(release);
+		}));
+
+		DataChannel channel = peers[0].createChannel("bulk");
+		CompletableFuture<Void> closed = whenClosed(channel);
+		byte[] payload = new byte[16 * 1024];
+
+		try {
+			for (int i = 0; i < 10; i++) {
+				payload[0] = (byte) i;
+				channel.send(payload);
 			}
-			else {
-				received.add(bytes[0] & 0xFF);
-			}
-		});
-		await(last);
 
-		// The newest messages were kept, in order.
-		assertTrue(received.size() < count, () -> "Kept " + received.size() + " messages");
-		assertEquals(count - 1, (int) received.get(received.size() - 1));
+			// The receiver closed the channel while its handler still blocked.
+			await(closed);
+		}
+		finally {
+			release.countDown();
+		}
+
+		assertTrue(await(error).getMessage().contains("fell more than"), () -> error.join().getMessage());
+
+		// The one in the handler and three queued fit the limit; the fifth
+		// went over it, and nothing after it was delivered. The error came
+		// after those queued before it.
+		assertEquals(Arrays.asList(0, 1, 2, 3), handled);
+	}
+
+	@Test
+	void handledMessagesFreeLimit() throws Exception {
+		// Far more than the limit passes through, a message at a time.
+		int limit = 64 * 1024;
+		Peer[] peers = pair(options -> options.channelReceiveLimit(limit));
+		Semaphore handled = new Semaphore(0);
+
+		peers[1].onChannel(remote -> remote.onMessage(message -> handled.release()));
+
+		DataChannel channel = peers[0].createChannel("bulk");
+		byte[] payload = new byte[16 * 1024];
+
+		for (int i = 0; i < 64; i++) {
+			await(channel.send(payload));
+			assertTrue(handled.tryAcquire(TIMEOUT_SECONDS, TimeUnit.SECONDS), "Message " + i + " was not handled");
+		}
+
+		// Nothing reached the error handler either; the base class checks.
+		assertEquals(ChannelState.OPEN, channel.state());
 	}
 
 	@Test
@@ -587,6 +630,27 @@ class PeerTests extends ClientTestBase {
 		}
 		catch (ExecutionException e) {
 			return e.getCause();
+		}
+	}
+
+	private static CompletableFuture<Void> whenClosed(DataChannel channel) {
+		CompletableFuture<Void> closed = new CompletableFuture<>();
+
+		channel.onStateChange(state -> {
+			if (state == ChannelState.CLOSED) {
+				closed.complete(null);
+			}
+		});
+
+		return closed;
+	}
+
+	private static void awaitQuietly(CountDownLatch latch) {
+		try {
+			latch.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 	}
 

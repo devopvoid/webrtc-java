@@ -774,8 +774,9 @@ Where the code differs from the API above:
   `CustomAudio.queuedMillis()`/`clear()`, `Message.size()`, `Negotiator.answer(offer, gathering)`.
 - An impolite peer that ignored an offer reports the two-impolite-peers collision after 5 seconds
   without an answer.
-- Messages a data channel keeps while it has no message handler are capped at 16 MiB; past that the
-  oldest are dropped and the peer's `onError` handlers hear of it once.
+- Received messages a data channel holds, waiting for its handlers or kept while it has none, are
+  capped by `PeerOptions.Builder.channelReceiveLimit` (16 MiB by default), counted before they are
+  queued; past that the channel closes and the peer's `onError` handlers hear why.
 - `Gathering.COMPLETE` waits at most `PeerOptions.Builder.gatheringTimeout` (3 seconds by default),
   since an unreachable STUN or TURN server holds up the end of gathering far longer.
 

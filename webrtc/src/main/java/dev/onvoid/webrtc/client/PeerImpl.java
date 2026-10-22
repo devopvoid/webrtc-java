@@ -555,6 +555,10 @@ final class PeerImpl implements Peer {
 		return options.channelSendLimit;
 	}
 
+	long channelReceiveLimit() {
+		return options.channelReceiveLimit;
+	}
+
 	/**
 	 * Hands a future out to the application: it completes on the event
 	 * executor, so its callbacks run there like the handlers.

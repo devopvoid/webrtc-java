@@ -63,6 +63,8 @@ public final class PeerOptions {
 
 	final long channelSendLimit;
 
+	final long channelReceiveLimit;
+
 
 	private PeerOptions(Builder builder) {
 		this.name = builder.name;
@@ -76,6 +78,7 @@ public final class PeerOptions {
 		this.customizer = builder.customizer;
 		this.gatheringTimeout = builder.gatheringTimeout;
 		this.channelSendLimit = builder.channelSendLimit;
+		this.channelReceiveLimit = builder.channelReceiveLimit;
 	}
 
 	/**
@@ -136,6 +139,8 @@ public final class PeerOptions {
 		private Duration gatheringTimeout = Duration.ofSeconds(3);
 
 		private long channelSendLimit = 16 * 1024 * 1024;
+
+		private long channelReceiveLimit = 16 * 1024 * 1024;
 
 
 		private Builder() {
@@ -276,6 +281,30 @@ public final class PeerOptions {
 			}
 
 			this.channelSendLimit = bytes;
+			return this;
+		}
+
+		/**
+		 * Sets how many bytes of received messages each data channel of the
+		 * peer may hold that its message handlers have not finished with yet,
+		 * including those kept while it has no handler; 16 MiB by default.
+		 * <p>
+		 * WebRTC cannot be told to stop receiving, so a channel whose handlers
+		 * fall behind the remote sender by more than that closes rather than
+		 * let received messages fill memory, or drop some unnoticed. The
+		 * peer's {@code onError} handlers hear why, and the messages after the
+		 * one that went over the limit are not delivered.
+		 *
+		 * @param bytes the limit, at least 1.
+		 *
+		 * @return this builder.
+		 */
+		public Builder channelReceiveLimit(long bytes) {
+			if (bytes < 1) {
+				throw new IllegalArgumentException("The limit must be at least 1 byte, got " + bytes);
+			}
+
+			this.channelReceiveLimit = bytes;
 			return this;
 		}
 
