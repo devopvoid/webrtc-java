@@ -144,6 +144,16 @@ foreach(RUNTIME_LIB ${FFMPEG_RUNTIME_LIBS})
         COMMENT "Collecting ${RUNTIME_LIB} for the platform jar")
 endforeach()
 
+# The project's own license and notice go along as well, at the top of
+# META-INF as in the Java jars.
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${NATIVES_DIR}/META-INF"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../../../LICENSE"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../../../NOTICE"
+            "${NATIVES_DIR}/META-INF"
+    COMMENT "Collecting the webrtc-java license and notice for the platform jar")
+
 #
 # The LGPL asks for its text to travel with the FFmpeg libraries, along with
 # a notice saying what they are and where their source is. Both go under

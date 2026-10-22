@@ -249,6 +249,23 @@
 				<artifactId>central-publishing-maven-plugin</artifactId>
 			</plugin>
 		</plugins>
+
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+			</resource>
+			<!-- The project's license and notice go into every jar, where they reach
+			     those who get the library from Maven Central rather than from this
+			     repository. Every module sits directly below the root. -->
+			<resource>
+				<directory>${project.basedir}/..</directory>
+				<targetPath>META-INF</targetPath>
+				<includes>
+					<include>LICENSE</include>
+					<include>NOTICE</include>
+				</includes>
+			</resource>
+		</resources>
 	</build>
 
 	<profiles>
@@ -263,6 +280,35 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-javadoc-plugin</artifactId>
+					</plugin>
+					<!-- The javadoc jar is made of what javadoc writes, not of the resources,
+					     so the license and notice are put next to the pages before it is
+					     packed. The notice covers the parts of the API docs taken from the
+					     W3C specification. -->
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-resources-plugin</artifactId>
+						<executions>
+							<execution>
+								<id>javadoc-licenses</id>
+								<phase>prepare-package</phase>
+								<goals>
+									<goal>copy-resources</goal>
+								</goals>
+								<configuration>
+									<outputDirectory>${project.build.directory}/reports/apidocs/META-INF</outputDirectory>
+									<resources>
+										<resource>
+											<directory>${project.basedir}/..</directory>
+											<includes>
+												<include>LICENSE</include>
+												<include>NOTICE</include>
+											</includes>
+										</resource>
+									</resources>
+								</configuration>
+							</execution>
+						</executions>
 					</plugin>
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
