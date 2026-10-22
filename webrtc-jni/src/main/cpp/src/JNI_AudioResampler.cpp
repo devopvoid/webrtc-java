@@ -68,6 +68,16 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampl
 		webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
 		CHECK_HANDLEV(resampler, -1);
 
+		// Java checks these too, but the views below must never reach past an array.
+		const jlong srcBytes = static_cast<jlong>(srcSamplesPerChannel) * channels * sizeof(int16_t);
+		const jlong dstBytes = static_cast<jlong>(dstSamplesPerChannel) * channels * sizeof(int16_t);
+
+		if (srcSamplesPerChannel <= 0 || dstSamplesPerChannel <= 0 || channels <= 0 ||
+			env->GetArrayLength(samplesIn) < srcBytes || env->GetArrayLength(samplesOut) < dstBytes) {
+			ThrowJavaException(env, "java/lang/IllegalArgumentException", "Sample arrays too short for the requested samples");
+			return -1;
+		}
+
 		auto releaseSrc = [env, samplesIn](jbyte * bytes) {
 			env->ReleaseByteArrayElements(samplesIn, bytes, JNI_ABORT);
 		};
