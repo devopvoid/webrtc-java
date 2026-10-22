@@ -227,6 +227,7 @@ final class DevicesImpl implements Devices {
 
 	private <T> CompletableFuture<T> onMediaExecutor(Supplier<T> action) {
 		CompletableFuture<T> result = new CompletableFuture<>();
+		media.rtc.track(result, null);
 
 		media.executor.execute(() -> {
 			try {

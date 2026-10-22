@@ -31,7 +31,12 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import dev.onvoid.webrtc.RTCSessionDescription;
@@ -493,6 +498,54 @@ class PeerTests extends ClientTestBase {
 		assertThrows(IllegalStateException.class,
 				() -> rtc.createPeer(PeerOptions.builder().signaling(link.first()).build()));
 		assertEquals(1, rtc.peers().size());
+	}
+
+	@Test
+	void operationAfterRuntimeCloseFails() throws Exception {
+		// The runtime's threads are gone, so the task that would fail the
+		// operation never runs. Its future has to fail all the same.
+		Peer peer = rtc.createPeer(manualOptions());
+
+		rtc.close();
+
+		assertInstanceOf(PeerClosedException.class, cause(peer.negotiator().createOffer()));
+		assertInstanceOf(PeerClosedException.class, cause(peer.withNative(connection -> connection)));
+	}
+
+	@Test
+	void rejectedEventsReported() throws Exception {
+		// An event executor that refuses work, as a bounded pool does when full.
+		AtomicBoolean refusing = new AtomicBoolean();
+		ExecutorService pool = Executors.newSingleThreadExecutor();
+		Executor executor = task -> {
+			if (refusing.get()) {
+				throw new RejectedExecutionException("Full");
+			}
+			pool.execute(task);
+		};
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.eventExecutor(executor)
+				.errorHandler(errors::add)
+				.build();
+
+		try {
+			Peer peer = runtime.createPeer(manualOptions());
+			refusing.set(true);
+
+			// Delivered all the same, though not on the event executor.
+			assertTrue(await(peer.negotiator().createOffer()).sdp.startsWith("v=0"));
+			assertTrue(errors.stream().anyMatch(error -> error.getCause() instanceof RejectedExecutionException),
+					() -> "Errors: " + errors);
+
+			refusing.set(false);
+		}
+		finally {
+			runtime.close();
+			pool.shutdown();
+		}
+
+		errors.clear();
 	}
 
 	private static Throwable cause(CompletableFuture<?> future) throws Exception {

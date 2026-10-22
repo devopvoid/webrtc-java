@@ -54,6 +54,7 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 		requireNonNull(device, "device");
 
 		CompletableFuture<Void> switched = new CompletableFuture<>();
+		media.rtc.track(switched, null);
 
 		// Opening a camera can take a moment, so it happens off the caller's thread.
 		media.executor.execute(() -> {

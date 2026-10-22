@@ -178,6 +178,9 @@ final class PeerImpl implements Peer {
 		this.trackHandlers = new Handlers<>(rtc::reportError);
 		this.channelHandlers = new Handlers<>(rtc::reportError);
 		this.errorHandlers = new Handlers<>(rtc::reportError);
+
+		rtc.track(connected, events);
+		rtc.track(closedFuture, events);
 	}
 
 	/**
@@ -224,12 +227,11 @@ final class PeerImpl implements Peer {
 
 				opened.completeExceptionally(e);
 			}
+		}, () -> {
+			// A runtime that stopped its threads dropped the task.
+			opened.completeExceptionally(new PeerClosedException("The runtime closed before " + name
+					+ " was created"));
 		});
-
-		// A runtime that stops its threads drops the task if it has not run,
-		// and then nothing else would end the wait.
-		rtc.whenShutDown().thenRun(() -> opened.completeExceptionally(
-				new PeerClosedException("The runtime closed before " + name + " was created")));
 
 		try {
 			opened.get();
@@ -556,7 +558,12 @@ final class PeerImpl implements Peer {
 	<T> CompletableFuture<T> toPublic(CompletableFuture<T> internal) {
 		ClientFuture<T> result = new ClientFuture<>();
 
-		internal.whenComplete((value, error) -> events.execute(() -> complete(result, value, error)));
+		rtc.track(result, events);
+
+		// Completed in any case: should the event executor reject the task, on
+		// the thread that found it rejected.
+		internal.whenComplete((value, error) -> events.execute(() -> complete(result, value, error),
+				() -> complete(result, value, error)));
 
 		return result;
 	}
@@ -977,7 +984,7 @@ final class PeerImpl implements Peer {
 		PeerState newState = PeerState.of(nativeState);
 		state = newState;
 
-		events.execute(() -> deliverState(newState));
+		events.execute(() -> deliverState(newState), () -> settleConnected(newState));
 	}
 
 	private void gatheringChanged(RTCIceGatheringState gatheringState) {
@@ -1137,6 +1144,9 @@ final class PeerImpl implements Peer {
 			channelHandlers.clear();
 			stateHandlers.clear();
 			errorHandlers.clear();
+		}, () -> {
+			connected.completeExceptionally(error);
+			closedFuture.complete(null);
 		});
 	}
 
@@ -1149,7 +1159,14 @@ final class PeerImpl implements Peer {
 
 		deliveredState = newState;
 		stateHandlers.accept(newState);
+		settleConnected(newState);
+	}
 
+	/**
+	 * Completes the connected future for the state, which is all that is left
+	 * of delivering it when the event executor rejects that.
+	 */
+	private void settleConnected(PeerState newState) {
 		if (newState == PeerState.CONNECTED) {
 			connected.complete(this);
 		}
