@@ -28,6 +28,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
 
 import org.junit.jupiter.api.Test;
 
@@ -227,6 +230,91 @@ class RuntimeCloseTests extends ClientTestBase {
 		}
 		finally {
 			control.runAll();
+			errors.clear();
+		}
+	}
+
+	@Test
+	void closeBeforeTrackCreated() throws Exception {
+		CompletableFuture<Void> closed = rtc.closeAsync();
+
+		assertThrows(PeerClosedException.class, () -> rtc.media().customVideo("late"));
+		await(closed);
+	}
+
+	@Test
+	void closeWhileCreatingTrack() throws Exception {
+		// The runtime begins to close while a track is created over its
+		// factory, which it keeps until the track is made, and then closed.
+		ManualExecutor control = new ManualExecutor();
+		WebRtc runtime = runtime(control);
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+		CompletableFuture<Void> closed;
+		CustomVideoImpl track;
+
+		try (LocalMediaImpl.Creation creation = media.begin()) {
+			closed = runtime.closeAsync();
+
+			CustomVideoSource source = new CustomVideoSource();
+			track = media.register(new CustomVideoImpl(media, runtime.factory.createVideoTrack("late", source),
+					source));
+		}
+
+		// The release of the track, which the runtime waits for.
+		control.awaitQueued(TIMEOUT_SECONDS);
+		assertTrue(track.isEnded());
+		assertFalse(closed.isDone());
+
+		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
+		await(closed);
+		await(track.closeAsync());
+	}
+
+	@Test
+	void releaseFailureFailsClose() throws Exception {
+		// A step of the release fails. The steps after it run all the same,
+		// and the track's close fails, as does the runtime's, which leaves
+		// the factory undisposed.
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.build();
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+		IllegalStateException broken = new IllegalStateException("Broken");
+		AtomicBoolean sourceReleased = new AtomicBoolean();
+		LocalVideoImpl track;
+
+		try (LocalMediaImpl.Creation creation = media.begin()) {
+			CustomVideoSource source = new CustomVideoSource();
+			Runnable release = () -> {
+				source.dispose();
+				sourceReleased.set(true);
+			};
+
+			track = media.register(new LocalVideoImpl(media, runtime.factory.createVideoTrack("broken", source),
+					release) {
+
+				@Override
+				void beforeRelease() {
+					throw broken;
+				}
+			});
+		}
+
+		try {
+			ExecutionException e = assertThrows(ExecutionException.class, () -> await(track.closeAsync()));
+			assertSame(broken, e.getCause().getCause());
+			assertTrue(sourceReleased.get());
+			assertTrue(track.isEnded());
+
+			ExecutionException closing = assertThrows(ExecutionException.class, () -> await(runtime.closeAsync()));
+			assertTrue(closing.getCause().getMessage().contains("left undisposed"), closing.getCause()::getMessage);
+
+			assertEquals(2, errors.size(), () -> "Errors: " + errors);
+			assertSame(e.getCause(), errors.get(0));
+			assertSame(closing.getCause(), errors.get(1));
+		}
+		finally {
 			errors.clear();
 		}
 	}

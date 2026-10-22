@@ -57,6 +57,9 @@ final class LocalMediaImpl implements LocalMedia {
 
 	private final Set<LocalTrackImpl> tracks = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
+	/** Completed as the creations of tracks end, which the runtime waits for when it closes. */
+	private final Set<CompletableFuture<Void>> creations = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
 	// Guarded by cameras.
 
 	private final Map<String, SharedCamera> cameras = new HashMap<>();
@@ -91,31 +94,32 @@ final class LocalMediaImpl implements LocalMedia {
 	@Override
 	public LocalCamera camera(CameraOptions options) {
 		requireNonNull(options, "options");
-		rtc.checkOpen();
 
-		VideoDevice device = options.device;
+		try (Creation creation = begin()) {
+			VideoDevice device = options.device;
 
-		if (device == null) {
-			List<VideoDevice> available = devices().cameras();
+			if (device == null) {
+				List<VideoDevice> available = devices().cameras();
 
-			if (available.isEmpty()) {
-				throw new MediaException("No camera was found");
+				if (available.isEmpty()) {
+					throw new MediaException("No camera was found");
+				}
+
+				device = available.get(0);
 			}
 
-			device = available.get(0);
-		}
+			CameraOptions resolved = options.withDevice(device);
+			SharedCamera camera = openCamera(resolved);
 
-		CameraOptions resolved = options.withDevice(device);
-		SharedCamera camera = openCamera(resolved);
+			try {
+				VideoTrack track = rtc.factory.createVideoTrack(newId("camera"), camera.source);
 
-		try {
-			VideoTrack track = rtc.factory.createVideoTrack(newId("camera"), camera.source);
-
-			return register(new LocalCameraImpl(this, track, camera));
-		}
-		catch (RuntimeException e) {
-			releaseCamera(camera);
-			throw new MediaException("The track of the camera " + device.getName() + " could not be created", e);
+				return register(new LocalCameraImpl(this, track, camera));
+			}
+			catch (RuntimeException e) {
+				releaseCamera(camera);
+				throw new MediaException("The track of the camera " + device.getName() + " could not be created", e);
+			}
 		}
 	}
 
@@ -133,72 +137,75 @@ final class LocalMediaImpl implements LocalMedia {
 	@Override
 	public LocalAudio microphone(AudioOptions options) {
 		requireNonNull(options, "options");
-		rtc.checkOpen();
 
-		if (rtc.audioMode != AudioMode.DEVICES) {
-			throw new ConfigurationException("The runtime was built with AudioMode." + rtc.audioMode
-					+ ", which sends pushed audio only. Build it with AudioMode.DEVICES to capture the microphone, "
-					+ "or use customAudio() to push audio");
-		}
+		try (Creation creation = begin()) {
+			if (rtc.audioMode != AudioMode.DEVICES) {
+				throw new ConfigurationException("The runtime was built with AudioMode." + rtc.audioMode
+						+ ", which sends pushed audio only. Build it with AudioMode.DEVICES to capture the microphone, "
+						+ "or use customAudio() to push audio");
+			}
 
-		AudioTrackSource source = rtc.factory.createAudioSource(options);
+			AudioTrackSource source = rtc.factory.createAudioSource(options);
 
-		try {
-			AudioTrack track = rtc.factory.createAudioTrack(newId("microphone"), source);
+			try {
+				AudioTrack track = rtc.factory.createAudioTrack(newId("microphone"), source);
 
-			return register(new LocalAudioImpl(this, track, source::dispose));
-		}
-		catch (RuntimeException e) {
-			source.dispose();
-			throw new MediaException("The microphone track could not be created", e);
+				return register(new LocalAudioImpl(this, track, source::dispose));
+			}
+			catch (RuntimeException e) {
+				source.dispose();
+				throw new MediaException("The microphone track could not be created", e);
+			}
 		}
 	}
 
 	@Override
 	public LocalVideo screen(ScreenOptions options) {
 		requireNonNull(options, "options");
-		rtc.checkOpen();
 
-		VideoDesktopSource source = new VideoDesktopSource();
+		try (Creation creation = begin()) {
+			VideoDesktopSource source = new VideoDesktopSource();
 
-		try {
-			source.setSourceId(options.source.id, options.window);
-			source.setFrameRate(options.frameRate);
+			try {
+				source.setSourceId(options.source.id, options.window);
+				source.setFrameRate(options.frameRate);
 
-			if (options.maxWidth > 0) {
-				source.setMaxFrameSize(options.maxWidth, options.maxHeight);
+				if (options.maxWidth > 0) {
+					source.setMaxFrameSize(options.maxWidth, options.maxHeight);
+				}
+
+				source.start();
+
+				VideoTrack track = rtc.factory.createVideoTrack(newId(options.window ? "window" : "screen"), source);
+
+				return register(new LocalVideoImpl(this, track, () -> {
+					source.stop();
+					source.dispose();
+				}));
 			}
-
-			source.start();
-
-			VideoTrack track = rtc.factory.createVideoTrack(newId(options.window ? "window" : "screen"), source);
-
-			return register(new LocalVideoImpl(this, track, () -> {
-				source.stop();
+			catch (RuntimeException e) {
 				source.dispose();
-			}));
-		}
-		catch (RuntimeException e) {
-			source.dispose();
-			throw new MediaException("Capturing " + options.source.title + " failed: " + e.getMessage(), e);
+				throw new MediaException("Capturing " + options.source.title + " failed: " + e.getMessage(), e);
+			}
 		}
 	}
 
 	@Override
 	public CustomVideo customVideo(String label) {
 		requireNonNull(label, "label");
-		rtc.checkOpen();
 
-		CustomVideoSource source = new CustomVideoSource();
+		try (Creation creation = begin()) {
+			CustomVideoSource source = new CustomVideoSource();
 
-		try {
-			VideoTrack track = rtc.factory.createVideoTrack(label, source);
+			try {
+				VideoTrack track = rtc.factory.createVideoTrack(label, source);
 
-			return register(new CustomVideoImpl(this, track, source));
-		}
-		catch (RuntimeException e) {
-			source.dispose();
-			throw e;
+				return register(new CustomVideoImpl(this, track, source));
+			}
+			catch (RuntimeException e) {
+				source.dispose();
+				throw e;
+			}
 		}
 	}
 
@@ -206,63 +213,92 @@ final class LocalMediaImpl implements LocalMedia {
 	public LocalVideo videoTrack(String label, VideoTrackSource source) {
 		requireNonNull(label, "label");
 		requireNonNull(source, "source");
-		rtc.checkOpen();
 
-		VideoTrack track = rtc.factory.createVideoTrack(label, source);
+		try (Creation creation = begin()) {
+			VideoTrack track = rtc.factory.createVideoTrack(label, source);
 
-		// The source is the caller's, and outlives the track.
-		return register(new LocalVideoImpl(this, track, () -> { }));
+			// The source is the caller's, and outlives the track.
+			return register(new LocalVideoImpl(this, track, () -> { }));
+		}
 	}
 
 	@Override
 	public LocalAudio audioTrack(String label, AudioTrackSource source) {
 		requireNonNull(label, "label");
 		requireNonNull(source, "source");
-		rtc.checkOpen();
 
-		boolean pushed = source instanceof CustomAudioSource;
+		try (Creation creation = begin()) {
+			boolean pushed = source instanceof CustomAudioSource;
 
-		if (pushed && rtc.audioMode == AudioMode.DEVICES) {
-			throw new ConfigurationException("A CustomAudioSource needs a runtime built with AudioMode.CUSTOM or "
-					+ "AudioMode.HEADLESS; this one captures the microphone");
+			if (pushed && rtc.audioMode == AudioMode.DEVICES) {
+				throw new ConfigurationException("A CustomAudioSource needs a runtime built with AudioMode.CUSTOM or "
+						+ "AudioMode.HEADLESS; this one captures the microphone");
+			}
+			if (!pushed && rtc.audioMode != AudioMode.DEVICES) {
+				throw new ConfigurationException("A captured audio source needs a runtime built with AudioMode.DEVICES; "
+						+ "this one was built with AudioMode." + rtc.audioMode);
+			}
+
+			AudioTrack track = rtc.factory.createAudioTrack(label, source);
+
+			// The source is the caller's, and outlives the track.
+			return register(new LocalAudioImpl(this, track, () -> { }));
 		}
-		if (!pushed && rtc.audioMode != AudioMode.DEVICES) {
-			throw new ConfigurationException("A captured audio source needs a runtime built with AudioMode.DEVICES; "
-					+ "this one was built with AudioMode." + rtc.audioMode);
-		}
-
-		AudioTrack track = rtc.factory.createAudioTrack(label, source);
-
-		// The source is the caller's, and outlives the track.
-		return register(new LocalAudioImpl(this, track, () -> { }));
 	}
 
 	@Override
 	public CustomAudio customAudio(String label) {
 		requireNonNull(label, "label");
-		rtc.checkOpen();
 
-		if (rtc.audioMode == AudioMode.DEVICES) {
-			throw new ConfigurationException("The runtime was built with AudioMode.DEVICES, which sends the "
-					+ "microphone. WebRTC feeds captured audio into every audio sender of a runtime, so pushed "
-					+ "audio needs a runtime built with AudioMode.CUSTOM or AudioMode.HEADLESS");
-		}
+		try (Creation creation = begin()) {
+			if (rtc.audioMode == AudioMode.DEVICES) {
+				throw new ConfigurationException("The runtime was built with AudioMode.DEVICES, which sends the "
+						+ "microphone. WebRTC feeds captured audio into every audio sender of a runtime, so pushed "
+						+ "audio needs a runtime built with AudioMode.CUSTOM or AudioMode.HEADLESS");
+			}
 
-		CustomAudioSource source = new CustomAudioSource();
+			CustomAudioSource source = new CustomAudioSource();
 
-		try {
-			AudioTrack track = rtc.factory.createAudioTrack(label, source);
+			try {
+				AudioTrack track = rtc.factory.createAudioTrack(label, source);
 
-			return register(new CustomAudioImpl(this, track, source));
-		}
-		catch (RuntimeException e) {
-			source.dispose();
-			throw e;
+				return register(new CustomAudioImpl(this, track, source));
+			}
+			catch (RuntimeException e) {
+				source.dispose();
+				throw e;
+			}
 		}
 	}
 
+	/**
+	 * Begins to create a track, before anything native is touched. The
+	 * creation is registered before the runtime is checked again: a runtime
+	 * that begins to close either waits for the creation before it frees the
+	 * factory, or is seen closing here.
+	 *
+	 * @return the creation, to close once the track is registered or failed.
+	 */
+	Creation begin() {
+		Creation creation = new Creation();
+		creations.add(creation.done);
+
+		if (rtc.isClosing()) {
+			creation.close();
+			throw new PeerClosedException("The runtime is closed");
+		}
+
+		return creation;
+	}
+
+	/**
+	 * Closes every track, and names the creations that still run. Those are
+	 * listed first: a creation registers its track before it ends, so a track
+	 * that one makes meanwhile is either listed or comes from a creation
+	 * listed, and the runtime closes it in its next round.
+	 */
 	List<CompletableFuture<Void>> closeAll() {
-		List<CompletableFuture<Void>> closing = new ArrayList<>();
+		List<CompletableFuture<Void>> closing = new ArrayList<>(creations);
 
 		for (LocalTrackImpl track : new ArrayList<>(tracks)) {
 			closing.add(track.closeInternal());
@@ -282,14 +318,8 @@ final class LocalMediaImpl implements LocalMedia {
 		tracks.remove(track);
 	}
 
-	private <T extends LocalTrackImpl> T register(T track) {
+	<T extends LocalTrackImpl> T register(T track) {
 		tracks.add(track);
-
-		if (rtc.isClosing()) {
-			// The runtime began to close meanwhile and may have missed it.
-			track.closeInternal();
-		}
-
 		return track;
 	}
 
@@ -386,6 +416,21 @@ final class LocalMediaImpl implements LocalMedia {
 
 	private static String newId(String kind) {
 		return kind + "-" + UUID.randomUUID();
+	}
+
+
+
+	/** A creation of a track, which the runtime waits for when it closes. */
+	final class Creation implements AutoCloseable {
+
+		final CompletableFuture<Void> done = new CompletableFuture<>();
+
+
+		@Override
+		public void close() {
+			creations.remove(done);
+			done.complete(null);
+		}
 	}
 
 

@@ -218,25 +218,29 @@ abstract class LocalTrackImpl implements LocalTrack {
 	}
 
 	private void release() {
-		try {
-			beforeRelease();
+		MediaStreamTrack last;
+		Runnable lastRelease;
 
-			MediaStreamTrack last;
-			Runnable lastRelease;
-
-			synchronized (this) {
-				last = track;
-				lastRelease = releaseSource;
-			}
-
-			last.dispose();
-			lastRelease.run();
-		}
-		catch (Throwable e) {
-			rtc.reportError(e);
+		synchronized (this) {
+			last = track;
+			lastRelease = releaseSource;
 		}
 
-		media.forget(this);
+		// Each step is tried, whether or not the one before failed: the source
+		// holds a reference of its own and is released even when the track is not.
+		Throwable failure = attempt(null, this::beforeRelease);
+		failure = attempt(failure, last::dispose);
+		failure = attempt(failure, lastRelease);
+
+		if (failure == null) {
+			media.forget(this);
+		}
+		else {
+			// Kept among the tracks, so that the runtime, which closes them
+			// again, sees what was left and leaves the factory undisposed.
+			failure = new WebRtcException("Releasing " + this + " failed", failure);
+			rtc.reportError(failure);
+		}
 
 		List<Runnable> handlers;
 
@@ -255,7 +259,32 @@ abstract class LocalTrackImpl implements LocalTrack {
 			}
 		}
 
-		closed.complete(null);
+		if (failure == null) {
+			closed.complete(null);
+		}
+		else {
+			closed.completeExceptionally(failure);
+		}
+	}
+
+	/**
+	 * Runs a step of the release.
+	 *
+	 * @return the failure so far, with the step's added to it.
+	 */
+	private static Throwable attempt(Throwable failure, Runnable step) {
+		try {
+			step.run();
+		}
+		catch (Throwable e) {
+			if (failure == null) {
+				return e;
+			}
+
+			failure.addSuppressed(e);
+		}
+
+		return failure;
 	}
 
 
