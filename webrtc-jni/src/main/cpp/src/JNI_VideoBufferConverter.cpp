@@ -63,17 +63,35 @@ size_t CalcBufferSize(int width, int height, int fourCC) {
 	return bufferSize;
 }
 
+// Throws and returns false unless [offset, offset + length) lies within the array.
+static bool CheckArrayWindow(JNIEnv * env, jbyteArray array, jint offset, jint length)
+{
+	jsize arrayLength = env->GetArrayLength(array);
+
+	if (offset < 0 || length < 0 || offset > arrayLength - length) {
+		env->Throw(jni::JavaRuntimeException(env, "Invalid array window [offset %d, length %d, array %d]",
+			offset, length, arrayLength));
+		return false;
+	}
+
+	return true;
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I420toByteArray
 (JNIEnv * env, jclass cls, jobject jSrcY, jint srcStrideY, jobject jSrcU, jint srcStrideU,
-	jobject jSrcV, jint srcStrideV, jbyteArray dst, jint width, jint height, jint fourCC)
+	jobject jSrcV, jint srcStrideV, jbyteArray dst, jint dstOffset, jint dstLength,
+	jint width, jint height, jint fourCC)
 {
 	try {
-		jsize arrayLength = env->GetArrayLength(dst);
+		if (!CheckArrayWindow(env, dst, dstOffset, dstLength)) {
+			return;
+		}
+
 		size_t requiredSize = CalcBufferSize(width, height, fourCC);
 
-		if (arrayLength < requiredSize) {
+		if (static_cast<size_t>(dstLength) < requiredSize) {
 			env->Throw(jni::JavaRuntimeException(env, "Insufficient buffer size [has %d, need %zd]",
-				arrayLength, requiredSize));
+				dstLength, requiredSize));
 			return;
 		}
 
@@ -89,7 +107,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I
 		if (!arrayPtr) {
 			return;
 		}
-		uint8_t * dstPtr = reinterpret_cast<uint8_t *>(arrayPtr.get());
+		uint8_t * dstPtr = reinterpret_cast<uint8_t *>(arrayPtr.get()) + dstOffset;
 
 		const int conversionResult = libyuv::ConvertFromI420(srcY, srcStrideY, srcU, srcStrideU,
 			srcV, srcStrideV, dstPtr, 0, width, height, static_cast<uint32_t>(fourCC));
@@ -138,16 +156,20 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_byteArrayToI420
-(JNIEnv * env, jclass cls, jbyteArray src, jint width, jint height, jobject jDstY, jint dstStrideY,
-	jobject jDstU, jint dstStrideU, jobject jDstV, jint dstStrideV, jint fourCC)
+(JNIEnv * env, jclass cls, jbyteArray src, jint srcOffset, jint srcLength, jint width, jint height,
+	jobject jDstY, jint dstStrideY, jobject jDstU, jint dstStrideU, jobject jDstV, jint dstStrideV,
+	jint fourCC)
 {
 	try {
-		jsize arrayLength = env->GetArrayLength(src);
+		if (!CheckArrayWindow(env, src, srcOffset, srcLength)) {
+			return;
+		}
+
 		size_t requiredSize = CalcBufferSize(width, height, fourCC);
 
-		if (arrayLength < requiredSize) {
+		if (static_cast<size_t>(srcLength) < requiredSize) {
 			env->Throw(jni::JavaRuntimeException(env, "Insufficient buffer size [has %d, need %zd]",
-				arrayLength, requiredSize));
+				srcLength, requiredSize));
 			return;
 		}
 
@@ -162,10 +184,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_b
 		if (!arrayPtr) {
 			return;
 		}
-		const uint8_t * srcPtr = reinterpret_cast<uint8_t *>(arrayPtr.get());
+		const uint8_t * srcPtr = reinterpret_cast<uint8_t *>(arrayPtr.get()) + srcOffset;
 
 		const int conversionResult = libyuv::ConvertToI420(
-			srcPtr, arrayLength,
+			srcPtr, srcLength,
 			dstY, dstStrideY,
 			dstU, dstStrideU,
 			dstV, dstStrideV,
