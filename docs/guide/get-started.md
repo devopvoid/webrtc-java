@@ -212,6 +212,7 @@ To establish communication with another peer, you need to create a `RTCPeerConne
 
 ```java
 import dev.onvoid.webrtc.RTCConfiguration;
+import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.PeerConnectionObserver;
@@ -224,7 +225,11 @@ config.iceServers.add(iceServer);
 
 // Create a peer connection with an observer to handle events
 RTCPeerConnection peerConnection = factory.createPeerConnection(config, new PeerConnectionObserver() {
-    // Implement required methods
+    @Override
+    public void onIceCandidate(RTCIceCandidate candidate) {
+        // Send the candidate to the remote peer, see below. The other
+        // methods are optional.
+    }
 });
 ```
 
@@ -374,7 +379,8 @@ To create audio and video tracks:
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.video.VideoDeviceSource;
-import dev.onvoid.webrtc.media.audio.AudioDeviceSource;
+import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 
 // Create a video source and track
 VideoDeviceSource videoSource = new VideoDeviceSource();
