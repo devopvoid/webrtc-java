@@ -142,7 +142,7 @@ namespace jni
 
 		for (const webrtc::SdpVideoFormat & format : factory.GetSupportedFormats()) {
 			if (IsDefaultHardwareFormat(format)
-				|| factory.QueryCodecSupport(format, std::nullopt).is_power_efficient) {
+				|| factory.QueryCodecSupport(format, std::nullopt, std::nullopt).is_power_efficient) {
 				formats.push_back(format);
 			}
 		}
@@ -156,7 +156,7 @@ namespace jni
 
 		for (const webrtc::SdpVideoFormat & format : factory.GetSupportedFormats()) {
 			if (IsDefaultHardwareFormat(format)
-				|| factory.QueryCodecSupport(format, false).is_power_efficient) {
+				|| factory.QueryCodecSupport(format, false, std::nullopt).is_power_efficient) {
 				formats.push_back(format);
 			}
 		}
