@@ -28,10 +28,12 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.UnaryOperator;
 
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
@@ -43,6 +45,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class HttpSessionTests extends ClientTestBase {
+
+	/** Longer than any test takes: the session times out only when a test fires it. */
+	private static final Duration SESSION_TIMEOUT = Duration.ofSeconds(25);
 
 	private ScheduledExecutorService feeder;
 
@@ -136,17 +141,82 @@ class HttpSessionTests extends ClientTestBase {
 
 	@Test
 	void lateAnswerDeleted() throws Exception {
-		// The answer arrives after the session timed out. The server created
-		// a resource for it all the same, which must not be left there.
+		// The session times out while the offer is out. The server created a
+		// resource for it all the same, which must not be left there.
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+
 		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
-			endpoint.stallMillis = 700;
+			CountDownLatch answer = endpoint.holdAnswers();
+			CompletableFuture<Whep.Session> session = Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(client);
 
-			ExecutionException failed = assertThrows(ExecutionException.class,
-					() -> Whep.from(endpoint.uri()).timeout(Duration.ofSeconds(1)).play(rtc)
-							.get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
+			assertEquals(1, timer.fire(SESSION_TIMEOUT));
 
+			// Failed before the answer arrives, which then meets a closed peer.
+			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session));
 			assertTrue(failed.getCause().getMessage().contains("within"), failed.getCause().getMessage());
-			awaitRequest(endpoint, "DELETE /live/session/1");
+
+			answer.countDown();
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+
+			client.close();
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void timeoutAfterAnswerDeletes() throws Exception {
+		// The session times out once the answer was read, before it is applied.
+		// Who owns the resource then is the timeout, not the request.
+		ManualExecutor control = new ManualExecutor();
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.controlPool(control).timer(timer));
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> answer(rtc.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL)
+				.build()), offer), 201)) {
+			CompletableFuture<CompletableFuture<Whep.Session>> playing = CompletableFuture.supplyAsync(
+					() -> Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(client));
+
+			// The client's side up to the answer: the peer is created, the
+			// offer is created and posted, and the answer read. The request
+			// runs on this thread, within the task that sends it.
+			control.runUntil(() -> endpoint.answered() > 0, TIMEOUT_SECONDS);
+			assertEquals(1, timer.fire(SESSION_TIMEOUT));
+			control.runAll();
+
+			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(await(playing)));
+			assertTrue(failed.getCause().getMessage().contains("within"), failed.getCause().getMessage());
+			// Deleted on this thread, by the last tasks run.
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+		finally {
+			closeStepping(client, control);
+		}
+	}
+
+	@Test
+	void closeAfterRuntimeReported() throws Exception {
+		// A runtime that closed has no threads left to delete the session on.
+		WebRtc client = clientRuntime(builder -> builder);
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(client));
+
+			client.close();
+			await(session.closeAsync());
+
+			assertEquals(0, endpoint.count("DELETE /live/session/1"));
+			assertEquals(1, errors.size(), () -> "Errors: " + errors);
+			assertTrue(errors.get(0).getMessage().contains("left on the server"), errors.get(0).getMessage());
+			errors.clear();
+		}
+		finally {
+			client.close();
 		}
 	}
 
@@ -161,7 +231,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			assertTrue(failed.getCause().getMessage().contains("larger than"), failed.getCause().getMessage());
 			// The resource was named before the answer was refused.
-			awaitRequest(endpoint, "DELETE /live/session/1");
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
 		}
 	}
 
@@ -209,6 +279,38 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	/**
+	 * An endpoint whose side of the session sends the video.
+	 */
+	private TestHttpEndpoint sendingEndpoint() throws Exception {
+		return new TestHttpEndpoint(offer -> {
+			Peer server = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+			server.addTrack(video);
+			return answer(server, offer);
+		}, 201);
+	}
+
+	/**
+	 * A runtime for the client's side of a session, apart from the one the
+	 * endpoint's side runs on, so that its threads can be held or stopped.
+	 */
+	private WebRtc clientRuntime(UnaryOperator<WebRtc.Builder> options) {
+		return options.apply(WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add))
+				.build();
+	}
+
+	/**
+	 * Closes a runtime whose control tasks run only when the test runs them.
+	 */
+	static void closeStepping(WebRtc runtime, ManualExecutor control) throws Exception {
+		CompletableFuture<Void> closed = runtime.closeAsync();
+
+		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
+		await(closed);
+	}
+
+	/**
 	 * An endpoint whose side of the session receives what is published.
 	 */
 	private TestHttpEndpoint receivingEndpoint() throws Exception {
@@ -225,18 +327,6 @@ class HttpSessionTests extends ClientTestBase {
 		assertEquals(1, errors.size(), () -> "Errors: " + errors);
 		assertTrue(errors.get(0).getCause().getMessage().contains(status), () -> "Errors: " + errors);
 		errors.clear();
-	}
-
-	private static void awaitRequest(TestHttpEndpoint endpoint, String request) throws InterruptedException {
-		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
-
-		while (endpoint.requests.stream().noneMatch(r -> r.toString().equals(request))
-				&& System.nanoTime() < deadline) {
-			Thread.sleep(50);
-		}
-
-		assertTrue(endpoint.requests.stream().anyMatch(r -> r.toString().equals(request)),
-				() -> "Requests: " + endpoint.requests);
 	}
 
 	private static String answer(Peer peer, String offer) {

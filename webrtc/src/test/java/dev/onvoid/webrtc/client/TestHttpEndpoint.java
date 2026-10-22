@@ -28,12 +28,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
  * Just enough HTTP for WHIP and WHEP tests. A POST is answered with what the
  * handler returns for the offer, and creates a resource; a DELETE of that
- * resource returns 200, unless the test sets another status.
+ * resource returns 200, unless the test sets another status. Requests are
+ * served one at a time, in the order they arrive.
  */
 final class TestHttpEndpoint implements AutoCloseable {
 
@@ -70,12 +73,10 @@ final class TestHttpEndpoint implements AutoCloseable {
 	/** Where a DELETE answered with a redirect points. */
 	volatile String redirect = "/live/moved";
 
-	/**
-	 * How long the answer to a POST pauses, twice: before its status line and
-	 * after it. Each pause stays within a client's read timeout while both
-	 * together may not.
-	 */
-	volatile long stallMillis;
+	/** Holds the answers to POSTs while set, until it is released. */
+	private volatile CountDownLatch answerGate;
+
+	private int answered;
 
 	private final ServerSocket server;
 
@@ -100,6 +101,49 @@ final class TestHttpEndpoint implements AutoCloseable {
 
 	URI uri() {
 		return URI.create("http://127.0.0.1:" + server.getLocalPort() + "/live/endpoint");
+	}
+
+	/**
+	 * Holds the answer to every POST from now on, after the request has been
+	 * recorded, until the returned latch is counted down.
+	 */
+	CountDownLatch holdAnswers() {
+		CountDownLatch gate = new CountDownLatch(1);
+		answerGate = gate;
+		return gate;
+	}
+
+	/**
+	 * @return how many POSTs have been answered, counted before the answer is
+	 * written: once a client has read one, it is counted.
+	 */
+	synchronized int answered() {
+		return answered;
+	}
+
+	/**
+	 * Waits until the endpoint has received the request, such as "DELETE
+	 * /live/session/1".
+	 */
+	synchronized void awaitRequest(String request, long timeoutSeconds) throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+
+		while (requests.stream().noneMatch(r -> r.toString().equals(request))) {
+			long left = deadline - System.nanoTime();
+
+			if (left <= 0) {
+				throw new AssertionError("No " + request + " within " + timeoutSeconds + " s. Requests: " + requests);
+			}
+
+			TimeUnit.NANOSECONDS.timedWait(this, left);
+		}
+	}
+
+	/**
+	 * @return how many of the requests received are the given one.
+	 */
+	long count(String request) {
+		return requests.stream().filter(r -> r.toString().equals(request)).count();
 	}
 
 	@Override
@@ -143,50 +187,54 @@ final class TestHttpEndpoint implements AutoCloseable {
 			read += in.read(body, read, length - read);
 		}
 
-		requests.add(new Request(requestLine[0], requestLine[1], authorization));
+		synchronized (this) {
+			requests.add(new Request(requestLine[0], requestLine[1], authorization));
+			notifyAll();
+		}
 
 		OutputStream out = socket.getOutputStream();
 
 		if (requestLine[0].equals("POST")) {
 			if (status != 201) {
-				respond(out, status + " Refused", "", "not allowed", 0);
+				respond(out, status + " Refused", "", "not allowed");
 				return;
 			}
 
 			String answer = answerer.apply(new String(body, StandardCharsets.UTF_8));
-			respond(out, "201 Created", "Location: " + location + "\r\n", answer, stallMillis);
+			CountDownLatch gate = answerGate;
+
+			if (gate != null) {
+				try {
+					gate.await();
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					throw new IOException(e);
+				}
+			}
+
+			synchronized (this) {
+				answered++;
+			}
+
+			respond(out, "201 Created", "Location: " + location + "\r\n", answer);
 		}
 		else if (deleteStatus / 100 == 3) {
-			respond(out, deleteStatus + " Moved", "Location: " + redirect + "\r\n", "", 0);
+			respond(out, deleteStatus + " Moved", "Location: " + redirect + "\r\n", "");
 		}
 		else {
-			respond(out, deleteStatus + " Status", "", "", 0);
+			respond(out, deleteStatus + " Status", "", "");
 		}
 	}
 
-	private static void respond(OutputStream out, String status, String headers, String body, long stallMillis)
-			throws IOException {
+	private static void respond(OutputStream out, String status, String headers, String body) throws IOException {
 		byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-		String head = "Content-Type: application/sdp\r\n" + headers
+		String head = "HTTP/1.1 " + status + "\r\nContent-Type: application/sdp\r\n" + headers
 				+ "Content-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n";
 
-		stall(stallMillis);
-		out.write(("HTTP/1.1 " + status + "\r\n").getBytes(StandardCharsets.US_ASCII));
-		out.flush();
-		stall(stallMillis);
 		out.write(head.getBytes(StandardCharsets.US_ASCII));
 		out.write(bytes);
 		out.flush();
-	}
-
-	private static void stall(long millis) throws IOException {
-		try {
-			Thread.sleep(millis);
-		}
-		catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			throw new IOException(e);
-		}
 	}
 
 	private static String readLine(InputStream in) throws IOException {
