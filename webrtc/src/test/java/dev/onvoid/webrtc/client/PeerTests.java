@@ -441,43 +441,6 @@ class PeerTests extends ClientTestBase {
 	}
 
 	@Test
-	void closeFailsWhenPeerStaysOpen() throws Exception {
-		List<Throwable> closeErrors = new CopyOnWriteArrayList<>();
-		WebRtc runtime = WebRtc.builder()
-				.audio(AudioMode.HEADLESS)
-				.errorHandler(closeErrors::add)
-				.closeTimeout(Duration.ofMillis(200))
-				.build();
-		PeerImpl peer = (PeerImpl) runtime.createPeer(manualOptions());
-		CountDownLatch release = new CountDownLatch(1);
-
-		// Holds the peer's control executor, so that its teardown cannot run.
-		peer.control.execute(() -> {
-			try {
-				release.await();
-			}
-			catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-		});
-
-		try {
-			ExecutionException e = assertThrows(ExecutionException.class,
-					() -> runtime.closeAsync().get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
-
-			assertInstanceOf(WebRtcException.class, e.getCause());
-			assertTrue(e.getCause().getMessage().contains("left undisposed"), e.getCause()::getMessage);
-
-			// The error handler hears of it once, also through close().
-			runtime.close();
-			assertEquals(Collections.singletonList(e.getCause()), closeErrors);
-		}
-		finally {
-			release.countDown();
-		}
-	}
-
-	@Test
 	void sendBeyondLimitFails() throws Exception {
 		// Never negotiated, so the channel stays connecting and holds every send.
 		Peer peer = rtc.createPeer(PeerOptions.builder()

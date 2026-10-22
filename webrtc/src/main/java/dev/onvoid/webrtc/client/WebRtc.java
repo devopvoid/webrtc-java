@@ -128,9 +128,11 @@ public final class WebRtc implements AutoCloseable {
 		this.closeTimeout = builder.closeTimeout;
 		this.errorHandler = builder.errorHandler != null ? builder.errorHandler : WebRtc::uncaught;
 
-		this.controlPool = Executors.newCachedThreadPool(threads("webrtc-client-control-" + runtime + "-"));
+		this.controlPool = builder.controlPool != null ? builder.controlPool
+				: Executors.newCachedThreadPool(threads("webrtc-client-control-" + runtime + "-"));
 		this.framePool = Executors.newCachedThreadPool(threads("webrtc-client-frames-" + runtime + "-"));
-		this.timer = Executors.newSingleThreadScheduledExecutor(threads("webrtc-client-timer-" + runtime + "-"));
+		this.timer = builder.timer != null ? builder.timer
+				: Executors.newSingleThreadScheduledExecutor(threads("webrtc-client-timer-" + runtime + "-"));
 
 		if (builder.eventExecutor != null) {
 			this.eventExecutor = builder.eventExecutor;
@@ -237,31 +239,7 @@ public final class WebRtc implements AutoCloseable {
 		int number = peerCount.incrementAndGet();
 		String name = options.name != null ? options.name : "peer-" + number;
 
-		PeerImpl peer = new PeerImpl(this, options, name);
-
-		// Registered before the runtime is checked again: a runtime that
-		// begins to close either finds the peer among those it closes and
-		// waits for it before freeing the factory, or is seen closing here.
-		peers.add(peer);
-
-		if (closing.get()) {
-			peers.remove(peer);
-			throw new PeerClosedException("The runtime is closed");
-		}
-
-		try {
-			peer.open();
-		}
-		catch (RuntimeException e) {
-			// Closed before the error goes out, so that nothing of the failed
-			// peer still runs when the runtime closes and frees WebRTC's threads.
-			// Closing removes the peer. Once the runtime has stopped its threads
-			// the close cannot run any more, and there is nothing left to wait for.
-			CompletableFuture.anyOf(peer.closeInternal(), closed).join();
-			throw e;
-		}
-
-		return peer;
+		return open(register(new PeerImpl(this, options, name)));
 	}
 
 	/**
@@ -333,6 +311,41 @@ public final class WebRtc implements AutoCloseable {
 		catch (TimeoutException e) {
 			reportError(new WebRtcException("The runtime did not close within " + closeTimeout, e));
 		}
+	}
+
+	/**
+	 * Registers a peer before the runtime is checked again: a runtime that
+	 * begins to close either finds the peer among those it closes and waits
+	 * for it before freeing the factory, or is seen closing here.
+	 */
+	PeerImpl register(PeerImpl peer) {
+		peers.add(peer);
+
+		if (closing.get()) {
+			peers.remove(peer);
+			throw new PeerClosedException("The runtime is closed");
+		}
+
+		return peer;
+	}
+
+	/**
+	 * Creates the connection of a registered peer.
+	 */
+	PeerImpl open(PeerImpl peer) {
+		try {
+			peer.open();
+		}
+		catch (RuntimeException e) {
+			// Closed before the error goes out, so that nothing of the failed
+			// peer still runs when the runtime closes and frees WebRTC's threads.
+			// Closing removes the peer. Once the runtime has stopped its threads
+			// the close cannot run any more, and there is nothing left to wait for.
+			CompletableFuture.anyOf(peer.closeInternal(), closed).join();
+			throw e;
+		}
+
+		return peer;
 	}
 
 	void reportError(Throwable error) {
@@ -545,6 +558,10 @@ public final class WebRtc implements AutoCloseable {
 
 		private Consumer<PeerConnectionFactory.Builder> factoryCustomizer;
 
+		private ExecutorService controlPool;
+
+		private ScheduledExecutorService timer;
+
 
 		private Builder() {
 		}
@@ -658,6 +675,25 @@ public final class WebRtc implements AutoCloseable {
 		 */
 		public Builder configureFactory(Consumer<PeerConnectionFactory.Builder> customizer) {
 			this.factoryCustomizer = requireNonNull(customizer, "customizer");
+			return this;
+		}
+
+		/**
+		 * Replaces the pool the control tasks run on, so that tests decide
+		 * when each of them runs. The runtime shuts it down when it closes.
+		 */
+		Builder controlPool(ExecutorService pool) {
+			this.controlPool = requireNonNull(pool, "pool");
+			return this;
+		}
+
+		/**
+		 * Replaces the timer of timeouts and periodic tasks, so that tests
+		 * decide when each of them fires. The runtime shuts it down when it
+		 * closes.
+		 */
+		Builder timer(ScheduledExecutorService timer) {
+			this.timer = requireNonNull(timer, "timer");
 			return this;
 		}
 
