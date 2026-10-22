@@ -28,10 +28,16 @@
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStream_id
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaStreamInterface * stream = GetHandle<webrtc::MediaStreamInterface>(env, caller);
-	CHECK_HANDLEV(stream, nullptr);
+	try {
+		webrtc::MediaStreamInterface * stream = GetHandle<webrtc::MediaStreamInterface>(env, caller);
+		CHECK_HANDLEV(stream, nullptr);
 
-	return jni::JavaString::toJava(env, stream->id()).release();
+		return jni::JavaString::toJava(env, stream->id()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getAudioTracks

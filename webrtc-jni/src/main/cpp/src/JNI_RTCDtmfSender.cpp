@@ -33,21 +33,33 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_canInsertDtmf
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_insertDtmf
 (JNIEnv * env, jobject caller, jstring jTones, jint duration, jint interToneGap)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
-	CHECK_HANDLEV(sender, false);
+	try {
+		webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+		CHECK_HANDLEV(sender, false);
 
-	std::string tones = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jTones));
+		std::string tones = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jTones));
 
-	return static_cast<jboolean>(sender->InsertDtmf(tones, static_cast<int>(duration), static_cast<int>(interToneGap)));
+		return static_cast<jboolean>(sender->InsertDtmf(tones, static_cast<int>(duration), static_cast<int>(interToneGap)));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return JNI_FALSE;
+	}
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_tones
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
-	CHECK_HANDLEV(sender, nullptr);
+	try {
+		webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+		CHECK_HANDLEV(sender, nullptr);
 
-	return jni::JavaString::toJava(env, sender->tones()).release();
+		return jni::JavaString::toJava(env, sender->tones()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_duration
@@ -71,17 +83,22 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_interToneGap
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	try {
+		webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+		CHECK_HANDLE(sender);
 
-	// Unregister and free a previously registered observer before replacing
-	// it, otherwise it would leak along with its JNI global reference.
-	sender->UnregisterObserver();
+		// Unregister and free a previously registered observer before replacing
+		// it, otherwise it would leak along with its JNI global reference.
+		sender->UnregisterObserver();
 
-	auto observer = new jni::RTCDtmfSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
-	ReplaceNativeObserver(env, caller, "observerHandle", observer);
+		auto observer = new jni::RTCDtmfSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+		ReplaceNativeObserver(env, caller, "observerHandle", observer);
 
-	sender->RegisterObserver(observer);
+		sender->RegisterObserver(observer);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver

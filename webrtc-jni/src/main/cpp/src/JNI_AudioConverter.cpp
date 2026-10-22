@@ -19,27 +19,37 @@
 #include "media/audio/AudioConverter.h"
 #include "JavaUtils.h"
 
+#include <memory>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_convertInternal
 (JNIEnv * env, jobject caller, jbyteArray src, jint nSrcSamples, jbyteArray dst, jint nDstSamples)
 {
-	jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
-	CHECK_HANDLE(converter);
+	try {
+		jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
+		CHECK_HANDLE(converter);
 
-	jboolean isDstCopy = JNI_FALSE;
+		auto releaseSrc = [env, src](jbyte * bytes) {
+			env->ReleaseByteArrayElements(src, bytes, JNI_ABORT);
+		};
+		std::unique_ptr<jbyte, decltype(releaseSrc)> srcPtr(env->GetByteArrayElements(src, nullptr), releaseSrc);
+		if (!srcPtr) {
+			return;
+		}
 
-	jbyte * srcPtr = env->GetByteArrayElements(src, nullptr);
-	jbyte * dstPtr = env->GetByteArrayElements(dst, &isDstCopy);
+		// Mode 0 writes the samples back when the VM handed out a copy.
+		auto releaseDst = [env, dst](jbyte * bytes) {
+			env->ReleaseByteArrayElements(dst, bytes, 0);
+		};
+		std::unique_ptr<jbyte, decltype(releaseDst)> dstPtr(env->GetByteArrayElements(dst, nullptr), releaseDst);
+		if (!dstPtr) {
+			return;
+		}
 
-	converter->convert(reinterpret_cast<const int16_t *>(srcPtr), nSrcSamples, reinterpret_cast<int16_t *>(dstPtr), nDstSamples);
-
-	if (isDstCopy == JNI_TRUE) {
-		jsize dstLength = env->GetArrayLength(dst);
-
-		env->SetByteArrayRegion(dst, 0, dstLength, dstPtr);
+		converter->convert(reinterpret_cast<const int16_t *>(srcPtr.get()), nSrcSamples, reinterpret_cast<int16_t *>(dstPtr.get()), nDstSamples);
 	}
-
-	env->ReleaseByteArrayElements(src, srcPtr, JNI_ABORT);
-	env->ReleaseByteArrayElements(dst, dstPtr, JNI_ABORT);
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_dispose

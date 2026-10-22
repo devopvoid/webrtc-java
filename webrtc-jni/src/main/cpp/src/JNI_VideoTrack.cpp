@@ -24,19 +24,25 @@
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInternal
 (JNIEnv * env, jobject caller, jobject jsink)
 {
-	if (jsink == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoTrackSink must not be null"));
+	try {
+		if (jsink == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "VideoTrackSink must not be null"));
+			return 0;
+		}
+
+		webrtc::VideoTrackInterface * track = GetHandle<webrtc::VideoTrackInterface>(env, caller);
+		CHECK_HANDLEV(track, 0);
+
+		auto sink = new jni::VideoTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
+
+		track->AddOrUpdateSink(sink, webrtc::VideoSinkWants());
+
+		return reinterpret_cast<jlong>(sink);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return 0;
 	}
-
-	webrtc::VideoTrackInterface * track = GetHandle<webrtc::VideoTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, 0);
-
-	auto sink = new jni::VideoTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
-
-	track->AddOrUpdateSink(sink, webrtc::VideoSinkWants());
-
-	return reinterpret_cast<jlong>(sink);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_removeSinkInternal

@@ -72,34 +72,44 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_addLogSink
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_log
 (JNIEnv * env, jclass caller, jobject jseverity, jstring jmessage)
 {
-	std::string message = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jmessage));
+	try {
+		std::string message = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jmessage));
 	
-	auto severity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
+		auto severity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
 
-	RTC_LOG_V(severity) << message;
+		RTC_LOG_V(severity) << message;
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logToDebug
 (JNIEnv * env, jclass caller, jobject jseverity)
 {
-	int rtcSeverity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
+	try {
+		int rtcSeverity = jni::JavaEnums::toNative<webrtc::LoggingSeverity>(env, jseverity);
 
-	if (rtcSeverity < webrtc::LS_VERBOSE || rtcSeverity > webrtc::LS_NONE) {
-		return;
+		if (rtcSeverity < webrtc::LS_VERBOSE || rtcSeverity > webrtc::LS_NONE) {
+			return;
+		}
+
+		auto severity = static_cast<webrtc::LoggingSeverity>(rtcSeverity);
+
+		std::lock_guard<std::mutex> lock(debugLogSinkMutex);
+
+		if (debugLogSinkAttached) {
+			webrtc::LogMessage::RemoveLogToStream(&debugLogSink);
+			debugLogSinkAttached = false;
+		}
+
+		if (severity != webrtc::LS_NONE) {
+			webrtc::LogMessage::AddLogToStream(&debugLogSink, severity);
+			debugLogSinkAttached = true;
+		}
 	}
-
-	auto severity = static_cast<webrtc::LoggingSeverity>(rtcSeverity);
-
-	std::lock_guard<std::mutex> lock(debugLogSinkMutex);
-
-	if (debugLogSinkAttached) {
-		webrtc::LogMessage::RemoveLogToStream(&debugLogSink);
-		debugLogSinkAttached = false;
-	}
-
-	if (severity != webrtc::LS_NONE) {
-		webrtc::LogMessage::AddLogToStream(&debugLogSink, severity);
-		debugLogSinkAttached = true;
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 }
 

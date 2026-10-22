@@ -23,9 +23,14 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_initialize
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = new jni::SyncClock();
+	try {
+	    jni::SyncClock * clock = new jni::SyncClock();
     
-    SetHandle(env, caller, clock);
+	    SetHandle(env, caller, clock);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_getTimestampUs

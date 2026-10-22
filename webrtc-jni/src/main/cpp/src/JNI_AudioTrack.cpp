@@ -24,19 +24,25 @@
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInternal
 (JNIEnv * env, jobject caller, jobject jsink, jboolean packetInfos)
 {
-	if (jsink == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioTrackSink must not be null"));
+	try {
+		if (jsink == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "AudioTrackSink must not be null"));
+			return 0;
+		}
+
+		webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+		CHECK_HANDLEV(track, 0);
+
+		auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink), packetInfos);
+
+		track->AddSink(sink);
+
+		return reinterpret_cast<jlong>(sink);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return 0;
 	}
-
-	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, 0);
-
-	auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink), packetInfos);
-
-	track->AddSink(sink);
-
-	return reinterpret_cast<jlong>(sink);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeSinkInternal

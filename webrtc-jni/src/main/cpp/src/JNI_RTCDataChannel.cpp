@@ -33,17 +33,22 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLE(channel);
+	try {
+		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		CHECK_HANDLE(channel);
 
-	// Unregister and free a previously registered observer before replacing
-	// it, otherwise it would leak along with its JNI global reference.
-	channel->UnregisterObserver();
+		// Unregister and free a previously registered observer before replacing
+		// it, otherwise it would leak along with its JNI global reference.
+		channel->UnregisterObserver();
 
-	auto observer = new jni::RTCDataChannelObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
-	ReplaceNativeObserver(env, caller, "observerHandle", observer);
+		auto observer = new jni::RTCDataChannelObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+		ReplaceNativeObserver(env, caller, "observerHandle", observer);
 
-	channel->RegisterObserver(observer);
+		channel->RegisterObserver(observer);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_unregisterObserver
@@ -60,10 +65,16 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_unregisterObserver
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getLabel
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLEV(channel, nullptr);
+	try {
+		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		CHECK_HANDLEV(channel, nullptr);
 
-	return jni::JavaString::toJava(env, channel->label()).release();
+		return jni::JavaString::toJava(env, channel->label()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isReliable
@@ -105,10 +116,16 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getMaxRetransmits
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getProtocol
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLEV(channel, nullptr);
+	try {
+		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		CHECK_HANDLEV(channel, nullptr);
 
-	return jni::JavaString::toJava(env, channel->protocol()).release();
+		return jni::JavaString::toJava(env, channel->protocol()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isNegotiated
@@ -123,22 +140,28 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isNegotiated
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getPriority
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLEV(channel, nullptr);
+	try {
+		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		CHECK_HANDLEV(channel, nullptr);
 
-	// The priority is a number on the wire; a remote peer may announce one
-	// between the four levels, which is rounded up to the next level.
-	const uint16_t value = channel->priority().value();
-	webrtc::Priority priority = webrtc::Priority::kHigh;
+		// The priority is a number on the wire; a remote peer may announce one
+		// between the four levels, which is rounded up to the next level.
+		const uint16_t value = channel->priority().value();
+		webrtc::Priority priority = webrtc::Priority::kHigh;
 
-	for (auto level : { webrtc::Priority::kVeryLow, webrtc::Priority::kLow, webrtc::Priority::kMedium }) {
-		if (value <= webrtc::PriorityValue(level).value()) {
-			priority = level;
-			break;
+		for (auto level : { webrtc::Priority::kVeryLow, webrtc::Priority::kLow, webrtc::Priority::kMedium }) {
+			if (value <= webrtc::PriorityValue(level).value()) {
+				priority = level;
+				break;
+			}
 		}
-	}
 
-	return jni::JavaEnums::toJava(env, priority).release();
+		return jni::JavaEnums::toJava(env, priority).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getId
@@ -153,10 +176,16 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getId
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getState
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLEV(channel, nullptr);
+	try {
+		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		CHECK_HANDLEV(channel, nullptr);
 
-	return jni::JavaEnums::toJava(env, channel->state()).release();
+		return jni::JavaEnums::toJava(env, channel->state()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getBufferedAmount

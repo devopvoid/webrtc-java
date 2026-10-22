@@ -253,6 +253,20 @@ class AudioProcessingTest {
 	}
 
 	@Test
+	void processShortBuffersRejected() {
+		ProcessBuffer buffer = new ProcessBuffer(48000, 48000, 1, 2);
+		buffer.dst = new byte[buffer.dst.length - 2];
+
+		assertEquals(-8, process(audioProcessing, buffer));
+		assertEquals(-8, processReverse(audioProcessing, buffer));
+
+		buffer = new ProcessBuffer(48000, 48000, 2, 2);
+		buffer.src = new byte[buffer.src.length - 2];
+
+		assertEquals(-8, process(audioProcessing, buffer));
+	}
+
+	@Test
 	void streamDelay() {
 		int delay = 70;
 

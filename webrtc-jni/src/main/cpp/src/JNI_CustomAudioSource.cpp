@@ -24,10 +24,15 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_initialize
 (JNIEnv * env, jobject caller)
 {
-    std::shared_ptr<jni::SyncClock> sync_clock = std::make_shared<jni::SyncClock>();
-    webrtc::scoped_refptr<jni::CustomAudioSource> source = webrtc::make_ref_counted<jni::CustomAudioSource>(sync_clock);
+	try {
+	    std::shared_ptr<jni::SyncClock> sync_clock = std::make_shared<jni::SyncClock>();
+	    webrtc::scoped_refptr<jni::CustomAudioSource> source = webrtc::make_ref_counted<jni::CustomAudioSource>(sync_clock);
 
-    SetHandle(env, caller, source.release());
+	    SetHandle(env, caller, source.release());
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_initializeWithClock
@@ -62,31 +67,41 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_disp
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_pushAudioInternal
 (JNIEnv * env, jobject caller, jbyteArray audioData, jint bits_per_sample, jint sampleRate, jint channels, jint frameCount)
 {
-    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
-    CHECK_HANDLE(source);
+	try {
+	    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
+	    CHECK_HANDLE(source);
     
-    // The caller validated the format, the frame count and the array length.
-    jbyte * data = env->GetByteArrayElements(audioData, nullptr);
+	    // The caller validated the format, the frame count and the array length.
+	    jbyte * data = env->GetByteArrayElements(audioData, nullptr);
 
-    if (data != nullptr) {
-        source->PushAudioData(data, bits_per_sample, sampleRate, channels, frameCount);
+	    if (data != nullptr) {
+	        source->PushAudioData(data, bits_per_sample, sampleRate, channels, frameCount);
         
-        env->ReleaseByteArrayElements(audioData, data, JNI_ABORT);
-    }
+	        env->ReleaseByteArrayElements(audioData, data, JNI_ABORT);
+	    }
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_pushAudioTimestamped
 (JNIEnv * env, jobject caller, jbyteArray audioData, jint bits_per_sample, jint sampleRate, jint channels, jint frameCount, jlong timestampUs)
 {
-    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
-    CHECK_HANDLE(source);
+	try {
+	    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
+	    CHECK_HANDLE(source);
 
-    // The caller validated the format, the frame count and the array length.
-    jbyte * data = env->GetByteArrayElements(audioData, nullptr);
+	    // The caller validated the format, the frame count and the array length.
+	    jbyte * data = env->GetByteArrayElements(audioData, nullptr);
 
-    if (data != nullptr) {
-        source->PushAudioData(data, bits_per_sample, sampleRate, channels, frameCount, timestampUs);
+	    if (data != nullptr) {
+	        source->PushAudioData(data, bits_per_sample, sampleRate, channels, frameCount, timestampUs);
 
-        env->ReleaseByteArrayElements(audioData, data, JNI_ABORT);
-    }
+	        env->ReleaseByteArrayElements(audioData, data, JNI_ABORT);
+	    }
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
