@@ -135,6 +135,7 @@ public void onImage(BufferedImage image) {
 ## Error handling and edge cases
 - All methods throw `NullPointerException` if src/dst is null; ensure proper checks.
 - `ByteBuffer` destinations must be writable (not read-only) for `convertFromI420`.
+- A `ByteBuffer` is read or written between its position and its limit only, also when it is a slice or a view of a larger buffer. The window must hold the whole frame; the position and limit stay as they are.
 - Ensure the correct FourCC is used for the actual memory layout you pass/expect.
 - Beware of frame rotation metadata; conversions do not rotate pixels. Handle `VideoFrame.rotation` separately if your renderer requires upright images.
 

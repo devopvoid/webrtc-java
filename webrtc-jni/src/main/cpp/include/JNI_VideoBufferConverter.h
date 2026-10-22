@@ -10,10 +10,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoBufferConverter
 	 * Method:    I420toByteArray
-	 * Signature: (Ljava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;I[BIII)V
+	 * Signature: (Ljava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;I[BIIIII)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I420toByteArray
-	(JNIEnv *, jclass, jobject, jint, jobject, jint, jobject, jint, jbyteArray, jint, jint, jint);
+	(JNIEnv *, jclass, jobject, jint, jobject, jint, jobject, jint, jbyteArray, jint, jint, jint, jint, jint);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoBufferConverter
@@ -26,10 +26,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoBufferConverter
 	 * Method:    byteArrayToI420
-	 * Signature: ([BIILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;II)V
+	 * Signature: ([BIIIILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;II)V
 	 */
 	 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_byteArrayToI420
-	 (JNIEnv *, jclass, jbyteArray, jint, jint, jobject, jint, jobject, jint, jobject, jint, jint);
+	 (JNIEnv *, jclass, jbyteArray, jint, jint, jint, jint, jobject, jint, jobject, jint, jobject, jint, jint);
 
 	 /*
 	  * Class:     dev_onvoid_webrtc_media_video_VideoBufferConverter

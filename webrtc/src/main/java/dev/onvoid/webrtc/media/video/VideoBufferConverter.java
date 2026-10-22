@@ -58,7 +58,7 @@ public final class VideoBufferConverter {
 				i420.getDataY(), i420.getStrideY(),
 				i420.getDataU(), i420.getStrideU(),
 				i420.getDataV(), i420.getStrideV(),
-				dst,
+				dst, 0, dst.length,
 				i420.getWidth(), i420.getHeight(),
 				fourCC.value());
 	}
@@ -67,10 +67,15 @@ public final class VideoBufferConverter {
 	 * Convert an arbitrary {@link VideoFrameBuffer} to the specified pixel format
 	 * and write the result into a {@link ByteBuffer}. If the destination buffer
 	 * is a direct buffer, a native direct path is used; otherwise its backing
-	 * array (or a temporary array) is employed.
+	 * array is employed.
+	 * <p>
+	 * The result is written to the bytes between the buffer's position and its
+	 * limit, starting at the position. The position and limit stay as they are,
+	 * and no byte outside of them is touched.
 	 *
 	 * @param src    Source video frame buffer.
-	 * @param dst    Writable destination {@link ByteBuffer}. Must not be read-only.
+	 * @param dst    Writable destination {@link ByteBuffer}. Must not be read-only,
+	 *               and must have enough bytes remaining for the converted frame.
 	 * @param fourCC Target FourCC format identifier.
 	 *
 	 * @throws NullPointerException     if {@code src} or {@code dst} is {@code null}.
@@ -92,30 +97,23 @@ public final class VideoBufferConverter {
 		I420Buffer i420 = src.toI420();
 		
 		if (dst.isDirect()) {
+			// The slice starts at the position and ends at the limit, which
+			// the native code sees as the buffer's address and capacity.
 			I420toDirectBuffer(
 					i420.getDataY(), i420.getStrideY(),
 					i420.getDataU(), i420.getStrideU(),
 					i420.getDataV(), i420.getStrideV(),
-					dst,
+					dst.slice(),
 					i420.getWidth(), i420.getHeight(),
 					fourCC.value());
 		}
 		else {
-			byte[] arrayBuffer;
-
-			if (dst.hasArray()) {
-				arrayBuffer = dst.array();
-			}
-			else {
-				arrayBuffer = new byte[dst.remaining()];
-				dst.get(arrayBuffer);
-			}
-
+			// A writable heap buffer always has an accessible array.
 			I420toByteArray(
 					i420.getDataY(), i420.getStrideY(),
 					i420.getDataU(), i420.getStrideU(),
 					i420.getDataV(), i420.getStrideV(),
-					arrayBuffer,
+					dst.array(), dst.arrayOffset() + dst.position(), dst.remaining(),
 					i420.getWidth(), i420.getHeight(),
 					fourCC.value());
 		}
@@ -142,7 +140,7 @@ public final class VideoBufferConverter {
 		}
 
 		byteArrayToI420(
-				src,
+				src, 0, src.length,
 				dst.getWidth(), dst.getHeight(),
 				dst.getDataY(), dst.getStrideY(),
 				dst.getDataU(), dst.getStrideU(),
@@ -155,6 +153,10 @@ public final class VideoBufferConverter {
 	 * specified by {@code fourCC}) to I420 and write the result into the provided
 	 * {@link I420Buffer}. Uses a direct native path for direct buffers; otherwise
 	 * reads from the backing or a temporary array.
+	 * <p>
+	 * The source frame is read from the bytes between the buffer's position and
+	 * its limit, starting at the position. The position and limit stay as they
+	 * are.
 	 *
 	 * @param src    Source pixel data buffer.
 	 * @param dst    Destination I420 buffer (pre-allocated).
@@ -173,8 +175,10 @@ public final class VideoBufferConverter {
 		}
 
 		if (src.isDirect()) {
+			// The slice starts at the position and ends at the limit, which
+			// the native code sees as the buffer's address and capacity.
 			directBufferToI420(
-					src,
+					src.slice(),
 					dst.getWidth(), dst.getHeight(),
 					dst.getDataY(), dst.getStrideY(),
 					dst.getDataU(), dst.getStrideU(),
@@ -182,18 +186,24 @@ public final class VideoBufferConverter {
 					fourCC.value());
 		}
 		else {
-			byte[] arrayBuffer;
+			byte[] array;
+			int offset;
+			int length = src.remaining();
 
 			if (src.hasArray()) {
-				arrayBuffer = src.array();
+				array = src.array();
+				offset = src.arrayOffset() + src.position();
 			}
 			else {
-				arrayBuffer = new byte[src.remaining()];
-				src.get(arrayBuffer);
+				// Read-only, so the array is not accessible. Copied through a
+				// duplicate, which leaves the position of the buffer as it is.
+				array = new byte[length];
+				offset = 0;
+				src.duplicate().get(array);
 			}
 
 			byteArrayToI420(
-					arrayBuffer,
+					array, offset, length,
 					dst.getWidth(), dst.getHeight(),
 					dst.getDataY(), dst.getStrideY(),
 					dst.getDataU(), dst.getStrideU(),
@@ -206,7 +216,7 @@ public final class VideoBufferConverter {
 			ByteBuffer srcY, int srcStrideY,
 			ByteBuffer srcU, int srcStrideU,
 			ByteBuffer srcV, int srcStrideV,
-			byte[] dst,
+			byte[] dst, int dstOffset, int dstLength,
 			int width, int height,
 			int fourCC) throws Exception;
 	
@@ -219,7 +229,7 @@ public final class VideoBufferConverter {
 			int fourCC) throws Exception;
 
 	private native static void byteArrayToI420(
-			byte[] src,
+			byte[] src, int srcOffset, int srcLength,
 			int width, int height,
 			ByteBuffer dstY, int dstStrideY,
 			ByteBuffer dstU, int dstStrideU,
