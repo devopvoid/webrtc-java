@@ -23,6 +23,17 @@ package dev.onvoid.webrtc.internal;
  */
 public abstract class NativeObject {
 
+	// Loaded before any class that wraps a native object is used, also when
+	// it is used on its own, without a factory that loaded the library.
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
+
 	/**
 	 * Field used to store a pointer to the native instance allocated on the
 	 * heap. Don't modify this value directly, or else you risk causing
