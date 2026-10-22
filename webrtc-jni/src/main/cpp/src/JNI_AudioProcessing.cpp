@@ -38,10 +38,15 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyConfig
 (JNIEnv * env, jobject caller, jobject config)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLE(apm);
+	try {
+		webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+		CHECK_HANDLE(apm);
 
-	apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
+		apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setStreamDelayMs

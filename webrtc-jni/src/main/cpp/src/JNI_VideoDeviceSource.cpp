@@ -32,22 +32,27 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureDevice
 (JNIEnv * env, jobject caller, jobject device)
 {
-	if (!device) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoDevice is null"));
-		return;
+	try {
+		if (!device) {
+			env->Throw(jni::JavaNullPointerException(env, "VideoDevice is null"));
+			return;
+		}
+
+	#ifdef __APPLE__
+	    jni::VideoTrackDeviceSourceMac * videoSource = GetHandle<jni::VideoTrackDeviceSourceMac>(env, caller);
+	#else
+	    jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
+	#endif
+
+		CHECK_HANDLE(videoSource);
+
+		const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
+
+		videoSource->setVideoDevice(std::make_shared<jni::avdev::VideoDevice>(dev.getName(), dev.getDescriptor()));
 	}
-
-#ifdef __APPLE__
-    jni::VideoTrackDeviceSourceMac * videoSource = GetHandle<jni::VideoTrackDeviceSourceMac>(env, caller);
-#else
-    jni::VideoTrackDeviceSource * videoSource = GetHandle<jni::VideoTrackDeviceSource>(env, caller);
-#endif
-
-	CHECK_HANDLE(videoSource);
-
-	const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
-
-	videoSource->setVideoDevice(std::make_shared<jni::avdev::VideoDevice>(dev.getName(), dev.getDescriptor()));
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureCapability

@@ -44,35 +44,46 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_getDesktopSources
 (JNIEnv * env, jobject caller)
 {
-	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
-	CHECK_HANDLEV(capturer, nullptr);
+	try {
+		jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
+		CHECK_HANDLEV(capturer, nullptr);
 
-	webrtc::DesktopCapturer::SourceList sources;
+		webrtc::DesktopCapturer::SourceList sources;
 
-	if (!capturer->GetSourceList(&sources)) {
-		env->Throw(jni::JavaError(env, "Get source list failed"));
+		if (!capturer->GetSourceList(&sources)) {
+			env->Throw(jni::JavaError(env, "Get source list failed"));
+			return nullptr;
+		}
+
+		jni::JavaArrayList sourceList(env, sources.size());
+
+		for (const auto & source : sources) {
+			sourceList.add(jni::DesktopSource::toJava(env, source));
+		}
+
+		return sourceList.listObject().release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return nullptr;
 	}
-
-	jni::JavaArrayList sourceList(env, sources.size());
-
-	for (const auto & source : sources) {
-		sourceList.add(jni::DesktopSource::toJava(env, source));
-	}
-
-	return sourceList.listObject().release();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_selectSource
 (JNIEnv * env, jobject caller, jobject jsource)
 {
-	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
-	CHECK_HANDLE(capturer);
+	try {
+		jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
+		CHECK_HANDLE(capturer);
 
-	auto source = jni::DesktopSource::toNative(env, jni::JavaLocalRef<jobject>(env, jsource));
+		auto source = jni::DesktopSource::toNative(env, jni::JavaLocalRef<jobject>(env, jsource));
 
-	if (!capturer->SelectSource(source.id)) {
-		env->Throw(jni::JavaError(env, "Select source failed"));
+		if (!capturer->SelectSource(source.id)) {
+			env->Throw(jni::JavaError(env, "Select source failed"));
+		}
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 }
 

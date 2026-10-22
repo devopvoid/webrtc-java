@@ -20,6 +20,7 @@
 #include "JavaError.h"
 #include "JavaFactories.h"
 #include "JavaString.h"
+#include "JavaUtils.h"
 #include "WebRTCContext.h"
 
 #include "media/MediaStreamTrackObserver.h"
@@ -66,19 +67,31 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getKind
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, nullptr);
+	try {
+		webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+		CHECK_HANDLEV(track, nullptr);
 
-	return jni::JavaString::toJava(env, track->kind()).release();
+		return jni::JavaString::toJava(env, track->kind()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getId
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, nullptr);
+	try {
+		webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+		CHECK_HANDLEV(track, nullptr);
 
-	return jni::JavaString::toJava(env, track->id()).release();
+		return jni::JavaString::toJava(env, track->id()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_isEnabled
@@ -102,10 +115,16 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_setEnabled
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getState
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLEV(track, nullptr);
+	try {
+		webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+		CHECK_HANDLEV(track, nullptr);
 
-	return jni::JavaEnums::toJava(env, track->state()).release();
+		return jni::JavaEnums::toJava(env, track->state()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addEndedEventListener

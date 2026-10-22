@@ -25,10 +25,15 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_initialize
 (JNIEnv * env, jobject caller)
 {
-    std::shared_ptr<jni::SyncClock> sync_clock = std::make_shared<jni::SyncClock>();
-    webrtc::scoped_refptr<jni::CustomVideoSource> source = webrtc::make_ref_counted<jni::CustomVideoSource>(sync_clock);
+	try {
+	    std::shared_ptr<jni::SyncClock> sync_clock = std::make_shared<jni::SyncClock>();
+	    webrtc::scoped_refptr<jni::CustomVideoSource> source = webrtc::make_ref_counted<jni::CustomVideoSource>(sync_clock);
 
-    SetHandle(env, caller, source.release());
+	    SetHandle(env, caller, source.release());
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_initializeWithClock

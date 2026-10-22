@@ -28,20 +28,25 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModule_initialize
 (JNIEnv * env, jobject caller, jobject jAudioLayer)
 {
-	jni::WebRTCContext * context = static_cast<jni::WebRTCContext*>(javaContext);
-	auto audioLayer = jni::JavaEnums::toNative<webrtc::AudioDeviceModule::AudioLayer>(env, jAudioLayer);
+	try {
+		jni::WebRTCContext * context = static_cast<jni::WebRTCContext*>(javaContext);
+		auto audioLayer = jni::JavaEnums::toNative<webrtc::AudioDeviceModule::AudioLayer>(env, jAudioLayer);
 
-	webrtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::CreateAudioDeviceModule(context->webrtcEnv, audioLayer);
+		webrtc::scoped_refptr<webrtc::AudioDeviceModule> audioModule = webrtc::CreateAudioDeviceModule(context->webrtcEnv, audioLayer);
 
-	if (!audioModule) {
-		env->Throw(jni::JavaError(env, "Create AudioDeviceModule failed"));
-		return;
+		if (!audioModule) {
+			env->Throw(jni::JavaError(env, "Create AudioDeviceModule failed"));
+			return;
+		}
+
+		if (audioModule->Init() != 0) {
+			env->Throw(jni::JavaError(env, "Initialize AudioDeviceModule failed"));
+			return;
+		}
+
+		SetHandle(env, caller, audioModule.release());
 	}
-
-	if (audioModule->Init() != 0) {
-		env->Throw(jni::JavaError(env, "Initialize AudioDeviceModule failed"));
-		return;
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
-
-	SetHandle(env, caller, audioModule.release());
 }

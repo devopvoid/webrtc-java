@@ -245,49 +245,61 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCap
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSourceInternal
 (JNIEnv * env, jobject caller, jobject jAudioOptions)
 {
-	if (jAudioOptions == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioOptions is null"));
+	try {
+		if (jAudioOptions == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "AudioOptions is null"));
+			return nullptr;
+		}
+
+		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		CHECK_HANDLEV(factory, nullptr);
+
+		auto audioOptions = jni::AudioOptions::toNative(env, jni::JavaLocalRef<jobject>(env, jAudioOptions));
+
+		webrtc::scoped_refptr<webrtc::AudioSourceInterface> audioSource = factory->CreateAudioSource(audioOptions);
+
+		if (audioSource == nullptr) {
+			env->Throw(jni::JavaError(env, "Create audio-track source failed"));
+			return nullptr;
+		}
+
+		return jni::JavaFactories::create(env, audioSource.release()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return nullptr;
 	}
-
-	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
-	CHECK_HANDLEV(factory, nullptr);
-
-	auto audioOptions = jni::AudioOptions::toNative(env, jni::JavaLocalRef<jobject>(env, jAudioOptions));
-
-	webrtc::scoped_refptr<webrtc::AudioSourceInterface> audioSource = factory->CreateAudioSource(audioOptions);
-
-	if (audioSource == nullptr) {
-		env->Throw(jni::JavaError(env, "Create audio-track source failed"));
-		return nullptr;
-	}
-
-	return jni::JavaFactories::create(env, audioSource.release()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioTrackInternal
 (JNIEnv * env, jobject caller, jstring jlabel, jobject jsource)
 {
-	if (jlabel == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "Audio track label is null"));
+	try {
+		if (jlabel == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "Audio track label is null"));
+			return nullptr;
+		}
+		if (jsource == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "AudioTrackSource is null"));
+			return nullptr;
+		}
+
+		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		CHECK_HANDLEV(factory, nullptr);
+
+		webrtc::AudioSourceInterface * source = GetHandle<webrtc::AudioSourceInterface>(env, jsource);
+		CHECK_HANDLEV(source, nullptr);
+
+		std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
+
+		webrtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
+
+		return jni::JavaFactories::create(env, audioTrack.release()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return nullptr;
 	}
-	if (jsource == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioTrackSource is null"));
-		return nullptr;
-	}
-
-	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
-	CHECK_HANDLEV(factory, nullptr);
-
-	webrtc::AudioSourceInterface * source = GetHandle<webrtc::AudioSourceInterface>(env, jsource);
-	CHECK_HANDLEV(source, nullptr);
-
-	std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
-
-	webrtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
-
-	return jni::JavaFactories::create(env, audioTrack.release()).release();
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFedAudioTrack
@@ -321,27 +333,33 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFe
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVideoTrack
 (JNIEnv * env, jobject caller, jstring jlabel, jobject jsource)
 {
-	if (jlabel == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "Video track label is null"));
+	try {
+		if (jlabel == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "Video track label is null"));
+			return nullptr;
+		}
+		if (jsource == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "VideoTrackSource is null"));
+			return nullptr;
+		}
+
+		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		CHECK_HANDLEV(factory, nullptr);
+
+		webrtc::VideoTrackSourceInterface * source = GetHandle<webrtc::VideoTrackSourceInterface>(env, jsource);
+		CHECK_HANDLEV(source, nullptr);
+
+		std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
+
+		webrtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(
+			webrtc::scoped_refptr<webrtc::VideoTrackSourceInterface>(source), label);
+
+		return jni::JavaFactories::create(env, videoTrack.release()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return nullptr;
 	}
-	if (jsource == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoTrackSource is null"));
-		return nullptr;
-	}
-
-	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
-	CHECK_HANDLEV(factory, nullptr);
-
-	webrtc::VideoTrackSourceInterface * source = GetHandle<webrtc::VideoTrackSourceInterface>(env, jsource);
-	CHECK_HANDLEV(source, nullptr);
-
-	std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
-
-	webrtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(
-		webrtc::scoped_refptr<webrtc::VideoTrackSourceInterface>(source), label);
-
-	return jni::JavaFactories::create(env, videoTrack.release()).release();
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPeerConnectionInternal
@@ -406,23 +424,35 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpReceiverCapabilities
 (JNIEnv * env, jobject caller, jobject mediaType)
 {
-	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
-	CHECK_HANDLEV(factory, nullptr);
+	try {
+		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		CHECK_HANDLEV(factory, nullptr);
 
-	auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);
-	auto capabilities = factory->GetRtpReceiverCapabilities(type);
+		auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);
+		auto capabilities = factory->GetRtpReceiverCapabilities(type);
 
-	return jni::RTCRtpCapabilities::toJava(env, capabilities).release();
+		return jni::RTCRtpCapabilities::toJava(env, capabilities).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpSenderCapabilities
 (JNIEnv * env, jobject caller, jobject mediaType)
 {
-	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
-	CHECK_HANDLEV(factory, nullptr);
+	try {
+		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		CHECK_HANDLEV(factory, nullptr);
 
-	auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);
-	auto capabilities = factory->GetRtpSenderCapabilities(type);
+		auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);
+		auto capabilities = factory->GetRtpSenderCapabilities(type);
 
-	return jni::RTCRtpCapabilities::toJava(env, capabilities).release();
+		return jni::RTCRtpCapabilities::toJava(env, capabilities).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }

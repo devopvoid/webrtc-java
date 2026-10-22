@@ -108,120 +108,142 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getPlayoutDevices
 (JNIEnv* env, jobject caller)
 {
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLEV(audioModule, nullptr);
+	try {
+		webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+		CHECK_HANDLEV(audioModule, nullptr);
 
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
+		char name[webrtc::kAdmMaxDeviceNameSize];
+		char guid[webrtc::kAdmMaxGuidSize];
 
-	int16_t deviceCount = audioModule->PlayoutDevices();
+		int16_t deviceCount = audioModule->PlayoutDevices();
 
-	jni::JavaArrayList deviceList(env, deviceCount);
+		jni::JavaArrayList deviceList(env, deviceCount);
 
-	for (int i = 0; i < deviceCount; ++i) {
-		if (audioModule->PlayoutDeviceName(i, name, guid) == 0) {
-			auto device = std::make_shared<jni::avdev::AudioDevice>(name, guid);
-			device -> directionType = jni::avdev::AudioDeviceDirectionType::adtRender;
+		for (int i = 0; i < deviceCount; ++i) {
+			if (audioModule->PlayoutDeviceName(i, name, guid) == 0) {
+				auto device = std::make_shared<jni::avdev::AudioDevice>(name, guid);
+				device -> directionType = jni::avdev::AudioDeviceDirectionType::adtRender;
 
-			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
+				deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
+			}
 		}
-	}
 
-	return deviceList.listObject().release();
+		return deviceList.listObject().release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getRecordingDevices
 (JNIEnv * env, jobject caller)
 {
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLEV(audioModule, nullptr);
+	try {
+		webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+		CHECK_HANDLEV(audioModule, nullptr);
 
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
+		char name[webrtc::kAdmMaxDeviceNameSize];
+		char guid[webrtc::kAdmMaxGuidSize];
 
-	int16_t deviceCount = audioModule->RecordingDevices();
+		int16_t deviceCount = audioModule->RecordingDevices();
 
-	jni::JavaArrayList deviceList(env, deviceCount);
+		jni::JavaArrayList deviceList(env, deviceCount);
 
-	for (int i = 0; i < deviceCount; ++i) {
-		if (audioModule->RecordingDeviceName(i, name, guid) == 0) {
-			auto device = std::make_shared<jni::avdev::AudioDevice>(name, guid);
-			device -> directionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
+		for (int i = 0; i < deviceCount; ++i) {
+			if (audioModule->RecordingDeviceName(i, name, guid) == 0) {
+				auto device = std::make_shared<jni::avdev::AudioDevice>(name, guid);
+				device -> directionType = jni::avdev::AudioDeviceDirectionType::adtCapture;
 
-			deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
+				deviceList.add(jni::AudioDevice::toJavaAudioDevice(env, device));
+			}
 		}
-	}
 
-	return deviceList.listObject().release();
+		return deviceList.listObject().release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_setPlayoutDevice
 (JNIEnv * env, jobject caller, jobject device)
 {
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLE(audioModule);
+	try {
+		webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (!device) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioDevice is null"));
-		return;
-	}
+		if (!device) {
+			env->Throw(jni::JavaNullPointerException(env, "AudioDevice is null"));
+			return;
+		}
 
-	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
+		jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
 
-	const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
-	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
+		const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
+		const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
-	uint16_t index = 0;
-	int16_t deviceCount = audioModule->PlayoutDevices();
+		uint16_t index = 0;
+		int16_t deviceCount = audioModule->PlayoutDevices();
 
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
+		char name[webrtc::kAdmMaxDeviceNameSize];
+		char guid[webrtc::kAdmMaxGuidSize];
 
-	for (int i = 0; i < deviceCount; ++i) {
-		if ((audioModule->PlayoutDeviceName(i, name, guid) == 0) && devGuid == std::string(guid)) {
-			index = i;
-			break;
+		for (int i = 0; i < deviceCount; ++i) {
+			if ((audioModule->PlayoutDeviceName(i, name, guid) == 0) && devGuid == std::string(guid)) {
+				index = i;
+				break;
+			}
+		}
+
+		if (audioModule->SetPlayoutDevice(index) != 0) {
+			env->Throw(jni::JavaError(env, "Set playout device failed"));
+			return;
 		}
 	}
-
-	if (audioModule->SetPlayoutDevice(index) != 0) {
-		env->Throw(jni::JavaError(env, "Set playout device failed"));
-		return;
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_setRecordingDevice
 (JNIEnv * env, jobject caller, jobject device)
 {
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLE(audioModule);
+	try {
+		webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (!device) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioDevice is null"));
-		return;
-	}
+		if (!device) {
+			env->Throw(jni::JavaNullPointerException(env, "AudioDevice is null"));
+			return;
+		}
 
-	jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
+		jni::JavaObject obj(env, jni::JavaLocalRef<jobject>(env, device));
 
-	const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
-	const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
+		const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
+		const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
-	uint16_t index = 0;
-	int16_t deviceCount = audioModule->RecordingDevices();
+		uint16_t index = 0;
+		int16_t deviceCount = audioModule->RecordingDevices();
 
-	char name[webrtc::kAdmMaxDeviceNameSize];
-	char guid[webrtc::kAdmMaxGuidSize];
+		char name[webrtc::kAdmMaxDeviceNameSize];
+		char guid[webrtc::kAdmMaxGuidSize];
 
-	for (int i = 0; i < deviceCount; ++i) {
-		if ((audioModule->RecordingDeviceName(i, name, guid) == 0) && devGuid == std::string(guid)) {
-			index = i;
-			break;
+		for (int i = 0; i < deviceCount; ++i) {
+			if ((audioModule->RecordingDeviceName(i, name, guid) == 0) && devGuid == std::string(guid)) {
+				index = i;
+				break;
+			}
+		}
+
+		if (audioModule->SetRecordingDevice(index) != 0) {
+			env->Throw(jni::JavaError(env, "Set recording device failed"));
+			return;
 		}
 	}
-
-	if (audioModule->SetRecordingDevice(index) != 0) {
-		env->Throw(jni::JavaError(env, "Set recording device failed"));
-		return;
+	catch (...) {
+		ThrowCxxJavaException(env);
 	}
 }
 
@@ -388,19 +410,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_addSinkInternal
 (JNIEnv * env, jobject caller, jobject jSink)
 {
-	if (jSink == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioSink must not be null"));
+	try {
+		if (jSink == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "AudioSink must not be null"));
+			return 0;
+		}
+
+		webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
+
+		auto sink = new jni::AudioTransportSink(env, jni::JavaGlobalRef<jobject>(env, jSink));
+
+		audioModule->RegisterAudioCallback(sink);
+
+		return reinterpret_cast<jlong>(sink);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return 0;
 	}
-
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
-
-	auto sink = new jni::AudioTransportSink(env, jni::JavaGlobalRef<jobject>(env, jSink));
-
-	audioModule->RegisterAudioCallback(sink);
-
-	return reinterpret_cast<jlong>(sink);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_removeSinkInternal
@@ -421,19 +449,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_addSourceInternal
 (JNIEnv * env, jobject caller, jobject jSource)
 {
-	if (jSource == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "AudioSource must not be null"));
+	try {
+		if (jSource == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "AudioSource must not be null"));
+			return 0;
+		}
+
+		webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
+
+		auto source = new jni::AudioTransportSource(env, jni::JavaGlobalRef<jobject>(env, jSource));
+
+		audioModule->RegisterAudioCallback(source);
+
+		return reinterpret_cast<jlong>(source);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
 		return 0;
 	}
-
-	webrtc::AudioDeviceModule * audioModule = GetHandle<webrtc::AudioDeviceModule>(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
-
-	auto source = new jni::AudioTransportSource(env, jni::JavaGlobalRef<jobject>(env, jSource));
-
-	audioModule->RegisterAudioCallback(source);
-
-	return reinterpret_cast<jlong>(source);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_removeSourceInternal

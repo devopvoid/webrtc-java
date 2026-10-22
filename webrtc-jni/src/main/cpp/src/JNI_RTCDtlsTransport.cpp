@@ -28,62 +28,85 @@
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getIceTransport
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLEV(transport, nullptr);
+	try {
+		webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+		CHECK_HANDLEV(transport, nullptr);
 
-	auto iceTransport = transport->ice_transport();
+		auto iceTransport = transport->ice_transport();
 
-	return jni::JavaFactories::create(env, iceTransport.get()).release();
+		return jni::JavaFactories::create(env, iceTransport.get()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getState
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLEV(transport, nullptr);
+	try {
+		webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+		CHECK_HANDLEV(transport, nullptr);
 
-	auto info = transport->Information();
+		auto info = transport->Information();
 
-	return jni::JavaEnums::toJava(env, info.state()).release();
+		return jni::JavaEnums::toJava(env, info.state()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getRemoteCertificates
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLEV(transport, nullptr);
+	try {
+		webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+		CHECK_HANDLEV(transport, nullptr);
 
-	auto info = transport->Information();
-	auto certChain = info.remote_ssl_certificates();
+		auto info = transport->Information();
+		auto certChain = info.remote_ssl_certificates();
 
-	size_t count = certChain->GetSize();
+		size_t count = certChain->GetSize();
 
-	jni::JavaArrayList certificates(env, count);
+		jni::JavaArrayList certificates(env, count);
 
-	for (size_t i = 0; i < count; i++) {
-		const webrtc::SSLCertificate & certificate = certChain->Get(i);
-		const webrtc::RTCCertificatePEM pem("", certificate.ToPEMString());
+		for (size_t i = 0; i < count; i++) {
+			const webrtc::SSLCertificate & certificate = certChain->Get(i);
+			const webrtc::RTCCertificatePEM pem("", certificate.ToPEMString());
 
-		certificates.add(jni::RTCCertificatePEM::toJava(env, pem));
+			certificates.add(jni::RTCCertificatePEM::toJava(env, pem));
+		}
+
+		return certificates.listObject().release();
 	}
-
-	return certificates.listObject().release();
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 (JNIEnv * env, jobject caller, jobject observer)
 {
-	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
-	CHECK_HANDLE(transport);
+	try {
+		webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+		CHECK_HANDLE(transport);
 
-	// Unregister and free a previously registered observer before replacing
-	// it, otherwise it would leak along with its JNI global reference.
-	transport->UnregisterObserver();
+		// Unregister and free a previously registered observer before replacing
+		// it, otherwise it would leak along with its JNI global reference.
+		transport->UnregisterObserver();
 
-	auto newObserver = new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer));
-	ReplaceNativeObserver(env, caller, "observerHandle", newObserver);
+		auto newObserver = new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer));
+		ReplaceNativeObserver(env, caller, "observerHandle", newObserver);
 
-	transport->RegisterObserver(newObserver);
+		transport->RegisterObserver(newObserver);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserver

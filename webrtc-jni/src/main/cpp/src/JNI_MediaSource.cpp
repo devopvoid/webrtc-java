@@ -23,8 +23,14 @@
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaSource_getState
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaSourceInterface * source = GetHandle<webrtc::MediaSourceInterface>(env, caller);
-	CHECK_HANDLEV(source, nullptr);
+	try {
+		webrtc::MediaSourceInterface * source = GetHandle<webrtc::MediaSourceInterface>(env, caller);
+		CHECK_HANDLEV(source, nullptr);
 
-	return jni::JavaEnums::toJava(env, source->state()).release();
+		return jni::JavaEnums::toJava(env, source->state()).release();
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }

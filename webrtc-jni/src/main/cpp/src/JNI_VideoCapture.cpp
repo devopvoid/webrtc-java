@@ -30,17 +30,22 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoCaptureDevice
 (JNIEnv * env, jobject caller, jobject device)
 {
-	if (!device) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoDevice is null"));
-		return;
+	try {
+		if (!device) {
+			env->Throw(jni::JavaNullPointerException(env, "VideoDevice is null"));
+			return;
+		}
+
+		jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
+		CHECK_HANDLE(videoSource);
+
+		const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
+
+		videoSource->setDevice(std::make_shared<jni::avdev::VideoDevice>(dev.getName(), dev.getDescriptor()));
 	}
-
-	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
-	CHECK_HANDLE(videoSource);
-
-	const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
-
-	videoSource->setDevice(std::make_shared<jni::avdev::VideoDevice>(dev.getName(), dev.getDescriptor()));
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoCaptureCapability
@@ -122,9 +127,14 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_dispose
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_initialize
 (JNIEnv * env, jobject caller)
 {
-#ifdef __APPLE__
-    SetHandle(env, caller, new jni::VideoCaptureMac());
-#else
-    SetHandle(env, caller, new jni::VideoCapture());
-#endif
+	try {
+	#ifdef __APPLE__
+	    SetHandle(env, caller, new jni::VideoCaptureMac());
+	#else
+	    SetHandle(env, caller, new jni::VideoCapture());
+	#endif
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
