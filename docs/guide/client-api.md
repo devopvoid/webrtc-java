@@ -103,6 +103,7 @@ Peer peer = rtc.createPeer(PeerOptions.builder()
 | `receive(MediaKind...)` | Receives audio or video without sending any, as a viewer does. |
 | `gatheringTimeout(Duration)` | How long `Gathering.COMPLETE` waits for ICE gathering, 3 seconds by default. See [Manual Negotiation](#manual-negotiation). |
 | `channelSendLimit(long)` | How many bytes each data channel may hold waiting to be sent, 16 MiB by default. See [Data Channels](#data-channels). |
+| `channelReceiveLimit(long)` | How many bytes of received messages each data channel may hold that its handlers are not done with, 16 MiB by default. See [Data Channels](#data-channels). |
 | `configure(Consumer<RTCConfiguration>)` | Anything else the [peer connection configuration](/guide/networking/peer-connection-config) has. |
 
 ### Signaling
@@ -496,7 +497,7 @@ peer.onChannel(channel -> {                  // channels the remote peer opens
 ```
 
 - A channel may be used right away: messages sent before it opens are held until it does.
-- Messages that arrive while a channel has no `onMessage` handler are kept for the next one, so none are lost while a handler is being set up. Up to 16 MiB are kept; beyond that the oldest are dropped, and the peer's `onError` handlers are told.
+- Messages that arrive while a channel has no `onMessage` handler are kept for the next one, so none are lost while a handler is being set up.
 - `send` takes a `String`, a `byte[]` or a `ByteBuffer`, and copies the data before it returns.
 - A `Message` holds a copy of the data. `isText()` tells text from binary, `text()` decodes it as UTF-8, and `bytes()` returns a copy.
 
@@ -509,6 +510,8 @@ for (byte[] chunk : chunks) {
 ```
 
 A sender that does not wait still cannot fill Java memory: each channel holds at most 16 MiB waiting to be sent, and a `send` beyond that fails at once with a `ChannelFullException`. `PeerOptions.builder().channelSendLimit(bytes)` changes the limit for every channel of a peer. `bufferedAmount()` tells how much a channel holds.
+
+Received messages are bounded as well. WebRTC cannot be told to stop receiving, so messages that arrive faster than the handlers take them, or while a channel has no handler, wait in Java. Each channel lets at most 16 MiB of them wait. When more arrive, the channel closes instead of dropping messages unnoticed: the peer's `onError` handlers hear why, the messages after the one over the limit are not delivered, and both sides see the channel close. `PeerOptions.builder().channelReceiveLimit(bytes)` changes the limit. A handler that takes long should hand the work to a thread of its own.
 
 `ChannelOptions` set how a channel delivers:
 
