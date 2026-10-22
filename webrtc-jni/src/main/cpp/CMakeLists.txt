@@ -178,6 +178,15 @@ install(FILES
     COMPONENT Runtime
 )
 
+# The project's own license and notice go along as well, at the top of
+# META-INF as in the Java jars.
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../LICENSE"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../NOTICE"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/META-INF"
+    COMPONENT Runtime
+)
+
 if(WIN32 OR LINUX)
     install(FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/nvenc/LICENSE"
