@@ -100,6 +100,8 @@ final class DataChannelImpl implements DataChannel {
 		this.sendLimit = peer.channelSendLimit();
 		this.messageHandlers = new Handlers<>(peer.rtc::reportError);
 		this.stateHandlers = new Handlers<>(peer.rtc::reportError);
+
+		peer.rtc.track(opened, peer.events);
 	}
 
 	/**
@@ -260,7 +262,8 @@ final class DataChannelImpl implements DataChannel {
 		state = ChannelState.CLOSED;
 		peer.channelClosed(this);
 
-		peer.events.execute(() -> deliverState(ChannelState.CLOSED, error));
+		peer.events.execute(() -> deliverState(ChannelState.CLOSED, error),
+				() -> settleOpened(ChannelState.CLOSED, error));
 	}
 
 	private CompletableFuture<Void> enqueue(byte[] data, boolean binary) {
@@ -364,7 +367,7 @@ final class DataChannelImpl implements DataChannel {
 			failPending(new PeerClosedException("The data channel " + label + " is closing"));
 		}
 
-		peer.events.execute(() -> deliverState(newState, null));
+		peer.events.execute(() -> deliverState(newState, null), () -> settleOpened(newState, null));
 	}
 
 	private void bufferChanged() {
@@ -375,6 +378,20 @@ final class DataChannelImpl implements DataChannel {
 
 	// On the event executor.
 
+	/**
+	 * Completes the opened future for the state, which is all that is left of
+	 * delivering it when the event executor rejects that.
+	 */
+	private void settleOpened(ChannelState newState, WebRtcException error) {
+		if (newState == ChannelState.OPEN) {
+			opened.complete(this);
+		}
+		else if (newState == ChannelState.CLOSED) {
+			opened.completeExceptionally(error != null ? error
+					: new PeerClosedException("The data channel " + label + " is closed"));
+		}
+	}
+
 	private void deliverState(ChannelState newState, WebRtcException error) {
 		if (newState == deliveredState || deliveredState == ChannelState.CLOSED) {
 			return;
@@ -382,14 +399,9 @@ final class DataChannelImpl implements DataChannel {
 
 		deliveredState = newState;
 		stateHandlers.accept(newState);
+		settleOpened(newState, error);
 
-		if (newState == ChannelState.OPEN) {
-			opened.complete(this);
-		}
-		else if (newState == ChannelState.CLOSED) {
-			opened.completeExceptionally(error != null ? error
-					: new PeerClosedException("The data channel " + label + " is closed"));
-
+		if (newState == ChannelState.CLOSED) {
 			messageHandlers.clear();
 			stateHandlers.clear();
 			early.clear();

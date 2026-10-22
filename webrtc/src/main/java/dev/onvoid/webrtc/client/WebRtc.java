@@ -113,6 +113,12 @@ public final class WebRtc implements AutoCloseable {
 
 	private final CompletableFuture<Void> closed = new CompletableFuture<>();
 
+	/** The futures tracked that are not done, with what fails each. */
+	private final Map<CompletableFuture<?>, Runnable> pending = new ConcurrentHashMap<>();
+
+	/** Set once the control tasks have run, after which none ever runs. */
+	private volatile boolean stopped;
+
 
 	private WebRtc(Builder builder) {
 		int runtime = RUNTIME_COUNT.incrementAndGet();
@@ -353,11 +359,25 @@ public final class WebRtc implements AutoCloseable {
 	}
 
 	/**
-	 * @return a future that completes once the runtime has closed and stopped
-	 * its threads, after which no task given to them runs.
+	 * Fails the future, unless it is done by then, once the runtime has
+	 * stopped the threads that could complete it. A task that would have
+	 * completed it is dropped then, and the future would stay open forever.
+	 *
+	 * @param future the future handed out or waited on.
+	 * @param events the event executor the future completes on, so that the
+	 *               failure comes after what is queued there; or null.
 	 */
-	CompletableFuture<Void> whenShutDown() {
-		return closed;
+	void track(CompletableFuture<?> future, SerialExecutor events) {
+		Runnable fail = () -> future.completeExceptionally(
+				new PeerClosedException("The runtime closed before this completed"));
+		Runnable orphan = events == null ? fail : () -> events.execute(fail, fail);
+
+		pending.put(future, orphan);
+		future.whenComplete((value, error) -> pending.remove(future));
+
+		if (stopped) {
+			orphan.run();
+		}
 	}
 
 	private void shutdown() {
@@ -412,6 +432,7 @@ public final class WebRtc implements AutoCloseable {
 		}
 		finally {
 			shutdownPools();
+			failPending();
 
 			if (failure == null) {
 				closed.complete(null);
@@ -419,6 +440,27 @@ public final class WebRtc implements AutoCloseable {
 			else {
 				closed.completeExceptionally(failure);
 			}
+		}
+	}
+
+	/**
+	 * Fails the futures that nothing completes any more, once the control
+	 * tasks still queued have run.
+	 */
+	private void failPending() {
+		try {
+			controlPool.awaitTermination(closeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+
+		// Set before the futures are listed: one tracked meanwhile either is
+		// listed or sees it set.
+		stopped = true;
+
+		for (Runnable orphan : new ArrayList<>(pending.values())) {
+			orphan.run();
 		}
 	}
 
@@ -554,6 +596,11 @@ public final class WebRtc implements AutoCloseable {
 		 * SwingUtilities::invokeLater} or {@code Platform::runLater}. The
 		 * order of each peer's events is kept whatever the executor. By
 		 * default the runtime runs them on threads of its own.
+		 * <p>
+		 * An executor that rejects work loses the events it rejects, which
+		 * goes to the error handler. The futures those events would have
+		 * completed complete all the same, on the thread that found them
+		 * rejected.
 		 *
 		 * @param executor runs handlers.
 		 *

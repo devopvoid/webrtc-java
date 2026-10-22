@@ -203,6 +203,8 @@ Every method of the client API may be called from any thread, including from ins
 
 The handlers of one peer never run at the same time, and they run in the order of the events. The handlers of different peers may run at the same time. With the default executor, the event thread is named after its peer, such as `webrtc-client-events-alice`, which shows up in thread dumps.
 
+An executor of your own that rejects work, such as a bounded pool that is full, loses the events it rejects, and the rejection goes to the error handler. The futures those events would have completed complete all the same, on the thread that found them rejected. Once the runtime is closed, every future of this API that is not done fails with `PeerClosedException`, including those of calls made after the close.
+
 ### Handlers on the UI Thread
 
 Pass the UI toolkit's executor, and every handler may touch UI components directly:
@@ -540,7 +542,9 @@ viewer.peer().onTrack(track -> System.out.println("Receiving " + track.kind()));
 
 The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
 
-`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else.
+`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler.
+
+The bearer token goes to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. Redirects are not followed, since they would take the token elsewhere: a redirected request fails with its status.
 
 | Builder method | What it sets |
 |---|---|
