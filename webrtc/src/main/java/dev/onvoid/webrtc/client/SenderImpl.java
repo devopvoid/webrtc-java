@@ -113,6 +113,10 @@ final class SenderImpl implements Sender {
 			if (next != null && !next.register(this)) {
 				throw new IllegalStateException("The track " + next.id() + " is closed");
 			}
+			if (next == track) {
+				// Already sent, and registered only once.
+				return;
+			}
 
 			try {
 				sender.replaceTrack(next == null ? null : next.nativeTrack());
@@ -127,7 +131,7 @@ final class SenderImpl implements Sender {
 			LocalTrackImpl previous = track;
 			track = next;
 
-			if (previous != null && previous != next) {
+			if (previous != null) {
 				previous.unregister(this);
 			}
 		});

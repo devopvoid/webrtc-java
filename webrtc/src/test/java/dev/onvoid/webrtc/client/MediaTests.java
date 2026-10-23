@@ -220,6 +220,25 @@ class MediaTests extends ClientTestBase {
 	}
 
 	@Test
+	void sameTrackRegisteredOnce() throws Exception {
+		Peer[] peers = pair();
+		LocalTrackImpl voice = (LocalTrackImpl) rtc.media().customAudio("voice");
+		Sender sender = peers[0].addTrack(voice);
+
+		for (int i = 0; i < 3; i++) {
+			await(sender.replaceTrack(voice));
+		}
+
+		assertEquals(voice, sender.track());
+		assertEquals(Collections.singletonList(sender), voice.registeredSenders());
+
+		await(sender.remove());
+
+		// A removed sender, and its peer, are not kept by the track.
+		assertTrue(voice.registeredSenders().isEmpty());
+	}
+
+	@Test
 	void senderConfigured() throws Exception {
 		Peer[] peers = pair();
 		Sender sender = peers[0].addTrack(rtc.media().customVideo("video"));

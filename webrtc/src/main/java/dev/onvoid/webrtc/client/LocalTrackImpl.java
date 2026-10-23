@@ -19,7 +19,9 @@ package dev.onvoid.webrtc.client;
 import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import dev.onvoid.webrtc.media.MediaStreamTrack;
@@ -54,7 +56,8 @@ abstract class LocalTrackImpl implements LocalTrack {
 
 	// Guarded by this.
 
-	private final List<SenderImpl> senders = new ArrayList<>();
+	/** A sender registers once, however often it is given this track. */
+	private final Set<SenderImpl> senders = new LinkedHashSet<>();
 
 	private final List<Runnable> endedHandlers = new ArrayList<>();
 
@@ -175,6 +178,10 @@ abstract class LocalTrackImpl implements LocalTrack {
 
 	synchronized void unregister(SenderImpl sender) {
 		senders.remove(sender);
+	}
+
+	synchronized List<SenderImpl> registeredSenders() {
+		return new ArrayList<>(senders);
 	}
 
 	/**
