@@ -121,16 +121,11 @@ final class DevicesImpl implements Devices {
 						+ " captures no microphone");
 			}
 
-			try {
-				audioModule.setRecordingDevice(device);
-			}
-			catch (Throwable e) {
-				// Most platforms switch only while not recording.
-				audioModule.stopRecording();
-				audioModule.setRecordingDevice(device);
-				audioModule.initRecording();
-				audioModule.startRecording();
-			}
+			switchDevice(() -> audioModule.setRecordingDevice(device),
+					audioModule::stopRecording, () -> {
+						audioModule.initRecording();
+						audioModule.startRecording();
+					});
 			return null;
 		});
 	}
@@ -144,16 +139,11 @@ final class DevicesImpl implements Devices {
 				throw new ConfigurationException("A runtime built with AudioMode.HEADLESS plays to no speakers");
 			}
 
-			try {
-				audioModule.setPlayoutDevice(device);
-			}
-			catch (Throwable e) {
-				// Most platforms switch only while not playing.
-				audioModule.stopPlayout();
-				audioModule.setPlayoutDevice(device);
-				audioModule.initPlayout();
-				audioModule.startPlayout();
-			}
+			switchDevice(() -> audioModule.setPlayoutDevice(device),
+					audioModule::stopPlayout, () -> {
+						audioModule.initPlayout();
+						audioModule.startPlayout();
+					});
 			return null;
 		});
 	}
@@ -176,6 +166,34 @@ final class DevicesImpl implements Devices {
 			refresh();
 			handlers.accept(this);
 		});
+	}
+
+	/**
+	 * Selects a device. Most platforms switch only while the module is stopped,
+	 * so a refused switch is tried again with the module stopped, and the
+	 * module is started again whether that works or not: a switch that fails
+	 * leaves it on the device it had.
+	 * <p>
+	 * A device that is no longer there fails at once. Stopping the module
+	 * would not bring it back.
+	 */
+	static void switchDevice(Runnable select, Runnable stop, Runnable start) {
+		try {
+			select.run();
+		}
+		catch (IllegalArgumentException e) {
+			throw e;
+		}
+		catch (Throwable e) {
+			stop.run();
+
+			try {
+				select.run();
+			}
+			finally {
+				start.run();
+			}
+		}
 	}
 
 	private void refresh() {

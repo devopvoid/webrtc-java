@@ -33,6 +33,40 @@
 #include "modules/audio_device/include/audio_device.h"
 #include "rtc_base/logging.h"
 
+#include <functional>
+
+namespace
+{
+	// The index under which the module lists the device with the given
+	// descriptor, or -1 if it does not list it, as when it was unplugged
+	// since it was listed. Another device in its place would be one nobody
+	// asked for.
+	//
+	// Not every module names its devices: Linux's leave the guid empty, so
+	// none can be told from another there, and the module keeps to its
+	// default device, index 0, whichever is asked for.
+	int FindDevice(int16_t count, const std::string & descriptor,
+			const std::function<int32_t(uint16_t, char *, char *)> & deviceName)
+	{
+		char name[webrtc::kAdmMaxDeviceNameSize];
+		char guid[webrtc::kAdmMaxGuidSize];
+		bool named = false;
+
+		for (int i = 0; i < count; ++i) {
+			if (deviceName(static_cast<uint16_t>(i), name, guid) != 0) {
+				continue;
+			}
+			if (descriptor == std::string(guid)) {
+				return i;
+			}
+
+			named = named || guid[0] != '\0';
+		}
+
+		return (count > 0 && !named) ? 0 : -1;
+	}
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_initPlayout
 (JNIEnv * env, jobject caller)
 {
@@ -184,20 +218,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_
 		const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
 		const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
-		uint16_t index = 0;
-		int16_t deviceCount = audioModule->PlayoutDevices();
+		int index = FindDevice(audioModule->PlayoutDevices(), devGuid,
+			[audioModule](uint16_t i, char * name, char * guid) {
+				return audioModule->PlayoutDeviceName(i, name, guid);
+			});
 
-		char name[webrtc::kAdmMaxDeviceNameSize];
-		char guid[webrtc::kAdmMaxGuidSize];
-
-		for (int i = 0; i < deviceCount; ++i) {
-			if ((audioModule->PlayoutDeviceName(i, name, guid) == 0) && devGuid == std::string(guid)) {
-				index = i;
-				break;
-			}
+		if (index < 0) {
+			ThrowJavaException(env, "java/lang/IllegalArgumentException", "Playout device not found");
+			return;
 		}
 
-		if (audioModule->SetPlayoutDevice(index) != 0) {
+		if (audioModule->SetPlayoutDevice(static_cast<uint16_t>(index)) != 0) {
 			env->Throw(jni::JavaError(env, "Set playout device failed"));
 			return;
 		}
@@ -224,20 +255,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_
 		const auto javaClass = jni::JavaClasses::get<jni::AudioDevice::JavaAudioDeviceClass>(env);
 		const std::string devGuid = jni::JavaString::toNative(env, obj.getString(javaClass->descriptor));
 
-		uint16_t index = 0;
-		int16_t deviceCount = audioModule->RecordingDevices();
+		int index = FindDevice(audioModule->RecordingDevices(), devGuid,
+			[audioModule](uint16_t i, char * name, char * guid) {
+				return audioModule->RecordingDeviceName(i, name, guid);
+			});
 
-		char name[webrtc::kAdmMaxDeviceNameSize];
-		char guid[webrtc::kAdmMaxGuidSize];
-
-		for (int i = 0; i < deviceCount; ++i) {
-			if ((audioModule->RecordingDeviceName(i, name, guid) == 0) && devGuid == std::string(guid)) {
-				index = i;
-				break;
-			}
+		if (index < 0) {
+			ThrowJavaException(env, "java/lang/IllegalArgumentException", "Recording device not found");
+			return;
 		}
 
-		if (audioModule->SetRecordingDevice(index) != 0) {
+		if (audioModule->SetRecordingDevice(static_cast<uint16_t>(index)) != 0) {
 			env->Throw(jni::JavaError(env, "Set recording device failed"));
 			return;
 		}
