@@ -379,7 +379,8 @@ final class LocalMediaImpl implements LocalMedia {
 				return;
 			}
 
-			cameras.remove(camera.key);
+			// Another camera of the same device may have been opened since.
+			cameras.remove(camera.key, camera);
 		}
 
 		camera.source.stop();

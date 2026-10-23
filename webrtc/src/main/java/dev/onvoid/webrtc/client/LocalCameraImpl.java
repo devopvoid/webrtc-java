@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import dev.onvoid.webrtc.media.video.VideoDevice;
 import dev.onvoid.webrtc.media.video.VideoTrack;
@@ -34,8 +36,12 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
  */
 final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 
-	/** Guarded by this. */
+	// Guarded by this.
+
 	private LocalMediaImpl.SharedCamera camera;
+
+	/** Replaced native tracks with their cameras, which late senders may still send. */
+	private final List<LocalTrackImpl.Replaced> retiring = new ArrayList<>();
 
 
 	LocalCameraImpl(LocalMediaImpl media, VideoTrack track, LocalMediaImpl.SharedCamera camera) {
@@ -59,7 +65,8 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 		// Opening a camera can take a moment, so it happens off the caller's thread.
 		media.executor.execute(() -> {
 			try {
-				switchTo(device, switched);
+				switchTo(device);
+				switched.complete(null);
 			}
 			catch (Throwable e) {
 				switched.completeExceptionally(e instanceof WebRtcException
@@ -70,7 +77,7 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 		return switched;
 	}
 
-	private void switchTo(VideoDevice device, CompletableFuture<Void> switched) {
+	private void switchTo(VideoDevice device) {
 		LocalMediaImpl.SharedCamera current;
 
 		synchronized (this) {
@@ -78,14 +85,11 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 		}
 
 		if (current.options.device.equals(device)) {
-			switched.complete(null);
 			return;
 		}
 
 		CameraOptions target = current.options.withDevice(device);
 		LocalMediaImpl.SharedCamera next;
-		boolean currentReleased = false;
-		MediaException failure = null;
 
 		try {
 			// Opened first, so that peers see no gap.
@@ -94,13 +98,36 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 		catch (MediaException beside) {
 			// Some cameras cannot capture at the same time, such as two
 			// sensors of one device. Unless another track shares the current
-			// camera, it is let go first, and comes back if the new one fails.
+			// camera, it is let go first.
 			if (!media.isOnlyUser(current)) {
 				throw beside;
 			}
 
-			media.releaseCamera(current);
-			currentReleased = true;
+			switchInstead(current, target);
+			return;
+		}
+
+		WebRtcException notTaken = replace(next, true);
+
+		if (notTaken != null) {
+			throw notTaken;
+		}
+	}
+
+	/**
+	 * Switches after letting go of the current camera, which comes back if
+	 * the new one fails. A track left without either camera ends.
+	 */
+	private void switchInstead(LocalMediaImpl.SharedCamera current, CameraOptions target) {
+		// The track no longer owns the camera, so that it does not let go of
+		// it a second time when it is released.
+		takeRelease().run();
+
+		MediaException failure = null;
+		WebRtcException notTaken;
+
+		try {
+			LocalMediaImpl.SharedCamera next;
 
 			try {
 				next = media.openCamera(target);
@@ -109,24 +136,45 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 				failure = instead;
 				next = media.openCamera(current.options);
 			}
-		}
 
-		replace(next, currentReleased);
+			notTaken = replace(next, false);
+		}
+		catch (RuntimeException e) {
+			closeInternal();
+
+			MediaException ended = new MediaException("The track let go of the camera "
+					+ current.options.device.getName() + " to switch, got no camera back, and ended", e);
+
+			if (failure != null && failure != e) {
+				ended.addSuppressed(failure);
+			}
+
+			throw ended;
+		}
 
 		if (failure != null) {
-			switched.completeExceptionally(failure);
+			if (notTaken != null) {
+				failure.addSuppressed(notTaken);
+			}
+
+			throw failure;
 		}
-		else {
-			switched.complete(null);
+		if (notTaken != null) {
+			throw notTaken;
 		}
 	}
 
 	/**
 	 * Puts a track over the camera in place of the current one, on this
-	 * track and on every sender, and lets the old one go once no sender sends
-	 * it any more.
+	 * track and on every sender, and lets the old one go once every sender
+	 * sends the new one. When not every sender does in time, the track goes
+	 * back to the old camera if it can, and keeps the new one otherwise.
+	 *
+	 * @param canGoBack whether the old camera is still open.
+	 *
+	 * @return null once every sender sends the new track, else why not.
 	 */
-	private void replace(LocalMediaImpl.SharedCamera next, boolean oldCameraReleased) {
+	private WebRtcException replace(LocalMediaImpl.SharedCamera next, boolean canGoBack) {
 		VideoTrack nextTrack;
 
 		try {
@@ -138,9 +186,11 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 					+ " could not be created", e);
 		}
 
+		LocalMediaImpl.SharedCamera previous;
 		LocalTrackImpl.Replaced replaced;
 
 		synchronized (this) {
+			previous = camera;
 			replaced = replaceNative(nextTrack, () -> media.releaseCamera(next));
 
 			if (replaced != null) {
@@ -156,23 +206,159 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 			throw new MediaException("The camera track is closed");
 		}
 
+		CompletableFuture<Void> sent = send(replaced.senders);
+		WebRtcException notTaken = await(sent, "Not every peer took the camera " + next.options.device.getName());
+
+		if (notTaken != null && canGoBack && goBack(replaced, previous, sent)) {
+			return notTaken;
+		}
+
+		retire(replaced, sent);
+
+		return notTaken;
+	}
+
+	/**
+	 * Puts the replaced track and camera back, on this track and on every
+	 * sender, and lets go of the new ones.
+	 *
+	 * @return false if the track closed meanwhile, whose release then lets go
+	 * of the new ones.
+	 */
+	private boolean goBack(LocalTrackImpl.Replaced replaced, LocalMediaImpl.SharedCamera previous,
+			CompletableFuture<Void> sent) {
+		LocalTrackImpl.Replaced undone;
+
+		synchronized (this) {
+			undone = replaceNative(replaced.track, replaced.release);
+
+			if (undone != null) {
+				moveSinks((VideoTrack) undone.track);
+				camera = previous;
+			}
+		}
+
+		if (undone == null) {
+			return false;
+		}
+
+		// A sender that is late sends the old track anyway, as it reads the
+		// track when its task runs.
+		CompletableFuture<Void> back = send(undone.senders);
+		WebRtcException notBack = await(back,
+				"Not every peer went back to the camera " + previous.options.device.getName());
+
+		if (notBack != null) {
+			rtc.reportError(notBack);
+		}
+
+		retire(undone, CompletableFuture.allOf(sent, back));
+
+		return true;
+	}
+
+	/**
+	 * Lets go of a replaced native track and its camera once no sender uses
+	 * them any more, or when this track is released, if that comes first.
+	 * Late senders are done by then, as the senders detach from this track
+	 * on the same executors.
+	 */
+	private void retire(LocalTrackImpl.Replaced replaced, CompletableFuture<Void> sent) {
+		if (sent.isDone()) {
+			retireNow(replaced);
+			return;
+		}
+
+		synchronized (this) {
+			retiring.add(replaced);
+		}
+
+		sent.whenComplete((ignored, error) -> media.executor.execute(() -> {
+			boolean pending;
+
+			synchronized (this) {
+				pending = retiring.remove(replaced);
+			}
+
+			if (pending) {
+				retireNow(replaced);
+			}
+		}));
+	}
+
+	private void retireNow(LocalTrackImpl.Replaced replaced) {
+		try {
+			letGo(replaced);
+		}
+		catch (Throwable e) {
+			rtc.reportError(new WebRtcException("Releasing the camera track replaced failed", e));
+		}
+	}
+
+	@Override
+	void beforeRelease() {
+		List<LocalTrackImpl.Replaced> left;
+
+		synchronized (this) {
+			left = new ArrayList<>(retiring);
+			retiring.clear();
+		}
+
+		Throwable failure = attempt(null, super::beforeRelease);
+
+		for (LocalTrackImpl.Replaced replaced : left) {
+			failure = attempt(failure, () -> letGo(replaced));
+		}
+
+		if (failure instanceof RuntimeException) {
+			throw (RuntimeException) failure;
+		}
+		if (failure instanceof Error) {
+			throw (Error) failure;
+		}
+	}
+
+	/**
+	 * Makes the senders send the native track this track has now.
+	 */
+	private CompletableFuture<Void> send(List<SenderImpl> senders) {
 		List<CompletableFuture<Void>> sending = new ArrayList<>();
 
-		for (SenderImpl sender : replaced.senders) {
+		for (SenderImpl sender : senders) {
 			sending.add(sender.trackReplaced(this));
 		}
 
+		return CompletableFuture.allOf(sending.toArray(new CompletableFuture[0]));
+	}
+
+	/**
+	 * @return null once the senders send within the operation timeout, else
+	 * why not.
+	 */
+	private WebRtcException await(CompletableFuture<Void> sent, String failure) {
 		try {
-			CompletableFuture.allOf(sending.toArray(new CompletableFuture[0]))
-					.get(rtc.operationTimeout.toMillis(), TimeUnit.MILLISECONDS);
-		}
-		catch (Exception e) {
-			rtc.reportError(new WebRtcException("Not every peer took the new camera in time", e));
-		}
+			sent.get(rtc.operationTimeout.toMillis(), TimeUnit.MILLISECONDS);
 
-		replaced.track.dispose();
+			return null;
+		}
+		catch (ExecutionException e) {
+			return new WebRtcException(failure, e.getCause());
+		}
+		catch (TimeoutException e) {
+			return new WebRtcException(failure + " within " + rtc.operationTimeout, e);
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return new WebRtcException(failure, e);
+		}
+	}
 
-		if (!oldCameraReleased) {
+	private static void letGo(LocalTrackImpl.Replaced replaced) {
+		try {
+			replaced.track.dispose();
+		}
+		finally {
+			// The camera holds a reference of its own, so it goes even when the track does not.
 			replaced.release.run();
 		}
 	}

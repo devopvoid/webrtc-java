@@ -287,24 +287,27 @@ final class SenderImpl implements Sender {
 	 * Sends the native track a local track uses now, after it replaced the one
 	 * before, without renegotiating.
 	 *
-	 * @return a future that completes once the sender sends the new track.
+	 * @return a future that completes once the sender sends the new track, or
+	 * no longer sends the local track, and fails if it could not take it.
 	 */
 	CompletableFuture<Void> trackReplaced(LocalTrackImpl replacedIn) {
 		CompletableFuture<Void> done = new CompletableFuture<>();
 
 		peer.control.execute(() -> {
 			try {
+				// Reads the native track now, so that a late task sends the
+				// one the local track has then.
 				if (!removed && sender != null && track == replacedIn && !peer.isClosed()) {
 					sender.replaceTrack(replacedIn.nativeTrack());
 				}
-			}
-			catch (Throwable e) {
-				peer.rtc.reportError(e);
-			}
-			finally {
+
 				done.complete(null);
 			}
-		});
+			catch (Throwable e) {
+				done.completeExceptionally(PeerImpl.asWebRtcException(e,
+						"The sender of " + peer.name + " could not take the new track"));
+			}
+		}, () -> done.completeExceptionally(new PeerClosedException("The runtime is closed")));
 
 		return done;
 	}

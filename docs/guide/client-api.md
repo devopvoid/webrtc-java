@@ -402,7 +402,7 @@ camera.switchCamera(media.devices().cameras().get(1))
         .thenRun(() -> System.out.println("Now sending " + camera.device().getName()));
 ```
 
-The new camera keeps the resolution and frame rate of the old one, as far as it supports them. The switch opens the new camera before it closes the old one, so that the peers see no gap. Some devices cannot capture with two cameras at once, such as the two sensors of a laptop camera; then the old camera closes first, and the switch takes about half a second. If the new camera cannot be opened, the future fails with a `MediaException`, and the track keeps sending the camera it had.
+The new camera keeps the resolution and frame rate of the old one, as far as it supports them. The switch opens the new camera before it closes the old one, so that the peers see no gap. Some devices cannot capture with two cameras at once, such as the two sensors of a laptop camera; then the old camera closes first, and the switch takes about half a second. If the new camera cannot be opened, the future fails with a `MediaException`, and the track keeps sending the camera it had. If a peer does not take the new camera within the operation timeout, the future fails with a `WebRtcException`; the track goes back to the old camera, or keeps the new one when the old one had to close first. A track that closed its camera first and can open neither camera ends.
 
 ### Devices
 

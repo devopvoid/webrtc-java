@@ -164,6 +164,19 @@ abstract class LocalTrackImpl implements LocalTrack {
 		return replaced;
 	}
 
+	/**
+	 * Takes the release of the source from the track, which then no longer
+	 * lets go of the source, even once it ended.
+	 *
+	 * @return the release taken.
+	 */
+	synchronized Runnable takeRelease() {
+		Runnable taken = releaseSource;
+		releaseSource = () -> { };
+
+		return taken;
+	}
+
 	synchronized boolean register(SenderImpl sender) {
 		if (ended) {
 			return false;
@@ -272,7 +285,7 @@ abstract class LocalTrackImpl implements LocalTrack {
 	 *
 	 * @return the failure so far, with the step's added to it.
 	 */
-	private static Throwable attempt(Throwable failure, Runnable step) {
+	static Throwable attempt(Throwable failure, Runnable step) {
 		try {
 			step.run();
 		}
