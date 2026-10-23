@@ -46,6 +46,18 @@ namespace ffmpeg
 			// WebRTC takes 10 ms of audio at a time and nothing else.
 			static constexpr int kFramesPerChunk = kSampleRate / 100;
 
+			// How far a frame's timestamp may stray from where the audio
+			// before it ends. Containers round their timestamps, so a frame
+			// is followed by its sample count as long as it stays this close,
+			// which is also below the point where audio running ahead of
+			// video starts to show.
+			static constexpr int64_t kTimestampToleranceUs = 40000;
+
+			// The longest stretch of missing audio filled with silence, or of
+			// repeated audio skipped. Beyond it the source's clock is taken
+			// to have jumped, as ffplay does past the same ten seconds.
+			static constexpr int64_t kMaxGapUs = 10000000;
+
 			AudioDecoder() = default;
 			~AudioDecoder();
 
@@ -82,6 +94,17 @@ namespace ffmpeg
 			// Resamples one decoded frame into the pending buffer.
 			int Resample(const AVFrame * frame);
 
+			// Holds the audio to the frame's timestamp where it strays from
+			// where the audio before it ends: missing audio becomes silence,
+			// and a frame that repeats audio already given out skips what it
+			// repeats, which it reports as the number of input samples to
+			// skip.
+			int FollowTimestamp(int64_t timestamp_us, int * skip);
+
+			// Where the audio taken in so far ends, in microseconds on the
+			// source's timeline.
+			int64_t GetEndTimestampUs() const;
+
 			// Moves whatever swresample still holds into the pending buffer,
 			// which it only hands out when told that no more input follows.
 			int DrainResampler();
@@ -113,7 +136,9 @@ namespace ffmpeg
 			// When the next chunk starts, in microseconds on the source's own
 			// timeline. Chunks advance it in exact 10 ms steps, so the audio
 			// this produces is perfectly regular whatever the container's
-			// packet timing looks like.
+			// packet timing looks like. Gaps in the source's timestamps are
+			// filled with silence rather than closed up, so audio stays where
+			// video, which follows its own timestamps, expects it.
 			int64_t next_timestamp_us_ = 0;
 			bool have_timestamp_ = false;
 

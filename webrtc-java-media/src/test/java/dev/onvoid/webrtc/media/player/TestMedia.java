@@ -157,6 +157,186 @@ final class TestMedia {
 	}
 
 	/**
+	 * Writes 48 kHz, mono, 16-bit PCM in a Matroska file, in blocks of 100 ms
+	 * of a constant, non-zero value. Matroska gives each block a time of its
+	 * own, so the blocks need not follow each other: a time later than where
+	 * the block before ends leaves audio missing, an earlier one repeats some.
+	 *
+	 * @param directory  Where to write the file.
+	 * @param value      The value of every sample.
+	 * @param blockTimes When each block starts, in milliseconds.
+	 *
+	 * @return The file written.
+	 */
+	static Path pcmMatroska(Path directory, short value, long... blockTimes)
+			throws IOException {
+		byte[] block = new byte[FLAC_BLOCK_SIZE * 2];
+
+		for (int i = 0; i < block.length; i += 2) {
+			block[i] = (byte) value;
+			block[i + 1] = (byte) (value >> 8);
+		}
+
+		byte[] track = trackEntry("A_PCM/INT/LIT", null, 1,
+				ebmlUInt(0x6264, 16));	// BitDepth
+
+		return Files.write(directory.resolve("pcm.mkv"),
+				matroska(track, blockTimes, n -> block));
+	}
+
+	/**
+	 * Writes Opus in a Matroska file, with more channels than the eight a
+	 * decoded frame has room for in its data pointers, in 20 ms packets of
+	 * silence. One mono stream feeds every channel.
+	 * <p>
+	 * The channel mapping, family 255, names no layout, so the file plays as
+	 * the usual layout for its channel count. For 14 channels that is 9.1.4,
+	 * whose side and top channels, all of which a stereo downmix takes in,
+	 * are planes 8 to 11 of a decoded frame.
+	 *
+	 * @param directory Where to write the file.
+	 * @param channels  How many channels, 9 to 255.
+	 * @param packets   How many 20 ms packets to write.
+	 *
+	 * @return The file written.
+	 */
+	static Path wideOpusMatroska(Path directory, int channels, int packets)
+			throws IOException {
+		ByteBuffer head = ByteBuffer.allocate(21 + channels)
+				.order(ByteOrder.LITTLE_ENDIAN);
+
+		head.put(ascii("OpusHead"))
+				.put((byte) 1)			// Version
+				.put((byte) channels)
+				.putShort((short) 0)	// Pre-skip
+				.putInt(48000)			// Input sample rate
+				.putShort((short) 0)	// Output gain
+				.put((byte) 255)		// Channel mapping family
+				.put((byte) 1)			// Streams
+				.put((byte) 0);			// Coupled streams
+
+		// The channel mapping follows, all zeros as allocated: every channel
+		// takes stream 0.
+
+		// A CELT-only, fullband, 20 ms, mono frame (TOC 0xF8) whose range
+		// coded data starts with the silence flag set.
+		byte[] silence = { (byte) 0xF8, (byte) 0xFF, (byte) 0xFF };
+
+		long[] times = new long[packets];
+
+		for (int i = 0; i < packets; i++) {
+			times[i] = i * 20L;
+		}
+
+		return Files.write(directory.resolve("wide-opus.mkv"),
+				matroska(trackEntry("A_OPUS", head.array(), channels), times, n -> silence));
+	}
+
+	/**
+	 * A Matroska file of one audio track and one block in each cluster, so
+	 * that every block carries its time in full. Times are in milliseconds.
+	 */
+	private static byte[] matroska(byte[] track, long[] blockTimes,
+			IntFunction<byte[]> block) {
+		ByteArrayOutputStream segment = new ByteArrayOutputStream();
+
+		// Info, with timestamps in milliseconds.
+		writeBytes(segment, ebml(0x1549A966, ebmlUInt(0x2AD7B1, 1000000)));
+		// Tracks.
+		writeBytes(segment, ebml(0x1654AE6B, track));
+
+		for (int i = 0; i < blockTimes.length; i++) {
+			ByteArrayOutputStream simpleBlock = new ByteArrayOutputStream();
+
+			// Track 1, no offset from the cluster's time, a keyframe.
+			simpleBlock.write(0x81);
+			writeInt(simpleBlock, 0, 2);
+			simpleBlock.write(0x80);
+			writeBytes(simpleBlock, block.apply(i));
+
+			// A cluster: its time, then the SimpleBlock.
+			writeBytes(segment, ebml(0x1F43B675,
+					ebmlUInt(0xE7, blockTimes[i]),
+					ebml(0xA3, simpleBlock.toByteArray())));
+		}
+
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+		writeBytes(out, ebml(0x1A45DFA3,
+				ebmlUInt(0x4286, 1),				// EBMLVersion
+				ebmlUInt(0x42F7, 1),				// EBMLReadVersion
+				ebmlUInt(0x42F2, 4),				// EBMLMaxIDLength
+				ebmlUInt(0x42F3, 8),				// EBMLMaxSizeLength
+				ebml(0x4282, ascii("matroska")),	// DocType
+				ebmlUInt(0x4287, 4),				// DocTypeVersion
+				ebmlUInt(0x4285, 2)));				// DocTypeReadVersion
+		writeBytes(out, ebml(0x18538067, segment.toByteArray()));
+
+		return out.toByteArray();
+	}
+
+	/**
+	 * The TrackEntry of track 1, an audio track at 48 kHz, with any further
+	 * audio settings given.
+	 */
+	private static byte[] trackEntry(String codec, byte[] codecPrivate,
+			int channels, byte[]... audio) {
+		ByteArrayOutputStream settings = new ByteArrayOutputStream();
+
+		writeBytes(settings, ebml(0xB5, ByteBuffer.allocate(8)
+				.putDouble(48000).array()));	// SamplingFrequency
+		writeBytes(settings, ebmlUInt(0x9F, channels));
+
+		for (byte[] setting : audio) {
+			writeBytes(settings, setting);
+		}
+
+		ByteArrayOutputStream entry = new ByteArrayOutputStream();
+
+		writeBytes(entry, ebmlUInt(0xD7, 1));		// TrackNumber
+		writeBytes(entry, ebmlUInt(0x73C5, 1));		// TrackUID
+		writeBytes(entry, ebmlUInt(0x83, 2));		// TrackType, audio
+		writeBytes(entry, ebml(0x86, ascii(codec)));
+
+		if (codecPrivate != null) {
+			writeBytes(entry, ebml(0x63A2, codecPrivate));
+		}
+
+		writeBytes(entry, ebml(0xE1, settings.toByteArray()));
+
+		return ebml(0xAE, entry.toByteArray());
+	}
+
+	/**
+	 * An EBML element: its ID, which carries its own length, then its size,
+	 * always in eight bytes, then the children or data given.
+	 */
+	private static byte[] ebml(int id, byte[]... content) {
+		ByteArrayOutputStream payload = new ByteArrayOutputStream();
+
+		for (byte[] bytes : content) {
+			writeBytes(payload, bytes);
+		}
+
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+		writeInt(out, id, (32 - Integer.numberOfLeadingZeros(id) + 7) / 8);
+		out.write(0x01);
+		writeInt(out, payload.size(), 7);
+		writeBytes(out, payload.toByteArray());
+
+		return out.toByteArray();
+	}
+
+	private static byte[] ebmlUInt(int id, long value) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+		writeInt(out, value, 8);
+
+		return ebml(id, out.toByteArray());
+	}
+
+	/**
 	 * A sawtooth in steps of 37, so that no two neighbouring samples are ever
 	 * equal.
 	 */

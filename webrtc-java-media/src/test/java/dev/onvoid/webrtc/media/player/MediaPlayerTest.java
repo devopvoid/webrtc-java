@@ -34,6 +34,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
@@ -534,6 +537,74 @@ class MediaPlayerTest {
 		}
 	}
 
+	@Test
+	void downmixesMoreThanEightChannels() throws Exception {
+		// One second of 14 planar channels. A frame has the planes from the
+		// ninth on only in its extended data, and reading them from its data
+		// pointers instead crashes the process.
+		Path file = TestMedia.wideOpusMatroska(tempDir, 14, 50);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(2, playback.channels.get());
+			assertTrue(Math.abs(playback.chunks.get() - 100) <= 2,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void fillsAudioGapWithSilence() throws Exception {
+		// A second of audio, a second missing, and a second more. Closing the
+		// gap up would play the last second a second early, ahead of any
+		// video that follows its own timestamps.
+		Path file = TestMedia.pcmMatroska(tempDir, (short) 1000,
+				blockTimes(0, 10, 2000, 10));
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(300, playback.chunks.get());
+			assertEquals(96000, playback.nonZeroSamples.get());
+			assertEquals(IntStream.range(100, 200).boxed().collect(Collectors.toList()),
+					playback.silentChunks);
+		}
+	}
+
+	@Test
+	void skipsRepeatedAudio() throws Exception {
+		// The second second starts 50 ms before the first one ends, so 50 ms
+		// of it repeat what has played already.
+		Path file = TestMedia.pcmMatroska(tempDir, (short) 1000,
+				blockTimes(0, 10, 950, 10));
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(195, playback.chunks.get());
+			assertEquals(195 * 480, playback.nonZeroSamples.get());
+			assertTrue(playback.silentChunks.isEmpty(),
+					"silent chunks: " + playback.silentChunks);
+		}
+	}
+
+	/**
+	 * The times of two runs of 100 ms blocks, in milliseconds.
+	 */
+	private static long[] blockTimes(long firstStart, int firstBlocks,
+			long secondStart, int secondBlocks) {
+		return LongStream.concat(
+				LongStream.range(0, firstBlocks).map(i -> firstStart + i * 100),
+				LongStream.range(0, secondBlocks).map(i -> secondStart + i * 100))
+				.toArray();
+	}
+
 	private static int countNonZero(byte[] data) {
 		int count = 0;
 
@@ -608,6 +679,7 @@ class MediaPlayerTest {
 		final AtomicLong firstChunkNs = new AtomicLong();
 		final AtomicInteger unevenChunks = new AtomicInteger();
 		final AtomicLong nonZeroSamples = new AtomicLong();
+		final List<Integer> silentChunks = Collections.synchronizedList(new ArrayList<>());
 
 		private final VideoTrackSink videoSink = frame -> {
 			frameTimes.add(System.nanoTime());
@@ -618,7 +690,7 @@ class MediaPlayerTest {
 
 		private final AudioTrackSink audioSink = (data, bits, rate, ch, count) -> {
 			firstChunkNs.compareAndSet(0, System.nanoTime());
-			chunks.incrementAndGet();
+			int index = chunks.getAndIncrement();
 			sampleRate.set(rate);
 			channels.set(ch);
 			framesPerChunk.set(count);
@@ -627,7 +699,13 @@ class MediaPlayerTest {
 				unevenChunks.incrementAndGet();
 			}
 
-			nonZeroSamples.addAndGet(countNonZero(data));
+			int nonZero = countNonZero(data);
+
+			if (nonZero == 0) {
+				silentChunks.add(index);
+			}
+
+			nonZeroSamples.addAndGet(nonZero);
 		};
 
 		private boolean closed;
