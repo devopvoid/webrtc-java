@@ -43,6 +43,7 @@ import dev.onvoid.webrtc.client.Sender;
 import dev.onvoid.webrtc.client.Signaling;
 import dev.onvoid.webrtc.client.SignalingPair;
 import dev.onvoid.webrtc.client.WebRtc;
+import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.media.player.MediaInfo;
 import dev.onvoid.webrtc.media.player.MediaReader;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
@@ -208,6 +209,31 @@ class ClientApiRecorderTest {
 		try (MediaRecorder recorder = new MediaRecorder(tempDir.resolve("refused.mkv"))) {
 			assertThrows(IllegalArgumentException.class, () -> recorder.addTrack(videoSender));
 		}
+	}
+
+	@Test
+	void interruptedWaitCancels() {
+		// The peer has not handed the source over yet; once it does, it finds
+		// the future cancelled and closes the source itself.
+		CompletableFuture<EncodedFrames.Source> pending = new CompletableFuture<>();
+
+		Thread.currentThread().interrupt();
+
+		assertThrows(IllegalStateException.class, () -> MediaRecorder.sourceOf(pending));
+		assertTrue(Thread.interrupted());
+		assertTrue(pending.isCancelled());
+	}
+
+	@Test
+	void sourceBeforeGivingUpClosed() throws Exception {
+		// The source arrived just as the recorder stopped waiting, so no
+		// recorder takes it over, and giving up drops its reference.
+		CompletableFuture<EncodedFrames.Source> frames = EncodedFrames.of(videoSender);
+		EncodedFrames.Source source = frames.get(10, TimeUnit.SECONDS);
+
+		MediaRecorder.giveUp(frames);
+
+		assertThrows(IllegalStateException.class, source::take);
 	}
 
 	private interface Tracks {

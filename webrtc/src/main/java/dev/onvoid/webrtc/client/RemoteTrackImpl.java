@@ -157,32 +157,23 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 	 * too.
 	 */
 	CompletableFuture<EncodedFrames.Source> encodedFrames() {
-		CompletableFuture<EncodedFrames.Source> result = new CompletableFuture<>();
-
-		peer.control.execute(() -> {
-			try {
-				if (ended) {
-					throw new IllegalStateException("The track " + id + " ended");
-				}
-
-				long frames = NativeApi.encodedFramesOf(receiver);
-
-				if (frames == 0) {
-					throw new IllegalStateException("The track " + id + " ended");
-				}
-
-				result.complete(new EncodedFrames.Source(frames, () -> onControl(() -> {
-					if (kind == MediaKind.VIDEO) {
-						receiver.requestKeyFrame();
-					}
-				})));
+		return peer.encodedFrames(() -> {
+			if (ended) {
+				throw new IllegalStateException("The track " + id + " ended");
 			}
-			catch (Throwable e) {
-				result.completeExceptionally(e);
+
+			long frames = NativeApi.encodedFramesOf(receiver);
+
+			if (frames == 0) {
+				throw new IllegalStateException("The track " + id + " ended");
 			}
+
+			return new EncodedFrames.Source(frames, () -> onControl(() -> {
+				if (kind == MediaKind.VIDEO) {
+					receiver.requestKeyFrame();
+				}
+			}));
 		});
-
-		return result;
 	}
 
 	/** Detaches everything from the native track, on the control executor. */

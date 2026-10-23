@@ -128,8 +128,24 @@ public final class NativeApi {
 		return receiverFrames(handleOf(receiver));
 	}
 
+	/**
+	 * Drops the reference a handle of {@link #encodedFramesOf(RTCRtpSender)}
+	 * or {@link #encodedFramesOf(RTCRtpReceiver)} carries, as {@code
+	 * encoded_frames_release()} does, for a handle that never reaches native
+	 * code. The handle must not be used afterwards.
+	 *
+	 * @param frames The handle, or {@code 0}, which is ignored.
+	 */
+	public static void releaseEncodedFrames(long frames) {
+		if (frames != 0) {
+			releaseFrames(frames);
+		}
+	}
+
 	private static native long senderFrames(long senderHandle);
 
 	private static native long receiverFrames(long receiverHandle);
+
+	private static native void releaseFrames(long frames);
 
 }
