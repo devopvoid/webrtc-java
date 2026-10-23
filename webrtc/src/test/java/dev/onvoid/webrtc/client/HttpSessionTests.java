@@ -31,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
@@ -136,6 +137,48 @@ class HttpSessionTests extends ClientTestBase {
 				Thread.sleep(50);
 			}
 			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
+		}
+	}
+
+	@Test
+	void foreignTrackLeavesNothing() throws Exception {
+		WebRtc other = clientRuntime(UnaryOperator.identity());
+
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Builder whip = Whip.to(endpoint.uri()).track(video).track(other.media().customVideo("other"));
+
+			assertThrows(IllegalArgumentException.class, () -> whip.publish(rtc));
+			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
+			assertTrue(endpoint.requests.isEmpty());
+		}
+		finally {
+			other.close();
+		}
+	}
+
+	@Test
+	void failedStartClosesPeer() throws Exception {
+		// The session's deadline cannot be scheduled, after the peer was created.
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			CustomVideo track = client.media().customVideo("video");
+			timer.shutdown();
+
+			assertThrows(RejectedExecutionException.class,
+					() -> Whip.to(endpoint.uri()).track(track).publish(client));
+			assertThrows(RejectedExecutionException.class, () -> Whep.from(endpoint.uri()).play(client));
+
+			for (Peer peer : client.peers()) {
+				PeerImpl impl = (PeerImpl) peer;
+				assertTrue(impl.isClosing(), () -> "Not closing: " + peer);
+				impl.closeInternal().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			}
+			assertTrue(client.peers().isEmpty(), () -> "Peers left: " + client.peers());
+		}
+		finally {
+			client.close();
 		}
 	}
 
