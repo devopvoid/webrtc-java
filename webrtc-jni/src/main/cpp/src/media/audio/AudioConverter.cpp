@@ -16,9 +16,13 @@
 
 #include "media/audio/AudioConverter.h"
 
+#include <algorithm>
 #include <memory>
+#include <stdexcept>
+#include <string>
 
 #include "audio/utility/channel_mixer.h"
+#include "common_audio/include/audio_util.h"
 #include "common_audio/resampler/include/push_resampler.h"
 
 namespace jni
@@ -49,14 +53,19 @@ namespace jni
             ChannelConverter(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels)
                 : AudioConverter(srcFrames, srcChannels, dstFrames, dstChannels)
             {
+                RTC_CHECK_EQ(srcFrames, dstFrames);
+
+                // The mixer works in place in an AudioFrame, which must hold both layouts.
+                if (std::max(srcChannels, dstChannels) * srcFrames > webrtc::AudioFrame::kMaxDataSizeSamples) {
+                    throw std::invalid_argument("Too many samples to remix: " + std::to_string(srcFrames) + " per channel, "
+                        + std::to_string(std::max(srcChannels, dstChannels)) + " channels");
+                }
+
                 webrtc::ChannelLayout srcLayout = webrtc::GuessChannelLayout(static_cast<int>(srcChannels));
                 webrtc::ChannelLayout dstLayout = webrtc::GuessChannelLayout(static_cast<int>(dstChannels));
 
                 mixer = std::make_unique<webrtc::ChannelMixer>(srcLayout, dstLayout);
                 frame = std::make_unique<webrtc::AudioFrame>();
-
-                frame->samples_per_channel_ = srcFrames;
-                frame->num_channels_ = srcChannels;
             }
 
             ~ChannelConverter() override
@@ -66,7 +75,8 @@ namespace jni
             void convert(const int16_t * src, size_t srcSize, int16_t * dst, size_t dstSize) override {
                 checkSizes(srcSize, dstSize);
 
-                std::memcpy(frame->mutable_data(), src, srcFrames * srcChannels * sizeof(int16_t));
+                // Transform() leaves the frame in the output layout, so the input layout is set on every call.
+                std::memcpy(frame->mutable_data(srcFrames, srcChannels).data().data(), src, srcFrames * srcChannels * sizeof(int16_t));
 
                 mixer->Transform(frame.get());
 
@@ -84,6 +94,8 @@ namespace jni
             ResampleConverter(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels)
                 : AudioConverter(srcFrames, srcChannels, dstFrames, dstChannels)
             {
+                RTC_CHECK_EQ(srcChannels, dstChannels);
+
                 resampler = std::make_unique<webrtc::PushResampler<int16_t>>(srcFrames, dstFrames, srcChannels);
             }
 
@@ -91,9 +103,12 @@ namespace jni
             {
             }
 
-            void convert(const int16_t * src, size_t srcSamplesPerChannel, int16_t * dst, size_t dstSamplesPerChannel) override {
-                webrtc::InterleavedView<const int16_t> srcView(src, srcSamplesPerChannel, srcChannels);
-                webrtc::InterleavedView<int16_t> dstView(dst, dstSamplesPerChannel, srcChannels);
+            void convert(const int16_t * src, size_t srcSize, int16_t * dst, size_t dstSize) override {
+                checkSizes(srcSize, dstSize);
+
+                // The views count samples per channel, the sizes count all channels.
+                webrtc::InterleavedView<const int16_t> srcView(src, srcFrames, srcChannels);
+                webrtc::InterleavedView<int16_t> dstView(dst, dstFrames, dstChannels);
 
                 resampler->Resample(srcView, dstView);
             }
@@ -106,7 +121,9 @@ namespace jni
     class CompositionConverter : public AudioConverter {
         public:
             explicit CompositionConverter(std::vector<std::unique_ptr<AudioConverter>> converters_)
-                : converters(std::move(converters_))
+                : AudioConverter(converters_.front()->getSrcFrames(), converters_.front()->getSrcChannels(),
+                    converters_.back()->getDstFrames(), converters_.back()->getDstChannels()),
+                  converters(std::move(converters_))
             {
                 RTC_CHECK_GE(converters.size(), 2);
 
@@ -121,11 +138,14 @@ namespace jni
             }
 
             void convert(const int16_t * src, size_t srcSize, int16_t * dst, size_t dstSize) override {
+                checkSizes(srcSize, dstSize);
+
                 converters.front()->convert(src, srcSize, buffers.front().data(), buffers.front().size());
 
-                for (size_t i = 2; i < converters.size(); ++i) {
-                    auto & src_buffer = buffers[i - 2];
-                    auto & dst_buffer = buffers[i - 1];
+                // Converter i reads the buffer of converter i - 1.
+                for (size_t i = 1; i < converters.size() - 1; ++i) {
+                    auto & src_buffer = buffers[i - 1];
+                    auto & dst_buffer = buffers[i];
 
                     converters[i]->convert(src_buffer.data(), src_buffer.size(), dst_buffer.data(), dst_buffer.size());
                 }
@@ -141,6 +161,20 @@ namespace jni
 
 	std::unique_ptr<AudioConverter> AudioConverter::create(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels)
 	{
+        auto checkFormat = [](size_t frames, size_t channels, const char * name) {
+            if (frames == 0 || frames > webrtc::kMaxSamplesPerChannel10ms) {
+                throw std::invalid_argument(std::string("Invalid number of ") + name + " samples per channel: "
+                    + std::to_string(frames) + ", must be between 1 and " + std::to_string(webrtc::kMaxSamplesPerChannel10ms));
+            }
+            if (channels == 0 || channels > static_cast<size_t>(webrtc::kMaxConcurrentChannels)) {
+                throw std::invalid_argument(std::string("Invalid number of ") + name + " channels: "
+                    + std::to_string(channels) + ", must be between 1 and " + std::to_string(webrtc::kMaxConcurrentChannels));
+            }
+        };
+
+        checkFormat(srcFrames, srcChannels, "source");
+        checkFormat(dstFrames, dstChannels, "destination");
+
         std::unique_ptr<AudioConverter> converter;
 
         if (srcChannels > dstChannels) {
@@ -177,14 +211,6 @@ namespace jni
         return converter;
 	}
 
-    AudioConverter::AudioConverter() :
-        srcFrames(0),
-        srcChannels(0),
-        dstFrames(0),
-        dstChannels(0)
-    {
-    }
-
     AudioConverter::AudioConverter(size_t srcFrames, size_t srcChannels, size_t dstFrames, size_t dstChannels) :
         srcFrames(srcFrames),
         srcChannels(srcChannels),
@@ -194,7 +220,13 @@ namespace jni
     }
 
     void AudioConverter::checkSizes(size_t srcSize, size_t dstCapacity) const {
-        RTC_CHECK_EQ(srcSize, srcChannels * srcFrames);
-        RTC_CHECK_GE(dstCapacity, dstChannels * dstFrames);
+        if (srcSize != srcChannels * srcFrames) {
+            throw std::invalid_argument("Source must hold " + std::to_string(srcChannels * srcFrames)
+                + " samples, but has " + std::to_string(srcSize));
+        }
+        if (dstCapacity < dstChannels * dstFrames) {
+            throw std::invalid_argument("Destination must hold " + std::to_string(dstChannels * dstFrames)
+                + " samples, but has room for " + std::to_string(dstCapacity));
+        }
     }
 }
