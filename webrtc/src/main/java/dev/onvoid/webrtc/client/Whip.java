@@ -147,13 +147,22 @@ public final class Whip {
 		 * fails if the endpoint refuses the offer or the peer does not connect
 		 * in time, with nothing left behind on the server.
 		 *
-		 * @throws IllegalStateException if no track was given.
+		 * @throws IllegalStateException    if no track was given.
+		 * @throws IllegalArgumentException if a track was not created by the
+		 *                                  runtime.
 		 */
 		public CompletableFuture<Session> publish(WebRtc rtc) {
 			requireNonNull(rtc, "rtc");
 
 			if (tracks.isEmpty()) {
 				throw new IllegalStateException("Give at least one track to publish");
+			}
+
+			// Before the peer exists, so that a wrong track leaves nothing behind.
+			for (LocalTrack track : tracks) {
+				if (!(track instanceof LocalTrackImpl) || ((LocalTrackImpl) track).rtc != rtc) {
+					throw new IllegalArgumentException("The track " + track + " was not created by the runtime");
+				}
 			}
 
 			PeerOptions.Builder options = PeerOptions.builder()
@@ -166,12 +175,19 @@ public final class Whip {
 
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
-			for (LocalTrack track : tracks) {
-				peer.addTrack(track);
-			}
+			try {
+				for (LocalTrack track : tracks) {
+					peer.addTrack(track);
+				}
 
-			return peer.toPublic(HttpSession.negotiate(rtc, peer, endpoint, bearerToken, timeout)
-					.thenApply(resource -> new Session(rtc, peer, resource, bearerToken, timeout)));
+				return peer.toPublic(HttpSession.negotiate(rtc, peer, endpoint, bearerToken, timeout)
+						.thenApply(resource -> new Session(rtc, peer, resource, bearerToken, timeout)));
+			}
+			catch (RuntimeException | Error e) {
+				// Until the session has it, no one else would close the peer.
+				peer.close();
+				throw e;
+			}
 		}
 	}
 }

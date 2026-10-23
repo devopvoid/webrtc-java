@@ -170,8 +170,15 @@ public final class Whep {
 
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
-			return peer.toPublic(HttpSession.negotiate(rtc, peer, endpoint, bearerToken, timeout)
-					.thenApply(resource -> new Session(rtc, peer, resource, bearerToken, timeout)));
+			try {
+				return peer.toPublic(HttpSession.negotiate(rtc, peer, endpoint, bearerToken, timeout)
+						.thenApply(resource -> new Session(rtc, peer, resource, bearerToken, timeout)));
+			}
+			catch (RuntimeException | Error e) {
+				// Until the session has it, no one else would close the peer.
+				peer.close();
+				throw e;
+			}
 		}
 	}
 }
