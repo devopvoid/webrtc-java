@@ -25,6 +25,14 @@ import dev.onvoid.webrtc.media.FourCC;
  * Utility methods to convert between I420 video frame buffers and other pixel
  * formats represented by a FourCC. Delegates actual conversion work to native
  * methods for performance.
+ * <p>
+ * A frame is stored without row padding, except where a format groups pixels
+ * in pairs: a {@link FourCC#YUY2} or {@link FourCC#UYVY} row, and an
+ * {@link FourCC#NV12} or {@link FourCC#NV21} chroma row, always ends with a
+ * whole pair. With an odd width, a YUY2 or UYVY row takes
+ * {@code 4 * ((width + 1) / 2)} bytes, and an NV12 or NV21 chroma row
+ * {@code 2 * ((width + 1) / 2)}. Conversions in both directions use this
+ * layout, and fail when the buffer is smaller than the frame.
  *
  * @author Alex Andres
  */
