@@ -99,6 +99,35 @@ class NativeI420BufferTest extends TestBase {
 	}
 
 	@Test
+	void allocateInvalidSize() {
+		assertThrows(IllegalArgumentException.class, () -> NativeI420Buffer.allocate(0, 8));
+		assertThrows(IllegalArgumentException.class, () -> NativeI420Buffer.allocate(8, 0));
+		assertThrows(IllegalArgumentException.class, () -> NativeI420Buffer.allocate(-8, 8));
+		assertThrows(IllegalArgumentException.class, () -> NativeI420Buffer.allocate(8, Integer.MIN_VALUE));
+	}
+
+	@Test
+	void allocateTooLarge() {
+		// The planes would exceed what WebRTC can address with an int.
+		assertThrows(IllegalArgumentException.class, () -> NativeI420Buffer.allocate(Integer.MAX_VALUE, Integer.MAX_VALUE));
+		assertThrows(IllegalArgumentException.class, () -> NativeI420Buffer.allocate(46341, 46341));
+		assertThrows(IllegalArgumentException.class, () -> NativeI420Buffer.allocate(Integer.MAX_VALUE, 1));
+	}
+
+	@Test
+	void allocateOddSize() {
+		NativeI420Buffer buffer = NativeI420Buffer.allocate(3, 1);
+
+		assertEquals(3, buffer.getWidth());
+		assertEquals(1, buffer.getHeight());
+		assertEquals(3, buffer.getDataY().capacity());
+		assertEquals(2, buffer.getDataU().capacity());
+		assertEquals(2, buffer.getDataV().capacity());
+
+		buffer.release();
+	}
+
+	@Test
 	void pushReleasedBuffer() {
 		CustomVideoSource videoSource = new CustomVideoSource();
 		NativeI420Buffer buffer = NativeI420Buffer.allocate(8, 8);
