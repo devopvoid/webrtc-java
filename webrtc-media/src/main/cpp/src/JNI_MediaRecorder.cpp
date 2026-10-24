@@ -18,6 +18,7 @@
 #include "media/ApiCheck.h"
 #include "media/ErrorText.h"
 #include "media/JavaRecorderObserver.h"
+#include "media/JniBoundary.h"
 #include "media/MediaRecorder.h"
 #include "webrtc_java_api.h"
 
@@ -26,16 +27,6 @@
 
 namespace
 {
-	void ThrowIOException(JNIEnv * env, const std::string & message)
-	{
-		jclass cls = env->FindClass("java/io/IOException");
-
-		if (cls != nullptr) {
-			env->ThrowNew(cls, message.c_str());
-			env->DeleteLocalRef(cls);
-		}
-	}
-
 	ffmpeg::MediaRecorder * RecorderOf(jlong handle)
 	{
 		return reinterpret_cast<ffmpeg::MediaRecorder *>(handle);
@@ -45,40 +36,44 @@ namespace
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_create
 (JNIEnv * env, jobject caller, jstring jPath, jlong tableAddress)
 {
-	const webrtc_java_api * api = reinterpret_cast<const webrtc_java_api *>(tableAddress);
-	std::string apiError = ffmpeg::CheckApi(api);
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		const webrtc_java_api * api = reinterpret_cast<const webrtc_java_api *>(tableAddress);
+		std::string apiError = ffmpeg::CheckApi(api);
 
-	if (!apiError.empty()) {
-		ThrowIOException(env, apiError);
+		if (!apiError.empty()) {
+			ffmpeg::ThrowIOException(env, apiError);
 
-		return 0;
-	}
+			return 0;
+		}
 
-	const char * chars = env->GetStringUTFChars(jPath, nullptr);
+		std::string path;
 
-	if (chars == nullptr) {
-		return 0;
-	}
+		{
+			ffmpeg::JavaStringChars chars(env, jPath);
 
-	std::string path(chars);
+			if (chars.get() == nullptr) {
+				return 0;
+			}
 
-	env->ReleaseStringUTFChars(jPath, chars);
+			path = chars.str();
+		}
 
-	auto recorder = std::make_unique<ffmpeg::MediaRecorder>(api, path);
+		auto recorder = std::make_unique<ffmpeg::MediaRecorder>(api, path);
 
-	int result = recorder->Open();
+		int result = recorder->Open();
 
-	if (result < 0) {
-		recorder.reset();
+		if (result < 0) {
+			recorder.reset();
 
-		ThrowIOException(env, "Opening " + path + " for recording failed: " + ffmpeg::ErrorText(result));
+			ffmpeg::ThrowIOException(env, "Opening " + path + " for recording failed: " + ffmpeg::ErrorText(result));
 
-		return 0;
-	}
+			return 0;
+		}
 
-	recorder->SetObserver(std::make_unique<ffmpeg::JavaRecorderObserver>(env, caller));
+		recorder->SetObserver(std::make_unique<ffmpeg::JavaRecorderObserver>(env, caller));
 
-	return reinterpret_cast<jlong>(recorder.release());
+		return reinterpret_cast<jlong>(recorder.release());
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_addTrack
@@ -88,15 +83,20 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_addTr
 		return -1;
 	}
 
-	return RecorderOf(handle)->AddTrack(reinterpret_cast<void *>(frames));
+	// A track that fails to be added has its frames released already.
+	return ffmpeg::CallFromJava<jint>(env, -1, [&]() -> jint {
+		return RecorderOf(handle)->AddTrack(reinterpret_cast<void *>(frames));
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_start
 (JNIEnv * env, jclass caller, jlong handle)
 {
-	if (handle != 0) {
-		RecorderOf(handle)->Start();
-	}
+	ffmpeg::CallFromJava(env, [&] {
+		if (handle != 0) {
+			RecorderOf(handle)->Start();
+		}
+	});
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stop
@@ -106,7 +106,9 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_s
 		return JNI_FALSE;
 	}
 
-	return RecorderOf(handle)->Stop() ? JNI_TRUE : JNI_FALSE;
+	return ffmpeg::CallFromJava<jboolean>(env, JNI_FALSE, [&]() -> jboolean {
+		return RecorderOf(handle)->Stop() ? JNI_TRUE : JNI_FALSE;
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_dispose

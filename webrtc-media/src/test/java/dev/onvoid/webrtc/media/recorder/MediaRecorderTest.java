@@ -34,6 +34,7 @@ import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioLayer;
+import dev.onvoid.webrtc.media.player.AllocationFault;
 import dev.onvoid.webrtc.media.player.MediaInfo;
 import dev.onvoid.webrtc.media.player.MediaReader;
 
@@ -218,6 +219,30 @@ class MediaRecorderTest {
 		}
 
 		assertFalse(Files.exists(file));
+	}
+
+	@Test
+	void pathCopyFails() throws Exception {
+		// The native copy of the path fails as an exhausted heap does: the
+		// failure reaches Java instead of ending the process, and the
+		// characters of the Java string are released all the same.
+		Path file = tempDir.resolve("copy-fails.mkv");
+
+		AllocationFault.failNextStringCopy();
+
+		try {
+			assertThrows(OutOfMemoryError.class, () -> new MediaRecorder(file));
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertEquals(0, AllocationFault.heldStrings());
+		assertFalse(Files.exists(file));
+
+		try (MediaRecorder recorder = new MediaRecorder(file)) {
+			assertEquals(MediaRecorderState.IDLE, recorder.getState());
+		}
 	}
 
 	@Test

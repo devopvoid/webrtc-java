@@ -16,8 +16,10 @@
 
 #include "JNI_MediaReader.h"
 #include "media/ErrorText.h"
+#include "media/JniBoundary.h"
 #include "media/MediaReader.h"
 
+#include <memory>
 #include <string>
 
 extern "C" {
@@ -49,25 +51,10 @@ namespace
 		return source.substr(0, authority_start) + source.substr(at + 1);
 	}
 
-	void ThrowIOException(JNIEnv * env, const std::string & message)
-	{
-		jclass cls = env->FindClass("java/io/IOException");
-
-		if (cls != nullptr) {
-			env->ThrowNew(cls, message.c_str());
-			env->DeleteLocalRef(cls);
-		}
-	}
-
 	ffmpeg::MediaReader * ReaderOf(JNIEnv * env, jlong handle)
 	{
 		if (handle == 0) {
-			jclass cls = env->FindClass("java/lang/IllegalStateException");
-
-			if (cls != nullptr) {
-				env->ThrowNew(cls, "MediaReader is closed");
-				env->DeleteLocalRef(cls);
-			}
+			ffmpeg::ThrowJavaException(env, "java/lang/IllegalStateException", "MediaReader is closed");
 
 			return nullptr;
 		}
@@ -79,88 +66,92 @@ namespace
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
 (JNIEnv * env, jclass caller, jstring source, jlong timeoutUs)
 {
-	if (source == nullptr) {
-		ThrowIOException(env, "Source must not be null");
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		if (source == nullptr) {
+			ffmpeg::ThrowIOException(env, "Source must not be null");
 
-		return 0;
-	}
+			return 0;
+		}
 
-	const char * chars = env->GetStringUTFChars(source, nullptr);
+		std::string url;
 
-	if (chars == nullptr) {
-		// The VM is out of memory and has already thrown.
-		return 0;
-	}
+		{
+			// Released before opening, which may wait for the network.
+			ffmpeg::JavaStringChars chars(env, source);
 
-	std::string url(chars);
+			if (chars.get() == nullptr) {
+				return 0;
+			}
 
-	env->ReleaseStringUTFChars(source, chars);
+			url = chars.str();
+		}
 
-	auto reader = new ffmpeg::MediaReader(static_cast<int64_t>(timeoutUs));
-	int result = reader->Open(url);
+		auto reader = std::make_unique<ffmpeg::MediaReader>(static_cast<int64_t>(timeoutUs));
+		int result = reader->Open(url);
 
-	if (result < 0) {
-		delete reader;
+		if (result < 0) {
+			reader.reset();
 
-		ThrowIOException(env, "Opening '" + WithoutCredentials(url) + "' failed: " + ffmpeg::ErrorText(result));
+			ffmpeg::ThrowIOException(env, "Opening '" + WithoutCredentials(url) + "' failed: " + ffmpeg::ErrorText(result));
 
-		return 0;
-	}
+			return 0;
+		}
 
-	return reinterpret_cast<jlong>(reader);
+		return reinterpret_cast<jlong>(reader.release());
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_info
 (JNIEnv * env, jclass caller, jlong handle)
 {
-	ffmpeg::MediaReader * reader = ReaderOf(env, handle);
+	return ffmpeg::CallFromJava<jobject>(env, nullptr, [&]() -> jobject {
+		ffmpeg::MediaReader * reader = ReaderOf(env, handle);
 
-	if (reader == nullptr) {
-		return nullptr;
-	}
+		if (reader == nullptr) {
+			return nullptr;
+		}
 
-	jclass cls = env->FindClass("dev/onvoid/webrtc/media/player/MediaInfo");
+		ffmpeg::LocalRef<jclass> cls(env, env->FindClass("dev/onvoid/webrtc/media/player/MediaInfo"));
 
-	if (cls == nullptr) {
-		return nullptr;
-	}
+		if (cls.get() == nullptr) {
+			return nullptr;
+		}
 
-	jmethodID ctor = env->GetMethodID(cls, "<init>",
-			"(JIIDLjava/lang/String;IILjava/lang/String;)V");
+		jmethodID ctor = env->GetMethodID(cls.get(), "<init>",
+				"(JIIDLjava/lang/String;IILjava/lang/String;)V");
 
-	if (ctor == nullptr) {
-		env->DeleteLocalRef(cls);
+		if (ctor == nullptr) {
+			return nullptr;
+		}
 
-		return nullptr;
-	}
+		// A stream that is not there is reported as a null codec name and zero
+		// everything else, which is the contract MediaInfo documents. A name
+		// the VM could not make has left an exception, and no JNI call may
+		// follow but cleaning up.
+		ffmpeg::LocalRef<jstring> videoCodec(env, reader->HasVideo()
+				? env->NewStringUTF(reader->GetVideoCodecName()) : nullptr);
 
-	// A stream that is not there is reported as a null codec name and zero
-	// everything else, which is the contract MediaInfo documents.
-	jstring videoCodec = reader->HasVideo()
-			? env->NewStringUTF(reader->GetVideoCodecName()) : nullptr;
-	jstring audioCodec = reader->HasAudio()
-			? env->NewStringUTF(reader->GetAudioCodecName()) : nullptr;
+		if (reader->HasVideo() && videoCodec.get() == nullptr) {
+			return nullptr;
+		}
 
-	jobject info = env->NewObject(cls, ctor,
-			static_cast<jlong>(reader->GetDurationUs()),
-			static_cast<jint>(reader->GetVideoWidth()),
-			static_cast<jint>(reader->GetVideoHeight()),
-			static_cast<jdouble>(reader->GetFrameRate()),
-			videoCodec,
-			static_cast<jint>(reader->GetSampleRate()),
-			static_cast<jint>(reader->GetChannels()),
-			audioCodec);
+		ffmpeg::LocalRef<jstring> audioCodec(env, reader->HasAudio()
+				? env->NewStringUTF(reader->GetAudioCodecName()) : nullptr);
 
-	if (videoCodec != nullptr) {
-		env->DeleteLocalRef(videoCodec);
-	}
-	if (audioCodec != nullptr) {
-		env->DeleteLocalRef(audioCodec);
-	}
+		if (reader->HasAudio() && audioCodec.get() == nullptr) {
+			return nullptr;
+		}
 
-	env->DeleteLocalRef(cls);
-
-	return info;
+		return env->NewObject(cls.get(), ctor,
+				static_cast<jlong>(reader->GetDurationUs()),
+				static_cast<jint>(reader->GetVideoWidth()),
+				static_cast<jint>(reader->GetVideoHeight()),
+				static_cast<jdouble>(reader->GetFrameRate()),
+				videoCodec.get(),
+				static_cast<jint>(reader->GetSampleRate()),
+				static_cast<jint>(reader->GetChannels()),
+				audioCodec.get());
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_dispose

@@ -118,12 +118,29 @@ namespace ffmpeg
 			return -1;
 		}
 
-		auto input = std::make_unique<Input>();
+		const int index = static_cast<int>(inputs_.size());
+		std::unique_ptr<Input> input;
+		std::unique_ptr<RecorderTrack> track;
+
+		try {
+			input = std::make_unique<Input>();
+			track = std::make_unique<RecorderTrack>(index);
+
+			// Room for both first, so that no track is added without its input.
+			tracks_.reserve(tracks_.size() + 1);
+			inputs_.reserve(inputs_.size() + 1);
+		}
+		catch (...) {
+			// The frames were handed over, and nothing else releases them.
+			api_->encoded_frames_release(frames);
+			throw;
+		}
+
 		input->recorder = this;
-		input->index = static_cast<int>(inputs_.size());
+		input->index = index;
 		input->frames = frames;
 
-		tracks_.push_back(std::make_unique<RecorderTrack>(input->index));
+		tracks_.push_back(std::move(track));
 		inputs_.push_back(std::move(input));
 
 		return static_cast<int>(inputs_.size()) - 1;
@@ -143,7 +160,17 @@ namespace ffmpeg
 			start_us_ = api_->now_us();
 		}
 
-		thread_ = std::thread(&MediaRecorder::Run, this);
+		try {
+			thread_ = std::thread(&MediaRecorder::Run, this);
+		}
+		catch (...) {
+			// Without a writer nothing may be queued, and stopping only has to
+			// release the frames and close the file.
+			std::lock_guard<std::mutex> lock(mutex_);
+
+			accepting_ = false;
+			throw;
+		}
 
 		// The inputs do not change once started, so the callbacks may hold on
 		// to them without the lock.
