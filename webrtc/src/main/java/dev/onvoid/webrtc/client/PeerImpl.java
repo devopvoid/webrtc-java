@@ -564,14 +564,32 @@ final class PeerImpl implements Peer {
 	 * executor, so its callbacks run there like the handlers.
 	 */
 	<T> CompletableFuture<T> toPublic(CompletableFuture<T> internal) {
+		return toPublic(internal, value -> { });
+	}
+
+	/**
+	 * Hands a future out to the application, as {@link #toPublic(CompletableFuture)}
+	 * does, and frees a result that comes too late for it: the caller may have
+	 * cancelled or completed the future meanwhile, and then no one else would.
+	 *
+	 * @param unclaimed frees a result the future did not take.
+	 */
+	<T> CompletableFuture<T> toPublic(CompletableFuture<T> internal, Consumer<? super T> unclaimed) {
 		ClientFuture<T> result = new ClientFuture<>();
 
 		rtc.track(result, events);
 
-		// Completed in any case: should the event executor reject the task, on
-		// the thread that found it rejected.
-		internal.whenComplete((value, error) -> events.execute(() -> complete(result, value, error),
-				() -> complete(result, value, error)));
+		internal.whenComplete((value, error) -> {
+			Runnable deliver = () -> {
+				if (!complete(result, value, error) && error == null && value != null) {
+					unclaimed.accept(value);
+				}
+			};
+
+			// Completed in any case: should the event executor reject the
+			// task, on the thread that found it rejected.
+			events.execute(deliver, deliver);
+		});
 
 		return result;
 	}
@@ -681,13 +699,15 @@ final class PeerImpl implements Peer {
 		return new WebRtcException(message + ": " + error, error);
 	}
 
-	static <T> void complete(CompletableFuture<T> future, T value, Throwable error) {
+	/**
+	 * @return whether this completed the future, which was not done before.
+	 */
+	static <T> boolean complete(CompletableFuture<T> future, T value, Throwable error) {
 		if (error != null) {
-			future.completeExceptionally(unwrap(error));
+			return future.completeExceptionally(unwrap(error));
 		}
-		else {
-			future.complete(value);
-		}
+
+		return future.complete(value);
 	}
 
 	private LocalTrackImpl checkTrack(LocalTrack track) {
