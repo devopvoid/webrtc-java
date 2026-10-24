@@ -416,7 +416,7 @@ devices.useMicrophone(devices.microphones().get(1));
 devices.useSpeaker(devices.speakers().get(0));
 ```
 
-`useMicrophone` and `useSpeaker` switch devices also for tracks that are sent or played now.
+`useMicrophone` and `useSpeaker` switch devices also for tracks that are sent or played now. A device that was disconnected since the list was read fails the returned future, and the device in use stays as it was. On Linux, where WebRTC's audio device module cannot tell devices apart, the default device is used whichever is given.
 
 ## Receiving Media
 

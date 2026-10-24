@@ -176,20 +176,36 @@ public class AudioDeviceModuleBase extends DisposableNativeObject {
     public native List<AudioDevice> getRecordingDevices();
 
     /**
-     * Sets the audio device to use for playback.
+     * Sets the audio device to use for playback. On Linux, where the module
+     * cannot tell its devices apart, it plays to the default device whichever
+     * device is given.
      *
      * @param device The audio device to use for playback.
      *
-     * @throws NullPointerException if the device is null.
+     * @throws NullPointerException     if the device is null.
+     * @throws IllegalArgumentException if the device is not one of
+     *                                  {@link #getPlayoutDevices()}, for example
+     *                                  because it was disconnected.
+     * @throws Error                    if the module cannot switch to the
+     *                                  device, which most platforms refuse
+     *                                  while the module is playing.
      */
     public native void setPlayoutDevice(AudioDevice device);
 
     /**
-     * Sets the audio device to use for recording.
+     * Sets the audio device to use for recording. On Linux, where the module
+     * cannot tell its devices apart, it records from the default device
+     * whichever device is given.
      *
      * @param device The audio device to use for recording.
      *
-     * @throws NullPointerException if the device is null.
+     * @throws NullPointerException     if the device is null.
+     * @throws IllegalArgumentException if the device is not one of
+     *                                  {@link #getRecordingDevices()}, for example
+     *                                  because it was disconnected.
+     * @throws Error                    if the module cannot switch to the
+     *                                  device, which most platforms refuse
+     *                                  while the module is recording.
      */
     public native void setRecordingDevice(AudioDevice device);
 

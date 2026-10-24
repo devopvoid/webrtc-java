@@ -16,6 +16,10 @@
 
 #include "media/AudioDecoder.h"
 
+#include <algorithm>
+#include <climits>
+#include <cstdlib>
+
 extern "C" {
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
@@ -205,15 +209,6 @@ namespace ffmpeg
 
 	int AudioDecoder::Resample(const AVFrame * frame)
 	{
-		if (!have_timestamp_) {
-			int64_t pts = frame->best_effort_timestamp != AV_NOPTS_VALUE
-					? frame->best_effort_timestamp : frame->pts;
-
-			next_timestamp_us_ = pts != AV_NOPTS_VALUE
-					? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) : 0;
-			have_timestamp_ = true;
-		}
-
 		if (frame->format != in_format_ || frame->sample_rate != in_rate_
 				|| av_channel_layout_compare(&frame->ch_layout, &in_layout_) != 0) {
 			// The stream changed its format. What swresample still holds of
@@ -232,14 +227,53 @@ namespace ffmpeg
 			}
 		}
 
+		int64_t pts = frame->best_effort_timestamp != AV_NOPTS_VALUE
+				? frame->best_effort_timestamp : frame->pts;
+		int skip = 0;
+
+		if (!have_timestamp_) {
+			next_timestamp_us_ = pts != AV_NOPTS_VALUE
+					? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) : 0;
+			have_timestamp_ = true;
+		}
+		else if (pts != AV_NOPTS_VALUE) {
+			int result = FollowTimestamp(av_rescale_q(pts, time_base_, AV_TIME_BASE_Q),
+					&skip);
+
+			if (result < 0) {
+				return result;
+			}
+		}
+
+		const int samples = frame->nb_samples - skip;
+
+		if (samples <= 0) {
+			return 0;
+		}
+
 		// swresample holds samples back when rates differ, and those come out
 		// of a later call, so the room needed is the delay plus this frame.
 		int64_t delay = swr_get_delay(swr_context_, in_rate_);
-		int64_t capacity = av_rescale_rnd(delay + frame->nb_samples, kSampleRate,
+		int64_t capacity = av_rescale_rnd(delay + samples, kSampleRate,
 				in_rate_, AV_ROUND_UP);
 
 		if (capacity <= 0) {
 			return 0;
+		}
+
+		// swresample reads a plane for every input channel, and data has room
+		// for eight: planar audio of more channels has the rest only in
+		// extended_data.
+		const AVSampleFormat format = static_cast<AVSampleFormat>(frame->format);
+		const bool planar = av_sample_fmt_is_planar(format) != 0;
+		const int planes = planar ? frame->ch_layout.nb_channels : 1;
+		const int stride = av_get_bytes_per_sample(format)
+				* (planar ? 1 : frame->ch_layout.nb_channels);
+
+		std::vector<const uint8_t *> input(static_cast<size_t>(planes));
+
+		for (int i = 0; i < planes; ++i) {
+			input[i] = frame->extended_data[i] + static_cast<size_t>(skip) * stride;
 		}
 
 		const size_t offset = pending_.size();
@@ -249,7 +283,7 @@ namespace ffmpeg
 		uint8_t * output = reinterpret_cast<uint8_t *>(pending_.data() + offset);
 
 		int converted = swr_convert(swr_context_, &output, static_cast<int>(capacity),
-				const_cast<const uint8_t **>(frame->data), frame->nb_samples);
+				input.data(), samples);
 
 		if (converted < 0) {
 			pending_.resize(offset);
@@ -261,6 +295,63 @@ namespace ffmpeg
 		pending_.resize(offset + static_cast<size_t>(converted) * channels_);
 
 		return 0;
+	}
+
+	int AudioDecoder::FollowTimestamp(int64_t timestamp_us, int * skip)
+	{
+		const int64_t drift = timestamp_us - GetEndTimestampUs();
+
+		if (std::abs(drift) <= kTimestampToleranceUs) {
+			return 0;
+		}
+
+		if (std::abs(drift) > kMaxGapUs) {
+			// Too far to be audio that went missing: the source's clock
+			// jumped, as a live stream's does when it restarts it. The audio
+			// goes on without a break, on the new timeline. What is pending
+			// is less than a chunk, so it lands just before the jump.
+			next_timestamp_us_ += drift;
+
+			return 0;
+		}
+
+		if (drift < 0) {
+			// The frame starts where audio already given out has been, so
+			// that much of its start goes.
+			*skip = static_cast<int>(std::min<int64_t>(
+					av_rescale(-drift, in_rate_, AV_TIME_BASE), INT_MAX));
+
+			return 0;
+		}
+
+		// Audio is missing before this frame, and silence takes its place, so
+		// that what follows plays at its own time and not early. What
+		// swresample holds back belongs before the gap.
+		int result = DrainResampler();
+
+		if (result < 0) {
+			return result;
+		}
+
+		result = swr_init(swr_context_);
+
+		if (result < 0) {
+			return result;
+		}
+
+		const int64_t silence = av_rescale(drift, kSampleRate, AV_TIME_BASE);
+
+		pending_.resize(pending_.size() + static_cast<size_t>(silence) * channels_, 0);
+
+		return 0;
+	}
+
+	int64_t AudioDecoder::GetEndTimestampUs() const
+	{
+		const int64_t frames = static_cast<int64_t>(pending_.size() / channels_)
+				+ swr_get_delay(swr_context_, kSampleRate);
+
+		return next_timestamp_us_ + av_rescale(frames, AV_TIME_BASE, kSampleRate);
 	}
 
 	int AudioDecoder::DrainResampler()
