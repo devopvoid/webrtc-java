@@ -232,9 +232,19 @@ public class MediaRecorder implements AutoCloseable {
 				return thread;
 			});
 
-			state = MediaRecorderState.RECORDING;
+			try {
+				start(handle);
+			}
+			catch (RuntimeException | Error e) {
+				// The native recorder could not start its writer, and is as
+				// it was: still idle, and closing it deletes its file.
+				events.shutdown();
+				events = null;
 
-			start(handle);
+				throw e;
+			}
+
+			state = MediaRecorderState.RECORDING;
 		}
 	}
 

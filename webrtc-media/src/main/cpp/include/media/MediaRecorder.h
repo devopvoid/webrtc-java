@@ -75,7 +75,8 @@ namespace ffmpeg
 			// Start().
 			int AddTrack(void * frames);
 
-			// Attaches to every track and starts writing.
+			// Attaches to every track and starts writing. A writer thread that
+			// cannot be started throws, and leaves the recorder unstarted.
 			void Start();
 
 			// Detaches from every track, writes out what is queued, finishes
@@ -113,6 +114,10 @@ namespace ffmpeg
 			static void OnEncodedFrame(void * opaque, const wj_encoded_frame * frame);
 
 			void Enqueue(Input * input, const wj_encoded_frame * frame);
+
+			// Makes up for a frame that could not be queued: the video after
+			// it is useless until the next key frame.
+			void Dropped(Input * input, bool video);
 			void WantKeyFrameLocked(Input * input);
 
 			// Makes a video track wait for its next key frame, and asks for

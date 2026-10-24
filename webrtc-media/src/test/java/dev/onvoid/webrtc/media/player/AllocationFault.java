@@ -42,6 +42,35 @@ public final class AllocationFault {
 	public static native void failNextStringCopy();
 
 	/**
+	 * Fails the next other native allocation that is checked, such as that of
+	 * a recorder track, or the copy of a frame to record.
+	 */
+	public static native void failNextAllocation();
+
+	/**
+	 * Fails the next native thread start that is checked, such as that of a
+	 * player's decoder or a recorder's writer, as one fails that the system
+	 * has no memory for.
+	 */
+	public static native void failNextThreadStart();
+
+	/**
+	 * @return True if a fault is armed that has not fired yet.
+	 */
+	public static native boolean isArmed();
+
+	/**
+	 * Throws a C++ exception in native code that holds the given string, for
+	 * the entry point to turn into a Java exception.
+	 *
+	 * @param kind    0 for std::bad_alloc, 1 for a std::runtime_error with the
+	 *                message, 2 for the same after a JNI call that failed,
+	 *                anything else for one that is no std::exception.
+	 * @param message The message.
+	 */
+	static native void throwInNative(int kind, String message);
+
+	/**
 	 * Forgets a fault that has not fired.
 	 */
 	public static native void disarm();

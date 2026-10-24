@@ -30,10 +30,21 @@ namespace ffmpeg
 		public:
 			// Fails the next copy of a Java string, once.
 			static void FailNextStringCopy();
+			// Fails the next other allocation that is checked, once.
+			static void FailNextAllocation();
+			// Fails the next thread start that is checked, once, as one does
+			// that the system has no memory for.
+			static void FailNextThreadStart();
 			// Forgets a fault that has not fired.
 			static void Disarm();
+			// Whether a fault is armed that has not fired.
+			static bool IsArmed();
 			// Throws std::bad_alloc if a fault is armed, and disarms it.
 			static void CheckStringCopy();
+			// The same for the other allocations.
+			static void CheckAllocation();
+			// Throws std::system_error if a fault is armed, and disarms it.
+			static void CheckThreadStart();
 	};
 }
 

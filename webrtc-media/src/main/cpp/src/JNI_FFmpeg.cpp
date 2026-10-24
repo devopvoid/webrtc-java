@@ -15,6 +15,7 @@
  */
 
 #include "JNI_FFmpeg.h"
+#include "media/JniBoundary.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -24,14 +25,18 @@ extern "C" {
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_version
 (JNIEnv * env, jclass caller)
 {
-	// The version of the libraries that were actually loaded, which is not
-	// necessarily the one this module was built against: the LGPL lets an
-	// application replace them.
-	return env->NewStringUTF(av_version_info());
+	return ffmpeg::CallFromJava<jstring>(env, nullptr, [&]() -> jstring {
+		// The version of the libraries that were actually loaded, which is not
+		// necessarily the one this module was built against: the LGPL lets an
+		// application replace them.
+		return env->NewStringUTF(av_version_info());
+	});
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_player_FFmpeg_license
 (JNIEnv * env, jclass caller)
 {
-	return env->NewStringUTF(avformat_license());
+	return ffmpeg::CallFromJava<jstring>(env, nullptr, [&]() -> jstring {
+		return env->NewStringUTF(avformat_license());
+	});
 }
