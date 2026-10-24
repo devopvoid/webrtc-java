@@ -30,6 +30,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import dev.onvoid.webrtc.media.audio.AudioDevice;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 
 import org.junit.jupiter.api.Test;
@@ -319,12 +320,56 @@ class RuntimeCloseTests extends ClientTestBase {
 		}
 	}
 
+	@Test
+	void closeWhileSwitchingDevice() throws Exception {
+		// A speaker switch is queued when the runtime begins to close. The
+		// runtime waits for it before it frees the audio module it uses.
+		ManualExecutor control = new ManualExecutor();
+		WebRtc runtime = runtime(control);
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+		AtomicBoolean poolStopped = new AtomicBoolean(true);
+
+		CompletableFuture<Void> switched = media.devices().useSpeaker(speaker());
+		switched.whenComplete((value, error) -> poolStopped.set(runtime.controlPool.isShutdown()));
+
+		// Named among what the runtime waits for.
+		assertEquals(1, media.closeAll().size());
+
+		CompletableFuture<Void> closed = runtime.closeAsync();
+		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
+		await(closed);
+
+		// The switch ran while the runtime still had its threads, and failed
+		// on its own: a headless runtime plays to no speakers.
+		assertFalse(poolStopped.get());
+		ExecutionException e = assertThrows(ExecutionException.class, () -> await(switched));
+		assertInstanceOf(ConfigurationException.class, e.getCause());
+	}
+
+	@Test
+	void switchDeviceAfterClose() throws Exception {
+		Devices devices = rtc.media().devices();
+		CompletableFuture<Void> closed = rtc.closeAsync();
+
+		// Failed at once, without reaching the module the runtime frees.
+		CompletableFuture<Void> switched = devices.useSpeaker(speaker());
+
+		assertTrue(switched.isDone());
+		ExecutionException e = assertThrows(ExecutionException.class, () -> await(switched));
+		assertInstanceOf(PeerClosedException.class, e.getCause());
+		await(closed);
+	}
+
 	private WebRtc runtime(ManualExecutor control) {
 		return WebRtc.builder()
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)
 				.controlPool(control)
 				.build();
+	}
+
+	private static AudioDevice speaker() {
+		return new AudioDevice("Test speaker", "test-speaker") { };
 	}
 
 	private static PeerOptions manualOptions() {
