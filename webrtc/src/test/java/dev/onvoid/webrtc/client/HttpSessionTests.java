@@ -306,6 +306,40 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void sessionKeepsItsToken() throws Exception {
+		// The builder is changed while the offer is out. The session must
+		// delete its resource with the token it created it with.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			CountDownLatch answer = endpoint.holdAnswers();
+			Whip.Builder whip = Whip.to(endpoint.uri()).bearerToken("first").track(video);
+			CompletableFuture<Whip.Session> session = whip.publish(rtc);
+
+			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
+			whip.bearerToken("second");
+			answer.countDown();
+			await(await(session).closeAsync());
+
+			assertEquals("Bearer first", endpoint.requests.get(0).authorization);
+			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
+			assertEquals("Bearer first", endpoint.requests.get(1).authorization);
+		}
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			CountDownLatch answer = endpoint.holdAnswers();
+			Whep.Builder whep = Whep.from(endpoint.uri()).bearerToken("first");
+			CompletableFuture<Whep.Session> session = whep.play(rtc);
+
+			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
+			whep.bearerToken("second");
+			answer.countDown();
+			await(await(session).closeAsync());
+
+			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
+			assertEquals("Bearer first", endpoint.requests.get(1).authorization);
+		}
+	}
+
+	@Test
 	void resourceKeepsTls() {
 		URI endpoint = URI.create("https://media.example/whep");
 
