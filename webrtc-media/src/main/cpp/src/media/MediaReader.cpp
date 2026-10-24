@@ -290,7 +290,17 @@ namespace ffmpeg
 	void MediaReader::BeginBlocking()
 	{
 		timed_out_.store(false);
-		deadline_us_.store(timeout_us_ > 0 ? av_gettime_relative() + timeout_us_ : 0);
+
+		if (timeout_us_ <= 0) {
+			deadline_us_.store(0);
+			return;
+		}
+
+		// Saturated: a timeout too long to count arrives as INT64_MAX, and the
+		// sum would wrap around into a deadline that has passed already.
+		const int64_t now = av_gettime_relative();
+
+		deadline_us_.store(timeout_us_ > INT64_MAX - now ? INT64_MAX : now + timeout_us_);
 	}
 
 	void MediaReader::EndBlocking()
