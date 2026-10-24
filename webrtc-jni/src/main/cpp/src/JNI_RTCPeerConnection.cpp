@@ -39,6 +39,7 @@
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/peer_connection_interface.h"
 #include "api/transport/bitrate_settings.h"
@@ -842,7 +843,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 
 		SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-		ClearNativeObserver<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
+		ClearNativeObserver<webrtc::PeerConnectionObserver>(env, caller, "observerHandle", PKG "RTCPeerConnection");
 
 		// Drop the owning reference taken when the PeerConnection was handed
 		// to Java in PeerConnectionFactory::createPeerConnection.

@@ -18,6 +18,7 @@
 #include "Exception.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/HeadlessAudioDeviceModule.h"
 

@@ -17,7 +17,10 @@
 #include "JavaWrappedException.h"
 
 #include <exception>
+#include <functional>
 #include <ios>
+#include <map>
+#include <mutex>
 
 bool ExceptionCheck(JNIEnv * env)
 {
@@ -118,21 +121,98 @@ jmethodID GetStaticMethod(JNIEnv * env, jclass cls, const char * name, const cha
 	return method;
 }
 
+namespace
+{
+	struct HandleClass
+	{
+		jclass cls;
+		std::map<std::string, jfieldID> fields;
+	};
+
+	struct HandleClasses
+	{
+		std::mutex mutex;
+		std::map<std::string, HandleClass, std::less<>> classes;
+	};
+
+	HandleClasses & GetHandleClasses()
+	{
+		// Never freed: the global class references keep the field IDs valid, and native
+		// threads may still look up handles while the process exits.
+		static HandleClasses * handleClasses = new HandleClasses();
+
+		return *handleClasses;
+	}
+}
+
 jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName,
 	const char * declaringClass)
 {
-	if (declaringClass == nullptr) {
-		return GetFieldID(env, obj, fieldName, "J");
+	HandleClasses & handles = GetHandleClasses();
+	jclass cls = nullptr;
+	jfieldID field = nullptr;
+
+	{
+		std::lock_guard<std::mutex> lock(handles.mutex);
+
+		auto entry = handles.classes.find(declaringClass);
+
+		if (entry != handles.classes.end()) {
+			cls = entry->second.cls;
+
+			auto id = entry->second.fields.find(fieldName);
+
+			if (id != entry->second.fields.end()) {
+				field = id->second;
+			}
+		}
 	}
 
-	auto cls = jni::ClassLoaderGetClass(env, declaringClass);
+	// Resolved without holding the lock, as loading a class calls into Java.
+	if (cls == nullptr) {
+		auto localCls = jni::ClassLoaderGetClass(env, declaringClass);
 
-	if (cls.get() == nullptr) {
-		ExceptionCheck(env);
+		if (localCls.get() == nullptr) {
+			ExceptionCheck(env);
+			return nullptr;
+		}
+
+		jclass globalCls = static_cast<jclass>(env->NewGlobalRef(localCls.get()));
+
+		std::lock_guard<std::mutex> lock(handles.mutex);
+
+		auto entry = handles.classes.emplace(declaringClass, HandleClass { globalCls, {} });
+
+		if (!entry.second) {
+			env->DeleteGlobalRef(globalCls);
+		}
+
+		cls = entry.first->second.cls;
+	}
+
+	if (field == nullptr) {
+		field = GetFieldID(env, cls, fieldName, "J");
+
+		if (field == nullptr) {
+			return nullptr;
+		}
+
+		std::lock_guard<std::mutex> lock(handles.mutex);
+
+		handles.classes.find(declaringClass)->second.fields.emplace(fieldName, field);
+	}
+
+	// The field ID is only valid on instances of the class that declares it.
+	if (obj == nullptr) {
+		ThrowJavaException(env, "java/lang/NullPointerException", "Object is null");
+		return nullptr;
+	}
+	if (!env->IsInstanceOf(obj, cls)) {
+		ThrowJavaException(env, "java/lang/IllegalArgumentException", "Object holds no native handle");
 		return nullptr;
 	}
 
-	return GetFieldID(env, cls.get(), fieldName, "J");
+	return field;
 }
 
 jfieldID GetFieldID(JNIEnv * env, jobject obj, const std::string & fieldName, const char * type)

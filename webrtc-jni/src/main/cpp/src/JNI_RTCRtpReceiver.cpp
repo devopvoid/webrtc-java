@@ -23,6 +23,7 @@
 #include "JavaList.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/EncodedFrameTransformer.h"
 
@@ -202,7 +203,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_setObserver
 		// the observer, so the previous one is out of use once this returns.
 		receiver->SetObserver(observer);
 
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
+		ReplaceNativeObserver(env, caller, "observerHandle", observer, PKG "RTCRtpReceiver");
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -217,10 +218,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_dispose
 
 	// WebRTC must let go of an observer set through this object before it is
 	// deleted.
-	if (GetHandle<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle") != nullptr) {
+	if (GetHandle<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle", PKG "RTCRtpReceiver") != nullptr) {
 		receiver->SetObserver(nullptr);
 
-		ClearNativeObserver<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle");
+		ClearNativeObserver<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle", PKG "RTCRtpReceiver");
 	}
 
 	// Unlike e.g. MediaStreamTrack, an RTCRtpReceiver is not exclusively

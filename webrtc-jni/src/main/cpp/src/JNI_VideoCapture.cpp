@@ -22,6 +22,7 @@
 #include "JavaObject.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #ifdef __APPLE__
 #include "media/video/macos/VideoCaptureMac.h"

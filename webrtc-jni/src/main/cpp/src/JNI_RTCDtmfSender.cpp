@@ -18,6 +18,7 @@
 #include "api/RTCDtmfSenderObserver.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/dtmf_sender_interface.h"
 
@@ -92,7 +93,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 		sender->UnregisterObserver();
 
 		auto observer = new jni::RTCDtmfSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
+		ReplaceNativeObserver(env, caller, "observerHandle", observer, PKG "RTCDtmfSender");
 
 		sender->RegisterObserver(observer);
 	}
@@ -109,5 +110,5 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver
 
 	sender->UnregisterObserver();
 
-	ClearNativeObserver<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
+	ClearNativeObserver<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle", PKG "RTCDtmfSender");
 }

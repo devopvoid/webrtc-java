@@ -18,6 +18,7 @@
 #include "api/EncodedFrameInjectorObserver.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/encoded_audio_frame_injector_interface.h"
 #include "api/frame_transformer_factory.h"
@@ -116,7 +117,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_dispo
 
 	// The sender keeps the injector and its callbacks; only the Java observer
 	// stops hearing from them here.
-	ClearNativeObserver<jni::EncodedFrameInjectorObserver>(env, caller, "observerHandle");
+	ClearNativeObserver<jni::EncodedFrameInjectorObserver>(env, caller, "observerHandle", PKG "RTCEncodedAudioFrameInjector");
 
 	injector->Release();
 

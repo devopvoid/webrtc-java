@@ -21,6 +21,7 @@
 #include "JavaObject.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/ref_counted_object.h"
 
@@ -97,7 +98,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_dis
 	// A track may keep the source alive; it must not reach the processor
 	// any more.
 	videoSource->SetVideoProcessor(env, nullptr);
-	SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr);
+	SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr, PKG_VIDEO "VideoTrackSource");
 
 	webrtc::RefCountReleaseStatus status = videoSource->Release();
 
@@ -115,6 +116,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_ini
 {
 	webrtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDesktopSource>();
 
-	SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()));
+	SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()), PKG_VIDEO "VideoTrackSource");
 	SetHandle(env, caller, videoSource.release());
 }

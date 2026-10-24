@@ -18,6 +18,7 @@
 #include "api/audio/audio_processing.h"
 #include "media/audio/AudioConverter.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include <memory>
 #include <stdexcept>

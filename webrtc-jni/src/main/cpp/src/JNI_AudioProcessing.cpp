@@ -23,6 +23,7 @@
 #include "JavaRef.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "WebRTCContext.h"
 
 #include "media/audio/AudioProcessing.h"

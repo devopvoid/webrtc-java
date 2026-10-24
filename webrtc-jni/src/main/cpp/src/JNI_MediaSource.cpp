@@ -17,6 +17,7 @@
 #include "JNI_MediaSource.h"
 #include "JavaEnums.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/media_stream_interface.h"
 

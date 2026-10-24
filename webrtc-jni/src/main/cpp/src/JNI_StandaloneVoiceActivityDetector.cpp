@@ -15,8 +15,8 @@
  */
 
 #include "JNI_StandaloneVoiceActivityDetector.h"
-#include "JNI_WebRTC.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "common_audio/vad/include/webrtc_vad.h"
 
@@ -28,7 +28,7 @@ namespace
 
 VadInst * GetDetector(JNIEnv * env, jobject caller)
 {
-	auto * detector = GetHandle<VadInst>(env, caller, "nativeHandle", PKG_INTERNAL "NativeObject");
+	auto * detector = GetHandle<VadInst>(env, caller);
 	if (env->ExceptionCheck()) {
 		return nullptr;
 	}
@@ -56,7 +56,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_StandaloneVoiceActivit
 		if (!ValidMode(env, mode)) {
 			return;
 		}
-		auto * existing = GetHandle<VadInst>(env, caller, "nativeHandle", PKG_INTERNAL "NativeObject");
+		auto * existing = GetHandle<VadInst>(env, caller);
 		if (env->ExceptionCheck()) {
 			return;
 		}
@@ -73,7 +73,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_StandaloneVoiceActivit
 			ThrowJavaException(env, "java/lang/IllegalStateException", "Cannot initialize VAD");
 			return;
 		}
-		SetHandle(env, caller, "nativeHandle", detector.get(), PKG_INTERNAL "NativeObject");
+		SetHandle(env, caller, detector.get());
 		if (!env->ExceptionCheck()) {
 			detector.release();
 		}
@@ -161,11 +161,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_StandaloneVoiceActivit
 (JNIEnv * env, jobject caller)
 {
 	try {
-		auto * detector = GetHandle<VadInst>(env, caller, "nativeHandle", PKG_INTERNAL "NativeObject");
+		auto * detector = GetHandle<VadInst>(env, caller);
 		if (env->ExceptionCheck()) {
 			return;
 		}
-		SetHandle<std::nullptr_t>(env, caller, "nativeHandle", nullptr, PKG_INTERNAL "NativeObject");
+		SetHandle<std::nullptr_t>(env, caller, nullptr);
 		if (!env->ExceptionCheck()) {
 			WebRtcVad_Free(detector);
 		}

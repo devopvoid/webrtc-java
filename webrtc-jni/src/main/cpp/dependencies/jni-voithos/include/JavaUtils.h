@@ -51,9 +51,11 @@ bool ExceptionCheck(JNIEnv * env);
 jclass FindClass(JNIEnv * env, const char * name);
 jmethodID GetMethod(JNIEnv * env, jclass cls, const char * name, const char * sig);
 jmethodID GetStaticMethod(JNIEnv * env, jclass cls, const char * name, const char * sig);
-// Specify the declaring class when subclasses may hide a handle field.
+// Resolves a handle field on the class that declares it, never on the dynamic class of `obj`,
+// so that a subclass field of the same name cannot hide it. Returns null with a pending
+// IllegalArgumentException when `obj` is no instance of `declaringClass`.
 jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName,
-	const char * declaringClass = nullptr);
+	const char * declaringClass);
 jfieldID GetFieldID(JNIEnv * env, jobject obj, const std::string & fieldName, const char * type);
 jfieldID GetFieldID(JNIEnv * env, jclass cls, const std::string & fieldName, const char * type);
 
@@ -70,21 +72,8 @@ auto make_unique_void(T * ptr) -> unique_void_ptr
 }
 
 template<typename T>
-jlong GetHandleLong(JNIEnv * env, jobject obj)
-{
-	jfieldID field = GetHandleField(env, obj, "nativeHandle");
-
-	if (!field) {
-		ExceptionCheck(env);
-		return 0;
-	}
-
-	return env->GetLongField(obj, field);
-}
-
-template<typename T>
 T * GetHandle(JNIEnv * env, jobject obj, const std::string & handleName,
-	const char * declaringClass = nullptr)
+	const char * declaringClass)
 {
 	jfieldID field = GetHandleField(env, obj, handleName, declaringClass);
 
@@ -97,14 +86,8 @@ T * GetHandle(JNIEnv * env, jobject obj, const std::string & handleName,
 }
 
 template<typename T>
-T * GetHandle(JNIEnv * env, jobject obj)
-{
-	return GetHandle<T>(env, obj, "nativeHandle");
-}
-
-template<typename T>
 void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t,
-	const char * declaringClass = nullptr)
+	const char * declaringClass)
 {
 	jfieldID field = GetHandleField(env, obj, handleName, declaringClass);
 
@@ -118,12 +101,6 @@ void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t,
 	env->SetLongField(obj, field, handle);
 }
 
-template<typename T>
-void SetHandle(JNIEnv * env, jobject obj, T * t)
-{
-	SetHandle<T>(env, obj, "nativeHandle", t);
-}
-
 // Replaces the native observer stored in the `handleName` field on `obj`
 // with `observer`, deleting whatever was stored there before. Use this
 // together with ClearNativeObserver() wherever a Java object registers a
@@ -132,13 +109,14 @@ void SetHandle(JNIEnv * env, jobject obj, T * t)
 // forgotten and leaked -- as opposed to reimplementing the same
 // get-old/delete/store-new sequence by hand in each JNI_Foo.cpp.
 template<typename T>
-void ReplaceNativeObserver(JNIEnv * env, jobject obj, const std::string & handleName, T * observer)
+void ReplaceNativeObserver(JNIEnv * env, jobject obj, const std::string & handleName, T * observer,
+	const char * declaringClass)
 {
-	T * old = GetHandle<T>(env, obj, handleName);
+	T * old = GetHandle<T>(env, obj, handleName, declaringClass);
 
 	delete old;
 
-	SetHandle(env, obj, handleName, observer);
+	SetHandle(env, obj, handleName, observer, declaringClass);
 }
 
 // Deletes and clears the native observer stored in the `handleName` field
@@ -146,12 +124,13 @@ void ReplaceNativeObserver(JNIEnv * env, jobject obj, const std::string & handle
 // (e.g. from an unregisterObserver()/dispose() implementation that isn't
 // sure whether one was ever set).
 template<typename T>
-void ClearNativeObserver(JNIEnv * env, jobject obj, const std::string & handleName)
+void ClearNativeObserver(JNIEnv * env, jobject obj, const std::string & handleName,
+	const char * declaringClass)
 {
-	T * observer = GetHandle<T>(env, obj, handleName);
+	T * observer = GetHandle<T>(env, obj, handleName, declaringClass);
 
 	if (observer) {
-		SetHandle<std::nullptr_t>(env, obj, handleName, nullptr);
+		SetHandle<std::nullptr_t>(env, obj, handleName, nullptr, declaringClass);
 		delete observer;
 	}
 }

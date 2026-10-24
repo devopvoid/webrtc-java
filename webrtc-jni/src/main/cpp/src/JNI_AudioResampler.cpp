@@ -19,6 +19,7 @@
 #include "JavaObject.h"
 #include "JavaRef.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "common_audio/resampler/include/push_resampler.h"
 

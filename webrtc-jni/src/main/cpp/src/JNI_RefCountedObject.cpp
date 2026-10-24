@@ -16,6 +16,7 @@
 
 #include "JNI_RefCountedObject.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "rtc_base/ref_count.h"
 

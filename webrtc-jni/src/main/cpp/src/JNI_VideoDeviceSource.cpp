@@ -28,6 +28,7 @@
 #include "JavaObject.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureDevice
 (JNIEnv * env, jobject caller, jobject device)
@@ -135,7 +136,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_disp
 	// A track may keep the source alive; it must not reach the processor
 	// any more.
 	videoSource->SetVideoProcessor(env, nullptr);
-	SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr);
+	SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr, PKG_VIDEO "VideoTrackSource");
 
 	webrtc::RefCountReleaseStatus status = videoSource->Release();
 
@@ -153,11 +154,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_init
 {
 #ifdef __APPLE__
     webrtc::scoped_refptr<jni::VideoTrackDeviceSourceMac> videoSource_ = webrtc::make_ref_counted<jni::VideoTrackDeviceSourceMac>();
-    SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource_.get()));
+    SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource_.get()), PKG_VIDEO "VideoTrackSource");
     SetHandle(env, caller, videoSource_.release());
 #else
     webrtc::scoped_refptr<jni::VideoTrackDeviceSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDeviceSource>();
-    SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()));
+    SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()), PKG_VIDEO "VideoTrackSource");
     SetHandle(env, caller, videoSource.release());
 #endif
 }

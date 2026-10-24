@@ -24,6 +24,7 @@
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "WebRTCUtils.h"
 
 #include "api/rtp_transceiver_interface.h"

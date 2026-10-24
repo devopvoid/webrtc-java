@@ -21,7 +21,7 @@
 namespace jni
 {
 	DataBufferFactory::DataBufferFactory(JNIEnv * env, const char * className) :
-		JavaFactory(env, className, "(" BYTE_BUFFER_SIG "Z)V")
+		JavaFactory(env, className, "(" BYTE_BUFFER_SIG "Z)V", nullptr)
 	{
 	}
 

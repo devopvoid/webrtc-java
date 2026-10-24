@@ -25,6 +25,7 @@
 #include "JavaFactories.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
+#include "NativeHandle.h"
 
 #include "api/encoded_audio_frame_injector_interface.h"
 #include "api/encoded_video_frame_injector_interface.h"
@@ -108,19 +109,19 @@ namespace jni
 		JavaEnums::add<jni::avdev::DeviceTransport>(env, PKG_MEDIA"DeviceTransport");
 		JavaEnums::add<jni::avdev::AudioDeviceDirectionType>(env, PKG_MEDIA"AudioDeviceDirectionType");
 
-		JavaFactories::add<webrtc::AudioSourceInterface>(env, PKG_MEDIA"audio/AudioTrackSource");
-		JavaFactories::add<webrtc::AudioTrackInterface>(env, PKG_MEDIA"audio/AudioTrack");
-		JavaFactories::add<webrtc::VideoTrackInterface>(env, PKG_MEDIA"video/VideoTrack");
-		JavaFactories::add<webrtc::MediaStreamInterface>(env, PKG_MEDIA"MediaStream");
-		JavaFactories::add<webrtc::DataChannelInterface>(env, PKG"RTCDataChannel");
-		JavaFactories::add<webrtc::DtlsTransportInterface>(env, PKG"RTCDtlsTransport");
-		JavaFactories::add<webrtc::EncodedAudioFrameInjectorInterface>(env, PKG"RTCEncodedAudioFrameInjector");
-		JavaFactories::add<webrtc::EncodedVideoFrameInjectorInterface>(env, PKG"RTCEncodedVideoFrameInjector");
-		JavaFactories::add<webrtc::IceTransportInterface>(env, PKG"RTCIceTransport");
-		JavaFactories::add<webrtc::PeerConnectionInterface>(env, PKG"RTCPeerConnection");
-		JavaFactories::add<webrtc::RtpReceiverInterface>(env, PKG"RTCRtpReceiver");
-		JavaFactories::add<webrtc::RtpSenderInterface>(env, PKG"RTCRtpSender");
-		JavaFactories::add<webrtc::RtpTransceiverInterface>(env, PKG"RTCRtpTransceiver");
+		JavaFactories::add<webrtc::AudioSourceInterface>(env, PKG_MEDIA"audio/AudioTrackSource", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::AudioTrackInterface>(env, PKG_MEDIA"audio/AudioTrack", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::VideoTrackInterface>(env, PKG_MEDIA"video/VideoTrack", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::MediaStreamInterface>(env, PKG_MEDIA"MediaStream", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::DataChannelInterface>(env, PKG"RTCDataChannel", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::DtlsTransportInterface>(env, PKG"RTCDtlsTransport", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::EncodedAudioFrameInjectorInterface>(env, PKG"RTCEncodedAudioFrameInjector", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::EncodedVideoFrameInjectorInterface>(env, PKG"RTCEncodedVideoFrameInjector", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::IceTransportInterface>(env, PKG"RTCIceTransport", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::PeerConnectionInterface>(env, PKG"RTCPeerConnection", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::RtpReceiverInterface>(env, PKG"RTCRtpReceiver", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::RtpSenderInterface>(env, PKG"RTCRtpSender", NATIVE_OBJECT_CLASS);
+		JavaFactories::add<webrtc::RtpTransceiverInterface>(env, PKG"RTCRtpTransceiver", NATIVE_OBJECT_CLASS);
 
 		initializeClassLoader(env, PKG_INTERNAL"NativeClassLoader");
 	}

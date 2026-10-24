@@ -18,6 +18,7 @@
 #include "JavaArrayList.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "media/video/desktop/DesktopCapturer.h"
 #include "media/video/desktop/DesktopCaptureCallback.h"
 #include "media/video/desktop/DesktopSource.h"
@@ -34,7 +35,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 
 	SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-	auto callback = GetHandle<jni::DesktopCaptureCallback>(env, caller, "callbackHandle");
+	auto callback = GetHandle<jni::DesktopCaptureCallback>(env, caller, "callbackHandle", PKG_DESKTOP "DesktopCapturer");
 
 	if (callback) {
 		delete callback;
@@ -119,7 +120,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 	auto callback = new jni::DesktopCaptureCallback(env, jni::JavaGlobalRef<jobject>(env, jcallback));
 
 	try {
-		SetHandle(env, caller, "callbackHandle", callback);
+		SetHandle(env, caller, "callbackHandle", callback, PKG_DESKTOP "DesktopCapturer");
 
 		capturer->Start(callback);
 	}
