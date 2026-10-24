@@ -68,6 +68,8 @@ WebRtc rtc = WebRtc.builder()
 | `closeTimeout(Duration)` | 10 seconds | How long `close()` waits. |
 | `configureFactory(Consumer<PeerConnectionFactory.Builder>)` | none | Anything else of the factory, such as codec factories of your own. |
 
+Every timeout of the client API, these two as well as the gathering timeout and the `Whip` and `Whep` timeouts below, must be positive; none of them can be switched off. A timeout counts in milliseconds, rounded up, so one under a millisecond waits a millisecond. One too long for milliseconds to count waits as long as they can count, about 292 million years.
+
 ### Audio Modes
 
 WebRTC feeds the audio a factory captures into every audio sender of that factory, so captured audio and audio you push cannot be mixed in one runtime. The runtime's `AudioMode` picks one of them up front:

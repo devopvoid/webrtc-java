@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -91,6 +92,17 @@ class MediaReaderTest {
 	}
 
 	@Test
+	void opensWithLongestTimeout() throws Exception {
+		// Longer than microseconds can count. The deadline saturates, rather
+		// than wrap around into one that has passed already.
+		String source = asset().toAbsolutePath().toString();
+
+		try (MediaReader reader = new MediaReader(source, Duration.ofSeconds(Long.MAX_VALUE))) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+	}
+
+	@Test
 	void readsAviInfo() throws Exception {
 		try (MediaReader reader = new MediaReader(asset(AVI_ASSET))) {
 			MediaInfo info = reader.getInfo();
@@ -114,6 +126,27 @@ class MediaReaderTest {
 		// The message has to name the source and what FFmpeg objected to,
 		// otherwise a wrong path is a guessing game.
 		assertTrue(e.getMessage().contains("no-such-file.webm"), e.getMessage());
+	}
+
+	@Test
+	void sourceCopyFails() throws Exception {
+		// The native copy of the source fails as an exhausted heap does: the
+		// failure reaches Java instead of ending the process, and the
+		// characters of the Java string are released all the same.
+		AllocationFault.failNextStringCopy();
+
+		try {
+			assertThrows(OutOfMemoryError.class, () -> new MediaReader(asset()));
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertEquals(0, AllocationFault.heldStrings());
+
+		try (MediaReader reader = new MediaReader(asset())) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
 	}
 
 	@Test

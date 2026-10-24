@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.internal.Timeouts;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 
 /**
@@ -58,12 +59,8 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 
 	@Override
 	public Subscription onAudio(Duration buffer, Consumer<AudioChunk> handler) {
-		requireNonNull(buffer, "buffer");
+		Timeouts.requirePositive(buffer, "buffer");
 		requireNonNull(handler, "handler");
-
-		if (buffer.isNegative() || buffer.isZero()) {
-			throw new IllegalArgumentException("The buffer must be positive, got " + buffer);
-		}
 
 		SerialExecutor executor = new SerialExecutor(peer.rtc.framePool, peer.rtc::reportError, false, null);
 		AudioDispatcher dispatcher = new AudioDispatcher(handler, buffer, executor, peer.rtc.audioWork,

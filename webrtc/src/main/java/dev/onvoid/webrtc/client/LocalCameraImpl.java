@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import dev.onvoid.webrtc.internal.Timeouts;
 import dev.onvoid.webrtc.media.video.VideoDevice;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
@@ -337,7 +338,7 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 	 */
 	private WebRtcException await(CompletableFuture<Void> sent, String failure) {
 		try {
-			sent.get(rtc.operationTimeout.toMillis(), TimeUnit.MILLISECONDS);
+			sent.get(Timeouts.toMillis(rtc.operationTimeout), TimeUnit.MILLISECONDS);
 
 			return null;
 		}

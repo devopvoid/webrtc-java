@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.player;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -122,6 +123,18 @@ class RtspStreamTest {
 			long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
 
 			assertTrue(elapsedMs < 5000, "took " + elapsedMs + " ms");
+			assertTrue(e.getMessage().toLowerCase().contains("timed out"), e.getMessage());
+		}
+	}
+
+	@Test
+	void shortTimeoutTimesOut() throws Exception {
+		// Under a microsecond, which rounded down would be zero, the timeout
+		// that waits as long as it takes.
+		try (TestRtspServer server = new TestRtspServer(TestRtspServer.Behavior.SILENT, 0)) {
+			IOException e = assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertThrows(IOException.class,
+					() -> new MediaReader(server.url(), Duration.ofNanos(1))));
+
 			assertTrue(e.getMessage().toLowerCase().contains("timed out"), e.getMessage());
 		}
 	}

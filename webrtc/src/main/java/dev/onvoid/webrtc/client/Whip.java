@@ -24,6 +24,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
+import dev.onvoid.webrtc.internal.Timeouts;
+
 /**
  * Publishes tracks to a server with the WebRTC HTTP Ingestion Protocol (WHIP,
  * RFC 9725), as media servers and streaming services take it:
@@ -127,13 +129,7 @@ public final class Whip {
 		 * @return this builder.
 		 */
 		public Builder timeout(Duration timeout) {
-			requireNonNull(timeout, "timeout");
-
-			if (timeout.isNegative() || timeout.isZero()) {
-				throw new IllegalArgumentException("The timeout must be positive, got " + timeout);
-			}
-
-			this.timeout = timeout;
+			this.timeout = Timeouts.requirePositive(timeout, "timeout");
 			return this;
 		}
 

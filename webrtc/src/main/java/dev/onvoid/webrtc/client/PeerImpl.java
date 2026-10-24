@@ -59,6 +59,7 @@ import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.RTCSignalingState;
 import dev.onvoid.webrtc.SetSessionDescriptionObserver;
 import dev.onvoid.webrtc.client.internal.EncodedFrames;
+import dev.onvoid.webrtc.internal.Timeouts;
 import dev.onvoid.webrtc.media.MediaStream;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
@@ -784,7 +785,7 @@ final class PeerImpl implements Peer {
 			return rtc.timer.schedule(() -> control.execute(() ->
 					operation.completeExceptionally(new TimeoutException("WebRTC did not finish an operation of "
 							+ name + " within " + rtc.operationTimeout))),
-					rtc.operationTimeout.toMillis(), TimeUnit.MILLISECONDS);
+					Timeouts.toMillis(rtc.operationTimeout), TimeUnit.MILLISECONDS);
 		}
 		catch (RejectedExecutionException e) {
 			// The runtime is closing: control tasks queued before still run,
@@ -932,7 +933,7 @@ final class PeerImpl implements Peer {
 				if (gatheringWaiters.remove(future)) {
 					future.complete(null);
 				}
-			}), options.gatheringTimeout.toMillis(), TimeUnit.MILLISECONDS);
+			}), Timeouts.toMillis(options.gatheringTimeout), TimeUnit.MILLISECONDS);
 		}
 		catch (RejectedExecutionException e) {
 			// The runtime is closing and has no timer left to wait with.

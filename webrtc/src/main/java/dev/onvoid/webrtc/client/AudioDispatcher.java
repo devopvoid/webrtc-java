@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.client;
 import java.time.Duration;
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.internal.Timeouts;
 import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 
 /**
@@ -33,7 +34,7 @@ final class AudioDispatcher extends Dispatcher<AudioChunk> implements AudioTrack
 	 */
 	AudioDispatcher(Consumer<AudioChunk> handler, Duration buffer, SerialExecutor executor,
 			Workload workload, Consumer<Throwable> errorHandler) {
-		super(handler, micros(buffer), executor, workload, errorHandler);
+		super(handler, Timeouts.toMicros(buffer), executor, workload, errorHandler);
 	}
 
 	@Override
@@ -51,12 +52,5 @@ final class AudioDispatcher extends Dispatcher<AudioChunk> implements AudioTrack
 	@Override
 	long weight(AudioChunk chunk) {
 		return chunk.sampleRate() > 0 ? chunk.frames() * 1_000_000L / chunk.sampleRate() : 0;
-	}
-
-	private static long micros(Duration duration) {
-		long seconds = duration.getSeconds();
-
-		return seconds >= Long.MAX_VALUE / 1_000_000 ? Long.MAX_VALUE
-				: seconds * 1_000_000 + duration.getNano() / 1_000;
 	}
 }

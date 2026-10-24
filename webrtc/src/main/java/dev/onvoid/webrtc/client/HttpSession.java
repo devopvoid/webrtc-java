@@ -37,6 +37,7 @@ import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
+import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
  * A WHIP or WHEP session: a peer whose offer and answer went over HTTP, and the
@@ -190,7 +191,7 @@ abstract class HttpSession implements AutoCloseable {
 
 		ScheduledFuture<?> deadline = rtc.timer.schedule(() -> fail.accept(new WebRtcException(
 				"The session with " + endpoint + " was not connected within " + timeout)),
-				timeout.toMillis(), TimeUnit.MILLISECONDS);
+				Timeouts.toMillis(timeout), TimeUnit.MILLISECONDS);
 
 		abandoned.thenRun(() -> {
 			deadline.cancel(false);
@@ -356,8 +357,10 @@ abstract class HttpSession implements AutoCloseable {
 			throws IOException {
 		HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
 		connection.setRequestMethod(method);
-		connection.setConnectTimeout((int) Math.min(Integer.MAX_VALUE, timeout.toMillis()));
-		connection.setReadTimeout((int) Math.min(Integer.MAX_VALUE, timeout.toMillis()));
+		// Never 0, which the connection takes as no timeout at all.
+		int millis = (int) Math.min(Integer.MAX_VALUE, Timeouts.toMillis(timeout));
+		connection.setConnectTimeout(millis);
+		connection.setReadTimeout(millis);
 		// A redirect would take the bearer token to wherever it points, so it
 		// fails the request instead.
 		connection.setInstanceFollowRedirects(false);

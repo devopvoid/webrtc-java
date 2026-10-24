@@ -30,6 +30,7 @@ import java.util.function.Consumer;
 import dev.onvoid.webrtc.RTCConfiguration;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCIceTransportPolicy;
+import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
  * How {@link WebRtc#createPeer} sets up a peer.
@@ -254,13 +255,7 @@ public final class PeerOptions {
 		 * @return this builder.
 		 */
 		public Builder gatheringTimeout(Duration timeout) {
-			requireNonNull(timeout, "timeout");
-
-			if (timeout.isNegative() || timeout.isZero()) {
-				throw new IllegalArgumentException("The timeout must be positive, got " + timeout);
-			}
-
-			this.gatheringTimeout = timeout;
+			this.gatheringTimeout = Timeouts.requirePositive(timeout, "gathering timeout");
 			return this;
 		}
 

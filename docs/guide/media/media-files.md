@@ -248,6 +248,8 @@ import java.time.Duration;
 MediaFileSource source = new MediaFileSource("rtsp://camera.local/stream1", Duration.ofSeconds(5));
 ```
 
+`Duration.ZERO` waits as long as it takes, and is the only limit that does: a positive one waits at least a microsecond, and one too long for microseconds to count waits as long as they can count. A negative one is rejected.
+
 An unreachable server makes the constructor throw an `IOException` once that time is up. A stream that stops sending during playback is reported to the listener's `onError`, and the player is left `PAUSED`. Closing a player never waits for the time limit: it breaks off whatever the player is waiting for at once.
 
 A live stream has no end and no length: its `MediaInfo` reports a duration of 0, looping does not apply, and seeking is reported as an error. Pausing stops reading from the server, but the server keeps sending; resuming carries on from where playback paused, which leaves it behind real time by as long as it was paused. To get back to live, close the source and open it again.
