@@ -57,7 +57,10 @@ final class LocalMediaImpl implements LocalMedia {
 
 	private final Set<LocalTrackImpl> tracks = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-	/** Completed as the creations of tracks end, which the runtime waits for when it closes. */
+	/**
+	 * Completed as the creations of tracks and the device switches end, which
+	 * the runtime waits for when it closes.
+	 */
 	private final Set<CompletableFuture<Void>> creations = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 	// Guarded by cameras.
@@ -421,7 +424,10 @@ final class LocalMediaImpl implements LocalMedia {
 
 
 
-	/** A creation of a track, which the runtime waits for when it closes. */
+	/**
+	 * A creation of a track, or a device switch, which the runtime waits for
+	 * when it closes.
+	 */
 	final class Creation implements AutoCloseable {
 
 		final CompletableFuture<Void> done = new CompletableFuture<>();

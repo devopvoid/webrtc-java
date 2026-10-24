@@ -225,8 +225,24 @@ final class DevicesImpl implements Devices {
 		}
 	}
 
+	/**
+	 * Runs a switch, which uses the audio module, on the media executor. It
+	 * is registered like the creation of a track, so that a runtime that
+	 * begins to close either waits for it before it frees the module, or is
+	 * seen closing here.
+	 */
 	private <T> CompletableFuture<T> onMediaExecutor(Supplier<T> action) {
 		CompletableFuture<T> result = new CompletableFuture<>();
+		LocalMediaImpl.Creation operation;
+
+		try {
+			operation = media.begin();
+		}
+		catch (PeerClosedException e) {
+			result.completeExceptionally(e);
+			return result;
+		}
+
 		media.rtc.track(result, null);
 
 		media.executor.execute(() -> {
@@ -237,6 +253,12 @@ final class DevicesImpl implements Devices {
 				result.completeExceptionally(e instanceof WebRtcException
 						? e : new MediaException("Switching the device failed: " + e.getMessage(), e));
 			}
+			finally {
+				operation.close();
+			}
+		}, () -> {
+			operation.close();
+			result.completeExceptionally(new PeerClosedException("The runtime is closed"));
 		});
 
 		return result;

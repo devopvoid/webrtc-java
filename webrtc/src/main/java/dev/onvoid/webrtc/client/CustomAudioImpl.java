@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.client;
 import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -133,6 +134,8 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 	/** Queues what is left of the previous format, filled with silence. */
 	private void flushPartial() {
 		if (partialLength > 0) {
+			// What lies beyond may be audio that clear() dropped.
+			Arrays.fill(partial, partialLength, partial.length, (byte) 0);
 			queue.add(new Chunk(partial, format));
 		}
 
