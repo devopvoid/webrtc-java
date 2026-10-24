@@ -26,6 +26,7 @@
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/EncodedFrameTransformer.h"
 #include "api/RTCDtmfSender.h"
@@ -216,7 +217,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createVideoFrameIn
 
 		auto jInjector = jni::JavaFactories::create(env, injector.release());
 
-		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
+		SetHandle(env, jInjector.get(), "observerHandle", observer.release(), PKG "RTCEncodedVideoFrameInjector");
 
 		return jInjector.release();
 	}
@@ -252,7 +253,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createAudioFrameIn
 
 		auto jInjector = jni::JavaFactories::create(env, injector.release());
 
-		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
+		SetHandle(env, jInjector.get(), "observerHandle", observer.release(), PKG "RTCEncodedAudioFrameInjector");
 
 		return jInjector.release();
 	}
@@ -318,7 +319,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setObserver
 		// the observer, so the previous one is out of use once this returns.
 		sender->SetObserver(observer);
 
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
+		ReplaceNativeObserver(env, caller, "observerHandle", observer, PKG "RTCRtpSender");
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -333,10 +334,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_dispose
 
 	// WebRTC must let go of an observer set through this object before it is
 	// deleted.
-	if (GetHandle<jni::RTCRtpSenderObserver>(env, caller, "observerHandle") != nullptr) {
+	if (GetHandle<jni::RTCRtpSenderObserver>(env, caller, "observerHandle", PKG "RTCRtpSender") != nullptr) {
 		sender->SetObserver(nullptr);
 
-		ClearNativeObserver<jni::RTCRtpSenderObserver>(env, caller, "observerHandle");
+		ClearNativeObserver<jni::RTCRtpSenderObserver>(env, caller, "observerHandle", PKG "RTCRtpSender");
 	}
 
 	// Unlike e.g. MediaStreamTrack, an RTCRtpSender is not exclusively owned

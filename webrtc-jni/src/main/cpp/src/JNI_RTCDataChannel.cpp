@@ -23,6 +23,7 @@
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/data_channel_interface.h"
 #include "rtc_base/logging.h"
@@ -42,7 +43,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 		channel->UnregisterObserver();
 
 		auto observer = new jni::RTCDataChannelObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
+		ReplaceNativeObserver(env, caller, "observerHandle", observer, PKG "RTCDataChannel");
 
 		channel->RegisterObserver(observer);
 	}
@@ -59,7 +60,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_unregisterObserver
 
 	channel->UnregisterObserver();
 
-	ClearNativeObserver<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
+	ClearNativeObserver<jni::RTCDataChannelObserver>(env, caller, "observerHandle", PKG "RTCDataChannel");
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getLabel
@@ -214,7 +215,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_dispose
 
 	channel->UnregisterObserver();
 
-	ClearNativeObserver<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
+	ClearNativeObserver<jni::RTCDataChannelObserver>(env, caller, "observerHandle", PKG "RTCDataChannel");
 
 	webrtc::RefCountReleaseStatus status = channel->Release();
 

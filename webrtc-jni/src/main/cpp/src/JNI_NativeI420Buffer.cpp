@@ -18,6 +18,7 @@
 #include "api/VideoFrame.h"
 #include "JavaRuntimeException.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/video/i420_buffer.h"
 #include "common_video/include/video_frame_buffer.h"

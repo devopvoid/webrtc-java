@@ -16,6 +16,7 @@
 
 #include "JNI_SyncClock.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "media/SyncClock.h"
 
 #include "rtc_base/time_utils.h"

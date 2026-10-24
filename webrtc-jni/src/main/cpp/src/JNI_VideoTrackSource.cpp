@@ -23,6 +23,7 @@
 #include "JavaRef.h"
 #include "JavaRuntimeException.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/video/video_frame.h"
 #include "api/video/video_rotation.h"
@@ -30,7 +31,7 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrackSource_setVideoProcessorNative
 (JNIEnv * env, jobject caller, jobject jProcessor)
 {
-	jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle");
+	jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle", PKG_VIDEO "VideoTrackSource");
 
 	if (host == nullptr) {
 		env->Throw(jni::JavaRuntimeException(env, "The video source does not support a VideoProcessor"));
@@ -53,7 +54,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrackSource_deliv
 		return;
 	}
 
-	jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle");
+	jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle", PKG_VIDEO "VideoTrackSource");
 
 	// The source has been disposed.
 	if (host == nullptr) {

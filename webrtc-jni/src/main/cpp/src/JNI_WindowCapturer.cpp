@@ -16,6 +16,7 @@
 
 #include "JNI_WindowCapturer.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "media/video/desktop/DesktopCapturer.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_WindowCapturer_initialize

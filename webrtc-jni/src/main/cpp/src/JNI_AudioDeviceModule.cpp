@@ -20,6 +20,7 @@
 #include "JavaError.h"
 #include "JavaRef.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "WebRTCContext.h"
 #include "api/audio/create_audio_device_module.h"
 

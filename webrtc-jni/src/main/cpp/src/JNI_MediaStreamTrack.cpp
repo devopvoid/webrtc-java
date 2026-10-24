@@ -21,6 +21,7 @@
 #include "JavaFactories.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "WebRTCContext.h"
 
 #include "media/MediaStreamTrackObserver.h"

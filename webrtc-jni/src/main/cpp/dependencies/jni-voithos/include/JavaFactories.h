@@ -32,11 +32,11 @@ namespace jni
 
 #ifdef __cpp_lib_any
 			template <class T>
-			static void add(JNIEnv * env, const char * className)
+			static void add(JNIEnv * env, const char * className, const char * handleClass)
 			{
 				std::unordered_map<std::type_index, std::any> & map = getFactoryMap();
 
-				map.emplace(std::type_index(typeid(T)), std::make_any<JavaFactory<T>>(JavaFactory<T>(env, className)));
+				map.emplace(std::type_index(typeid(T)), std::make_any<JavaFactory<T>>(JavaFactory<T>(env, className, handleClass)));
 			}
 
 			template <class T>
@@ -87,11 +87,11 @@ namespace jni
 			}
 #else
 			template <class T>
-			static void add(JNIEnv * env, const char * className)
+			static void add(JNIEnv * env, const char * className, const char * handleClass)
 			{
 				std::unordered_map<std::type_index, unique_void_ptr> & map = getFactoryMap();
 
-				map.emplace(std::type_index(typeid(T)), make_unique_void(new JavaFactory<T>(env, className)));
+				map.emplace(std::type_index(typeid(T)), make_unique_void(new JavaFactory<T>(env, className, handleClass)));
 			}
 
 			template <class T>

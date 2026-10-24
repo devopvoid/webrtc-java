@@ -22,6 +22,7 @@
 #include "JavaFactories.h"
 #include "JavaRef.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/dtls_transport_interface.h"
 
@@ -100,7 +101,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 		transport->UnregisterObserver();
 
 		auto newObserver = new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer));
-		ReplaceNativeObserver(env, caller, "observerHandle", newObserver);
+		ReplaceNativeObserver(env, caller, "observerHandle", newObserver, PKG "RTCDtlsTransport");
 
 		transport->RegisterObserver(newObserver);
 	}
@@ -117,5 +118,5 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserve
 
 	transport->UnregisterObserver();
 
-	ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
+	ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle", PKG "RTCDtlsTransport");
 }

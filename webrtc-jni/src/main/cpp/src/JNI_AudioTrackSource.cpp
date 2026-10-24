@@ -16,6 +16,7 @@
 
 #include "JNI_AudioTrackSource.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/media_stream_interface.h"
 

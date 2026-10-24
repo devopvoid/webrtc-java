@@ -30,6 +30,7 @@
 #include "JavaRef.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "WebRTCContext.h"
 
 #include "api/audio/builtin_audio_processing_builder.h"
@@ -169,9 +170,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 
 		if (factory != nullptr) {
 			SetHandle(env, caller, factory.release());
-			SetHandle(env, caller, "networkThreadHandle", networkThread.release());
-			SetHandle(env, caller, "signalingThreadHandle", signalingThread.release());
-			SetHandle(env, caller, "audioModuleHandle", proxy.release());
+			SetHandle(env, caller, "networkThreadHandle", networkThread.release(), PKG "PeerConnectionFactory");
+			SetHandle(env, caller, "signalingThreadHandle", signalingThread.release(), PKG "PeerConnectionFactory");
+			SetHandle(env, caller, "audioModuleHandle", proxy.release(), PKG "PeerConnectionFactory");
 		}
 		else {
 			throw jni::Exception("Create PeerConnectionFactory failed");
@@ -188,9 +189,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
 	CHECK_HANDLE(factory);
 
-	webrtc::Thread * networkThread = GetHandle<webrtc::Thread>(env, caller, "networkThreadHandle");
-	webrtc::Thread * signalingThread = GetHandle<webrtc::Thread>(env, caller, "signalingThreadHandle");
-	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
+	webrtc::Thread * networkThread = GetHandle<webrtc::Thread>(env, caller, "networkThreadHandle", PKG "PeerConnectionFactory");
+	webrtc::Thread * signalingThread = GetHandle<webrtc::Thread>(env, caller, "signalingThreadHandle", PKG "PeerConnectionFactory");
+	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle", PKG "PeerConnectionFactory");
 
 	webrtc::RefCountReleaseStatus status = factory->Release();
 
@@ -220,7 +221,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 				RTC_LOG(LS_WARNING) << "ProxyAudioDeviceModule was not deleted. A reference is still around somewhere.";
 			}
 
-			SetHandle<std::nullptr_t>(env, caller, "audioModuleHandle", nullptr);
+			SetHandle<std::nullptr_t>(env, caller, "audioModuleHandle", nullptr, PKG "PeerConnectionFactory");
 		}
 	}
 	catch (...) {
@@ -231,7 +232,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCaptureEnabled
 (JNIEnv * env, jobject caller, jboolean enabled)
 {
-	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
+	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle", PKG "PeerConnectionFactory");
 	CHECK_HANDLE(audioModule);
 
 	try {
@@ -411,7 +412,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 	if (pc != nullptr) {
 		auto javaPeerConnection = jni::JavaFactories::create(env, pc.release());
 
-		SetHandle(env, javaPeerConnection.get(), "observerHandle", observer);
+		SetHandle(env, javaPeerConnection.get(), "observerHandle", observer, PKG "RTCPeerConnection");
 
 		return javaPeerConnection.release();
 	}

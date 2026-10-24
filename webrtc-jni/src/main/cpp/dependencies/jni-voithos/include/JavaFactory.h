@@ -19,8 +19,10 @@ namespace jni
 	class JavaFactory
 	{
 		public:
-			JavaFactory(JNIEnv * env, const char * className) :
-				JavaFactory(env, className, "()V")
+			// The created objects hold their native object in the `nativeHandle` field
+			// declared by `handleClass`.
+			JavaFactory(JNIEnv * env, const char * className, const char * handleClass) :
+				JavaFactory(env, className, "()V", handleClass)
 			{
 			}
 
@@ -34,7 +36,7 @@ namespace jni
 				jobject object = env->NewObject(javaClass, javaCtor);
 				ExceptionCheck(env);
 
-				SetHandle(env, object, nativeObject);
+				SetHandle(env, object, "nativeHandle", nativeObject, handleClass);
 
 				return JavaLocalRef<jobject>(env, object);
 			}
@@ -45,9 +47,12 @@ namespace jni
 			}
 
 		protected:
-			JavaFactory(JNIEnv * env, const char * className, const char * ctorSignature) :
+			// A subclass that overrides create() binds no handle and may pass no `handleClass`.
+			JavaFactory(JNIEnv * env, const char * className, const char * ctorSignature,
+				const char * handleClass) :
 				javaClass(nullptr),
-				javaCtor(nullptr)
+				javaCtor(nullptr),
+				handleClass(handleClass)
 			{
 				loadClass(env, className, ctorSignature);
 			}
@@ -63,6 +68,7 @@ namespace jni
 		protected:
 			JavaGlobalRef<jclass> javaClass;
 			jmethodID javaCtor;
+			const char * handleClass;
 	};
 }
 

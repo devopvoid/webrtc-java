@@ -18,6 +18,7 @@
 #include "api/AudioTrackSink.h"
 #include "JavaNullPointerException.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "api/media_stream_interface.h"
 

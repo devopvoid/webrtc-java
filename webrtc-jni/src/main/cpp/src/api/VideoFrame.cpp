@@ -17,6 +17,7 @@
 #include "api/VideoFrame.h"
 #include "JavaObject.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "JavaRuntimeException.h"
 #include "JavaWrappedException.h"
 #include "JNI_WebRTC.h"
@@ -62,6 +63,12 @@ namespace jni
 			webrtc::scoped_refptr<webrtc::I420Buffer> buffer = webrtc::I420Buffer::Copy(
 				width, height, y_data, strideY, u_data, strideU, v_data, strideV);
 			*/
+
+			// Any other buffer is implemented in Java, and its handle would be no I420 buffer.
+			if (!env->IsInstanceOf(jBuffer, JavaClasses::get<JavaNativeI420BufferClass>(env)->cls)) {
+				ThrowJavaException(env, "java/lang/IllegalArgumentException", "The buffer of the VideoFrame is no NativeI420Buffer");
+				ExceptionCheck(env);
+			}
 
 			webrtc::I420BufferInterface * i420Buffer = GetHandle<webrtc::I420BufferInterface>(env, jBuffer);
 

@@ -16,6 +16,7 @@
 
 #include "JNI_CustomVideoSource.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 #include "api/VideoFrame.h"
 
 #include "media/video/CustomVideoSource.h"

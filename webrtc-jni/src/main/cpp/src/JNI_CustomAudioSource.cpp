@@ -16,6 +16,7 @@
 
 #include "JNI_CustomAudioSource.h"
 #include "JavaUtils.h"
+#include "NativeHandle.h"
 
 #include "media/audio/CustomAudioSource.h"
 
