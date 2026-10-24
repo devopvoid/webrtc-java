@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import dev.onvoid.webrtc.internal.Timeouts;
+
 /**
  * Receives a stream from a server with the WebRTC HTTP Egress Protocol (WHEP),
  * as media servers such as MediaMTX, Janus and Cloudflare Stream offer it:
@@ -136,13 +138,7 @@ public final class Whep {
 		 * @return this builder.
 		 */
 		public Builder timeout(Duration timeout) {
-			requireNonNull(timeout, "timeout");
-
-			if (timeout.isNegative() || timeout.isZero()) {
-				throw new IllegalArgumentException("The timeout must be positive, got " + timeout);
-			}
-
-			this.timeout = timeout;
+			this.timeout = Timeouts.requirePositive(timeout, "timeout");
 			return this;
 		}
 

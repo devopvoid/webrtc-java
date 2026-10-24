@@ -19,7 +19,8 @@ package dev.onvoid.webrtc.media.player;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Objects;
+
+import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
  * An opened media source, and what it contains.
@@ -86,7 +87,8 @@ public class MediaReader implements AutoCloseable {
 	 * @param source  The path or {@code rtsp://} URL of the source to open.
 	 * @param timeout How long opening, and later any single read, seek or
 	 *                close, may wait on the source. {@link Duration#ZERO}
-	 *                waits as long as it takes.
+	 *                waits as long as it takes; a positive timeout waits at
+	 *                least a microsecond.
 	 *
 	 * @throws IOException              if the source cannot be opened in
 	 *                                  time, or holds nothing that can be
@@ -94,13 +96,11 @@ public class MediaReader implements AutoCloseable {
 	 * @throws IllegalArgumentException if the timeout is negative.
 	 */
 	public MediaReader(String source, Duration timeout) throws IOException {
-		Objects.requireNonNull(timeout, "Timeout is null");
+		// Zero is the one timeout without limit: a positive one rounds up to a
+		// microsecond, and one too long to count is as long as can be counted.
+		Timeouts.requireNonNegative(timeout, "timeout");
 
-		if (timeout.isNegative()) {
-			throw new IllegalArgumentException("Timeout is negative: " + timeout);
-		}
-
-		handle = open(source, toMicros(timeout));
+		handle = open(source, Timeouts.toMicros(timeout));
 	}
 
 	/**
@@ -147,16 +147,6 @@ public class MediaReader implements AutoCloseable {
 		handle = 0;
 
 		return detaching;
-	}
-
-	private static long toMicros(Duration duration) {
-		try {
-			return duration.toNanos() / 1000;
-		}
-		catch (ArithmeticException e) {
-			// Longer than nanoseconds can count, which is as good as never.
-			return 0;
-		}
 	}
 
 	private static native long open(String source, long timeoutUs) throws IOException;

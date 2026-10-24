@@ -40,6 +40,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
+import dev.onvoid.webrtc.internal.Timeouts;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModuleBase;
 import dev.onvoid.webrtc.media.audio.AudioProcessing;
@@ -300,7 +301,7 @@ public final class WebRtc implements AutoCloseable {
 		CompletableFuture<Void> future = closeAsync();
 
 		try {
-			future.get(closeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+			future.get(Timeouts.toMillis(closeTimeout), TimeUnit.MILLISECONDS);
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
@@ -462,7 +463,7 @@ public final class WebRtc implements AutoCloseable {
 	 */
 	private void failPending() {
 		try {
-			controlPool.awaitTermination(closeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+			controlPool.awaitTermination(Timeouts.toMillis(closeTimeout), TimeUnit.MILLISECONDS);
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
@@ -492,7 +493,7 @@ public final class WebRtc implements AutoCloseable {
 
 			try {
 				CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-						.get(closeTimeout.toMillis(), TimeUnit.MILLISECONDS);
+						.get(Timeouts.toMillis(closeTimeout), TimeUnit.MILLISECONDS);
 			}
 			catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
@@ -650,7 +651,7 @@ public final class WebRtc implements AutoCloseable {
 		 * @return this builder.
 		 */
 		public Builder operationTimeout(Duration timeout) {
-			this.operationTimeout = positive(timeout);
+			this.operationTimeout = Timeouts.requirePositive(timeout, "operation timeout");
 			return this;
 		}
 
@@ -661,7 +662,7 @@ public final class WebRtc implements AutoCloseable {
 		 * @return this builder.
 		 */
 		public Builder closeTimeout(Duration timeout) {
-			this.closeTimeout = positive(timeout);
+			this.closeTimeout = Timeouts.requirePositive(timeout, "close timeout");
 			return this;
 		}
 
@@ -704,16 +705,6 @@ public final class WebRtc implements AutoCloseable {
 		 */
 		public WebRtc build() {
 			return new WebRtc(this);
-		}
-
-		private static Duration positive(Duration duration) {
-			requireNonNull(duration, "duration");
-
-			if (duration.isNegative() || duration.isZero()) {
-				throw new IllegalArgumentException("The duration must be positive, got " + duration);
-			}
-
-			return duration;
 		}
 	}
 }

@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -206,6 +207,34 @@ class HttpSessionTests extends ClientTestBase {
 
 			client.close();
 			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void shortTimeoutBoundsRequest() throws Exception {
+		// Under a millisecond, which the connection takes as no timeout at all
+		// if it is rounded down. The session's own deadline is on a timer that
+		// does not fire, so only the request's timeout can end the wait.
+		Duration timeout = Duration.ofNanos(1);
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
+			CountDownLatch answer = endpoint.holdAnswers();
+
+			try {
+				ExecutionException failed = assertThrows(ExecutionException.class,
+						() -> await(Whep.from(endpoint.uri()).timeout(timeout).play(client)));
+
+				assertInstanceOf(SocketTimeoutException.class, failed.getCause().getCause(),
+						failed.getCause()::getMessage);
+			}
+			finally {
+				answer.countDown();
+			}
 		}
 		finally {
 			client.close();

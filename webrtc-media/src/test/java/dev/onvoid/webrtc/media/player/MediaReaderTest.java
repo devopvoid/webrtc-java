@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -87,6 +88,17 @@ class MediaReaderTest {
 			// The asset runs 3.008 seconds. The tolerance is there because the
 			// duration comes from the container, and FFmpeg may be replaced.
 			assertEquals(3_008_000, reader.getInfo().getDurationUs(), 50_000);
+		}
+	}
+
+	@Test
+	void opensWithLongestTimeout() throws Exception {
+		// Longer than microseconds can count. The deadline saturates, rather
+		// than wrap around into one that has passed already.
+		String source = asset().toAbsolutePath().toString();
+
+		try (MediaReader reader = new MediaReader(source, Duration.ofSeconds(Long.MAX_VALUE))) {
+			assertTrue(reader.getInfo().hasVideo());
 		}
 	}
 

@@ -29,11 +29,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import dev.onvoid.webrtc.internal.Timeouts;
+
 /**
  * A timer on which no time passes: what is scheduled fires only when a test
  * fires it, on the test's thread. Tasks are told apart by the delay they were
  * scheduled with, so that a timeout fires exactly when the test wants it to,
- * however long the work it bounds takes.
+ * however long the work it bounds takes. A delay counts in milliseconds,
+ * rounded up as the runtime rounds it.
  */
 final class ManualTimer extends AbstractExecutorService implements ScheduledExecutorService {
 
@@ -53,7 +56,7 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 
 		synchronized (this) {
 			for (Task<?> task : tasks) {
-				if (task.delayMillis == delay.toMillis() && !task.isDone()) {
+				if (task.delayMillis == Timeouts.toMillis(delay) && !task.isDone()) {
 					due.add(task);
 				}
 			}
@@ -78,7 +81,7 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 		int count = 0;
 
 		for (Task<?> task : tasks) {
-			if (task.delayMillis == delay.toMillis() && !task.isDone()) {
+			if (task.delayMillis == Timeouts.toMillis(delay) && !task.isDone()) {
 				count++;
 			}
 		}

@@ -151,6 +151,23 @@ class RuntimeCloseTests extends ClientTestBase {
 	}
 
 	@Test
+	void closeTimeoutBeyondMillis() throws Exception {
+		// Longer than milliseconds can count. The waits of close take the
+		// longest they can count instead of failing on the conversion.
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.closeTimeout(Duration.ofSeconds(Long.MAX_VALUE))
+				.build();
+		Peer peer = runtime.createPeer(manualOptions());
+
+		runtime.close();
+
+		assertEquals(PeerState.CLOSED, peer.state());
+		await(runtime.closeAsync());
+	}
+
+	@Test
 	void closeOnEventThread() throws Exception {
 		// close() does not wait for the events of the peers it closes, which
 		// would wait for the very thread it runs on.
