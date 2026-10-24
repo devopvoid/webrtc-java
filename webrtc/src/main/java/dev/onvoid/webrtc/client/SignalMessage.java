@@ -131,7 +131,9 @@ public final class SignalMessage {
 	 * @return the message.
 	 *
 	 * @throws IllegalArgumentException if the text is no JSON or no signaling
-	 *                                  message.
+	 *                                  message, is longer than a MiB, or
+	 *                                  nests arrays and objects deeper than
+	 *                                  64 levels.
 	 */
 	public static SignalMessage fromJson(String json) {
 		requireNonNull(json, "json");

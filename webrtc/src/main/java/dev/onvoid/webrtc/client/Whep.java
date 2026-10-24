@@ -168,11 +168,15 @@ public final class Whep {
 				options.iceServer(urls);
 			}
 
+			// The builder may change while the session starts; the session keeps
+			// what it started with, so that its DELETE is authorized like its POST.
+			String token = bearerToken;
+			Duration limit = timeout;
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
-				return peer.toPublic(HttpSession.negotiate(rtc, peer, endpoint, bearerToken, timeout)
-						.thenApply(resource -> new Session(rtc, peer, resource, bearerToken, timeout)));
+				return peer.toPublic(HttpSession.negotiate(rtc, peer, endpoint, token, limit)
+						.thenApply(resource -> new Session(rtc, peer, resource, token, limit)));
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.
