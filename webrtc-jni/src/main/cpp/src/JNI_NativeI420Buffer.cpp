@@ -23,7 +23,7 @@
 #include "common_video/include/video_frame_buffer.h"
 #include "libyuv/scale.h"
 
-JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_allocate
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_allocateBuffer
 (JNIEnv * env, jclass caller, jint width, jint height)
 {
 	try {

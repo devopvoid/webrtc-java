@@ -9,10 +9,10 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_NativeI420Buffer
-	 * Method:    allocate
+	 * Method:    allocateBuffer
 	 * Signature: (II)Ldev/onvoid/webrtc/media/video/NativeI420Buffer;
 	 */
-	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_allocate
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_allocateBuffer
 	(JNIEnv *, jclass, jint, jint);
 
 	/*

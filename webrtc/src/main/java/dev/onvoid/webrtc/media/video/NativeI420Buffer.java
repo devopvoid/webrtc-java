@@ -121,8 +121,31 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 
 	/**
 	 * Allocates an empty I420Buffer suitable for an image of the given dimensions.
+	 *
+	 * @param width  The width of the image in pixels.
+	 * @param height The height of the image in pixels.
+	 *
+	 * @return A new buffer of the given dimensions.
+	 *
+	 * @throws IllegalArgumentException if a dimension is not positive or all three planes together
+	 *                                  are larger than {@link Integer#MAX_VALUE} bytes.
 	 */
-	public static native NativeI420Buffer allocate(int width, int height);
+	public static NativeI420Buffer allocate(int width, int height) {
+		// WebRTC aborts the process on dimensions it cannot allocate, rather than failing the call.
+		if (width <= 0 || height <= 0) {
+			throw new IllegalArgumentException("Invalid buffer size " + width + "x" + height);
+		}
+
+		long chromaSize = ((width + 1L) / 2) * ((height + 1L) / 2);
+
+		if ((long) width * height + 2 * chromaSize > Integer.MAX_VALUE) {
+			throw new IllegalArgumentException("Buffer size " + width + "x" + height + " is too large");
+		}
+
+		return allocateBuffer(width, height);
+	}
+
+	private static native NativeI420Buffer allocateBuffer(int width, int height);
 
 	/**
 	 * Creates a copy of an I420 buffer with the given dimensions and data.
