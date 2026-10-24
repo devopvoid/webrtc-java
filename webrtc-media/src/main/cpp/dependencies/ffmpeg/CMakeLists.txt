@@ -418,7 +418,7 @@ else()
     if(NOT EXISTS "${FFMPEG_SOURCE_DIR}/configure")
         message(FATAL_ERROR
             "The FFmpeg submodule is not checked out. Run:\n"
-            "  git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg")
+            "  git submodule update --init --depth 1 webrtc-media/third-party/ffmpeg")
     endif()
 
     # FFmpeg's configure and its makefiles are shell scripts, so a POSIX shell
@@ -690,7 +690,7 @@ else()
     if(NOT EXISTS "${DAV1D_SOURCE_DIR}/meson.build")
         message(FATAL_ERROR
             "The dav1d submodule is not checked out. Run:\n"
-            "  git submodule update --init --depth 1 webrtc-java-media/third-party/dav1d")
+            "  git submodule update --init --depth 1 webrtc-media/third-party/dav1d")
     endif()
 
     find_program(MESON_EXECUTABLE NAMES meson)

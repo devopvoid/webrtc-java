@@ -223,8 +223,8 @@ jobs:
             echo "Artifacts destined for the deployment bundle:"
             echo '```'
             ls -1 webrtc/target/*.jar webrtc/target/*.asc \
-              webrtc-java-media/target/*.jar webrtc-java-media/target/*.asc \
-              webrtc-java-javafx/target/*.jar webrtc-java-javafx/target/*.asc \
+              webrtc-media/target/*.jar webrtc-media/target/*.asc \
+              webrtc-javafx/target/*.jar webrtc-javafx/target/*.asc \
               natives/*.asc 2>/dev/null || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -238,12 +238,12 @@ jobs:
             webrtc/target/central-*/**
             webrtc/target/*.jar
             webrtc/target/*.asc
-            webrtc-java-media/target/central-*/**
-            webrtc-java-media/target/*.jar
-            webrtc-java-media/target/*.asc
-            webrtc-java-javafx/target/central-*/**
-            webrtc-java-javafx/target/*.jar
-            webrtc-java-javafx/target/*.asc
+            webrtc-media/target/central-*/**
+            webrtc-media/target/*.jar
+            webrtc-media/target/*.asc
+            webrtc-javafx/target/central-*/**
+            webrtc-javafx/target/*.jar
+            webrtc-javafx/target/*.asc
             natives/*.asc
           if-no-files-found: error
           retention-days: 7

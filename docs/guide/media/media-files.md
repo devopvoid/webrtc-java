@@ -18,7 +18,7 @@ Decoding happens entirely in native code. Frames never travel through Java: the 
 The module is part of the normal build, and it builds FFmpeg and dav1d (the software decoder of AV1) from submodules pinned to release tags, so the submodules have to be present:
 
 ```shell
-git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg webrtc-java-media/third-party/dav1d
+git submodule update --init --depth 1 webrtc-media/third-party/ffmpeg webrtc-media/third-party/dav1d
 mvn install
 ```
 

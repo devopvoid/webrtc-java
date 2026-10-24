@@ -69,7 +69,7 @@ runs:
           -DgeneratePom=false
       shell: bash
 
-    # natives.dir makes webrtc and webrtc-java-media attach the jars of all
+    # natives.dir makes webrtc and webrtc-media attach the jars of all
     # platforms instead of the host's. skipUpload still stages and bundles the
     # release, but stops before uploading it.
     #
@@ -83,7 +83,7 @@ runs:
         PROFILES: ${{ inputs.profiles }}
         SKIP_UPLOAD: ${{ inputs.skip-upload }}
       run: >
-        mvn -B deploy -pl .,webrtc,webrtc-java-media,webrtc-java-javafx -DskipTests
+        mvn -B deploy -pl .,webrtc,webrtc-media,webrtc-javafx -DskipTests
         -Dmaven.repository.credentialScope=id
         ${PROFILES:+-P$PROFILES}
         -Dnatives.dir="$PWD/natives"

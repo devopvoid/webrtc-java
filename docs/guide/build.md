@@ -21,7 +21,7 @@ You don't have to install Chromium's `depot_tools`, Siso or GN: the build clones
 FFmpeg and dav1d come from Git submodules, which a plain clone leaves empty. Fetch them before the first build:
 
 ```shell
-git submodule update --init --depth 1 webrtc-java-media/third-party/ffmpeg webrtc-java-media/third-party/dav1d
+git submodule update --init --depth 1 webrtc-media/third-party/ffmpeg webrtc-media/third-party/dav1d
 ```
 
 ### Linux

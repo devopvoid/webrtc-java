@@ -39,7 +39,7 @@
                 <version>3.6.4</version>
                 <configuration>
                     <additionalClasspathElements>
-                        <additionalClasspathElement>${project.basedir}/../webrtc-java-media/target/natives</additionalClasspathElement>
+                        <additionalClasspathElement>${project.basedir}/../webrtc-media/target/natives</additionalClasspathElement>
                     </additionalClasspathElements>
                 </configuration>
             </plugin>
