@@ -117,6 +117,27 @@ class MediaReaderTest {
 	}
 
 	@Test
+	void sourceCopyFails() throws Exception {
+		// The native copy of the source fails as an exhausted heap does: the
+		// failure reaches Java instead of ending the process, and the
+		// characters of the Java string are released all the same.
+		AllocationFault.failNextStringCopy();
+
+		try {
+			assertThrows(OutOfMemoryError.class, () -> new MediaReader(asset()));
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertEquals(0, AllocationFault.heldStrings());
+
+		try (MediaReader reader = new MediaReader(asset())) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+	}
+
+	@Test
 	void closesTwice() throws Exception {
 		MediaReader reader = new MediaReader(asset());
 
