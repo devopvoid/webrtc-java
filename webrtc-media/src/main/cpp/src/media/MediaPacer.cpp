@@ -252,6 +252,13 @@ namespace ffmpeg
 		return position_us_;
 	}
 
+	bool MediaPacer::IsOwnThread() const
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return thread_.get_id() == std::this_thread::get_id();
+	}
+
 	void MediaPacer::Run()
 	{
 		std::unique_lock<std::mutex> lock(mutex_);

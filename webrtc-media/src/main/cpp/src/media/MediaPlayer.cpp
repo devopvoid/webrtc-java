@@ -244,6 +244,19 @@ namespace ffmpeg
 		return state_;
 	}
 
+	bool MediaPlayer::IsOwnThread() const
+	{
+		{
+			std::lock_guard<std::mutex> lock(mutex_);
+
+			if (thread_.get_id() == std::this_thread::get_id()) {
+				return true;
+			}
+		}
+
+		return pacer_->IsOwnThread();
+	}
+
 	void MediaPlayer::Run()
 	{
 		AVPacket * packet = av_packet_alloc();

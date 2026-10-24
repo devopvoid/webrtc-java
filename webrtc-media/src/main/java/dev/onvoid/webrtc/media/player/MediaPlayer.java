@@ -252,11 +252,12 @@ public class MediaPlayer implements AutoCloseable {
 	 * and waits for the player's thread to finish. Closing a player that is
 	 * already closed does nothing.
 	 * <p>
-	 * Closing from within a {@link MediaPlayerListener} call is allowed, but
-	 * cannot wait: the player's thread is the one making that call. The player
-	 * is closed at once, in that every later command does nothing and its
-	 * state reads as closed, and it is released on another thread as soon as
-	 * the listener call has returned.
+	 * Closing from within a {@link MediaPlayerListener} call, or from a sink
+	 * of a track made from one of the sources this player feeds, is allowed,
+	 * but cannot wait: the player's thread is the one making that call. The
+	 * player is closed at once, in that every later command does nothing and
+	 * its state reads as closed, and it is released on another thread as soon
+	 * as that call has returned.
 	 */
 	@Override
 	public void close() {
@@ -274,6 +275,9 @@ public class MediaPlayer implements AutoCloseable {
 			return;
 		}
 
+		// A sink of a track this player feeds is called on one of its threads
+		// too, but not through the listener. The native side tells those
+		// apart itself, and hands the release to another thread.
 		if (callbackDepth.get()[0] == 0) {
 			dispose(closing);
 

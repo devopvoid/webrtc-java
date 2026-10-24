@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.player;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
@@ -66,7 +67,12 @@ public class MediaFileSource implements AutoCloseable {
 
 	private final MediaPlayer player;
 
-	private boolean closed;
+	/**
+	 * Not guarded by a lock: a close holding one while it waits for the
+	 * player's threads would never end if one of them, in a listener or a
+	 * sink, closed this source as well.
+	 */
+	private final AtomicBoolean closed = new AtomicBoolean();
 
 
 	/**
@@ -275,12 +281,10 @@ public class MediaFileSource implements AutoCloseable {
 	 * a source that is already closed does nothing.
 	 */
 	@Override
-	public synchronized void close() {
-		if (closed) {
+	public void close() {
+		if (!closed.compareAndSet(false, true)) {
 			return;
 		}
-
-		closed = true;
 
 		player.close();
 
