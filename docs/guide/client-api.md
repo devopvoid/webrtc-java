@@ -60,6 +60,9 @@ WebRtc rtc = WebRtc.builder()
 | `hardwareVideoCodecs(boolean)` | `false` | Encodes and decodes video on the GPU where it can, as the [Video Codecs](/guide/advanced/video-codecs) guide describes. |
 | `fieldTrials(Map)` | none | [Field trials](/guide/advanced/field-trials). |
 | `eventExecutor(Executor)` | threads of the runtime | Where handlers run, see [Threads](#threads). |
+| `eventThreads(int)` | unlimited | The most threads the runtime runs handlers on, see [Limiting Threads](#limiting-threads). |
+| `frameThreads(int)` | unlimited | The most threads that run `onFrame` and `onAudio` handlers. |
+| `audioBuffer(Duration)` | 5 seconds | How much audio an `onAudio` subscription keeps for a handler that falls behind, see [Audio](#audio). |
 | `errorHandler(Consumer<Throwable>)` | the thread's uncaught exception handler | Receives what handlers throw, and failures nobody else hears of. |
 | `operationTimeout(Duration)` | 30 seconds | How long an operation such as applying a description may take before it fails with a `TimeoutException`. |
 | `closeTimeout(Duration)` | 10 seconds | How long `close()` waits. |
@@ -198,13 +201,53 @@ Every method of the client API may be called from any thread, including from ins
 |---|---|---|
 | Your calls into the API | your thread | They don't block. The exceptions are `WebRtc.createPeer`, which waits briefly for the connection, and `WebRtc.close()`, which waits up to the close timeout. |
 | Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
-| `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped. |
+| `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
 | `LocalTrack.onEnded` and `Devices.onChange` handlers | a background thread of the runtime | Briefly. |
 | WebRTC's own callbacks | WebRTC's threads | Not your code. The library only copies what they report and queues it. |
 
 The handlers of one peer never run at the same time, and they run in the order of the events. The handlers of different peers may run at the same time. With the default executor, the event thread is named after its peer, such as `webrtc-client-events-alice`, which shows up in thread dumps.
 
 An executor of your own that rejects work, such as a bounded pool that is full, loses the events it rejects, and the rejection goes to the error handler. The futures those events would have completed complete all the same, on the thread that found them rejected. Once the runtime is closed, every future of this API that is not done fails with `PeerClosedException`, including those of calls made after the close.
+
+### Limiting Threads
+
+By default the runtime starts a thread for each peer whose events wait and for each subscription whose frames wait, so a thousand peers with slow handlers take a thousand threads. `eventThreads(n)` and `frameThreads(n)` cap them:
+
+```java
+WebRtc rtc = WebRtc.builder()
+        .eventThreads(8)     // handlers of all peers, future callbacks, Signaling.send
+        .frameThreads(4)     // onFrame and onAudio handlers, local previews included
+        .build();
+```
+
+With a limit, the peers take turns, and so do the subscriptions: one that has work runs up to 64 handlers, for at most 10 ms, then goes to the back of the line. A slow handler thus delays the others but never starves them, and a peer's events still run one at a time and in order. The limit rejects nothing: events wait for their turn and are never dropped, so no future stays open, and once the runtime closes, the futures still open fail after the events queued before them. Media that waits is bounded by its subscription instead, by the `FrameDelivery` of a video handler and the audio buffer of an audio handler, which drop the oldest frames and audio when they are full.
+
+A limit has one cost: a handler that waits for what another peer's handler does, say on a latch, can wait forever once all threads are taken by such waits. Handlers that wait for something outside the API should hand the work to a thread of their own.
+
+The control threads of the library, which call into WebRTC, are not limited. Their tasks wait for one another, such as a camera switch for every peer to take the new track.
+
+`rtc.loadStats()` tells how much work waits and runs, at this moment and cheaply enough to be read every second:
+
+```java
+LoadStats load = rtc.loadStats();
+
+LoadStats.Work events = load.events();
+metrics.gauge("webrtc.events.queued", events.queued());                     // events waiting for a thread
+metrics.gauge("webrtc.events.oldest_ms", events.oldestWaiting().toMillis()); // how long the oldest has waited
+metrics.gauge("webrtc.events.active", events.active());                     // handlers running now
+metrics.gauge("webrtc.video.dropped", load.video().dropped());              // frames dropped since start
+metrics.gauge("webrtc.audio.dropped", load.audio().dropped());              // audio chunks dropped since start
+metrics.gauge("webrtc.event_threads", load.eventThreads());
+```
+
+| Part | What waits | What `dropped()` counts |
+|---|---|---|
+| `control()` | tasks of the library that call into WebRTC | tasks the control pool rejected while running, which it never does |
+| `events()` | events of all peers, for handlers, future callbacks and `Signaling.send` | events an `eventExecutor` of your own rejected |
+| `video()` | frames for `onFrame` handlers | frames a handler had no time for |
+| `audio()` | chunks for `onAudio` handlers | chunks beyond the audio buffer |
+
+A queue that keeps growing, or an oldest wait that keeps getting longer, tells that handlers do not keep up. A higher limit helps handlers that wait for I/O; handlers that compute only spread the delay over more threads.
 
 ### Handlers on the UI Thread
 
@@ -442,7 +485,7 @@ A track ends when the remote peer stops sending it or the peer closes.
 
 ### Video Frames
 
-Each `onFrame` subscription has a thread of its own, so a slow renderer holds up neither WebRTC's decoder nor the peer's other events. By default the handler always gets the newest frame, and the frames it had no time for are dropped. `FrameDelivery.queue(n)` keeps up to `n` frames instead:
+Each `onFrame` subscription has a thread of its own, so a slow renderer holds up neither WebRTC's decoder nor the peer's other events. With `frameThreads(n)` the subscriptions share `n` threads and take turns, see [Limiting Threads](#limiting-threads). By default the handler always gets the newest frame, and the frames it had no time for are dropped. `FrameDelivery.queue(n)` keeps up to `n` frames instead:
 
 ```java
 video.onFrame(FrameDelivery.queue(10), frame -> encoder.encode(frame));
@@ -453,6 +496,12 @@ A frame is valid while the handler runs. Call `frame.retain()` to keep it longer
 ### Audio
 
 `onAudio` hands decoded audio to a handler in order, usually 10 ms of 16-bit PCM per `AudioChunk`. Audio reaches these handlers only while the runtime plays out, which a `HEADLESS` runtime always does and a `DEVICES` or `CUSTOM` runtime does to its speakers. `setVolume(double)` changes the playout gain of a track, from 0 to 10, where 1 plays it as received.
+
+A handler that falls behind gets the audio of the last 5 seconds; the oldest audio beyond that is dropped and counted in `rtc.loadStats().audio().dropped()`. `WebRtc.Builder.audioBuffer(Duration)` changes the buffer of every subscription, and `onAudio(Duration, handler)` that of one. A speech recognizer that must stay live keeps a short buffer; a recorder that can catch up after a stall keeps a long one, at about 190 KiB per second of 48 kHz stereo:
+
+```java
+track.asAudio().onAudio(Duration.ofMillis(200), chunk -> recognizer.feed(chunk.samples()));
+```
 
 ### Receiving Without Sending
 

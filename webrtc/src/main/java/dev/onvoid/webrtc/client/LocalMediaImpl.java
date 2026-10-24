@@ -75,7 +75,7 @@ final class LocalMediaImpl implements LocalMedia {
 	LocalMediaImpl(WebRtc rtc, AudioDeviceModuleBase audioModule) {
 		this.rtc = rtc;
 		this.audioModule = audioModule;
-		this.executor = new SerialExecutor(rtc.controlPool, rtc::reportError, false, null);
+		this.executor = new SerialExecutor(rtc.controlPool, rtc.controlWork, rtc::reportError, false, null);
 	}
 
 	@Override

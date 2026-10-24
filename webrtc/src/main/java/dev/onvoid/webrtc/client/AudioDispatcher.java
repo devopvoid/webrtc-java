@@ -16,39 +16,24 @@
 
 package dev.onvoid.webrtc.client;
 
-import java.util.ArrayDeque;
+import java.time.Duration;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 
 /**
  * Hands the audio of a track to a handler on a thread of its own, in order.
- * When the handler falls more than {@link #CAPACITY} chunks behind, the oldest
- * waiting chunk is dropped.
+ * When the chunks waiting for the handler last longer than the buffer, the
+ * oldest are dropped.
  */
-final class AudioDispatcher implements AudioTrackSink {
+final class AudioDispatcher extends Dispatcher<AudioChunk> implements AudioTrackSink {
 
-	/** Five seconds of 10 ms chunks. */
-	private static final int CAPACITY = 500;
-
-	private final Consumer<AudioChunk> handler;
-
-	private final SerialExecutor executor;
-
-	private final Consumer<Throwable> errorHandler;
-
-	private final ArrayDeque<AudioChunk> queue = new ArrayDeque<>();
-
-	private boolean scheduled;
-
-	private boolean closed;
-
-
-	AudioDispatcher(Consumer<AudioChunk> handler, SerialExecutor executor,
-			Consumer<Throwable> errorHandler) {
-		this.handler = handler;
-		this.executor = executor;
-		this.errorHandler = errorHandler;
+	/**
+	 * @param buffer how much audio may wait for the handler.
+	 */
+	AudioDispatcher(Consumer<AudioChunk> handler, Duration buffer, SerialExecutor executor,
+			Workload workload, Consumer<Throwable> errorHandler) {
+		super(handler, micros(buffer), executor, workload, errorHandler);
 	}
 
 	@Override
@@ -57,51 +42,21 @@ final class AudioDispatcher implements AudioTrackSink {
 			return;
 		}
 
-		AudioChunk chunk = new AudioChunk(data.clone(), sampleRate, channels, frames);
-
-		synchronized (queue) {
-			if (closed) {
-				return;
-			}
-
-			queue.add(chunk);
-
-			if (queue.size() > CAPACITY) {
-				queue.poll();
-			}
-			if (!scheduled) {
-				scheduled = true;
-				executor.execute(this::drain);
-			}
-		}
+		offer(new AudioChunk(data.clone(), sampleRate, channels, frames));
 	}
 
-	void close() {
-		synchronized (queue) {
-			closed = true;
-			queue.clear();
-		}
+	/**
+	 * @return the length of the chunk in microseconds.
+	 */
+	@Override
+	long weight(AudioChunk chunk) {
+		return chunk.sampleRate() > 0 ? chunk.frames() * 1_000_000L / chunk.sampleRate() : 0;
 	}
 
-	private void drain() {
-		while (true) {
-			AudioChunk chunk;
+	private static long micros(Duration duration) {
+		long seconds = duration.getSeconds();
 
-			synchronized (queue) {
-				chunk = queue.poll();
-
-				if (chunk == null) {
-					scheduled = false;
-					return;
-				}
-			}
-
-			try {
-				handler.accept(chunk);
-			}
-			catch (Throwable e) {
-				errorHandler.accept(e);
-			}
-		}
+		return seconds >= Long.MAX_VALUE / 1_000_000 ? Long.MAX_VALUE
+				: seconds * 1_000_000 + duration.getNano() / 1_000;
 	}
 }

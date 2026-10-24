@@ -172,8 +172,8 @@ final class PeerImpl implements Peer {
 		this.options = options;
 		this.name = name;
 		this.signaling = options.signaling;
-		this.control = new SerialExecutor(rtc.controlPool, rtc::reportError, false, null);
-		this.events = new SerialExecutor(rtc.eventExecutor, rtc::reportError, true,
+		this.control = new SerialExecutor(rtc.controlPool, rtc.controlWork, rtc::reportError, false, null);
+		this.events = new SerialExecutor(rtc.eventExecutor, rtc.eventWork, rtc::reportError, true,
 				rtc.ownsEventExecutor ? "webrtc-client-events-" + name : null);
 		this.stateHandlers = new Handlers<>(rtc::reportError);
 		this.trackHandlers = new Handlers<>(rtc::reportError);

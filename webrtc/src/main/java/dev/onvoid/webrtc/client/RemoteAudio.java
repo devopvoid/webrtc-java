@@ -16,6 +16,7 @@
 
 package dev.onvoid.webrtc.client;
 
+import java.time.Duration;
 import java.util.function.Consumer;
 
 /**
@@ -27,12 +28,29 @@ public interface RemoteAudio extends RemoteTrack {
 	 * Calls the handler with the decoded audio, in order. Audio reaches
 	 * handlers only while the runtime plays out, which a {@link
 	 * AudioMode#HEADLESS} runtime always does.
+	 * <p>
+	 * A handler that falls behind gets the audio of the last {@link
+	 * WebRtc.Builder#audioBuffer(Duration) audio buffer} of the runtime; the
+	 * oldest audio beyond that is dropped.
 	 *
 	 * @param handler called on a thread of this subscription.
 	 *
 	 * @return the subscription that stops the audio.
 	 */
 	Subscription onAudio(Consumer<AudioChunk> handler);
+
+	/**
+	 * Like {@link #onAudio(Consumer)}, with a buffer of its own: a handler
+	 * that falls behind gets the audio of the last {@code buffer}, and the
+	 * oldest audio beyond that is dropped. A buffer shorter than one chunk
+	 * keeps only the newest chunk.
+	 *
+	 * @param buffer  the most audio that waits for the handler.
+	 * @param handler called on a thread of this subscription.
+	 *
+	 * @return the subscription that stops the audio.
+	 */
+	Subscription onAudio(Duration buffer, Consumer<AudioChunk> handler);
 
 	/**
 	 * Sets the playout gain of this track.
