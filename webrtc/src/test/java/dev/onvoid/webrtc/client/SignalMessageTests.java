@@ -19,18 +19,27 @@ package dev.onvoid.webrtc.client;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 
 class SignalMessageTests {
 
 	private static final String SDP = "v=0\r\no=- 4611731400430051336 2 IN IP4 127.0.0.1\r\ns=\"quoted\" \\ \u0001\r\n";
+
+	/** A candidate message, with its sdpMLineIndex left to fill in. */
+	private static final String CANDIDATE =
+			"{\"candidate\":\"candidate:1 1 udp 1 10.0.0.1 9 typ host\",\"sdpMid\":\"0\",\"sdpMLineIndex\":%s}";
 
 	@Test
 	void descriptionRoundTrip() {
@@ -82,6 +91,86 @@ class SignalMessageTests {
 		assertThrows(IllegalArgumentException.class, () -> SignalMessage.fromJson("{\"hello\":1}"));
 		assertThrows(IllegalArgumentException.class,
 				() -> SignalMessage.of(new RTCSessionDescription(RTCSdpType.ROLLBACK, "")));
+	}
+
+	@TestFactory
+	List<DynamicTest> invalidMLineIndexRejected() {
+		// Index, then the start of the message it fails with. The parser
+		// checks the syntax and that a number is finite, the message that it
+		// is an integer in range.
+		String[] cases = {
+				"1.9", "\"sdpMLineIndex\" is not an integer: 1.9",
+				"0.5", "\"sdpMLineIndex\" is not an integer",
+				"-0.5", "\"sdpMLineIndex\" is not an integer",
+				"1.0000001", "\"sdpMLineIndex\" is not an integer",
+				"-1", "\"sdpMLineIndex\" is not from 0 to 65535: -1",
+				"65536", "\"sdpMLineIndex\" is not from 0 to 65535: 65536",
+				"4294967296", "\"sdpMLineIndex\" is not from 0 to 65535: 4294967296",
+				"1e300", "\"sdpMLineIndex\" is not from 0 to 65535: 1.0E300",
+				"1e999", "Number out of range",
+				"01", "Leading zero in a number",
+				"1.", "Expected a digit after the decimal point",
+				"\"1\"", "\"sdpMLineIndex\" is not a number",
+				"true", "\"sdpMLineIndex\" is not a number",
+				"[0]", "\"sdpMLineIndex\" is not a number"
+		};
+		List<DynamicTest> tests = new ArrayList<>();
+
+		for (int i = 0; i < cases.length; i += 2) {
+			String index = cases[i];
+			String message = cases[i + 1];
+
+			tests.add(DynamicTest.dynamicTest(index, () -> {
+				IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+						() -> SignalMessage.fromJson(String.format(CANDIDATE, index)));
+
+				assertTrue(e.getMessage().startsWith(message), e.getMessage());
+			}));
+		}
+
+		return tests;
+	}
+
+	@TestFactory
+	List<DynamicTest> validMLineIndexAccepted() {
+		String[] indexes = { "0", "-0", "65535", "1.0", "1e2", "2E+1", "1000e-1" };
+		int[] expected = { 0, 0, 65535, 1, 100, 20, 100 };
+		List<DynamicTest> tests = new ArrayList<>();
+
+		for (int i = 0; i < indexes.length; i++) {
+			String index = indexes[i];
+			int value = expected[i];
+
+			tests.add(DynamicTest.dynamicTest(index, () -> assertEquals(value,
+					SignalMessage.fromJson(String.format(CANDIDATE, index)).candidate().sdpMLineIndex)));
+		}
+
+		return tests;
+	}
+
+	@Test
+	void strictJsonRequired() {
+		// A browser's JSON.stringify escapes the line breaks of an SDP.
+		IllegalArgumentException rawBreak = assertThrows(IllegalArgumentException.class,
+				() -> SignalMessage.fromJson("{\"type\":\"offer\",\"sdp\":\"v=0\r\n\"}"));
+		// Which of the two counts would depend on the parser.
+		IllegalArgumentException twoTypes = assertThrows(IllegalArgumentException.class,
+				() -> SignalMessage.fromJson("{\"type\":\"offer\",\"type\":\"answer\",\"sdp\":\"v=0\\r\\n\"}"));
+
+		assertTrue(rawBreak.getMessage().startsWith("Unescaped control character U+000D"), rawBreak.getMessage());
+		assertTrue(twoTypes.getMessage().startsWith("Duplicate member name \"type\""), twoTypes.getMessage());
+	}
+
+	@Test
+	void unreadableIndexNotWritten() {
+		// A removed candidate has the index -1, which fromJson would reject.
+		assertThrows(IllegalArgumentException.class,
+				() -> SignalMessage.of(new RTCIceCandidate("0", -1, "candidate:1 1 udp 1 10.0.0.1 9 typ host")));
+		assertThrows(IllegalArgumentException.class,
+				() -> SignalMessage.of(new RTCIceCandidate("0", 65536, "candidate:1 1 udp 1 10.0.0.1 9 typ host")));
+		assertEquals(65535, SignalMessage.fromJson(SignalMessage.of(
+				new RTCIceCandidate("0", 65535, "candidate:1 1 udp 1 10.0.0.1 9 typ host")).toJson())
+				.candidate().sdpMLineIndex);
 	}
 
 	@Test

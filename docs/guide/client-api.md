@@ -127,7 +127,7 @@ A `SignalMessage` is a session description (`OFFER`, `ANSWER`) or an ICE candida
 {"candidate":"candidate:842163049 1 udp 1677729535 203.0.113.7 49203 typ srflx raddr 0.0.0.0 rport 0","sdpMid":"0","sdpMLineIndex":0}
 ```
 
-`SignalMessage.fromJson(String)` reads these, what a browser's `JSON.stringify(pc.localDescription)` and `JSON.stringify(candidate)` write, and the `{"description": ...}` and `{"candidate": {...}}` envelopes of the perfect negotiation examples. Anything else throws an `IllegalArgumentException`, as does text longer than a MiB or nested deeper than 64 levels, so a message from the remote side cannot exhaust the stack. Routing, such as room names or peer ids, belongs in an envelope of your own around this JSON.
+`SignalMessage.fromJson(String)` reads these, what a browser's `JSON.stringify(pc.localDescription)` and `JSON.stringify(candidate)` write, and the `{"description": ...}` and `{"candidate": {...}}` envelopes of the perfect negotiation examples. Anything else throws an `IllegalArgumentException` that says what is wrong and where, as does text longer than a MiB or nested deeper than 64 levels, so a message from the remote side cannot exhaust the stack. The JSON must be strict (RFC 8259): no raw line breaks or other control characters inside strings, no member name twice in one object, no numbers like `01`, `1.` or `1e999`. An `sdpMLineIndex` must be an integer from 0 to 65535; `1.9` is rejected rather than truncated to 1. Routing, such as room names or peer ids, belongs in an envelope of your own around this JSON.
 
 A browser peer that only answers needs no more than this:
 

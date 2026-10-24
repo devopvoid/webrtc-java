@@ -26,6 +26,12 @@ import java.util.Map;
  * library. Objects become {@code Map}s, arrays {@code List}s, numbers {@code
  * Double}s.
  * <p>
+ * The grammar is that of RFC 8259 and nothing more lenient: no control
+ * characters inside strings, numbers without leading zeros or bare points,
+ * only the four whitespace characters JSON has. A member name must not appear
+ * twice in an object, which would leave open which of the values counts, and
+ * a number must fit a {@code double}, since JSON has no infinities.
+ * <p>
  * Text comes from the remote side, so it is bounded: in length, like the
  * answers of WHIP and WHEP endpoints, and in nesting, which a signaling
  * message needs only a few levels of and the recursive parser would otherwise
@@ -143,7 +149,7 @@ final class Json {
 				if (c == '-' || (c >= '0' && c <= '9')) {
 					return readNumber();
 				}
-				throw error("Unexpected character '" + c + "'");
+				throw error("Unexpected character " + describe(c));
 		}
 	}
 
@@ -164,7 +170,13 @@ final class Json {
 				throw error("Expected a member name");
 			}
 
+			int start = pos;
 			String name = readString();
+
+			if (object.containsKey(name)) {
+				throw error("Duplicate member name " + quote(name), start);
+			}
+
 			skipWhitespace();
 
 			if (peek() != ':') {
@@ -229,6 +241,9 @@ final class Json {
 			if (c == '"') {
 				return out.toString();
 			}
+			if (c < 0x20) {
+				throw error("Unescaped control character " + describe(c) + " in a string", pos - 1);
+			}
 			if (c != '\\') {
 				out.append(c);
 				continue;
@@ -264,12 +279,20 @@ final class Json {
 					if (pos + 4 > text.length()) {
 						throw error("Incomplete unicode escape");
 					}
-					try {
-						out.append((char) Integer.parseInt(text.substring(pos, pos + 4), 16));
+
+					int code = 0;
+
+					for (int i = 0; i < 4; i++) {
+						int digit = hexDigit(text.charAt(pos + i));
+
+						if (digit < 0) {
+							throw error("Invalid unicode escape", pos + i);
+						}
+
+						code = code << 4 | digit;
 					}
-					catch (NumberFormatException ex) {
-						throw error("Invalid unicode escape");
-					}
+
+					out.append((char) code);
 					pos += 4;
 					break;
 				default:
@@ -281,16 +304,59 @@ final class Json {
 	private Double readNumber() {
 		int start = pos;
 
-		while (pos < text.length() && "+-0123456789.eE".indexOf(text.charAt(pos)) >= 0) {
+		if (next('-')) {
 			pos++;
 		}
+		if (next('0')) {
+			pos++;
 
-		try {
-			return Double.valueOf(text.substring(start, pos));
+			if (nextIsDigit()) {
+				throw error("Leading zero in a number");
+			}
 		}
-		catch (NumberFormatException e) {
-			throw error("Invalid number");
+		else {
+			readDigits("Expected a digit");
 		}
+		if (next('.')) {
+			pos++;
+			readDigits("Expected a digit after the decimal point");
+		}
+		if (next('e') || next('E')) {
+			pos++;
+
+			if (next('+') || next('-')) {
+				pos++;
+			}
+
+			readDigits("Expected a digit in the exponent");
+		}
+
+		// The grammar above is a subset of what Double.valueOf reads.
+		Double value = Double.valueOf(text.substring(start, pos));
+
+		if (value.isInfinite()) {
+			throw error("Number out of range", start);
+		}
+
+		return value;
+	}
+
+	private void readDigits(String message) {
+		if (!nextIsDigit()) {
+			throw error(message);
+		}
+
+		while (nextIsDigit()) {
+			pos++;
+		}
+	}
+
+	private boolean next(char c) {
+		return pos < text.length() && text.charAt(pos) == c;
+	}
+
+	private boolean nextIsDigit() {
+		return pos < text.length() && text.charAt(pos) >= '0' && text.charAt(pos) <= '9';
 	}
 
 	private void enter() {
@@ -316,12 +382,55 @@ final class Json {
 	}
 
 	private void skipWhitespace() {
-		while (pos < text.length() && Character.isWhitespace(text.charAt(pos))) {
+		while (pos < text.length() && isWhitespace(text.charAt(pos))) {
 			pos++;
 		}
 	}
 
 	private IllegalArgumentException error(String message) {
-		return new IllegalArgumentException(message + " at position " + pos);
+		return error(message, pos);
+	}
+
+	private static IllegalArgumentException error(String message, int position) {
+		return new IllegalArgumentException(message + " at position " + position);
+	}
+
+	private static boolean isWhitespace(char c) {
+		return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+	}
+
+	private static int hexDigit(char c) {
+		if (c >= '0' && c <= '9') {
+			return c - '0';
+		}
+		if (c >= 'a' && c <= 'f') {
+			return c - 'a' + 10;
+		}
+		if (c >= 'A' && c <= 'F') {
+			return c - 'A' + 10;
+		}
+
+		return -1;
+	}
+
+	/**
+	 * @return the character for a message, readable whatever it is.
+	 */
+	private static String describe(char c) {
+		if (c >= 0x20 && c < 0x7f) {
+			return "'" + c + "'";
+		}
+
+		return String.format("U+%04X", (int) c);
+	}
+
+	/**
+	 * @return the text as a JSON string for a message, cut short if long.
+	 */
+	private static String quote(String text) {
+		StringBuilder out = new StringBuilder();
+		writeString(out, text.length() > 32 ? text.substring(0, 32) + "..." : text);
+
+		return out.toString();
 	}
 }

@@ -64,6 +64,12 @@ public final class SignalMessage {
 	private static final SignalMessage END_OF_CANDIDATES =
 			new SignalMessage(Type.END_OF_CANDIDATES, null, null);
 
+	/**
+	 * The largest {@code sdpMLineIndex}, which the browser API types as an
+	 * {@code unsigned short}.
+	 */
+	private static final int MAX_M_LINE_INDEX = 0xFFFF;
+
 	private final Type type;
 
 	private final RTCSessionDescription description;
@@ -104,6 +110,11 @@ public final class SignalMessage {
 	 * @param candidate a local ICE candidate.
 	 *
 	 * @return a message that carries the candidate.
+	 *
+	 * @throws IllegalArgumentException if the candidate's {@code
+	 *                                  sdpMLineIndex} is not from 0 to
+	 *                                  65535, which {@link #fromJson} would
+	 *                                  not read back.
 	 */
 	public static SignalMessage of(RTCIceCandidate candidate) {
 		requireNonNull(candidate, "candidate");
@@ -112,6 +123,8 @@ public final class SignalMessage {
 		if (candidate.sdp.isEmpty()) {
 			return END_OF_CANDIDATES;
 		}
+
+		checkMLineIndex(candidate.sdpMLineIndex);
 
 		return new SignalMessage(Type.CANDIDATE, null, candidate);
 	}
@@ -130,10 +143,12 @@ public final class SignalMessage {
 	 *
 	 * @return the message.
 	 *
-	 * @throws IllegalArgumentException if the text is no JSON or no signaling
-	 *                                  message, is longer than a MiB, or
-	 *                                  nests arrays and objects deeper than
-	 *                                  64 levels.
+	 * @throws IllegalArgumentException if the text is no strict JSON or no
+	 *                                  signaling message, is longer than a
+	 *                                  MiB, nests arrays and objects deeper
+	 *                                  than 64 levels, or has an {@code
+	 *                                  sdpMLineIndex} that is not an integer
+	 *                                  from 0 to 65535.
 	 */
 	public static SignalMessage fromJson(String json) {
 		requireNonNull(json, "json");
@@ -274,7 +289,7 @@ public final class SignalMessage {
 			}
 
 			return new SignalMessage(Type.CANDIDATE, null, new RTCIceCandidate(
-					(String) mid, index == null ? 0 : ((Number) index).intValue(), sdp));
+					(String) mid, index == null ? 0 : mLineIndex((Number) index), sdp));
 		}
 
 		Object type = object.get("type");
@@ -294,6 +309,34 @@ public final class SignalMessage {
 				return of(new RTCSessionDescription(RTCSdpType.ANSWER, (String) sdp));
 			default:
 				throw new IllegalArgumentException("Unsupported description type \"" + type + "\"");
+		}
+	}
+
+	/**
+	 * @param number the {@code sdpMLineIndex} of a JSON message.
+	 *
+	 * @return the index, if the number is an integer from 0 to 65535.
+	 */
+	private static int mLineIndex(Number number) {
+		double index = number.doubleValue();
+
+		// Checked as a double, not after a cast, which would truncate 1.9 to 1
+		// and clamp 1e300 to Integer.MAX_VALUE.
+		if (index != Math.rint(index)) {
+			throw new IllegalArgumentException("\"sdpMLineIndex\" is not an integer: " + number);
+		}
+		if (index < 0 || index > MAX_M_LINE_INDEX) {
+			throw new IllegalArgumentException("\"sdpMLineIndex\" is not from 0 to " + MAX_M_LINE_INDEX
+					+ ": " + (Math.abs(index) < 1e15 ? Long.toString((long) index) : number.toString()));
+		}
+
+		return (int) index;
+	}
+
+	private static void checkMLineIndex(int index) {
+		if (index < 0 || index > MAX_M_LINE_INDEX) {
+			throw new IllegalArgumentException("\"sdpMLineIndex\" is not from 0 to " + MAX_M_LINE_INDEX
+					+ ": " + index);
 		}
 	}
 }
