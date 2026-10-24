@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Arrays;
+
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
@@ -80,6 +82,45 @@ class SignalMessageTests {
 		assertThrows(IllegalArgumentException.class, () -> SignalMessage.fromJson("{\"hello\":1}"));
 		assertThrows(IllegalArgumentException.class,
 				() -> SignalMessage.of(new RTCSessionDescription(RTCSdpType.ROLLBACK, "")));
+	}
+
+	@Test
+	void deepNestingRejected() {
+		// In a member the message does not know, which is read all the same.
+		// Without a limit, 10,000 levels overflow the stack.
+		String message = "{\"type\":\"answer\",\"sdp\":\"v=0\\r\\n\",\"extra\":%s}";
+
+		assertEquals(SignalMessage.Type.ANSWER,
+				SignalMessage.fromJson(String.format(message, nested(Json.MAX_DEPTH - 1))).type());
+		assertThrows(IllegalArgumentException.class,
+				() -> SignalMessage.fromJson(String.format(message, nested(Json.MAX_DEPTH))));
+		assertThrows(IllegalArgumentException.class,
+				() -> SignalMessage.fromJson(String.format(message, nested(10_000))));
+	}
+
+	@Test
+	void oversizedMessageRejected() {
+		char[] sdp = new char[Json.MAX_LENGTH];
+		Arrays.fill(sdp, 'a');
+
+		assertThrows(IllegalArgumentException.class,
+				() -> SignalMessage.fromJson("{\"type\":\"offer\",\"sdp\":\"" + new String(sdp) + "\"}"));
+	}
+
+	/**
+	 * @return arrays nested the given number of levels deep.
+	 */
+	private static String nested(int levels) {
+		StringBuilder out = new StringBuilder();
+
+		for (int i = 0; i < levels; i++) {
+			out.append('[');
+		}
+		for (int i = 0; i < levels; i++) {
+			out.append(']');
+		}
+
+		return out.toString();
 	}
 
 }

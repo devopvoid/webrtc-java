@@ -25,12 +25,25 @@ import java.util.Map;
  * Just enough JSON for signaling messages, so that the module needs no JSON
  * library. Objects become {@code Map}s, arrays {@code List}s, numbers {@code
  * Double}s.
+ * <p>
+ * Text comes from the remote side, so it is bounded: in length, like the
+ * answers of WHIP and WHEP endpoints, and in nesting, which a signaling
+ * message needs only a few levels of and the recursive parser would otherwise
+ * run out of stack on.
  */
 final class Json {
+
+	/** The longest text read, in chars. */
+	static final int MAX_LENGTH = 1 << 20;
+
+	/** The deepest nesting of arrays and objects read. */
+	static final int MAX_DEPTH = 64;
 
 	private final String text;
 
 	private int pos;
+
+	private int depth;
 
 
 	private Json(String text) {
@@ -38,6 +51,10 @@ final class Json {
 	}
 
 	static Object parse(String text) {
+		if (text.length() > MAX_LENGTH) {
+			throw new IllegalArgumentException("The JSON is longer than " + MAX_LENGTH + " chars");
+		}
+
 		Json json = new Json(text);
 		json.skipWhitespace();
 
@@ -102,9 +119,15 @@ final class Json {
 
 		switch (c) {
 			case '{':
-				return readObject();
+				enter();
+				Map<String, Object> object = readObject();
+				depth--;
+				return object;
 			case '[':
-				return readArray();
+				enter();
+				List<Object> array = readArray();
+				depth--;
+				return array;
 			case '"':
 				return readString();
 			case 't':
@@ -267,6 +290,12 @@ final class Json {
 		}
 		catch (NumberFormatException e) {
 			throw error("Invalid number");
+		}
+	}
+
+	private void enter() {
+		if (++depth > MAX_DEPTH) {
+			throw error("Nested deeper than " + MAX_DEPTH + " levels");
 		}
 	}
 
