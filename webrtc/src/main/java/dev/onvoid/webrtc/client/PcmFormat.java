@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.client;
 
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+
 /**
  * The format of 16-bit PCM audio: sample rate and channel count.
  */
@@ -34,7 +36,10 @@ public final class PcmFormat {
 	/**
 	 * @param sampleRate the sample rate in Hz, a multiple of 100 so that 10 ms
 	 *                   hold a whole number of samples.
-	 * @param channels   the channel count, 1 to 8.
+	 * @param channels   the channel count, 1 to 8. 10 ms of all channels
+	 *                   together may hold at most {@value
+	 *                   CustomAudioSource#MAX_SAMPLES_PER_PUSH} samples, as
+	 *                   48 kHz with 8 channels or 384 kHz with 2 do.
 	 *
 	 * @return the format.
 	 */
@@ -44,6 +49,16 @@ public final class PcmFormat {
 		}
 		if (channels < 1 || channels > 8) {
 			throw new IllegalArgumentException("The channel count must be between 1 and 8, got " + channels);
+		}
+
+		// WebRTC takes audio in 10 ms chunks of a bounded size. A larger chunk
+		// would be queued all the same and fail only when it is sent.
+		int samples = sampleRate / 100 * channels;
+
+		if (samples > CustomAudioSource.MAX_SAMPLES_PER_PUSH) {
+			throw new IllegalArgumentException("10 ms of " + sampleRate + " Hz with " + channels + " channels hold "
+					+ samples + " samples, more than the " + CustomAudioSource.MAX_SAMPLES_PER_PUSH
+					+ " WebRTC takes at once. Use fewer channels or a lower sample rate");
 		}
 
 		return new PcmFormat(sampleRate, channels);

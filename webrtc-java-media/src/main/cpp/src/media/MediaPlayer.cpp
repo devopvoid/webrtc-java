@@ -156,25 +156,28 @@ namespace ffmpeg
 
 	void MediaPlayer::Seek(int64_t position_us)
 	{
-		{
-			std::lock_guard<std::mutex> lock(mutex_);
+		std::lock_guard<std::mutex> lock(mutex_);
 
-			if (closing_) {
-				return;
-			}
-
-			seek_pending_ = true;
-			seek_position_us_ = position_us;
-			ended_ = false;
-
-			command_.notify_all();
+		if (closing_) {
+			return;
 		}
+
+		seek_pending_ = true;
+		seek_position_us_ = position_us;
+		ended_ = false;
 
 		// The decode thread may be held up by a full queue, and it cannot act
 		// on the request until it gets out of that. Dropping what is queued
 		// both frees it and throws away what belongs to the old position; the
 		// thread flushes again once the seek has actually happened.
+		//
+		// Under the lock, as the thread takes the request only under it: a
+		// flush after that would throw away what it has decoded at the new
+		// position, and an audio source, decoded seconds ahead, would skip
+		// ahead or end at once.
 		pacer_->Flush(position_us + loop_offset_us_.load());
+
+		command_.notify_all();
 	}
 
 	void MediaPlayer::SetLooping(bool looping)

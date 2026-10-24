@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -83,6 +84,71 @@ class MediaTests extends ClientTestBase {
 
 		assertTrue(chunk.frames() > 0);
 		assertEquals(chunk.frames() * chunk.channels() * 2, chunk.samples().length);
+	}
+
+	@Test
+	void clearedAudioNotResent() throws Exception {
+		// A format change sends the chunk begun before it, filled with
+		// silence, not with the audio that clear() dropped from it.
+		ManualTimer timer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.timer(timer)
+				.build();
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+		List<byte[]> sent = new ArrayList<>();
+		CustomAudioImpl voice;
+
+		try (LocalMediaImpl.Creation creation = media.begin()) {
+			CustomAudioSource source = new CustomAudioSource() {
+
+				@Override
+				public void pushAudio(byte[] audioData, int bitsPerSample, int sampleRate, int channels,
+						int frameCount) {
+					sent.add(audioData.clone());
+				}
+			};
+
+			voice = media.register(new CustomAudioImpl(media, runtime.factory.createAudioTrack("voice", source),
+					source));
+		}
+
+		try {
+			// 160 bytes in 10 ms.
+			PcmFormat format = PcmFormat.of(8000, 1);
+			byte[] dropped = new byte[120];
+			byte[] kept = new byte[20];
+			Arrays.fill(dropped, (byte) 1);
+			Arrays.fill(kept, (byte) 2);
+
+			voice.push(dropped, format);
+			voice.clear();
+			voice.push(kept, format);
+			voice.push(new byte[2], PcmFormat.of(16000, 1));
+
+			timer.fire(Duration.ofMillis(10));
+
+			assertEquals(1, sent.size());
+			assertEquals(160, sent.get(0).length);
+
+			for (int i = 0; i < 160; i++) {
+				assertEquals(i < 20 ? 2 : 0, sent.get(0)[i], "Byte " + i);
+			}
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void oversizedFormatRejected() {
+		// 10 ms of these hold 30720 samples, more than WebRTC takes at once.
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(384000, 8));
+
+		// The largest that fit, 7680 and 3840 samples.
+		PcmFormat.of(384000, 2);
+		PcmFormat.of(48000, 8);
 	}
 
 	@Test

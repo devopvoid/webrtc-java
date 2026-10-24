@@ -26,6 +26,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
@@ -123,13 +124,40 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
+	 * Negotiates the peer over HTTP and hands the session out once the peer is
+	 * connected. A caller that stops waiting, by cancelling the future or
+	 * completing it itself, ends the negotiation, and a session made too late
+	 * for the future is closed: either way the peer is closed and what the
+	 * server created is deleted.
+	 *
+	 * @param factory makes the session of the connected peer.
+	 *
+	 * @return the future handed to the application.
+	 */
+	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
+			String bearerToken, Duration timeout, Factory<S> factory) {
+		CompletableFuture<Void> abandoned = new CompletableFuture<>();
+		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, abandoned)
+				.thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout)),
+				HttpSession::close);
+
+		// Once the session was handed out, this finds the negotiation finished.
+		session.whenComplete((value, error) -> abandoned.complete(null));
+
+		return session;
+	}
+
+	/**
 	 * Negotiates a manual peer over HTTP: creates the offer with all candidates,
 	 * posts it, applies the answer and waits until the peer is connected.
 	 *
+	 * @param abandoned completes when no one waits for the session anymore,
+	 *                  which then ends as if it had failed.
+	 *
 	 * @return a future with the resource the server named, or null.
 	 */
-	static CompletableFuture<URI> negotiate(WebRtc rtc, Peer peer, URI endpoint, String bearerToken,
-			Duration timeout) {
+	private static CompletableFuture<URI> negotiate(WebRtc rtc, Peer peer, URI endpoint, String bearerToken,
+			Duration timeout, CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
 		// The resource the server created. Whoever takes it out owns it: the
 		// session that connected, or whoever deletes it.
@@ -163,6 +191,11 @@ abstract class HttpSession implements AutoCloseable {
 		ScheduledFuture<?> deadline = rtc.timer.schedule(() -> fail.accept(new WebRtcException(
 				"The session with " + endpoint + " was not connected within " + timeout)),
 				timeout.toMillis(), TimeUnit.MILLISECONDS);
+
+		abandoned.thenRun(() -> {
+			deadline.cancel(false);
+			fail.accept(new CancellationException("The session with " + endpoint + " was abandoned"));
+		});
 
 		peer.negotiator().createOffer(Gathering.COMPLETE)
 				.thenApplyAsync(offer -> {
@@ -236,6 +269,16 @@ abstract class HttpSession implements AutoCloseable {
 				connection.disconnect();
 			}
 		}
+	}
+
+	/**
+	 * Makes the session of a peer that connected.
+	 *
+	 * @param <S> the session type.
+	 */
+	interface Factory<S extends HttpSession> {
+
+		S create(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout);
 	}
 
 	private static void delete(URI resource, String bearerToken, Duration timeout) throws IOException {

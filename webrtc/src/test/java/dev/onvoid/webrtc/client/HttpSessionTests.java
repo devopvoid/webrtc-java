@@ -34,6 +34,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import dev.onvoid.webrtc.RTCSdpType;
@@ -212,6 +213,54 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void cancelledStartDeletes() throws Exception {
+		// The caller cancels while the offer is out. The peer must not go on to
+		// connect, and what the server creates must not be left there.
+		WebRtc client = clientRuntime(builder -> builder);
+
+		try {
+			CustomVideo track = client.media().customVideo("video");
+
+			assertCancelDeletes(client, uri -> Whip.to(uri).track(track).publish(client));
+			assertCancelDeletes(client, uri -> Whep.from(uri).play(client));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void unclaimedSessionClosed() throws Exception {
+		// The caller cancels once the peer is connected, as the session is
+		// made or right before. A session the future cannot take anymore is
+		// closed, rather than left connected with no one to close it.
+		WebRtc client = clientRuntime(builder -> builder);
+
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			CountDownLatch answer = endpoint.holdAnswers();
+			CompletableFuture<Whip.Session> session = Whip.to(endpoint.uri())
+					.track(client.media().customVideo("video"))
+					.publish(client);
+
+			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
+			Peer peer = client.peers().get(0);
+			CompletableFuture<Void> cancelled = peer.whenConnected().thenRun(() -> session.cancel(true));
+
+			answer.countDown();
+			await(cancelled);
+			await(peer.whenClosed());
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+
+			assertTrue(session.isCancelled());
+			client.close();
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
 	void timeoutAfterAnswerDeletes() throws Exception {
 		// The session times out once the answer was read, before it is applied.
 		// Who owns the resource then is the timeout, not the request.
@@ -306,6 +355,40 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void sessionKeepsItsToken() throws Exception {
+		// The builder is changed while the offer is out. The session must
+		// delete its resource with the token it created it with.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			CountDownLatch answer = endpoint.holdAnswers();
+			Whip.Builder whip = Whip.to(endpoint.uri()).bearerToken("first").track(video);
+			CompletableFuture<Whip.Session> session = whip.publish(rtc);
+
+			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
+			whip.bearerToken("second");
+			answer.countDown();
+			await(await(session).closeAsync());
+
+			assertEquals("Bearer first", endpoint.requests.get(0).authorization);
+			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
+			assertEquals("Bearer first", endpoint.requests.get(1).authorization);
+		}
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			CountDownLatch answer = endpoint.holdAnswers();
+			Whep.Builder whep = Whep.from(endpoint.uri()).bearerToken("first");
+			CompletableFuture<Whep.Session> session = whep.play(rtc);
+
+			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
+			whep.bearerToken("second");
+			answer.countDown();
+			await(await(session).closeAsync());
+
+			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
+			assertEquals("Bearer first", endpoint.requests.get(1).authorization);
+		}
+	}
+
+	@Test
 	void resourceKeepsTls() {
 		URI endpoint = URI.create("https://media.example/whep");
 
@@ -341,6 +424,32 @@ class HttpSessionTests extends ClientTestBase {
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add))
 				.build();
+	}
+
+	/**
+	 * Starts a session, cancels it while the answer is held and releases the
+	 * answer, whose resource must then be deleted.
+	 */
+	private static void assertCancelDeletes(WebRtc client,
+			Function<URI, CompletableFuture<? extends HttpSession>> start) throws Exception {
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
+			CountDownLatch answer = endpoint.holdAnswers();
+			CompletableFuture<? extends HttpSession> session = start.apply(endpoint.uri());
+
+			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
+			PeerImpl peer = (PeerImpl) client.peers().get(0);
+
+			assertTrue(session.cancel(true));
+			// Closed by the cancellation itself, so it never connects.
+			assertTrue(peer.isClosing(), () -> "Not closing: " + peer);
+
+			answer.countDown();
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+			await(peer.whenClosed());
+
+			assertTrue(session.isCancelled());
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
 	}
 
 	/**

@@ -127,7 +127,7 @@ A `SignalMessage` is a session description (`OFFER`, `ANSWER`) or an ICE candida
 {"candidate":"candidate:842163049 1 udp 1677729535 203.0.113.7 49203 typ srflx raddr 0.0.0.0 rport 0","sdpMid":"0","sdpMLineIndex":0}
 ```
 
-`SignalMessage.fromJson(String)` reads these, what a browser's `JSON.stringify(pc.localDescription)` and `JSON.stringify(candidate)` write, and the `{"description": ...}` and `{"candidate": {...}}` envelopes of the perfect negotiation examples. Routing, such as room names or peer ids, belongs in an envelope of your own around this JSON.
+`SignalMessage.fromJson(String)` reads these, what a browser's `JSON.stringify(pc.localDescription)` and `JSON.stringify(candidate)` write, and the `{"description": ...}` and `{"candidate": {...}}` envelopes of the perfect negotiation examples. Anything else throws an `IllegalArgumentException`, as does text longer than a MiB or nested deeper than 64 levels, so a message from the remote side cannot exhaust the stack. Routing, such as room names or peer ids, belongs in an envelope of your own around this JSON.
 
 A browser peer that only answers needs no more than this:
 
@@ -543,7 +543,7 @@ Whep.Session viewer = Whep.from(URI.create("https://example.com/live/whep"))
 viewer.peer().onTrack(track -> System.out.println("Receiving " + track.kind()));
 ```
 
-The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
+The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. Cancelling the future, say once `get` gave up waiting, ends the session the same way, even when the answer is still on its way. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
 
 `session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler.
 

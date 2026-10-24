@@ -65,6 +65,28 @@ class PeerTests extends ClientTestBase {
 	}
 
 	@Test
+	void lateResultFreed() throws Exception {
+		// A result that comes after the caller cancelled has no one else to
+		// free it. One the caller takes is left alone.
+		PeerImpl peer = (PeerImpl) rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+		CompletableFuture<String> late = new CompletableFuture<>();
+		CompletableFuture<String> freed = new CompletableFuture<>();
+		CompletableFuture<String> cancelled = peer.toPublic(late, freed::complete);
+
+		assertTrue(cancelled.cancel(true));
+		late.complete("late");
+		assertEquals("late", await(freed));
+
+		CompletableFuture<String> taken = new CompletableFuture<>();
+		CompletableFuture<String> kept = new CompletableFuture<>();
+		CompletableFuture<String> handed = peer.toPublic(taken, kept::complete);
+
+		taken.complete("taken");
+		assertEquals("taken", await(handed));
+		assertFalse(kept.isDone());
+	}
+
+	@Test
 	void stateHandlerGetsCurrentState() throws Exception {
 		Peer[] peers = pair();
 		peers[0].createChannel("chat");
