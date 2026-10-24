@@ -124,8 +124,8 @@ runs:
         MEDIA_JAR="$PWD/$MEDIA_JAR"
         WEBRTC_JAR="$PWD/$WEBRTC_JAR"
 
-        mkdir -p webrtc-java-media/target/natives
-        cd webrtc-java-media/target/natives
+        mkdir -p webrtc-media/target/natives
+        cd webrtc-media/target/natives
         # jar rather than unzip: the JDK is set up above, and unzip is not on
         # every runner image.
         "$JAVA_HOME/bin/jar" xf "$MEDIA_JAR"
@@ -142,7 +142,7 @@ runs:
     # The native build is off: these natives were cross compiled by another
     # job, and this runner is here to run them, not to build them again.
     - name: Test
-      run: mvn -B -pl webrtc,webrtc-java-media test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
+      run: mvn -B -pl webrtc,webrtc-media test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
       shell: bash
 
     # What failed, for runners that cannot be reproduced locally.

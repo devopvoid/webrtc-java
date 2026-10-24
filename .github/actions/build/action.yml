@@ -42,7 +42,7 @@ runs:
         restore-keys: webrtc-${{ env.WEBRTC_CACHE_BRANCH }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-jni/src/main/cpp/dependencies/webrtc/CMakeLists.txt', 'webrtc-jni/src/main/cpp/dependencies/webrtc/patches/**/*.patch') }}-
 
     - name: Derive the FFmpeg version from the pom
-      run: echo "FFMPEG_VERSION=$(sed -n 's|.*<ffmpeg.version>\([^<]*\)</ffmpeg.version>.*|\1|p' webrtc-java-media/pom.xml)" >> "$GITHUB_ENV"
+      run: echo "FFMPEG_VERSION=$(sed -n 's|.*<ffmpeg.version>\([^<]*\)</ffmpeg.version>.*|\1|p' webrtc-media/pom.xml)" >> "$GITHUB_ENV"
       shell: bash
 
     - id: ffmpeg-cache
@@ -50,8 +50,8 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: ~/ffmpeg
-        key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt', 'webrtc-java-media/src/main/cpp/dependencies/ffmpeg/patches/*.patch') }}-${{ hashFiles('webrtc-java-media/pom.xml') }}
-        restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt', 'webrtc-java-media/src/main/cpp/dependencies/ffmpeg/patches/*.patch') }}-
+        key: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt', 'webrtc-media/src/main/cpp/dependencies/ffmpeg/patches/*.patch') }}-${{ hashFiles('webrtc-media/pom.xml') }}
+        restore-keys: ffmpeg-${{ env.FFMPEG_VERSION }}-${{ inputs.platform-name }}-${{ hashFiles('webrtc-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt', 'webrtc-media/src/main/cpp/dependencies/ffmpeg/patches/*.patch') }}-
 
     # One cache per OS: the dependencies do not differ between the platforms of
     # an OS. The project's own artifacts change with every build and stay out
@@ -112,9 +112,9 @@ runs:
       with:
         name: natives-media-${{ inputs.platform-name }}
         path: |
-          webrtc-java-media/target/webrtc-java-media-*-windows-*.jar
-          webrtc-java-media/target/webrtc-java-media-*-linux-*.jar
-          webrtc-java-media/target/webrtc-java-media-*-macos-*.jar
+          webrtc-media/target/webrtc-java-media-*-windows-*.jar
+          webrtc-media/target/webrtc-java-media-*-linux-*.jar
+          webrtc-media/target/webrtc-java-media-*-macos-*.jar
         if-no-files-found: error
         retention-days: ${{ inputs.retention-days }}
         overwrite: true

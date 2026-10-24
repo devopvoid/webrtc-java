@@ -37,7 +37,7 @@ modifications:
 
 How they are configured and built, including which demuxers, decoders,
 parsers and protocols are enabled, is set out in
-webrtc-java-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt of
+webrtc-media/src/main/cpp/dependencies/ffmpeg/CMakeLists.txt of
 webrtc-java, at the release this jar belongs to:
 
   https://github.com/devopvoid/webrtc-java
