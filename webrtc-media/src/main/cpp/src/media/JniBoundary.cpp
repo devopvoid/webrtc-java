@@ -18,12 +18,31 @@
 #include "media/AllocationFault.h"
 
 #include <atomic>
+#include <cstddef>
 #include <exception>
 #include <new>
 
 namespace
 {
 	std::atomic<int> held_strings{ 0 };
+
+	// The text of a standard exception is in no defined encoding, and may be
+	// in the locale's, while ThrowNew reads modified UTF-8. Printable ASCII is
+	// both, so everything else is replaced. It goes into a buffer of fixed
+	// size, because this may run when memory has run out.
+	void CopyAscii(const char * text, char * buffer, size_t size) noexcept
+	{
+		size_t length = 0;
+
+		while (text != nullptr && text[length] != '\0' && length + 1 < size) {
+			const unsigned char c = static_cast<unsigned char>(text[length]);
+
+			buffer[length] = (c >= 0x20 && c < 0x7F) ? static_cast<char>(c) : '?';
+			length++;
+		}
+
+		buffer[length] = '\0';
+	}
 }
 
 namespace ffmpeg
@@ -57,7 +76,11 @@ namespace ffmpeg
 			ThrowJavaException(env, "java/lang/OutOfMemoryError", "Native memory allocation failed");
 		}
 		catch (const std::exception & e) {
-			ThrowJavaException(env, "java/lang/RuntimeException", e.what());
+			char message[256];
+
+			CopyAscii(e.what(), message, sizeof(message));
+
+			ThrowJavaException(env, "java/lang/RuntimeException", message);
 		}
 		catch (...) {
 			ThrowJavaException(env, "java/lang/RuntimeException", "Unknown native exception");

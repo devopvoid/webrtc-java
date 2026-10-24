@@ -15,6 +15,7 @@
  */
 
 #include "media/MediaPlayer.h"
+#include "media/AllocationFault.h"
 #include "media/ErrorText.h"
 
 #include <chrono>
@@ -90,6 +91,8 @@ namespace ffmpeg
 
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
+
+			AllocationFault::CheckThreadStart();
 
 			running_ = true;
 			thread_ = std::thread(&MediaPlayer::Run, this);

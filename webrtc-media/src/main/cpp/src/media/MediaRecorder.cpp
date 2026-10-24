@@ -15,6 +15,7 @@
  */
 
 #include "media/MediaRecorder.h"
+#include "media/AllocationFault.h"
 #include "media/ErrorText.h"
 
 #include <chrono>
@@ -123,6 +124,8 @@ namespace ffmpeg
 		std::unique_ptr<RecorderTrack> track;
 
 		try {
+			AllocationFault::CheckAllocation();
+
 			input = std::make_unique<Input>();
 			track = std::make_unique<RecorderTrack>(index);
 
@@ -161,13 +164,17 @@ namespace ffmpeg
 		}
 
 		try {
+			AllocationFault::CheckThreadStart();
+
 			thread_ = std::thread(&MediaRecorder::Run, this);
 		}
 		catch (...) {
-			// Without a writer nothing may be queued, and stopping only has to
-			// release the frames and close the file.
+			// Without a writer the recorder stays as it was before the call:
+			// it may be started again, and stopping only has to release the
+			// frames and close the file.
 			std::lock_guard<std::mutex> lock(mutex_);
 
+			started_ = false;
 			accepting_ = false;
 			throw;
 		}
@@ -236,7 +243,16 @@ namespace ffmpeg
 	{
 		Input * input = static_cast<Input *>(opaque);
 
-		input->recorder->Enqueue(input, frame);
+		// WebRTC calls this through the C interface, on threads of its own,
+		// and nothing may be thrown back into it. A frame that cannot be
+		// copied for want of memory is dropped, as is one the writer has no
+		// room for.
+		try {
+			input->recorder->Enqueue(input, frame);
+		}
+		catch (...) {
+			input->recorder->Dropped(input, frame->media_type == WEBRTC_JAVA_MEDIA_VIDEO);
+		}
 	}
 
 	void MediaRecorder::Enqueue(Input * input, const wj_encoded_frame * frame)
@@ -261,9 +277,11 @@ namespace ffmpeg
 				return;
 			}
 
+			// The name first, which may fail to be copied: a track is locked
+			// only once all of it is set.
+			input->mime_type = frame->mime_type != nullptr ? frame->mime_type : "";
 			input->locked = true;
 			input->ssrc = frame->ssrc;
-			input->mime_type = frame->mime_type != nullptr ? frame->mime_type : "";
 		}
 		else if (frame->ssrc != input->ssrc) {
 			// Another simulcast layer, which is not recorded; or the stream
@@ -333,12 +351,27 @@ namespace ffmpeg
 		recorded.width = frame->width;
 		recorded.height = frame->height;
 
-		input->last_time_us = frame->time_us;
+		// Counted once it is in the queue, which may fail to grow.
+		AllocationFault::CheckAllocation();
 
-		queued_bytes_ += frame->size;
 		queue_.push_back(std::move(recorded));
 
+		input->last_time_us = frame->time_us;
+		queued_bytes_ += frame->size;
+
 		wake_.notify_one();
+	}
+
+	void MediaRecorder::Dropped(Input * input, bool video)
+	{
+		if (!video) {
+			return;
+		}
+
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		input->waiting_for_key_frame = true;
+		WantKeyFrameLocked(input);
 	}
 
 	void MediaRecorder::WantKeyFrameLocked(Input * input)

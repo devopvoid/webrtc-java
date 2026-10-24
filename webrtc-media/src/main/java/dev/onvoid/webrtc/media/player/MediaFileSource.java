@@ -169,7 +169,7 @@ public class MediaFileSource implements AutoCloseable {
 		try {
 			player = new MediaPlayer(reader, videoSource, audioSource, hardwareDecoding);
 		}
-		catch (IOException | RuntimeException e) {
+		catch (IOException | RuntimeException | Error e) {
 			// The player did not take charge, so what was made here has to be
 			// unwound rather than left to leak.
 			disposeSources();
