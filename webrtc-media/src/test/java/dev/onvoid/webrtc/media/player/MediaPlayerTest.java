@@ -335,6 +335,11 @@ class MediaPlayerTest {
 			// About 0.4 s into the source again, not held at where it was.
 			assertTrue(after < before / 2, "position after seeking back: " + after
 					+ " us, " + before + " us before it");
+			// And still playing: the source is decoded to its end long before
+			// it plays out, and a flush that came after the seek had happened
+			// threw away all of it, so that the player ended at once.
+			assertEquals(MediaPlayerState.PLAYING, playback.player.getState());
+			assertTrue(after > 0, "position after seeking back: " + after + " us");
 		}
 	}
 
