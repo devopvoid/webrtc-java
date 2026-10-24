@@ -30,6 +30,8 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import dev.onvoid.webrtc.RTCSdpType;
+import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.media.audio.AudioDevice;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 
@@ -358,6 +360,68 @@ class RuntimeCloseTests extends ClientTestBase {
 		ExecutionException e = assertThrows(ExecutionException.class, () -> await(switched));
 		assertInstanceOf(PeerClosedException.class, e.getCause());
 		await(closed);
+	}
+
+	@Test
+	void closedPeerNeedsNoTimer() throws Exception {
+		// An operation reaches a peer the closing runtime has closed, after it
+		// stopped its timer, as control tasks queued before still run.
+		ManualExecutor control = new ManualExecutor();
+		ManualTimer timer = new ManualTimer();
+		WebRtc runtime = runtime(control, timer);
+		CompletableFuture<Peer> created = CompletableFuture.supplyAsync(() -> runtime.createPeer(manualOptions()));
+		control.runUntil(created::isDone, TIMEOUT_SECONDS);
+		Peer peer = await(created);
+
+		try {
+			CompletableFuture<Void> peerClosed = peer.closeAsync();
+			control.runUntil(peerClosed::isDone, TIMEOUT_SECONDS);
+
+			CompletableFuture<Object> operation = peer.withNative(connection -> null);
+			timer.shutdown();
+			control.runUntil(operation::isDone, TIMEOUT_SECONDS);
+
+			ExecutionException e = assertThrows(ExecutionException.class, () -> await(operation));
+			assertInstanceOf(PeerClosedException.class, e.getCause());
+			assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+		}
+		finally {
+			HttpSessionTests.closeStepping(runtime, control);
+		}
+	}
+
+	@Test
+	void operationWithoutTimer() throws Exception {
+		// A peer the runtime could not close still runs what was queued, with
+		// no timer left to bound how long WebRTC or gathering takes.
+		ManualExecutor control = new ManualExecutor();
+		ManualTimer timer = new ManualTimer();
+		WebRtc runtime = runtime(control, timer);
+		CompletableFuture<Peer> created = CompletableFuture.supplyAsync(() -> runtime.createPeer(manualOptions()));
+		control.runUntil(created::isDone, TIMEOUT_SECONDS);
+		Peer peer = await(created);
+
+		try {
+			timer.shutdown();
+
+			CompletableFuture<RTCSessionDescription> offer = peer.negotiator().createOffer(Gathering.COMPLETE);
+			control.runUntil(offer::isDone, TIMEOUT_SECONDS);
+
+			assertEquals(RTCSdpType.OFFER, await(offer).sdpType);
+			assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+		}
+		finally {
+			HttpSessionTests.closeStepping(runtime, control);
+		}
+	}
+
+	private WebRtc runtime(ManualExecutor control, ManualTimer timer) {
+		return WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.controlPool(control)
+				.timer(timer)
+				.build();
 	}
 
 	private WebRtc runtime(ManualExecutor control) {

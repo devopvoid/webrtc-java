@@ -30,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -752,13 +753,13 @@ final class PeerImpl implements Peer {
 			CompletableFuture<T> current = running;
 			runningOperation = current;
 
-			ScheduledFuture<?> timeout = rtc.timer.schedule(() -> control.execute(() ->
-					current.completeExceptionally(new TimeoutException("WebRTC did not finish an operation of "
-							+ name + " within " + rtc.operationTimeout))),
-					rtc.operationTimeout.toMillis(), TimeUnit.MILLISECONDS);
+			// One that is done already, as on a closed peer, needs no timeout.
+			ScheduledFuture<?> timeout = current.isDone() ? null : timeOut(current);
 
 			current.whenComplete((value, error) -> control.execute(() -> {
-				timeout.cancel(false);
+				if (timeout != null) {
+					timeout.cancel(false);
+				}
 
 				runningOperation = null;
 				operationRunning = false;
@@ -771,6 +772,25 @@ final class PeerImpl implements Peer {
 		runNextOperation();
 
 		return result;
+	}
+
+	/**
+	 * Fails a running operation once the operation timeout has passed.
+	 *
+	 * @return the timeout, or null once the runtime has stopped its timer.
+	 */
+	private ScheduledFuture<?> timeOut(CompletableFuture<?> operation) {
+		try {
+			return rtc.timer.schedule(() -> control.execute(() ->
+					operation.completeExceptionally(new TimeoutException("WebRTC did not finish an operation of "
+							+ name + " within " + rtc.operationTimeout))),
+					rtc.operationTimeout.toMillis(), TimeUnit.MILLISECONDS);
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing: control tasks queued before still run,
+			// and it fails the futures they leave open.
+			return null;
+		}
 	}
 
 	private void runNextOperation() {
@@ -907,11 +927,18 @@ final class PeerImpl implements Peer {
 
 		// A STUN or TURN server that cannot be reached holds up the end of
 		// gathering for long; the description then goes with what there is.
-		rtc.timer.schedule(() -> control.execute(() -> {
-			if (gatheringWaiters.remove(future)) {
-				future.complete(null);
-			}
-		}), options.gatheringTimeout.toMillis(), TimeUnit.MILLISECONDS);
+		try {
+			rtc.timer.schedule(() -> control.execute(() -> {
+				if (gatheringWaiters.remove(future)) {
+					future.complete(null);
+				}
+			}), options.gatheringTimeout.toMillis(), TimeUnit.MILLISECONDS);
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing and has no timer left to wait with.
+			gatheringWaiters.remove(future);
+			future.complete(null);
+		}
 
 		return future;
 	}
@@ -1029,15 +1056,20 @@ final class PeerImpl implements Peer {
 
 		int answers = remoteAnswers;
 
-		collisionCheck = rtc.timer.schedule(() -> control.execute(() -> {
-			collisionCheck = null;
+		try {
+			collisionCheck = rtc.timer.schedule(() -> control.execute(() -> {
+				collisionCheck = null;
 
-			if (!closed && remoteAnswers == answers
-					&& connection.getSignalingState() == RTCSignalingState.HAVE_LOCAL_OFFER) {
-				deliverError(new NegotiationException("Both peers sent an offer at once, and both are impolite, "
-						+ "so neither gives way. Build exactly one of them with PeerOptions.Builder.polite(true)"));
-			}
-		}), COLLISION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+				if (!closed && remoteAnswers == answers
+						&& connection.getSignalingState() == RTCSignalingState.HAVE_LOCAL_OFFER) {
+					deliverError(new NegotiationException("Both peers sent an offer at once, and both are impolite, "
+							+ "so neither gives way. Build exactly one of them with PeerOptions.Builder.polite(true)"));
+				}
+			}), COLLISION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing, and the peer with it.
+		}
 	}
 
 	// What WebRTC reports, on the control executor.
