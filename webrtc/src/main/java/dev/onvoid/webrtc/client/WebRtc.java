@@ -30,13 +30,16 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
@@ -75,6 +78,11 @@ import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
  * one peer run one at a time and in order; those of different peers may run
  * at the same time, unless the {@link Builder#eventExecutor(Executor) event
  * executor} is serial, such as the Swing event dispatch thread.
+ * <p>
+ * By default the runtime starts a thread for each peer and each subscription
+ * whose handlers have work. {@link Builder#eventThreads(int)} and {@link
+ * Builder#frameThreads(int)} limit them; what finds no thread then waits its
+ * turn, and {@link #loadStats()} tells how much waits.
  */
 public final class WebRtc implements AutoCloseable {
 
@@ -95,6 +103,21 @@ public final class WebRtc implements AutoCloseable {
 	final ScheduledExecutorService timer;
 
 	final Duration operationTimeout;
+
+	/** How much audio an {@code onAudio} subscription buffers by default. */
+	final Duration audioBuffer;
+
+	/** The tasks of the control executors. */
+	final Workload controlWork;
+
+	/** The tasks of the peers' event executors. */
+	final Workload eventWork;
+
+	/** The frames of the video subscriptions. */
+	final Workload videoWork;
+
+	/** The chunks of the audio subscriptions. */
+	final Workload audioWork;
 
 	private final AudioDeviceModuleBase audioModule;
 
@@ -127,11 +150,19 @@ public final class WebRtc implements AutoCloseable {
 		this.audioMode = builder.audioMode;
 		this.operationTimeout = builder.operationTimeout;
 		this.closeTimeout = builder.closeTimeout;
+		this.audioBuffer = builder.audioBuffer;
 		this.errorHandler = builder.errorHandler != null ? builder.errorHandler : WebRtc::uncaught;
 
+		this.controlWork = new Workload(builder.clock);
+		this.eventWork = new Workload(builder.clock);
+		this.videoWork = new Workload(builder.clock);
+		this.audioWork = new Workload(builder.clock);
+
+		// Never limited: control tasks wait for other peers' control tasks,
+		// such as a camera switch for every sender to take the new track.
 		this.controlPool = builder.controlPool != null ? builder.controlPool
 				: Executors.newCachedThreadPool(threads("webrtc-client-control-" + runtime + "-"));
-		this.framePool = Executors.newCachedThreadPool(threads("webrtc-client-frames-" + runtime + "-"));
+		this.framePool = pool(builder.frameThreads, "webrtc-client-frames-" + runtime + "-");
 		this.timer = builder.timer != null ? builder.timer
 				: Executors.newSingleThreadScheduledExecutor(threads("webrtc-client-timer-" + runtime + "-"));
 
@@ -140,7 +171,7 @@ public final class WebRtc implements AutoCloseable {
 			this.ownsEventExecutor = false;
 		}
 		else {
-			this.eventExecutor = Executors.newCachedThreadPool(threads("webrtc-client-events-" + runtime + "-"));
+			this.eventExecutor = pool(builder.eventThreads, "webrtc-client-events-" + runtime + "-");
 			this.ownsEventExecutor = true;
 		}
 
@@ -262,6 +293,20 @@ public final class WebRtc implements AutoCloseable {
 	 */
 	public AudioMode audioMode() {
 		return audioMode;
+	}
+
+	/**
+	 * Tells how much work waits for the threads of this runtime and how much
+	 * runs, at this moment. Cheap enough to be read every second, from any
+	 * thread.
+	 *
+	 * @return the load of the runtime.
+	 */
+	public LoadStats loadStats() {
+		return new LoadStats(controlWork.snapshot(), eventWork.snapshot(),
+				videoWork.snapshot(), audioWork.snapshot(),
+				poolSize(controlPool), ownsEventExecutor ? poolSize(eventExecutor) : 0,
+				poolSize(framePool));
 	}
 
 	/**
@@ -521,6 +566,30 @@ public final class WebRtc implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * Creates a pool of at most the given number of threads, or an unlimited
+	 * one for 0. A limited pool queues what finds no thread, in order, and
+	 * never rejects it while it runs; since each serial executor has at most
+	 * one turn queued at a time, the queue holds no more than one turn per
+	 * peer or subscription.
+	 */
+	private static ExecutorService pool(int limit, String prefix) {
+		if (limit == 0) {
+			return Executors.newCachedThreadPool(threads(prefix));
+		}
+
+		ThreadPoolExecutor pool = new ThreadPoolExecutor(limit, limit, 60, TimeUnit.SECONDS,
+				new LinkedBlockingQueue<>(), threads(prefix));
+		// Idle threads end, as those of an unlimited pool do.
+		pool.allowCoreThreadTimeOut(true);
+
+		return pool;
+	}
+
+	private static int poolSize(Executor executor) {
+		return executor instanceof ThreadPoolExecutor ? ((ThreadPoolExecutor) executor).getPoolSize() : 0;
+	}
+
 	private static ThreadFactory threads(String prefix) {
 		AtomicInteger count = new AtomicInteger();
 
@@ -557,11 +626,19 @@ public final class WebRtc implements AutoCloseable {
 
 		private Duration closeTimeout = Duration.ofSeconds(10);
 
+		private Duration audioBuffer = Duration.ofSeconds(5);
+
+		private int eventThreads;
+
+		private int frameThreads;
+
 		private Consumer<PeerConnectionFactory.Builder> factoryCustomizer;
 
 		private ExecutorService controlPool;
 
 		private ScheduledExecutorService timer;
+
+		private LongSupplier clock = System::nanoTime;
 
 
 		private Builder() {
@@ -626,6 +703,70 @@ public final class WebRtc implements AutoCloseable {
 		 */
 		public Builder eventExecutor(Executor executor) {
 			this.eventExecutor = requireNonNull(executor, "executor");
+			return this;
+		}
+
+		/**
+		 * Limits the threads the runtime runs handlers on, those of peers,
+		 * tracks and channels, future callbacks and {@code Signaling.send}.
+		 * Unlimited by default, so that each peer whose events wait gets a
+		 * thread.
+		 * <p>
+		 * With a limit, the peers take turns: a peer that has events runs a
+		 * few of them, for at most a few milliseconds, then lets the next
+		 * peer in line run, so that slow handlers delay the others but never
+		 * starve them. Nothing is rejected or dropped for the limit; events
+		 * wait, and {@link LoadStats#events()} tells how many and for how
+		 * long. A handler that waits for what another peer's handler does
+		 * may then wait forever, once every thread is taken by such waits.
+		 * <p>
+		 * Applies only to the runtime's own threads, not to an {@link
+		 * #eventExecutor(Executor) executor of the application}.
+		 *
+		 * @param limit the most threads, 1 or more.
+		 *
+		 * @return this builder.
+		 */
+		public Builder eventThreads(int limit) {
+			this.eventThreads = atLeastOne(limit);
+			return this;
+		}
+
+		/**
+		 * Limits the threads that run {@code onFrame} and {@code onAudio}
+		 * handlers, of all subscriptions together, local previews included.
+		 * Unlimited by default, so that each subscription with media waiting
+		 * gets a thread.
+		 * <p>
+		 * With a limit, the subscriptions take turns as the peers do with
+		 * {@link #eventThreads(int)}. A subscription waiting for a thread
+		 * keeps what its {@link FrameDelivery} or audio buffer holds and drops
+		 * the oldest beyond that, which {@link LoadStats#video()} and {@link
+		 * LoadStats#audio()} count.
+		 *
+		 * @param limit the most threads, 1 or more.
+		 *
+		 * @return this builder.
+		 */
+		public Builder frameThreads(int limit) {
+			this.frameThreads = atLeastOne(limit);
+			return this;
+		}
+
+		/**
+		 * Sets how much decoded audio an {@link RemoteAudio#onAudio(Consumer)
+		 * onAudio} subscription keeps for a handler that falls behind. The
+		 * oldest audio beyond that is dropped. A short buffer keeps a live
+		 * stream close to real time; a long one rides out a handler that
+		 * stalls now and then, at the cost of memory, about 190 KiB per second
+		 * of 48 kHz stereo.
+		 *
+		 * @param buffer the most audio that waits; 5 seconds by default.
+		 *
+		 * @return this builder.
+		 */
+		public Builder audioBuffer(Duration buffer) {
+			this.audioBuffer = Timeouts.requirePositive(buffer, "audio buffer");
 			return this;
 		}
 
@@ -699,12 +840,39 @@ public final class WebRtc implements AutoCloseable {
 		}
 
 		/**
+		 * Replaces the clock of the load statistics and of the turns of the
+		 * executors, so that tests decide how much time passes.
+		 *
+		 * @param nanos the time in nanoseconds, as {@link System#nanoTime()}.
+		 */
+		Builder clock(LongSupplier nanos) {
+			this.clock = requireNonNull(nanos, "nanos");
+			return this;
+		}
+
+		/**
 		 * @return the runtime.
 		 *
 		 * @throws ConfigurationException if the factory cannot be created.
+		 * @throws IllegalStateException  if both {@link #eventThreads(int)}
+		 *                                and {@link #eventExecutor(Executor)}
+		 *                                were set.
 		 */
 		public WebRtc build() {
+			if (eventExecutor != null && eventThreads != 0) {
+				throw new IllegalStateException("eventThreads limits the runtime's own event threads, "
+						+ "which an eventExecutor replaces; set only one of them");
+			}
+
 			return new WebRtc(this);
+		}
+
+		private static int atLeastOne(int limit) {
+			if (limit < 1) {
+				throw new IllegalArgumentException("The limit must be 1 or more, got " + limit);
+			}
+
+			return limit;
 		}
 	}
 }

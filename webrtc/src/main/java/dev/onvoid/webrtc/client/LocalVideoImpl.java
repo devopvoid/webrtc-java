@@ -44,7 +44,8 @@ class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 		requireNonNull(handler, "handler");
 
 		SerialExecutor executor = new SerialExecutor(rtc.framePool, rtc::reportError, false, null);
-		FrameDispatcher dispatcher = new FrameDispatcher(handler, FrameDelivery.LATEST, executor, rtc::reportError);
+		FrameDispatcher dispatcher = new FrameDispatcher(handler, FrameDelivery.LATEST, executor, rtc.videoWork,
+				rtc::reportError);
 
 		synchronized (this) {
 			if (!isLive()) {

@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,7 +35,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Drives a {@link SerialExecutor} through a {@link ManualExecutor}, so that
- * each test decides when the pool runs a task and when it rejects one.
+ * each test decides when the pool runs a task and when it rejects one, and
+ * through a clock that moves only when the test moves it.
  */
 class SerialExecutorTests {
 
@@ -42,7 +44,11 @@ class SerialExecutorTests {
 
 	private final ManualExecutor pool = new ManualExecutor();
 
-	private final SerialExecutor serial = new SerialExecutor(pool, errors::add, false, null);
+	private long now;
+
+	private final Workload work = new Workload(() -> now);
+
+	private final SerialExecutor serial = new SerialExecutor(pool, work, errors::add, false, null);
 
 
 	@Test
@@ -72,6 +78,8 @@ class SerialExecutorTests {
 		// The pool's owner shut it down and fails what it loses itself.
 		assertEquals(Arrays.asList("fallback"), ran);
 		assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+		assertEquals(0, work.snapshot().dropped());
+		assertEquals(0, work.snapshot().queued());
 	}
 
 	@Test
@@ -102,6 +110,8 @@ class SerialExecutorTests {
 		assertEquals(Arrays.asList(64, 65, 67, 68, 69), dropped);
 		assertEquals(1, errors.size(), () -> "Errors: " + errors);
 		assertTrue(errors.get(0).getMessage().contains("rejected 6 tasks"), errors.get(0).getMessage());
+		assertEquals(6, work.snapshot().dropped());
+		assertEquals(0, work.snapshot().queued());
 
 		// Taken again once the pool accepts work.
 		pool.rejecting(false);
@@ -136,7 +146,7 @@ class SerialExecutorTests {
 	@Test
 	void batchesShareThePool() {
 		List<String> ran = new ArrayList<>();
-		SerialExecutor other = new SerialExecutor(pool, errors::add, false, null);
+		SerialExecutor other = new SerialExecutor(pool, work, errors::add, false, null);
 
 		for (int i = 0; i < 100; i++) {
 			int n = i;
@@ -154,6 +164,61 @@ class SerialExecutorTests {
 		assertEquals("serial-64", ran.get(65));
 		assertEquals(101, ran.size());
 		assertEquals(0, pool.queued());
+	}
+
+	@Test
+	void turnEndsAfterTimeSlice() {
+		List<String> ran = new ArrayList<>();
+		SerialExecutor other = new SerialExecutor(pool, work, errors::add, false, null);
+		long slow = SerialExecutor.TURN_NANOS * 6 / 10;
+
+		for (int i = 0; i < 3; i++) {
+			int n = i;
+			serial.execute(() -> {
+				ran.add("slow-" + n);
+				now += slow;
+			});
+		}
+		other.execute(() -> ran.add("other"));
+
+		pool.runAll();
+
+		// Two slow tasks fill a turn, far below the batch size.
+		assertEquals(Arrays.asList("slow-0", "slow-1", "other", "slow-2"), ran);
+	}
+
+	@Test
+	void loadCounted() {
+		List<LoadStats.Work> seen = new ArrayList<>();
+		SerialExecutor other = new SerialExecutor(pool, work, errors::add, false, null);
+
+		serial.execute(() -> seen.add(work.snapshot()));
+		now += 5_000_000;
+		serial.execute(() -> { });
+		other.execute(() -> { });
+		now += 3_000_000;
+
+		LoadStats.Work before = work.snapshot();
+
+		assertEquals(3, before.queued());
+		assertEquals(Duration.ofMillis(8), before.oldestWaiting());
+		assertEquals(0, before.active());
+
+		pool.runAll();
+
+		// While the first task ran: the other two waited, the older since 5 ms.
+		LoadStats.Work during = seen.get(0);
+
+		assertEquals(2, during.queued());
+		assertEquals(Duration.ofMillis(3), during.oldestWaiting());
+		assertEquals(1, during.active());
+
+		LoadStats.Work after = work.snapshot();
+
+		assertEquals(0, after.queued());
+		assertEquals(Duration.ZERO, after.oldestWaiting());
+		assertEquals(0, after.active());
+		assertEquals(0, after.dropped());
 	}
 
 	@Test
