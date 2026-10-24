@@ -154,7 +154,8 @@ public final class Whep {
 		 *
 		 * @return a future with the session once its peer is connected. It
 		 * fails if the endpoint refuses the offer or the peer does not connect
-		 * in time, with nothing left behind on the server.
+		 * in time, with nothing left behind on the server. Cancelling it ends
+		 * the session the same way.
 		 */
 		public CompletableFuture<Session> play(WebRtc rtc) {
 			requireNonNull(rtc, "rtc");
@@ -175,8 +176,7 @@ public final class Whep {
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
-				return peer.toPublic(HttpSession.negotiate(rtc, peer, endpoint, token, limit)
-						.thenApply(resource -> new Session(rtc, peer, resource, token, limit)));
+				return HttpSession.start(rtc, peer, endpoint, token, limit, Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.
