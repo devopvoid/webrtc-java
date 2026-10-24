@@ -19,12 +19,14 @@ package dev.onvoid.webrtc.media.player;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -160,6 +162,54 @@ class MediaFileSourceTest {
 
 		assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
 		assertEquals(MediaPlayerState.CLOSED, source.getState());
+	}
+
+	@Test
+	void closesFromSinkWhileClosing() throws Exception {
+		MediaFileSource source = new MediaFileSource(asset());
+		VideoTrack track = factory.createVideoTrack("video", source.getVideoSource());
+		CountDownLatch delivering = new CountDownLatch(1);
+		AtomicInteger sinkCloses = new AtomicInteger();
+
+		VideoTrackSink sink = frame -> {
+			try {
+				if (delivering.getCount() == 0) {
+					return;
+				}
+
+				delivering.countDown();
+
+				// Once the player reads as closed, the close on the test
+				// thread is waiting for this very thread to return.
+				long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+
+				while (source.getState() != MediaPlayerState.CLOSED
+						&& System.nanoTime() < deadline) {
+					Thread.yield();
+				}
+
+				// Must not wait for the close already under way.
+				source.close();
+				sinkCloses.incrementAndGet();
+			}
+			finally {
+				frame.release();
+			}
+		};
+
+		track.addSink(sink);
+		source.play();
+
+		assertTrue(delivering.await(10, TimeUnit.SECONDS), "nothing delivered");
+
+		// Would never return if the two closes waited for each other.
+		assertTimeoutPreemptively(Duration.ofSeconds(10), source::close);
+
+		assertEquals(1, sinkCloses.get());
+		assertEquals(MediaPlayerState.CLOSED, source.getState());
+
+		track.removeSink(sink);
+		track.dispose();
 	}
 
 	private static Path asset() throws Exception {

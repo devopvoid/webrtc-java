@@ -432,6 +432,65 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void closesFromVideoSink() throws Exception {
+		try (Sources sources = new Sources()) {
+			VideoTrack track = factory.createVideoTrack("video", sources.video);
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch closed = new CountDownLatch(1);
+
+			// Called on the player's pacing thread, which is the one closing
+			// it has to wait for, and not through the listener.
+			VideoTrackSink sink = frame -> {
+				try {
+					player.close();
+					closed.countDown();
+				}
+				finally {
+					frame.release();
+				}
+			};
+
+			track.addSink(sink);
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			player.close();
+
+			track.removeSink(sink);
+			track.dispose();
+		}
+	}
+
+	@Test
+	void closesFromAudioSink() throws Exception {
+		try (Sources sources = new Sources()) {
+			AudioTrack track = factory.createAudioTrack("audio", sources.audio);
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch closed = new CountDownLatch(1);
+
+			AudioTrackSink sink = (data, bits, rate, ch, count) -> {
+				player.close();
+				closed.countDown();
+			};
+
+			track.addSink(sink);
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			player.close();
+
+			track.removeSink(sink);
+			track.dispose();
+		}
+	}
+
+	@Test
 	void outlivesDisposedSources() throws Exception {
 		CustomVideoSource videoSource = new CustomVideoSource();
 		CustomAudioSource audioSource = new CustomAudioSource();

@@ -116,6 +116,10 @@ namespace ffmpeg
 			// playback has got to.
 			int64_t GetPositionUs() const;
 
+			// True on the pacing thread, which is the one that calls the sinks
+			// of the tracks fed by the sources.
+			bool IsOwnThread() const;
+
 		private:
 			struct VideoItem
 			{

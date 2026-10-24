@@ -175,7 +175,7 @@ source.setListener(new MediaPlayerListener() {
 ::: warning
 Every call arrives on the player's own thread, and that thread is the one decoding the media. A listener must return promptly, and must not wait on the player.
 
-Closing the player, or the `MediaFileSource`, from a listener is fine: it takes effect at once, and the native player is released on another thread once the listener has returned.
+Closing the player, or the `MediaFileSource`, from a listener is fine: it takes effect at once, and the native player is released on another thread once the listener has returned. The same holds for a sink of a track made from the player's sources, which the player calls on its own thread as well.
 :::
 
 ## Feeding Your Own Media Sources

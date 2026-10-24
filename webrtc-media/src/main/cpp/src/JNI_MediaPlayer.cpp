@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <string>
+#include <thread>
 
 extern "C" {
 #include <libavutil/error.h>
@@ -155,7 +156,22 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_dispose
 {
 	// Closing twice is allowed, so a handle that is already zero is simply
 	// nothing to do.
-	if (handle != 0) {
-		delete PlayerOf(handle);
+	if (handle == 0) {
+		return;
 	}
+
+	ffmpeg::MediaPlayer * player = PlayerOf(handle);
+
+	if (player->IsOwnThread()) {
+		// Called from something the player is calling, such as a sink of a
+		// track it feeds. Destroying it here would wait for this very thread,
+		// and the delivery that made the call still uses the player once the
+		// call returns. Another thread destroys it, and its wait ends as soon
+		// as this thread is out of the player.
+		std::thread([player] { delete player; }).detach();
+
+		return;
+	}
+
+	delete player;
 }

@@ -106,6 +106,13 @@ namespace ffmpeg
 
 			int GetState() const;
 
+			// True on any thread of the player, which are the ones its
+			// observer and the sinks of the tracks it feeds are called on.
+			// Such a thread cannot destroy the player: that waits for the
+			// thread, and what is below the call on its stack still uses
+			// the player.
+			bool IsOwnThread() const;
+
 		private:
 			void Run();
 
