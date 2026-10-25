@@ -32,6 +32,12 @@ import java.util.function.Consumer;
  * A task that throws does not stop the ones after it; its exception goes to
  * the error handler.
  * <p>
+ * Each turn on the executor runs at most {@link #BATCH_SIZE} tasks and ends
+ * once it has run for {@link #TURN_NANOS}, after which the executor queues
+ * its next turn behind those of the others. A pool with a fixed number of
+ * threads and a FIFO queue thus serves every executor in turn, however slow
+ * the tasks of some of them are, and it holds at most one turn of each.
+ * <p>
  * When the executor rejects the tasks, they are dropped, and those submitted
  * with a fallback have it run instead, on the thread that found them
  * rejected. A rejection by an executor that was not shut down goes to the
@@ -40,7 +46,10 @@ import java.util.function.Consumer;
 final class SerialExecutor implements Executor {
 
 	/** Tasks run per turn, so one busy executor cannot starve the others of a shared pool. */
-	private static final int BATCH_SIZE = 64;
+	static final int BATCH_SIZE = 64;
+
+	/** How long a turn runs tasks before it gives the others of a shared pool a turn. */
+	static final long TURN_NANOS = 10_000_000;
 
 	/** Marks the threads that run event tasks, to catch a future waited on there. */
 	private static final ThreadLocal<int[]> EVENT_DEPTH = new ThreadLocal<int[]>() {
@@ -59,7 +68,11 @@ final class SerialExecutor implements Executor {
 
 	private final String threadName;
 
-	private final ArrayDeque<Runnable> tasks = new ArrayDeque<>();
+	private final Workload workload;
+
+	private final ArrayDeque<Task> tasks = new ArrayDeque<>();
+
+	private final Workload.Backlog backlog = this::count;
 
 	private boolean scheduled;
 
@@ -76,7 +89,17 @@ final class SerialExecutor implements Executor {
 	 */
 	SerialExecutor(Executor executor, Consumer<Throwable> errorHandler,
 			boolean eventThread, String threadName) {
+		this(executor, new Workload(System::nanoTime), errorHandler, eventThread, threadName);
+	}
+
+	/**
+	 * @param workload counts the tasks that wait and run, and those dropped
+	 *                 when the executor rejects them while it runs.
+	 */
+	SerialExecutor(Executor executor, Workload workload, Consumer<Throwable> errorHandler,
+			boolean eventThread, String threadName) {
 		this.executor = executor;
+		this.workload = workload;
 		this.errorHandler = errorHandler;
 		this.eventThread = eventThread;
 		this.threadName = threadName;
@@ -95,12 +118,20 @@ final class SerialExecutor implements Executor {
 	 * keeps a future the task would complete from staying open forever.
 	 */
 	void execute(Runnable task, Runnable dropped) {
-		execute(new Droppable(task, dropped));
+		submit(new Task(task, dropped, workload.now()));
 	}
 
 	@Override
 	public void execute(Runnable task) {
+		submit(new Task(task, null, workload.now()));
+	}
+
+	private void submit(Task task) {
 		synchronized (tasks) {
+			if (tasks.isEmpty()) {
+				workload.waiting(backlog);
+			}
+
 			tasks.add(task);
 
 			if (scheduled) {
@@ -125,26 +156,28 @@ final class SerialExecutor implements Executor {
 			executor.execute(this::drain);
 		}
 		catch (RejectedExecutionException e) {
-			List<Runnable> dropped;
+			List<Task> dropped;
 
 			synchronized (tasks) {
 				scheduled = false;
 				dropped = new ArrayList<>(tasks);
 				tasks.clear();
+				workload.idle(backlog);
 			}
 
 			// The runtime's own pools reject only once it has stopped them,
 			// and then nothing is lost that it does not fail itself.
 			if (!(executor instanceof ExecutorService && ((ExecutorService) executor).isShutdown())) {
+				workload.dropped(dropped.size());
 				errorHandler.accept(new WebRtcException("The executor rejected " + dropped.size()
 						+ " tasks, which were dropped", e));
 			}
 
 			// In order, as they would have run.
-			for (Runnable task : dropped) {
-				if (task instanceof Droppable) {
+			for (Task task : dropped) {
+				if (task.dropped != null) {
 					try {
-						((Droppable) task).dropped.run();
+						task.dropped.run();
 					}
 					catch (Throwable error) {
 						errorHandler.accept(error);
@@ -169,10 +202,11 @@ final class SerialExecutor implements Executor {
 		runner = thread;
 
 		boolean more = true;
+		long start = workload.now();
 
 		try {
-			for (int i = 0; i < BATCH_SIZE; i++) {
-				Runnable task;
+			for (int i = 0; i < BATCH_SIZE && (i == 0 || workload.now() - start < TURN_NANOS); i++) {
+				Task task;
 
 				synchronized (tasks) {
 					task = tasks.poll();
@@ -182,13 +216,21 @@ final class SerialExecutor implements Executor {
 						more = false;
 						break;
 					}
+					if (tasks.isEmpty()) {
+						workload.idle(backlog);
+					}
 				}
 
+				workload.started();
+
 				try {
-					task.run();
+					task.task.run();
 				}
 				catch (Throwable e) {
 					errorHandler.accept(e);
+				}
+				finally {
+					workload.finished();
 				}
 			}
 		}
@@ -209,23 +251,32 @@ final class SerialExecutor implements Executor {
 		}
 	}
 
+	private void count(Workload.Tally tally) {
+		synchronized (tasks) {
+			Task oldest = tasks.peek();
+
+			if (oldest != null) {
+				tally.add(tasks.size(), oldest.queuedAt);
+			}
+		}
+	}
 
 
-	private static final class Droppable implements Runnable {
+
+	private static final class Task {
 
 		final Runnable task;
 
+		/** Runs instead of the task should the executor reject it, or null. */
 		final Runnable dropped;
 
+		final long queuedAt;
 
-		Droppable(Runnable task, Runnable dropped) {
+
+		Task(Runnable task, Runnable dropped, long queuedAt) {
 			this.task = task;
 			this.dropped = dropped;
-		}
-
-		@Override
-		public void run() {
-			task.run();
+			this.queuedAt = queuedAt;
 		}
 	}
 }

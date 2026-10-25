@@ -62,7 +62,8 @@ final class RemoteVideoImpl extends RemoteTrackImpl implements RemoteVideo {
 		requireNonNull(handler, "handler");
 
 		SerialExecutor executor = new SerialExecutor(peer.rtc.framePool, peer.rtc::reportError, false, null);
-		FrameDispatcher dispatcher = new FrameDispatcher(handler, delivery, executor, peer.rtc::reportError);
+		FrameDispatcher dispatcher = new FrameDispatcher(handler, delivery, executor, peer.rtc.videoWork,
+				peer.rtc::reportError);
 
 		onControl(() -> {
 			dispatchers.add(dispatcher);
