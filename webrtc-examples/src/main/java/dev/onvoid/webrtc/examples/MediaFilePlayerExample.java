@@ -689,10 +689,18 @@ public class MediaFilePlayerExample {
                 return "Not recording";
             }
 
-            boolean recorded = running.stop();
             running.close();
 
-            return recorded ? "Saved " + recording : "Nothing was recorded";
+            switch (running.getResult()) {
+                case COMPLETE:
+                    return "Saved " + recording;
+                case PARTIAL:
+                    return "Saved " + recording + ", but writing it failed";
+                case FAILED:
+                    return "Recording failed";
+                default:
+                    return "Nothing was recorded";
+            }
         }
 
         /**

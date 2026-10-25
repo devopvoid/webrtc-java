@@ -17,6 +17,7 @@
 #include "media/MediaRecorder.h"
 #include "media/AllocationFault.h"
 #include "media/ErrorText.h"
+#include "media/WriteFault.h"
 
 #include <chrono>
 #include <cstring>
@@ -191,13 +192,13 @@ namespace ffmpeg
 		}
 	}
 
-	bool MediaRecorder::Stop()
+	MediaRecorder::Result MediaRecorder::Stop()
 	{
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 
 			if (stopped_) {
-				return header_written_;
+				return result_;
 			}
 
 			stopped_ = true;
@@ -232,11 +233,24 @@ namespace ffmpeg
 		// The writer closes the file when it finishes. A recorder that never
 		// started has no writer, and its file must not stay open either: the
 		// caller deletes an empty file, which Windows refuses while it is.
-		if (context_ != nullptr && context_->pb != nullptr && !(context_->oformat->flags & AVFMT_NOFILE)) {
-			avio_closep(&context_->pb);
+		Close();
+
+		// The writer has ended, so what it left is final. Media in the file
+		// is kept even after a failure: what made it there may still play.
+		Result result;
+
+		if (header_written_) {
+			result = failed_ ? Result::kPartial : Result::kComplete;
+		}
+		else {
+			result = failed_ ? Result::kFailed : Result::kEmpty;
 		}
 
-		return header_written_;
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		result_ = result;
+
+		return result_;
 	}
 
 	void MediaRecorder::OnEncodedFrame(void * opaque, const wj_encoded_frame * frame)
@@ -519,7 +533,7 @@ namespace ffmpeg
 		AVPacket * packet = tracks_[frame.track]->Stamp(frame, start_us_);
 
 		// Takes the packet's reference and leaves the packet blank.
-		int result = av_interleaved_write_frame(context_, packet);
+		int result = WriteFault::Check(WriteFault::Call::kPacket, av_interleaved_write_frame(context_, packet));
 
 		if (result < 0) {
 			Fail("Writing to " + path_ + " failed", result);
@@ -576,7 +590,7 @@ namespace ffmpeg
 			av_dict_set(&options, "frag_duration", "1000000", 0);
 		}
 
-		int result = avformat_write_header(context_, &options);
+		int result = WriteFault::Check(WriteFault::Call::kHeader, avformat_write_header(context_, &options));
 
 		av_dict_free(&options);
 
@@ -612,7 +626,7 @@ namespace ffmpeg
 		if (header_written_) {
 			// Even after a failed write: whatever made it into the file
 			// is only playable with a trailer.
-			int result = av_write_trailer(context_);
+			int result = WriteFault::Check(WriteFault::Call::kTrailer, av_write_trailer(context_));
 
 			if (result < 0 && !failed_) {
 				Fail("Finishing " + path_ + " failed", result);
@@ -621,8 +635,22 @@ namespace ffmpeg
 
 		pending_.clear();
 
-		if (context_->pb != nullptr && !(context_->oformat->flags & AVFMT_NOFILE)) {
-			avio_closep(&context_->pb);
+		Close();
+	}
+
+	void MediaRecorder::Close()
+	{
+		if (context_ == nullptr || context_->pb == nullptr || (context_->oformat->flags & AVFMT_NOFILE)) {
+			return;
+		}
+
+		// Flushes what is still buffered, so a full disk may only show here,
+		// and the file system may refuse to close a file it could not keep.
+		int result = WriteFault::Check(WriteFault::Call::kClose, avio_closep(&context_->pb));
+
+		// After an earlier failure, the same cause is not reported twice.
+		if (result < 0 && !failed_) {
+			Fail("Closing " + path_ + " failed", result);
 		}
 	}
 
