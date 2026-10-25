@@ -55,7 +55,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_crea
 				return 0;
 			}
 
-			path = chars.str();
+			path = chars.utf8();
 		}
 
 		auto recorder = std::make_unique<ffmpeg::MediaRecorder>(api, path);

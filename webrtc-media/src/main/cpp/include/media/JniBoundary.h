@@ -28,7 +28,13 @@ namespace ffmpeg
 	// C++ heap, so that it can also report that an allocation failed.
 	void ThrowJavaException(JNIEnv * env, const char * class_name, const char * message) noexcept;
 
+	// The message is UTF-8, as is everything FFmpeg and this library write.
 	void ThrowIOException(JNIEnv * env, const std::string & message) noexcept;
+
+	// A Java string of the given UTF-8, in which what is not UTF-8 becomes
+	// U+FFFD, as it does in Java. Null if it could not be made, and a Java
+	// exception may be pending then.
+	jstring NewJavaString(JNIEnv * env, const std::string & utf8) noexcept;
 
 	// Turns the C++ exception being handled into a Java one: a failed
 	// allocation into an OutOfMemoryError, anything else into a
@@ -102,8 +108,8 @@ namespace ffmpeg
 			T ref_;
 	};
 
-	// The modified UTF-8 of a Java string, released when this goes out of
-	// scope, also when a copy of it fails on the way out.
+	// The characters of a Java string, released when this goes out of scope,
+	// also when a copy of them fails on the way out.
 	class JavaStringChars
 	{
 		public:
@@ -115,13 +121,17 @@ namespace ffmpeg
 			JavaStringChars(const JavaStringChars &) = delete;
 			JavaStringChars & operator=(const JavaStringChars &) = delete;
 
-			const char * get() const noexcept
+			const jchar * get() const noexcept
 			{
 				return chars_;
 			}
 
-			// A copy that outlives this object. Throws std::bad_alloc.
-			std::string str() const;
+			// The string as UTF-8, which FFmpeg takes, and not as the modified
+			// UTF-8 of JNI, which writes the characters outside the Basic
+			// Multilingual Plane as surrogates and U+0000 as two bytes. A
+			// surrogate without its pair becomes '?', as it does in Java.
+			// Throws std::bad_alloc.
+			std::string utf8() const;
 
 			// How many strings are held right now, for the tests to see that
 			// none is left behind.
@@ -130,7 +140,8 @@ namespace ffmpeg
 		private:
 			JNIEnv * env_;
 			jstring string_;
-			const char * chars_;
+			const jchar * chars_;
+			jsize length_;
 	};
 }
 

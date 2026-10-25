@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -31,6 +32,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Tests reading a media source. The asset is three seconds of VP8 and Opus in
@@ -126,6 +128,41 @@ class MediaReaderTest {
 		// The message has to name the source and what FFmpeg objected to,
 		// otherwise a wrong path is a guessing game.
 		assertTrue(e.getMessage().contains("no-such-file.webm"), e.getMessage());
+	}
+
+	@Test
+	void opensPathBeyondBasicPlane(@TempDir Path dir) throws Exception {
+		// FFmpeg takes UTF-8, which is not the modified UTF-8 of JNI for
+		// characters beyond the Basic Multilingual Plane.
+		Path file = UnicodeFileName.resolve(dir, "webm");
+
+		Files.copy(asset(), file);
+
+		try (MediaReader reader = new MediaReader(file)) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+		try (MediaReader reader = new MediaReader(file.toString())) {
+			assertTrue(reader.getInfo().hasAudio());
+		}
+	}
+
+	@Test
+	void missingSourceBeyondBasicPlaneFails(@TempDir Path dir) {
+		Path file = UnicodeFileName.resolve(dir, "webm");
+
+		IOException e = assertThrows(IOException.class, () -> new MediaReader(file));
+
+		// The name comes back to Java as it went in.
+		assertTrue(e.getMessage().contains(UnicodeFileName.NAME), e.getMessage());
+	}
+
+	@Test
+	void rejectsSourceWithNullCharacter() throws Exception {
+		// Read up to the null character, the source would be the asset.
+		String source = asset().toAbsolutePath() + "\u0000.txt";
+
+		assertThrows(IOException.class, () -> new MediaReader(source));
+		assertEquals(0, AllocationFault.heldStrings());
 	}
 
 	@Test
