@@ -49,9 +49,9 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
 	 * Method:    stop
-	 * Signature: (J)Z
+	 * Signature: (J)I
 	 */
-	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stop
+	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stop
 	(JNIEnv *, jclass, jlong);
 
 	/*
