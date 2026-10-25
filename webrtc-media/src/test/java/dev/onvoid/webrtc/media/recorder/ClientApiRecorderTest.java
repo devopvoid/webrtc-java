@@ -42,6 +42,7 @@ import dev.onvoid.webrtc.client.RemoteTrack;
 import dev.onvoid.webrtc.client.Sender;
 import dev.onvoid.webrtc.client.Signaling;
 import dev.onvoid.webrtc.client.SignalingPair;
+import dev.onvoid.webrtc.client.Subscription;
 import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.media.player.MediaInfo;
@@ -124,6 +125,16 @@ class ClientApiRecorderTest {
 		remoteVideo.get(15, TimeUnit.SECONDS);
 		remoteAudio.get(15, TimeUnit.SECONDS);
 
+		// A track that is signaled need not carry video yet: on a slow machine
+		// the receiver may still wait for its first key frame, and a recorder
+		// started then waits for one too, longer than it holds the file back
+		// for it. The call is up once the remote video decodes.
+		CountDownLatch decoded = new CountDownLatch(15);
+
+		try (Subscription frames = remoteVideo.join().asVideo().onFrame(frame -> decoded.countDown())) {
+			assertTrue(decoded.await(15, TimeUnit.SECONDS), "no remote video decoded");
+		}
+
 		// Well into the call, so that the recorder has to ask for a key frame.
 		Thread.sleep(1500);
 	}
@@ -141,14 +152,14 @@ class ClientApiRecorderTest {
 	void recordsRemoteTracks() throws Exception {
 		Path file = tempDir.resolve("received.mkv");
 
-		record(file, recorder -> {
+		List<String> warnings = record(file, recorder -> {
 			recorder.addTrack(remoteVideo.join());
 			recorder.addTrack(remoteAudio.join());
 		});
 
 		MediaInfo info = readInfo(file);
 
-		assertTrue(info.hasVideo());
+		assertTrue(info.hasVideo(), () -> "No video, warnings: " + warnings);
 		assertEquals(WIDTH, info.getVideoWidth());
 		assertEquals(HEIGHT, info.getVideoHeight());
 		assertEquals("opus", info.getAudioCodec());
@@ -242,9 +253,14 @@ class ClientApiRecorderTest {
 
 	}
 
-	private static void record(Path file, Tracks tracks) throws Exception {
+	/**
+	 * Records the given tracks into the file, and returns what the recorder
+	 * warned of, such as a track it had to leave out.
+	 */
+	private static List<String> record(Path file, Tracks tracks) throws Exception {
 		CountDownLatch started = new CountDownLatch(1);
 		AtomicReference<String> error = new AtomicReference<>();
+		List<String> warnings = new CopyOnWriteArrayList<>();
 
 		try (MediaRecorder recorder = new MediaRecorder(file)) {
 			recorder.setListener(new MediaRecorderListener() {
@@ -252,6 +268,11 @@ class ClientApiRecorderTest {
 				@Override
 				public void onStarted() {
 					started.countDown();
+				}
+
+				@Override
+				public void onWarning(String message) {
+					warnings.add(message);
 				}
 
 				@Override
@@ -269,6 +290,8 @@ class ClientApiRecorderTest {
 		}
 
 		assertNull(error.get());
+
+		return warnings;
 	}
 
 	private static MediaInfo readInfo(Path file) throws Exception {
