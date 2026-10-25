@@ -61,6 +61,25 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 		requireNonNull(device, "device");
 
 		CompletableFuture<Void> switched = new CompletableFuture<>();
+
+		if (isEnded()) {
+			switched.completeExceptionally(new MediaException("The camera track is closed"));
+			return switched;
+		}
+
+		// Registered like the creation of a track, as the switch opens a
+		// camera and uses the factory: a runtime that begins to close either
+		// waits for it before it frees the factory, or is seen closing here.
+		LocalMediaImpl.Creation operation;
+
+		try {
+			operation = media.begin();
+		}
+		catch (PeerClosedException e) {
+			switched.completeExceptionally(e);
+			return switched;
+		}
+
 		media.rtc.track(switched, null);
 
 		// Opening a camera can take a moment, so it happens off the caller's thread.
@@ -73,6 +92,12 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 				switched.completeExceptionally(e instanceof WebRtcException
 						? e : new MediaException("Switching to the camera " + device.getName() + " failed", e));
 			}
+			finally {
+				operation.close();
+			}
+		}, () -> {
+			operation.close();
+			switched.completeExceptionally(new PeerClosedException("The runtime is closed"));
 		});
 
 		// Completed on the event executor, so that the application's
@@ -84,6 +109,11 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 		LocalMediaImpl.SharedCamera current;
 
 		synchronized (this) {
+			// Closed while the switch was queued, so no camera is opened.
+			if (!isLive()) {
+				throw new MediaException("The camera track is closed");
+			}
+
 			current = camera;
 		}
 

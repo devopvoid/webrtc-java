@@ -34,6 +34,7 @@ import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.media.audio.AudioDevice;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
+import dev.onvoid.webrtc.media.video.VideoDevice;
 
 import org.junit.jupiter.api.Test;
 
@@ -442,6 +443,73 @@ class RuntimeCloseTests extends ClientTestBase {
 	}
 
 	@Test
+	void closeWhileSwitchingCamera() throws Exception {
+		// A camera switch is queued when the runtime begins to close. The
+		// runtime waits for it before it frees the factory, and the switch,
+		// which finds its track closed, opens no camera.
+		ManualExecutor control = new ManualExecutor();
+		WebRtc runtime = runtime(control);
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+		LocalCameraImpl camera = camera(runtime);
+
+		CompletableFuture<Void> switched = camera.switchCamera(camera("Other camera"));
+
+		// Named among what the runtime waits for, beside the track.
+		assertEquals(2, media.closeAll().size());
+
+		CompletableFuture<Void> closed = runtime.closeAsync();
+		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
+		await(closed);
+
+		// The switch ran while the runtime still had its threads, rather than
+		// being failed by the runtime's close.
+		assertTrackClosed(switched);
+	}
+
+	@Test
+	void switchCameraAfterClose() throws Exception {
+		LocalCameraImpl camera = camera(rtc);
+		await(camera.closeAsync());
+
+		// Failed at once, without opening a camera over the factory.
+		CompletableFuture<Void> switched = camera.switchCamera(camera("Other camera"));
+
+		assertTrue(switched.isDone());
+		assertTrackClosed(switched);
+	}
+
+	@Test
+	void switchCameraRejected() throws Exception {
+		// The executor refuses the switch, which fails and lets go of its
+		// registration, so that the runtime does not wait for it.
+		ManualExecutor control = new ManualExecutor();
+		WebRtc runtime = runtime(control);
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+		LocalCameraImpl camera = camera(runtime);
+
+		try {
+			control.rejecting(true);
+			CompletableFuture<Void> switched = camera.switchCamera(camera("Other camera"));
+
+			ExecutionException e = assertThrows(ExecutionException.class, () -> await(switched));
+			assertInstanceOf(PeerClosedException.class, e.getCause());
+			assertEquals(1, errors.size(), () -> "Errors: " + errors);
+			assertInstanceOf(RejectedExecutionException.class, errors.get(0).getCause());
+		}
+		finally {
+			control.rejecting(false);
+			errors.clear();
+		}
+
+		// Only the track is left.
+		assertEquals(1, media.closeAll().size());
+
+		CompletableFuture<Void> closed = runtime.closeAsync();
+		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
+		await(closed);
+	}
+
+	@Test
 	void closedPeerNeedsNoTimer() throws Exception {
 		// An operation reaches a peer the closing runtime has closed, after it
 		// stopped its timer, as control tasks queued before still run.
@@ -509,6 +577,38 @@ class RuntimeCloseTests extends ClientTestBase {
 				.errorHandler(errors::add)
 				.controlPool(control)
 				.build();
+	}
+
+	/**
+	 * A camera track over a custom source, so that no camera is needed. Its
+	 * camera has another user, so that the track's release lets go of its
+	 * share only, and touches no capture device.
+	 */
+	private static LocalCameraImpl camera(WebRtc runtime) {
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+		VideoDevice device = camera("Test camera");
+		LocalMediaImpl.SharedCamera shared = new LocalMediaImpl.SharedCamera(device.getDescriptor(),
+				CameraOptions.builder().device(device).build(), null);
+		shared.users = 2;
+
+		try (LocalMediaImpl.Creation creation = media.begin()) {
+			CustomVideoSource source = new CustomVideoSource();
+			LocalCameraImpl camera = media.register(new LocalCameraImpl(media,
+					runtime.factory.createVideoTrack("camera", source), shared));
+			camera.onEnded(source::dispose);
+
+			return camera;
+		}
+	}
+
+	private static VideoDevice camera(String name) {
+		return new VideoDevice(name, name.toLowerCase().replace(' ', '-')) { };
+	}
+
+	private static void assertTrackClosed(CompletableFuture<Void> switched) {
+		ExecutionException e = assertThrows(ExecutionException.class, () -> await(switched));
+		assertInstanceOf(MediaException.class, e.getCause());
+		assertEquals("The camera track is closed", e.getCause().getMessage());
 	}
 
 	/**
