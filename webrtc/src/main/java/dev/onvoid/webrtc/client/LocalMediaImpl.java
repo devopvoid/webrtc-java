@@ -50,8 +50,15 @@ final class LocalMediaImpl implements LocalMedia {
 
 	final WebRtc rtc;
 
-	/** Releases tracks and runs their ended handlers, off WebRTC's and the application's threads. */
+	/** Releases tracks and switches devices, off WebRTC's and the application's threads. */
 	final SerialExecutor executor;
+
+	/**
+	 * Runs the ended and device handlers and completes the futures handed
+	 * out, as a peer's event executor does, so that no application code holds
+	 * up a release.
+	 */
+	final SerialExecutor events;
 
 	private final AudioDeviceModuleBase audioModule;
 
@@ -76,6 +83,8 @@ final class LocalMediaImpl implements LocalMedia {
 		this.rtc = rtc;
 		this.audioModule = audioModule;
 		this.executor = new SerialExecutor(rtc.controlPool, rtc.controlWork, rtc::reportError, false, null);
+		this.events = new SerialExecutor(rtc.eventExecutor, rtc.eventWork, rtc::reportError, true,
+				rtc.ownsEventExecutor ? "webrtc-client-events-media" : null);
 	}
 
 	@Override
@@ -308,6 +317,29 @@ final class LocalMediaImpl implements LocalMedia {
 		}
 
 		return closing;
+	}
+
+	/**
+	 * Hands a future out to the application: it completes on the event
+	 * executor, after the handlers queued before, and cancelling it leaves the
+	 * internal one alone.
+	 */
+	<T> CompletableFuture<T> toPublic(CompletableFuture<T> internal) {
+		ClientFuture<T> result = new ClientFuture<>();
+
+		internal.whenComplete((value, error) -> {
+			Runnable deliver = () -> PeerImpl.complete(result, value, error);
+
+			// Completed in any case: should the event executor reject the
+			// task, on the thread that found it rejected.
+			events.execute(deliver, deliver);
+		});
+
+		// Tracked after, so that a track released before the runtime stopped
+		// its threads still reports that, rather than the runtime's close.
+		rtc.track(result, events);
+
+		return result;
 	}
 
 	synchronized void dispose() {

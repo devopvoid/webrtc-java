@@ -164,7 +164,7 @@ final class DevicesImpl implements Devices {
 	private void changed() {
 		media.executor.execute(() -> {
 			refresh();
-			handlers.accept(this);
+			media.events.execute(() -> handlers.accept(this));
 		});
 	}
 
@@ -247,7 +247,9 @@ final class DevicesImpl implements Devices {
 	 * Runs a switch, which uses the audio module, on the media executor. It
 	 * is registered like the creation of a track, so that a runtime that
 	 * begins to close either waits for it before it frees the module, or is
-	 * seen closing here.
+	 * seen closing here. The future handed out completes on the event
+	 * executor, so that the application's callbacks never hold up the media
+	 * executor.
 	 */
 	private <T> CompletableFuture<T> onMediaExecutor(Supplier<T> action) {
 		CompletableFuture<T> result = new CompletableFuture<>();
@@ -279,6 +281,6 @@ final class DevicesImpl implements Devices {
 			result.completeExceptionally(new PeerClosedException("The runtime is closed"));
 		});
 
-		return result;
+		return media.toPublic(result);
 	}
 }

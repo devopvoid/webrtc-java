@@ -46,6 +46,21 @@ final class ClientFuture<T> extends CompletableFuture<T> {
 		return future;
 	}
 
+	/**
+	 * Hands out a future of its own for a future shared by many callers: a
+	 * caller that cancels or completes its copy changes nothing for the
+	 * others, nor for what waits for the shared one.
+	 *
+	 * @param shared the future the copy completes with, on the same thread.
+	 *
+	 * @return a new future.
+	 */
+	static <T> ClientFuture<T> copyOf(CompletableFuture<T> shared) {
+		ClientFuture<T> copy = new ClientFuture<>();
+		shared.whenComplete((value, error) -> PeerImpl.complete(copy, value, error));
+		return copy;
+	}
+
 	@Override
 	public T get() throws InterruptedException, ExecutionException {
 		checkBlocking();

@@ -204,7 +204,7 @@ Every method of the client API may be called from any thread, including from ins
 | Your calls into the API | your thread | They don't block. The exceptions are `WebRtc.createPeer`, which waits briefly for the connection, and `WebRtc.close()`, which waits up to the close timeout. |
 | Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
 | `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
-| `LocalTrack.onEnded` and `Devices.onChange` handlers | a background thread of the runtime | Briefly. |
+| `LocalTrack.onEnded` and `Devices.onChange` handlers, callbacks of the futures of local tracks and devices | the event thread of the runtime's local media | Yes, but that delays the other events of local media. They must not wait for a future of this API either. A track is released before its `onEnded` handlers run, so they never hold up a release. |
 | WebRTC's own callbacks | WebRTC's threads | Not your code. The library only copies what they report and queues it. |
 
 The handlers of one peer never run at the same time, and they run in the order of the events. The handlers of different peers may run at the same time. With the default executor, the event thread is named after its peer, such as `webrtc-client-events-alice`, which shows up in thread dumps.
@@ -328,6 +328,8 @@ peer.onChannel(channel -> {
 ```
 
 A future that is already done may be read anywhere, and any thread that is not an event thread, such as `main`, may wait.
+
+Each call returns a future of its own, also of `closeAsync()`, `whenClosed()`, `whenConnected()` and `whenOpen()`. Cancelling one only stops waiting: the close goes on, and the futures of other callers, and of the runtime's own close, are not affected.
 
 ::: warning
 On Java 8, only the futures the API returns refuse to be waited on. Futures derived from them with `thenApply` and the like do not, so waiting for one of those in a handler hangs that peer. From Java 9 on, the derived futures refuse too.

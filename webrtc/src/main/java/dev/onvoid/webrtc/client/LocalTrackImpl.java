@@ -32,7 +32,9 @@ import dev.onvoid.webrtc.media.MediaStreamTrack;
  * Calls on the native track and source happen under this object's lock and
  * only while the track has not ended, so that closing never races with them.
  * Closing first makes every sender let go of the track, each on its peer's
- * control executor, and only then releases the native track and source.
+ * control executor, and only then releases the native track and source. The
+ * ended handlers and the futures handed out follow on the media's event
+ * executor, so that neither holds up a release nor the runtime's close.
  */
 abstract class LocalTrackImpl implements LocalTrack {
 
@@ -50,7 +52,12 @@ abstract class LocalTrackImpl implements LocalTrack {
 	/** Guarded by this. */
 	private Runnable releaseSource;
 
-	private final CompletableFuture<Void> closed = new CompletableFuture<>();
+	/**
+	 * Completed on the media executor once the native track is released,
+	 * before the handlers hear of it. Never handed out, so that no caller can
+	 * cancel what the runtime waits for.
+	 */
+	private final CompletableFuture<Void> closedInternal = new CompletableFuture<>();
 
 	private volatile boolean enabled = true;
 
@@ -117,7 +124,7 @@ abstract class LocalTrackImpl implements LocalTrack {
 			}
 		}
 
-		media.executor.execute(handler);
+		media.events.execute(handler);
 
 		return () -> { };
 	}
@@ -129,7 +136,7 @@ abstract class LocalTrackImpl implements LocalTrack {
 
 	@Override
 	public CompletableFuture<Void> closeAsync() {
-		return closeInternal();
+		return media.toPublic(closeInternal());
 	}
 
 	@Override
@@ -205,12 +212,18 @@ abstract class LocalTrackImpl implements LocalTrack {
 		return !ended;
 	}
 
+	/**
+	 * Starts closing, once.
+	 *
+	 * @return a future that completes on the media executor once the native
+	 * track is released, before the handlers hear of it.
+	 */
 	CompletableFuture<Void> closeInternal() {
 		List<SenderImpl> using;
 
 		synchronized (this) {
 			if (ended) {
-				return closed;
+				return closedInternal;
 			}
 
 			ended = true;
@@ -227,7 +240,7 @@ abstract class LocalTrackImpl implements LocalTrack {
 		CompletableFuture.allOf(detached.toArray(new CompletableFuture[0]))
 				.whenComplete((ignored, error) -> media.executor.execute(this::release));
 
-		return closed;
+		return closedInternal;
 	}
 
 	/**
@@ -270,20 +283,25 @@ abstract class LocalTrackImpl implements LocalTrack {
 			endedHandlers.clear();
 		}
 
-		for (Runnable handler : handlers) {
-			try {
-				handler.run();
+		// Queued before the release completes, so that the futures handed out
+		// complete after the handlers ran, and the runtime cannot stop the
+		// event executor in between.
+		media.events.execute(() -> {
+			for (Runnable handler : handlers) {
+				try {
+					handler.run();
+				}
+				catch (Throwable e) {
+					rtc.reportError(e);
+				}
 			}
-			catch (Throwable e) {
-				rtc.reportError(e);
-			}
-		}
+		});
 
 		if (failure == null) {
-			closed.complete(null);
+			closedInternal.complete(null);
 		}
 		else {
-			closed.completeExceptionally(failure);
+			closedInternal.completeExceptionally(failure);
 		}
 	}
 
