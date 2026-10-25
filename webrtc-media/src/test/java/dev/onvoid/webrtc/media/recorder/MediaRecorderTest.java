@@ -22,13 +22,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCRtpReceiver;
@@ -37,6 +41,7 @@ import dev.onvoid.webrtc.media.audio.AudioLayer;
 import dev.onvoid.webrtc.media.player.AllocationFault;
 import dev.onvoid.webrtc.media.player.MediaInfo;
 import dev.onvoid.webrtc.media.player.MediaReader;
+import dev.onvoid.webrtc.media.player.UnicodeFileName;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -150,6 +155,47 @@ class MediaRecorderTest {
 		assertEquals("vp8", info.getVideoCodec());
 		assertEquals("opus", info.getAudioCodec());
 		assertDuration(info);
+	}
+
+	@Test
+	void recordsIntoPathBeyondBasicPlane() throws Exception {
+		// FFmpeg takes UTF-8, which is not the modified UTF-8 of JNI for
+		// characters beyond the Basic Multilingual Plane. A directory of its
+		// own shows that no file of another name was written.
+		Path dir = Files.createDirectory(tempDir.resolve("unicode"));
+		Path file = UnicodeFileName.resolve(dir, "mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			Thread.sleep(1000);
+
+			assertTrue(recorder.stop());
+		}
+
+		assertNull(listener.error.get());
+
+		try (Stream<Path> files = Files.list(dir)) {
+			assertEquals(Collections.singletonList(file), files.collect(Collectors.toList()));
+		}
+
+		assertEquals("vp8", readInfo(file).getVideoCodec());
+	}
+
+	@Test
+	void failedOpenBeyondBasicPlaneNamesPath() {
+		Path file = UnicodeFileName.resolve(tempDir.resolve("no-such-dir"), "mkv");
+
+		IOException e = assertThrows(IOException.class, () -> new MediaRecorder(file));
+
+		// The path comes back to Java as it went in.
+		assertTrue(e.getMessage().contains(UnicodeFileName.NAME), e.getMessage());
 	}
 
 	@Test

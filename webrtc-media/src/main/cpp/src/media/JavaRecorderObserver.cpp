@@ -15,6 +15,7 @@
  */
 
 #include "media/JavaRecorderObserver.h"
+#include "media/JniBoundary.h"
 
 namespace ffmpeg
 {
@@ -120,7 +121,7 @@ namespace ffmpeg
 		JNIEnv * env = Attach(&attached);
 
 		if (CanCallJava(env)) {
-			jstring text = env->NewStringUTF(message.c_str());
+			jstring text = NewJavaString(env, message);
 
 			if (text != nullptr) {
 				env->CallVoidMethod(recorder_, method, text);

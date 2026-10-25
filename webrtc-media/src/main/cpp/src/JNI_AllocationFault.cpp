@@ -63,12 +63,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_throw
 			case 0:
 				throw std::bad_alloc();
 			case 1:
-				throw std::runtime_error(text.get());
+				throw std::runtime_error(text.utf8());
 			case 2:
 				// A JNI call that failed, and a C++ exception after it.
 				env->FindClass("dev/onvoid/webrtc/media/player/NoSuchClass");
 
-				throw std::runtime_error(text.get());
+				throw std::runtime_error(text.utf8());
 			default:
 				throw kind;
 		}
