@@ -285,6 +285,103 @@ class MediaRecorderTest {
 		assertTrue(readInfo(file).hasVideo());
 	}
 
+	@Test
+	void failedAddTrackLeavesRecorderAsItWas() throws Exception {
+		Path file = tempDir.resolve("failed-track.mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+
+			AllocationFault.failNextAllocation();
+
+			assertThrows(OutOfMemoryError.class, () -> recorder.addTrack(call.getVideoSender()));
+
+			// Not added on either side: there is nothing to start with.
+			assertThrows(IllegalStateException.class, recorder::start);
+
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+			assertTrue(recorder.stop());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertNull(listener.error.get());
+		assertTrue(readInfo(file).hasVideo());
+	}
+
+	@Test
+	void failedStartLeavesRecorderIdle() throws Exception {
+		Path file = tempDir.resolve("failed-start.mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+
+			AllocationFault.failNextThreadStart();
+
+			RuntimeException e = assertThrows(RuntimeException.class, recorder::start);
+			assertTrue(e.getMessage().startsWith("Starting a thread failed"), e.getMessage());
+			assertEquals(MediaRecorderState.IDLE, recorder.getState());
+
+			// Nothing was left half started, so it starts on a second try.
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+			assertTrue(recorder.stop());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertNull(listener.error.get());
+		assertTrue(readInfo(file).hasVideo());
+	}
+
+	@Test
+	void dropsFrameThatCannotBeQueued() throws Exception {
+		Path file = tempDir.resolve("dropped-frame.mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			// The next frame cannot be copied, on a WebRTC thread, where
+			// nothing may be thrown.
+			AllocationFault.failNextAllocation();
+
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+
+			while (AllocationFault.isArmed() && System.nanoTime() < deadline) {
+				Thread.sleep(10);
+			}
+
+			assertFalse(AllocationFault.isArmed(), "no frame arrived");
+
+			Thread.sleep(1000);
+
+			assertTrue(recorder.stop());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertNull(listener.error.get());
+		assertTrue(readInfo(file).hasVideo());
+	}
+
 	/**
 	 * Records a call that sends G.711 into Matroska, which has no codec ID of
 	 * its own for it, and reads the audio back as the codec it was sent in.

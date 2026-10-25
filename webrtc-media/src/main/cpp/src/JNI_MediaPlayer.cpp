@@ -37,6 +37,20 @@ namespace
 	{
 		return reinterpret_cast<ffmpeg::MediaPlayer *>(handle);
 	}
+
+	// Releases a player that never made it to Java. Its observer goes first:
+	// closing reports the closed state, which would be a call into Java for a
+	// player nobody listens to yet, and with an exception pending such a call
+	// is not allowed, and would also clear it.
+	struct DiscardPlayer
+	{
+		void operator()(ffmpeg::MediaPlayer * player) const
+		{
+			player->SetObserver(nullptr);
+
+			delete player;
+		}
+	};
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
@@ -66,9 +80,11 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 			return 0;
 		}
 
-		auto player = std::make_unique<ffmpeg::MediaPlayer>(std::move(reader), api,
-				reinterpret_cast<void *>(videoSourceHandle),
-				reinterpret_cast<void *>(audioSourceHandle));
+		// Also released that way when a C++ exception unwinds through here.
+		std::unique_ptr<ffmpeg::MediaPlayer, DiscardPlayer> player(
+				new ffmpeg::MediaPlayer(std::move(reader), api,
+						reinterpret_cast<void *>(videoSourceHandle),
+						reinterpret_cast<void *>(audioSourceHandle)));
 
 		player->SetObserver(std::make_unique<ffmpeg::JavaPlayerObserver>(env, caller));
 		player->SetHardwareDecoding(hardwareDecoding == JNI_TRUE);
@@ -76,11 +92,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 		int result = player->Initialize();
 
 		if (result < 0) {
-			// Released before throwing: closing reports the closed state to the
-			// observer, which calls into Java, and a call into Java with an
-			// exception pending is not allowed, and would also clear it. Nothing
-			// is listening yet anyway, so the observer goes first.
-			player->SetObserver(nullptr);
+			// Released before throwing, see DiscardPlayer.
 			player.reset();
 
 			ffmpeg::ThrowIOException(env, "Opening the decoders failed: " + ffmpeg::ErrorText(result));
