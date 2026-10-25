@@ -42,7 +42,7 @@ import dev.onvoid.webrtc.internal.Timeouts;
 /**
  * A WHIP or WHEP session: a peer whose offer and answer went over HTTP, and the
  * resource the server created for it. Closing the session deletes the resource
- * and closes the peer.
+ * and closes the peer, independently of each other.
  */
 abstract class HttpSession implements AutoCloseable {
 
@@ -92,25 +92,40 @@ abstract class HttpSession implements AutoCloseable {
 
 	/**
 	 * Deletes the session's resource on the server, which frees what the
-	 * server holds for it, and closes the peer.
+	 * server holds for it, and closes the peer. Both start at once, so that a
+	 * slow server does not keep the peer open. A deletion that fails also goes
+	 * to the runtime's error handler, for those who close without waiting.
 	 *
-	 * @return a future that completes once both are done.
+	 * @return a future that completes once both are done, or fails with a
+	 * {@link WebRtcException} when the resource could not be deleted, or with
+	 * why the peer did not close. A failure of both carries the peer's as a
+	 * suppressed exception.
 	 */
 	public CompletableFuture<Void> closeAsync() {
 		if (closing.compareAndSet(false, true)) {
-			CompletableFuture<Void> deleted;
+			CompletableFuture<Throwable> peerClosed = peer.closeAsync().handle((ignored, error) -> error);
+			CompletableFuture<WebRtcException> deleted;
 
 			try {
-				deleted = CompletableFuture.runAsync(() -> discard(rtc, resource, bearerToken, timeout),
+				deleted = CompletableFuture.supplyAsync(() -> discard(rtc, resource, bearerToken, timeout),
 						rtc.controlPool);
 			}
 			catch (RejectedExecutionException e) {
-				leftOnServer(rtc, resource);
-				deleted = CompletableFuture.completedFuture(null);
+				deleted = CompletableFuture.completedFuture(leftOnServer(rtc, resource));
 			}
 
-			deleted.thenCompose(ignored -> peer.closeAsync())
-					.whenComplete((ignored, error) -> closed.complete(null));
+			deleted.thenAcceptBoth(peerClosed, (deleteError, peerError) -> {
+				Throwable error = PeerImpl.unwrap(peerError);
+
+				if (deleteError != null) {
+					if (error != null) {
+						deleteError.addSuppressed(error);
+					}
+					error = deleteError;
+				}
+
+				PeerImpl.complete(closed, null, error);
+			});
 		}
 
 		return ClientFuture.copyOf(closed);
@@ -301,25 +316,37 @@ abstract class HttpSession implements AutoCloseable {
 	/**
 	 * Deletes a resource that nothing else will, and reports rather than
 	 * throws if that fails.
+	 *
+	 * @return the failure reported, or null.
 	 */
-	private static void discard(WebRtc rtc, URI resource, String bearerToken, Duration timeout) {
+	private static WebRtcException discard(WebRtc rtc, URI resource, String bearerToken, Duration timeout) {
 		if (resource == null) {
-			return;
+			return null;
 		}
 
 		try {
 			delete(resource, bearerToken, timeout);
+			return null;
 		}
 		catch (Exception e) {
-			rtc.reportError(new WebRtcException("Deleting the session " + resource + " failed", e));
+			WebRtcException error = new WebRtcException("Deleting the session " + resource + " failed", e);
+			rtc.reportError(error);
+			return error;
 		}
 	}
 
-	private static void leftOnServer(WebRtc rtc, URI resource) {
-		if (resource != null) {
-			rtc.reportError(new WebRtcException("The session " + resource
-					+ " was left on the server, since the runtime is closed"));
+	/**
+	 * @return the failure reported, or null if there was no resource.
+	 */
+	private static WebRtcException leftOnServer(WebRtc rtc, URI resource) {
+		if (resource == null) {
+			return null;
 		}
+
+		WebRtcException error = new WebRtcException("The session " + resource
+				+ " was left on the server, since the runtime is closed");
+		rtc.reportError(error);
+		return error;
 	}
 
 	/**

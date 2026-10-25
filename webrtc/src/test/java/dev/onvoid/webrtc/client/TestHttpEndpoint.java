@@ -76,6 +76,9 @@ final class TestHttpEndpoint implements AutoCloseable {
 	/** Holds the answers to POSTs while set, until it is released. */
 	private volatile CountDownLatch answerGate;
 
+	/** Holds the answers to DELETEs while set, until it is released. */
+	private volatile CountDownLatch deleteGate;
+
 	private int answered;
 
 	private final ServerSocket server;
@@ -110,6 +113,16 @@ final class TestHttpEndpoint implements AutoCloseable {
 	CountDownLatch holdAnswers() {
 		CountDownLatch gate = new CountDownLatch(1);
 		answerGate = gate;
+		return gate;
+	}
+
+	/**
+	 * Holds the answer to every DELETE from now on, after the request has been
+	 * recorded, until the returned latch is counted down.
+	 */
+	CountDownLatch holdDeletes() {
+		CountDownLatch gate = new CountDownLatch(1);
+		deleteGate = gate;
 		return gate;
 	}
 
@@ -201,29 +214,35 @@ final class TestHttpEndpoint implements AutoCloseable {
 			}
 
 			String answer = answerer.apply(new String(body, StandardCharsets.UTF_8));
-			CountDownLatch gate = answerGate;
-
-			if (gate != null) {
-				try {
-					gate.await();
-				}
-				catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-					throw new IOException(e);
-				}
-			}
+			pass(answerGate);
 
 			synchronized (this) {
 				answered++;
 			}
 
 			respond(out, "201 Created", "Location: " + location + "\r\n", answer);
+			return;
 		}
-		else if (deleteStatus / 100 == 3) {
+
+		pass(deleteGate);
+
+		if (deleteStatus / 100 == 3) {
 			respond(out, deleteStatus + " Moved", "Location: " + redirect + "\r\n", "");
 		}
 		else {
 			respond(out, deleteStatus + " Status", "", "");
+		}
+	}
+
+	private static void pass(CountDownLatch gate) throws IOException {
+		if (gate != null) {
+			try {
+				gate.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new IOException(e);
+			}
 		}
 	}
 

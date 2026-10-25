@@ -20,9 +20,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Proxy;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -329,8 +331,9 @@ class HttpSessionTests extends ClientTestBase {
 			Whep.Session session = await(Whep.from(endpoint.uri()).play(client));
 
 			client.close();
-			await(session.closeAsync());
+			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
 
+			assertTrue(failed.getCause().getMessage().contains("left on the server"), failed.getCause().getMessage());
 			assertEquals(0, endpoint.count("DELETE /live/session/1"));
 			assertEquals(1, errors.size(), () -> "Errors: " + errors);
 			assertTrue(errors.get(0).getMessage().contains("left on the server"), errors.get(0).getMessage());
@@ -362,8 +365,54 @@ class HttpSessionTests extends ClientTestBase {
 			endpoint.deleteStatus = 500;
 
 			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
-			await(session.closeAsync());
 
+			assertCloseFails(session, "500");
+			// Closed all the same.
+			assertEquals(PeerState.CLOSED, session.peer().state());
+			assertDeleteReported("500");
+		}
+	}
+
+	@Test
+	void slowDeleteKeepsNoPeerOpen() throws Exception {
+		// The peer closes while the server has yet to answer the deletion,
+		// and the session is closed once both are done.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
+			CountDownLatch deleted = endpoint.holdDeletes();
+			CompletableFuture<Void> closed = session.closeAsync();
+
+			try {
+				endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+				await(session.peer().whenClosed());
+				assertFalse(closed.isDone());
+			}
+			finally {
+				deleted.countDown();
+			}
+
+			await(closed);
+		}
+	}
+
+	@Test
+	void failedPeerCloseFails() throws Exception {
+		IllegalStateException peerError = new IllegalStateException("The peer did not close");
+
+		// Nothing to delete: the session fails as the peer did.
+		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, null, SESSION_TIMEOUT);
+		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
+		assertSame(peerError, failed.getCause());
+
+		// Both fail: the deletion leads, and the peer's failure goes along.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			endpoint.deleteStatus = 500;
+
+			HttpSession both = new Whep.Session(rtc, failingToClose(peerError),
+					endpoint.uri().resolve("/live/session/1"), null, SESSION_TIMEOUT);
+			Throwable error = assertCloseFails(both, "500");
+
+			assertEquals(Arrays.asList(peerError), Arrays.asList(error.getSuppressed()));
 			assertDeleteReported("500");
 		}
 	}
@@ -375,8 +424,8 @@ class HttpSessionTests extends ClientTestBase {
 			endpoint.deleteStatus = 307;
 
 			Whip.Session session = await(Whip.to(endpoint.uri()).bearerToken("secret").track(video).publish(rtc));
-			await(session.closeAsync());
 
+			assertCloseFails(session, "307");
 			assertDeleteReported("307");
 			assertFalse(endpoint.requests.stream().anyMatch(request -> request.path.equals(endpoint.redirect)),
 					() -> "Requests: " + endpoint.requests);
@@ -498,6 +547,36 @@ class HttpSessionTests extends ClientTestBase {
 		return new TestHttpEndpoint(offer -> answer(rtc.createPeer(PeerOptions.builder()
 				.negotiation(Negotiation.MANUAL)
 				.build()), offer), 201);
+	}
+
+	/**
+	 * Checks that closing the session fails with the deletion the server
+	 * answered with the given status.
+	 *
+	 * @return the failure.
+	 */
+	private static Throwable assertCloseFails(HttpSession session, String status) {
+		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
+		Throwable error = failed.getCause();
+
+		assertInstanceOf(WebRtcException.class, error);
+		assertTrue(error.getMessage().contains("Deleting the session"), error::getMessage);
+		assertTrue(error.getCause().getMessage().contains(status), () -> error.getCause().getMessage());
+
+		return error;
+	}
+
+	/**
+	 * A peer whose close fails, as no peer of the runtime can be made to.
+	 */
+	private static Peer failingToClose(Throwable error) {
+		return (Peer) Proxy.newProxyInstance(Peer.class.getClassLoader(), new Class<?>[] { Peer.class },
+				(proxy, method, args) -> {
+					if (method.getName().equals("closeAsync")) {
+						return ClientFuture.failed(error);
+					}
+					throw new UnsupportedOperationException(method.getName());
+				});
 	}
 
 	/**
