@@ -54,6 +54,22 @@ namespace ffmpeg
 	class MediaRecorder
 	{
 		public:
+			// How a recording ended, in the order of the Java
+			// MediaRecorderResult.
+			enum class Result
+			{
+				// Every frame taken was written, and the file was finished
+				// and closed.
+				kComplete,
+				// Media went into the file, but writing, finishing or closing
+				// it failed later.
+				kPartial,
+				// Nothing went wrong, and no media went into the file.
+				kEmpty,
+				// Writing failed before any media went into the file.
+				kFailed
+			};
+
 			MediaRecorder(const webrtc_java_api * api, std::string path);
 
 			// Stops the recording if it still runs.
@@ -80,9 +96,10 @@ namespace ffmpeg
 			void Start();
 
 			// Detaches from every track, writes out what is queued, finishes
-			// the file and waits for the writer thread. Returns whether any
-			// media was written. Stopping twice does nothing more.
-			bool Stop();
+			// the file, waits for the writer thread and closes the file.
+			// Returns how the recording ended. Stopping twice does nothing
+			// more, and returns the same.
+			Result Stop();
 
 		private:
 			// What the observer callback knows about a track. Guarded by
@@ -135,6 +152,10 @@ namespace ffmpeg
 			bool MaybeWriteHeader(bool finishing);
 
 			void Finish();
+
+			// Closes the file if it is open, and fails the recording if that
+			// does.
+			void Close();
 			void Fail(const std::string & message, int error);
 			void Warn(const std::string & message);
 
@@ -155,6 +176,8 @@ namespace ffmpeg
 			int64_t first_ready_us_ = 0;
 			// Also read by Stop(), on the thread that stops.
 			std::atomic<bool> header_written_{ false };
+			// Read by Stop() once the writer has ended; the thread that stops
+			// sets it when it closes a file that had no writer.
 			bool failed_ = false;
 
 			// When recording started, in the clock of the frames.
@@ -175,6 +198,8 @@ namespace ffmpeg
 			bool stopping_ = false;
 			bool started_ = false;
 			bool stopped_ = false;
+			// Set by the first Stop(), once the file is closed.
+			Result result_ = Result::kEmpty;
 	};
 }
 

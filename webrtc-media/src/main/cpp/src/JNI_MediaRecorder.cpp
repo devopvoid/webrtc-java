@@ -55,7 +55,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_crea
 				return 0;
 			}
 
-			path = chars.str();
+			path = chars.utf8();
 		}
 
 		auto recorder = std::make_unique<ffmpeg::MediaRecorder>(api, path);
@@ -99,15 +99,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_start
 	});
 }
 
-JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stop
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stop
 (JNIEnv * env, jclass caller, jlong handle)
 {
+	const jint failed = static_cast<jint>(ffmpeg::MediaRecorder::Result::kFailed);
+
 	if (handle == 0) {
-		return JNI_FALSE;
+		return failed;
 	}
 
-	return ffmpeg::CallFromJava<jboolean>(env, JNI_FALSE, [&]() -> jboolean {
-		return RecorderOf(handle)->Stop() ? JNI_TRUE : JNI_FALSE;
+	return ffmpeg::CallFromJava<jint>(env, failed, [&]() -> jint {
+		return static_cast<jint>(RecorderOf(handle)->Stop());
 	});
 }
 

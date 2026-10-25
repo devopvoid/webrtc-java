@@ -30,7 +30,24 @@ try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
 
 A sender's frames are recorded as they leave the encoder, a receiver's as they go to the decoder. Senders and receivers of any number of peer connections can go into one file, e.g. both sides of a call.
 
-`stop()` waits until everything received so far is written and the file is finished, and returns whether the file holds a recording. A recorder that never got any media to write deletes its file rather than leave an unplayable one behind. `close()` stops a recording that still runs.
+`stop()` waits until everything received so far is written and the file is finished and closed, and returns whether the file holds a recording. A recorder that never got any media to write deletes its file rather than leave an unplayable one behind. `close()` stops a recording that still runs.
+
+How the recording ended, `getResult()` tells once the recorder is stopped, and keeps telling after `close()`:
+
+| Result | File | Meaning |
+| --- | --- | --- |
+| `COMPLETE` | kept | Everything was written, and the file was finished and closed. |
+| `PARTIAL` | kept | Media went into the file, but writing, finishing or closing it failed later. What made it into the file is kept, since it may still play. |
+| `EMPTY` | deleted | No media arrived before the stop. |
+| `FAILED` | deleted | Writing failed before any media went into the file. |
+
+```java
+recorder.stop();
+
+if (recorder.getResult() == MediaRecorderResult.PARTIAL) {
+    System.out.println("Incomplete recording in " + recorder.getFile());
+}
+```
 
 ::: warning
 Keep the senders and receivers undisposed while recording. The recorder asks them for key frames, and a disposed one cannot be asked.
@@ -84,6 +101,8 @@ recorder.setListener(new MediaRecorderListener() {
 ```
 
 Calls arrive in order on a thread the recorder keeps for them, so a listener may take its time and may even stop the recorder.
+
+`onError` also hears of a file that cannot be finished or closed when the recorder stops, e.g. because the last data does not fit on the disk. The recording then ends as `PARTIAL`.
 
 ## How Tracks Are Recorded
 

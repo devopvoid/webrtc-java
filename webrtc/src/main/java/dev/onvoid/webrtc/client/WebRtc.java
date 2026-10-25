@@ -135,6 +135,7 @@ public final class WebRtc implements AutoCloseable {
 
 	private final AtomicBoolean closing = new AtomicBoolean();
 
+	/** Never handed out, so that no caller can cancel what the close waits for. */
 	private final CompletableFuture<Void> closed = new CompletableFuture<>();
 
 	/** The futures tracked that are not done, with what fails each. */
@@ -319,16 +320,17 @@ public final class WebRtc implements AutoCloseable {
 	 * that names the cause, as it does when disposing fails.
 	 *
 	 * @return a future that completes once all is closed, or fails when not
-	 * everything could be released.
+	 * everything could be released. Each call returns a future of its own:
+	 * cancelling it stops waiting, not the close.
 	 */
 	public CompletableFuture<Void> closeAsync() {
-		if (closing.compareAndSet(false, true)) {
-			Thread thread = new Thread(this::shutdown, "webrtc-client-close");
-			thread.setDaemon(true);
-			thread.start();
-		}
+		startClose();
 
-		return closed;
+		// Not on an event thread, so that one may wait for it.
+		CompletableFuture<Void> result = new CompletableFuture<>();
+		closed.whenComplete((ignored, error) -> PeerImpl.complete(result, null, error));
+
+		return result;
 	}
 
 	/**
@@ -343,10 +345,10 @@ public final class WebRtc implements AutoCloseable {
 	 */
 	@Override
 	public void close() {
-		CompletableFuture<Void> future = closeAsync();
+		startClose();
 
 		try {
-			future.get(Timeouts.toMillis(closeTimeout), TimeUnit.MILLISECONDS);
+			closed.get(Timeouts.toMillis(closeTimeout), TimeUnit.MILLISECONDS);
 		}
 		catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
@@ -356,6 +358,14 @@ public final class WebRtc implements AutoCloseable {
 		}
 		catch (TimeoutException e) {
 			reportError(new WebRtcException("The runtime did not close within " + closeTimeout, e));
+		}
+	}
+
+	private void startClose() {
+		if (closing.compareAndSet(false, true)) {
+			Thread thread = new Thread(this::shutdown, "webrtc-client-close");
+			thread.setDaemon(true);
+			thread.start();
 		}
 	}
 

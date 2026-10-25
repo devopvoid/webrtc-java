@@ -113,7 +113,7 @@ abstract class HttpSession implements AutoCloseable {
 					.whenComplete((ignored, error) -> closed.complete(null));
 		}
 
-		return closed;
+		return ClientFuture.copyOf(closed);
 	}
 
 	/**

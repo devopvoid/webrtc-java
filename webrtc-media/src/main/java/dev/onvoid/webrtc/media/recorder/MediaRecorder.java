@@ -110,6 +110,9 @@ public class MediaRecorder implements AutoCloseable {
 
 	private MediaRecorderState state = MediaRecorderState.IDLE;
 
+	/** How the recording ended, or null until it was stopped. */
+	private MediaRecorderResult result;
+
 
 	/**
 	 * Creates a recorder writing to the given file, which is created, or
@@ -253,24 +256,31 @@ public class MediaRecorder implements AutoCloseable {
 	 * so far to be written. A recorder that never got any media to write
 	 * deletes its file rather than leave an unplayable one behind.
 	 * <p>
-	 * Stopping a recorder that is stopped does nothing. Stopping one that was
-	 * never started deletes its file.
+	 * A file that holds media is kept even when writing, finishing or closing
+	 * it failed, since what made it into the file may still play. Whether it
+	 * is complete, {@link #getResult()} tells.
+	 * <p>
+	 * Stopping a recorder that is stopped does nothing, and returns the same.
+	 * Stopping one that was never started deletes its file.
 	 *
-	 * @return True if the file holds a recording, false if it was deleted.
+	 * @return True if the file holds a recording, complete or not, false if it
+	 * was deleted.
 	 */
 	public boolean stop() {
 		boolean recorded;
 
 		synchronized (lock) {
+			if (result != null) {
+				return result.keepsFile();
+			}
 			if (handle == 0) {
 				return false;
 			}
-			if (state == MediaRecorderState.STOPPED) {
-				return Files.exists(file);
-			}
 
-			recorded = stop(handle);
+			// In the order of the native MediaRecorder::Result.
+			result = MediaRecorderResult.values()[stop(handle)];
 			state = MediaRecorderState.STOPPED;
+			recorded = result.keepsFile();
 
 			if (events != null) {
 				// Lets the reports already queued run, then ends the thread.
@@ -298,6 +308,20 @@ public class MediaRecorder implements AutoCloseable {
 	public MediaRecorderState getState() {
 		synchronized (lock) {
 			return state;
+		}
+	}
+
+	/**
+	 * Returns how the recording ended: completely, partly, without media, or
+	 * failed. It is known once the recorder is stopped, and stays the same
+	 * from then on, after {@link #close()} as well.
+	 *
+	 * @return The result, or {@code null} if the recorder was not stopped
+	 * yet.
+	 */
+	public MediaRecorderResult getResult() {
+		synchronized (lock) {
+			return result;
 		}
 	}
 
@@ -466,7 +490,7 @@ public class MediaRecorder implements AutoCloseable {
 
 	private static native void start(long handle);
 
-	private static native boolean stop(long handle);
+	private static native int stop(long handle);
 
 	private static native void dispose(long handle);
 

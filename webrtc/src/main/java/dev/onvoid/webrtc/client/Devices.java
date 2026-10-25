@@ -85,7 +85,8 @@ public interface Devices {
 	/**
 	 * Calls the handler after a device was connected or disconnected.
 	 *
-	 * @param handler called on a background thread with the new snapshot.
+	 * @param handler called on an event thread of the runtime with the new
+	 *                snapshot.
 	 *
 	 * @return the subscription that removes the handler.
 	 */

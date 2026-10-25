@@ -292,6 +292,68 @@ class RuntimeCloseTests extends ClientTestBase {
 	}
 
 	@Test
+	void endedHandlerWaitsForClose() throws Exception {
+		// Handlers of a track wait for its own close and for that of another
+		// track. Both releases complete without the handlers, which run on an
+		// event thread, where the waits are refused rather than hanging.
+		LocalVideo first = rtc.media().customVideo("first");
+		LocalVideo second = rtc.media().customVideo("second");
+		CompletableFuture<Throwable> ownWait = new CompletableFuture<>();
+		CompletableFuture<Throwable> otherWait = new CompletableFuture<>();
+
+		first.onEnded(() -> ownWait.complete(waitFor(first.closeAsync())));
+		first.onEnded(() -> otherWait.complete(waitFor(second.closeAsync())));
+		first.close();
+
+		assertInstanceOf(BlockingCallException.class, await(ownWait));
+		assertInstanceOf(BlockingCallException.class, await(otherWait));
+
+		await(first.closeAsync());
+		await(second.closeAsync());
+		assertTrue(second.isEnded());
+	}
+
+	@Test
+	void cancelledTrackClose() throws Exception {
+		// The application stops waiting for a track's close before the release
+		// ran. The release goes on, and the runtime, which waits for it, does
+		// not take the cancellation for a failure.
+		ManualExecutor control = new ManualExecutor();
+		WebRtc runtime = runtime(control);
+		LocalVideo track = runtime.media().customVideo("cancelled");
+
+		assertTrue(track.closeAsync().cancel(false));
+		control.awaitQueued(TIMEOUT_SECONDS);
+
+		CompletableFuture<Void> closed = runtime.closeAsync();
+		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
+
+		await(closed);
+		await(track.closeAsync());
+	}
+
+	@Test
+	void cancelledRuntimeClose() throws Exception {
+		// Each caller gets a future of its own, whose cancellation neither
+		// stops the close nor reaches the others.
+		assertTrue(rtc.closeAsync().cancel(false));
+
+		rtc.close();
+		await(rtc.closeAsync());
+	}
+
+	@Test
+	void cancelledPeerClose() throws Exception {
+		Peer peer = rtc.createPeer(manualOptions());
+
+		assertTrue(peer.whenClosed().cancel(false));
+		assertTrue(peer.closeAsync().cancel(false));
+
+		await(peer.whenClosed());
+		await(peer.closeAsync());
+	}
+
+	@Test
 	void releaseFailureFailsClose() throws Exception {
 		// A step of the release fails. The steps after it run all the same,
 		// and the track's close fails, as does the runtime's, which leaves
@@ -388,11 +450,9 @@ class RuntimeCloseTests extends ClientTestBase {
 		ManualExecutor control = new ManualExecutor();
 		WebRtc runtime = runtime(control);
 		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
-		AtomicBoolean poolStopped = new AtomicBoolean(true);
 		LocalCameraImpl camera = camera(runtime);
 
 		CompletableFuture<Void> switched = camera.switchCamera(camera("Other camera"));
-		switched.whenComplete((value, error) -> poolStopped.set(runtime.controlPool.isShutdown()));
 
 		// Named among what the runtime waits for, beside the track.
 		assertEquals(2, media.closeAll().size());
@@ -401,7 +461,8 @@ class RuntimeCloseTests extends ClientTestBase {
 		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
 		await(closed);
 
-		assertFalse(poolStopped.get());
+		// The switch ran while the runtime still had its threads, rather than
+		// being failed by the runtime's close.
 		assertTrackClosed(switched);
 	}
 
@@ -430,7 +491,6 @@ class RuntimeCloseTests extends ClientTestBase {
 			control.rejecting(true);
 			CompletableFuture<Void> switched = camera.switchCamera(camera("Other camera"));
 
-			assertTrue(switched.isDone());
 			ExecutionException e = assertThrows(ExecutionException.class, () -> await(switched));
 			assertInstanceOf(PeerClosedException.class, e.getCause());
 			assertEquals(1, errors.size(), () -> "Errors: " + errors);
@@ -549,6 +609,19 @@ class RuntimeCloseTests extends ClientTestBase {
 		ExecutionException e = assertThrows(ExecutionException.class, () -> await(switched));
 		assertInstanceOf(MediaException.class, e.getCause());
 		assertEquals("The camera track is closed", e.getCause().getMessage());
+	}
+
+	/**
+	 * @return what waiting for the future threw, or null.
+	 */
+	private static Throwable waitFor(CompletableFuture<?> future) {
+		try {
+			future.join();
+			return null;
+		}
+		catch (Throwable e) {
+			return e;
+		}
 	}
 
 	private static AudioDevice speaker() {

@@ -83,7 +83,14 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
 				return 0;
 			}
 
-			url = chars.str();
+			url = chars.utf8();
+		}
+
+		// FFmpeg would read the source only up to it, and open another one.
+		if (url.find('\0') != std::string::npos) {
+			ffmpeg::ThrowIOException(env, "Source must not contain a null character");
+
+			return 0;
 		}
 
 		auto reader = std::make_unique<ffmpeg::MediaReader>(static_cast<int64_t>(timeoutUs));

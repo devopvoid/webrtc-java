@@ -57,6 +57,7 @@ import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.recorder.MediaRecorder;
 import dev.onvoid.webrtc.media.recorder.MediaRecorderListener;
+import dev.onvoid.webrtc.media.recorder.MediaRecorderResult;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
@@ -170,7 +171,8 @@ public class EncryptedRecordingExample {
             Thread.sleep(TimeUnit.SECONDS.toMillis(RECORD_SECONDS));
 
             if (recorder.stop()) {
-                LOG.info("Recorded " + RECORD_SECONDS + " seconds into " + recorder.getFile());
+                LOG.info("Recorded " + RECORD_SECONDS + " seconds into " + recorder.getFile()
+                        + (recorder.getResult() == MediaRecorderResult.PARTIAL ? ", incomplete" : ""));
             }
         }
         finally {

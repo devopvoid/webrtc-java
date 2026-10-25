@@ -22,13 +22,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCRtpReceiver;
@@ -37,6 +41,7 @@ import dev.onvoid.webrtc.media.audio.AudioLayer;
 import dev.onvoid.webrtc.media.player.AllocationFault;
 import dev.onvoid.webrtc.media.player.MediaInfo;
 import dev.onvoid.webrtc.media.player.MediaReader;
+import dev.onvoid.webrtc.media.player.UnicodeFileName;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -97,11 +102,13 @@ class MediaRecorderTest {
 
 				assertEquals(MediaRecorderState.RECORDING, recorder.getState());
 				assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+				assertNull(recorder.getResult());
 
 				Thread.sleep(RECORD_MS);
 
 				assertTrue(recorder.stop());
 				assertEquals(MediaRecorderState.STOPPED, recorder.getState());
+				assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
 			}
 			finally {
 				video.dispose();
@@ -150,6 +157,47 @@ class MediaRecorderTest {
 		assertEquals("vp8", info.getVideoCodec());
 		assertEquals("opus", info.getAudioCodec());
 		assertDuration(info);
+	}
+
+	@Test
+	void recordsIntoPathBeyondBasicPlane() throws Exception {
+		// FFmpeg takes UTF-8, which is not the modified UTF-8 of JNI for
+		// characters beyond the Basic Multilingual Plane. A directory of its
+		// own shows that no file of another name was written.
+		Path dir = Files.createDirectory(tempDir.resolve("unicode"));
+		Path file = UnicodeFileName.resolve(dir, "mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			Thread.sleep(1000);
+
+			assertTrue(recorder.stop());
+		}
+
+		assertNull(listener.error.get());
+
+		try (Stream<Path> files = Files.list(dir)) {
+			assertEquals(Collections.singletonList(file), files.collect(Collectors.toList()));
+		}
+
+		assertEquals("vp8", readInfo(file).getVideoCodec());
+	}
+
+	@Test
+	void failedOpenBeyondBasicPlaneNamesPath() {
+		Path file = UnicodeFileName.resolve(tempDir.resolve("no-such-dir"), "mkv");
+
+		IOException e = assertThrows(IOException.class, () -> new MediaRecorder(file));
+
+		// The path comes back to Java as it went in.
+		assertTrue(e.getMessage().contains(UnicodeFileName.NAME), e.getMessage());
 	}
 
 	@Test
@@ -204,6 +252,7 @@ class MediaRecorderTest {
 
 			// Too soon for any frame to have made it into the file.
 			assertFalse(recorder.stop());
+			assertEquals(MediaRecorderResult.EMPTY, recorder.getResult());
 		}
 
 		assertFalse(Files.exists(file));
@@ -212,13 +261,21 @@ class MediaRecorderTest {
 	@Test
 	void unstartedRecorderDeletesFile() throws Exception {
 		Path file = tempDir.resolve("unstarted.mkv");
+		MediaRecorder recorder = new MediaRecorder(file);
 
-		try (MediaRecorder recorder = new MediaRecorder(file)) {
+		try {
 			assertEquals(MediaRecorderState.IDLE, recorder.getState());
 			assertThrows(IllegalStateException.class, recorder::start);
 		}
+		finally {
+			recorder.close();
+		}
 
 		assertFalse(Files.exists(file));
+
+		// Kept beyond the close, with the answer of the stop it made.
+		assertEquals(MediaRecorderResult.EMPTY, recorder.getResult());
+		assertFalse(recorder.stop());
 	}
 
 	@Test
@@ -382,6 +439,113 @@ class MediaRecorderTest {
 		assertTrue(readInfo(file).hasVideo());
 	}
 
+	@Test
+	void failedHeaderFailsRecording() throws Exception {
+		Path file = tempDir.resolve("failed-header.mkv");
+		Listener listener = new Listener();
+
+		WriteFault.failHeader();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+
+			// Nothing playable went into the file, so it is not kept.
+			assertFalse(recorder.stop());
+			assertEquals(MediaRecorderResult.FAILED, recorder.getResult());
+		}
+		finally {
+			WriteFault.disarm();
+		}
+
+		assertErrorStartsWith(listener, "Writing the header of ");
+		assertEquals(1, listener.started.getCount(), "reported as started");
+		assertFalse(Files.exists(file));
+	}
+
+	@Test
+	void failedWriteKeepsPartialRecording() throws Exception {
+		Path file = tempDir.resolve("failed-write.mkv");
+		Listener listener = new Listener();
+
+		// Well into the recording, once there is media in the file.
+		WriteFault.failPacket(30);
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.PARTIAL, recorder.getResult());
+		}
+		finally {
+			WriteFault.disarm();
+		}
+
+		assertErrorStartsWith(listener, "Writing to ");
+		assertTrue(readInfo(file).hasVideo());
+	}
+
+	@Test
+	void failedTrailerKeepsPartialRecording() throws Exception {
+		assertFailedFinishKeepsFile("failed-trailer.mkv", WriteFault::failTrailer, "Finishing ");
+	}
+
+	@Test
+	void failedCloseKeepsPartialRecording() throws Exception {
+		assertFailedFinishKeepsFile("failed-close.mkv", WriteFault::failClose, "Closing ");
+	}
+
+	/**
+	 * Records a call whose file fails to be finished or closed when the
+	 * recorder stops: the failure is reported, and the file is kept as
+	 * partial.
+	 */
+	private void assertFailedFinishKeepsFile(String name, Runnable fault, String error) throws Exception {
+		Path file = tempDir.resolve(name);
+		Listener listener = new Listener();
+
+		fault.run();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			Thread.sleep(1000);
+
+			assertNull(listener.error.get());
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.PARTIAL, recorder.getResult());
+
+			// Reported before the event thread ends, which the stop let do.
+			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+		}
+		finally {
+			WriteFault.disarm();
+		}
+
+		assertErrorStartsWith(listener, error + file.toAbsolutePath());
+		assertTrue(Files.exists(file));
+	}
+
+	private static void assertErrorStartsWith(Listener listener, String prefix) {
+		String error = listener.error.get();
+
+		assertTrue(error != null && error.startsWith(prefix), "error: " + error);
+	}
+
 	/**
 	 * Records a call that sends G.711 into Matroska, which has no codec ID of
 	 * its own for it, and reads the audio back as the codec it was sent in.
@@ -440,6 +604,8 @@ class MediaRecorderTest {
 
 		final AtomicReference<String> error = new AtomicReference<>();
 
+		final CountDownLatch failed = new CountDownLatch(1);
+
 
 		@Override
 		public void onStarted() {
@@ -454,6 +620,7 @@ class MediaRecorderTest {
 		@Override
 		public void onError(String message) {
 			error.set(message);
+			failed.countDown();
 		}
 	}
 

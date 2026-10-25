@@ -48,10 +48,12 @@ public interface LocalTrack extends AutoCloseable {
 	void setEnabled(boolean enabled);
 
 	/**
-	 * Calls the handler once the track ended. A handler added after that is
-	 * called at once.
+	 * Calls the handler once the track ended and its native track is
+	 * released. A handler added after that is called at once.
 	 *
-	 * @param handler called on a background thread.
+	 * @param handler called on an event thread of the runtime, where waiting
+	 *                for a future of this API that is not done throws a
+	 *                {@link BlockingCallException}.
 	 *
 	 * @return the subscription that removes the handler.
 	 */
@@ -71,6 +73,9 @@ public interface LocalTrack extends AutoCloseable {
 	 * LocalMedia#videoTrack} or {@link LocalMedia#audioTrack}, may be closed;
 	 * or fails with a {@link WebRtcException} when the track or its source
 	 * could not be released, which then fails the runtime's close as well.
+	 * It completes on an event thread, after the ended handlers ran. Each
+	 * call returns a future of its own: cancelling it stops waiting, not the
+	 * close.
 	 */
 	CompletableFuture<Void> closeAsync();
 

@@ -100,7 +100,9 @@ final class LocalCameraImpl extends LocalVideoImpl implements LocalCamera {
 			switched.completeExceptionally(new PeerClosedException("The runtime is closed"));
 		});
 
-		return switched;
+		// Completed on the event executor, so that the application's
+		// callbacks never hold up the media executor.
+		return media.toPublic(switched);
 	}
 
 	private void switchTo(VideoDevice device) {
