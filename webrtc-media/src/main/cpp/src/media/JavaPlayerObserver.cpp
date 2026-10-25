@@ -175,12 +175,9 @@ namespace ffmpeg
 
 	void JavaPlayerObserver::ClearPendingException(JNIEnv * env)
 	{
-		if (env->ExceptionCheck() == JNI_TRUE) {
-			// There is nowhere to throw this: the thread below is decoding,
-			// not running Java. Reporting and clearing keeps it from taking
-			// down the next unrelated JNI call instead.
-			env->ExceptionDescribe();
-			env->ExceptionClear();
-		}
+		// There is nowhere to throw this: the thread below is decoding,
+		// not running Java. Reporting and clearing keeps it from taking
+		// down the next unrelated JNI call instead.
+		ReportPendingException(env);
 	}
 }

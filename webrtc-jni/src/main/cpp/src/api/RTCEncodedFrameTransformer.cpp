@@ -15,6 +15,7 @@
  */
 
 #include "api/RTCEncodedFrameTransformer.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
@@ -52,8 +53,7 @@ namespace jni
 		bool ClearException(JNIEnv * env)
 		{
 			if (env->ExceptionCheck()) {
-				env->ExceptionDescribe();
-				env->ExceptionClear();
+				ReportPendingException(env);
 
 				return true;
 			}

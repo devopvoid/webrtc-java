@@ -22,8 +22,9 @@
 bool ExceptionCheck(JNIEnv * env)
 {
 	if (env->ExceptionCheck()) {
+		// Not described here: the exception travels on, to be thrown back
+		// into Java or reported by whoever catches it.
 		jthrowable exception = env->ExceptionOccurred();
-		env->ExceptionDescribe();
 		env->ExceptionClear();
 
 		if (exception) {

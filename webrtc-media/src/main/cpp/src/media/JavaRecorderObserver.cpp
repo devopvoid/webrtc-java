@@ -175,9 +175,6 @@ namespace ffmpeg
 
 	void JavaRecorderObserver::ClearPendingException(JNIEnv * env)
 	{
-		if (env->ExceptionCheck() == JNI_TRUE) {
-			env->ExceptionDescribe();
-			env->ExceptionClear();
-		}
+		ReportPendingException(env);
 	}
 }

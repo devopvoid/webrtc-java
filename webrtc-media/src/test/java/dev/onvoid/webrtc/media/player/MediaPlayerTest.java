@@ -401,6 +401,47 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void reportsWhatTheListenerThrows() throws Exception {
+		// What the listener throws on the player's thread goes to that
+		// thread's uncaught exception handler, as it would on a Java thread,
+		// rather than half to native stderr through ExceptionDescribe.
+		CountDownLatch reported = new CountDownLatch(1);
+		Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+
+		Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+			if (e instanceof IllegalStateException && "listener fails on purpose".equals(e.getMessage())) {
+				reported.countDown();
+			}
+			else if (previous != null) {
+				previous.uncaughtException(thread, e);
+			}
+		});
+
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					throw new IllegalStateException("listener fails on purpose");
+				}
+			});
+
+			player.seek(2_500_000);
+			player.play();
+
+			assertTrue(reported.await(10, TimeUnit.SECONDS), "not reported");
+
+			player.close();
+		}
+		finally {
+			Thread.setDefaultUncaughtExceptionHandler(previous);
+		}
+	}
+
+	@Test
 	void closesFromStateChangeOfCommand() throws Exception {
 		try (Sources sources = new Sources()) {
 			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),

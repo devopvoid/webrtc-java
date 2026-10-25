@@ -41,6 +41,13 @@ namespace ffmpeg
 	// RuntimeException. Only to be called from a catch block.
 	void ThrowCurrentException(JNIEnv * env) noexcept;
 
+	// Clears the Java exception pending on the calling thread, if any, and
+	// hands it to that thread's uncaught exception handler, as the JVM does
+	// for one escaping a Java thread. Unlike ExceptionDescribe, which writes
+	// its first line to native stderr and the stack trace to System.err, the
+	// whole report goes to where the handler writes it.
+	void ReportPendingException(JNIEnv * env) noexcept;
+
 	// Runs the body of a JNI entry point, which must not let a C++ exception
 	// reach the VM: one that does ends the process. A C++ exception becomes a
 	// Java one, and the entry point returns `on_error`. Whatever the body

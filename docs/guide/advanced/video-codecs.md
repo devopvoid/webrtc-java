@@ -281,7 +281,7 @@ class MyDecoder implements VideoDecoder {
 
 ## Errors
 
-Whatever an encoder, decoder or factory method throws is logged and treated as `VideoCodecStatus.ERROR`, and a factory that throws from `createEncoder()` or `createDecoder()` creates no codec for that stream. On an error other than `FALLBACK_SOFTWARE` and `UNINITIALIZED`, WebRTC releases the codec and initializes it again.
+Whatever an encoder, decoder or factory method throws goes to the calling thread's uncaught exception handler, is logged, and is treated as `VideoCodecStatus.ERROR`, and a factory that throws from `createEncoder()` or `createDecoder()` creates no codec for that stream. On an error other than `FALLBACK_SOFTWARE` and `UNINITIALIZED`, WebRTC releases the codec and initializes it again.
 
 ## Related API
 

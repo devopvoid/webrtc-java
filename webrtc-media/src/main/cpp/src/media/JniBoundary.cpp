@@ -204,6 +204,47 @@ namespace ffmpeg
 		}
 	}
 
+	void ReportPendingException(JNIEnv * env) noexcept
+	{
+		if (env->ExceptionCheck() == JNI_FALSE) {
+			return;
+		}
+
+		LocalRef<jthrowable> exception(env, env->ExceptionOccurred());
+		env->ExceptionClear();
+
+		LocalRef<jclass> thread_class(env, env->FindClass("java/lang/Thread"));
+		LocalRef<jclass> handler_class(env, env->FindClass("java/lang/Thread$UncaughtExceptionHandler"));
+
+		if (env->ExceptionCheck() == JNI_TRUE) {
+			env->ExceptionClear();
+			return;
+		}
+
+		jmethodID current_thread = env->GetStaticMethodID(thread_class.get(), "currentThread", "()Ljava/lang/Thread;");
+		jmethodID get_handler = env->GetMethodID(thread_class.get(), "getUncaughtExceptionHandler",
+			"()Ljava/lang/Thread$UncaughtExceptionHandler;");
+		jmethodID uncaught_exception = env->GetMethodID(handler_class.get(), "uncaughtException",
+			"(Ljava/lang/Thread;Ljava/lang/Throwable;)V");
+
+		if (env->ExceptionCheck() == JNI_TRUE) {
+			env->ExceptionClear();
+			return;
+		}
+
+		LocalRef<jobject> thread(env, env->CallStaticObjectMethod(thread_class.get(), current_thread));
+		LocalRef<jobject> handler(env, env->CallObjectMethod(thread.get(), get_handler));
+
+		if (env->ExceptionCheck() == JNI_FALSE && handler.get() != nullptr) {
+			env->CallVoidMethod(handler.get(), uncaught_exception, thread.get(), exception.get());
+		}
+
+		// Like the JVM, ignore an exception thrown by the handler itself.
+		if (env->ExceptionCheck() == JNI_TRUE) {
+			env->ExceptionClear();
+		}
+	}
+
 	JavaStringChars::JavaStringChars(JNIEnv * env, jstring string) noexcept :
 		env_(env),
 		string_(string),
