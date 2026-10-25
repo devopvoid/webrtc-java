@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -184,7 +183,13 @@ class MediaRecorderTest {
 		assertNull(listener.error.get());
 
 		try (Stream<Path> files = Files.list(dir)) {
-			assertEquals(Collections.singletonList(file), files.collect(Collectors.toList()));
+			List<Path> written = files.collect(Collectors.toList());
+
+			// Compared as files, not as paths: on macOS Java holds the name
+			// decomposed (ü as u and a diaeresis), while FFmpeg writes it as
+			// given, and the file system finds the file by either form.
+			assertEquals(1, written.size(), () -> "Written: " + written);
+			assertTrue(Files.isSameFile(file, written.get(0)), () -> "Written: " + written);
 		}
 
 		assertEquals("vp8", readInfo(file).getVideoCodec());
