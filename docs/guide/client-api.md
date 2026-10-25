@@ -655,7 +655,8 @@ peer.onStats(Duration.ofSeconds(1), stats -> System.out.printf(
 | `candidateType()` | The type of the local candidate in use: `host`, `srflx`, `prflx` or `relay`. Null while not connected. |
 | `roundTripTime()` | The current round trip time, or null while not measured. |
 | `bytesSent()`, `bytesReceived()` | The bytes sent and received on the connection so far. |
-| `outgoingBitrate()`, `incomingBitrate()` | Bits per second since the previous sample, or -1 for a peer's first sample. |
+| `timestamp()` | When WebRTC measured the statistics. |
+| `outgoingBitrate()`, `incomingBitrate()` | Bits per second between the measurement times of the previous sample and this one, or -1 when there is none to compare with: for a peer's first sample, after the clock went back, or after the byte counter started again. A report WebRTC hands out again within its short cache lifetime repeats the previous bitrates. |
 | `packetLoss()` | The share of received packets lost so far, 0 to 1. |
 | `outboundVideo()`, `inboundVideo()` | Codec, resolution and frame rate of each video stream, and what limits a sent one. |
 | `report()` | The whole `RTCStatsReport`. |

@@ -24,8 +24,8 @@ import dev.onvoid.webrtc.RTCStatsReport;
 
 /**
  * The statistics people look for first, taken from an {@link RTCStatsReport}.
- * Bitrates are computed between two samples, so the first sample a peer takes
- * has none.
+ * Bitrates are computed between the measurement times of two samples, so the
+ * first sample a peer takes has none.
  */
 public final class PeerStats {
 
@@ -71,7 +71,8 @@ public final class PeerStats {
 	}
 
 	/**
-	 * @return when the statistics were taken.
+	 * @return when WebRTC measured the statistics, the timestamp of the
+	 * report.
 	 */
 	public Instant timestamp() {
 		return timestamp;
@@ -107,8 +108,9 @@ public final class PeerStats {
 	}
 
 	/**
-	 * @return the bits sent per second since the previous sample, or -1 for
-	 * the first sample.
+	 * @return the bits sent per second since the previous sample, or -1 when
+	 * there is none to compare with: for the first sample, after the clock
+	 * went back, or after the byte counter started again.
 	 */
 	public long outgoingBitrate() {
 		return outgoingBitrate;
@@ -116,7 +118,8 @@ public final class PeerStats {
 
 	/**
 	 * @return the bits received per second since the previous sample, or -1
-	 * for the first sample.
+	 * when there is none to compare with: for the first sample, after the
+	 * clock went back, or after the byte counter started again.
 	 */
 	public long incomingBitrate() {
 		return incomingBitrate;

@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.client;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,15 +30,21 @@ import dev.onvoid.webrtc.RTCStatsType;
 
 /**
  * Takes {@link PeerStats} from the reports of one peer. It keeps the previous
- * sample to compute bitrates. Used on the peer's control executor.
+ * sample to compute bitrates over the time between the two measurements, not
+ * between their arrival here, which a busy control executor may delay. Used on
+ * the peer's control executor.
  */
 final class StatsReader {
 
-	private long lastNanos = -1;
+	private long lastMicros = -1;
 
 	private long lastBytesSent;
 
 	private long lastBytesReceived;
+
+	private long lastOutgoingBitrate = -1;
+
+	private long lastIncomingBitrate = -1;
 
 
 	PeerStats read(RTCStatsReport report) {
@@ -93,27 +100,47 @@ final class StatsReader {
 			}
 		}
 
-		long now = System.nanoTime();
+		long micros = report.getTimestamp();
 		long outgoingBitrate = -1;
 		long incomingBitrate = -1;
 
-		if (lastNanos >= 0 && now > lastNanos) {
-			double seconds = (now - lastNanos) / 1e9;
-
-			outgoingBitrate = (long) (Math.max(0, bytesSent - lastBytesSent) * 8 / seconds);
-			incomingBitrate = (long) (Math.max(0, bytesReceived - lastBytesReceived) * 8 / seconds);
+		if (lastMicros >= 0 && micros == lastMicros) {
+			// WebRTC hands out a report again for a short while: the same
+			// measurement, with the same bitrates, measured from the same
+			// sample.
+			outgoingBitrate = lastOutgoingBitrate;
+			incomingBitrate = lastIncomingBitrate;
 		}
+		else {
+			// A clock that went back leaves no interval to measure, and the
+			// next sample is measured from this one.
+			if (lastMicros >= 0 && micros > lastMicros) {
+				double seconds = (micros - lastMicros) / 1e6;
 
-		lastNanos = now;
-		lastBytesSent = bytesSent;
-		lastBytesReceived = bytesReceived;
+				outgoingBitrate = bitrate(bytesSent, lastBytesSent, seconds);
+				incomingBitrate = bitrate(bytesReceived, lastBytesReceived, seconds);
+			}
+
+			lastMicros = micros;
+			lastBytesSent = bytesSent;
+			lastBytesReceived = bytesReceived;
+			lastOutgoingBitrate = outgoingBitrate;
+			lastIncomingBitrate = incomingBitrate;
+		}
 
 		long packetsExpected = packetsReceived + packetsLost;
 		double packetLoss = packetsExpected == 0 ? 0 : (double) packetsLost / packetsExpected;
 
-		return new PeerStats(Instant.now(), candidateType, roundTripTime, bytesSent, bytesReceived,
+		return new PeerStats(Instant.EPOCH.plus(micros, ChronoUnit.MICROS), candidateType, roundTripTime, bytesSent, bytesReceived,
 				outgoingBitrate, incomingBitrate, packetLoss,
 				Collections.unmodifiableList(outbound), Collections.unmodifiableList(inbound), report);
+	}
+
+	private static long bitrate(long bytes, long lastBytes, double seconds) {
+		// Fewer bytes than before: the counter started again, such as on a
+		// transport that replaced another, and what was sent meanwhile is
+		// unknown.
+		return bytes < lastBytes ? -1 : (long) ((bytes - lastBytes) * 8 / seconds);
 	}
 
 	private static VideoStats video(Map<String, RTCStats> stats, Map<String, Object> values,
