@@ -401,12 +401,12 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public CompletableFuture<Peer> whenConnected() {
-		return connected;
+		return ClientFuture.copyOf(connected);
 	}
 
 	@Override
 	public CompletableFuture<Void> whenClosed() {
-		return closedFuture;
+		return ClientFuture.copyOf(closedFuture);
 	}
 
 	@Override
@@ -522,7 +522,7 @@ final class PeerImpl implements Peer {
 	public CompletableFuture<Void> closeAsync() {
 		closeInternal();
 
-		return closedFuture;
+		return ClientFuture.copyOf(closedFuture);
 	}
 
 	@Override

@@ -157,7 +157,7 @@ final class DataChannelImpl implements DataChannel {
 
 	@Override
 	public CompletableFuture<DataChannel> whenOpen() {
-		return opened;
+		return ClientFuture.copyOf(opened);
 	}
 
 	@Override
