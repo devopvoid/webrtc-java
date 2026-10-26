@@ -39,6 +39,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCStats;
 import dev.onvoid.webrtc.RTCStatsType;
@@ -90,31 +92,17 @@ class MediaTests extends ClientTestBase {
 	void clearedAudioNotResent() throws Exception {
 		// A format change sends the chunk begun before it, filled with
 		// silence, not with the audio that clear() dropped from it.
-		ManualTimer timer = new ManualTimer();
+		ManualTimer pacer = new ManualTimer();
 		WebRtc runtime = WebRtc.builder()
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)
-				.timer(timer)
+				.audioPacer(pacer)
 				.build();
-		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
 		List<byte[]> sent = new ArrayList<>();
-		CustomAudioImpl voice;
-
-		try (LocalMediaImpl.Creation creation = media.begin()) {
-			CustomAudioSource source = new CustomAudioSource() {
-
-				@Override
-				public void pushAudio(byte[] audioData, int bitsPerSample, int sampleRate, int channels,
-						int frameCount) {
-					sent.add(audioData.clone());
-				}
-			};
-
-			voice = media.register(new CustomAudioImpl(media, runtime.factory.createAudioTrack("voice", source),
-					source));
-		}
 
 		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+
 			// 160 bytes in 10 ms.
 			PcmFormat format = PcmFormat.of(8000, 1);
 			byte[] dropped = new byte[120];
@@ -127,7 +115,7 @@ class MediaTests extends ClientTestBase {
 			voice.push(kept, format);
 			voice.push(new byte[2], PcmFormat.of(16000, 1));
 
-			timer.fire(Duration.ofMillis(10));
+			pacer.fire(Duration.ofMillis(10));
 
 			assertEquals(1, sent.size());
 			assertEquals(160, sent.get(0).length);
@@ -138,6 +126,83 @@ class MediaTests extends ClientTestBase {
 		}
 		finally {
 			runtime.close();
+		}
+	}
+
+	@Test
+	void stalledAudioNotBurst() throws Exception {
+		// After a stall the pacer runs the missed ticks back to back. Those
+		// at most 50 ms late send, the earlier ones leave the audio queued.
+		ManualTimer pacer = new ManualTimer();
+		AtomicLong now = new AtomicLong();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.clock(now::get)
+				.build();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+			Duration tick = Duration.ofMillis(10);
+
+			// One second, 100 chunks of 160 bytes.
+			voice.push(new byte[16000], PcmFormat.of(8000, 1));
+			pacer.fire(tick);
+
+			assertEquals(1, sent.size());
+
+			// Stalled for a second: ticks 1 to 100 are due.
+			now.set(TimeUnit.SECONDS.toNanos(1));
+
+			for (int i = 0; i < 100; i++) {
+				pacer.fire(tick);
+			}
+
+			// Ticks 95 to 100, due from 950 ms on.
+			assertEquals(7, sent.size());
+			assertEquals(930, voice.queuedMillis());
+
+			// Back on pace.
+			now.addAndGet(tick.toNanos());
+			pacer.fire(tick);
+
+			assertEquals(8, sent.size());
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void slowPushLeavesTimerFree() throws Exception {
+		// Pushed audio is sent on a thread of its own: a push that hangs in
+		// WebRTC holds up the audio, not the timeouts on the timer.
+		CountDownLatch pushing = new CountDownLatch(1);
+		CountDownLatch unblock = new CountDownLatch(1);
+		CustomAudioImpl voice = recordingAudio(rtc, data -> {
+			pushing.countDown();
+
+			try {
+				unblock.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+
+		try {
+			voice.push(new byte[160], PcmFormat.of(8000, 1));
+			assertTrue(pushing.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+
+			CompletableFuture<Void> fired = new CompletableFuture<>();
+			rtc.timer.schedule(() -> fired.complete(null), 1, TimeUnit.MILLISECONDS);
+
+			await(fired);
+		}
+		finally {
+			unblock.countDown();
 		}
 	}
 
@@ -468,6 +533,25 @@ class MediaTests extends ClientTestBase {
 		}
 
 		return pcm;
+	}
+
+	/** A pushed-audio track whose source hands each chunk to the consumer. */
+	private static CustomAudioImpl recordingAudio(WebRtc runtime, Consumer<byte[]> chunks) {
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+
+		try (LocalMediaImpl.Creation creation = media.begin()) {
+			CustomAudioSource source = new CustomAudioSource() {
+
+				@Override
+				public void pushAudio(byte[] audioData, int bitsPerSample, int sampleRate, int channels,
+						int frameCount) {
+					chunks.accept(audioData.clone());
+				}
+			};
+
+			return media.register(new CustomAudioImpl(media, runtime.factory.createAudioTrack("voice", source),
+					source));
+		}
 	}
 
 }

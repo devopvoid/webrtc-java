@@ -407,7 +407,7 @@ CustomAudio voice = media.customAudio("voice");
 voice.push(pcm, PcmFormat.of(48000, 1));
 ```
 
-`CustomAudio` takes PCM in pieces of any length and from any thread. It cuts the audio into the 10 ms chunks WebRTC works with and sends one every 10 ms from a thread of its own, so pushing a whole second at once is as fine as pushing every 10 ms. `queuedMillis()` tells how much is still waiting, and `clear()` drops it.
+`CustomAudio` takes PCM in pieces of any length and from any thread. It cuts the audio into the 10 ms chunks WebRTC works with and sends one every 10 ms from a thread of its own, so pushing a whole second at once is as fine as pushing every 10 ms. `queuedMillis()` tells how much is still waiting, and `clear()` drops it. That thread does nothing else, so a slow push into WebRTC delays only the audio, not the timeouts of the runtime. Should it stall, as in a long garbage collection pause, it makes up for at most the last 50 ms instead of sending the whole pause at once; the queued audio then stays behind by the rest, until `clear()` drops it.
 
 ### Controlling Senders and Tracks
 
