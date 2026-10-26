@@ -86,9 +86,12 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	 * the form of RTP packets. When bundling is used, multiple RTCRtpReceivers
 	 * will share one transport and will all receive RTP and RTCP over the same
 	 * transport.
+	 * <p>
+	 * Each call returns a new instance holding its own reference to the
+	 * transport, to be released with {@link RTCDtlsTransport#dispose()}.
 	 *
 	 * @return The transport over which media for the receiver's track is
-	 * received.
+	 * received, or null if the receiver has none yet.
 	 */
 	public native RTCDtlsTransport getTransport();
 

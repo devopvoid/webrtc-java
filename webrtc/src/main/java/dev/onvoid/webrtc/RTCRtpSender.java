@@ -89,8 +89,12 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * form of RTP packets. When bundling is used, multiple RTCRtpSenders will
 	 * share one transport and will all send RTP and RTCP over the same
 	 * transport.
+	 * <p>
+	 * Each call returns a new instance holding its own reference to the
+	 * transport, to be released with {@link RTCDtlsTransport#dispose()}.
 	 *
-	 * @return The transport over which media from the MediaStreamTrack is sent.
+	 * @return The transport over which media from the MediaStreamTrack is sent,
+	 * or null if the sender has none yet.
 	 */
 	public native RTCDtlsTransport getTransport();
 

@@ -19,12 +19,15 @@ package dev.onvoid.webrtc;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -197,6 +200,51 @@ class RTCPeerConnectionSignalingTests extends TestBase {
 
 		channel.dispose();
 		remote.dispose();
+	}
+
+	@Test
+	void closeBeforeDescriptionResultFailsObserver() throws Exception {
+		RTCPeerConnection connection = factory.createPeerConnection(
+				new RTCConfiguration(), candidate -> { });
+		connection.createDataChannel("data", new RTCDataChannelInit());
+
+		TestSetDescObserver applied = new TestSetDescObserver();
+		CountDownLatch closed = new CountDownLatch(1);
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+
+		connection.createOffer(new RTCOfferOptions(), new CreateSessionDescriptionObserver() {
+			@Override
+			public void onSuccess(RTCSessionDescription description) {
+				// This runs on the signaling thread. Setting the description
+				// waits for the offer, whose result is posted to that thread.
+				// Closing from here takes effect once this returns, before the
+				// result of setting the description is posted in turn, and
+				// WebRTC drops that result with the connection.
+				try {
+					connection.createOffer(new RTCOfferOptions(), new TestCreateDescObserver());
+					connection.setLocalDescription(applied);
+					connection.close();
+				}
+				catch (Throwable e) {
+					failure.set(e);
+				}
+				closed.countDown();
+			}
+
+			@Override
+			public void onFailure(String error) {
+				failure.set(new IllegalStateException(error));
+				closed.countDown();
+			}
+		});
+
+		assertTrue(closed.await(5, TimeUnit.SECONDS), "Offer was not created");
+		assertNull(failure.get());
+
+		ExecutionException e = assertThrows(ExecutionException.class,
+				() -> applied.get(5, TimeUnit.SECONDS));
+
+		assertTrue(e.getMessage().startsWith("[INVALID_STATE]"), e.getMessage());
 	}
 
 	/**
