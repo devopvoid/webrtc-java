@@ -120,3 +120,24 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserve
 
 	ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
 }
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_dispose
+(JNIEnv * env, jobject caller)
+{
+	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
+	CHECK_HANDLE(transport);
+
+	// WebRTC must let go of an observer registered through this object before
+	// it is deleted.
+	if (GetHandle<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle") != nullptr) {
+		transport->UnregisterObserver();
+
+		ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
+	}
+
+	// The connection, its senders and receivers, and other Java objects keep
+	// their own references, so this one need not be the last.
+	transport->Release();
+
+	SetHandle<std::nullptr_t>(env, caller, nullptr);
+}

@@ -53,7 +53,13 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTransport
 
 		auto transport = sender->dtls_transport();
 
-		return jni::JavaFactories::create(env, transport.get()).release();
+		if (!transport) {
+			return nullptr;
+		}
+
+		// The Java object holds a reference until it is disposed, since the
+		// connection frees the transport once it closes or drops it.
+		return jni::JavaFactories::create(env, transport.release()).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

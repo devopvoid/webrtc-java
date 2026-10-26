@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -45,6 +46,8 @@ class RTCDtlsTransportTests extends TestBase {
 	private TestPeerConnection caller;
 	private TestPeerConnection callee;
 
+	private RTCRtpSender sender;
+
 	private RTCDtlsTransport transport;
 
 
@@ -59,7 +62,7 @@ class RTCDtlsTransportTests extends TestBase {
 		List<String> streamIds = new ArrayList<>();
 		streamIds.add("stream1");
 
-		RTCRtpSender sender = caller.getPeerConnection().addTrack(audioTrack, streamIds);
+		sender = caller.getPeerConnection().addTrack(audioTrack, streamIds);
 
 		caller.setRemotePeerConnection(callee);
 		callee.setRemotePeerConnection(caller);
@@ -77,6 +80,27 @@ class RTCDtlsTransportTests extends TestBase {
 	void dispose() {
 		caller.close();
 		callee.close();
+
+		if (transport != null) {
+			transport.dispose();
+		}
+	}
+
+	@Test
+	void noTransportBeforeNegotiation() {
+		TestPeerConnection offerer = new TestPeerConnection(factory);
+
+		try {
+			AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+			AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+			RTCRtpSender audioSender = offerer.getPeerConnection()
+					.addTrack(audioTrack, Collections.singletonList("stream1"));
+
+			assertNull(audioSender.getTransport());
+		}
+		finally {
+			offerer.close();
+		}
 	}
 
 	@Test
@@ -160,10 +184,45 @@ class RTCDtlsTransportTests extends TestBase {
 			assertEquals(RTCDtlsTransportState.NEW, dtlsTransport.getState());
 
 			assertTrue(dtlsTransport.getRemoteCertificates().isEmpty());
+
+			dtlsTransport.dispose();
 		}
 		finally {
 			offerer.close();
 		}
+	}
+
+	@Test
+	void transportOutlivesClosedConnection() throws Exception {
+		CompletableFuture<RTCDtlsTransportState> closedState = new CompletableFuture<>();
+
+		transport.registerObserver(new RTCDtlsTransportObserver() {
+			@Override
+			public void onStateChange(RTCDtlsTransportState state) {
+				if (state == RTCDtlsTransportState.CLOSED) {
+					closedState.complete(state);
+				}
+			}
+
+			@Override
+			public void onError(String error) { }
+		});
+
+		// Closing frees the connection's transports, and with the sender gone
+		// nothing else refers to this one. The wrapper must keep the transport
+		// it refers to alive, rather than point to freed memory.
+		caller.close();
+		callee.close();
+		sender.dispose();
+
+		assertEquals(RTCDtlsTransportState.CLOSED, closedState.get(5, TimeUnit.SECONDS));
+
+		for (int i = 0; i < 1000; i++) {
+			assertEquals(RTCDtlsTransportState.CLOSED, transport.getState());
+			assertTrue(transport.getRemoteCertificates().isEmpty());
+		}
+
+		assertDoesNotThrow(transport::unregisterObserver);
 	}
 
 	@Test
@@ -209,6 +268,7 @@ class RTCDtlsTransportTests extends TestBase {
 			assertNotNull(parameters.get(10, TimeUnit.SECONDS));
 
 			dtlsTransport.unregisterObserver();
+			dtlsTransport.dispose();
 		}
 		finally {
 			offerer.close();
