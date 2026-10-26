@@ -114,9 +114,11 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 	 * Creates a copy of this I420 buffer. This method performs a deep copy of all data in the buffer.
 	 *
 	 * @return A new NativeI420Buffer instance with the same dimensions and data as this buffer.
+	 *
+	 * @throws RuntimeException if this buffer has been released.
 	 */
 	public NativeI420Buffer copy() {
-		return copy(width, height, dataY.slice(), strideY, dataU.slice(), strideU, dataV.slice(), strideV);
+		return copy(this);
 	}
 
 	/**
@@ -148,10 +150,15 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 	private static native NativeI420Buffer allocateBuffer(int width, int height);
 
 	/**
-	 * Creates a copy of an I420 buffer with the given dimensions and data.
+	 * Copies the pixels of any buffer, as {@link VideoFrameBuffer#toI420()} provides them, into a new
+	 * buffer.
+	 *
+	 * @throws IllegalArgumentException if the size, strides and planes of the I420 buffer do not fit
+	 *                                  together.
+	 * @throws RuntimeException         if the buffer has no readable pixels, such as a released buffer
+	 *                                  or one with heap byte buffers.
 	 */
-	private static native NativeI420Buffer copy(int width, int height, ByteBuffer dataY, int strideY, ByteBuffer dataU,
-												int strideU, ByteBuffer dataV, int strideV);
+	static native NativeI420Buffer copy(VideoFrameBuffer buffer);
 
 	/**
 	 * Crops this buffer without copying. The cropped buffer shares the pixels of this one and holds a

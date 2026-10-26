@@ -68,8 +68,10 @@ VideoFrame frame = new VideoFrame(buffer, System.nanoTime());
 videoSource.pushFrame(frame);
 
 // Don't forget to release the frame when done
-frame.dispose();
+frame.release();
 ```
+
+A frame can also carry a `VideoFrameBuffer` of your own. The source takes its pixels from `toI420()`: a `NativeI420Buffer` returned there is used as it is, and any other `I420Buffer` is copied, so its planes have to be direct byte buffers that are as large as their strides and the height require. A buffer that does not fit its description is rejected with an `IllegalArgumentException`. `VideoFrame.copy()` works the same way, and always returns a frame with a `NativeI420Buffer`.
 
 ## Video Format Considerations
 

@@ -24,8 +24,32 @@
 #include "api/video/i420_buffer.h"
 #include "rtc_base/time_utils.h"
 
+#include <cstdarg>
+#include <cstdio>
+#include <limits>
+
 namespace jni
 {
+	namespace
+	{
+		// Throws an IllegalArgumentException for a buffer whose pixels do not match its description.
+		[[noreturn]] void ThrowInvalidBuffer(JNIEnv * env, const char * format, ...)
+		{
+			char message[256];
+
+			va_list args;
+			va_start(args, format);
+			vsnprintf(message, sizeof(message), format, args);
+			va_end(args);
+
+			ThrowJavaException(env, "java/lang/IllegalArgumentException", message);
+			ExceptionCheck(env);
+
+			// Only if the exception itself could not be created.
+			throw JavaWrappedException(JavaLocalRef<jthrowable>(env, JavaRuntimeException(env, message)));
+		}
+	}
+
 	namespace VideoFrame
 	{
 		webrtc::VideoFrame toNative(JNIEnv * env, const JavaRef<jobject> & javaFrame)
@@ -36,42 +60,13 @@ namespace jni
 			int rotation = obj.getInt(javaClass->rotation);
 			int64_t timestamp_ns = obj.getLong(javaClass->timestampNs);
 			JavaLocalRef<jobject> jBuffer = obj.getObject(javaClass->buffer);
-			
-			/*
-			// Get the I420Buffer properties
-			const auto i420Class = JavaClasses::get<JavaNativeI420BufferClass>(env);
-			JavaObject bufferObj(env, jBuffer);
-			
-			int width = bufferObj.getInt(i420Class->width);
-			int height = bufferObj.getInt(i420Class->height);
-			
-			JavaLocalRef<jobject> dataY = bufferObj.getObject(i420Class->dataY);
-			JavaLocalRef<jobject> dataU = bufferObj.getObject(i420Class->dataU);
-			JavaLocalRef<jobject> dataV = bufferObj.getObject(i420Class->dataV);
-			
-			int strideY = bufferObj.getInt(i420Class->strideY);
-			int strideU = bufferObj.getInt(i420Class->strideU);
-			int strideV = bufferObj.getInt(i420Class->strideV);
-			
-			// Get the direct buffer addresses
-			const uint8_t * y_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataY.get()));
-			const uint8_t * u_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataU.get()));
-			const uint8_t * v_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataV.get()));
-			
-			// Create a native I420Buffer
-			webrtc::scoped_refptr<webrtc::I420Buffer> buffer = webrtc::I420Buffer::Copy(
-				width, height, y_data, strideY, u_data, strideU, v_data, strideV);
-			*/
 
-			webrtc::I420BufferInterface * i420Buffer = GetHandle<webrtc::I420BufferInterface>(env, jBuffer);
+			webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = toNativeBuffer(env, jBuffer);
 
-			// A buffer that has been released for good has no pixels left.
-			if (i420Buffer == nullptr) {
+			if (buffer == nullptr) {
 				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
-					JavaRuntimeException(env, "The buffer of the VideoFrame has been released")));
+					JavaRuntimeException(env, "The buffer of the VideoFrame cannot be read")));
 			}
-
-			webrtc::scoped_refptr<webrtc::I420BufferInterface> buffer(i420Buffer);
 
 			return webrtc::VideoFrame::Builder()
 				.set_video_frame_buffer(buffer)
@@ -111,10 +106,24 @@ namespace jni
 
 		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> toNativeBuffer(JNIEnv * env, const JavaRef<jobject> & javaBuffer)
 		{
+			if (javaBuffer.get() == nullptr) {
+				return nullptr;
+			}
+
+			const auto javaClass = JavaClasses::get<JavaI420BufferClass>(env);
+
+			// A NativeI420Buffer returns itself, and so may any other buffer that keeps its pixels in one.
+			JavaLocalRef<jobject> i420(env, env->CallObjectMethod(javaBuffer, javaClass->toI420));
+			ExceptionCheck(env);
+
+			if (i420.get() == nullptr) {
+				return nullptr;
+			}
+
 			const auto nativeClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
 
-			if (env->IsInstanceOf(javaBuffer, nativeClass->cls)) {
-				webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, javaBuffer);
+			if (env->IsInstanceOf(i420, nativeClass->cls)) {
+				webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, i420);
 
 				// Released for good, so there is nothing to read.
 				if (buffer == nullptr) {
@@ -122,15 +131,6 @@ namespace jni
 				}
 
 				return webrtc::scoped_refptr<webrtc::VideoFrameBuffer>(buffer);
-			}
-
-			const auto javaClass = JavaClasses::get<JavaI420BufferClass>(env);
-
-			JavaLocalRef<jobject> i420(env, env->CallObjectMethod(javaBuffer, javaClass->toI420));
-			ExceptionCheck(env);
-
-			if (i420.get() == nullptr) {
-				return nullptr;
 			}
 
 			const jint width = env->CallIntMethod(i420, javaClass->getWidth);
@@ -154,8 +154,37 @@ namespace jni
 			const uint8_t * u = static_cast<const uint8_t *>(env->GetDirectBufferAddress(dataU));
 			const uint8_t * v = static_cast<const uint8_t *>(env->GetDirectBufferAddress(dataV));
 
-			if (y == nullptr || u == nullptr || v == nullptr || width <= 0 || height <= 0) {
+			if (y == nullptr || u == nullptr || v == nullptr) {
 				return nullptr;
+			}
+
+			// WebRTC aborts the process on sizes it cannot allocate, and the copy trusts the strides and
+			// reads every row of a plane up to its width, whether the memory belongs to the plane or not.
+			if (width <= 0 || height <= 0) {
+				ThrowInvalidBuffer(env, "Invalid buffer size %dx%d", width, height);
+			}
+
+			const int64_t chromaWidth = (static_cast<int64_t>(width) + 1) / 2;
+			const int64_t chromaHeight = (static_cast<int64_t>(height) + 1) / 2;
+
+			if (static_cast<int64_t>(width) * height + 2 * chromaWidth * chromaHeight > std::numeric_limits<int>::max()) {
+				ThrowInvalidBuffer(env, "Buffer size %dx%d is too large", width, height);
+			}
+			if (strideY < width || strideU < chromaWidth || strideV < chromaWidth) {
+				ThrowInvalidBuffer(env, "Strides %d, %d, %d are too small for a width of %d", strideY, strideU,
+					strideV, width);
+			}
+
+			// The last row ends at the width, as in the buffers handed to Java.
+			auto planeSize = [](int64_t stride, int64_t planeWidth, int64_t planeHeight) {
+				return stride * (planeHeight - 1) + planeWidth;
+			};
+
+			if (env->GetDirectBufferCapacity(dataY) < planeSize(strideY, width, height) ||
+				env->GetDirectBufferCapacity(dataU) < planeSize(strideU, chromaWidth, chromaHeight) ||
+				env->GetDirectBufferCapacity(dataV) < planeSize(strideV, chromaWidth, chromaHeight)) {
+				ThrowInvalidBuffer(env, "The planes of the %dx%d buffer are smaller than its strides require",
+					width, height);
 			}
 
 			return webrtc::I420Buffer::Copy(width, height, y, strideY, u, strideU, v, strideV);

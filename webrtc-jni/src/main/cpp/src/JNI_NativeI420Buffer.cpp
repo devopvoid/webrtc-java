@@ -42,16 +42,19 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_al
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_copy
-(JNIEnv* env, jclass caller, jint width, jint height, jobject jSrcY, jint srcStrideY,
-	jobject jSrcU, jint srcStrideU, jobject jSrcV, jint srcStrideV)
+(JNIEnv * env, jclass caller, jobject jSource)
 {
 	try {
-		const uint8_t * src_y = static_cast<uint8_t*>(env->GetDirectBufferAddress(jSrcY));
-		const uint8_t * src_u = static_cast<uint8_t*>(env->GetDirectBufferAddress(jSrcU));
-		const uint8_t * src_v = static_cast<uint8_t*>(env->GetDirectBufferAddress(jSrcV));
+		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> source =
+			jni::VideoFrame::toNativeBuffer(env, jni::JavaLocalRef<jobject>(env, jSource));
+		webrtc::scoped_refptr<webrtc::I420BufferInterface> sourceI420 = source ? source->ToI420() : nullptr;
 
-		webrtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = webrtc::I420Buffer::Copy(width, height,
-			src_y, srcStrideY, src_u, srcStrideU, src_v, srcStrideV);
+		if (sourceI420 == nullptr) {
+			env->Throw(jni::JavaRuntimeException(env, "The buffer cannot be read"));
+			return nullptr;
+		}
+
+		webrtc::scoped_refptr<webrtc::I420BufferInterface> i420Buffer = webrtc::I420Buffer::Copy(*sourceI420);
 
 		jni::JavaLocalRef<jobject> jBuffer = jni::I420Buffer::toJava(env, i420Buffer);
 

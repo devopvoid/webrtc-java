@@ -18,10 +18,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_NativeI420Buffer
 	 * Method:    copy
-	 * Signature: (IILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;ILjava/nio/ByteBuffer;I)Ldev/onvoid/webrtc/media/video/NativeI420Buffer;
+	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoFrameBuffer;)Ldev/onvoid/webrtc/media/video/NativeI420Buffer;
 	 */
 	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_copy
-	(JNIEnv*, jclass, jint, jint, jobject, jint, jobject, jint, jobject, jint);
+	(JNIEnv *, jclass, jobject);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_NativeI420Buffer
