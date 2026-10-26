@@ -169,6 +169,8 @@ Frames must still be pushed in real time. A frame is encoded and sent when it ar
 Timestamps must also advance by at least one millisecond from frame to frame. WebRTC drops a frame whose capture time does not move forward.
 :::
 
+`pushFrame(VideoFrame)` stamps its frames with the same clock, so a source may mix the two calls.
+
 Push audio with timestamps from the same clock, as described in [Custom Audio Source](/guide/audio/custom-audio-source), and the two stay in sync on the receiving side.
 
 ## Integration with Video Tracks

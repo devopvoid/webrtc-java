@@ -48,8 +48,12 @@ namespace jni
 
     void CustomVideoSource::PushFrame(const webrtc::VideoFrame& frame)
     {
-        // No capture time from the caller, so the frame is captured now.
-        DeliverFrame(frame, clock_->GetTimestampUs(), clock_->GetNtpTime().ToMs());
+        // No capture time from the caller, so the frame is captured now, on
+        // the same clock as a caller's capture time. A source that mixes both
+        // calls would otherwise hand out frame times that jump between two
+        // clocks, to the frame rate adapter, the encoder's cadence adapter and
+        // every sink of the track, which all expect them to increase.
+        PushFrame(frame, webrtc::TimeMicros());
     }
 
     void CustomVideoSource::PushFrame(const webrtc::VideoFrame& frame, int64_t timestamp_us)

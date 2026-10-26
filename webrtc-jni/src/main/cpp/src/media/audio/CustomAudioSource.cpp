@@ -54,8 +54,12 @@ namespace jni
     {
         webrtc::MutexLock lock(&mutex_);
 
-        // Calculate absolute capture time
-        int64_t timestamp_us = clock_->GetTimestampUs();
+        // Captured now, on the clock AudioTrackSinkInterface requires of an
+        // absolute capture timestamp and the one a caller's capture time is
+        // on. WebRTC ignores a capture time that is not positive, and turns
+        // the gap between two of them into an RTP timestamp step when
+        // sending resumes, so both calls must stay on this clock.
+        int64_t timestamp_us = webrtc::TimeMicros();
 
         // Apply delay if audio capture has inherent latency
         timestamp_us -= audio_capture_delay_us_;

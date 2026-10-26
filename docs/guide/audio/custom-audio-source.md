@@ -104,7 +104,7 @@ audioSource.pushAudio(pcm, 16, sampleRate, channels, frameCount,
         baseUs + presentationUs);
 ```
 
-Use the same base for the audio and the video of one source, and the two stay in sync on the receiving side. See [Custom Video Source](/guide/video/custom-video-source) for the video half. Chunks must still be pushed in real time; the timestamp describes the audio, it does not schedule it.
+Use the same base for the audio and the video of one source, and the two stay in sync on the receiving side. See [Custom Video Source](/guide/video/custom-video-source) for the video half. Chunks must still be pushed in real time; the timestamp describes the audio, it does not schedule it. A chunk pushed without a timestamp is stamped with the same clock, so a source may mix the two calls.
 
 ## Audio Format Considerations
 
