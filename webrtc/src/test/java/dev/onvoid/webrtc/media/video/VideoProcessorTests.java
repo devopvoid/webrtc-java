@@ -99,6 +99,66 @@ class VideoProcessorTests extends TestBase {
 	}
 
 	@Test
+	void acceptsCustomBufferLayouts() {
+		VideoDesktopSource source = new VideoDesktopSource();
+		TestProcessor processor = new TestProcessor();
+
+		source.setVideoProcessor(processor);
+
+		try {
+			// Tightly packed, odd-sized, and padded rows whose last row ends at the width.
+			processor.sink.onVideoFrame(new VideoFrame(new LaidOutI420Buffer(64, 48), 0));
+			processor.sink.onVideoFrame(new VideoFrame(new LaidOutI420Buffer(5, 3), 0));
+			processor.sink.onVideoFrame(new VideoFrame(new LaidOutI420Buffer(64, 48,
+					80, 80 * 47 + 64, 40, 40 * 23 + 32, 48, 48 * 23 + 32), 0));
+		}
+		finally {
+			source.dispose();
+		}
+	}
+
+	@Test
+	void rejectsCustomBufferOverreads() {
+		VideoDesktopSource source = new VideoDesktopSource();
+		TestProcessor processor = new TestProcessor();
+
+		source.setVideoProcessor(processor);
+
+		int w = 64;
+		int h = 48;
+		int cw = 32;
+		int ch = 24;
+
+		// Each would make the copy read past the end of a plane.
+		LaidOutI420Buffer[] buffers = {
+				new LaidOutI420Buffer(w, h, w - 1, w * h, cw, cw * ch, cw, cw * ch),
+				new LaidOutI420Buffer(w, h, -w, w * h, cw, cw * ch, cw, cw * ch),
+				new LaidOutI420Buffer(w, h, w, w * h, cw - 1, cw * ch, cw, cw * ch),
+				new LaidOutI420Buffer(w, h, w, w * h, cw, cw * ch, 0, cw * ch),
+				new LaidOutI420Buffer(w, h, w, w * h - 1, cw, cw * ch, cw, cw * ch),
+				new LaidOutI420Buffer(w, h, w * 2, w * h, cw, cw * ch, cw, cw * ch),
+				new LaidOutI420Buffer(w, h, w, w * h, cw, cw * ch - 1, cw, cw * ch),
+				new LaidOutI420Buffer(w, h, w, w * h, cw, cw * ch, cw, cw * (ch - 1)),
+				new LaidOutI420Buffer(w, h, w, w * h, Integer.MAX_VALUE, cw * ch, cw, cw * ch),
+				// Larger than WebRTC can allocate, with planes that claim to fit.
+				new LaidOutI420Buffer(46341, 46341, 46341, 16, 23171, 16, 23171, 16),
+				new LaidOutI420Buffer(Integer.MAX_VALUE, 1, Integer.MAX_VALUE, 16, Integer.MAX_VALUE, 16, Integer.MAX_VALUE, 16),
+		};
+
+		try {
+			for (LaidOutI420Buffer buffer : buffers) {
+				VideoFrame frame = new VideoFrame(buffer, 0);
+
+				assertThrows(RuntimeException.class, () -> processor.sink.onVideoFrame(frame),
+						() -> buffer.toString());
+			}
+		}
+		finally {
+			source.dispose();
+		}
+	}
+
+	@Test
 	void processedDesktopFramesReachTrack() throws Exception {
 		DesktopSource screen = firstScreen();
 
@@ -249,6 +309,105 @@ class VideoProcessorTests extends TestBase {
 	}
 
 
+
+	/**
+	 * An I420 buffer in Java with the strides and plane sizes it is given.
+	 */
+	private static class LaidOutI420Buffer implements I420Buffer {
+
+		private final int width;
+		private final int height;
+		private final int strideY;
+		private final int strideU;
+		private final int strideV;
+		private final ByteBuffer dataY;
+		private final ByteBuffer dataU;
+		private final ByteBuffer dataV;
+
+
+		LaidOutI420Buffer(int width, int height) {
+			this(width, height, width, width * height, (width + 1) / 2,
+					((width + 1) / 2) * ((height + 1) / 2), (width + 1) / 2,
+					((width + 1) / 2) * ((height + 1) / 2));
+		}
+
+		LaidOutI420Buffer(int width, int height, int strideY, int sizeY, int strideU, int sizeU,
+				int strideV, int sizeV) {
+			this.width = width;
+			this.height = height;
+			this.strideY = strideY;
+			this.strideU = strideU;
+			this.strideV = strideV;
+			this.dataY = ByteBuffer.allocateDirect(sizeY);
+			this.dataU = ByteBuffer.allocateDirect(sizeU);
+			this.dataV = ByteBuffer.allocateDirect(sizeV);
+		}
+
+		@Override
+		public ByteBuffer getDataY() {
+			return dataY.slice();
+		}
+
+		@Override
+		public ByteBuffer getDataU() {
+			return dataU.slice();
+		}
+
+		@Override
+		public ByteBuffer getDataV() {
+			return dataV.slice();
+		}
+
+		@Override
+		public int getStrideY() {
+			return strideY;
+		}
+
+		@Override
+		public int getStrideU() {
+			return strideU;
+		}
+
+		@Override
+		public int getStrideV() {
+			return strideV;
+		}
+
+		@Override
+		public int getWidth() {
+			return width;
+		}
+
+		@Override
+		public int getHeight() {
+			return height;
+		}
+
+		@Override
+		public I420Buffer toI420() {
+			return this;
+		}
+
+		@Override
+		public VideoFrameBuffer cropAndScale(int cropX, int cropY, int cropWidth,
+				int cropHeight, int scaleWidth, int scaleHeight) {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void retain() {
+		}
+
+		@Override
+		public void release() {
+		}
+
+		@Override
+		public String toString() {
+			return String.format("%dx%d, Y %d/%d, U %d/%d, V %d/%d", width, height,
+					strideY, dataY.capacity(), strideU, dataU.capacity(), strideV, dataV.capacity());
+		}
+	}
 
 	private static class TestProcessor implements VideoProcessor {
 
