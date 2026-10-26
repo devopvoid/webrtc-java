@@ -277,7 +277,7 @@ class MyDecoder implements VideoDecoder {
 
 - The image and its buffer are read-only and valid only until `decode()` returns; copy the data to keep it longer.
 - A decoded frame must carry the capture time of the image it was decoded from as its timestamp.
-- `onDecodedFrame()` takes a reference of its own, so the caller still releases the frame it created. Frame buffers other than `NativeI420Buffer` are copied, and have to provide direct byte buffers.
+- `onDecodedFrame()` takes a reference of its own, so the caller still releases the frame it created. A buffer whose `toI420()` returns a `NativeI420Buffer` is shared; any other is copied, and has to provide direct byte buffers as large as its strides and height require.
 
 ## Errors
 

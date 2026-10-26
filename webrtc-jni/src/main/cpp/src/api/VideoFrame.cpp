@@ -61,42 +61,13 @@ namespace jni
 			int rotation = obj.getInt(javaClass->rotation);
 			int64_t timestamp_ns = obj.getLong(javaClass->timestampNs);
 			JavaLocalRef<jobject> jBuffer = obj.getObject(javaClass->buffer);
-			
-			/*
-			// Get the I420Buffer properties
-			const auto i420Class = JavaClasses::get<JavaNativeI420BufferClass>(env);
-			JavaObject bufferObj(env, jBuffer);
-			
-			int width = bufferObj.getInt(i420Class->width);
-			int height = bufferObj.getInt(i420Class->height);
-			
-			JavaLocalRef<jobject> dataY = bufferObj.getObject(i420Class->dataY);
-			JavaLocalRef<jobject> dataU = bufferObj.getObject(i420Class->dataU);
-			JavaLocalRef<jobject> dataV = bufferObj.getObject(i420Class->dataV);
-			
-			int strideY = bufferObj.getInt(i420Class->strideY);
-			int strideU = bufferObj.getInt(i420Class->strideU);
-			int strideV = bufferObj.getInt(i420Class->strideV);
-			
-			// Get the direct buffer addresses
-			const uint8_t * y_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataY.get()));
-			const uint8_t * u_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataU.get()));
-			const uint8_t * v_data = static_cast<uint8_t*>(env->GetDirectBufferAddress(dataV.get()));
-			
-			// Create a native I420Buffer
-			webrtc::scoped_refptr<webrtc::I420Buffer> buffer = webrtc::I420Buffer::Copy(
-				width, height, y_data, strideY, u_data, strideU, v_data, strideV);
-			*/
 
-			webrtc::I420BufferInterface * i420Buffer = GetHandle<webrtc::I420BufferInterface>(env, jBuffer);
+			webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer = toNativeBuffer(env, jBuffer);
 
-			// A buffer that has been released for good has no pixels left.
-			if (i420Buffer == nullptr) {
+			if (buffer == nullptr) {
 				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
-					JavaRuntimeException(env, "The buffer of the VideoFrame has been released")));
+					JavaRuntimeException(env, "The buffer of the VideoFrame cannot be read")));
 			}
-
-			webrtc::scoped_refptr<webrtc::I420BufferInterface> buffer(i420Buffer);
 
 			return webrtc::VideoFrame::Builder()
 				.set_video_frame_buffer(buffer)
@@ -136,10 +107,24 @@ namespace jni
 
 		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> toNativeBuffer(JNIEnv * env, const JavaRef<jobject> & javaBuffer)
 		{
+			if (javaBuffer.get() == nullptr) {
+				return nullptr;
+			}
+
+			const auto javaClass = JavaClasses::get<JavaI420BufferClass>(env);
+
+			// A NativeI420Buffer returns itself, and so may any other buffer that keeps its pixels in one.
+			JavaLocalRef<jobject> i420(env, env->CallObjectMethod(javaBuffer, javaClass->toI420));
+			ExceptionCheck(env);
+
+			if (i420.get() == nullptr) {
+				return nullptr;
+			}
+
 			const auto nativeClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
 
-			if (env->IsInstanceOf(javaBuffer, nativeClass->cls)) {
-				webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, javaBuffer);
+			if (env->IsInstanceOf(i420, nativeClass->cls)) {
+				webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, i420);
 
 				// Released for good, so there is nothing to read.
 				if (buffer == nullptr) {
@@ -147,15 +132,6 @@ namespace jni
 				}
 
 				return webrtc::scoped_refptr<webrtc::VideoFrameBuffer>(buffer);
-			}
-
-			const auto javaClass = JavaClasses::get<JavaI420BufferClass>(env);
-
-			JavaLocalRef<jobject> i420(env, env->CallObjectMethod(javaBuffer, javaClass->toI420));
-			ExceptionCheck(env);
-
-			if (i420.get() == nullptr) {
-				return nullptr;
 			}
 
 			const jint width = env->CallIntMethod(i420, javaClass->getWidth);

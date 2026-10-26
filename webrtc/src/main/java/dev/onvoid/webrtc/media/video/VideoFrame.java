@@ -74,14 +74,18 @@ public class VideoFrame implements RefCounted {
 	}
 
 	/**
-	 * Creates a deep copy of this VideoFrame. The new frame will have its own copy of the buffer data.
+	 * Creates a deep copy of this VideoFrame. The new frame will have its own copy of the buffer data,
+	 * in a {@link NativeI420Buffer} made from what {@link VideoFrameBuffer#toI420()} of the buffer
+	 * returns.
 	 *
 	 * @return A new VideoFrame with a copy of the buffer data.
+	 *
+	 * @throws RuntimeException if the buffer has no readable pixels, such as a released buffer or one
+	 *                          with heap byte buffers, or if the size, strides and planes of the I420
+	 *                          buffer do not fit together.
 	 */
 	public VideoFrame copy() {
-		NativeI420Buffer nativeBuffer = (NativeI420Buffer) buffer;
-
-		return new VideoFrame(nativeBuffer.copy(), rotation, timestampNs);
+		return new VideoFrame(NativeI420Buffer.copy(buffer), rotation, timestampNs);
 	}
 
 	@Override
