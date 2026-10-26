@@ -16,6 +16,7 @@
 
 package dev.onvoid.webrtc.client;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -81,6 +82,22 @@ class VideoViewTests extends ClientTestBase {
 	}
 
 	@Test
+	void anyRotationMultiple() {
+		// A rotation outside 0..270 is shown as its equal inside it.
+		assertArrayEquals(rotated(270), rotated(-90));
+		assertArrayEquals(rotated(90), rotated(450));
+
+		// Sideways, a 4:3 picture in a 4:3 view leaves bars on the sides.
+		VideoView view = new VideoView();
+		view.setSize(64, 48);
+		view.accept(frame(64, 48, 128, 128, -90));
+
+		BufferedImage painted = paint(view);
+		assertEquals(Color.BLACK, new Color(painted.getRGB(2, 24)));
+		assertGray(new Color(painted.getRGB(32, 24)));
+	}
+
+	@Test
 	void showsRemoteVideo() throws Exception {
 		Peer[] peers = pair();
 		CustomVideo video = rtc.media().customVideo("video");
@@ -112,11 +129,24 @@ class VideoViewTests extends ClientTestBase {
 		assertEquals(320, snapshot.getWidth());
 	}
 
+	/** The pixels a 64x48 view paints of a 64x48 two-tone frame with the given rotation. */
+	private static int[] rotated(int rotation) {
+		VideoView view = new VideoView();
+		view.setSize(64, 48);
+		view.accept(frame(64, 48, 16, 235, rotation));
+
+		return paint(view).getRGB(0, 0, 64, 48, null, 0, 64);
+	}
+
+	private static VideoFrame frame(int width, int height, int left, int right) {
+		return frame(width, height, left, right, 0);
+	}
+
 	/**
 	 * A frame whose left half has luma {@code left} and right half {@code right}, with
 	 * neutral chroma.
 	 */
-	private static VideoFrame frame(int width, int height, int left, int right) {
+	private static VideoFrame frame(int width, int height, int left, int right, int rotation) {
 		NativeI420Buffer buffer = NativeI420Buffer.allocate(width, height);
 		ByteBuffer y = buffer.getDataY();
 
@@ -129,7 +159,7 @@ class VideoViewTests extends ClientTestBase {
 		fill(buffer.getDataU());
 		fill(buffer.getDataV());
 
-		return new VideoFrame(buffer, System.nanoTime());
+		return new VideoFrame(buffer, rotation, System.nanoTime());
 	}
 
 	private static void fill(ByteBuffer plane) {

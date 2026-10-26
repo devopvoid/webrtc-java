@@ -144,6 +144,22 @@ class VideoViewTest {
 	}
 
 	@Test
+	void anyRotationMultiple() throws Exception {
+		// A rotation outside 0..270 is shown as its equal inside it.
+		assertSamePixels(rotated(270), rotated(-90));
+		assertSamePixels(rotated(90), rotated(450));
+
+		// Sideways, a 4:3 picture in a 4:3 view leaves bars on the sides.
+		VideoView view = sized(64, 48);
+		view.accept(frame(64, 48, 128, 128, -90));
+		presented(view);
+
+		Image painted = paint(view);
+		assertEquals(Color.BLACK, painted.getPixelReader().getColor(2, 24));
+		assertGray(painted.getPixelReader().getColor(32, 24));
+	}
+
+	@Test
 	void showsRemoteVideo() throws Exception {
 		SignalingPair link = Signaling.loopback();
 		Peer caller = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
@@ -219,11 +235,24 @@ class VideoViewTest {
 		return result.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 	}
 
+	/** What a 64x48 view paints of a 64x48 two-tone frame with the given rotation. */
+	private Image rotated(int rotation) throws Exception {
+		VideoView view = sized(64, 48);
+		view.accept(frame(64, 48, 16, 235, rotation));
+		presented(view);
+
+		return paint(view);
+	}
+
+	private static VideoFrame frame(int width, int height, int left, int right) {
+		return frame(width, height, left, right, 0);
+	}
+
 	/**
 	 * A frame whose left half has luma {@code left} and right half {@code right}, with
 	 * neutral chroma.
 	 */
-	private static VideoFrame frame(int width, int height, int left, int right) {
+	private static VideoFrame frame(int width, int height, int left, int right, int rotation) {
 		NativeI420Buffer buffer = NativeI420Buffer.allocate(width, height);
 		ByteBuffer y = buffer.getDataY();
 
@@ -236,12 +265,24 @@ class VideoViewTest {
 		fill(buffer.getDataU());
 		fill(buffer.getDataV());
 
-		return new VideoFrame(buffer, System.nanoTime());
+		return new VideoFrame(buffer, rotation, System.nanoTime());
 	}
 
 	private static void fill(ByteBuffer plane) {
 		for (int i = 0; i < plane.capacity(); i++) {
 			plane.put(i, (byte) 128);
+		}
+	}
+
+	private static void assertSamePixels(Image expected, Image actual) {
+		assertEquals((int) expected.getWidth(), (int) actual.getWidth());
+		assertEquals((int) expected.getHeight(), (int) actual.getHeight());
+
+		for (int y = 0; y < (int) expected.getHeight(); y++) {
+			for (int x = 0; x < (int) expected.getWidth(); x++) {
+				assertEquals(expected.getPixelReader().getArgb(x, y), actual.getPixelReader().getArgb(x, y),
+						"Pixel " + x + "," + y);
+			}
 		}
 	}
 
