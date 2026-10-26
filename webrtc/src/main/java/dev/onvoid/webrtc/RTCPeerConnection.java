@@ -507,6 +507,11 @@ public class RTCPeerConnection extends NativeObject {
 	/**
 	 * Closes the peer connection, terminates all media and releases any used
 	 * resources.
+	 * <p>
+	 * When called from an observer callback of a connection created by the
+	 * same factory, the connection is closed once that callback has returned,
+	 * since WebRTC goes on with it afterwards. Until then, the {@link
+	 * PeerConnectionObserver} may still hear of the operation in progress.
 	 */
 	public native void close();
 

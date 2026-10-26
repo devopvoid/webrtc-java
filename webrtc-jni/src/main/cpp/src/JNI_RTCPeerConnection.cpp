@@ -39,15 +39,18 @@
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "JNI_WebRTC.h"
 
 #include "api/peer_connection_interface.h"
 #include "api/transport/bitrate_settings.h"
 #include "api/rtp_receiver_interface.h"
 #include "api/rtp_sender_interface.h"
+#include "rtc_base/thread.h"
 
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getSenders
@@ -838,15 +841,37 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 	CHECK_HANDLE(pc);
 
 	try {
-		pc->Close();
+		jni::JavaLocalRef<jobject> factory(env, env->GetObjectField(caller,
+			GetFieldID(env, caller, "factory", "L" PKG "PeerConnectionFactory;")));
+		webrtc::Thread * signalingThread = factory.get() != nullptr
+			? GetHandle<webrtc::Thread>(env, factory.get(), "signalingThreadHandle")
+			: nullptr;
+
+		webrtc::PeerConnectionObserver * observer = GetHandle<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
 
 		SetHandle<std::nullptr_t>(env, caller, nullptr);
+		SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
 
-		ClearNativeObserver<webrtc::PeerConnectionObserver>(env, caller, "observerHandle");
+		auto close = [pc, observer]() {
+			pc->Close();
 
-		// Drop the owning reference taken when the PeerConnection was handed
-		// to Java in PeerConnectionFactory::createPeerConnection.
-		pc->Release();
+			// The connection lets go of its observer once closed.
+			delete observer;
+
+			// Drop the owning reference taken when the PeerConnection was handed
+			// to Java in PeerConnectionFactory::createPeerConnection.
+			pc->Release();
+		};
+
+		if (signalingThread != nullptr && signalingThread->IsCurrent()) {
+			// Called from a callback of this or another connection of the same
+			// factory. WebRTC goes on with the connection once the callback has
+			// returned, so it must not be closed and freed under its feet.
+			signalingThread->PostTask(std::move(close));
+		}
+		else {
+			close();
+		}
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
