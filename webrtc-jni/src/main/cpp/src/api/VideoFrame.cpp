@@ -24,8 +24,33 @@
 #include "api/video/i420_buffer.h"
 #include "rtc_base/time_utils.h"
 
+#include <climits>
+#include <cstdint>
+
 namespace jni
 {
+	namespace
+	{
+		// Throws unless the plane holds every byte a copy reads: the last row ends at the width.
+		void CheckPlane(JNIEnv * env, const char * name, const JavaRef<jobject> & data, jint stride, jint width, jint height)
+		{
+			if (stride < width) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "Stride %d of the %s plane is less than its width %d", stride, name, width)));
+			}
+
+			// Neither factor exceeds an int, so the product cannot overflow.
+			const int64_t required = static_cast<int64_t>(stride) * (height - 1) + width;
+			const jlong capacity = env->GetDirectBufferCapacity(data);
+
+			if (capacity < required) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The %s plane holds %lld bytes, but a %dx%d plane with stride %d needs %lld",
+						name, static_cast<long long>(capacity), width, height, stride, static_cast<long long>(required))));
+			}
+		}
+	}
+
 	namespace VideoFrame
 	{
 		webrtc::VideoFrame toNative(JNIEnv * env, const JavaRef<jobject> & javaFrame)
@@ -157,6 +182,19 @@ namespace jni
 			if (y == nullptr || u == nullptr || v == nullptr || width <= 0 || height <= 0) {
 				return nullptr;
 			}
+
+			const jint chromaWidth = static_cast<jint>((width + 1LL) / 2);
+			const jint chromaHeight = static_cast<jint>((height + 1LL) / 2);
+
+			// WebRTC aborts the process on a copy larger than it can address with an int.
+			if (static_cast<int64_t>(width) * height + 2 * static_cast<int64_t>(chromaWidth) * chromaHeight > INT_MAX) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "Buffer size %dx%d is too large", width, height)));
+			}
+
+			CheckPlane(env, "Y", dataY, strideY, width, height);
+			CheckPlane(env, "U", dataU, strideU, chromaWidth, chromaHeight);
+			CheckPlane(env, "V", dataV, strideV, chromaWidth, chromaHeight);
 
 			return webrtc::I420Buffer::Copy(width, height, y, strideY, u, strideU, v, strideV);
 		}
