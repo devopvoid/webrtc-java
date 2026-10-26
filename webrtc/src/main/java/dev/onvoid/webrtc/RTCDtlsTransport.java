@@ -80,13 +80,18 @@ public class RTCDtlsTransport extends DisposableNativeObject {
 	/**
 	 * Register an observer to receive events from this transport. The observer
 	 * will replace the previously registered observer.
+	 * <p>
+	 * A transport has one observer, also when several RTCDtlsTransport
+	 * instances stand for it: registering through one replaces the observer
+	 * registered through another.
 	 *
 	 * @param observer The new DTLS transport observer.
 	 */
 	public native void registerObserver(RTCDtlsTransportObserver observer);
 
 	/**
-	 * Unregister the last set RTCDtlsTransportObserver.
+	 * Unregister the RTCDtlsTransportObserver last registered through this
+	 * instance. An observer that another instance has registered since stays.
 	 */
 	public native void unregisterObserver();
 

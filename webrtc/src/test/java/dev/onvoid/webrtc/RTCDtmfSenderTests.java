@@ -81,6 +81,7 @@ class RTCDtmfSenderTests extends TestBase {
     TestPeerConnection caller;
     TestPeerConnection callee;
 
+    RTCRtpSender sender;
     RTCDtmfSender dtmfSender;
 
 
@@ -98,7 +99,7 @@ class RTCDtmfSenderTests extends TestBase {
         List<String> streamIds = new ArrayList<>();
         streamIds.add("stream1");
 
-        RTCRtpSender sender = peerConnection.addTrack(audioTrack, streamIds);
+        sender = peerConnection.addTrack(audioTrack, streamIds);
         dtmfSender = sender.getDtmfSender();
 
         caller.setRemotePeerConnection(callee);
@@ -123,6 +124,79 @@ class RTCDtmfSenderTests extends TestBase {
     void dispose() {
         caller.close();
         callee.close();
+
+        if (sender != null) {
+            sender.dispose();
+        }
+        dtmfSender.dispose();
+    }
+
+    @Test
+    void dtmfSenderOutlivesClosedConnection() {
+        TestDtmfSenderObserver observer = new TestDtmfSenderObserver();
+
+        dtmfSender.registerObserver(observer);
+
+        // Closing frees the connection's senders, and with the RTCRtpSender
+        // gone nothing else refers to the DTMF sender. The instance must keep
+        // the DTMF sender it refers to alive, rather than point to freed
+        // memory; this used to crash the VM.
+        caller.close();
+        callee.close();
+        sender.dispose();
+        sender = null;
+
+        for (int i = 0; i < 1000; i++) {
+            assertFalse(dtmfSender.canInsertDtmf());
+            assertFalse(dtmfSender.insertDtmf("1", 100, 70));
+            assertNull(dtmfSender.tones());
+        }
+
+        assertDoesNotThrow(dtmfSender::unregisterObserver);
+    }
+
+    @Test
+    void unregisterKeepsObserverOfOtherInstance() throws InterruptedException {
+        assertObserverOfOtherInstanceStays(false);
+    }
+
+    @Test
+    void disposeKeepsObserverOfOtherInstance() throws InterruptedException {
+        assertObserverOfOtherInstanceStays(true);
+    }
+
+    private void assertObserverOfOtherInstanceStays(boolean dispose) throws InterruptedException {
+        RTCDtmfSender first = sender.getDtmfSender();
+        RTCDtmfSender second = sender.getDtmfSender();
+
+        TestDtmfSenderObserver firstObserver = new TestDtmfSenderObserver();
+        TestDtmfSenderObserver secondObserver = new TestDtmfSenderObserver();
+
+        try {
+            first.registerObserver(firstObserver);
+            second.registerObserver(secondObserver);
+
+            // The second observer replaced the first, which leaves the first
+            // instance nothing to remove from the DTMF sender.
+            if (dispose) {
+                first.dispose();
+            }
+            else {
+                first.unregisterObserver();
+            }
+
+            assertTrue(dtmfSender.insertDtmf("1", 100, 70));
+            assertTrue(secondObserver.awaitCompletion(), "The observer of the other instance was removed");
+
+            assertEquals(Arrays.asList("1", null), secondObserver.getTones());
+            assertTrue(firstObserver.getTones().isEmpty(), "The replaced observer must not receive events");
+        }
+        finally {
+            if (!dispose) {
+                first.dispose();
+            }
+            second.dispose();
+        }
     }
 
     @Test

@@ -16,6 +16,7 @@
 
 #include "JNI_RTCRtpSender.h"
 #include "api/EncodedFrameInjectorObserver.h"
+#include "api/RegisteredObservers.h"
 #include "api/RTCRtpSenderObserver.h"
 #include "api/RTCRtpSendParameters.h"
 #include "api/WebRTCUtils.h"
@@ -146,7 +147,9 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 
 		auto jDtmfSender = jni::RTCDtmfSender::toJava(env);
 
-		SetHandle(env, jDtmfSender, dtmfSender.get());
+		// The Java object holds a reference until it is disposed, since the
+		// sender frees its DTMF sender once the connection drops the sender.
+		SetHandle(env, jDtmfSender, dtmfSender.release());
 
 		return jDtmfSender.release();
 	}
@@ -320,10 +323,20 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setObserver
 			observer = new jni::RTCRtpSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
 		}
 
+		// Setting replaces whatever observer the sender had, also one set
+		// through another Java object. Removing removes only the one set
+		// through this object, unless another has replaced it since.
+		if (observer != nullptr) {
+			jni::RegisteredObservers::Set(sender, observer);
+
+			sender->SetObserver(observer);
+		}
+		else if (jni::RegisteredObservers::Remove(sender, GetHandle<jni::RTCRtpSenderObserver>(env, caller, "observerHandle"))) {
+			sender->SetObserver(nullptr);
+		}
+
 		// Runs on the signaling thread, which is also the thread that calls
 		// the observer, so the previous one is out of use once this returns.
-		sender->SetObserver(observer);
-
 		ReplaceNativeObserver(env, caller, "observerHandle", observer);
 	}
 	catch (...) {
@@ -338,12 +351,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_dispose
 	CHECK_HANDLE(sender);
 
 	// WebRTC must let go of an observer set through this object before it is
-	// deleted.
-	if (GetHandle<jni::RTCRtpSenderObserver>(env, caller, "observerHandle") != nullptr) {
+	// deleted. One that another Java object has set since stays.
+	if (jni::RegisteredObservers::Remove(sender, GetHandle<jni::RTCRtpSenderObserver>(env, caller, "observerHandle"))) {
 		sender->SetObserver(nullptr);
-
-		ClearNativeObserver<jni::RTCRtpSenderObserver>(env, caller, "observerHandle");
 	}
+
+	ClearNativeObserver<jni::RTCRtpSenderObserver>(env, caller, "observerHandle");
 
 	// Unlike e.g. MediaStreamTrack, an RTCRtpSender is not exclusively owned
 	// by one Java wrapper: the owning RtpTransceiver keeps its own reference,

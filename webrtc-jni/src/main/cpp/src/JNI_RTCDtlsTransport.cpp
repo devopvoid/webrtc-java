@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCDtlsTransport.h"
+#include "api/RegisteredObservers.h"
 #include "api/RTCDtlsTransportObserver.h"
 #include "rtc/RTCCertificatePEM.h"
 #include "JavaArrayList.h"
@@ -89,6 +90,24 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getRemoteCerti
 	}
 }
 
+namespace
+{
+	// Unregisters and frees the observer registered through the Java object.
+	// WebRTC is told only while that observer is still the registered one:
+	// another Java object for the same transport may have registered its own
+	// since, which stays.
+	void UnregisterOwnObserver(JNIEnv * env, jobject caller, webrtc::DtlsTransportInterface * transport)
+	{
+		auto observer = GetHandle<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
+
+		if (jni::RegisteredObservers::Remove(transport, observer)) {
+			transport->UnregisterObserver();
+		}
+
+		ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
+	}
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 (JNIEnv * env, jobject caller, jobject observer)
 {
@@ -96,14 +115,16 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 		webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
 		CHECK_HANDLE(transport);
 
-		// Unregister and free a previously registered observer before replacing
-		// it, otherwise it would leak along with its JNI global reference.
-		transport->UnregisterObserver();
-
 		auto newObserver = new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer));
-		ReplaceNativeObserver(env, caller, "observerHandle", newObserver);
+
+		// Registering replaces whatever observer the transport had, also one
+		// registered through another Java object, so the one registered
+		// through this object before is out of use and can be freed.
+		jni::RegisteredObservers::Set(transport, newObserver);
 
 		transport->RegisterObserver(newObserver);
+
+		ReplaceNativeObserver(env, caller, "observerHandle", newObserver);
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -116,9 +137,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserve
 	webrtc::DtlsTransportInterface * transport = GetHandle<webrtc::DtlsTransportInterface>(env, caller);
 	CHECK_HANDLE(transport);
 
-	transport->UnregisterObserver();
-
-	ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
+	UnregisterOwnObserver(env, caller, transport);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_dispose
@@ -129,11 +148,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_dispose
 
 	// WebRTC must let go of an observer registered through this object before
 	// it is deleted.
-	if (GetHandle<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle") != nullptr) {
-		transport->UnregisterObserver();
-
-		ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
-	}
+	UnregisterOwnObserver(env, caller, transport);
 
 	// The connection, its senders and receivers, and other Java objects keep
 	// their own references, so this one need not be the last.

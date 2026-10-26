@@ -15,11 +15,30 @@
  */
 
 #include "JNI_RTCDtmfSender.h"
+#include "api/RegisteredObservers.h"
 #include "api/RTCDtmfSenderObserver.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
 
 #include "api/dtmf_sender_interface.h"
+
+namespace
+{
+	// Unregisters and frees the observer registered through the Java object.
+	// WebRTC is told only while that observer is still the registered one:
+	// another Java object for the same DTMF sender may have registered its
+	// own since, which stays.
+	void UnregisterOwnObserver(JNIEnv * env, jobject caller, webrtc::DtmfSenderInterface * sender)
+	{
+		auto observer = GetHandle<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
+
+		if (jni::RegisteredObservers::Remove(sender, observer)) {
+			sender->UnregisterObserver();
+		}
+
+		ClearNativeObserver<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
+	}
+}
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_canInsertDtmf
 (JNIEnv * env, jobject caller)
@@ -87,14 +106,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 		webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
 		CHECK_HANDLE(sender);
 
-		// Unregister and free a previously registered observer before replacing
-		// it, otherwise it would leak along with its JNI global reference.
-		sender->UnregisterObserver();
-
 		auto observer = new jni::RTCDtmfSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
+
+		// Registering replaces whatever observer the DTMF sender had, also one
+		// registered through another Java object. It runs on the signaling
+		// thread, which is also the thread that calls the observer, so the one
+		// registered through this object before is out of use once it returns.
+		jni::RegisteredObservers::Set(sender, observer);
 
 		sender->RegisterObserver(observer);
+
+		ReplaceNativeObserver(env, caller, "observerHandle", observer);
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -107,7 +129,22 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver
 	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
 	CHECK_HANDLE(sender);
 
-	sender->UnregisterObserver();
+	UnregisterOwnObserver(env, caller, sender);
+}
 
-	ClearNativeObserver<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_dispose
+(JNIEnv * env, jobject caller)
+{
+	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+	CHECK_HANDLE(sender);
+
+	// WebRTC must let go of an observer registered through this object before
+	// it is deleted.
+	UnregisterOwnObserver(env, caller, sender);
+
+	// The RTCRtpSender and other Java objects keep their own references, so
+	// this one need not be the last.
+	sender->Release();
+
+	SetHandle<std::nullptr_t>(env, caller, nullptr);
 }

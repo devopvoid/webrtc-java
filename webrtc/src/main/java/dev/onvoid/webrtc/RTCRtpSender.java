@@ -60,10 +60,11 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * packet, replacing any observer set before. {@code null} removes the
 	 * observer.
 	 * <p>
-	 * A sender has one observer. It belongs to the RTCRtpSender object it was
-	 * set through: disposing that object removes it, also when it was set
-	 * through another object of the same sender in the meantime, so set it
-	 * through one object.
+	 * A sender has one observer, also when several RTCRtpSender objects stand
+	 * for it: setting it through one replaces the observer set through
+	 * another. Removing it, or disposing this object, removes only the
+	 * observer set through this object, and only while no other object has
+	 * replaced it.
 	 *
 	 * @param observer The observer, or {@code null}.
 	 */
@@ -153,6 +154,9 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * Returns the RTCDtmfSender associated with this RTCRtpSender. The RTCDtmfSender
 	 * enables the transmission of DTMF (Dual-Tone Multi-Frequency) tones over the
 	 * RTCPeerConnection.
+	 * <p>
+	 * Each call returns a new instance holding its own reference to the DTMF
+	 * sender, to be released with {@link RTCDtmfSender#dispose()}.
 	 *
 	 * @return The DTMF sender object associated with this RTP sender, or null if DTMF
 	 *         is not supported for the media type of the associated track.
