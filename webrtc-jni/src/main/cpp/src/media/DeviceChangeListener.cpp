@@ -15,6 +15,7 @@
  */
 
 #include "media/DeviceChangeListener.h"
+#include "api/WebRTCUtils.h"
 #include "media/audio/AudioDevice.h"
 #include "media/video/VideoDevice.h"
 #include "JavaFactories.h"
@@ -79,10 +80,7 @@ namespace jni
 			RTC_LOG(LS_ERROR) << "Device change notification failed";
 		}
 
-		if (env->ExceptionCheck()) {
-			env->ExceptionDescribe();
-			env->ExceptionClear();
-		}
+		ReportPendingException(env);
 	}
 
 	DeviceChangeListener::JavaDeviceChangeListenerClass::JavaDeviceChangeListenerClass(JNIEnv * env)

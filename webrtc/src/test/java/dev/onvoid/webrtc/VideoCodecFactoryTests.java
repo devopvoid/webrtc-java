@@ -365,6 +365,21 @@ class VideoCodecFactoryTests extends TestBase {
 		// exception was still pending.
 		Logging.addLogSink(Logging.Severity.WARNING, (severity, message) -> { });
 
+		// What the factory threw goes to the uncaught exception handler of the
+		// thread that called it, as it would from a Java thread, rather than
+		// half to native stderr through ExceptionDescribe.
+		CountDownLatch reported = new CountDownLatch(1);
+		Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+
+		Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+			if (e instanceof IllegalStateException && "createEncoder fails on purpose".equals(e.getMessage())) {
+				reported.countDown();
+			}
+			else if (previous != null) {
+				previous.uncaughtException(thread, e);
+			}
+		});
+
 		PeerConnectionFactory built = testCodecFactory(encoderFactory, new TestDecoderFactory());
 
 		try (TestMediaCall call = new TestMediaCall(built, true, false, TEST_CODEC)) {
@@ -379,9 +394,11 @@ class VideoCodecFactoryTests extends TestBase {
 			}
 
 			assertTrue(encoderFactory.created.get() > 0, "the encoder factory was never asked");
+			assertTrue(reported.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "the failure was not reported");
 		}
 		finally {
 			built.dispose();
+			Thread.setDefaultUncaughtExceptionHandler(previous);
 		}
 	}
 
