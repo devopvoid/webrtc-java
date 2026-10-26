@@ -97,7 +97,7 @@ public class WhepExample {
 
             Thread.sleep(seconds * 1000L);
 
-            // Deletes the session on the server, then closes the peer.
+            // Deletes the session on the server and closes the peer.
             session.closeAsync().get(5, TimeUnit.SECONDS);
 
             System.out.println("Ended the session " + session.resource());
