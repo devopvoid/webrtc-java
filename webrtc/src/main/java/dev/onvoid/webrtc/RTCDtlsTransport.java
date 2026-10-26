@@ -64,7 +64,8 @@ public class RTCDtlsTransport extends NativeObject {
 
 	/**
 	 * Returns the certificate chain in use by the remote side, with each
-	 * certificate encoded in PEM format.
+	 * certificate encoded in PEM format. The list is empty until the DTLS
+	 * handshake has received the certificates of the remote side.
 	 *
 	 * @return The certificate chain in use by the remote side.
 	 */

@@ -69,7 +69,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getRemoteCerti
 		auto info = transport->Information();
 		auto certChain = info.remote_ssl_certificates();
 
-		size_t count = certChain->GetSize();
+		// There is no chain before the handshake has received one.
+		size_t count = certChain != nullptr ? certChain->GetSize() : 0;
 
 		jni::JavaArrayList certificates(env, count);
 
