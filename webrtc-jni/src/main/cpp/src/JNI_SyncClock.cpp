@@ -20,11 +20,16 @@
 
 #include "rtc_base/time_utils.h"
 
+#include <memory>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_initialize
 (JNIEnv * env, jobject caller)
 {
 	try {
-	    jni::SyncClock * clock = new jni::SyncClock();
+	    // The handle holds a reference, not the clock itself: a custom source
+	    // constructed with this clock takes its own, so disposing the Java
+	    // clock leaves the native one alive for as long as a source uses it.
+	    auto clock = new std::shared_ptr<jni::SyncClock>(std::make_shared<jni::SyncClock>());
     
 	    SetHandle(env, caller, clock);
 	}
@@ -36,37 +41,39 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_initialize
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_getTimestampUs
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
+    auto clock = GetHandle<std::shared_ptr<jni::SyncClock>>(env, caller);
     CHECK_HANDLEV(clock, 0);
     
-    return clock->GetTimestampUs();
+    return (*clock)->GetTimestampUs();
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_getTimestampMs
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
+    auto clock = GetHandle<std::shared_ptr<jni::SyncClock>>(env, caller);
     CHECK_HANDLEV(clock, 0);
     
-    return clock->GetTimestampMs();
+    return (*clock)->GetTimestampMs();
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_getNtpTime
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
+    auto clock = GetHandle<std::shared_ptr<jni::SyncClock>>(env, caller);
     CHECK_HANDLEV(clock, 0);
     
-    webrtc::NtpTime ntpTime = clock->GetNtpTime();
+    webrtc::NtpTime ntpTime = (*clock)->GetNtpTime();
     return ntpTime.ToMs();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_dispose
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
+    auto clock = GetHandle<std::shared_ptr<jni::SyncClock>>(env, caller);
     CHECK_HANDLE(clock);
     
+    // Drops this wrapper's reference only; sources still using the clock
+    // keep theirs.
     delete clock;
     
     SetHandle<std::nullptr_t>(env, caller, nullptr);

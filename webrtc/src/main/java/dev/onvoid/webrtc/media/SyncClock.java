@@ -92,6 +92,10 @@ public class SyncClock extends NativeObject {
      * Disposes of any native resources held by this clock.
      * This method should be called when the clock is no longer needed
      * to prevent memory leaks.
+     * <p>
+     * A custom audio or video source constructed with this clock shares it,
+     * so the clock may be disposed while such a source is still in use: the
+     * source keeps the native clock until it is disposed itself.
      */
     public native void dispose();
 

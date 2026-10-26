@@ -39,11 +39,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_init
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_initializeWithClock
 (JNIEnv * env, jobject caller, jobject javaClock)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, javaClock);
+    auto clock = GetHandle<std::shared_ptr<jni::SyncClock>>(env, javaClock);
     CHECK_HANDLE(clock);
 
-    std::shared_ptr<jni::SyncClock> sync_clock(clock, [](jni::SyncClock*) {});  // Shared ownership without deleting
-    webrtc::scoped_refptr<jni::CustomVideoSource> source = webrtc::make_ref_counted<jni::CustomVideoSource>(sync_clock);
+    // The source shares the clock, so disposing the Java clock while the
+    // source is still pushed to does not free it.
+    webrtc::scoped_refptr<jni::CustomVideoSource> source = webrtc::make_ref_counted<jni::CustomVideoSource>(*clock);
 
     SetHandle(env, caller, source.release());
 }
