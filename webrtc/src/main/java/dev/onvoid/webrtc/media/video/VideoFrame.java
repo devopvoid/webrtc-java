@@ -32,7 +32,7 @@ public class VideoFrame implements RefCounted {
 	/** The underlying frame buffer. */
 	public final VideoFrameBuffer buffer;
 
-	/** Rotation of the frame in degrees. */
+	/** Clockwise rotation of the frame in degrees: 0, 90, 180 or 270. */
 	public final int rotation;
 
 	/** Timestamp of the frame in nanoseconds. */
@@ -55,7 +55,9 @@ public class VideoFrame implements RefCounted {
 	 * Creates a new VideoFrame with the specified buffer, rotation and timestamp.
 	 *
 	 * @param buffer      The video frame buffer containing the actual frame data.
-	 * @param rotation    The rotation of the frame in degrees (must be a multiple of 90).
+	 * @param rotation    The clockwise rotation of the frame in degrees (must be a multiple of 90).
+	 *                    Any multiple is taken, and kept as its equal in 0, 90, 180 or 270, so that
+	 *                    -90 and 450 are stored as 270 and 90.
 	 * @param timestampNs The timestamp of the frame in nanoseconds.
 	 *
 	 * @throws IllegalArgumentException If buffer is null or rotation is not a multiple of 90.
@@ -69,7 +71,7 @@ public class VideoFrame implements RefCounted {
 		}
 
 		this.buffer = buffer;
-		this.rotation = rotation;
+		this.rotation = ((rotation % 360) + 360) % 360;
 		this.timestampNs = timestampNs;
 	}
 
