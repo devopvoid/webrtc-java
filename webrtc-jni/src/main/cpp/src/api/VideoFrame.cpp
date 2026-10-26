@@ -24,29 +24,30 @@
 #include "api/video/i420_buffer.h"
 #include "rtc_base/time_utils.h"
 
-#include <cstdarg>
-#include <cstdio>
-#include <limits>
+#include <climits>
+#include <cstdint>
 
 namespace jni
 {
 	namespace
 	{
-		// Throws an IllegalArgumentException for a buffer whose pixels do not match its description.
-		[[noreturn]] void ThrowInvalidBuffer(JNIEnv * env, const char * format, ...)
+		// Throws unless the plane holds every byte a copy reads: the last row ends at the width.
+		void CheckPlane(JNIEnv * env, const char * name, const JavaRef<jobject> & data, jint stride, jint width, jint height)
 		{
-			char message[256];
+			if (stride < width) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "Stride %d of the %s plane is less than its width %d", stride, name, width)));
+			}
 
-			va_list args;
-			va_start(args, format);
-			vsnprintf(message, sizeof(message), format, args);
-			va_end(args);
+			// Neither factor exceeds an int, so the product cannot overflow.
+			const int64_t required = static_cast<int64_t>(stride) * (height - 1) + width;
+			const jlong capacity = env->GetDirectBufferCapacity(data);
 
-			ThrowJavaException(env, "java/lang/IllegalArgumentException", message);
-			ExceptionCheck(env);
-
-			// Only if the exception itself could not be created.
-			throw JavaWrappedException(JavaLocalRef<jthrowable>(env, JavaRuntimeException(env, message)));
+			if (capacity < required) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The %s plane holds %lld bytes, but a %dx%d plane with stride %d needs %lld",
+						name, static_cast<long long>(capacity), width, height, stride, static_cast<long long>(required))));
+			}
 		}
 	}
 
@@ -154,38 +155,22 @@ namespace jni
 			const uint8_t * u = static_cast<const uint8_t *>(env->GetDirectBufferAddress(dataU));
 			const uint8_t * v = static_cast<const uint8_t *>(env->GetDirectBufferAddress(dataV));
 
-			if (y == nullptr || u == nullptr || v == nullptr) {
+			if (y == nullptr || u == nullptr || v == nullptr || width <= 0 || height <= 0) {
 				return nullptr;
 			}
 
-			// WebRTC aborts the process on sizes it cannot allocate, and the copy trusts the strides and
-			// reads every row of a plane up to its width, whether the memory belongs to the plane or not.
-			if (width <= 0 || height <= 0) {
-				ThrowInvalidBuffer(env, "Invalid buffer size %dx%d", width, height);
+			const jint chromaWidth = static_cast<jint>((width + 1LL) / 2);
+			const jint chromaHeight = static_cast<jint>((height + 1LL) / 2);
+
+			// WebRTC aborts the process on a copy larger than it can address with an int.
+			if (static_cast<int64_t>(width) * height + 2 * static_cast<int64_t>(chromaWidth) * chromaHeight > INT_MAX) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "Buffer size %dx%d is too large", width, height)));
 			}
 
-			const int64_t chromaWidth = (static_cast<int64_t>(width) + 1) / 2;
-			const int64_t chromaHeight = (static_cast<int64_t>(height) + 1) / 2;
-
-			if (static_cast<int64_t>(width) * height + 2 * chromaWidth * chromaHeight > std::numeric_limits<int>::max()) {
-				ThrowInvalidBuffer(env, "Buffer size %dx%d is too large", width, height);
-			}
-			if (strideY < width || strideU < chromaWidth || strideV < chromaWidth) {
-				ThrowInvalidBuffer(env, "Strides %d, %d, %d are too small for a width of %d", strideY, strideU,
-					strideV, width);
-			}
-
-			// The last row ends at the width, as in the buffers handed to Java.
-			auto planeSize = [](int64_t stride, int64_t planeWidth, int64_t planeHeight) {
-				return stride * (planeHeight - 1) + planeWidth;
-			};
-
-			if (env->GetDirectBufferCapacity(dataY) < planeSize(strideY, width, height) ||
-				env->GetDirectBufferCapacity(dataU) < planeSize(strideU, chromaWidth, chromaHeight) ||
-				env->GetDirectBufferCapacity(dataV) < planeSize(strideV, chromaWidth, chromaHeight)) {
-				ThrowInvalidBuffer(env, "The planes of the %dx%d buffer are smaller than its strides require",
-					width, height);
-			}
+			CheckPlane(env, "Y", dataY, strideY, width, height);
+			CheckPlane(env, "U", dataU, strideU, chromaWidth, chromaHeight);
+			CheckPlane(env, "V", dataV, strideV, chromaWidth, chromaHeight);
 
 			return webrtc::I420Buffer::Copy(width, height, y, strideY, u, strideU, v, strideV);
 		}

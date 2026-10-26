@@ -153,10 +153,9 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 	 * Copies the pixels of any buffer, as {@link VideoFrameBuffer#toI420()} provides them, into a new
 	 * buffer.
 	 *
-	 * @throws IllegalArgumentException if the size, strides and planes of the I420 buffer do not fit
-	 *                                  together.
-	 * @throws RuntimeException         if the buffer has no readable pixels, such as a released buffer
-	 *                                  or one with heap byte buffers.
+	 * @throws RuntimeException if the buffer has no readable pixels, such as a released buffer or one
+	 *                          with heap byte buffers, or if the size, strides and planes of the I420
+	 *                          buffer do not fit together.
 	 */
 	static native NativeI420Buffer copy(VideoFrameBuffer buffer);
 

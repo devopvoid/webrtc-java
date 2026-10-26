@@ -41,8 +41,8 @@ namespace jni
 		// is converted to I420 in Java first. A NativeI420Buffer that comes
 		// out of that is shared; any other I420 buffer is copied. Returns
 		// null if it has no readable pixels, such as a released buffer or
-		// one with heap byte buffers, and throws an IllegalArgumentException
-		// if its size, strides and planes do not fit together.
+		// one with heap byte buffers, and throws a RuntimeException if its
+		// size, strides and planes do not fit together.
 		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> toNativeBuffer(JNIEnv * env, const JavaRef<jobject> & javaBuffer);
 	}
 

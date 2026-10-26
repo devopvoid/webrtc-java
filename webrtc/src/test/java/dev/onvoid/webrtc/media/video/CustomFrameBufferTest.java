@@ -131,8 +131,8 @@ class CustomFrameBufferTest extends TestBase {
 		// Each plane lacks the last byte that its strides and height require.
 		VideoFrame frame = new VideoFrame(new DirectI420Buffer(WIDTH, -1), 0);
 
-		assertThrows(IllegalArgumentException.class, () -> videoSource.pushFrame(frame));
-		assertThrows(IllegalArgumentException.class, frame::copy);
+		assertThrows(RuntimeException.class, () -> videoSource.pushFrame(frame));
+		assertThrows(RuntimeException.class, frame::copy);
 		assertEquals(0, received.size());
 	}
 
@@ -140,7 +140,7 @@ class CustomFrameBufferTest extends TestBase {
 	void pushBufferWithShortStride() {
 		VideoFrame frame = new VideoFrame(new DirectI420Buffer(WIDTH - 1, 0), 0);
 
-		assertThrows(IllegalArgumentException.class, () -> videoSource.pushFrame(frame));
+		assertThrows(RuntimeException.class, () -> videoSource.pushFrame(frame));
 		assertEquals(0, received.size());
 	}
 

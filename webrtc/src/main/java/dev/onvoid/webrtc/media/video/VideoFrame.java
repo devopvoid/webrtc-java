@@ -80,10 +80,9 @@ public class VideoFrame implements RefCounted {
 	 *
 	 * @return A new VideoFrame with a copy of the buffer data.
 	 *
-	 * @throws IllegalArgumentException if the size, strides and planes of the I420 buffer do not fit
-	 *                                  together.
-	 * @throws RuntimeException         if the buffer has no readable pixels, such as a released buffer
-	 *                                  or one with heap byte buffers.
+	 * @throws RuntimeException if the buffer has no readable pixels, such as a released buffer or one
+	 *                          with heap byte buffers, or if the size, strides and planes of the I420
+	 *                          buffer do not fit together.
 	 */
 	public VideoFrame copy() {
 		return new VideoFrame(NativeI420Buffer.copy(buffer), rotation, timestampNs);
