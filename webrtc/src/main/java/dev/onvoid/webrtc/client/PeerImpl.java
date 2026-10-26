@@ -481,7 +481,7 @@ final class PeerImpl implements Peer {
 					return;
 				}
 				if (error == null) {
-					handler.accept(stats);
+					call(handler, stats);
 				}
 				else if (!(unwrap(error) instanceof PeerClosedException)) {
 					deliverError(asWebRtcException(error, "Reading the statistics failed"));

@@ -24,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -551,8 +553,54 @@ class PeerTests extends ClientTestBase {
 
 		assertEquals("host", first.candidateType());
 		assertTrue(first.bytesSent() > 10_000, () -> "Bytes sent: " + first.bytesSent());
+		assertEquals(first.report().getTimestamp(), ChronoUnit.MICROS.between(Instant.EPOCH, first.timestamp()));
 		assertEquals(-1, first.outgoingBitrate());
-		assertTrue(second.outgoingBitrate() >= 0);
+		// Asked for right after the first, the second may be the report WebRTC
+		// still caches, which repeats the first one's bitrate.
+		if (second.timestamp().equals(first.timestamp())) {
+			assertEquals(-1, second.outgoingBitrate());
+		}
+		else {
+			assertTrue(second.outgoingBitrate() >= 0);
+		}
+	}
+
+	@Test
+	void statsHandlerErrorReported() throws Exception {
+		// A stats handler that throws reaches the runtime's error handler, and
+		// the samples after it still come.
+		ManualTimer timer = new ManualTimer();
+		CompletableFuture<Throwable> reported = new CompletableFuture<>();
+		Duration interval = Duration.ofSeconds(7);
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(error -> {
+					errors.add(error);
+					reported.complete(error);
+				})
+				.timer(timer)
+				.build()) {
+			Peer peer = runtime.createPeer(manualOptions());
+			AtomicInteger calls = new AtomicInteger();
+			CompletableFuture<PeerStats> later = new CompletableFuture<>();
+
+			peer.onStats(interval, stats -> {
+				if (calls.incrementAndGet() == 1) {
+					throw new IllegalStateException("Handler failed");
+				}
+				later.complete(stats);
+			});
+
+			assertEquals(1, timer.fire(interval));
+			Throwable error = await(reported);
+
+			assertInstanceOf(IllegalStateException.class, error);
+			errors.remove(error);
+
+			assertEquals(1, timer.fire(interval));
+			await(later);
+		}
 	}
 
 	@Test
