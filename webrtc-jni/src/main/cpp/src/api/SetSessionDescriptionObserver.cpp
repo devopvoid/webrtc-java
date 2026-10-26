@@ -20,6 +20,8 @@
 #include "JNI_WebRTC.h"
 #include "JavaUtils.h"
 
+#include <utility>
+
 namespace jni
 {
 	SetSessionDescriptionObserver::SetSessionDescriptionObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
@@ -28,36 +30,54 @@ namespace jni
 	{
 	}
 
+	SetSessionDescriptionObserver::~SetSessionDescriptionObserver()
+	{
+		// WebRTC posts the result to the signaling thread and drops it, together
+		// with this observer, when the peer connection goes away before it runs.
+		Notify("[INVALID_STATE] Setting the session description was discarded before completion");
+	}
+
 	void SetSessionDescriptionObserver::OnSuccess()
 	{
-		JNIEnv * env = AttachCurrentThread();
-
-		if (env == nullptr) {
-			return;
-		}
-
-		env->CallVoidMethod(observer, javaClass->onSuccess);
-
-		ReportPendingException(env);
+		Notify(nullptr);
 	}
 
 	void SetSessionDescriptionObserver::OnFailure(webrtc::RTCError error)
 	{
+		try {
+			Notify(RTCErrorToString(error).c_str());
+		}
+		catch (...) {
+			Notify("[INTERNAL_ERROR] Could not report the session description result");
+		}
+	}
+
+	void SetSessionDescriptionObserver::Notify(const char * error) noexcept
+	{
+		JavaGlobalRef<jobject> callback(std::move(observer));
+
+		if (!callback.get()) {
+			return;
+		}
+
 		JNIEnv * env = AttachCurrentThread();
 
 		if (env == nullptr) {
 			return;
 		}
 
-		try {
-			JavaLocalRef<jstring> errorMessage = JavaString::toJava(env, RTCErrorToString(error));
-
-			env->CallVoidMethod(observer, javaClass->onFailure, errorMessage.get());
+		if (error == nullptr) {
+			env->CallVoidMethod(callback.get(), javaClass->onSuccess);
 		}
-		catch (...) {
-			ThrowCxxJavaException(env);
+		else {
+			JavaLocalRef<jstring> message(env, env->NewStringUTF(error));
+
+			if (!env->ExceptionCheck()) {
+				env->CallVoidMethod(callback.get(), javaClass->onFailure, message.get());
+			}
 		}
 
+		// A Java exception must not escape into WebRTC's signaling thread.
 		ReportPendingException(env);
 	}
 
