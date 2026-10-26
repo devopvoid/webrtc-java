@@ -18,7 +18,9 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -125,6 +127,43 @@ class RTCDtlsTransportTests extends TestBase {
 
 		assertEquals(firstCallsAfterReplace, firstObserverCalls.get(),
 				"The replaced observer must not receive further events");
+	}
+
+	@Test
+	void remoteCertificates() {
+		List<RTCCertificatePEM> certificates = transport.getRemoteCertificates();
+
+		assertFalse(certificates.isEmpty());
+
+		for (RTCCertificatePEM certificate : certificates) {
+			assertTrue(certificate.getCertificate().startsWith("-----BEGIN CERTIFICATE-----"));
+		}
+	}
+
+	@Test
+	void remoteCertificatesBeforeHandshake() throws Exception {
+		TestPeerConnection offerer = new TestPeerConnection(factory);
+
+		try {
+			AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+			AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+			RTCRtpSender audioSender = offerer.getPeerConnection()
+					.addTrack(audioTrack, Collections.singletonList("stream1"));
+
+			// Setting the local description creates the transport, which has
+			// no remote certificates before the handshake. Reading them used
+			// to crash the VM.
+			offerer.createOffer();
+
+			RTCDtlsTransport dtlsTransport = audioSender.getTransport();
+			assertNotNull(dtlsTransport);
+			assertEquals(RTCDtlsTransportState.NEW, dtlsTransport.getState());
+
+			assertTrue(dtlsTransport.getRemoteCertificates().isEmpty());
+		}
+		finally {
+			offerer.close();
+		}
 	}
 
 	@Test
