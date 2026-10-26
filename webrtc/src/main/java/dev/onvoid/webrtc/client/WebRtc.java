@@ -102,6 +102,15 @@ public final class WebRtc implements AutoCloseable {
 
 	final ScheduledExecutorService timer;
 
+	/**
+	 * The one thread that sends pushed audio, apart from the timer: a slow
+	 * push must not delay the timeouts.
+	 */
+	final ScheduledExecutorService audioPacer;
+
+	/** The time in nanoseconds, as {@link System#nanoTime()}. */
+	final LongSupplier clock;
+
 	final Duration operationTimeout;
 
 	/** How much audio an {@code onAudio} subscription buffers by default. */
@@ -166,6 +175,9 @@ public final class WebRtc implements AutoCloseable {
 		this.framePool = pool(builder.frameThreads, "webrtc-client-frames-" + runtime + "-");
 		this.timer = builder.timer != null ? builder.timer
 				: Executors.newSingleThreadScheduledExecutor(threads("webrtc-client-timer-" + runtime + "-"));
+		this.audioPacer = builder.audioPacer != null ? builder.audioPacer
+				: Executors.newSingleThreadScheduledExecutor(threads("webrtc-client-audio-" + runtime + "-"));
+		this.clock = builder.clock;
 
 		if (builder.eventExecutor != null) {
 			this.eventExecutor = builder.eventExecutor;
@@ -570,6 +582,7 @@ public final class WebRtc implements AutoCloseable {
 		controlPool.shutdown();
 		framePool.shutdown();
 		timer.shutdownNow();
+		audioPacer.shutdownNow();
 
 		if (ownsEventExecutor) {
 			((ExecutorService) eventExecutor).shutdown();
@@ -647,6 +660,8 @@ public final class WebRtc implements AutoCloseable {
 		private ExecutorService controlPool;
 
 		private ScheduledExecutorService timer;
+
+		private ScheduledExecutorService audioPacer;
 
 		private LongSupplier clock = System::nanoTime;
 
@@ -850,8 +865,18 @@ public final class WebRtc implements AutoCloseable {
 		}
 
 		/**
-		 * Replaces the clock of the load statistics and of the turns of the
-		 * executors, so that tests decide how much time passes.
+		 * Replaces the thread that sends pushed audio, so that tests decide
+		 * when each chunk is due. The runtime shuts it down when it closes.
+		 */
+		Builder audioPacer(ScheduledExecutorService pacer) {
+			this.audioPacer = requireNonNull(pacer, "pacer");
+			return this;
+		}
+
+		/**
+		 * Replaces the clock of the load statistics, of the turns of the
+		 * executors and of the audio pacing, so that tests decide how much
+		 * time passes.
 		 *
 		 * @param nanos the time in nanoseconds, as {@link System#nanoTime()}.
 		 */

@@ -23,6 +23,11 @@ package dev.onvoid.webrtc.client;
  * Audio may be pushed in pieces of any length, from any thread. The track
  * cuts it into 10 ms chunks and sends one every 10 ms from a thread of its
  * own, so pushing a whole second at once is as fine as pushing every 10 ms.
+ * <p>
+ * Should that thread stall, such as in a long garbage collection pause, it
+ * makes up for at most the last 50 ms of the stall. The audio of the rest is
+ * not sent faster but later, so what is queued then stays that much behind,
+ * unless {@link #clear()} drops it.
  */
 public interface CustomAudio extends LocalAudio {
 

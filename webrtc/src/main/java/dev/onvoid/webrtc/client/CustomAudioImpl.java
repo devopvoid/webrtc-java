@@ -28,13 +28,33 @@ import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 
 /**
  * An audio track fed with audio the application pushes. Pushed audio is cut
- * into 10 ms chunks, which the runtime's timer thread hands to the source one
- * every 10 ms. That thread is the only one that pushes into the source, as
- * {@link CustomAudioSource} requires.
+ * into 10 ms chunks, which the runtime's audio pacer hands to the source one
+ * every 10 ms. Its thread is the only one that pushes into the source, as
+ * {@link CustomAudioSource} requires, and it runs no timeouts, which a slow
+ * push would hold up.
  */
 final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 
+	private static final long TICK_NANOS = TimeUnit.MILLISECONDS.toNanos(10);
+
+	/**
+	 * How late a tick may run and still send. The pacer runs at a fixed rate,
+	 * so after a stall it runs the missed ticks back to back: those up to this
+	 * late are made up for, so that a short stall keeps the pace, and the
+	 * earlier ones are skipped, so that a long one does not burst out all the
+	 * audio of the pause at once. Skipped ticks leave the queue as it is.
+	 */
+	private static final long MAX_LATE_NANOS = TimeUnit.MILLISECONDS.toNanos(50);
+
 	private final CustomAudioSource source;
+
+	// Confined to the pacer, once the ticker is scheduled.
+
+	/** When the first tick was due. */
+	private long start;
+
+	/** The ticks run so far. */
+	private long ticks;
 
 	// Guarded by queue.
 
@@ -98,7 +118,8 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 			}
 
 			if (ticker == null) {
-				ticker = rtc.timer.scheduleAtFixedRate(this::tick, 0, 10, TimeUnit.MILLISECONDS);
+				start = rtc.clock.getAsLong();
+				ticker = rtc.audioPacer.scheduleAtFixedRate(this::tick, 0, TICK_NANOS, TimeUnit.NANOSECONDS);
 			}
 		}
 	}
@@ -144,6 +165,12 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 	}
 
 	private void tick() {
+		long late = rtc.clock.getAsLong() - (start + ticks++ * TICK_NANOS);
+
+		if (late > MAX_LATE_NANOS) {
+			return;
+		}
+
 		Chunk chunk;
 
 		synchronized (queue) {
