@@ -331,10 +331,10 @@ A future that is already done may be read anywhere, and any thread that is not a
 
 Each call returns a future of its own, also of `closeAsync()`, `whenClosed()`, `whenConnected()` and `whenOpen()`. Cancelling one only stops waiting: the close goes on, and the futures of other callers, and of the runtime's own close, are not affected.
 
-::: warning
-On Java 8, only the futures the API returns refuse to be waited on. Futures derived from them with `thenApply` and the like do not, so waiting for one of those in a handler hangs that peer. From Java 9 on, the derived futures refuse too.
+Futures derived from them with `thenApply` and the like refuse to be waited on as well.
 
-A UI thread used as event executor is the same: waiting on it for a future of this API hangs the UI, since the future completes on it.
+::: warning
+A UI thread used as event executor does not refuse: waiting on it for a future of this API hangs the UI, since the future completes on it.
 :::
 
 ## Sending Media

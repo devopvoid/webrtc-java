@@ -9,7 +9,7 @@ low-level API stays as it is.
 
 - Package `dev.onvoid.webrtc.client`, in the existing `webrtc-java` jar, exported by the
   `webrtc.java` module.
-- Java 8, like the rest of the module: no records, no sealed types, no `var`.
+- Java 11, like the rest of the module: no records, no sealed types.
 - Pure Java. Phase 1 needs no native or JNI changes and changes no existing signature.
 
 ## Decisions
@@ -20,7 +20,7 @@ These were open questions in the mockup. Each went with its recommendation.
 |---|---|---|
 | Where does it live? | A package in the existing jar, not a separate artifact. | Users get it without another dependency. It follows the core's releases. |
 | Default perfect negotiation role? | Impolite by default. | Glare between two impolite peers fails with a `NegotiationException` that names the fix (make one side polite). Every example sets the role explicitly. |
-| Plain `CompletableFuture` or an own type? | Plain `CompletableFuture`. | On Java 8, stages derived from a subclass are plain `CompletableFuture`s, so `BlockingCallException` only catches a `join()`/`get()` on the future the API returned. The exception message and the event thread names help with the rest. |
+| Plain `CompletableFuture` or an own type? | Plain `CompletableFuture`. | The API returns a `ClientFuture` subclass behind the type, whose derived stages are `ClientFuture`s too, so `BlockingCallException` catches a `join()`/`get()` on them as well. The exception message and the event thread names help with the rest. |
 | Does `Peer.close()` block? | No, never. | Safe in handlers and on UI threads. `closeAsync()` returns a future for callers who want to wait. `WebRtc.close()` is the one call that waits for everything. |
 | A camera opened twice? | Shared when the options match, `MediaException` when they differ. | One capture per device. Most platforms can't open a device with two capabilities anyway. |
 | Entry point name? | `WebRtc`. | `try (WebRtc rtc = WebRtc.create()) { ... }` |
@@ -750,8 +750,8 @@ How the threading model is built:
 - Native observer completions are posted back to the control executor before anything is chained
   on them, so no internal code ever runs on a WebRTC thread.
 - Public futures are `ClientFuture`s completed on the event executor. `join()`/`get()` on an
-  unfinished one from any event thread throws `BlockingCallException`. On Java 9+ derived stages
-  refuse too, through `newIncompleteFuture`.
+  unfinished one from any event thread throws `BlockingCallException`. Derived stages refuse too,
+  through `newIncompleteFuture`.
 - Frame and audio subscriptions each get a `SerialExecutor` over a frame pool, with the drop
   policies described above.
 - `CustomAudio` is cut into 10 ms chunks and pushed from the runtime's timer thread, every 10 ms.

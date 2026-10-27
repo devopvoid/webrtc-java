@@ -75,33 +75,12 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>3.16.0</version>
-					<executions>
-						<execution>
-							<id>default-compile</id>
-							<configuration>
-								<release>9</release>
-								<!-- No excludes: compile everything to ensure module-info contains the right entries -->
-							</configuration>
-						</execution>
-						<execution>
-							<id>base-compile</id>
-							<goals>
-								<goal>compile</goal>
-							</goals>
-							<configuration>
-								<!-- Recompile everything for the target VM except the module-info.java -->
-								<excludes>
-									<exclude>module-info.java</exclude>
-								</excludes>
-							</configuration>
-						</execution>
-					</executions>
 					<!-- Defaults for compiler and testCompile -->
 					<configuration>
-						<release>8</release><!-- compatibility expectations -->
+						<release>11</release><!-- compatibility expectations -->
 						<!-- Only required when haven't configured the maven-toolchains-plugin -->
 						<jdkToolchain>
-							<version>9</version>
+							<version>11</version>
 						</jdkToolchain>
 						<showDeprecation>true</showDeprecation>
 						<showWarnings>true</showWarnings>
