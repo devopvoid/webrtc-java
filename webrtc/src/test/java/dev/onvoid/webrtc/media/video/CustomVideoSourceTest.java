@@ -138,9 +138,9 @@ class CustomVideoSourceTest extends TestBase {
     }
 
     @Test
-    void pushFrameWithoutTimestampUsesSourceClock() {
-        // Without a capture time the source stamps the frame itself, which is
-        // the behaviour of pushFrame(VideoFrame) and must stay that way.
+    void pushFrameWithoutTimestampUsesMediaClock() {
+        // Without a capture time the source stamps the frame itself, with the
+        // moment of the push on the clock a caller's capture time is on.
         VideoTrack videoTrack = factory.createVideoTrack("videoTrack", customVideoSource);
 
         final List<Long> timestamps = new ArrayList<>();
@@ -152,15 +152,72 @@ class CustomVideoSourceTest extends TestBase {
         NativeI420Buffer buffer = NativeI420Buffer.allocate(320, 240);
         VideoFrame frame = new VideoFrame(buffer, 424242L);
 
+        long beforeUs = SyncClock.currentTimeUs();
         customVideoSource.pushFrame(frame);
+        long afterUs = SyncClock.currentTimeUs();
         frame.release();
 
         assertEquals(1, timestamps.size());
         assertNotEquals(424242L, timestamps.get(0),
                 "Frame kept the timestamp it was constructed with");
+        assertPushedBetween(beforeUs, afterUs, timestamps.get(0));
 
         videoTrack.removeSink(sink);
         videoTrack.dispose();
+    }
+
+    @Test
+    void pushFrameWithAndWithoutTimestampShareOneClock() {
+        // A source may push some frames with a capture time and others
+        // without. Both must be on one clock, or the frame time jumps back and
+        // forth between them, which the adapter and the encoder take for time
+        // running backwards.
+        SyncClock clock = new SyncClock();
+        CustomVideoSource source = new CustomVideoSource(clock);
+        VideoTrack videoTrack = factory.createVideoTrack("videoTrack", source);
+
+        final List<Long> timestamps = new ArrayList<>();
+
+        VideoTrackSink sink = frame -> timestamps.add(frame.timestampNs);
+
+        videoTrack.addSink(sink);
+
+        long[] beforeUs = new long[3];
+        long[] afterUs = new long[3];
+
+        for (int i = 0; i < 3; i++) {
+            NativeI420Buffer buffer = NativeI420Buffer.allocate(320, 240);
+            VideoFrame frame = new VideoFrame(buffer, 0);
+
+            beforeUs[i] = SyncClock.currentTimeUs();
+
+            if (i == 1) {
+                source.pushFrame(frame);
+            }
+            else {
+                source.pushFrame(frame, beforeUs[i]);
+            }
+
+            afterUs[i] = SyncClock.currentTimeUs();
+
+            frame.release();
+        }
+
+        assertEquals(3, timestamps.size(), "Not every frame reached the sink");
+
+        for (int i = 0; i < 3; i++) {
+            assertPushedBetween(beforeUs[i], afterUs[i], timestamps.get(i));
+        }
+        for (int i = 1; i < 3; i++) {
+            assertTrue(timestamps.get(i) >= timestamps.get(i - 1),
+                    "Frame time went back from " + timestamps.get(i - 1)
+                            + " ns to " + timestamps.get(i) + " ns");
+        }
+
+        videoTrack.removeSink(sink);
+        videoTrack.dispose();
+        source.dispose();
+        clock.dispose();
     }
 
     @Test
@@ -212,6 +269,14 @@ class CustomVideoSourceTest extends TestBase {
         videoTrack.dispose();
         sourceWithClock.dispose();
         clock.dispose();
+    }
+
+    private static void assertPushedBetween(long beforeUs, long afterUs, long timestampNs) {
+        long timestampUs = timestampNs / 1000;
+
+        assertTrue(timestampUs >= beforeUs && timestampUs <= afterUs,
+                "Frame time " + timestampUs + " µs is not between " + beforeUs
+                        + " µs and " + afterUs + " µs on SyncClock.currentTimeUs()");
     }
 
     private void testVideoFrame(int width, int height) {

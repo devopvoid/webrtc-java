@@ -75,6 +75,11 @@ public class CustomAudioSource extends AudioTrackSource {
 	 * 10 ms is the size WebRTC works with; at most
 	 * {@value #MAX_SAMPLES_PER_PUSH} samples, counting every channel, fit in
 	 * one chunk.
+	 * <p>
+	 * The chunk is treated as captured at the moment of the call, and stamped
+	 * with {@link dev.onvoid.webrtc.media.SyncClock#currentTimeUs()}, the clock
+	 * of {@link #pushAudio(byte[], int, int, int, int, long)}, so the two may
+	 * be mixed on one source.
 	 *
 	 * @param audioData       The raw audio data bytes to process. Must hold at
 	 *                        least {@code frameCount * channels * 2} bytes.

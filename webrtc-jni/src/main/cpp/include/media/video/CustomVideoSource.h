@@ -40,10 +40,10 @@ namespace jni
             SourceState state() const override;
             bool remote() const override;
 
-            // Delivers a frame captured now, stamping it with this source's
-            // clock. This is what the Java pushFrame() calls, so a caller that
-            // has no capture time of its own gets the timing of the moment it
-            // pushes.
+            // Delivers a frame captured now, stamping it with
+            // webrtc::TimeMicros(), the clock of the overload below. This is
+            // what the Java pushFrame() calls, so a caller that has no capture
+            // time of its own gets the timing of the moment it pushes.
             void PushFrame(const webrtc::VideoFrame & frame);
 
             // Delivers a frame captured at the given time, in microseconds on

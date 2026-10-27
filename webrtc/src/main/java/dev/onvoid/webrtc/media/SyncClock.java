@@ -53,7 +53,8 @@ public class SyncClock extends NativeObject {
      * example by {@link dev.onvoid.webrtc.media.video.CustomVideoSource#pushFrame(
      * dev.onvoid.webrtc.media.video.VideoFrame, long) pushFrame} and
      * {@link dev.onvoid.webrtc.media.audio.CustomAudioSource#pushAudio(byte[],
-     * int, int, int, int, long) pushAudio}. It is the monotonic clock WebRTC
+     * int, int, int, int, long) pushAudio}, and the one those sources stamp
+     * media pushed without a timestamp with. It is the monotonic clock WebRTC
      * itself runs on, which is what makes those timestamps comparable with
      * WebRTC's own notion of now.
      * <p>
