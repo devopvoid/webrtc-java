@@ -362,7 +362,7 @@ final class TestHttpEndpoint implements AutoCloseable {
 				head += "Transfer-Encoding: chunked\r\n";
 				body = Integer.toHexString(half) + ";part=1\r\n" + body.substring(0, half) + "\r\n"
 						+ Integer.toHexString(body.length() - half) + "\r\n" + body.substring(half) + "\r\n"
-						+ "0\r\nX-Trailer: done\r\n\r\n";
+						+ "0\r\n\r\n";
 			}
 
 			out.write((head + "\r\n" + body).getBytes(StandardCharsets.UTF_8));
