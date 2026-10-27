@@ -48,8 +48,11 @@ import dev.onvoid.webrtc.internal.Timeouts;
  */
 public final class Whip {
 
-	/** An endpoint under load answers 503, with Retry-After (RFC 9725, 4.5). */
-	private static final Set<Integer> RETRIED = Set.of(503);
+	/**
+	 * An endpoint under load answers 503, with Retry-After (RFC 9725, 4.5).
+	 * WHIP has no counter-offers.
+	 */
+	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(503), false);
 
 
 	private Whip() {
@@ -186,7 +189,7 @@ public final class Whip {
 					peer.addTrack(track);
 				}
 
-				return HttpSession.start(rtc, peer, endpoint, token, limit, RETRIED, Session::new);
+				return HttpSession.start(rtc, peer, endpoint, token, limit, PROTOCOL, Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.

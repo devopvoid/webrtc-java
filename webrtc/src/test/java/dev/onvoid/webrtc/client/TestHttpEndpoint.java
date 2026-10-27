@@ -30,7 +30,9 @@ import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocket;
@@ -96,6 +98,18 @@ final class TestHttpEndpoint implements AutoCloseable {
 	/** The Retry-After of a refusal, or null for none. */
 	private volatile String refusalRetryAfter;
 
+	/** Makes the counter-offer to every POST, or null for none. */
+	private volatile Supplier<String> counterOfferer;
+
+	/** The Content-Type of a counter-offer. */
+	private volatile String counterOfferType;
+
+	/** Takes the answer a PATCH carries, or null. */
+	private volatile Consumer<String> counterAnswered;
+
+	/** The status a PATCH is answered with. */
+	volatile int patchStatus = 204;
+
 	/** Where POSTs are redirected to, or null. */
 	private volatile String redirectLocation;
 
@@ -156,6 +170,22 @@ final class TestHttpEndpoint implements AutoCloseable {
 		refusals = times;
 		refusalStatus = status;
 		refusalRetryAfter = retryAfter;
+	}
+
+	/**
+	 * Counters every POST from now on with an offer of the endpoint's own,
+	 * with status 406 and the Location of the session, as WHEP allows. A
+	 * PATCH then carries the answer.
+	 *
+	 * @param offerer     makes the counter-offer.
+	 * @param contentType the Content-Type it is sent with.
+	 * @param answered    takes the answer of a PATCH that is answered with a
+	 *                    2xx {@link #patchStatus}.
+	 */
+	void counterOffers(Supplier<String> offerer, String contentType, Consumer<String> answered) {
+		counterOfferType = contentType;
+		counterAnswered = answered;
+		counterOfferer = offerer;
 	}
 
 	/**
@@ -348,6 +378,19 @@ final class TestHttpEndpoint implements AutoCloseable {
 				respond(out, redirectStatus + " Redirect", "Location: " + redirectLocation + "\r\n", "");
 				return;
 			}
+
+			Supplier<String> offerer = counterOfferer;
+
+			if (offerer != null) {
+				byte[] offer = offerer.get().getBytes(StandardCharsets.UTF_8);
+				String head = "HTTP/1.1 406 Not Acceptable\r\nContent-Type: " + counterOfferType + "\r\nLocation: "
+						+ location + "\r\nContent-Length: " + offer.length + "\r\nConnection: close\r\n\r\n";
+
+				out.write(head.getBytes(StandardCharsets.US_ASCII));
+				out.write(offer);
+				out.flush();
+				return;
+			}
 			if (status != 201) {
 				respond(out, status + " Refused", "", "not allowed");
 				return;
@@ -366,6 +409,18 @@ final class TestHttpEndpoint implements AutoCloseable {
 			}
 
 			respond(out, "201 Created", "Location: " + location + "\r\n", answer);
+			return;
+		}
+
+		if (requestLine[0].equals("PATCH")) {
+			Consumer<String> answered = counterAnswered;
+			int patched = patchStatus;
+
+			if (answered != null && patched / 100 == 2) {
+				answered.accept(new String(body, StandardCharsets.UTF_8));
+			}
+
+			respond(out, patched + " Status", "", "");
 			return;
 		}
 

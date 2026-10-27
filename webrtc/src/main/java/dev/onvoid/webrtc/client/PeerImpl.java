@@ -419,6 +419,27 @@ final class PeerImpl implements Peer {
 		return negotiator;
 	}
 
+	/**
+	 * Takes this peer's own offer back and answers the given one instead, as
+	 * a WHEP player does when the server counters its offer. Unlike {@link
+	 * Negotiator#answer}, which fails while an offer of this peer is out.
+	 *
+	 * @param offer     the offer that replaces this peer's own.
+	 * @param gathering when the answer is handed over.
+	 *
+	 * @return a future with the answer, applied as the local description.
+	 */
+	CompletableFuture<RTCSessionDescription> answerInstead(RTCSessionDescription offer, Gathering gathering) {
+		return negotiator.run(() -> setLocal(new RTCSessionDescription(RTCSdpType.ROLLBACK, ""))
+				.thenCompose(ignored -> setRemote(offer))
+				.thenCompose(ignored -> {
+					releaseHeldCandidates();
+					return createAnswer();
+				})
+				.thenCompose(this::setLocal)
+				.thenCompose(ignored -> negotiator.gathered(gathering)));
+	}
+
 	@Override
 	public CompletableFuture<PeerStats> stats() {
 		CompletableFuture<PeerStats> result = new CompletableFuture<>();
