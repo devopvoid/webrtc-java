@@ -367,6 +367,41 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void counterOfferMediaRejected() throws Exception {
+		// The endpoint offers audio and video; the player wants only video, and
+		// rejects the audio m-line, with port 0, as WHEP allows.
+		List<String> answers = new CopyOnWriteArrayList<>();
+		CustomAudio audio = rtc.media().customAudio("audio");
+
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", answers, video, audio)) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).receive(MediaKind.VIDEO).play(rtc));
+
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+
+			assertEquals(160, (int) await(width));
+			assertTrue(answers.get(0).contains("\nm=audio 0 "), answers.get(0));
+			assertFalse(answers.get(0).contains("\nm=video 0 "), answers.get(0));
+			// The handler, which takes every track as video, saw no audio.
+			assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void counterOfferWithoutWantedMediaFails() throws Exception {
+		// At least one audio or video m-line has to be accepted.
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).receive(MediaKind.AUDIO).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("none of the media"), failed.getCause().getMessage());
+			assertEquals(0, endpoint.count("PATCH /live/session/1"));
+		}
+	}
+
+	@Test
 	void counterOfferNeedsSdp() throws Exception {
 		// Any other 406 is an error, as WHEP says.
 		try (TestHttpEndpoint endpoint = counteringEndpoint("text/plain", new ArrayList<>())) {
@@ -807,14 +842,19 @@ class HttpSessionTests extends ClientTestBase {
 	 *
 	 * @param contentType the Content-Type of the counter-offer.
 	 * @param answers     gets the answers.
+	 * @param tracks      what the endpoint sends; the video if none.
 	 */
-	private TestHttpEndpoint counteringEndpoint(String contentType, List<String> answers) throws Exception {
+	private TestHttpEndpoint counteringEndpoint(String contentType, List<String> answers, LocalTrack... tracks)
+			throws Exception {
 		TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201);
 		Peer[] server = new Peer[1];
 
 		endpoint.counterOffers(() -> {
 			server[0] = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
-			server[0].addTrack(video);
+
+			for (LocalTrack track : tracks.length > 0 ? tracks : new LocalTrack[] { video }) {
+				server[0].addTrack(track);
+			}
 
 			try {
 				return server[0].negotiator().createOffer(Gathering.COMPLETE)

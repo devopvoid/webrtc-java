@@ -96,10 +96,21 @@ public class RTCRtpTransceiver extends DisposableNativeObject {
 	 * will no longer send, the receiver will no longer receive. Calling stop()
 	 * updates the negotiation-needed flag for the RTCRtpTransceiver's
 	 * associated RTCPeerConnection. Stopping a transceiver will cause future
-	 * calls to createOffer or createAnswer to generate a zero port in the media
-	 * description for the corresponding transceiver.
+	 * calls to createOffer to generate a zero port in the media description
+	 * for the corresponding transceiver. An answer created before the stop
+	 * has been negotiated keeps the media description, as inactive; {@link
+	 * #stopImmediately()} rejects it instead.
 	 */
 	public native void stop();
+
+	/**
+	 * Irreversibly stops the RTCRtpTransceiver at once, without waiting for
+	 * the stop to be negotiated, as {@link #stop()} does. An answer created
+	 * after it rejects the media description of the transceiver, with a zero
+	 * port, which lets an answerer decline a media description of a remote
+	 * offer. This goes beyond the W3C API.
+	 */
+	public native void stopImmediately();
 
 	/**
 	 * Indicates that the sender of this transceiver will no longer send, and

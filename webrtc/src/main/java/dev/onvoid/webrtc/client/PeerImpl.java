@@ -23,8 +23,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -166,6 +169,13 @@ final class PeerImpl implements Peer {
 	private final ClientFuture<Void> closedFuture = new ClientFuture<>();
 
 	private final NegotiatorImpl negotiator = new NegotiatorImpl();
+
+	/**
+	 * The kinds of media whose tracks this peer drops, those it declined when
+	 * it answered an offer that replaced its own. Only on the control
+	 * executor.
+	 */
+	private final Set<MediaKind> declinedKinds = EnumSet.noneOf(MediaKind.class);
 
 
 	PeerImpl(WebRtc rtc, PeerOptions options, String name) {
@@ -423,6 +433,10 @@ final class PeerImpl implements Peer {
 	 * Takes this peer's own offer back and answers the given one instead, as
 	 * a WHEP player does when the server counters its offer. Unlike {@link
 	 * Negotiator#answer}, which fails while an offer of this peer is out.
+	 * <p>
+	 * The answer receives only the kinds of media the peer was built to
+	 * receive: the audio or video m-lines of other kinds are rejected, with
+	 * port 0. An offer without any m-line of those kinds fails.
 	 *
 	 * @param offer     the offer that replaces this peer's own.
 	 * @param gathering when the answer is handed over.
@@ -430,14 +444,95 @@ final class PeerImpl implements Peer {
 	 * @return a future with the answer, applied as the local description.
 	 */
 	CompletableFuture<RTCSessionDescription> answerInstead(RTCSessionDescription offer, Gathering gathering) {
-		return negotiator.run(() -> setLocal(new RTCSessionDescription(RTCSdpType.ROLLBACK, ""))
-				.thenCompose(ignored -> setRemote(offer))
-				.thenCompose(ignored -> {
-					releaseHeldCandidates();
-					return createAnswer();
-				})
-				.thenCompose(this::setLocal)
-				.thenCompose(ignored -> negotiator.gathered(gathering)));
+		Set<String> rejected;
+
+		try {
+			rejected = midsNotReceived(offer.sdp);
+		}
+		catch (NegotiationException e) {
+			return toPublic(CompletableFuture.failedFuture(e));
+		}
+
+		return negotiator.run(() -> {
+			// Before the offer is applied, which reports the tracks of the
+			// m-lines that are then rejected.
+			for (MediaKind kind : MediaKind.values()) {
+				if (!options.receive.contains(kind)) {
+					declinedKinds.add(kind);
+				}
+			}
+
+			return setLocal(new RTCSessionDescription(RTCSdpType.ROLLBACK, ""))
+					.thenCompose(ignored -> setRemote(offer))
+					.thenCompose(ignored -> {
+						stopTransceivers(rejected);
+						releaseHeldCandidates();
+						return createAnswer();
+					})
+					.thenCompose(this::setLocal)
+					.thenCompose(ignored -> negotiator.gathered(gathering));
+		});
+	}
+
+	/**
+	 * Finds the audio and video m-lines of an offer whose kind this peer does
+	 * not receive.
+	 *
+	 * @return their mids.
+	 *
+	 * @throws NegotiationException if the offer has no open m-line of a kind
+	 *                              this peer receives.
+	 */
+	private Set<String> midsNotReceived(String sdp) {
+		Set<String> rejected = new HashSet<>();
+		boolean received = false;
+		MediaKind kind = null;
+
+		for (String line : sdp.split("\r?\n")) {
+			if (line.startsWith("m=")) {
+				String[] fields = line.substring(2).split(" ");
+				boolean open = fields.length > 1 && !fields[1].equals("0");
+
+				kind = !open ? null
+						: fields[0].equals("audio") ? MediaKind.AUDIO
+						: fields[0].equals("video") ? MediaKind.VIDEO
+						: null;
+				received |= kind != null && options.receive.contains(kind);
+			}
+			else if (line.startsWith("a=mid:") && kind != null && !options.receive.contains(kind)) {
+				rejected.add(line.substring("a=mid:".length()).trim());
+			}
+		}
+
+		if (!received) {
+			throw new NegotiationException("The offer of the remote peer of " + name
+					+ " holds none of the media it receives, " + options.receive);
+		}
+
+		return rejected;
+	}
+
+	/**
+	 * Stops the transceivers of the given mids, whose m-lines the next
+	 * answer then rejects.
+	 */
+	private void stopTransceivers(Set<String> mids) {
+		if (mids.isEmpty()) {
+			return;
+		}
+
+		for (RTCRtpTransceiver transceiver : connection.getTransceivers()) {
+			try {
+				if (mids.contains(transceiver.getMid()) && !transceiver.stopped()) {
+					// At once: an answer rejects only the m-lines of stopped
+					// transceivers, and keeps those still stopping, inactive.
+					transceiver.stopImmediately();
+				}
+			}
+			finally {
+				transceiver.dispose();
+			}
+		}
 	}
 
 	@Override
@@ -1132,6 +1227,13 @@ final class PeerImpl implements Peer {
 		MediaStreamTrack track = receiver.getTrack();
 		String id = track.getId();
 
+		if (declinedKinds.contains(track instanceof VideoTrack ? MediaKind.VIDEO : MediaKind.AUDIO)) {
+			// Of an m-line this peer rejected, when it answered an offer that
+			// replaced its own.
+			track.dispose();
+			receiver.dispose();
+			return;
+		}
 		if (remoteTrackById.containsKey(id)) {
 			// Renegotiation reported a track that is already known.
 			track.dispose();
