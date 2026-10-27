@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
-import java.net.SocketTimeoutException;
 import java.net.URI;
+import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
@@ -187,28 +187,147 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
-	void lateAnswerDeleted() throws Exception {
-		// The session times out while the offer is out. The server created a
-		// resource for it all the same, which must not be left there.
+	void timeoutAbortsRequest() throws Exception {
+		// The session times out while the server holds the answer. The request
+		// is cut off then, rather than holding its thread until the server
+		// answers.
 		ManualTimer timer = new ManualTimer();
 		WebRtc client = clientRuntime(builder -> builder.timer(timer));
 
 		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
-			CountDownLatch answer = endpoint.holdAnswers();
+			endpoint.stallAnswers();
 			CompletableFuture<Whep.Session> session = Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(client);
 
 			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
 			assertEquals(1, timer.fire(SESSION_TIMEOUT));
 
-			// Failed before the answer arrives, which then meets a closed peer.
 			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session));
 			assertTrue(failed.getCause().getMessage().contains("within"), failed.getCause().getMessage());
-
-			answer.countDown();
-			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
-
+			endpoint.awaitHangUp(TIMEOUT_SECONDS);
+		}
+		finally {
 			client.close();
-			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+	}
+
+	@Test
+	void tricklingAnswerTimesOut() throws Exception {
+		// Each byte of the answer comes well within the timeout, and the answer
+		// never ends. The session's own deadline is on a timer that does not
+		// fire, so only the deadline of the request as a whole can end it.
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
+			endpoint.trickleAnswers();
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).timeout(Duration.ofSeconds(2)).play(client)));
+
+			assertInstanceOf(HttpTimeoutException.class, failed.getCause().getCause(),
+					failed.getCause()::getMessage);
+			endpoint.awaitHangUp(TIMEOUT_SECONDS);
+			// The server named the session before the answer timed out.
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void redirectFollowed() throws Exception {
+		// The endpoint sends the offer on to another, as WHIP and WHEP allow,
+		// and the token goes along. The session is the one the other names.
+		try (TestHttpEndpoint target = sendingEndpoint();
+				TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
+			endpoint.redirectAnswers(307, target.uri().toString());
+
+			Whep.Session session = await(Whep.from(endpoint.uri()).bearerToken("secret").play(rtc));
+
+			assertEquals("Bearer secret", endpoint.requests.get(0).authorization);
+			assertEquals("Bearer secret", target.requests.get(0).authorization);
+			assertEquals(target.uri().resolve("/live/session/1"), session.resource());
+
+			await(session.closeAsync());
+			assertEquals(1, target.count("DELETE /live/session/1"));
+			assertEquals(0, endpoint.count("DELETE /live/session/1"));
+		}
+	}
+
+	@Test
+	void redirectsLimited() throws Exception {
+		// An endpoint that redirects to itself.
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
+			endpoint.redirectAnswers(308, endpoint.uri().toString());
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("redirected more than"),
+					failed.getCause().getMessage());
+			assertEquals(HttpCall.MAX_REDIRECTS + 1, endpoint.count("POST /live/endpoint"));
+		}
+	}
+
+	@Test
+	void foundNotFollowed() throws Exception {
+		// 302 would turn the POST into a GET; WHIP and WHEP rule it out.
+		try (TestHttpEndpoint target = sendingEndpoint();
+				TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
+			endpoint.redirectAnswers(302, target.uri().toString());
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("302"), failed.getCause().getMessage());
+			assertTrue(target.requests.isEmpty(), () -> "Requests: " + target.requests);
+		}
+	}
+
+	@Test
+	void tricklingDeleteTimesOut() throws Exception {
+		// The deletion is bounded as the offer is: the head of its answer comes
+		// a byte at a time and never ends, and the session's timeout ends it.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Peer peer = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), null,
+					Duration.ofSeconds(1));
+
+			endpoint.trickleDeletes();
+
+			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
+
+			assertInstanceOf(HttpTimeoutException.class, failed.getCause().getCause(),
+					failed.getCause()::getMessage);
+			endpoint.awaitHangUp(TIMEOUT_SECONDS);
+			assertEquals(1, errors.size(), () -> "Errors: " + errors);
+			errors.clear();
+		}
+	}
+
+	@Test
+	void slowDeleteDelaysNoPeer() throws Exception {
+		// With one control thread, a deletion the server holds must not hold
+		// up what the other peers do.
+		WebRtc client = clientRuntime(builder -> builder.controlPool(Executors.newSingleThreadExecutor()));
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(client));
+			Peer other = client.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+			CountDownLatch deleted = endpoint.holdDeletes();
+			CompletableFuture<Void> closed = session.closeAsync();
+
+			try {
+				endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+				await(other.stats());
+				assertFalse(closed.isDone());
+			}
+			finally {
+				deleted.countDown();
+			}
+
+			await(closed);
 		}
 		finally {
 			client.close();
@@ -217,9 +336,8 @@ class HttpSessionTests extends ClientTestBase {
 
 	@Test
 	void shortTimeoutBoundsRequest() throws Exception {
-		// Under a millisecond, which the connection takes as no timeout at all
-		// if it is rounded down. The session's own deadline is on a timer that
-		// does not fire, so only the request's timeout can end the wait.
+		// Under a millisecond. The session's own deadline is on a timer that
+		// does not fire, so only the request's deadline can end the wait.
 		Duration timeout = Duration.ofNanos(1);
 		ManualTimer timer = new ManualTimer();
 		WebRtc client = clientRuntime(builder -> builder.timer(timer));
@@ -231,7 +349,7 @@ class HttpSessionTests extends ClientTestBase {
 				ExecutionException failed = assertThrows(ExecutionException.class,
 						() -> await(Whep.from(endpoint.uri()).timeout(timeout).play(client)));
 
-				assertInstanceOf(SocketTimeoutException.class, failed.getCause().getCause(),
+				assertInstanceOf(HttpTimeoutException.class, failed.getCause().getCause(),
 						failed.getCause()::getMessage);
 			}
 			finally {
@@ -244,16 +362,16 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
-	void cancelledStartDeletes() throws Exception {
+	void cancelAbortsRequest() throws Exception {
 		// The caller cancels while the offer is out. The peer must not go on to
-		// connect, and what the server creates must not be left there.
+		// connect, and the request must not wait for the answer.
 		WebRtc client = clientRuntime(builder -> builder);
 
 		try {
 			CustomVideo track = client.media().customVideo("video");
 
-			assertCancelDeletes(client, uri -> Whip.to(uri).track(track).publish(client));
-			assertCancelDeletes(client, uri -> Whep.from(uri).play(client));
+			assertCancelAborts(client, uri -> Whip.to(uri).track(track).publish(client));
+			assertCancelAborts(client, uri -> Whep.from(uri).play(client));
 		}
 		finally {
 			client.close();
@@ -305,16 +423,17 @@ class HttpSessionTests extends ClientTestBase {
 			CompletableFuture<CompletableFuture<Whep.Session>> playing = CompletableFuture.supplyAsync(
 					() -> Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(client));
 
-			// The client's side up to the answer: the peer is created, the
-			// offer is created and posted, and the answer read. The request
-			// runs on this thread, within the task that sends it.
+			// The client's side up to the answer: the peer is created, and the
+			// offer is created and posted. The answer, once read, hands its
+			// application to the control executor, where it waits.
 			control.runUntil(() -> endpoint.answered() > 0, TIMEOUT_SECONDS);
+			control.awaitQueued(TIMEOUT_SECONDS);
 			assertEquals(1, timer.fire(SESSION_TIMEOUT));
 			control.runAll();
 
 			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(await(playing)));
 			assertTrue(failed.getCause().getMessage().contains("within"), failed.getCause().getMessage());
-			// Deleted on this thread, by the last tasks run.
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
 			assertEquals(1, endpoint.count("DELETE /live/session/1"));
 		}
 		finally {
@@ -419,7 +538,7 @@ class HttpSessionTests extends ClientTestBase {
 
 	@Test
 	void redirectNotFollowed() throws Exception {
-		// Following it would take the bearer token to wherever it points.
+		// The deletion follows no redirect; WHIP and WHEP do not ask for that.
 		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
 			endpoint.deleteStatus = 307;
 
@@ -505,13 +624,13 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	/**
-	 * Starts a session, cancels it while the answer is held and releases the
-	 * answer, whose resource must then be deleted.
+	 * Starts a session and cancels it while the server holds the answer,
+	 * which must cut off the request.
 	 */
-	private static void assertCancelDeletes(WebRtc client,
+	private static void assertCancelAborts(WebRtc client,
 			Function<URI, CompletableFuture<? extends HttpSession>> start) throws Exception {
 		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
-			CountDownLatch answer = endpoint.holdAnswers();
+			endpoint.stallAnswers();
 			CompletableFuture<? extends HttpSession> session = start.apply(endpoint.uri());
 
 			endpoint.awaitRequest("POST /live/endpoint", TIMEOUT_SECONDS);
@@ -521,12 +640,10 @@ class HttpSessionTests extends ClientTestBase {
 			// Closed by the cancellation itself, so it never connects.
 			assertTrue(peer.isClosing(), () -> "Not closing: " + peer);
 
-			answer.countDown();
-			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+			endpoint.awaitHangUp(TIMEOUT_SECONDS);
 			await(peer.whenClosed());
 
 			assertTrue(session.isCancelled());
-			assertEquals(1, endpoint.count("DELETE /live/session/1"));
 		}
 	}
 

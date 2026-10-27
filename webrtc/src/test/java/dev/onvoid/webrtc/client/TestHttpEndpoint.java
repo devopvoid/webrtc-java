@@ -32,6 +32,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
+
 /**
  * Just enough HTTP for WHIP and WHEP tests. A POST is answered with what the
  * handler returns for the offer, and creates a resource; a DELETE of that
@@ -79,6 +82,20 @@ final class TestHttpEndpoint implements AutoCloseable {
 	/** Holds the answers to DELETEs while set, until it is released. */
 	private volatile CountDownLatch deleteGate;
 
+	/** How POSTs are answered. */
+	private volatile Answer answerMode = Answer.WHOLE;
+
+	/** Whether the head of the answer to a DELETE trickles in. */
+	private volatile boolean trickleDeletes;
+
+	/** Where POSTs are redirected to, or null. */
+	private volatile String redirectLocation;
+
+	private volatile int redirectStatus;
+
+	/** Counted down once a client hung up on an answer it did not get whole. */
+	private final CountDownLatch hungUp = new CountDownLatch(1);
+
 	private int answered;
 
 	private final ServerSocket server;
@@ -93,9 +110,21 @@ final class TestHttpEndpoint implements AutoCloseable {
 	 * @param status   the status of the answer, 201 for success.
 	 */
 	TestHttpEndpoint(Function<String, String> answerer, int status) throws IOException {
+		this(answerer, status, null);
+	}
+
+	/**
+	 * @param answerer turns an offer into an answer.
+	 * @param status   the status of the answer, 201 for success.
+	 * @param tls      the TLS the endpoint serves https with, or null for
+	 *                 plain http.
+	 */
+	TestHttpEndpoint(Function<String, String> answerer, int status, SSLContext tls) throws IOException {
 		this.answerer = answerer;
 		this.status = status;
-		this.server = new ServerSocket(0, 10, InetAddress.getLoopbackAddress());
+		this.server = tls == null
+				? new ServerSocket(0, 10, InetAddress.getLoopbackAddress())
+				: tls.getServerSocketFactory().createServerSocket(0, 10, InetAddress.getLoopbackAddress());
 
 		Thread thread = new Thread(this::serve, "test-http-endpoint");
 		thread.setDaemon(true);
@@ -103,7 +132,20 @@ final class TestHttpEndpoint implements AutoCloseable {
 	}
 
 	URI uri() {
-		return URI.create("http://127.0.0.1:" + server.getLocalPort() + "/live/endpoint");
+		String scheme = server instanceof SSLServerSocket ? "https" : "http";
+
+		return URI.create(scheme + "://127.0.0.1:" + server.getLocalPort() + "/live/endpoint");
+	}
+
+	/**
+	 * Answers every POST from now on with a redirect.
+	 *
+	 * @param status   the status, such as 307.
+	 * @param location where the redirect points.
+	 */
+	void redirectAnswers(int status, String location) {
+		redirectStatus = status;
+		redirectLocation = location;
 	}
 
 	/**
@@ -124,6 +166,63 @@ final class TestHttpEndpoint implements AutoCloseable {
 		CountDownLatch gate = new CountDownLatch(1);
 		deleteGate = gate;
 		return gate;
+	}
+
+	/**
+	 * Answers no POST from now on: the endpoint waits until the client hangs
+	 * up, which {@link #awaitHangUp(long)} tells.
+	 */
+	void stallAnswers() {
+		answerMode = Answer.NONE;
+	}
+
+	/**
+	 * Answers every POST from now on with its head and the first half of its
+	 * body, then waits until the client hangs up.
+	 */
+	void stallBodies() {
+		answerMode = Answer.HALF;
+	}
+
+	/**
+	 * Answers every POST from now on with its head, then sends a body of a
+	 * megabyte a byte at a time, one every 20 ms, until the client hangs up.
+	 */
+	void trickleAnswers() {
+		answerMode = Answer.TRICKLE;
+	}
+
+	/**
+	 * Answers every POST from now on with the body in two chunks.
+	 */
+	void chunkAnswers() {
+		answerMode = Answer.CHUNKED;
+	}
+
+	/**
+	 * Answers every POST from now on with a body of no stated length, which
+	 * ends where the endpoint closes the connection.
+	 */
+	void answerUntilClose() {
+		answerMode = Answer.UNTIL_CLOSE;
+	}
+
+	/**
+	 * Answers every DELETE from now on with a status line, then a header a
+	 * byte at a time, one every 20 ms, that never ends, until the client
+	 * hangs up.
+	 */
+	void trickleDeletes() {
+		trickleDeletes = true;
+	}
+
+	/**
+	 * Waits until a client hung up on an answer that was stalled or trickled.
+	 */
+	void awaitHangUp(long timeoutSeconds) throws InterruptedException {
+		if (!hungUp.await(timeoutSeconds, TimeUnit.SECONDS)) {
+			throw new AssertionError("The client did not hang up within " + timeoutSeconds + " s");
+		}
 	}
 
 	/**
@@ -208,8 +307,17 @@ final class TestHttpEndpoint implements AutoCloseable {
 		OutputStream out = socket.getOutputStream();
 
 		if (requestLine[0].equals("POST")) {
+			if (redirectLocation != null) {
+				respond(out, redirectStatus + " Redirect", "Location: " + redirectLocation + "\r\n", "");
+				return;
+			}
 			if (status != 201) {
 				respond(out, status + " Refused", "", "not allowed");
+				return;
+			}
+
+			if (answerMode != Answer.WHOLE) {
+				answerInPart(socket, answerer.apply(new String(body, StandardCharsets.UTF_8)));
 				return;
 			}
 
@@ -224,6 +332,12 @@ final class TestHttpEndpoint implements AutoCloseable {
 			return;
 		}
 
+		if (trickleDeletes) {
+			out.write("HTTP/1.1 200 OK\r\nX-Padding: ".getBytes(StandardCharsets.US_ASCII));
+			trickle(out);
+			return;
+		}
+
 		pass(deleteGate);
 
 		if (deleteStatus / 100 == 3) {
@@ -232,6 +346,82 @@ final class TestHttpEndpoint implements AutoCloseable {
 		else {
 			respond(out, deleteStatus + " Status", "", "");
 		}
+	}
+
+	private void answerInPart(Socket socket, String answer) throws IOException {
+		OutputStream out = socket.getOutputStream();
+		byte[] bytes = answer.getBytes(StandardCharsets.UTF_8);
+		Answer mode = answerMode;
+
+		if (mode == Answer.CHUNKED || mode == Answer.UNTIL_CLOSE) {
+			String body = new String(bytes, StandardCharsets.UTF_8);
+			String head = "HTTP/1.1 201 Created\r\nLocation: " + location + "\r\nConnection: close\r\n";
+
+			if (mode == Answer.CHUNKED) {
+				int half = body.length() / 2;
+				head += "Transfer-Encoding: chunked\r\n";
+				body = Integer.toHexString(half) + ";part=1\r\n" + body.substring(0, half) + "\r\n"
+						+ Integer.toHexString(body.length() - half) + "\r\n" + body.substring(half) + "\r\n"
+						+ "0\r\n\r\n";
+			}
+
+			out.write((head + "\r\n" + body).getBytes(StandardCharsets.UTF_8));
+			out.flush();
+			return;
+		}
+
+		if (mode != Answer.NONE) {
+			int length = mode == Answer.TRICKLE ? 1 << 20 : bytes.length;
+			String head = "HTTP/1.1 201 Created\r\nContent-Type: application/sdp\r\nLocation: " + location
+					+ "\r\nContent-Length: " + length + "\r\nConnection: close\r\n\r\n";
+
+			out.write(head.getBytes(StandardCharsets.US_ASCII));
+			out.write(bytes, 0, mode == Answer.HALF ? bytes.length / 2 : 0);
+			out.flush();
+		}
+
+		if (mode == Answer.TRICKLE) {
+			trickle(out);
+			return;
+		}
+
+		try {
+			// Bounded, so that a client that never hangs up frees the endpoint.
+			socket.setSoTimeout(60_000);
+
+			while (socket.getInputStream().read() != -1) {
+				// The client sends nothing more.
+			}
+		}
+		catch (IOException e) {
+			// The client hung up.
+		}
+
+		hungUp.countDown();
+	}
+
+	/**
+	 * Writes a byte every 20 ms until the client hangs up, for at most a
+	 * megabyte.
+	 */
+	private void trickle(OutputStream out) {
+		try {
+			// A write fails once the client has closed the connection.
+			for (int i = 0; i < 1 << 20; i++) {
+				out.write('a');
+				out.flush();
+				Thread.sleep(20);
+			}
+		}
+		catch (IOException e) {
+			// The client hung up.
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return;
+		}
+
+		hungUp.countDown();
 	}
 
 	private static void pass(CountDownLatch gate) throws IOException {
@@ -267,5 +457,28 @@ final class TestHttpEndpoint implements AutoCloseable {
 		}
 
 		return new String(line.toByteArray(), StandardCharsets.US_ASCII);
+	}
+
+
+
+	private enum Answer {
+
+		/** The whole answer. */
+		WHOLE,
+
+		/** Nothing at all. */
+		NONE,
+
+		/** The head and half the body. */
+		HALF,
+
+		/** The head and a body that trickles in. */
+		TRICKLE,
+
+		/** The answer in chunks. */
+		CHUNKED,
+
+		/** The answer, ended by closing the connection. */
+		UNTIL_CLOSE
 	}
 }

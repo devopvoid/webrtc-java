@@ -4,6 +4,7 @@
 module webrtc.java {
 
 	requires java.desktop;
+	requires java.net.http;
 
 	exports dev.onvoid.webrtc;
 	exports dev.onvoid.webrtc.client;

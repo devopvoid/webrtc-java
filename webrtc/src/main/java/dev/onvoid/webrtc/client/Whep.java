@@ -132,8 +132,8 @@ public final class Whep {
 		}
 
 		/**
-		 * @param timeout how long the session may take to be connected; 15
-		 *                seconds by default.
+		 * @param timeout how long the session may take to be connected, and its
+		 *                deletion to be answered; 15 seconds by default.
 		 *
 		 * @return this builder.
 		 */
