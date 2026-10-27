@@ -1,0 +1,550 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.onvoid.webrtc.client;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.Authenticator;
+import java.net.CookieHandler;
+import java.net.PasswordAuthentication;
+import java.net.ProxySelector;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
+import java.util.function.Consumer;
+
+import javax.net.ssl.SSLContext;
+
+/**
+ * One HTTP request of a WHIP or WHEP session, with a deadline for all of it.
+ * <p>
+ * The request takes no thread while it waits. Its timeout counts from the
+ * moment it is made and bounds it as a whole, redirects included: the head of
+ * the response by the client's own request timeout, set to what is left, and
+ * the body read by read, so that one that trickles in ends with it as well.
+ * {@link #abort()} ends it from any thread: a body being read at once, and on
+ * Java 16 and later a request still waiting for its head too; before that,
+ * such a request ends with its timeout.
+ * <p>
+ * Redirects are followed only when asked for, and only those with status 307
+ * and 308, which keep the method and body.
+ */
+final class HttpCall {
+
+	/** The most redirects a request follows. */
+	static final int MAX_REDIRECTS = 5;
+
+	/** How much of an error response is read, for a message. */
+	static final int MAX_ERROR_BODY = 1024;
+
+	private final HttpClient client;
+
+	private final String method;
+
+	private final String bearerToken;
+
+	private final Duration timeout;
+
+	/** When the request was made, as {@link System#nanoTime()}. */
+	private final long start;
+
+	/** The timeout in nanoseconds, or {@link Long#MAX_VALUE} if it is longer. */
+	private final long limit;
+
+	private final CompletableFuture<Response> result = new CompletableFuture<>();
+
+	private final URI uri;
+
+	private boolean followRedirects;
+
+	/** The exchange under way, which an abort cancels. */
+	private CompletableFuture<?> exchange;
+
+	/** The body being read, which an abort ends. */
+	private Body body;
+
+	private boolean aborted;
+
+
+	/**
+	 * @param timeout how long the request may take, from now on, until its
+	 *                response has been read; redirects included.
+	 */
+	HttpCall(HttpClient client, URI uri, String method, String bearerToken, Duration timeout) {
+		this.client = client;
+		this.uri = uri;
+		this.method = method;
+		this.bearerToken = bearerToken;
+		this.timeout = timeout;
+		this.start = System.nanoTime();
+
+		long nanos;
+
+		try {
+			nanos = timeout.toNanos();
+		}
+		catch (ArithmeticException e) {
+			nanos = Long.MAX_VALUE;
+		}
+
+		this.limit = nanos;
+	}
+
+	/**
+	 * Makes a client for these requests. It goes about the network as {@code
+	 * HttpURLConnection} does where the client can: through the proxies of
+	 * the default {@link ProxySelector}, with the default {@link SSLContext},
+	 * and asking the default {@link CookieHandler} of the moment. Redirects
+	 * are left to the requests.
+	 *
+	 * @param authenticates whether to answer a proxy or server that asks for
+	 *                      Basic credentials with those of the default {@link
+	 *                      Authenticator} of the moment. A client that does
+	 *                      drops the Authorization header of its requests, so
+	 *                      it cannot send a bearer token.
+	 *
+	 * @return the client.
+	 */
+	static HttpClient newClient(boolean authenticates) {
+		HttpClient.Builder builder = HttpClient.newBuilder()
+				.followRedirects(HttpClient.Redirect.NEVER)
+				.cookieHandler(new DefaultCookieHandler());
+
+		if (authenticates) {
+			builder.authenticator(new DefaultAuthenticator());
+		}
+
+		return builder.build();
+	}
+
+	/**
+	 * Follows redirects with status 307 and 308, up to {@link #MAX_REDIRECTS}
+	 * of them, with the bearer token. One from https to plain http fails.
+	 *
+	 * @return this request.
+	 */
+	HttpCall followRedirects() {
+		this.followRedirects = true;
+		return this;
+	}
+
+	/**
+	 * Sends the request. Of a response with a status other than 2xx, at most
+	 * {@link #MAX_ERROR_BODY} bytes of the body are read, for a message.
+	 *
+	 * @param contentType the type of the body, or null if there is none.
+	 * @param content     the body, or null.
+	 * @param maxBody     the largest body of a 2xx response; a larger one
+	 *                    fails the request. With 0 the body is not read.
+	 * @param onHead      gets the response without its body as soon as its
+	 *                    head has come, unless the request was aborted
+	 *                    before. What it throws fails the request.
+	 *
+	 * @return a future with the response, or that fails with an {@code
+	 * IOException}, an {@link HttpTimeoutException} once the timeout has
+	 * passed.
+	 */
+	CompletableFuture<Response> send(String contentType, byte[] content, int maxBody, Consumer<Response> onHead) {
+		exchange(uri, contentType, content, maxBody, onHead, 0);
+
+		return result;
+	}
+
+	/**
+	 * Ends the request from any thread, at whatever step it is, and fails it:
+	 * as timed out once its timeout has passed, as aborted before.
+	 */
+	void abort() {
+		IOException reason = remainingNanos() <= 0
+				? timedOut()
+				: new IOException("The request to " + uri + " was aborted");
+		CompletableFuture<?> exchange;
+		Body body;
+
+		synchronized (this) {
+			if (aborted) {
+				return;
+			}
+
+			aborted = true;
+			exchange = this.exchange;
+			body = this.body;
+		}
+
+		result.completeExceptionally(reason);
+
+		if (body != null) {
+			body.stop(reason);
+		}
+		if (exchange != null) {
+			// From Java 16 on, this ends one that waits for its head as well.
+			exchange.cancel(true);
+		}
+	}
+
+	private void exchange(URI target, String contentType, byte[] content, int maxBody, Consumer<Response> onHead,
+			int redirects) {
+		long left = remainingNanos();
+
+		if (left <= 0) {
+			result.completeExceptionally(timedOut());
+			return;
+		}
+
+		HttpRequest request;
+
+		try {
+			HttpRequest.Builder builder = HttpRequest.newBuilder(target).timeout(Duration.ofNanos(left));
+
+			if (bearerToken != null) {
+				builder.header("Authorization", "Bearer " + bearerToken);
+			}
+			if (content != null) {
+				builder.header("Content-Type", contentType)
+						.header("Accept", contentType)
+						.method(method, HttpRequest.BodyPublishers.ofByteArray(content));
+			}
+			else {
+				builder.method(method, HttpRequest.BodyPublishers.noBody());
+			}
+
+			request = builder.build();
+		}
+		catch (IllegalArgumentException e) {
+			result.completeExceptionally(new IOException("The request to " + target + " is invalid: "
+					+ e.getMessage(), e));
+			return;
+		}
+
+		CompletableFuture<HttpResponse<String>> response;
+
+		synchronized (this) {
+			if (aborted) {
+				return;
+			}
+
+			response = client.sendAsync(request, info -> head(info, target, maxBody, onHead));
+			exchange = response;
+		}
+
+		response.whenComplete((value, error) -> {
+			if (error != null) {
+				result.completeExceptionally(unwrap(error));
+				return;
+			}
+
+			String location = value.headers().firstValue("Location").orElse(null);
+
+			if (!isRedirect(value.statusCode(), location)) {
+				result.complete(new Response(target, value.statusCode(), value.headers(), value.body()));
+				return;
+			}
+			if (redirects == MAX_REDIRECTS) {
+				result.completeExceptionally(new IOException("The request to " + uri
+						+ " was redirected more than " + MAX_REDIRECTS + " times"));
+				return;
+			}
+
+			try {
+				exchange(redirectTarget(target, location), contentType, content, maxBody, onHead, redirects + 1);
+			}
+			catch (IOException e) {
+				result.completeExceptionally(e);
+			}
+		});
+	}
+
+	/**
+	 * Takes the head of a response, and picks how much of its body to read.
+	 */
+	private HttpResponse.BodySubscriber<String> head(HttpResponse.ResponseInfo info, URI target, int maxBody,
+			Consumer<Response> onHead) {
+		int status = info.statusCode();
+		boolean redirect = isRedirect(status, info.headers().firstValue("Location").orElse(null));
+		boolean success = status / 100 == 2;
+		// A redirect's body is not read, and neither is an error's beyond what
+		// a message takes.
+		Body body = new Body(redirect ? 0 : success ? maxBody : MAX_ERROR_BODY, !success || redirect);
+
+		synchronized (this) {
+			if (aborted) {
+				body.stop(new IOException("The request to " + uri + " was aborted"));
+				return body;
+			}
+
+			this.body = body;
+
+			if (!redirect) {
+				try {
+					// Here, so that an abort either comes first and the head
+					// is never handed over, or after it.
+					onHead.accept(new Response(target, status, info.headers(), null));
+				}
+				catch (RuntimeException e) {
+					body.stop(e);
+				}
+			}
+		}
+
+		return body;
+	}
+
+	private boolean isRedirect(int status, String location) {
+		return followRedirects && (status == 307 || status == 308) && location != null;
+	}
+
+	private static URI redirectTarget(URI from, String location) throws IOException {
+		URI target;
+
+		try {
+			target = from.resolve(location.trim());
+		}
+		catch (IllegalArgumentException e) {
+			throw new IOException("The server redirected to an invalid URL: " + location);
+		}
+
+		String scheme = target.getScheme();
+
+		if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+			throw new IOException("The server redirected to a URL that is not http: " + target);
+		}
+		if ("https".equalsIgnoreCase(from.getScheme()) && !"https".equalsIgnoreCase(scheme)) {
+			throw new IOException("The server redirected to a URL without TLS: " + target);
+		}
+
+		return target;
+	}
+
+	private long remainingNanos() {
+		return limit - (System.nanoTime() - start);
+	}
+
+	private HttpTimeoutException timedOut() {
+		return new HttpTimeoutException("The request to " + uri + " did not complete within " + timeout);
+	}
+
+	private static Throwable unwrap(Throwable error) {
+		return error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+	}
+
+
+
+	/**
+	 * Asks the default authenticator of the moment, which a client would
+	 * otherwise take once, when it is built.
+	 */
+	private static final class DefaultAuthenticator extends Authenticator {
+
+		@Override
+		protected PasswordAuthentication getPasswordAuthentication() {
+			return Authenticator.requestPasswordAuthentication(getRequestingHost(), getRequestingSite(),
+					getRequestingPort(), getRequestingProtocol(), getRequestingPrompt(), getRequestingScheme(),
+					getRequestingURL(), getRequestorType());
+		}
+	}
+
+
+
+	/**
+	 * Asks the default cookie handler of the moment, if there is one.
+	 */
+	private static final class DefaultCookieHandler extends CookieHandler {
+
+		@Override
+		public Map<String, List<String>> get(URI uri, Map<String, List<String>> requestHeaders)
+				throws IOException {
+			CookieHandler handler = CookieHandler.getDefault();
+
+			return handler != null ? handler.get(uri, requestHeaders) : Collections.emptyMap();
+		}
+
+		@Override
+		public void put(URI uri, Map<String, List<String>> responseHeaders) throws IOException {
+			CookieHandler handler = CookieHandler.getDefault();
+
+			if (handler != null) {
+				handler.put(uri, responseHeaders);
+			}
+		}
+	}
+
+
+
+	/**
+	 * A response: its status and headers, where it came from, and its body.
+	 */
+	static final class Response {
+
+		/** The URL that answered, after the redirects followed. */
+		final URI uri;
+
+		final int status;
+
+		final HttpHeaders headers;
+
+		/** The body as read, or null where only the head is handed over. */
+		final String body;
+
+
+		Response(URI uri, int status, HttpHeaders headers, String body) {
+			this.uri = uri;
+			this.status = status;
+			this.headers = headers;
+			this.body = body;
+		}
+
+		/**
+		 * @return the first value of the header, or null.
+		 */
+		String header(String name) {
+			return headers.firstValue(name).orElse(null);
+		}
+	}
+
+
+
+	/**
+	 * Reads a body of at most the given size, and no longer than the timeout.
+	 * A larger one fails, or is cut off when only a message is made of it.
+	 */
+	private final class Body implements HttpResponse.BodySubscriber<String> {
+
+		private final CompletableFuture<String> text = new CompletableFuture<>();
+
+		private final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+		private final int max;
+
+		private final boolean truncate;
+
+		private Flow.Subscription subscription;
+
+		private boolean done;
+
+
+		Body(int max, boolean truncate) {
+			this.max = max;
+			this.truncate = truncate;
+		}
+
+		@Override
+		public CompletionStage<String> getBody() {
+			return text;
+		}
+
+		@Override
+		public void onSubscribe(Flow.Subscription subscription) {
+			synchronized (this) {
+				if (done) {
+					subscription.cancel();
+					return;
+				}
+
+				this.subscription = subscription;
+			}
+
+			if (max == 0) {
+				stop(null);
+				return;
+			}
+
+			subscription.request(Long.MAX_VALUE);
+		}
+
+		@Override
+		public void onNext(List<ByteBuffer> items) {
+			if (remainingNanos() <= 0) {
+				// A body that trickles in.
+				stop(timedOut());
+				return;
+			}
+
+			for (ByteBuffer item : items) {
+				byte[] bytes = new byte[item.remaining()];
+				item.get(bytes);
+
+				if (out.size() + bytes.length > max) {
+					if (!truncate) {
+						stop(new IOException("The response is larger than " + max + " bytes"));
+						return;
+					}
+
+					out.write(bytes, 0, max - out.size());
+					stop(null);
+					return;
+				}
+
+				out.write(bytes, 0, bytes.length);
+			}
+		}
+
+		@Override
+		public void onError(Throwable error) {
+			finish(error);
+		}
+
+		@Override
+		public void onComplete() {
+			finish(null);
+		}
+
+		/**
+		 * Ends the body before it is complete, which closes the connection,
+		 * with what came so far or with the error.
+		 */
+		void stop(Throwable error) {
+			Flow.Subscription subscription;
+
+			synchronized (this) {
+				if (done) {
+					return;
+				}
+
+				done = true;
+				subscription = this.subscription;
+			}
+
+			if (subscription != null) {
+				subscription.cancel();
+			}
+
+			finish(error);
+		}
+
+		private void finish(Throwable error) {
+			if (error != null) {
+				text.completeExceptionally(error);
+			}
+			else {
+				text.complete(new String(out.toByteArray(), StandardCharsets.UTF_8));
+			}
+		}
+	}
+}

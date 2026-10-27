@@ -18,11 +18,6 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -48,9 +43,6 @@ abstract class HttpSession implements AutoCloseable {
 
 	/** The largest answer read; an SDP answer is a few kilobytes. */
 	private static final int MAX_BODY = 1 << 20;
-
-	/** How much of an error response goes into a message. */
-	private static final int MAX_ERROR_BODY = 1024;
 
 	private final Peer peer;
 
@@ -93,8 +85,9 @@ abstract class HttpSession implements AutoCloseable {
 	/**
 	 * Deletes the session's resource on the server, which frees what the
 	 * server holds for it, and closes the peer. Both start at once, so that a
-	 * slow server does not keep the peer open. A deletion that fails also goes
-	 * to the runtime's error handler, for those who close without waiting.
+	 * slow server does not keep the peer open. The deletion takes at most the
+	 * session's timeout. A deletion that fails also goes to the runtime's
+	 * error handler, for those who close without waiting.
 	 *
 	 * @return a future that completes once both are done, or fails with a
 	 * {@link WebRtcException} when the resource could not be deleted, or with
@@ -104,15 +97,7 @@ abstract class HttpSession implements AutoCloseable {
 	public CompletableFuture<Void> closeAsync() {
 		if (closing.compareAndSet(false, true)) {
 			CompletableFuture<Throwable> peerClosed = peer.closeAsync().handle((ignored, error) -> error);
-			CompletableFuture<WebRtcException> deleted;
-
-			try {
-				deleted = CompletableFuture.supplyAsync(() -> discard(rtc, resource, bearerToken, timeout),
-						rtc.controlPool);
-			}
-			catch (RejectedExecutionException e) {
-				deleted = CompletableFuture.completedFuture(leftOnServer(rtc, resource));
-			}
+			CompletableFuture<WebRtcException> deleted = discard(rtc, resource, bearerToken, timeout);
 
 			deleted.thenAcceptBoth(peerClosed, (deleteError, peerError) -> {
 				Throwable error = PeerImpl.unwrap(peerError);
@@ -144,7 +129,9 @@ abstract class HttpSession implements AutoCloseable {
 	 * connected. A caller that stops waiting, by cancelling the future or
 	 * completing it itself, ends the negotiation, and a session made too late
 	 * for the future is closed: either way the peer is closed and what the
-	 * server created is deleted.
+	 * server named is deleted. An offer still out is cut off then, so that
+	 * a server that does not answer holds no thread; what it creates for an
+	 * offer it had yet to answer is left for it to time out.
 	 *
 	 * @param factory makes the session of the connected peer.
 	 *
@@ -179,6 +166,10 @@ abstract class HttpSession implements AutoCloseable {
 		// session that connected, or whoever deletes it.
 		AtomicReference<URI> resource = new AtomicReference<>();
 		AtomicBoolean finished = new AtomicBoolean();
+		// Made now, so that it ends with the session's deadline at the latest,
+		// however long the offer takes.
+		HttpCall offerRequest = new HttpCall(rtc.httpClient(bearerToken != null), endpoint, "POST", bearerToken,
+				timeout).followRedirects();
 
 		// Either way the session ends, once: connected, failed or timed out.
 		Consumer<Throwable> fail = error -> {
@@ -186,22 +177,16 @@ abstract class HttpSession implements AutoCloseable {
 				return;
 			}
 
+			// Ends an offer still out, whose answer would only meet a closed
+			// peer.
+			offerRequest.abort();
 			// Reported before the resource is deleted, which may take as long
 			// as the timeout again.
 			peer.close();
 			result.completeExceptionally(PeerImpl.asWebRtcException(error,
 					"The session with " + endpoint + " could not be set up"));
 
-			URI created = resource.getAndSet(null);
-
-			if (created != null) {
-				try {
-					CompletableFuture.runAsync(() -> discard(rtc, created, bearerToken, timeout), rtc.controlPool);
-				}
-				catch (RejectedExecutionException e) {
-					leftOnServer(rtc, created);
-				}
-			}
+			discard(rtc, resource.getAndSet(null), bearerToken, timeout);
 		};
 
 		ScheduledFuture<?> deadline = rtc.timer.schedule(() -> fail.accept(new WebRtcException(
@@ -214,19 +199,15 @@ abstract class HttpSession implements AutoCloseable {
 		});
 
 		peer.negotiator().createOffer(Gathering.COMPLETE)
-				.thenApplyAsync(offer -> {
-					try {
-						return post(endpoint, offer.sdp, bearerToken, timeout, resource);
-					}
-					finally {
-						if (finished.get()) {
-							// The session ended while the offer was out, so what
-							// the server created meanwhile has no one else to
-							// delete it. The answer then meets a closed peer.
-							discard(rtc, resource.getAndSet(null), bearerToken, timeout);
-						}
-					}
-				}, rtc.controlPool)
+				.thenCompose(offer -> post(offerRequest, endpoint, offer.sdp, resource)
+						.whenComplete((answer, error) -> {
+							if (finished.get()) {
+								// The session ended while the offer was out,
+								// after the server named what it created, which
+								// then has no one else to delete it.
+								discard(rtc, resource.getAndSet(null), bearerToken, timeout);
+							}
+						}))
 				.thenCompose(answer -> peer.negotiator()
 						.applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, answer)))
 				.thenCompose(applied -> peer.whenConnected())
@@ -247,44 +228,30 @@ abstract class HttpSession implements AutoCloseable {
 	/**
 	 * Posts the offer and returns the answer. The resource the server names is
 	 * set as soon as it is known, so that it is deleted even if reading the
-	 * answer fails.
+	 * answer fails. The request follows the redirects WHIP and WHEP allow, and
+	 * the resource is resolved against the endpoint that answered.
 	 */
-	private static String post(URI endpoint, String sdp, String bearerToken, Duration timeout,
+	private static CompletableFuture<String> post(HttpCall request, URI endpoint, String sdp,
 			AtomicReference<URI> resource) {
-		HttpURLConnection connection = null;
-
-		try {
-			connection = open(endpoint, "POST", bearerToken, timeout);
-			connection.setDoOutput(true);
-			connection.setRequestProperty("Content-Type", "application/sdp");
-			connection.setRequestProperty("Accept", "application/sdp");
-
-			byte[] body = sdp.getBytes(StandardCharsets.UTF_8);
-			connection.setFixedLengthStreamingMode(body.length);
-
-			try (OutputStream out = connection.getOutputStream()) {
-				out.write(body);
+		return request.send("application/sdp", sdp.getBytes(StandardCharsets.UTF_8), MAX_BODY, head -> {
+			if (head.status == 201 || head.status == 200) {
+				resource.set(resourceOf(head.uri, head.header("Location")));
+			}
+		}).handle((response, error) -> {
+			if (error instanceof WebRtcException) {
+				throw (WebRtcException) error;
+			}
+			if (error != null) {
+				throw new WebRtcException("Sending the offer to " + endpoint + " failed: " + error.getMessage(),
+						error);
+			}
+			if (response.status != 201 && response.status != 200) {
+				throw new WebRtcException("The endpoint " + endpoint + " answered the offer with status "
+						+ response.status + ": " + response.body);
 			}
 
-			int status = connection.getResponseCode();
-
-			if (status != HttpURLConnection.HTTP_CREATED && status != HttpURLConnection.HTTP_OK) {
-				throw new WebRtcException("The endpoint " + endpoint + " answered the offer with status " + status
-						+ ": " + read(connection.getErrorStream(), MAX_ERROR_BODY, true));
-			}
-
-			resource.set(resourceOf(endpoint, connection.getHeaderField("Location")));
-
-			return read(connection.getInputStream(), MAX_BODY, false);
-		}
-		catch (IOException e) {
-			throw new WebRtcException("Sending the offer to " + endpoint + " failed: " + e.getMessage(), e);
-		}
-		finally {
-			if (connection != null) {
-				connection.disconnect();
-			}
-		}
+			return response.body;
+		});
 	}
 
 	/**
@@ -297,42 +264,58 @@ abstract class HttpSession implements AutoCloseable {
 		S create(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout);
 	}
 
-	private static void delete(URI resource, String bearerToken, Duration timeout) throws IOException {
-		HttpURLConnection connection = open(resource, "DELETE", bearerToken, timeout);
-
-		try {
-			int status = connection.getResponseCode();
-
-			if (status / 100 != 2) {
-				throw new WebRtcException("The endpoint answered the deletion of " + resource + " with status "
-						+ status + ": " + read(connection.getErrorStream(), MAX_ERROR_BODY, true));
-			}
-		}
-		finally {
-			connection.disconnect();
-		}
-	}
-
 	/**
 	 * Deletes a resource that nothing else will, and reports rather than
-	 * throws if that fails.
+	 * throws if that fails. The deletion takes at most the timeout from now on.
+	 * A body of a 2xx answer is not read.
 	 *
-	 * @return the failure reported, or null.
+	 * @return a future with the failure reported, or null.
 	 */
-	private static WebRtcException discard(WebRtc rtc, URI resource, String bearerToken, Duration timeout) {
+	private static CompletableFuture<WebRtcException> discard(WebRtc rtc, URI resource, String bearerToken,
+			Duration timeout) {
 		if (resource == null) {
-			return null;
+			return CompletableFuture.completedFuture(null);
 		}
 
+		HttpCall request;
+
 		try {
-			delete(resource, bearerToken, timeout);
-			return null;
+			request = new HttpCall(rtc.httpClient(bearerToken != null), resource, "DELETE", bearerToken, timeout);
 		}
-		catch (Exception e) {
-			WebRtcException error = new WebRtcException("Deleting the session " + resource + " failed", e);
-			rtc.reportError(error);
-			return error;
+		catch (RejectedExecutionException e) {
+			return CompletableFuture.completedFuture(leftOnServer(rtc, resource));
 		}
+
+		CompletableFuture<WebRtcException> deleted = request.send(null, null, 0, head -> { })
+				.handle((response, error) -> {
+					Throwable failure = error;
+
+					if (failure == null && response.status / 100 != 2) {
+						failure = new WebRtcException("The endpoint answered the deletion of " + resource
+								+ " with status " + response.status + ": " + response.body);
+					}
+					if (failure == null) {
+						return null;
+					}
+
+					WebRtcException reported = new WebRtcException("Deleting the session " + resource + " failed",
+							failure);
+					rtc.reportError(reported);
+					return reported;
+				});
+
+		try {
+			// The request's own timeout bounds the head of the answer; this ends
+			// the body of an error that does not come.
+			ScheduledFuture<?> deadline = rtc.timer.schedule(request::abort, Timeouts.toMillis(timeout),
+					TimeUnit.MILLISECONDS);
+			deleted.whenComplete((error, ignored) -> deadline.cancel(false));
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing, and the request's own timeout bounds it.
+		}
+
+		return deleted;
 	}
 
 	/**
@@ -378,56 +361,6 @@ abstract class HttpSession implements AutoCloseable {
 		}
 
 		return resource;
-	}
-
-	private static HttpURLConnection open(URI uri, String method, String bearerToken, Duration timeout)
-			throws IOException {
-		HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
-		connection.setRequestMethod(method);
-		// Never 0, which the connection takes as no timeout at all.
-		int millis = (int) Math.min(Integer.MAX_VALUE, Timeouts.toMillis(timeout));
-		connection.setConnectTimeout(millis);
-		connection.setReadTimeout(millis);
-		// A redirect would take the bearer token to wherever it points, so it
-		// fails the request instead.
-		connection.setInstanceFollowRedirects(false);
-
-		if (bearerToken != null) {
-			connection.setRequestProperty("Authorization", "Bearer " + bearerToken);
-		}
-
-		return connection;
-	}
-
-	/**
-	 * Reads a response body of at most the given size. A larger one fails, or
-	 * is cut off when only a message is made of it.
-	 */
-	private static String read(InputStream in, int limit, boolean truncate) throws IOException {
-		if (in == null) {
-			return "";
-		}
-
-		try (InputStream stream = in) {
-			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			byte[] buffer = new byte[8192];
-			int count;
-
-			while ((count = stream.read(buffer)) != -1) {
-				if (out.size() + count > limit) {
-					if (!truncate) {
-						throw new IOException("The response is larger than " + limit + " bytes");
-					}
-
-					out.write(buffer, 0, limit - out.size());
-					break;
-				}
-
-				out.write(buffer, 0, count);
-			}
-
-			return new String(out.toByteArray(), StandardCharsets.UTF_8);
-		}
 	}
 
 	static URI checkEndpoint(URI endpoint) {

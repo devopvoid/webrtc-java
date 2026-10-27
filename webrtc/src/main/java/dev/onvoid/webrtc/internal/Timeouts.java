@@ -24,8 +24,8 @@ import java.time.Duration;
  * Checks timeouts and converts them to the unit they are waited for in.
  * <p>
  * A conversion rounds up and saturates. A positive timeout never becomes zero,
- * which many waits, such as those of {@code HttpURLConnection} and of FFmpeg,
- * take as no limit at all; and one too long for the unit becomes the longest
+ * which many waits, such as those of sockets and of FFmpeg, take as no limit
+ * at all; and one too long for the unit becomes the longest
  * the unit can count, rather than failing or wrapping around. So only a
  * timeout given as zero comes out as zero, and whether that means no limit is
  * for the caller to say.

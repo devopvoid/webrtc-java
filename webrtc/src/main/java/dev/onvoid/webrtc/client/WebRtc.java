@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
+import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,6 +32,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -152,6 +154,18 @@ public final class WebRtc implements AutoCloseable {
 
 	/** Set once the control tasks have run, after which none ever runs. */
 	private volatile boolean stopped;
+
+	private final Object httpLock = new Object();
+
+	/**
+	 * The clients of WHIP and WHEP requests, each made for the first request
+	 * it sends: one for those with a bearer token, one that answers proxies
+	 * with credentials for those without. A client cannot do both.
+	 */
+	private final HttpClient[] httpClients = new HttpClient[2];
+
+	/** Set once the runtime has stopped its threads; no request goes out after. */
+	private boolean httpStopped;
 
 
 	private WebRtc(Builder builder) {
@@ -583,9 +597,58 @@ public final class WebRtc implements AutoCloseable {
 		framePool.shutdown();
 		timer.shutdownNow();
 		audioPacer.shutdownNow();
+		stopHttp();
 
 		if (ownsEventExecutor) {
 			((ExecutorService) eventExecutor).shutdown();
+		}
+	}
+
+	/**
+	 * @param bearerToken whether the requests carry a bearer token.
+	 *
+	 * @return the client of WHIP and WHEP requests.
+	 *
+	 * @throws RejectedExecutionException once the runtime has stopped its
+	 *                                    threads.
+	 */
+	HttpClient httpClient(boolean bearerToken) {
+		int index = bearerToken ? 0 : 1;
+
+		synchronized (httpLock) {
+			if (httpStopped) {
+				throw new RejectedExecutionException("The runtime is closed");
+			}
+			if (httpClients[index] == null) {
+				httpClients[index] = HttpCall.newClient(!bearerToken);
+			}
+
+			return httpClients[index];
+		}
+	}
+
+	private void stopHttp() {
+		HttpClient[] clients;
+
+		synchronized (httpLock) {
+			httpStopped = true;
+			clients = httpClients.clone();
+		}
+
+		for (HttpClient client : clients) {
+			if (client == null) {
+				continue;
+			}
+
+			try {
+				// From Java 21 on, a client ends its threads once the requests
+				// under way are done, each within its timeout. Before, its
+				// threads end once it is collected.
+				HttpClient.class.getMethod("shutdown").invoke(client);
+			}
+			catch (ReflectiveOperationException e) {
+				// Before Java 21.
+			}
 		}
 	}
 

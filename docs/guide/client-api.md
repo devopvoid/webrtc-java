@@ -228,6 +228,8 @@ A limit has one cost: a handler that waits for what another peer's handler does,
 
 The control threads of the library, which call into WebRTC, are not limited. Their tasks wait for one another, such as a camera switch for every peer to take the new track.
 
+The HTTP requests of `Whip` and `Whep` sessions take no thread while they wait, so a slow server holds up no peer: they go through Java's `HttpClient`, one of each runtime.
+
 `rtc.loadStats()` tells how much work waits and runs, at this moment and cheaply enough to be read every second:
 
 ```java
@@ -596,11 +598,15 @@ Whep.Session viewer = Whep.from(URI.create("https://example.com/live/whep"))
 viewer.peer().onTrack(track -> System.out.println("Receiving " + track.kind()));
 ```
 
-The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. Cancelling the future, say once `get` gave up waiting, ends the session the same way, even when the answer is still on its way. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
+The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. Cancelling the future, say once `get` gave up waiting, ends the session the same way. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
 
-`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. Both start at once, so a slow server does not keep the peer open. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler, and also fails the future of `closeAsync()`, which completes once both are done; a peer that did not close fails it too.
+The timeout bounds the requests as a whole, not each read, so a server that sends its answer a byte at a time cannot stretch it. A request still out when the session times out or is cancelled is cut off at once; one still waiting for the head of its answer only from Java 16 on, and before that at its timeout. Once the server has named the session, in the head of its answer, it is deleted all the same; a session the server created for an answer that had not come yet is left for the server to time out.
 
-The bearer token goes to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. Redirects are not followed, since they would take the token elsewhere: a redirected request fails with its status.
+`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. Both start at once, so a slow server does not keep the peer open, and the deletion takes at most the session's timeout. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler, and also fails the future of `closeAsync()`, which completes once both are done; a peer that did not close fails it too.
+
+The bearer token goes to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. The offer follows redirects with status 307 and 308, as WHIP and WHEP ask of clients, such as those of a load balancer: up to five of them, all within the timeout, and the token goes along. A redirect from `https` to plain `http` fails the session, and so does one with status 301, 302 or 303, which would turn the offer into a `GET`. The deletion follows no redirect; one fails it with its status.
+
+Requests go through Java's `HttpClient`, with the default `SSLContext` and the HTTP proxy Java is configured with, the first the default `ProxySelector` names: `-Dhttps.proxyHost` and `-Dhttps.proxyPort`, `-Dhttp.proxyHost`, or `-Djava.net.useSystemProxies=true`. `HttpClient` takes no SOCKS proxies. A proxy that asks for credentials gets Basic ones from the default `Authenticator`, but only for sessions without a bearer token: `HttpClient` drops the token of a request once it answers for credentials itself. As in Java, Basic is not used for the tunnel of an `https` request unless `jdk.http.auth.tunneling.disabledSchemes` allows it. Other schemes, such as Digest, NTLM and Negotiate, are not supported.
 
 | Builder method | What it sets |
 |---|---|
@@ -608,7 +614,7 @@ The bearer token goes to the endpoint, and along with the deletion to the sessio
 | `iceServer(String...)` | A STUN or TURN server; endpoints usually name their own in the answer. |
 | `track(LocalTrack)` | A track to publish, WHIP only. The tracks share one stream. |
 | `receive(MediaKind...)` | What to receive, WHEP only; video and audio by default. |
-| `timeout(Duration)` | How long the session may take to be connected. |
+| `timeout(Duration)` | How long the session may take to be connected, and its deletion to be answered. |
 
 ## Manual Negotiation
 
