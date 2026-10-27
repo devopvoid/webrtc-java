@@ -22,35 +22,6 @@
 		<javafx.version>17.0.20</javafx.version>
 	</properties>
 
-	<build>
-		<plugins>
-			<!-- OpenJFX is built for Java 11, so this module cannot target the
-			     Java 8 the rest of the library does. The module descriptor
-			     compiles at Java 11 too, which makes the parent's second pass,
-			     the one that recompiles the classes for Java 8 without the
-			     descriptor, unnecessary. -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<executions>
-					<execution>
-						<id>default-compile</id>
-						<configuration>
-							<release>11</release>
-						</configuration>
-					</execution>
-					<execution>
-						<id>base-compile</id>
-						<phase>none</phase>
-					</execution>
-				</executions>
-				<configuration>
-					<release>11</release>
-				</configuration>
-			</plugin>
-		</plugins>
-	</build>
-
 	<dependencies>
 		<dependency>
 			<groupId>dev.onvoid.webrtc</groupId>

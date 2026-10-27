@@ -27,8 +27,8 @@ import java.util.concurrent.TimeoutException;
  * {@link #get()} refuse with a {@link BlockingCallException} instead of
  * deadlocking. A future that is already done may be read anywhere.
  * <p>
- * On Java 9 and later the futures derived from this one, with {@code
- * thenApply} and the like, are of this class too and refuse the same way.
+ * The futures derived from this one, with {@code thenApply} and the like, are
+ * of this class too and refuse the same way.
  *
  * @param <T> the result type.
  */
@@ -81,14 +81,14 @@ final class ClientFuture<T> extends CompletableFuture<T> {
 	}
 
 	/**
-	 * Makes the futures derived from this one, on Java 9 and later, refuse to
-	 * be waited on from an event thread as well. Java 8 has no such method and
-	 * never calls it.
+	 * Makes the futures derived from this one refuse to be waited on from an
+	 * event thread as well.
 	 *
 	 * @param <U> the result type of the derived future.
 	 *
 	 * @return a new incomplete future.
 	 */
+	@Override
 	public <U> CompletableFuture<U> newIncompleteFuture() {
 		return new ClientFuture<>();
 	}

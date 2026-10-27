@@ -10,7 +10,7 @@ You don't have to install Chromium's `depot_tools`, Siso or GN: the build clones
 
 | Tool                  | Notes                                                                                     |
 | --------------------- | ----------------------------------------------------------------------------------------- |
-| JDK 17 or newer       | The libraries target Java 8, but the JavaFX module needs 11 and the examples need 17.     |
+| JDK 17 or newer       | The libraries target Java 11, and the examples need 17.                                   |
 | Maven 3.6.3 or newer  |                                                                                           |
 | Git                   | Clones `depot_tools`, the WebRTC sources and the submodules.                              |
 | CMake 3.13 or newer   | Must be on the `PATH`. The Maven build does not download it.                              |

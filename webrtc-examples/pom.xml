@@ -47,23 +47,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <executions>
-                    <!-- Clear parent executions -->
-                    <execution>
-                        <id>default-compile</id>
-                        <phase>compile</phase>
-                        <goals>
-                            <goal>compile</goal>
-                        </goals>
-                        <configuration>
-                            <release>17</release>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>base-compile</id>
-                        <phase>none</phase>
-                    </execution>
-                </executions>
                 <configuration>
                     <release>17</release>
                     <jdkToolchain>
