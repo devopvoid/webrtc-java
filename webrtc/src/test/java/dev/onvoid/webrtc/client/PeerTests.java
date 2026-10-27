@@ -189,6 +189,44 @@ class PeerTests extends ClientTestBase {
 	}
 
 	@Test
+	void handlerAddedOnChannelGetsQueuedMessages() throws Exception {
+		// The channel handler returns only after the receiver closed the
+		// channel, so the messages and the close wait behind it. The message
+		// handler it adds still gets those that fit the limit.
+		int limit = 64 * 1024;
+		Peer[] peers = pair(options -> options.channelReceiveLimit(limit));
+		CountDownLatch overflowed = new CountDownLatch(1);
+		List<Integer> handled = new CopyOnWriteArrayList<>();
+		CompletableFuture<WebRtcException> error = new CompletableFuture<>();
+
+		peers[1].onError(error::complete);
+		peers[1].onChannel(remote -> {
+			awaitQuietly(overflowed);
+			remote.onMessage(message -> handled.add(message.bytes()[0] & 0xFF));
+		});
+
+		DataChannel channel = peers[0].createChannel("bulk");
+		CompletableFuture<Void> closed = whenClosed(channel);
+		closed.thenRun(overflowed::countDown);
+		byte[] payload = new byte[16 * 1024];
+
+		try {
+			for (int i = 0; i < 10; i++) {
+				payload[0] = (byte) i;
+				channel.send(payload);
+			}
+
+			await(closed);
+		}
+		finally {
+			overflowed.countDown();
+		}
+
+		assertTrue(await(error).getMessage().contains("fell more than"), () -> error.join().getMessage());
+		assertEquals(Arrays.asList(0, 1, 2, 3), handled);
+	}
+
+	@Test
 	void handledMessagesFreeLimit() throws Exception {
 		// Far more than the limit passes through, a message at a time.
 		int limit = 64 * 1024;
