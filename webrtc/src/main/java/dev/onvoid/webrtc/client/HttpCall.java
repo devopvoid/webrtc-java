@@ -31,13 +31,21 @@ import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import javax.net.ssl.SSLContext;
@@ -54,7 +62,8 @@ import javax.net.ssl.SSLContext;
  * such a request ends with its timeout.
  * <p>
  * Redirects are followed only when asked for, and only those with status 307
- * and 308, which keep the method and body.
+ * and 308, which keep the method and body. Likewise, a request is only sent
+ * again when asked for, after the wait a server names in Retry-After.
  */
 final class HttpCall {
 
@@ -63,6 +72,12 @@ final class HttpCall {
 
 	/** How much of an error response is read, for a message. */
 	static final int MAX_ERROR_BODY = 1024;
+
+	/**
+	 * The shortest wait before a request is sent again, so that a server that
+	 * says to come back at once is not asked many times a second.
+	 */
+	static final long MIN_RETRY_MILLIS = 1000;
 
 	private final HttpClient client;
 
@@ -84,8 +99,15 @@ final class HttpCall {
 
 	private boolean followRedirects;
 
+	private ScheduledExecutorService retryTimer;
+
+	private Set<Integer> retryStatuses = Collections.emptySet();
+
 	/** The exchange under way, which an abort cancels. */
 	private CompletableFuture<?> exchange;
+
+	/** The wait before the request is sent again, which an abort ends. */
+	private Future<?> retry;
 
 	/** The body being read, which an abort ends. */
 	private Body body;
@@ -145,6 +167,24 @@ final class HttpCall {
 	}
 
 	/**
+	 * Sends the request again when the server answers with one of the given
+	 * statuses and a Retry-After header field, after the time it names, at
+	 * least {@link #MIN_RETRY_MILLIS}, and as often as that fits within the
+	 * timeout. Without the field, or once the wait would not fit, the answer
+	 * is the response.
+	 *
+	 * @param timer    the timer the waits are on.
+	 * @param statuses the statuses to send the request again for.
+	 *
+	 * @return this request.
+	 */
+	HttpCall retry(ScheduledExecutorService timer, Set<Integer> statuses) {
+		this.retryTimer = timer;
+		this.retryStatuses = statuses;
+		return this;
+	}
+
+	/**
 	 * Follows redirects with status 307 and 308, up to {@link #MAX_REDIRECTS}
 	 * of them, with the bearer token. One from https to plain http fails.
 	 *
@@ -187,6 +227,7 @@ final class HttpCall {
 				: new IOException("The request to " + uri + " was aborted");
 		CompletableFuture<?> exchange;
 		Body body;
+		Future<?> retry;
 
 		synchronized (this) {
 			if (aborted) {
@@ -196,10 +237,14 @@ final class HttpCall {
 			aborted = true;
 			exchange = this.exchange;
 			body = this.body;
+			retry = this.retry;
 		}
 
 		result.completeExceptionally(reason);
 
+		if (retry != null) {
+			retry.cancel(false);
+		}
 		if (body != null) {
 			body.stop(reason);
 		}
@@ -263,7 +308,15 @@ final class HttpCall {
 			String location = value.headers().firstValue("Location").orElse(null);
 
 			if (!isRedirect(value.statusCode(), location)) {
-				result.complete(new Response(target, value.statusCode(), value.headers(), value.body()));
+				long wait = retryStatuses.contains(value.statusCode())
+						? retryDelayMillis(value.headers().firstValue("Retry-After").orElse(null),
+								System.currentTimeMillis())
+						: -1;
+
+				if (wait < 0 || !retryLater(Math.max(wait, MIN_RETRY_MILLIS),
+						() -> exchange(target, contentType, content, maxBody, onHead, redirects))) {
+					result.complete(new Response(target, value.statusCode(), value.headers(), value.body()));
+				}
 				return;
 			}
 			if (redirects == MAX_REDIRECTS) {
@@ -314,6 +367,72 @@ final class HttpCall {
 		}
 
 		return body;
+	}
+
+	/**
+	 * Sends the request again after the wait, if that leaves time for it.
+	 *
+	 * @return false if the request is not sent again.
+	 */
+	private boolean retryLater(long waitMillis, Runnable send) {
+		if (TimeUnit.MILLISECONDS.toNanos(waitMillis) >= remainingNanos()) {
+			return false;
+		}
+
+		synchronized (this) {
+			if (aborted) {
+				// Failed already.
+				return true;
+			}
+
+			try {
+				retry = retryTimer.schedule(send, waitMillis, TimeUnit.MILLISECONDS);
+			}
+			catch (RejectedExecutionException e) {
+				// The runtime is closing.
+				return false;
+			}
+
+			exchange = null;
+			body = null;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Reads a Retry-After header field, in seconds or as an HTTP date.
+	 *
+	 * @param value     the field, or null.
+	 * @param nowMillis the time, as {@link System#currentTimeMillis()}.
+	 *
+	 * @return how long to wait in milliseconds, or -1 if the field says
+	 * nothing that can be read.
+	 */
+	static long retryDelayMillis(String value, long nowMillis) {
+		if (value == null) {
+			return -1;
+		}
+
+		String field = value.trim();
+
+		if (!field.isEmpty() && field.chars().allMatch(Character::isDigit)) {
+			try {
+				return Math.multiplyExact(Long.parseLong(field), 1000);
+			}
+			catch (NumberFormatException | ArithmeticException e) {
+				return Long.MAX_VALUE;
+			}
+		}
+
+		try {
+			long date = ZonedDateTime.parse(field, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli();
+
+			return Math.max(0, date - nowMillis);
+		}
+		catch (DateTimeParseException e) {
+			return -1;
+		}
 	}
 
 	private boolean isRedirect(int status, String location) {

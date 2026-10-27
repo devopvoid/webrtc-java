@@ -32,6 +32,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
@@ -216,6 +219,24 @@ class HttpCallTests {
 			assertTrue(asked.isEmpty(), () -> "Asked: " + asked);
 			assertTrue(endpoint.requests.isEmpty(), () -> "Requests: " + endpoint.requests);
 		}
+	}
+
+	@Test
+	void retryAfterRead() {
+		long now = 1_000_000_000_000L;
+		String inFive = DateTimeFormatter.RFC_1123_DATE_TIME.format(
+				Instant.ofEpochMilli(now + 5000).atZone(ZoneOffset.UTC));
+		String past = DateTimeFormatter.RFC_1123_DATE_TIME.format(
+				Instant.ofEpochMilli(now - 5000).atZone(ZoneOffset.UTC));
+
+		assertEquals(3000, HttpCall.retryDelayMillis("3", now));
+		assertEquals(0, HttpCall.retryDelayMillis(" 0 ", now));
+		assertEquals(5000, HttpCall.retryDelayMillis(inFive, now));
+		assertEquals(0, HttpCall.retryDelayMillis(past, now));
+		assertEquals(Long.MAX_VALUE, HttpCall.retryDelayMillis("99999999999999999999", now));
+		assertEquals(-1, HttpCall.retryDelayMillis("soon", now));
+		assertEquals(-1, HttpCall.retryDelayMillis("", now));
+		assertEquals(-1, HttpCall.retryDelayMillis(null, now));
 	}
 
 	private static HttpCall post(HttpClient client, URI uri) {
