@@ -23,11 +23,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import dev.onvoid.webrtc.media.SyncClock;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 
@@ -253,6 +257,49 @@ class RTCEncodedFrameTransformTests extends TestBase {
 			assertEquals("audio/opus", first.get().getMimeType().toLowerCase());
 
 			receiver.dispose();
+		}
+	}
+
+	@Test
+	void audioPushedWithoutTimestampCarriesCaptureTimeOfPush() throws Exception {
+		// The call pushes its audio without a timestamp. The source then
+		// stamps each chunk with the moment of the push, on the clock a
+		// caller's capture time is on, and WebRTC carries that time through
+		// to the encoded frames of the sender.
+		List<Long> captureTimesUs = new CopyOnWriteArrayList<>();
+
+		try (TestMediaCall call = new TestMediaCall(factory, false, true)) {
+			call.getAudioSender().setTransform(frame -> captureTimesUs.add(frame.getCaptureTimeUs()));
+
+			call.negotiate();
+			call.awaitConnected();
+
+			long startUs = SyncClock.currentTimeUs();
+
+			call.startMedia();
+
+			waitFor(() -> captureTimesUs.size() >= 20);
+
+			List<Long> seen = new ArrayList<>(captureTimesUs);
+			long endUs = SyncClock.currentTimeUs();
+
+			// WebRTC keeps the capture time in whole milliseconds, cut off
+			// rather than rounded.
+			long earliestUs = startUs - 1000;
+
+			for (int i = 0; i < seen.size(); i++) {
+				long captureUs = seen.get(i);
+
+				assertTrue(captureUs >= earliestUs && captureUs <= endUs,
+						"Capture time " + captureUs + " µs is not between " + earliestUs
+								+ " µs and " + endUs + " µs on SyncClock.currentTimeUs()");
+
+				if (i > 0) {
+					assertTrue(captureUs >= seen.get(i - 1),
+							"Capture time went back from " + seen.get(i - 1) + " µs to "
+									+ captureUs + " µs");
+				}
+			}
 		}
 	}
 
