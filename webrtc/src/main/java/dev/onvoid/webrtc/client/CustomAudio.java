@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.client;
 
+import java.time.Duration;
+
 /**
  * An audio track fed with audio the application pushes, made by {@link
  * LocalMedia#customAudio(String)}.
@@ -28,6 +30,12 @@ package dev.onvoid.webrtc.client;
  * makes up for at most the last 50 ms of the stall. The audio of the rest is
  * not sent faster but later, so what is queued then stays that much behind,
  * unless {@link #clear()} drops it.
+ * <p>
+ * The queue holds at most 10 seconds by default, beyond which a push fails
+ * with an {@link AudioQueueFullException}, so that a producer faster than real
+ * time cannot fill memory and let the delay grow without end. {@link
+ * #queueLimit(Duration, AudioOverflow)} changes the limit and what happens
+ * beyond it.
  */
 public interface CustomAudio extends LocalAudio {
 
@@ -39,8 +47,29 @@ public interface CustomAudio extends LocalAudio {
 	 * @param format the sample rate and channel count. A format other than the
 	 *               one before starts a new stream: audio still queued in the
 	 *               old format is sent first.
+	 *
+	 * @throws AudioQueueFullException if the audio would take the queue beyond
+	 *                                 its limit and the overflow is {@link
+	 *                                 AudioOverflow#REJECT}. None of it is
+	 *                                 queued then.
 	 */
 	void push(byte[] pcm, PcmFormat format);
+
+	/**
+	 * Limits how much audio the queue holds; 10 seconds with {@link
+	 * AudioOverflow#REJECT} by default. The audio of a push that is shorter
+	 * than 10 ms, or does not end on a 10 ms boundary, waits for the next push
+	 * and does not count until it fills 10 ms.
+	 * <p>
+	 * A limit lower than what is queued drops the oldest audio at once with
+	 * {@link AudioOverflow#DROP_OLDEST}; with {@link AudioOverflow#REJECT} the
+	 * queued audio is sent, and pushes fail until it drained below the limit.
+	 *
+	 * @param max      the longest the queue may hold, at least 10 ms. It is
+	 *                 rounded down to whole 10 ms.
+	 * @param overflow what happens to audio pushed beyond the limit.
+	 */
+	void queueLimit(Duration max, AudioOverflow overflow);
 
 	/**
 	 * @return the audio queued and not sent yet, in milliseconds.

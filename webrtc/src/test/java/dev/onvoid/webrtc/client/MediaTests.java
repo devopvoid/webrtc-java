@@ -176,6 +176,142 @@ class MediaTests extends ClientTestBase {
 	}
 
 	@Test
+	void defaultQueueLimit() throws Exception {
+		ManualTimer pacer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.build();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, data -> { });
+			PcmFormat format = PcmFormat.of(8000, 1);
+
+			// Ten seconds fit, not a chunk more.
+			voice.push(new byte[160000], format);
+			assertThrows(AudioQueueFullException.class, () -> voice.push(new byte[160], format));
+			assertEquals(10000, voice.queuedMillis());
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void fullQueueRejectsPush() throws Exception {
+		// A refused push leaves nothing of itself behind, not even in the
+		// chunk begun before it.
+		ManualTimer pacer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.build();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+			Duration tick = Duration.ofMillis(10);
+
+			// 160 bytes in 10 ms.
+			PcmFormat format = PcmFormat.of(8000, 1);
+			voice.queueLimit(Duration.ofMillis(50), AudioOverflow.REJECT);
+
+			// 45 ms, 5 of them begin a chunk.
+			voice.push(filled(720, 1), format);
+			voice.push(filled(160, 1), format);
+			assertEquals(50, voice.queuedMillis());
+
+			// Would complete the begun chunk.
+			assertThrows(AudioQueueFullException.class, () -> voice.push(filled(80, 9), format));
+			// So would a new format, which sends the begun chunk.
+			assertThrows(AudioQueueFullException.class, () -> voice.push(new byte[2], PcmFormat.of(16000, 1)));
+			assertEquals(50, voice.queuedMillis());
+
+			pacer.fire(tick);
+			voice.push(filled(80, 2), format);
+			assertEquals(50, voice.queuedMillis());
+
+			for (int i = 0; i < 5; i++) {
+				pacer.fire(tick);
+			}
+
+			assertEquals(6, sent.size());
+
+			for (byte[] chunk : sent) {
+				for (byte b : chunk) {
+					assertTrue(b == 1 || b == 2);
+				}
+			}
+
+			assertEquals(2, sent.get(5)[159]);
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void fullQueueDropsOldest() throws Exception {
+		ManualTimer pacer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.build();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+			Duration tick = Duration.ofMillis(10);
+			PcmFormat format = PcmFormat.of(8000, 1);
+			voice.queueLimit(Duration.ofMillis(39), AudioOverflow.DROP_OLDEST);
+
+			// Five chunks, of which the limit, rounded down to 30 ms, keeps
+			// the newest three.
+			for (int i = 1; i <= 5; i++) {
+				voice.push(filled(160, i), format);
+			}
+
+			assertEquals(30, voice.queuedMillis());
+
+			// A push longer than the limit keeps its own end.
+			byte[] burst = new byte[800];
+
+			for (int i = 0; i < 5; i++) {
+				Arrays.fill(burst, i * 160, (i + 1) * 160, (byte) (6 + i));
+			}
+
+			voice.push(burst, format);
+			assertEquals(30, voice.queuedMillis());
+
+			// A lower limit drops at once.
+			voice.queueLimit(Duration.ofMillis(20), AudioOverflow.DROP_OLDEST);
+			assertEquals(20, voice.queuedMillis());
+
+			for (int i = 0; i < 3; i++) {
+				pacer.fire(tick);
+			}
+
+			assertEquals(2, sent.size());
+			assertEquals(9, sent.get(0)[0]);
+			assertEquals(10, sent.get(1)[0]);
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void queueLimitBelowChunkRejected() {
+		CustomAudio voice = rtc.media().customAudio("voice");
+
+		assertThrows(IllegalArgumentException.class,
+				() -> voice.queueLimit(Duration.ofMillis(9), AudioOverflow.REJECT));
+	}
+
+	@Test
 	void slowPushLeavesTimerFree() throws Exception {
 		// Pushed audio is sent on a thread of its own: a push that hangs in
 		// WebRTC holds up the audio, not the timeouts on the timer.
@@ -516,6 +652,14 @@ class MediaTests extends ClientTestBase {
 			video.push(frame);
 			frame.release();
 		}, 0, 33, TimeUnit.MILLISECONDS);
+	}
+
+	/** PCM of the given length with every byte set to the value. */
+	private static byte[] filled(int length, int value) {
+		byte[] pcm = new byte[length];
+		Arrays.fill(pcm, (byte) value);
+
+		return pcm;
 	}
 
 	private static byte[] tone(int sampleRate, int channels, int millis) {
