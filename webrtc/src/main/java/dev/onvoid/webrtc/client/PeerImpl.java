@@ -458,6 +458,28 @@ final class PeerImpl implements Peer {
 	}
 
 	/**
+	 * Makes every transceiver send only, as a WHIP client's offer should be
+	 * (RFC 9725, 4.2). Ordered with the negotiation steps, so it takes effect
+	 * on the next offer.
+	 */
+	CompletableFuture<Void> sendOnly() {
+		return negotiator.run(() -> {
+			for (RTCRtpTransceiver transceiver : connection.getTransceivers()) {
+				try {
+					if (!transceiver.stopped()) {
+						transceiver.setDirection(RTCRtpTransceiverDirection.SEND_ONLY);
+					}
+				}
+				finally {
+					transceiver.dispose();
+				}
+			}
+
+			return CompletableFuture.completedFuture(null);
+		});
+	}
+
+	/**
 	 * Gathers candidates from now on with the given ICE servers, unless the
 	 * peer was built with servers of its own, which take precedence.
 	 *

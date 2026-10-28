@@ -232,6 +232,11 @@ public final class Whip {
 					peer.addTrack(track);
 				}
 
+				// Before the offer, which follows in the same order: WHIP only
+				// sends (RFC 9725, 4.2). Should WebRTC refuse, the offer stays
+				// sendrecv, which WHIP allows as well.
+				peer.sendOnly();
+
 				return HttpSession.start(rtc, peer, endpoint, token, limit, gathering, PROTOCOL, Session::new);
 			}
 			catch (RuntimeException | Error e) {

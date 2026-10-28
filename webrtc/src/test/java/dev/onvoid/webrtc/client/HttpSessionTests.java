@@ -360,6 +360,9 @@ class HttpSessionTests extends ClientTestBase {
 			assertEquals(RTCBundlePolicy.MAX_BUNDLE, policy);
 			assertEquals(2, offer.split("\r\na=rtcp-mux-only\r\n", -1).length - 1, offer);
 			assertEquals(2, offer.split("\r\nm=", -1).length - 1, offer);
+			// RFC 9725, 4.2: a WHIP client should only send.
+			assertEquals(2, offer.split("\r\na=sendonly\r\n", -1).length - 1, offer);
+			assertFalse(offer.contains("a=sendrecv"), offer);
 
 			await(session.closeAsync());
 		}
