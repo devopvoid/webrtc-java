@@ -166,8 +166,8 @@ abstract class HttpSession implements AutoCloseable {
 	 *
 	 * @return a future that completes once the new ICE information of both
 	 * sides is applied, or fails, among others when the session takes no ICE
-	 * restarts or answered the offer with one of its own. The ICE session
-	 * before then goes on.
+	 * restarts. Sessions established with a WHEP counter-offer are supported
+	 * as well. If the restart is refused, the previous ICE session goes on.
 	 */
 	public CompletableFuture<Void> restartIce() {
 		CompletableFuture<Void> restarted = ice != null
@@ -307,7 +307,7 @@ abstract class HttpSession implements AutoCloseable {
 							Duration left = timeout.minusNanos(System.nanoTime() - started);
 
 							return answerCounterOffer(rtc, client, peer, reply, bearerToken,
-									left.isNegative() || left.isZero() ? Duration.ofNanos(1) : left, resource,
+									left.isNegative() || left.isZero() ? Duration.ofNanos(1) : left, resource, ice,
 									request, finished);
 						}))
 				.thenCompose(applied -> peer.whenConnected())
@@ -381,7 +381,7 @@ abstract class HttpSession implements AutoCloseable {
 	 * @param timeout what is left of the session's timeout.
 	 */
 	private static CompletableFuture<Void> answerCounterOffer(WebRtc rtc, HttpClient client, PeerImpl peer,
-			Reply reply, String bearerToken, Duration timeout, AtomicReference<URI> resource,
+			Reply reply, String bearerToken, Duration timeout, AtomicReference<URI> resource, HttpIce ice,
 			AtomicReference<HttpCall> request, AtomicBoolean finished) {
 		return peer.answerInstead(new RTCSessionDescription(RTCSdpType.OFFER, reply.sdp), Gathering.COMPLETE)
 				.thenCompose(answer -> {
@@ -415,6 +415,7 @@ abstract class HttpSession implements AutoCloseable {
 											+ response.body);
 								}
 
+								ice.attach(reply.session, response.header("ETag"), answer.sdp);
 								return null;
 							});
 				});

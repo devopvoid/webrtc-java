@@ -538,7 +538,7 @@ final class TestHttpEndpoint implements AutoCloseable {
 			Consumer<String> answered = counterAnswered;
 			int patched = patchStatus;
 
-			if (answered != null && patched / 100 == 2) {
+			if (answered != null && patched / 100 == 2 && "application/sdp".equals(contentType)) {
 				answered.accept(new String(body, StandardCharsets.UTF_8));
 			}
 

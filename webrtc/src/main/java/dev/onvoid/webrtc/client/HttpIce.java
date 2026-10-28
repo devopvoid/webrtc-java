@@ -170,7 +170,7 @@ final class HttpIce {
 			}
 			if (session == null) {
 				return CompletableFuture.failedFuture(new WebRtcException("ICE cannot restart: the endpoint named "
-						+ "no session, or answered with an offer of its own"));
+						+ "no session"));
 			}
 		}
 

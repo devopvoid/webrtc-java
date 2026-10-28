@@ -613,6 +613,62 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void counterOfferRestarted() throws Exception {
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>(),
+				video, rtc.media().customAudio("audio"))) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).bearerToken("secret")
+					.receive(MediaKind.VIDEO).play(rtc));
+			String before = await(session.peer().withNative(c -> c.getLocalDescription().sdp));
+			await(session.restartIce());
+			String after = await(session.peer().withNative(c -> c.getLocalDescription().sdp));
+			assertNotEquals(HttpIce.Fragment.of(before).ufrag, HttpIce.Fragment.of(after).ufrag);
+			assertTrue(after.contains("\nm=audio 0 "), after);
+			assertTrue(after.contains("a=recvonly"), after);
+			assertFalse(after.contains("a=sendrecv"), after);
+			assertEquals(RTCSdpType.OFFER, await(session.peer().withNative(c -> c.getRemoteDescription().sdpType)));
+			TestHttpEndpoint.Request restart = endpoint.awaitRequest(r -> "*".equals(r.ifMatch),
+					"ICE restart", TIMEOUT_SECONDS);
+			assertEquals("Bearer secret", restart.authorization);
+			assertEquals(HttpIce.FRAGMENT_TYPE, restart.contentType);
+			assertEquals(HttpIce.Fragment.parse(restart.body).ufrag, HttpIce.Fragment.of(after).ufrag);
+			endpoint.awaitRequest(r -> "\"restart-1\"".equals(r.ifMatch), "restart candidates", TIMEOUT_SECONDS);
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			assertEquals(160, (int) await(width));
+			// A second restart exercises the descriptions left by the first.
+			await(session.restartIce());
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void counterOfferRestartsAutomatically() throws Exception {
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			session.ice().stateChanged(PeerState.FAILED);
+			endpoint.awaitRequest(r -> "\"restart-1\"".equals(r.ifMatch), "restart candidates", TIMEOUT_SECONDS);
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void counterOfferRestartRefused() throws Exception {
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			String before = await(session.peer().withNative(c -> c.getLocalDescription().sdp));
+			endpoint.iceRestartStatus = 405;
+			assertThrows(ExecutionException.class, () -> await(session.restartIce()));
+			assertEquals(before, await(session.peer().withNative(c -> c.getLocalDescription().sdp)));
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			assertEquals(160, (int) await(width));
+			endpoint.iceRestartStatus = 200;
+			await(session.restartIce());
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
 	void counterOfferMediaRejected() throws Exception {
 		// The endpoint offers audio and video; the player wants only video, and
 		// rejects the audio m-line, with port 0, as WHEP allows.
@@ -1148,6 +1204,25 @@ class HttpSessionTests extends ClientTestBase {
 				throw new IllegalStateException(e);
 			}
 		});
+
+		endpoint.iceRestarts = fragment -> {
+			try {
+				String previous = await(server[0].withNative(c -> c.getRemoteDescription().sdp));
+				await(server[0].withNative(connection -> {
+					connection.restartIce();
+					return null;
+				}));
+				String offer = await(server[0].negotiator().createOffer(Gathering.COMPLETE)).sdp;
+				await(server[0].negotiator().applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER,
+						HttpIce.Fragment.parse(fragment).applyTo(previous))));
+				StringBuilder own = new StringBuilder(HttpIce.Fragment.of(offer).text);
+				HttpIce.Fragment.parse(offer).candidates.forEach(candidate -> own.append(candidate).append("\r\n"));
+				return own.append("a=end-of-candidates\r\n").toString();
+			}
+			catch (Exception e) {
+				throw new IllegalStateException(e);
+			}
+		};
 
 		return endpoint;
 	}
