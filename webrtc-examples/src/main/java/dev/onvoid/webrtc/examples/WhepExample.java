@@ -62,6 +62,8 @@ public class WhepExample {
             System.out.println("Requesting the stream from " + endpoint);
 
             // The main thread may wait for the session; a handler must not.
+            // For endpoints without Trickle ICE, add .gathering(Gathering.COMPLETE).
+            // Authenticated TURN is configured with .turnServer(url, username, password).
             Whep.Session session = Whep.from(endpoint)
                     .iceServer("stun:stun.l.google.com:19302")
                     .play(rtc)

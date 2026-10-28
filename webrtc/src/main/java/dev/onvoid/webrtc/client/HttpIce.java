@@ -170,7 +170,7 @@ final class HttpIce {
 			}
 			if (session == null) {
 				return CompletableFuture.failedFuture(new WebRtcException("ICE cannot restart: the endpoint named "
-						+ "no session, or answered with an offer of its own"));
+						+ "no session"));
 			}
 		}
 
@@ -278,6 +278,7 @@ final class HttpIce {
 					+ response.status + ": " + response.body);
 		}
 
+		HttpSession.requireContentType(response, FRAGMENT_TYPE);
 		Fragment remote = Fragment.parse(response.body);
 
 		if (remote.ufrag == null || remote.pwd == null) {
@@ -326,6 +327,7 @@ final class HttpIce {
 		HttpCall request;
 		String body;
 		URI target;
+		Fragment generation;
 
 		synchronized (this) {
 			if (closed || !trickle || restarting || candidatesRequest != null || (pending.isEmpty() && !gathered)) {
@@ -351,6 +353,7 @@ final class HttpIce {
 			candidatesRequest = request;
 			body = fragment.toString();
 			target = session;
+			generation = local;
 		}
 
 		request.send(FRAGMENT_TYPE, body.getBytes(StandardCharsets.UTF_8), 0, head -> { })
@@ -360,16 +363,15 @@ final class HttpIce {
 					synchronized (this) {
 						candidatesRequest = null;
 
-						if (error == null && UNSUPPORTED.contains(response.status)) {
+						if (local == generation && error == null && UNSUPPORTED.contains(response.status)) {
 							// The session finds the peer from its checks.
 							trickle = false;
 						}
 
-						// A precondition that fails belongs to an ICE session
-						// a restart replaced.
-						report = !closed && (error != null || (response.status / 100 != 2
-								&& !UNSUPPORTED.contains(response.status) && response.status != 412
-								&& response.status != 428));
+						// Only replies to a replaced ICE generation are obsolete.
+						// A 412 or 428 for the current one is a real failure.
+						report = !closed && local == generation && (error != null
+								|| (response.status / 100 != 2 && !UNSUPPORTED.contains(response.status)));
 
 						if (report) {
 							trickle = false;
@@ -707,17 +709,24 @@ final class HttpIce {
 
 		/**
 		 * Puts the ICE information of this fragment, which a session sent,
-		 * into the remote answer applied before. Its candidates replace those
-		 * of the answer; with none, the answer keeps its own, since a session
-		 * that names none has kept them.
+		 * into the remote description. The new candidate set replaces the old
+		 * one even when empty (RFC 9725, 4.3.3).
 		 */
 		String applyTo(String answer) {
+			return applyTo(answer, true);
+		}
+
+		/** Changes local credentials without replacing locally gathered candidates. */
+		String applyCredentialsTo(String answer) {
+			return applyTo(answer, false);
+		}
+
+		private String applyTo(String answer, boolean replace) {
 			List<List<String>> sections = sections(answer);
 			String group = first(sections.get(0), "a=group:BUNDLE");
 			String tag = group != null && group.trim().split("\\s+").length > 1
 					? group.trim().split("\\s+")[1]
 					: null;
-			boolean replace = !candidates.isEmpty();
 			boolean placed = false;
 			StringBuilder sdp = new StringBuilder();
 

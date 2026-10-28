@@ -42,7 +42,7 @@ import dev.onvoid.webrtc.internal.Timeouts;
  * ...
  * session.close();
  * }</pre>
- * The offer goes to the endpoint at once, and the candidates follow it by
+ * By default the offer goes to the endpoint at once, and candidates follow by
  * PATCH, gathered with the STUN and TURN servers the endpoint names. The
  * session's future completes once the peer is connected. The session
  * restarts ICE when the connection breaks, or by {@link Session#restartIce()}.
@@ -91,17 +91,21 @@ public final class Whip {
 
 		private final URI endpoint;
 
-		private final List<String[]> iceServers = new ArrayList<>();
+		private final PeerOptions.Builder options = PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL).configure(HttpSession::requireBundle);
 
 		private final List<LocalTrack> tracks = new ArrayList<>();
 
 		private String bearerToken;
+
+		private Gathering gathering = Gathering.TRICKLE;
 
 		private Duration timeout = Duration.ofSeconds(15);
 
 
 		private Builder(URI endpoint) {
 			this.endpoint = endpoint;
+			options.name("whip-" + endpoint.getHost());
 		}
 
 		/**
@@ -135,7 +139,37 @@ public final class Whip {
 		 * @return this builder.
 		 */
 		public Builder iceServer(String... urls) {
-			iceServers.add(urls.clone());
+			options.iceServer(urls);
+			return this;
+		}
+
+		/**
+		 * Configures an authenticated TURN server, overriding endpoint-provided
+		 * servers. Uses a distinct name so three URL arguments to iceServer
+		 * keep their original meaning.
+		 *
+		 * @param url the TURN server URL.
+		 * @param username the TURN username.
+		 * @param password the TURN password.
+		 * @return this builder.
+		 */
+		public Builder turnServer(String url, String username, String password) {
+			options.iceServer(url, username, password);
+			return this;
+		}
+
+		/**
+		 * Selects when the initial offer is sent. COMPLETE gathers candidates
+		 * before POST, up to the peer's gathering timeout (three seconds).
+		 * Later candidates may still follow by PATCH. Configure STUN/TURN
+		 * servers locally in that mode: links in the answer arrive too late
+		 * for the initial gathering. Subsequent ICE restarts still use PATCH.
+		 *
+		 * @param gathering TRICKLE (the default) or COMPLETE.
+		 * @return this builder.
+		 */
+		public Builder gathering(Gathering gathering) {
+			this.gathering = requireNonNull(gathering, "gathering");
 			return this;
 		}
 
@@ -187,15 +221,6 @@ public final class Whip {
 				}
 			}
 
-			PeerOptions.Builder options = PeerOptions.builder()
-					.name("whip-" + endpoint.getHost())
-					.negotiation(Negotiation.MANUAL)
-					.configure(HttpSession::requireBundle);
-
-			for (String[] urls : iceServers) {
-				options.iceServer(urls);
-			}
-
 			// The builder may change while the session starts; the session keeps
 			// what it started with, so that its DELETE is authorized like its POST.
 			String token = bearerToken;
@@ -207,7 +232,7 @@ public final class Whip {
 					peer.addTrack(track);
 				}
 
-				return HttpSession.start(rtc, peer, endpoint, token, limit, PROTOCOL, Session::new);
+				return HttpSession.start(rtc, peer, endpoint, token, limit, gathering, PROTOCOL, Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.

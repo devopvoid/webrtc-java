@@ -129,6 +129,15 @@ final class TestHttpEndpoint implements AutoCloseable {
 	/** Header fields an answer of 201 carries beyond Location, each ended by CRLF. */
 	volatile String answerHeaders = "";
 
+	/** Overrides the successful POST response for protocol validation tests. */
+	volatile String answerContentType = "application/sdp";
+
+	volatile int answerStatus = 201;
+
+	/** Holds a candidate PATCH response; called only for trickle fragments. */
+	volatile Consumer<Request> candidatePatch;
+
+
 	/**
 	 * Takes the fragment of an ICE restart, a PATCH with If-Match *, and
 	 * returns the endpoint's own, or is null for an endpoint that refuses ICE
@@ -138,6 +147,8 @@ final class TestHttpEndpoint implements AutoCloseable {
 
 	/** The status an ICE restart is answered with; with another than 200, the restart fails. */
 	volatile int iceRestartStatus = 200;
+
+	volatile String iceRestartContentType = HttpIce.FRAGMENT_TYPE;
 
 	private int restarts;
 
@@ -412,6 +423,9 @@ final class TestHttpEndpoint implements AutoCloseable {
 	private void handle(Socket socket) throws IOException {
 		InputStream in = socket.getInputStream();
 		String[] requestLine = readLine(in).split(" ");
+		if (requestLine.length < 2) {
+			return; // An aborted request can close before sending its head.
+		}
 		String authorization = null;
 		String ifMatch = null;
 		String contentType = null;
@@ -501,7 +515,8 @@ final class TestHttpEndpoint implements AutoCloseable {
 				answered++;
 			}
 
-			respond(out, "201 Created", "Location: " + location + "\r\n" + answerHeaders, answer);
+			respond(out, answerStatus + " Status", (location == null ? "" : "Location: " + location + "\r\n")
+					+ answerHeaders, answer, answerContentType);
 			return;
 		}
 
@@ -525,7 +540,7 @@ final class TestHttpEndpoint implements AutoCloseable {
 				restart = ++restarts;
 			}
 
-			String head = "HTTP/1.1 200 OK\r\nContent-Type: application/trickle-ice-sdpfrag\r\nETag: \"restart-"
+			String head = "HTTP/1.1 200 OK\r\nContent-Type: " + iceRestartContentType + "\r\nETag: \"restart-"
 					+ restart + "\"\r\nContent-Length: " + fragment.length + "\r\nConnection: close\r\n\r\n";
 
 			out.write(head.getBytes(StandardCharsets.US_ASCII));
@@ -537,8 +552,12 @@ final class TestHttpEndpoint implements AutoCloseable {
 		if (requestLine[0].equals("PATCH")) {
 			Consumer<String> answered = counterAnswered;
 			int patched = patchStatus;
+			if (HttpIce.FRAGMENT_TYPE.equals(contentType) && candidatePatch != null) {
+				candidatePatch.accept(new Request(requestLine[0], requestLine[1], authorization, ifMatch,
+						contentType, new String(body, StandardCharsets.UTF_8)));
+			}
 
-			if (answered != null && patched / 100 == 2) {
+			if (answered != null && patched / 100 == 2 && "application/sdp".equals(contentType)) {
 				answered.accept(new String(body, StandardCharsets.UTF_8));
 			}
 
@@ -569,7 +588,7 @@ final class TestHttpEndpoint implements AutoCloseable {
 
 		if (mode == Answer.CHUNKED || mode == Answer.UNTIL_CLOSE) {
 			String body = new String(bytes, StandardCharsets.UTF_8);
-			String head = "HTTP/1.1 201 Created\r\nLocation: " + location + "\r\nConnection: close\r\n";
+			String head = "HTTP/1.1 201 Created\r\nContent-Type: application/sdp\r\nLocation: " + location + "\r\nConnection: close\r\n";
 
 			if (mode == Answer.CHUNKED) {
 				int half = body.length() / 2;
@@ -651,8 +670,14 @@ final class TestHttpEndpoint implements AutoCloseable {
 	}
 
 	private static void respond(OutputStream out, String status, String headers, String body) throws IOException {
+		respond(out, status, headers, body, "application/sdp");
+	}
+
+	private static void respond(OutputStream out, String status, String headers, String body, String type)
+			throws IOException {
 		byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-		String head = "HTTP/1.1 " + status + "\r\nContent-Type: application/sdp\r\n" + headers
+		String head = "HTTP/1.1 " + status + "\r\n"
+				+ (type == null ? "" : "Content-Type: " + type + "\r\n") + headers
 				+ "Content-Length: " + bytes.length + "\r\nConnection: close\r\n\r\n";
 
 		out.write(head.getBytes(StandardCharsets.US_ASCII));

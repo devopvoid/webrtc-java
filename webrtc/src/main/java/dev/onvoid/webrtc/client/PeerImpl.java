@@ -500,7 +500,9 @@ final class PeerImpl implements Peer {
 	/**
 	 * Restarts ICE as WHIP and WHEP do, without a renegotiation: only the ICE
 	 * information of a new offer goes to the remote peer, and the remote
-	 * answer applied before stays, with the ICE information that comes back.
+	 * description keeps its offer/answer role, with the ICE information that
+	 * comes back. After a server counter-offer, the new local credentials are
+	 * applied in an answer to the updated remote offer.
 	 * An exchange that fails takes the new offer back, and the ICE session
 	 * before goes on.
 	 *
@@ -515,12 +517,41 @@ final class PeerImpl implements Peer {
 			RTCSessionDescription remote = connection.getRemoteDescription();
 
 			if (connection.getSignalingState() != RTCSignalingState.STABLE || remote == null
-					|| remote.sdpType != RTCSdpType.ANSWER) {
+					|| (remote.sdpType != RTCSdpType.ANSWER && remote.sdpType != RTCSdpType.OFFER)) {
 				return CompletableFuture.failedFuture(new NegotiationException("The peer " + name
-						+ " has no answer to its own offer to restart ICE with"));
+						+ " has no stable description to restart ICE with"));
 			}
 
 			connection.restartIce();
+
+			if (remote.sdpType == RTCSdpType.OFFER) {
+				// Keep the server's offerer role (including its DTLS role and
+				// media sections). Create an offer only to obtain fresh local
+				// ICE credentials; do not apply it or change signaling roles.
+				return createOffer().thenCompose(offer -> onControl(exchange.apply(offer))
+						.thenCompose(change -> setRemote(new RTCSessionDescription(
+								RTCSdpType.OFFER, change.apply(remote.sdp))))
+						.thenCompose(ignored -> {
+							// Reapplying the server's offer can create transceivers
+							// for media the original answer rejected.
+							stopTransceivers(midsNotReceived(remote.sdp));
+							return createAnswer();
+						})
+						.thenCompose(answer -> setLocal(new RTCSessionDescription(RTCSdpType.ANSWER,
+								HttpIce.Fragment.of(offer.sdp).applyCredentialsTo(answer.sdp)))))
+						.handle((applied, error) -> {
+							if (error == null) {
+								return CompletableFuture.<Void>completedFuture(null);
+							}
+							CompletableFuture<Void> failed = CompletableFuture.failedFuture(unwrap(error));
+							if (closed || connection.getSignalingState() != RTCSignalingState.HAVE_REMOTE_OFFER) {
+								return failed;
+							}
+							return setRemote(new RTCSessionDescription(RTCSdpType.ROLLBACK, ""))
+									.handle((ignored, rollbackError) -> null)
+									.thenCompose(ignored -> failed);
+						}).thenCompose(result -> result);
+			}
 
 			return createOffer()
 					.thenCompose(offer -> setLocal(offer).thenApply(ignored -> offer))

@@ -136,6 +136,169 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void completeOffersNeedNoPatch() throws Exception {
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.patchStatus = 405;
+			Whep.Session session = await(Whep.from(endpoint.uri()).gathering(Gathering.COMPLETE).play(rtc));
+			assertTrue(endpoint.request("POST /live/endpoint").body.contains("a=candidate:"));
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			assertEquals(160, (int) await(width));
+			await(session.closeAsync());
+			assertEquals(0, endpoint.count("PATCH /live/session/1"));
+		}
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			endpoint.patchStatus = 405;
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video)
+					.gathering(Gathering.COMPLETE).publish(rtc));
+			assertTrue(endpoint.request("POST /live/endpoint").body.contains("a=candidate:"));
+			await(session.closeAsync());
+			assertEquals(0, endpoint.count("PATCH /live/session/1"));
+		}
+	}
+
+	@Test
+	void completeOfferCanBeCountered() throws Exception {
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).gathering(Gathering.COMPLETE).play(rtc));
+			assertTrue(endpoint.request("POST /live/endpoint").body.contains("a=candidate:"));
+			await(session.restartIce());
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void turnCredentialsConfigured() throws Exception {
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerHeaders = "Link: <stun:127.0.0.2:3478>; rel=\"ice-server\"\r\n";
+			Whep.Session session = await(Whep.from(endpoint.uri())
+					.turnServer("turn:127.0.0.1:3478", "user", "password").play(rtc));
+			RTCIceServer server = await(session.peer().withNative(c -> c.getConfiguration().iceServers.get(0)));
+			assertEquals(Arrays.asList("turn:127.0.0.1:3478"), server.urls);
+			assertEquals("user", server.username);
+			assertEquals("password", server.password);
+			await(session.closeAsync());
+		}
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video)
+					.turnServer("turn:127.0.0.1:3478", "user", "password")
+					.iceServer("stun:127.0.0.2:3478", "stun:127.0.0.3:3478", "stun:127.0.0.4:3478")
+					.publish(rtc));
+			List<RTCIceServer> servers = await(session.peer().withNative(c -> c.getConfiguration().iceServers));
+			assertEquals("password", servers.get(0).password);
+			assertEquals(3, servers.get(1).urls.size());
+			assertNull(servers.get(1).username);
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void malformedSuccessDeleted() throws Exception {
+		// A known resource must still be deleted when its answer is unusable.
+		for (String type : Arrays.asList("text/plain", null)) {
+			try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+				endpoint.answerContentType = type;
+				ExecutionException failed = assertThrows(ExecutionException.class,
+						() -> await(Whep.from(endpoint.uri()).play(rtc)));
+				assertTrue(failed.getCause().getMessage().contains("Content-Type"));
+				endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+			}
+		}
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerStatus = 200;
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).play(rtc)));
+			assertTrue(failed.getCause().getMessage().contains("status 200"));
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+		}
+	}
+
+	@Test
+	void contentTypeParametersAccepted() throws Exception {
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerContentType = "Application/SDP; charset=utf-8";
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void restartRequiresFragmentType() throws Exception {
+		try (TestHttpEndpoint endpoint = restartingEndpoint(new ArrayList<>())) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			String previous = await(session.peer().withNative(c -> c.getLocalDescription().sdp));
+			endpoint.iceRestartContentType = "text/plain";
+			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.restartIce()));
+			assertTrue(failed.getCause().getMessage().contains("Content-Type"));
+			assertEquals(previous, await(session.peer().withNative(c -> c.getLocalDescription().sdp)));
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void sessionLocationRequired() throws Exception {
+		for (String location : Arrays.asList(null, "")) {
+			try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+				endpoint.location = location;
+				ExecutionException failed = assertThrows(ExecutionException.class,
+						() -> await(Whep.from(endpoint.uri()).play(rtc)));
+				assertTrue(failed.getCause().getMessage().contains("Location"));
+				assertEquals(0, endpoint.count("DELETE /live/session/1"));
+			}
+		}
+	}
+
+	@Test
+	void currentPreconditionFailureReported() throws Exception {
+		for (int status : new int[] { 412, 428 }) {
+			CompletableFuture<Throwable> error = new CompletableFuture<>();
+			WebRtc client = clientRuntime(builder -> builder.errorHandler(error::complete));
+			try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+				endpoint.patchStatus = status;
+				Whep.Session session = await(Whep.from(endpoint.uri()).play(client));
+				assertTrue(await(error).getMessage().contains("status " + status));
+				await(session.closeAsync());
+			}
+			finally {
+				client.close();
+			}
+		}
+	}
+
+	@Test
+	void stalePreconditionFailureIgnored() throws Exception {
+		for (int status : new int[] { 412, 428, 405 }) {
+			CountDownLatch release = new CountDownLatch(1);
+			try (TestHttpEndpoint endpoint = restartingEndpoint(new ArrayList<>())) {
+				// The first candidate PATCH fails only after a restart has
+				// installed a new generation. Its failure must not stop new candidates.
+				endpoint.patchStatus = status;
+				endpoint.candidatePatch = request -> {
+					if (!"\"restart-1\"".equals(request.ifMatch)) {
+						try {
+							assertTrue(release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+						}
+						catch (InterruptedException e) {
+							Thread.currentThread().interrupt();
+							throw new IllegalStateException(e);
+						}
+					}
+				};
+				Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+				endpoint.awaitRequest("PATCH /live/session/1", TIMEOUT_SECONDS);
+				await(session.restartIce());
+				endpoint.patchStatus = 204;
+				release.countDown();
+				endpoint.awaitRequest(r -> "\"restart-1\"".equals(r.ifMatch), "new candidates", TIMEOUT_SECONDS);
+				await(session.closeAsync());
+			}
+			finally {
+				release.countDown();
+			}
+		}
+	}
+
+	@Test
 	void refusedOfferLeavesNothing() throws Exception {
 		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 403)) {
 			ExecutionException failed = assertThrows(ExecutionException.class,
@@ -609,6 +772,62 @@ class HttpSessionTests extends ClientTestBase {
 
 			await(session.closeAsync());
 			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+	}
+
+	@Test
+	void counterOfferRestarted() throws Exception {
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>(),
+				video, rtc.media().customAudio("audio"))) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).bearerToken("secret")
+					.receive(MediaKind.VIDEO).play(rtc));
+			String before = await(session.peer().withNative(c -> c.getLocalDescription().sdp));
+			await(session.restartIce());
+			String after = await(session.peer().withNative(c -> c.getLocalDescription().sdp));
+			assertNotEquals(HttpIce.Fragment.of(before).ufrag, HttpIce.Fragment.of(after).ufrag);
+			assertTrue(after.contains("\nm=audio 0 "), after);
+			assertTrue(after.contains("a=recvonly"), after);
+			assertFalse(after.contains("a=sendrecv"), after);
+			assertEquals(RTCSdpType.OFFER, await(session.peer().withNative(c -> c.getRemoteDescription().sdpType)));
+			TestHttpEndpoint.Request restart = endpoint.awaitRequest(r -> "*".equals(r.ifMatch),
+					"ICE restart", TIMEOUT_SECONDS);
+			assertEquals("Bearer secret", restart.authorization);
+			assertEquals(HttpIce.FRAGMENT_TYPE, restart.contentType);
+			assertEquals(HttpIce.Fragment.parse(restart.body).ufrag, HttpIce.Fragment.of(after).ufrag);
+			endpoint.awaitRequest(r -> "\"restart-1\"".equals(r.ifMatch), "restart candidates", TIMEOUT_SECONDS);
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			assertEquals(160, (int) await(width));
+			// A second restart exercises the descriptions left by the first.
+			await(session.restartIce());
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void counterOfferRestartsAutomatically() throws Exception {
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			session.ice().stateChanged(PeerState.FAILED);
+			endpoint.awaitRequest(r -> "\"restart-1\"".equals(r.ifMatch), "restart candidates", TIMEOUT_SECONDS);
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void counterOfferRestartRefused() throws Exception {
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			String before = await(session.peer().withNative(c -> c.getLocalDescription().sdp));
+			endpoint.iceRestartStatus = 405;
+			assertThrows(ExecutionException.class, () -> await(session.restartIce()));
+			assertEquals(before, await(session.peer().withNative(c -> c.getLocalDescription().sdp)));
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			assertEquals(160, (int) await(width));
+			endpoint.iceRestartStatus = 200;
+			await(session.restartIce());
+			await(session.closeAsync());
 		}
 	}
 
@@ -1148,6 +1367,25 @@ class HttpSessionTests extends ClientTestBase {
 				throw new IllegalStateException(e);
 			}
 		});
+
+		endpoint.iceRestarts = fragment -> {
+			try {
+				String previous = await(server[0].withNative(c -> c.getRemoteDescription().sdp));
+				await(server[0].withNative(connection -> {
+					connection.restartIce();
+					return null;
+				}));
+				String offer = await(server[0].negotiator().createOffer(Gathering.COMPLETE)).sdp;
+				await(server[0].negotiator().applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER,
+						HttpIce.Fragment.parse(fragment).applyTo(previous))));
+				StringBuilder own = new StringBuilder(HttpIce.Fragment.of(offer).text);
+				HttpIce.Fragment.parse(offer).candidates.forEach(candidate -> own.append(candidate).append("\r\n"));
+				return own.append("a=end-of-candidates\r\n").toString();
+			}
+			catch (Exception e) {
+				throw new IllegalStateException(e);
+			}
+		};
 
 		return endpoint;
 	}
