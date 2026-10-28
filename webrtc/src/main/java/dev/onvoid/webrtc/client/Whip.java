@@ -22,6 +22,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -104,7 +106,8 @@ public final class Whip {
 
 		/**
 		 * @param track a track of the runtime to publish. Tracks share one
-		 *              stream, so the server keeps audio and video in sync.
+		 *              stream, so the server keeps audio and video in sync,
+		 *              which holds one audio and one video track at most.
 		 *
 		 * @return this builder.
 		 */
@@ -160,7 +163,8 @@ public final class Whip {
 		 *
 		 * @throws IllegalStateException    if no track was given.
 		 * @throws IllegalArgumentException if a track was not created by the
-		 *                                  runtime.
+		 *                                  runtime, or two tracks are of the
+		 *                                  same kind.
 		 */
 		public CompletableFuture<Session> publish(WebRtc rtc) {
 			requireNonNull(rtc, "rtc");
@@ -170,15 +174,23 @@ public final class Whip {
 			}
 
 			// Before the peer exists, so that a wrong track leaves nothing behind.
+			Set<MediaKind> kinds = EnumSet.noneOf(MediaKind.class);
+
 			for (LocalTrack track : tracks) {
 				if (!(track instanceof LocalTrackImpl) || ((LocalTrackImpl) track).rtc != rtc) {
 					throw new IllegalArgumentException("The track " + track + " was not created by the runtime");
+				}
+				if (!kinds.add(track.kind())) {
+					// RFC 9725, 4.4.2: one stream, with one track of each kind.
+					throw new IllegalArgumentException("WHIP publishes at most one "
+							+ track.kind().name().toLowerCase(Locale.ROOT) + " track, got another: " + track);
 				}
 			}
 
 			PeerOptions.Builder options = PeerOptions.builder()
 					.name("whip-" + endpoint.getHost())
-					.negotiation(Negotiation.MANUAL);
+					.negotiation(Negotiation.MANUAL)
+					.configure(HttpSession::requireBundle);
 
 			for (String[] urls : iceServers) {
 				options.iceServer(urls);

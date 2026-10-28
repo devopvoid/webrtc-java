@@ -39,6 +39,8 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import dev.onvoid.webrtc.RTCBundlePolicy;
+import dev.onvoid.webrtc.RTCConfiguration;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
@@ -273,7 +275,7 @@ abstract class HttpSession implements AutoCloseable {
 		});
 
 		peer.offer()
-				.thenCompose(offer -> post(offerRequest, endpoint, offer.sdp, protocol, resource)
+				.thenCompose(offer -> post(offerRequest, endpoint, withRtcpMuxOnly(offer.sdp), protocol, resource)
 						.whenComplete((reply, error) -> {
 							if (finished.get()) {
 								// The session ended while the offer was out,
@@ -400,7 +402,8 @@ abstract class HttpSession implements AutoCloseable {
 						resource.set(reply.session);
 					}
 
-					return answerRequest.send("application/sdp", answer.sdp.getBytes(StandardCharsets.UTF_8), 0,
+					return answerRequest.send("application/sdp",
+							withRtcpMuxOnly(answer.sdp).getBytes(StandardCharsets.UTF_8), 0,
 							head -> { }).handle((response, error) -> {
 								if (error != null) {
 									throw new WebRtcException("Sending the answer to " + reply.session + " failed: "
@@ -630,6 +633,56 @@ abstract class HttpSession implements AutoCloseable {
 		}
 
 		return resource;
+	}
+
+	/**
+	 * Bundles all media on one transport, as RFC 9725 asks (4.4.1), so that
+	 * only the m-line that tags the BUNDLE group gathers candidates, the ones
+	 * that go to the session.
+	 */
+	static void requireBundle(RTCConfiguration config) {
+		config.bundlePolicy = RTCBundlePolicy.MAX_BUNDLE;
+	}
+
+	/**
+	 * Marks each m-line that multiplexes RTP and RTCP as rtcp-mux-only, as RFC
+	 * 9725 asks of what a client sends (4.4.1). WebRTC multiplexes them anyway,
+	 * by {@code RTCRtcpMuxPolicy.REQUIRE}, but does not say so; only the
+	 * description that goes out says it, the one applied stays as WebRTC made
+	 * it.
+	 *
+	 * @param sdp a description WebRTC made.
+	 *
+	 * @return the description with the attribute, where it was missing.
+	 */
+	static String withRtcpMuxOnly(String sdp) {
+		String[] lines = sdp.split("\r?\n", -1);
+		StringBuilder marked = new StringBuilder(sdp.length() + 64);
+		boolean present = false;
+
+		for (int i = 0; i < lines.length; i++) {
+			String line = lines[i];
+
+			if (line.startsWith("m=")) {
+				present = false;
+
+				for (int j = i + 1; j < lines.length && !lines[j].startsWith("m="); j++) {
+					present |= lines[j].equals("a=rtcp-mux-only");
+				}
+			}
+
+			marked.append(line);
+
+			if (i < lines.length - 1) {
+				marked.append("\r\n");
+			}
+			if (line.equals("a=rtcp-mux") && !present) {
+				marked.append("a=rtcp-mux-only\r\n");
+				present = true;
+			}
+		}
+
+		return marked.toString();
 	}
 
 	static URI checkEndpoint(URI endpoint) {
