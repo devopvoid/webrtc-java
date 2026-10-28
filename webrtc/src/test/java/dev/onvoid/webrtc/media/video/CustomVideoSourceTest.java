@@ -271,6 +271,56 @@ class CustomVideoSourceTest extends TestBase {
         clock.dispose();
     }
 
+    @Test
+    void pushFrameAfterClockDisposed() {
+        // The source shares its clock, so disposing the Java clock first must
+        // leave the native one alive for the source, with and without a
+        // capture time from the caller.
+        SyncClock clock = new SyncClock();
+        CustomVideoSource sourceWithClock = new CustomVideoSource(clock);
+
+        clock.dispose();
+
+        VideoTrack videoTrack = factory.createVideoTrack("videoTrack", sourceWithClock);
+
+        final List<Long> timestamps = new ArrayList<>();
+
+        VideoTrackSink sink = frame -> timestamps.add(frame.timestampNs);
+
+        videoTrack.addSink(sink);
+
+        long[] beforeUs = new long[2];
+        long[] afterUs = new long[2];
+
+        for (int i = 0; i < 2; i++) {
+            NativeI420Buffer buffer = NativeI420Buffer.allocate(320, 240);
+            VideoFrame frame = new VideoFrame(buffer, 0);
+
+            beforeUs[i] = SyncClock.currentTimeUs();
+
+            if (i == 0) {
+                sourceWithClock.pushFrame(frame);
+            }
+            else {
+                sourceWithClock.pushFrame(frame, beforeUs[i]);
+            }
+
+            afterUs[i] = SyncClock.currentTimeUs();
+
+            frame.release();
+        }
+
+        assertEquals(2, timestamps.size(), "Not every frame reached the sink");
+
+        for (int i = 0; i < 2; i++) {
+            assertPushedBetween(beforeUs[i], afterUs[i], timestamps.get(i));
+        }
+
+        videoTrack.removeSink(sink);
+        videoTrack.dispose();
+        sourceWithClock.dispose();
+    }
+
     private static void assertPushedBetween(long beforeUs, long afterUs, long timestampNs) {
         long timestampUs = timestampNs / 1000;
 

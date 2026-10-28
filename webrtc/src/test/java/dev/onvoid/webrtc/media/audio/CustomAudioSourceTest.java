@@ -240,6 +240,35 @@ class CustomAudioSourceTest extends TestBase {
         clock.dispose();
     }
 
+    @Test
+    void pushAudioAfterClockDisposed() {
+        // The source shares its clock, so disposing the Java clock first must
+        // leave the native one alive for as long as the source holds it.
+        SyncClock clock = new SyncClock();
+        CustomAudioSource sourceWithClock = new CustomAudioSource(clock);
+
+        clock.dispose();
+
+        AudioTrack audioTrack = factory.createAudioTrack("audioTrack", sourceWithClock);
+
+        final AtomicInteger chunksReceived = new AtomicInteger(0);
+        AudioTrackSink testSink = (data, bits, rate, chans, frames) -> chunksReceived.incrementAndGet();
+
+        audioTrack.addSink(testSink);
+
+        byte[] audioData = new byte[480 * 2 * 2]; // 10ms of 48kHz stereo 16-bit audio
+
+        for (int i = 0; i < 3; i++) {
+            sourceWithClock.pushAudio(audioData, 16, 48000, 2, 480);
+        }
+
+        assertEquals(3, chunksReceived.get(), "Not every chunk reached the sink");
+
+        audioTrack.removeSink(testSink);
+        audioTrack.dispose();
+        sourceWithClock.dispose();
+    }
+
     private void testAudioFormat(int bitsPerSample, int sampleRate, int channels, int frameCount) {
         AudioTrack audioTrack = factory.createAudioTrack("audioTrack", customAudioSource);
 

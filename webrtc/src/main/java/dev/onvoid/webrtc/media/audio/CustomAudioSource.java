@@ -56,6 +56,8 @@ public class CustomAudioSource extends AudioTrackSource {
 
 	/**
 	 * Constructs a new CustomAudioSource instance with a specified SyncClock.
+	 * The source shares the clock, which may therefore be disposed before
+	 * this source.
 	 *
 	 * @param clock The SyncClock to use for timing and synchronization.
 	 */
