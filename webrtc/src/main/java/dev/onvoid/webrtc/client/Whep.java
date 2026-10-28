@@ -40,8 +40,10 @@ import dev.onvoid.webrtc.internal.Timeouts;
  * ...
  * session.close();
  * }</pre>
- * The offer goes to the endpoint with all local candidates, as WHEP servers
- * expect, and the session's future completes once the peer is connected.
+ * The offer goes to the endpoint at once, and the candidates follow it by
+ * PATCH, gathered with the STUN and TURN servers the endpoint names. The
+ * session's future completes once the peer is connected. The session
+ * restarts ICE when the connection breaks, or by {@link Session#restartIce()}.
  * {@link Peer#onTrack} hands over tracks that arrived before a handler was
  * added, so registering it after the future completed misses none.
  *
@@ -77,8 +79,8 @@ public final class Whep {
 	/** A stream received over WHEP. Closing it ends the session on the server. */
 	public static final class Session extends HttpSession {
 
-		Session(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout) {
-			super(rtc, peer, resource, bearerToken, timeout);
+		Session(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout, HttpIce ice) {
+			super(rtc, peer, resource, bearerToken, timeout, ice);
 		}
 	}
 
@@ -114,8 +116,8 @@ public final class Whep {
 		}
 
 		/**
-		 * @param urls a STUN or TURN server without credentials. The endpoint
-		 *             usually names its own in its answer.
+		 * @param urls a STUN or TURN server without credentials. Servers given
+		 *             here replace those the endpoint names in its answer.
 		 *
 		 * @return this builder.
 		 */

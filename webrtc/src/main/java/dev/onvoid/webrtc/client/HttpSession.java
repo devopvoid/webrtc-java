@@ -26,6 +26,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -38,6 +39,7 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.internal.Timeouts;
@@ -72,17 +74,25 @@ abstract class HttpSession implements AutoCloseable {
 
 	private final WebRtc rtc;
 
+	/** The ICE of the session, or null for a session made without. */
+	private final HttpIce ice;
+
 	private final AtomicBoolean closing = new AtomicBoolean();
 
 	private final CompletableFuture<Void> closed = new CompletableFuture<>();
 
 
-	HttpSession(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout) {
+	HttpSession(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout, HttpIce ice) {
 		this.rtc = rtc;
 		this.peer = peer;
 		this.resource = resource;
 		this.bearerToken = bearerToken;
 		this.timeout = timeout;
+		this.ice = ice;
+
+		if (ice != null) {
+			ice.watch();
+		}
 	}
 
 	/**
@@ -101,6 +111,13 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
+	 * @return the ICE of the session, or null.
+	 */
+	HttpIce ice() {
+		return ice;
+	}
+
+	/**
 	 * Deletes the session's resource on the server, which frees what the
 	 * server holds for it, and closes the peer. Both start at once, so that a
 	 * slow server does not keep the peer open. The deletion takes at most the
@@ -114,6 +131,10 @@ abstract class HttpSession implements AutoCloseable {
 	 */
 	public CompletableFuture<Void> closeAsync() {
 		if (closing.compareAndSet(false, true)) {
+			if (ice != null) {
+				ice.close();
+			}
+
 			CompletableFuture<Throwable> peerClosed = peer.closeAsync().handle((ignored, error) -> error);
 			CompletableFuture<WebRtcException> deleted = discard(rtc, resource, bearerToken, timeout);
 
@@ -132,6 +153,26 @@ abstract class HttpSession implements AutoCloseable {
 		}
 
 		return ClientFuture.copyOf(closed);
+	}
+
+	/**
+	 * Restarts ICE, as after the network changed: the peer gathers new
+	 * candidates, and only the ICE information goes to the session, by PATCH,
+	 * as WHIP and WHEP do; the media go on as negotiated. The session restarts
+	 * ICE by itself too, when the connection fails or stays disconnected for
+	 * two seconds, up to three times in a row without success.
+	 *
+	 * @return a future that completes once the new ICE information of both
+	 * sides is applied, or fails, among others when the session takes no ICE
+	 * restarts or answered the offer with one of its own. The ICE session
+	 * before then goes on.
+	 */
+	public CompletableFuture<Void> restartIce() {
+		CompletableFuture<Void> restarted = ice != null
+				? ice.restart()
+				: CompletableFuture.failedFuture(new WebRtcException("The session has no ICE to restart"));
+
+		return ClientFuture.copyOf(restarted);
 	}
 
 	/**
@@ -159,8 +200,9 @@ abstract class HttpSession implements AutoCloseable {
 	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
 			String bearerToken, Duration timeout, Protocol protocol, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
+		HttpIce ice = new HttpIce(rtc, rtc.httpClient(bearerToken != null), peer, bearerToken, timeout);
 		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, protocol,
-				abandoned).thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout)),
+				ice, abandoned).thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout, ice)),
 				HttpSession::close);
 
 		// Once the session was handed out, this finds the negotiation finished.
@@ -170,18 +212,22 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
-	 * Negotiates a manual peer over HTTP: creates the offer with all candidates,
-	 * posts it, applies the answer and waits until the peer is connected. An
-	 * endpoint that counters the offer, as WHEP allows, gets the answer to its
-	 * own offer instead.
+	 * Negotiates a manual peer over HTTP: creates the offer and posts it at
+	 * once, without candidates, as RFC 9725 recommends with Trickle ICE. Only
+	 * then is the offer applied, with the STUN and TURN servers the endpoint
+	 * named, and the candidates it gathers go to the session by PATCH. The
+	 * answer is applied, and the future completes once the peer is connected.
+	 * An endpoint that counters the offer, as WHEP allows, gets the answer to
+	 * its own offer instead, with all candidates.
 	 *
+	 * @param ice       the ICE of the session once the offer is answered.
 	 * @param abandoned completes when no one waits for the session anymore,
 	 *                  which then ends as if it had failed.
 	 *
 	 * @return a future with the resource the server named, or null.
 	 */
 	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String bearerToken,
-			Duration timeout, Protocol protocol, CompletableFuture<?> abandoned) {
+			Duration timeout, Protocol protocol, HttpIce ice, CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
 		long started = System.nanoTime();
 		// The resource the server created. Whoever takes it out owns it: the
@@ -207,6 +253,7 @@ abstract class HttpSession implements AutoCloseable {
 			// Ends a request still out, whose answer would only meet a closed
 			// peer.
 			request.get().abort();
+			ice.close();
 			// Reported before the resource is deleted, which may take as long
 			// as the timeout again.
 			peer.close();
@@ -225,7 +272,7 @@ abstract class HttpSession implements AutoCloseable {
 			fail.accept(new CancellationException("The session with " + endpoint + " was abandoned"));
 		});
 
-		peer.negotiator().createOffer(Gathering.COMPLETE)
+		peer.offer()
 				.thenCompose(offer -> post(offerRequest, endpoint, offer.sdp, protocol, resource)
 						.whenComplete((reply, error) -> {
 							if (finished.get()) {
@@ -234,19 +281,33 @@ abstract class HttpSession implements AutoCloseable {
 								// then has no one else to delete it.
 								discard(rtc, resource.getAndSet(null), bearerToken, timeout);
 							}
+						})
+						.thenCompose(reply -> peer.useIceServers(reply.iceServers).handle((used, error) -> {
+							if (error != null) {
+								// Gathered without them, as if the endpoint had
+								// named none.
+								rtc.reportError(PeerImpl.unwrap(error));
+							}
+
+							return reply;
 						}))
-				.thenCompose(reply -> {
-					if (!reply.counterOffer) {
-						return peer.negotiator().applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, reply.sdp));
-					}
+						.thenCompose(reply -> {
+							if (!reply.counterOffer) {
+								// Before the offer is applied, which starts the
+								// gathering of the candidates that go there.
+								ice.attach(resource.get(), reply.etag, offer.sdp);
 
-					// The rest of the session's time, which the answer has.
-					Duration left = timeout.minusNanos(System.nanoTime() - started);
+								return peer.applyLocal(offer).thenCompose(applied -> peer.negotiator()
+										.applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, reply.sdp)));
+							}
 
-					return answerCounterOffer(rtc, client, peer, reply, bearerToken,
-							left.isNegative() || left.isZero() ? Duration.ofNanos(1) : left, resource, request,
-							finished);
-				})
+							// The rest of the session's time, which the answer has.
+							Duration left = timeout.minusNanos(System.nanoTime() - started);
+
+							return answerCounterOffer(rtc, client, peer, reply, bearerToken,
+									left.isNegative() || left.isZero() ? Duration.ofNanos(1) : left, resource,
+									request, finished);
+						}))
 				.thenCompose(applied -> peer.whenConnected())
 				.whenComplete((connected, error) -> {
 					deadline.cancel(false);
@@ -284,7 +345,7 @@ abstract class HttpSession implements AutoCloseable {
 						error);
 			}
 			if (response.status == 201 || response.status == 200) {
-				return new Reply(response.body, false, null, 0);
+				return new Reply(response.body, false, null, 0, response);
 			}
 			if (protocol.counterOffers && isCounterOffer(response)) {
 				URI session = resourceOf(response.uri, response.header("Location"));
@@ -295,7 +356,7 @@ abstract class HttpSession implements AutoCloseable {
 				}
 
 				return new Reply(response.body, true, session,
-						counterOfferExpiry(response.header("Content-Type"), System.currentTimeMillis()));
+						counterOfferExpiry(response.header("Content-Type"), System.currentTimeMillis()), response);
 			}
 
 			String body = response.body;
@@ -440,12 +501,20 @@ abstract class HttpSession implements AutoCloseable {
 		/** Until when a counter-offer can be answered. */
 		final long validUntil;
 
+		/** The entity-tag of the ICE session, or null. */
+		final String etag;
 
-		Reply(String sdp, boolean counterOffer, URI session, long validUntil) {
+		/** The STUN and TURN servers the endpoint named. */
+		final List<RTCIceServer> iceServers;
+
+
+		Reply(String sdp, boolean counterOffer, URI session, long validUntil, HttpCall.Response response) {
 			this.sdp = sdp;
 			this.counterOffer = counterOffer;
 			this.session = session;
 			this.validUntil = validUntil;
+			this.etag = response.header("ETag");
+			this.iceServers = HttpIce.iceServers(response.headers.allValues("Link"));
 		}
 	}
 
@@ -458,7 +527,7 @@ abstract class HttpSession implements AutoCloseable {
 	 */
 	interface Factory<S extends HttpSession> {
 
-		S create(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout);
+		S create(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout, HttpIce ice);
 	}
 
 	/**

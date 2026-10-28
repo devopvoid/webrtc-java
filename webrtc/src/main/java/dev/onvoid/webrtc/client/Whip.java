@@ -40,8 +40,10 @@ import dev.onvoid.webrtc.internal.Timeouts;
  * ...
  * session.close();
  * }</pre>
- * The offer goes to the endpoint with all local candidates, as WHIP servers
- * expect, and the session's future completes once the peer is connected.
+ * The offer goes to the endpoint at once, and the candidates follow it by
+ * PATCH, gathered with the STUN and TURN servers the endpoint names. The
+ * session's future completes once the peer is connected. The session
+ * restarts ICE when the connection breaks, or by {@link Session#restartIce()}.
  * Closing the session ends it on the server; the tracks stay open.
  *
  * @see <a href="https://www.rfc-editor.org/rfc/rfc9725">RFC 9725: WHIP</a>
@@ -75,8 +77,8 @@ public final class Whip {
 	/** Tracks published over WHIP. Closing it ends the session on the server. */
 	public static final class Session extends HttpSession {
 
-		Session(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout) {
-			super(rtc, peer, resource, bearerToken, timeout);
+		Session(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout, HttpIce ice) {
+			super(rtc, peer, resource, bearerToken, timeout, ice);
 		}
 	}
 
@@ -124,7 +126,8 @@ public final class Whip {
 		}
 
 		/**
-		 * @param urls a STUN or TURN server without credentials.
+		 * @param urls a STUN or TURN server without credentials. Servers given
+		 *             here replace those the endpoint names in its answer.
 		 *
 		 * @return this builder.
 		 */
