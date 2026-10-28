@@ -19,8 +19,13 @@ package dev.onvoid.webrtc.client;
 import static java.util.Objects.requireNonNull;
 
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -30,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
@@ -44,6 +51,16 @@ abstract class HttpSession implements AutoCloseable {
 
 	/** The largest answer read; an SDP answer is a few kilobytes. */
 	private static final int MAX_BODY = 1 << 20;
+
+	/** The status of a counter-offer, whose body is an offer to answer. */
+	private static final Set<Integer> COUNTER_OFFER = Set.of(406);
+
+	/** How long a counter-offer can be answered if it does not say. */
+	private static final long COUNTER_OFFER_VALIDITY_MILLIS = 30_000;
+
+	/** The "valid-until" parameter of a counter-offer's Content-Type. */
+	private static final Pattern VALID_UNTIL = Pattern.compile(";\\s*valid-until\\s*=\\s*\"?([^\";]+)\"?",
+			Pattern.CASE_INSENSITIVE);
 
 	private final Peer peer;
 
@@ -130,21 +147,19 @@ abstract class HttpSession implements AutoCloseable {
 	 * connected. A caller that stops waiting, by cancelling the future or
 	 * completing it itself, ends the negotiation, and a session made too late
 	 * for the future is closed: either way the peer is closed and what the
-	 * server named is deleted. An offer still out is cut off then, so that
-	 * a server that does not answer holds no thread; what it creates for an
-	 * offer it had yet to answer is left for it to time out.
+	 * server named is deleted. A request still out is cut off then, so that
+	 * a server that does not answer holds no connection; what it creates for
+	 * an offer it had yet to answer is left for it to time out.
 	 *
-	 * @param retried the statuses of an answer to the offer, together with a
-	 *                Retry-After header field, after which the offer is sent
-	 *                again, as long as the wait fits within the timeout.
-	 * @param factory makes the session of the connected peer.
+	 * @param protocol what WHIP or WHEP asks beyond the offer and its answer.
+	 * @param factory  makes the session of the connected peer.
 	 *
 	 * @return the future handed to the application.
 	 */
 	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
-			String bearerToken, Duration timeout, Set<Integer> retried, Factory<S> factory) {
+			String bearerToken, Duration timeout, Protocol protocol, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
-		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, retried,
+		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, protocol,
 				abandoned).thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout)),
 				HttpSession::close);
 
@@ -156,24 +171,32 @@ abstract class HttpSession implements AutoCloseable {
 
 	/**
 	 * Negotiates a manual peer over HTTP: creates the offer with all candidates,
-	 * posts it, applies the answer and waits until the peer is connected.
+	 * posts it, applies the answer and waits until the peer is connected. An
+	 * endpoint that counters the offer, as WHEP allows, gets the answer to its
+	 * own offer instead.
 	 *
 	 * @param abandoned completes when no one waits for the session anymore,
 	 *                  which then ends as if it had failed.
 	 *
 	 * @return a future with the resource the server named, or null.
 	 */
-	private static CompletableFuture<URI> negotiate(WebRtc rtc, Peer peer, URI endpoint, String bearerToken,
-			Duration timeout, Set<Integer> retried, CompletableFuture<?> abandoned) {
+	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String bearerToken,
+			Duration timeout, Protocol protocol, CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
+		long started = System.nanoTime();
 		// The resource the server created. Whoever takes it out owns it: the
 		// session that connected, or whoever deletes it.
 		AtomicReference<URI> resource = new AtomicReference<>();
 		AtomicBoolean finished = new AtomicBoolean();
+		HttpClient client = rtc.httpClient(bearerToken != null);
 		// Made now, so that it ends with the session's deadline at the latest,
 		// however long the offer takes.
-		HttpCall offerRequest = new HttpCall(rtc.httpClient(bearerToken != null), endpoint, "POST", bearerToken,
-				timeout).followRedirects().retry(rtc.timer, retried);
+		HttpCall offerRequest = new HttpCall(client, endpoint, "POST", bearerToken, timeout)
+				.followRedirects()
+				.retry(rtc.timer, protocol.retried)
+				.readBodies(protocol.counterOffers ? COUNTER_OFFER : Collections.emptySet());
+		// The request under way, which the end of the session cuts off.
+		AtomicReference<HttpCall> request = new AtomicReference<>(offerRequest);
 
 		// Either way the session ends, once: connected, failed or timed out.
 		Consumer<Throwable> fail = error -> {
@@ -181,9 +204,9 @@ abstract class HttpSession implements AutoCloseable {
 				return;
 			}
 
-			// Ends an offer still out, whose answer would only meet a closed
+			// Ends a request still out, whose answer would only meet a closed
 			// peer.
-			offerRequest.abort();
+			request.get().abort();
 			// Reported before the resource is deleted, which may take as long
 			// as the timeout again.
 			peer.close();
@@ -203,8 +226,8 @@ abstract class HttpSession implements AutoCloseable {
 		});
 
 		peer.negotiator().createOffer(Gathering.COMPLETE)
-				.thenCompose(offer -> post(offerRequest, endpoint, offer.sdp, resource)
-						.whenComplete((answer, error) -> {
+				.thenCompose(offer -> post(offerRequest, endpoint, offer.sdp, protocol, resource)
+						.whenComplete((reply, error) -> {
 							if (finished.get()) {
 								// The session ended while the offer was out,
 								// after the server named what it created, which
@@ -212,8 +235,18 @@ abstract class HttpSession implements AutoCloseable {
 								discard(rtc, resource.getAndSet(null), bearerToken, timeout);
 							}
 						}))
-				.thenCompose(answer -> peer.negotiator()
-						.applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, answer)))
+				.thenCompose(reply -> {
+					if (!reply.counterOffer) {
+						return peer.negotiator().applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, reply.sdp));
+					}
+
+					// The rest of the session's time, which the answer has.
+					Duration left = timeout.minusNanos(System.nanoTime() - started);
+
+					return answerCounterOffer(rtc, client, peer, reply, bearerToken,
+							left.isNegative() || left.isZero() ? Duration.ofNanos(1) : left, resource, request,
+							finished);
+				})
 				.thenCompose(applied -> peer.whenConnected())
 				.whenComplete((connected, error) -> {
 					deadline.cancel(false);
@@ -230,12 +263,13 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
-	 * Posts the offer and returns the answer. The resource the server names is
-	 * set as soon as it is known, so that it is deleted even if reading the
-	 * answer fails. The request follows the redirects WHIP and WHEP allow, and
-	 * the resource is resolved against the endpoint that answered.
+	 * Posts the offer and returns what the endpoint answered with. The
+	 * resource the server names with an answer is set as soon as it is known,
+	 * so that it is deleted even if reading the answer fails. The request
+	 * follows the redirects WHIP and WHEP allow, and the resource is resolved
+	 * against the endpoint that answered.
 	 */
-	private static CompletableFuture<String> post(HttpCall request, URI endpoint, String sdp,
+	private static CompletableFuture<Reply> post(HttpCall request, URI endpoint, String sdp, Protocol protocol,
 			AtomicReference<URI> resource) {
 		return request.send("application/sdp", sdp.getBytes(StandardCharsets.UTF_8), MAX_BODY, head -> {
 			if (head.status == 201 || head.status == 200) {
@@ -249,14 +283,173 @@ abstract class HttpSession implements AutoCloseable {
 				throw new WebRtcException("Sending the offer to " + endpoint + " failed: " + error.getMessage(),
 						error);
 			}
-			if (response.status != 201 && response.status != 200) {
-				throw new WebRtcException("The endpoint " + endpoint + " answered the offer with status "
-						+ response.status + ": " + response.body);
+			if (response.status == 201 || response.status == 200) {
+				return new Reply(response.body, false, null, 0);
+			}
+			if (protocol.counterOffers && isCounterOffer(response)) {
+				URI session = resourceOf(response.uri, response.header("Location"));
+
+				if (session == null) {
+					throw new WebRtcException("The endpoint " + endpoint
+							+ " countered the offer without naming the session");
+				}
+
+				return new Reply(response.body, true, session,
+						counterOfferExpiry(response.header("Content-Type"), System.currentTimeMillis()));
 			}
 
-			return response.body;
+			String body = response.body;
+
+			if (body.length() > HttpCall.MAX_ERROR_BODY) {
+				body = body.substring(0, HttpCall.MAX_ERROR_BODY);
+			}
+
+			throw new WebRtcException("The endpoint " + endpoint + " answered the offer with status "
+					+ response.status + ": " + body);
 		});
 	}
+
+	/**
+	 * Answers the endpoint's own offer, which replaces the peer's, and sends
+	 * the answer to the session the endpoint named. The session is the
+	 * peer's to delete from the moment the answer goes out, since the server
+	 * creates it only then.
+	 *
+	 * @param timeout what is left of the session's timeout.
+	 */
+	private static CompletableFuture<Void> answerCounterOffer(WebRtc rtc, HttpClient client, PeerImpl peer,
+			Reply reply, String bearerToken, Duration timeout, AtomicReference<URI> resource,
+			AtomicReference<HttpCall> request, AtomicBoolean finished) {
+		return peer.answerInstead(new RTCSessionDescription(RTCSdpType.OFFER, reply.sdp), Gathering.COMPLETE)
+				.thenCompose(answer -> {
+					if (System.currentTimeMillis() > reply.validUntil) {
+						throw new WebRtcException("The counter-offer for " + reply.session
+								+ " expired before it was answered");
+					}
+
+					HttpCall answerRequest = new HttpCall(client, reply.session, "PATCH", bearerToken, timeout);
+					request.set(answerRequest);
+
+					if (finished.get()) {
+						// Ended meanwhile, by what may have aborted the request
+						// before.
+						answerRequest.abort();
+					}
+					else {
+						resource.set(reply.session);
+					}
+
+					return answerRequest.send("application/sdp", answer.sdp.getBytes(StandardCharsets.UTF_8), 0,
+							head -> { }).handle((response, error) -> {
+								if (error != null) {
+									throw new WebRtcException("Sending the answer to " + reply.session + " failed: "
+											+ error.getMessage(), error);
+								}
+								if (response.status / 100 != 2) {
+									throw new WebRtcException("The endpoint answered the answer for "
+											+ reply.session + " with status " + response.status + ": "
+											+ response.body);
+								}
+
+								return null;
+							});
+				});
+	}
+
+	/**
+	 * Tells a counter-offer from any other 406 answer, which WHEP asks to be
+	 * taken as an error: one has an SDP offer as its body.
+	 */
+	private static boolean isCounterOffer(HttpCall.Response response) {
+		String type = response.header("Content-Type");
+
+		if (response.status != 406 || type == null) {
+			return false;
+		}
+
+		String mediaType = type.split(";", 2)[0].trim();
+
+		return mediaType.equalsIgnoreCase("application/sdp") && response.body.startsWith("v=0")
+				&& response.body.contains("\nm=");
+	}
+
+	/**
+	 * Reads until when a counter-offer can be answered: the "valid-until"
+	 * parameter of its Content-Type, an HTTP date, or else 30 seconds after
+	 * it came, as WHEP says.
+	 *
+	 * @param contentType the Content-Type of the counter-offer.
+	 * @param nowMillis   the time it came, as {@link System#currentTimeMillis()}.
+	 *
+	 * @return the time, as {@link System#currentTimeMillis()}.
+	 */
+	static long counterOfferExpiry(String contentType, long nowMillis) {
+		Matcher validUntil = VALID_UNTIL.matcher(contentType != null ? contentType : "");
+
+		if (validUntil.find()) {
+			try {
+				return ZonedDateTime.parse(validUntil.group(1).trim(), DateTimeFormatter.RFC_1123_DATE_TIME)
+						.toInstant().toEpochMilli();
+			}
+			catch (DateTimeParseException e) {
+				// Not an HTTP date; as if there were none.
+			}
+		}
+
+		return nowMillis + COUNTER_OFFER_VALIDITY_MILLIS;
+	}
+
+	/**
+	 * What WHIP or WHEP asks of a session beyond the offer and its answer.
+	 */
+	static final class Protocol {
+
+		/**
+		 * The statuses of an answer to the offer, together with a Retry-After
+		 * header field, after which the offer is sent again, as long as the
+		 * wait fits within the timeout.
+		 */
+		final Set<Integer> retried;
+
+		/** Whether the endpoint may counter the offer with one of its own. */
+		final boolean counterOffers;
+
+
+		Protocol(Set<Integer> retried, boolean counterOffers) {
+			this.retried = retried;
+			this.counterOffers = counterOffers;
+		}
+	}
+
+
+
+	/**
+	 * What the endpoint answered the offer with: an answer, or an offer of its
+	 * own.
+	 */
+	private static final class Reply {
+
+		final String sdp;
+
+		/** Whether the SDP is the endpoint's offer, which replaces the peer's. */
+		final boolean counterOffer;
+
+		/** Where the session is once a counter-offer is answered. */
+		final URI session;
+
+		/** Until when a counter-offer can be answered. */
+		final long validUntil;
+
+
+		Reply(String sdp, boolean counterOffer, URI session, long validUntil) {
+			this.sdp = sdp;
+			this.counterOffer = counterOffer;
+			this.session = session;
+			this.validUntil = validUntil;
+		}
+	}
+
+
 
 	/**
 	 * Makes the session of a peer that connected.

@@ -103,6 +103,9 @@ final class HttpCall {
 
 	private Set<Integer> retryStatuses = Collections.emptySet();
 
+	/** Statuses other than 2xx whose body is read as that of a 2xx one. */
+	private Set<Integer> answerStatuses = Collections.emptySet();
+
 	/** The exchange under way, which an abort cancels. */
 	private CompletableFuture<?> exchange;
 
@@ -181,6 +184,20 @@ final class HttpCall {
 	HttpCall retry(ScheduledExecutorService timer, Set<Integer> statuses) {
 		this.retryTimer = timer;
 		this.retryStatuses = statuses;
+		return this;
+	}
+
+	/**
+	 * Reads the body of a response with one of the given statuses as that of
+	 * a 2xx one, up to the size {@link #send} is given, rather than only as
+	 * much as a message takes.
+	 *
+	 * @param statuses the statuses whose bodies are read in full.
+	 *
+	 * @return this request.
+	 */
+	HttpCall readBodies(Set<Integer> statuses) {
+		this.answerStatuses = statuses;
 		return this;
 	}
 
@@ -341,7 +358,7 @@ final class HttpCall {
 			Consumer<Response> onHead) {
 		int status = info.statusCode();
 		boolean redirect = isRedirect(status, info.headers().firstValue("Location").orElse(null));
-		boolean success = status / 100 == 2;
+		boolean success = status / 100 == 2 || answerStatuses.contains(status);
 		// A redirect's body is not read, and neither is an error's beyond what
 		// a message takes.
 		Body body = new Body(redirect ? 0 : success ? maxBody : MAX_ERROR_BODY, !success || redirect);

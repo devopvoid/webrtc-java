@@ -152,6 +152,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stop
 	}
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopImmediately
+(JNIEnv * env, jobject caller)
+{
+	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+	CHECK_HANDLE(transceiver);
+
+	// Unlike StopStandard, stopped() is true at once, so that an answer
+	// created next rejects the m-line rather than making it inactive.
+	transceiver->StopInternal();
+}
+
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopped
 (JNIEnv * env, jobject caller)
 {

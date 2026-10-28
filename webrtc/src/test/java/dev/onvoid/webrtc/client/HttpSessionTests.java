@@ -29,8 +29,13 @@ import java.net.URI;
 import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -331,6 +336,138 @@ class HttpSessionTests extends ClientTestBase {
 		finally {
 			client.close();
 		}
+	}
+
+	@Test
+	void counterOfferAnswered() throws Exception {
+		// The endpoint rejects the player's offer and makes its own, which the
+		// player answers by PATCH to the session the endpoint named.
+		List<String> answers = new CopyOnWriteArrayList<>();
+
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", answers)) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).bearerToken("secret").play(rtc));
+
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+
+			assertEquals(160, (int) await(width));
+			assertEquals(endpoint.uri().resolve("/live/session/1"), session.resource());
+			assertEquals("PATCH /live/session/1", endpoint.requests.get(1).toString());
+			assertEquals("Bearer secret", endpoint.requests.get(1).authorization);
+			// WHEP asks the player's answer to receive only.
+			assertTrue(answers.get(0).contains("a=recvonly"), answers.get(0));
+			assertFalse(answers.get(0).contains("a=sendrecv"), answers.get(0));
+			// With its candidates, gathered anew after the player's offer was
+			// taken back.
+			assertTrue(answers.get(0).contains("a=candidate"), answers.get(0));
+
+			await(session.closeAsync());
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+	}
+
+	@Test
+	void counterOfferMediaRejected() throws Exception {
+		// The endpoint offers audio and video; the player wants only video, and
+		// rejects the audio m-line, with port 0, as WHEP allows.
+		List<String> answers = new CopyOnWriteArrayList<>();
+		CustomAudio audio = rtc.media().customAudio("audio");
+
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", answers, video, audio)) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).receive(MediaKind.VIDEO).play(rtc));
+
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+
+			assertEquals(160, (int) await(width));
+			assertTrue(answers.get(0).contains("\nm=audio 0 "), answers.get(0));
+			assertFalse(answers.get(0).contains("\nm=video 0 "), answers.get(0));
+			// The handler, which takes every track as video, saw no audio.
+			assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void counterOfferWithoutWantedMediaFails() throws Exception {
+		// At least one audio or video m-line has to be accepted.
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).receive(MediaKind.AUDIO).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("none of the media"), failed.getCause().getMessage());
+			assertEquals(0, endpoint.count("PATCH /live/session/1"));
+		}
+	}
+
+	@Test
+	void counterOfferNeedsSdp() throws Exception {
+		// Any other 406 is an error, as WHEP says.
+		try (TestHttpEndpoint endpoint = counteringEndpoint("text/plain", new ArrayList<>())) {
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("406"), failed.getCause().getMessage());
+			assertEquals(0, endpoint.count("PATCH /live/session/1"));
+		}
+	}
+
+	@Test
+	void counterOfferRefusedForWhip() throws Exception {
+		// WHIP knows no counter-offers.
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whip.to(endpoint.uri()).track(video).publish(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("406"), failed.getCause().getMessage());
+			assertEquals(0, endpoint.count("PATCH /live/session/1"));
+		}
+	}
+
+	@Test
+	void expiredCounterOfferFails() throws Exception {
+		String expired = "application/sdp; valid-until=\"Wed, 09 Oct 2024 10:00:00 GMT\"";
+
+		try (TestHttpEndpoint endpoint = counteringEndpoint(expired, new ArrayList<>())) {
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("expired"), failed.getCause().getMessage());
+			// Never sent, so the server created no session to delete.
+			assertEquals(0, endpoint.count("PATCH /live/session/1"));
+			assertEquals(0, endpoint.count("DELETE /live/session/1"));
+		}
+	}
+
+	@Test
+	void refusedCounterAnswerDeletes() throws Exception {
+		// The session is the player's to delete once its answer went out.
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", new ArrayList<>())) {
+			endpoint.patchStatus = 400;
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("400"), failed.getCause().getMessage());
+			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+		}
+	}
+
+	@Test
+	void counterOfferExpiryRead() {
+		long now = 1_000_000_000_000L;
+		long date = ZonedDateTime.parse("Wed, 09 Oct 2024 10:00:00 GMT", DateTimeFormatter.RFC_1123_DATE_TIME)
+				.toInstant().toEpochMilli();
+
+		assertEquals(date, HttpSession.counterOfferExpiry(
+				"application/sdp; valid-until=\"Wed, 09 Oct 2024 10:00:00 GMT\"", now));
+		assertEquals(date, HttpSession.counterOfferExpiry(
+				"application/sdp;Valid-Until=Wed, 09 Oct 2024 10:00:00 GMT", now));
+		// Thirty seconds without one, or with one that is no date.
+		assertEquals(now + 30_000, HttpSession.counterOfferExpiry("application/sdp", now));
+		assertEquals(now + 30_000, HttpSession.counterOfferExpiry("application/sdp; valid-until=soon", now));
+		assertEquals(now + 30_000, HttpSession.counterOfferExpiry(null, now));
 	}
 
 	@Test
@@ -697,6 +834,48 @@ class HttpSessionTests extends ClientTestBase {
 				() -> HttpSession.resourceOf(endpoint, "http://media.example/session/1"));
 		assertThrows(WebRtcException.class,
 				() -> HttpSession.resourceOf(URI.create("http://media.example/whep"), "file:/etc/passwd"));
+	}
+
+	/**
+	 * An endpoint that counters every offer with one of its own, from a peer
+	 * that sends the video, and applies the answer a PATCH carries.
+	 *
+	 * @param contentType the Content-Type of the counter-offer.
+	 * @param answers     gets the answers.
+	 * @param tracks      what the endpoint sends; the video if none.
+	 */
+	private TestHttpEndpoint counteringEndpoint(String contentType, List<String> answers, LocalTrack... tracks)
+			throws Exception {
+		TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201);
+		Peer[] server = new Peer[1];
+
+		endpoint.counterOffers(() -> {
+			server[0] = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+
+			for (LocalTrack track : tracks.length > 0 ? tracks : new LocalTrack[] { video }) {
+				server[0].addTrack(track);
+			}
+
+			try {
+				return server[0].negotiator().createOffer(Gathering.COMPLETE)
+						.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).sdp;
+			}
+			catch (Exception e) {
+				throw new IllegalStateException(e);
+			}
+		}, contentType, answer -> {
+			answers.add(answer);
+
+			try {
+				server[0].negotiator().applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, answer))
+						.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			}
+			catch (Exception e) {
+				throw new IllegalStateException(e);
+			}
+		});
+
+		return endpoint;
 	}
 
 	/**

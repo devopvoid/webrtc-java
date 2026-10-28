@@ -51,10 +51,10 @@ public final class Whep {
 
 	/**
 	 * An endpoint under load answers 503, and one whose stream has yet to
-	 * start 409, both with Retry-After (draft-ietf-wish-whep-05, 4.7 and
-	 * 4.3.9).
+	 * start 409, both with Retry-After; and an endpoint may counter the offer
+	 * with one of its own (draft-ietf-wish-whep-05, 4.7, 4.3.9 and 4.3.2).
 	 */
-	private static final Set<Integer> RETRIED = Set.of(409, 503);
+	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(409, 503), true);
 
 
 	private Whep() {
@@ -180,7 +180,7 @@ public final class Whep {
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
-				return HttpSession.start(rtc, peer, endpoint, token, limit, RETRIED, Session::new);
+				return HttpSession.start(rtc, peer, endpoint, token, limit, PROTOCOL, Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.

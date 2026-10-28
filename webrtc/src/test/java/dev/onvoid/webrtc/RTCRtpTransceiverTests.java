@@ -2,7 +2,9 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
@@ -92,6 +94,36 @@ class RTCRtpTransceiverTests extends TestBase {
 		assertDoesNotThrow(secondSender::dispose);
 		assertDoesNotThrow(secondReceiver::dispose);
 		assertDoesNotThrow(transceiver::dispose);
+	}
+
+	@Test
+	void stopImmediatelyRejectsInAnswer() throws Exception {
+		// The answerer declines the audio of an offer of audio and video. With
+		// stop(), the answer would keep the audio, as inactive.
+		TestPeerConnection offerer = new TestPeerConnection(factory);
+
+		try {
+			offerer.getPeerConnection().addTransceiver(MediaType.AUDIO, new RTCRtpTransceiverInit()).dispose();
+			offerer.getPeerConnection().addTransceiver(MediaType.VIDEO, new RTCRtpTransceiverInit()).dispose();
+			connection.setRemoteDescription(offerer.createOffer());
+
+			for (RTCRtpTransceiver transceiver : connection.getPeerConnection().getTransceivers()) {
+				if ("0".equals(transceiver.getMid())) {
+					transceiver.stopImmediately();
+					assertTrue(transceiver.stopped());
+				}
+
+				transceiver.dispose();
+			}
+
+			String answer = connection.createAnswer().sdp;
+
+			assertTrue(answer.contains("m=audio 0 "), answer);
+			assertFalse(answer.contains("m=video 0 "), answer);
+		}
+		finally {
+			offerer.close();
+		}
 	}
 
 }
