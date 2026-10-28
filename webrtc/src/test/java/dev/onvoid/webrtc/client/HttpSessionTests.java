@@ -46,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
+import dev.onvoid.webrtc.RTCBundlePolicy;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
@@ -165,6 +166,62 @@ class HttpSessionTests extends ClientTestBase {
 		finally {
 			other.close();
 		}
+	}
+
+	@Test
+	void secondTrackOfKindRefused() throws Exception {
+		// RFC 9725, 4.4.2: one stream, with one track of each kind at most.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Builder whip = Whip.to(endpoint.uri()).track(video).track(rtc.media().customVideo("other"));
+
+			IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> whip.publish(rtc));
+
+			assertTrue(refused.getMessage().contains("at most one video track"), refused.getMessage());
+			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
+			assertTrue(endpoint.requests.isEmpty());
+		}
+	}
+
+	@Test
+	void offerBundledAndMuxed() throws Exception {
+		// RFC 9725, 4.4.1: max-bundle, and rtcp-mux-only in each m-line.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Session session = await(Whip.to(endpoint.uri())
+					.track(video)
+					.track(rtc.media().customAudio("audio"))
+					.publish(rtc));
+			String offer = endpoint.request("POST /live/endpoint").body;
+			RTCBundlePolicy policy = await(session.peer().withNative(connection ->
+					connection.getConfiguration().bundlePolicy));
+
+			assertEquals(RTCBundlePolicy.MAX_BUNDLE, policy);
+			assertEquals(2, offer.split("\r\na=rtcp-mux-only\r\n", -1).length - 1, offer);
+			assertEquals(2, offer.split("\r\nm=", -1).length - 1, offer);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void rtcpMuxOnlyMarked() {
+		String sdp = String.join("\r\n",
+				"v=0",
+				"a=group:BUNDLE 0 1 2",
+				"m=audio 9 UDP/TLS/RTP/SAVPF 111",
+				"a=mid:0",
+				"a=rtcp-mux",
+				"m=video 9 UDP/TLS/RTP/SAVPF 96",
+				"a=mid:1",
+				"a=rtcp-mux",
+				"a=rtcp-mux-only",
+				"m=application 9 UDP/DTLS/SCTP webrtc-datachannel",
+				"a=mid:2",
+				"");
+		String marked = HttpSession.withRtcpMuxOnly(sdp);
+
+		assertEquals(sdp.replace("a=mid:0\r\na=rtcp-mux\r\n", "a=mid:0\r\na=rtcp-mux\r\na=rtcp-mux-only\r\n"), marked);
+		// Once is enough.
+		assertEquals(marked, HttpSession.withRtcpMuxOnly(marked));
 	}
 
 	@Test
@@ -544,6 +601,7 @@ class HttpSessionTests extends ClientTestBase {
 			assertEquals("Bearer secret", endpoint.requests.get(1).authorization);
 			// WHEP asks the player's answer to receive only.
 			assertTrue(answers.get(0).contains("a=recvonly"), answers.get(0));
+			assertTrue(answers.get(0).contains("\r\na=rtcp-mux-only\r\n"), answers.get(0));
 			assertFalse(answers.get(0).contains("a=sendrecv"), answers.get(0));
 			// With its candidates, gathered anew after the player's offer was
 			// taken back.

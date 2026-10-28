@@ -172,7 +172,8 @@ public final class Whep {
 			PeerOptions.Builder options = PeerOptions.builder()
 					.name("whep-" + endpoint.getHost())
 					.negotiation(Negotiation.MANUAL)
-					.receive(receive.toArray(new MediaKind[0]));
+					.receive(receive.toArray(new MediaKind[0]))
+					.configure(HttpSession::requireBundle);
 
 			for (String[] urls : iceServers) {
 				options.iceServer(urls);
