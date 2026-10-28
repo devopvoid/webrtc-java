@@ -556,6 +556,9 @@ abstract class HttpSession implements AutoCloseable {
 		if ("https".equalsIgnoreCase(endpoint.getScheme()) && !"https".equalsIgnoreCase(scheme)) {
 			throw new WebRtcException("The endpoint " + endpoint + " named a resource without TLS: " + resource);
 		}
+		if (!"https".equalsIgnoreCase(scheme) && !HttpCall.isLoopback(resource.getHost())) {
+			throw new WebRtcException("The endpoint " + endpoint + " named a resource without TLS: " + resource);
+		}
 
 		return resource;
 	}
@@ -565,8 +568,11 @@ abstract class HttpSession implements AutoCloseable {
 
 		String scheme = endpoint.getScheme();
 
-		if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
-			throw new IllegalArgumentException("The endpoint must be an http or https URL, got " + endpoint);
+		boolean local = "http".equalsIgnoreCase(scheme) && HttpCall.isLoopback(endpoint.getHost());
+
+		if (!"https".equalsIgnoreCase(scheme) && !local) {
+			throw new IllegalArgumentException("The endpoint must be an https URL, or an http one on this machine, "
+					+ "such as http://localhost, got " + endpoint);
 		}
 
 		return endpoint;

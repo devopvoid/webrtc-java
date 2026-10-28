@@ -834,6 +834,34 @@ class HttpSessionTests extends ClientTestBase {
 				() -> HttpSession.resourceOf(endpoint, "http://media.example/session/1"));
 		assertThrows(WebRtcException.class,
 				() -> HttpSession.resourceOf(URI.create("http://media.example/whep"), "file:/etc/passwd"));
+
+		// A local endpoint may name a local session over plain http, but no
+		// other one.
+		URI local = URI.create("http://127.0.0.1:8889/whep");
+		assertEquals(URI.create("http://localhost:8889/session/1"),
+				HttpSession.resourceOf(local, "http://localhost:8889/session/1"));
+		assertThrows(WebRtcException.class,
+				() -> HttpSession.resourceOf(local, "http://media.example/session/1"));
+	}
+
+	@Test
+	void plainHttpOnlyOnLoopback() {
+		// WHIP and WHEP ask for TLS, but a media server beside the
+		// application may go without.
+		for (String endpoint : Arrays.asList("https://media.example/whep", "http://localhost:8889/whep",
+				"http://LOCALHOST/whep", "http://127.0.0.1:8889/whep", "http://127.5.0.1/whep",
+				"http://[::1]:8889/whep")) {
+			Whep.from(URI.create(endpoint));
+			Whip.to(URI.create(endpoint));
+		}
+
+		// Names are not resolved: one could point here now and elsewhere
+		// later.
+		for (String endpoint : Arrays.asList("http://media.example/whep", "http://10.0.0.1/whep",
+				"http://localhost.example/whep", "http://[::2]/whep", "ftp://localhost/whep")) {
+			assertThrows(IllegalArgumentException.class, () -> Whep.from(URI.create(endpoint)), endpoint);
+			assertThrows(IllegalArgumentException.class, () -> Whip.to(URI.create(endpoint)), endpoint);
+		}
 	}
 
 	/**
