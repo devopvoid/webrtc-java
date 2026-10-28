@@ -411,6 +411,18 @@ voice.push(pcm, PcmFormat.of(48000, 1));
 
 `CustomAudio` takes PCM in pieces of any length and from any thread. It cuts the audio into the 10 ms chunks WebRTC works with and sends one every 10 ms from a thread of its own, so pushing a whole second at once is as fine as pushing every 10 ms. `queuedMillis()` tells how much is still waiting, and `clear()` drops it. That thread does nothing else, so a slow push into WebRTC delays only the audio, not the timeouts of the runtime. Should it stall, as in a long garbage collection pause, it makes up for at most the last 50 ms instead of sending the whole pause at once; the queued audio then stays behind by the rest, until `clear()` drops it.
 
+A producer faster than real time would otherwise fill memory and push the delay up without end, so the queue holds at most 10 seconds, and a `push` beyond that fails with an `AudioQueueFullException`, keeping none of its audio. `queueLimit(max, overflow)` sets another limit and what happens beyond it:
+
+```java
+// Live audio: stay at most 200 ms behind, dropping the oldest audio.
+voice.queueLimit(Duration.ofMillis(200), AudioOverflow.DROP_OLDEST);
+
+// A file, which must arrive whole: refuse the push, to try it again later.
+voice.queueLimit(Duration.ofSeconds(2), AudioOverflow.REJECT);
+```
+
+With `REJECT` a refused push can be pushed again once `queuedMillis()` has shrunk; with `DROP_OLDEST` every push is taken, and the audio sent lags at most the limit behind.
+
 ### Controlling Senders and Tracks
 
 ```java
@@ -716,6 +728,7 @@ Failures arrive as exceptions, thrown or as the cause of a failed future, all of
 | `NegotiationException` | A description or candidate was rejected, or two impolite peers collided. |
 | `PeerClosedException` | An operation was pending when its peer, channel or runtime closed, or came after that. |
 | `ChannelFullException` | A data channel already holds as many bytes waiting to be sent as its peer's `channelSendLimit` allows. |
+| `AudioQueueFullException` | Pushed audio would take a `CustomAudio` queue beyond its `queueLimit`, with `AudioOverflow.REJECT`. |
 | `MediaException` | A device is missing, busy, refused access, or already open with other options. |
 | `ConfigurationException` | A call does not fit how the runtime was built, or WebRTC refused a configuration. |
 | `BlockingCallException` | A future was waited on from an event thread. |

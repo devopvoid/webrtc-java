@@ -463,6 +463,8 @@ public interface CustomVideo extends LocalVideo {
 public interface CustomAudio extends LocalAudio {
 
     void push(byte[] pcm, PcmFormat format);                    // any length, any thread
+
+    void queueLimit(Duration max, AudioOverflow overflow);      // 10 s, REJECT by default
 }
 ```
 
