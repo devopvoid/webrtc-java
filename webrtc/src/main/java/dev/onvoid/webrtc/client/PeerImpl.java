@@ -763,9 +763,15 @@ final class PeerImpl implements Peer {
 
 	/**
 	 * Registers a handler on the event executor, where it sees exactly the
-	 * events the other handlers saw.
+	 * events the other handlers saw. A handler that registers another does so
+	 * at once, so that the new one also sees the events already queued, such
+	 * as the messages of a channel it was just handed.
 	 */
 	Subscription subscribe(Supplier<Subscription> register) {
+		if (events.inExecutor()) {
+			return register.get();
+		}
+
 		DeferredSubscription subscription = new DeferredSubscription();
 
 		events.execute(() -> subscription.set(register.get()));

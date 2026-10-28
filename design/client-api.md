@@ -170,7 +170,8 @@ sequenceDiagram
    ordering holds whatever executor is given.
 4. **No lost events from registration races.** `onStateChange` is called with the current state
    first. `onTrack` and `onChannel` replay what already arrived. A data channel keeps the messages
-   that arrive before its first `onMessage` handler.
+   that arrive before its first `onMessage` handler. A handler registered from within another
+   handler takes effect at once, so it also sees the events already queued behind that one.
 5. **Operations run in order.** Each peer runs its operations one at a time, like the W3C
    operations chain. `addTrack` followed by `createChannel` always negotiates both, in that order.
 6. **Close is final and quiet.** After `close()` the only event is `onStateChange(CLOSED)`. Pending
