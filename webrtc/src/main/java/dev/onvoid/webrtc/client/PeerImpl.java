@@ -63,6 +63,7 @@ import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
 import dev.onvoid.webrtc.RTCRtpCapabilities;
 import dev.onvoid.webrtc.RTCRtpCodecCapability;
+import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiverDirection;
@@ -326,6 +327,27 @@ final class PeerImpl implements Peer {
 			ids.add(defaultStreamId);
 		}
 
+		return addSender(local, ids, Collections.emptyList(), new CompletableFuture<>());
+	}
+
+	/**
+	 * Adds a track to the stream of the tracks added without stream ids, sent
+	 * in the given encodings, as simulcast (RFC 8853) does with one for each
+	 * layer.
+	 *
+	 * @return a future that completes once the track is added, or fails if
+	 * WebRTC refuses the encodings.
+	 */
+	CompletableFuture<Void> addTrack(LocalTrack track, List<RTCRtpEncodingParameters> encodings) {
+		CompletableFuture<Void> added = new CompletableFuture<>();
+
+		addSender(checkTrack(track), List.of(defaultStreamId), encodings, added);
+
+		return added;
+	}
+
+	private SenderImpl addSender(LocalTrackImpl local, List<String> ids, List<RTCRtpEncodingParameters> encodings,
+			CompletableFuture<Void> added) {
 		SenderImpl sender = new SenderImpl(this, local);
 		senders.add(sender);
 
@@ -333,18 +355,21 @@ final class PeerImpl implements Peer {
 			if (closed) {
 				senders.remove(sender);
 				sender.failAttach(closedError());
+				added.completeExceptionally(closedError());
 				return;
 			}
 
 			try {
-				sender.attach(connection, ids);
+				sender.attach(connection, ids, encodings);
+				added.complete(null);
 			}
 			catch (Throwable e) {
 				senders.remove(sender);
 				sender.failAttach(e);
 				deliverError(asWebRtcException(e, "Adding the track failed"));
+				added.completeExceptionally(e);
 			}
-		});
+		}, () -> added.completeExceptionally(closedError()));
 
 		return sender;
 	}

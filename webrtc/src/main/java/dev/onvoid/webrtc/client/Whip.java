@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
@@ -61,6 +62,13 @@ public final class Whip {
 	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(503), false);
 
 
+	/**
+	 * The rids of the simulcast layers, from the largest down, as is common:
+	 * full, half and quarter.
+	 */
+	private static final List<String> RIDS = List.of("f", "h", "q");
+
+
 	private Whip() {
 	}
 
@@ -74,6 +82,28 @@ public final class Whip {
 	 */
 	public static Builder to(URI endpoint) {
 		return new Builder(HttpSession.checkEndpoint(endpoint));
+	}
+
+	/**
+	 * @return the encodings of the simulcast layers, with their rids, or none
+	 * without simulcast.
+	 */
+	private static List<RTCRtpEncodingParameters> encodings(List<Encoding> layers) {
+		List<RTCRtpEncodingParameters> encodings = new ArrayList<>();
+
+		for (int i = 0; i < layers.size(); i++) {
+			Encoding layer = layers.get(i);
+			RTCRtpEncodingParameters parameters = new RTCRtpEncodingParameters();
+			parameters.rid = RIDS.get(i);
+			parameters.active = layer.active;
+			parameters.maxBitrate = layer.maxBitrate;
+			parameters.maxFramerate = layer.maxFrameRate;
+			parameters.scaleResolutionDownBy = layer.scaleDownBy;
+
+			encodings.add(parameters);
+		}
+
+		return encodings;
 	}
 
 
@@ -103,6 +133,8 @@ public final class Whip {
 		private String bearerToken;
 
 		private boolean alwaysOfferVideo;
+
+		private List<Encoding> simulcast = List.of();
 
 		private Gathering gathering = Gathering.TRICKLE;
 
@@ -187,6 +219,46 @@ public final class Whip {
 		}
 
 		/**
+		 * Sends the video track in three layers, as simulcast (RFC 8853): in
+		 * full, half and quarter resolution, with the rids {@code f}, {@code h}
+		 * and {@code q}. An endpoint that forwards the stream can then give
+		 * each viewer the layer its bandwidth takes. One that takes no
+		 * simulcast gets the first layer only, in full resolution.
+		 *
+		 * @return this builder.
+		 */
+		public Builder simulcast() {
+			return simulcast(Encoding.builder().scaleDownBy(1).build(), Encoding.builder().scaleDownBy(2).build(),
+					Encoding.builder().scaleDownBy(4).build());
+		}
+
+		/**
+		 * Sends the video track in the layers of the given encodings, as
+		 * simulcast (RFC 8853), with the rids {@code f}, {@code h} and
+		 * {@code q} in this order. An endpoint that takes no simulcast gets the
+		 * first layer only, so the largest comes first. {@link
+		 * Sender#configure} on the sender of the track changes every layer
+		 * alike.
+		 *
+		 * @param layers two or three encodings, the most WebRTC sends; those
+		 *               without a {@link Encoding.Builder#scaleDownBy factor}
+		 *               keep the resolution of the track.
+		 *
+		 * @return this builder.
+		 *
+		 * @throws IllegalArgumentException if there are fewer than two layers,
+		 *                                  or more than three.
+		 */
+		public Builder simulcast(Encoding... layers) {
+			if (layers.length < 2 || layers.length > RIDS.size()) {
+				throw new IllegalArgumentException("Simulcast takes two or three layers, got " + layers.length);
+			}
+
+			this.simulcast = List.of(layers);
+			return this;
+		}
+
+		/**
 		 * @param urls a STUN or TURN server without credentials. Servers given
 		 *             here replace those the endpoint names in its answer.
 		 *
@@ -250,7 +322,8 @@ public final class Whip {
 		 * the session the same way. It fails with a {@link
 		 * ConfigurationException} if WebRTC has no codec of a name given.
 		 *
-		 * @throws IllegalStateException    if no track was given.
+		 * @throws IllegalStateException    if no track was given, or no video
+		 *                                  track for simulcast.
 		 * @throws IllegalArgumentException if a track was not created by the
 		 *                                  runtime, or two tracks are of the
 		 *                                  same kind.
@@ -275,6 +348,9 @@ public final class Whip {
 							+ track.kind().name().toLowerCase(Locale.ROOT) + " track, got another: " + track);
 				}
 			}
+			if (!simulcast.isEmpty() && !kinds.contains(MediaKind.VIDEO)) {
+				throw new IllegalStateException("Simulcast needs a video track to publish");
+			}
 
 			// The builder may change while the session starts; the session keeps
 			// what it started with, so that its DELETE is authorized like its POST.
@@ -282,16 +358,24 @@ public final class Whip {
 			Duration limit = timeout;
 			Map<MediaKind, List<String>> names = new EnumMap<>(codecs);
 			boolean placeholder = alwaysOfferVideo && !kinds.contains(MediaKind.VIDEO);
+			List<RTCRtpEncodingParameters> layers = encodings(simulcast);
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
-				for (LocalTrack track : tracks) {
-					peer.addTrack(track);
-				}
+				CompletableFuture<Void> video = CompletableFuture.completedFuture(null);
 
-				CompletableFuture<Void> video = placeholder
-						? peer.addVideoWithoutTrack()
-						: CompletableFuture.completedFuture(null);
+				for (LocalTrack track : tracks) {
+					if (track.kind() == MediaKind.VIDEO && !layers.isEmpty()) {
+						// RFC 9725, 4.8: simulcast is negotiated in the offer.
+						video = peer.addTrack(track, layers);
+					}
+					else {
+						peer.addTrack(track);
+					}
+				}
+				if (placeholder) {
+					video = peer.addVideoWithoutTrack();
+				}
 
 				// Before the offer, which follows in the same order: WHIP only
 				// sends (RFC 9725, 4.2). Should WebRTC refuse, the offer stays

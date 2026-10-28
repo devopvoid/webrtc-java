@@ -629,6 +629,20 @@ Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
         .get(15, TimeUnit.SECONDS);
 ```
 
+`simulcast()` sends the video track of a WHIP session in three layers, as simulcast (RFC 8853), in full, half and quarter resolution, with the rids `f`, `h` and `q`. The offer negotiates them, as RFC 9725 asks, and an endpoint that forwards the stream can then give each viewer the layer its bandwidth takes. `simulcast(Encoding...)` takes two or three layers of its own, the most WebRTC sends, from the largest down, with their resolution factor, bitrate and frame rate. An endpoint that takes no simulcast leaves it out of its answer and gets the first layer only, which is why the largest comes first. Simulcast needs a video track; `Sender.configure` on its sender changes every layer alike.
+
+```java
+Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
+        .bearerToken(token)
+        .track(rtc.media().camera())
+        .simulcast(
+                Encoding.builder().maxBitrate(2_500_000).build(),
+                Encoding.builder().scaleDownBy(2).maxBitrate(800_000).build(),
+                Encoding.builder().scaleDownBy(4).maxBitrate(200_000).build())
+        .publish(rtc)
+        .get(15, TimeUnit.SECONDS);
+```
+
 A normal SDP answer must have status 201, a nonempty session `Location`, and Content-Type `application/sdp` (parameters are allowed). Invalid responses fail the session; a resource already named by the server is deleted even when its SDP response cannot be used.
 
 When the connection fails, or stays disconnected for two seconds, the session restarts ICE: the peer gathers new candidates, and only the new ICE username fragment and password go to the session, by `PATCH` with `If-Match: *`, while the media go on as negotiated. The session's answer, with status 200 and Content-Type `application/trickle-ice-sdpfrag`, brings its own ICE information and a new `ETag`. Its candidate set replaces the old one completely, including when it is empty. Three restarts in a row that do not bring the connection back, or an endpoint that takes no restarts, end the attempts, which the error handler hears of. `session.restartIce()` restarts ICE at once, say after the network changed; a restart that fails leaves the ICE session before as it was. Restarts also work after a WHEP counter-offer; the player keeps its answerer role and updates only the ICE information.
@@ -655,6 +669,7 @@ Requests go through Java's `HttpClient`, with the default `SSLContext` and the H
 | `receive(MediaKind...)` | What to receive, WHEP only; video and audio by default. |
 | `videoCodecs(String...)`, `audioCodecs(String...)` | The only codecs to negotiate, in order of preference; every codec WebRTC has by default. |
 | `alwaysOfferVideo()` | Video in the offer even without a video track, WHIP only, for endpoints that refuse an offer without video. |
+| `simulcast()`, `simulcast(Encoding...)` | The video track in layers, as simulcast, WHIP only: three by default (`f`, `h`, `q`), or two or three given, the largest first. |
 | `timeout(Duration)` | How long the session may take to be connected, and its deletion to be answered. |
 
 ## Manual Negotiation
