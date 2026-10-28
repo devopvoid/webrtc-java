@@ -21,6 +21,7 @@ import static java.util.Objects.requireNonNull;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
@@ -133,15 +134,18 @@ abstract class HttpSession implements AutoCloseable {
 	 * a server that does not answer holds no thread; what it creates for an
 	 * offer it had yet to answer is left for it to time out.
 	 *
+	 * @param retried the statuses of an answer to the offer, together with a
+	 *                Retry-After header field, after which the offer is sent
+	 *                again, as long as the wait fits within the timeout.
 	 * @param factory makes the session of the connected peer.
 	 *
 	 * @return the future handed to the application.
 	 */
 	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
-			String bearerToken, Duration timeout, Factory<S> factory) {
+			String bearerToken, Duration timeout, Set<Integer> retried, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
-		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, abandoned)
-				.thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout)),
+		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, retried,
+				abandoned).thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout)),
 				HttpSession::close);
 
 		// Once the session was handed out, this finds the negotiation finished.
@@ -160,7 +164,7 @@ abstract class HttpSession implements AutoCloseable {
 	 * @return a future with the resource the server named, or null.
 	 */
 	private static CompletableFuture<URI> negotiate(WebRtc rtc, Peer peer, URI endpoint, String bearerToken,
-			Duration timeout, CompletableFuture<?> abandoned) {
+			Duration timeout, Set<Integer> retried, CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
 		// The resource the server created. Whoever takes it out owns it: the
 		// session that connected, or whoever deletes it.
@@ -169,7 +173,7 @@ abstract class HttpSession implements AutoCloseable {
 		// Made now, so that it ends with the session's deadline at the latest,
 		// however long the offer takes.
 		HttpCall offerRequest = new HttpCall(rtc.httpClient(bearerToken != null), endpoint, "POST", bearerToken,
-				timeout).followRedirects();
+				timeout).followRedirects().retry(rtc.timer, retried);
 
 		// Either way the session ends, once: connected, failed or timed out.
 		Consumer<Throwable> fail = error -> {

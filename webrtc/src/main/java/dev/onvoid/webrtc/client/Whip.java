@@ -22,6 +22,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import dev.onvoid.webrtc.internal.Timeouts;
@@ -46,6 +47,10 @@ import dev.onvoid.webrtc.internal.Timeouts;
  * @see <a href="https://www.rfc-editor.org/rfc/rfc9725">RFC 9725: WHIP</a>
  */
 public final class Whip {
+
+	/** An endpoint under load answers 503, with Retry-After (RFC 9725, 4.5). */
+	private static final Set<Integer> RETRIED = Set.of(503);
+
 
 	private Whip() {
 	}
@@ -181,7 +186,7 @@ public final class Whip {
 					peer.addTrack(track);
 				}
 
-				return HttpSession.start(rtc, peer, endpoint, token, limit, Session::new);
+				return HttpSession.start(rtc, peer, endpoint, token, limit, RETRIED, Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.

@@ -236,6 +236,104 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void conflictRetriedForWhep() throws Exception {
+		// The stream has yet to start, and the endpoint says to come back at
+		// once. The offer goes again after the shortest wait, on the timer.
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+		Duration wait = Duration.ofMillis(HttpCall.MIN_RETRY_MILLIS);
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.refuseAnswers(1, 409, "0");
+			CompletableFuture<Whep.Session> session = Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(client);
+
+			awaitScheduled(timer, wait);
+			assertEquals(1, endpoint.count("POST /live/endpoint"));
+			assertEquals(1, timer.fire(wait));
+
+			await(await(session).closeAsync());
+			assertEquals(2, endpoint.count("POST /live/endpoint"));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void unavailableRetriedForWhip() throws Exception {
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+		Duration wait = Duration.ofSeconds(2);
+
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			endpoint.refuseAnswers(1, 503, "2");
+			CompletableFuture<Whip.Session> session = Whip.to(endpoint.uri())
+					.track(client.media().customVideo("video"))
+					.timeout(SESSION_TIMEOUT)
+					.publish(client);
+
+			awaitScheduled(timer, wait);
+			assertEquals(1, timer.fire(wait));
+
+			await(await(session).closeAsync());
+			assertEquals(2, endpoint.count("POST /live/endpoint"));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void conflictFailsWhip() throws Exception {
+		// 409 means nothing particular to WHIP, so it is no reason to retry.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			endpoint.refuseAnswers(1, 409, "1");
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whip.to(endpoint.uri()).track(video).publish(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("409"), failed.getCause().getMessage());
+			assertEquals(1, endpoint.count("POST /live/endpoint"));
+		}
+	}
+
+	@Test
+	void retryBeyondTimeoutFails() throws Exception {
+		// Coming back in a minute would miss the session's timeout.
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.refuseAnswers(1, 503, "60");
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(rtc)));
+
+			assertTrue(failed.getCause().getMessage().contains("503"), failed.getCause().getMessage());
+			assertEquals(1, endpoint.count("POST /live/endpoint"));
+		}
+	}
+
+	@Test
+	void cancelEndsRetryWait() throws Exception {
+		// Cancelled while it waits to send the offer again: it never does.
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+		Duration wait = Duration.ofSeconds(2);
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.refuseAnswers(1, 503, "2");
+			CompletableFuture<Whep.Session> session = Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(client);
+
+			awaitScheduled(timer, wait);
+			assertTrue(session.cancel(true));
+
+			assertEquals(0, timer.fire(wait));
+			assertEquals(1, endpoint.count("POST /live/endpoint"));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
 	void redirectFollowed() throws Exception {
 		// The endpoint sends the offer on to another, as WHIP and WHEP allow,
 		// and the token goes along. The session is the one the other names.
@@ -621,6 +719,22 @@ class HttpSessionTests extends ClientTestBase {
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add))
 				.build();
+	}
+
+	/**
+	 * Waits until a task with the delay is scheduled on the timer, which an
+	 * answer read on a thread of the HTTP client does.
+	 */
+	private static void awaitScheduled(ManualTimer timer, Duration delay) throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+
+		while (timer.scheduled(delay) == 0) {
+			if (System.nanoTime() > deadline) {
+				throw new AssertionError("Nothing was scheduled in " + delay + " within " + TIMEOUT_SECONDS + " s");
+			}
+
+			Thread.sleep(10);
+		}
 	}
 
 	/**

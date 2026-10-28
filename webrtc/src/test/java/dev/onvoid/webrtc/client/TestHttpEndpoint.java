@@ -88,6 +88,14 @@ final class TestHttpEndpoint implements AutoCloseable {
 	/** Whether the head of the answer to a DELETE trickles in. */
 	private volatile boolean trickleDeletes;
 
+	/** How many POSTs are still refused with {@link #refusalStatus}. */
+	private int refusals;
+
+	private volatile int refusalStatus;
+
+	/** The Retry-After of a refusal, or null for none. */
+	private volatile String refusalRetryAfter;
+
 	/** Where POSTs are redirected to, or null. */
 	private volatile String redirectLocation;
 
@@ -135,6 +143,19 @@ final class TestHttpEndpoint implements AutoCloseable {
 		String scheme = server instanceof SSLServerSocket ? "https" : "http";
 
 		return URI.create(scheme + "://127.0.0.1:" + server.getLocalPort() + "/live/endpoint");
+	}
+
+	/**
+	 * Refuses the next POSTs, then answers as before.
+	 *
+	 * @param times      how many POSTs to refuse.
+	 * @param status     the status, such as 503.
+	 * @param retryAfter the Retry-After to send along, or null for none.
+	 */
+	synchronized void refuseAnswers(int times, int status, String retryAfter) {
+		refusals = times;
+		refusalStatus = status;
+		refusalRetryAfter = retryAfter;
 	}
 
 	/**
@@ -307,6 +328,22 @@ final class TestHttpEndpoint implements AutoCloseable {
 		OutputStream out = socket.getOutputStream();
 
 		if (requestLine[0].equals("POST")) {
+			boolean refused;
+
+			synchronized (this) {
+				refused = refusals > 0;
+
+				if (refused) {
+					refusals--;
+				}
+			}
+
+			if (refused) {
+				String retryAfter = refusalRetryAfter;
+				respond(out, refusalStatus + " Refused", retryAfter != null ? "Retry-After: " + retryAfter + "\r\n" : "",
+						"come back later");
+				return;
+			}
 			if (redirectLocation != null) {
 				respond(out, redirectStatus + " Redirect", "Location: " + redirectLocation + "\r\n", "");
 				return;
