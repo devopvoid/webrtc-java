@@ -132,11 +132,24 @@ class HttpIceTests {
 	}
 
 	@Test
-	void restartWithoutCandidatesKeepsThem() {
+	void localCredentialsKeepCandidates() {
+		HttpIce.Fragment restart = HttpIce.Fragment.parse("a=ice-ufrag:cccc\r\na=ice-pwd:cccccccccccccccccccccccc\r\n");
+		String answer = restart.applyCredentialsTo(ANSWER);
+		assertTrue(answer.contains("192.0.2.1"), answer);
+		assertTrue(answer.contains("a=end-of-candidates"), answer);
+		assertTrue(answer.contains("a=ice-ufrag:cccc"), answer);
+	}
+
+	@Test
+	void restartWithoutCandidatesClearsThem() {
 		HttpIce.Fragment restart = HttpIce.Fragment.parse("a=ice-ufrag:cccc\r\na=ice-pwd:cccccccccccccccccccccccc\r\n");
 		String answer = restart.applyTo(ANSWER);
 
-		assertTrue(answer.contains("192.0.2.1"), answer);
+		assertFalse(answer.contains("192.0.2.1"), answer);
+		assertFalse(answer.contains("a=end-of-candidates"), answer);
 		assertTrue(answer.contains("a=ice-ufrag:cccc"), answer);
+		String ended = HttpIce.Fragment.parse(restart.text + "a=end-of-candidates\r\n").applyTo(ANSWER);
+		assertFalse(ended.contains("a=candidate:"), ended);
+		assertTrue(ended.contains("a=end-of-candidates"), ended);
 	}
 }

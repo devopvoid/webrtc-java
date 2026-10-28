@@ -194,16 +194,17 @@ abstract class HttpSession implements AutoCloseable {
 	 * a server that does not answer holds no connection; what it creates for
 	 * an offer it had yet to answer is left for it to time out.
 	 *
+	 * @param gathering when the initial offer is sent.
 	 * @param protocol what WHIP or WHEP asks beyond the offer and its answer.
 	 * @param factory  makes the session of the connected peer.
 	 *
 	 * @return the future handed to the application.
 	 */
 	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
-			String bearerToken, Duration timeout, Protocol protocol, Factory<S> factory) {
+			String bearerToken, Duration timeout, Gathering gathering, Protocol protocol, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
 		HttpIce ice = new HttpIce(rtc, rtc.httpClient(bearerToken != null), peer, bearerToken, timeout);
-		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, protocol,
+		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, gathering, protocol,
 				ice, abandoned).thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout, ice)),
 				HttpSession::close);
 
@@ -220,7 +221,9 @@ abstract class HttpSession implements AutoCloseable {
 	 * named, and the candidates it gathers go to the session by PATCH. The
 	 * answer is applied, and the future completes once the peer is connected.
 	 * An endpoint that counters the offer, as WHEP allows, gets the answer to
-	 * its own offer instead, with all candidates.
+	 * its own offer instead, with all candidates. With COMPLETE gathering,
+	 * the initial offer is applied and gathered before POST; endpoint-provided
+	 * ICE servers then arrive too late for this gathering and are ignored.
 	 *
 	 * @param ice       the ICE of the session once the offer is answered.
 	 * @param abandoned completes when no one waits for the session anymore,
@@ -229,7 +232,7 @@ abstract class HttpSession implements AutoCloseable {
 	 * @return a future with the resource the server named, or null.
 	 */
 	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String bearerToken,
-			Duration timeout, Protocol protocol, HttpIce ice, CompletableFuture<?> abandoned) {
+			Duration timeout, Gathering gathering, Protocol protocol, HttpIce ice, CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
 		long started = System.nanoTime();
 		// The resource the server created. Whoever takes it out owns it: the
@@ -274,7 +277,9 @@ abstract class HttpSession implements AutoCloseable {
 			fail.accept(new CancellationException("The session with " + endpoint + " was abandoned"));
 		});
 
-		peer.offer()
+		CompletableFuture<RTCSessionDescription> initial = gathering == Gathering.COMPLETE
+				? peer.negotiator().createOffer(Gathering.COMPLETE) : peer.offer();
+		initial
 				.thenCompose(offer -> post(offerRequest, endpoint, withRtcpMuxOnly(offer.sdp), protocol, resource)
 						.whenComplete((reply, error) -> {
 							if (finished.get()) {
@@ -284,7 +289,9 @@ abstract class HttpSession implements AutoCloseable {
 								discard(rtc, resource.getAndSet(null), bearerToken, timeout);
 							}
 						})
-						.thenCompose(reply -> peer.useIceServers(reply.iceServers).handle((used, error) -> {
+						.thenCompose(reply -> (gathering == Gathering.COMPLETE
+								? CompletableFuture.<Void>completedFuture(null)
+								: peer.useIceServers(reply.iceServers)).handle((used, error) -> {
 							if (error != null) {
 								// Gathered without them, as if the endpoint had
 								// named none.
@@ -295,11 +302,13 @@ abstract class HttpSession implements AutoCloseable {
 						}))
 						.thenCompose(reply -> {
 							if (!reply.counterOffer) {
-								// Before the offer is applied, which starts the
-								// gathering of the candidates that go there.
+								// Trickle offers are not applied yet; COMPLETE offers
+								// already carry the gathered candidates.
 								ice.attach(resource.get(), reply.etag, offer.sdp);
 
-								return peer.applyLocal(offer).thenCompose(applied -> peer.negotiator()
+								return (gathering == Gathering.COMPLETE
+										? CompletableFuture.<Void>completedFuture(null) : peer.applyLocal(offer))
+										.thenCompose(applied -> peer.negotiator()
 										.applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, reply.sdp)));
 							}
 
@@ -346,7 +355,11 @@ abstract class HttpSession implements AutoCloseable {
 				throw new WebRtcException("Sending the offer to " + endpoint + " failed: " + error.getMessage(),
 						error);
 			}
-			if (response.status == 201 || response.status == 200) {
+			if (response.status == 201) {
+				if (resource.get() == null) {
+					throw new WebRtcException("The endpoint " + endpoint + " answered without a session Location");
+				}
+				requireContentType(response, "application/sdp");
 				return new Reply(response.body, false, null, 0, response);
 			}
 			if (protocol.counterOffers && isCounterOffer(response)) {
@@ -608,7 +621,7 @@ abstract class HttpSession implements AutoCloseable {
 	 * delete it, so an https endpoint cannot name a plain http resource.
 	 */
 	static URI resourceOf(URI endpoint, String location) {
-		if (location == null) {
+		if (location == null || location.trim().isEmpty()) {
 			return null;
 		}
 
@@ -684,6 +697,15 @@ abstract class HttpSession implements AutoCloseable {
 		}
 
 		return marked.toString();
+	}
+
+	/** Rejects success bodies that are not of the negotiated media type. */
+	static void requireContentType(HttpCall.Response response, String expected) {
+		String type = response.header("Content-Type");
+		if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase(expected)) {
+			throw new WebRtcException("The session " + response.uri + " answered with Content-Type "
+					+ type + "; expected " + expected);
+		}
 	}
 
 	static URI checkEndpoint(URI endpoint) {

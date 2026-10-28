@@ -538,7 +538,7 @@ final class PeerImpl implements Peer {
 							return createAnswer();
 						})
 						.thenCompose(answer -> setLocal(new RTCSessionDescription(RTCSdpType.ANSWER,
-								HttpIce.Fragment.of(offer.sdp).applyTo(answer.sdp)))))
+								HttpIce.Fragment.of(offer.sdp).applyCredentialsTo(answer.sdp)))))
 						.handle((applied, error) -> {
 							if (error == null) {
 								return CompletableFuture.<Void>completedFuture(null);
