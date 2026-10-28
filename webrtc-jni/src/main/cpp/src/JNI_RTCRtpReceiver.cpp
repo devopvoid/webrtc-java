@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCRtpReceiver.h"
+#include "api/RegisteredObservers.h"
 #include "api/RTCRtpParameters.h"
 #include "api/RTCRtpReceiverObserver.h"
 #include "api/RTCRtpContributingSource.h"
@@ -204,10 +205,20 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_setObserver
 			observer = new jni::RTCRtpReceiverObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
 		}
 
+		// Setting replaces whatever observer the receiver had, also one set
+		// through another Java object. Removing removes only the one set
+		// through this object, unless another has replaced it since.
+		if (observer != nullptr) {
+			jni::RegisteredObservers::Set(receiver, observer);
+
+			receiver->SetObserver(observer);
+		}
+		else if (jni::RegisteredObservers::Remove(receiver, GetHandle<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle"))) {
+			receiver->SetObserver(nullptr);
+		}
+
 		// Runs on the signaling thread, which is also the thread that calls
 		// the observer, so the previous one is out of use once this returns.
-		receiver->SetObserver(observer);
-
 		ReplaceNativeObserver(env, caller, "observerHandle", observer);
 	}
 	catch (...) {
@@ -222,12 +233,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_dispose
 	CHECK_HANDLE(receiver);
 
 	// WebRTC must let go of an observer set through this object before it is
-	// deleted.
-	if (GetHandle<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle") != nullptr) {
+	// deleted. One that another Java object has set since stays.
+	if (jni::RegisteredObservers::Remove(receiver, GetHandle<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle"))) {
 		receiver->SetObserver(nullptr);
-
-		ClearNativeObserver<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle");
 	}
+
+	ClearNativeObserver<jni::RTCRtpReceiverObserver>(env, caller, "observerHandle");
 
 	// Unlike e.g. MediaStreamTrack, an RTCRtpReceiver is not exclusively
 	// owned by one Java wrapper: the owning RtpTransceiver keeps its own

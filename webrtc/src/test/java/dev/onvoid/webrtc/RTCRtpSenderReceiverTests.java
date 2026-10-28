@@ -96,6 +96,46 @@ class RTCRtpSenderReceiverTests extends TestBase {
 	}
 
 	@Test
+	void disposeKeepsObserverOfOtherObject() throws Exception {
+		try (TestMediaCall call = new TestMediaCall(factory, true, false)) {
+			call.negotiate();
+
+			RTCRtpSender sender = call.getCallerSenders()[0];
+			RTCRtpReceiver receiver = call.getReceiver(MediaStreamTrack.VIDEO_TRACK_KIND);
+			RTCRtpReceiver otherReceiver = call.getReceiver(MediaStreamTrack.VIDEO_TRACK_KIND);
+
+			assertEquals(call.getVideoSender(), sender);
+
+			CountDownLatch sent = new CountDownLatch(1);
+			CountDownLatch received = new CountDownLatch(1);
+
+			try {
+				sender.setObserver(type -> { });
+				call.getVideoSender().setObserver(type -> sent.countDown());
+
+				receiver.setObserver(type -> { });
+				otherReceiver.setObserver(type -> received.countDown());
+
+				// The observers set through the other objects replaced the
+				// first ones, which leaves these objects nothing to remove.
+				sender.dispose();
+				receiver.dispose();
+
+				call.awaitConnected();
+				call.startMedia();
+
+				assertTrue(sent.await(10, TimeUnit.SECONDS), "The observer of the other sender object was removed");
+				assertTrue(received.await(10, TimeUnit.SECONDS), "The observer of the other receiver object was removed");
+
+				call.getVideoSender().setObserver(null);
+			}
+			finally {
+				otherReceiver.dispose();
+			}
+		}
+	}
+
+	@Test
 	void senderIdAndStreams() {
 		RTCPeerConnection connection = factory.createPeerConnection(new RTCConfiguration(), candidate -> { });
 		// Custom audio, like the calls of the other tests: a factory sends

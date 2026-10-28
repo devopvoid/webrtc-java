@@ -16,7 +16,7 @@
 
 package dev.onvoid.webrtc;
 
-import dev.onvoid.webrtc.internal.NativeObject;
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
  * Represents a DTMF (Dual-Tone Multi-Frequency) sender for WebRTC.
@@ -29,18 +29,24 @@ import dev.onvoid.webrtc.internal.NativeObject;
  * DTMF tones are the audible tones generated when pressing keys on a telephone keypad.
  * The supported DTMF tones are: 0-9, A-D, *, and #. In addition, the special characters
  * ',' (comma) can be used to insert a 2-second delay between tones.
+ * <p>
+ * Each instance holds a reference to the native DTMF sender, which keeps it
+ * usable after the connection has closed or dropped its {@link RTCRtpSender};
+ * it then can no longer insert tones. Release it with {@link #dispose()} once
+ * it is no longer needed.
  *
  * @author Alex Andres
  *
  * @see <a href="https://w3c.github.io/webrtc-pc/#rtcdtmfsender">W3C WebRTC 1.0: RTCDtmfSender</a>
  */
-public class RTCDtmfSender extends NativeObject {
+public class RTCDtmfSender extends DisposableNativeObject {
 
 	/**
 	 * The native observer registered via {@link #registerObserver}. The
 	 * RTCDtmfSender does not take ownership of the Java observer, but it
-	 * owns the native observer wrapper; it is freed when replaced and when
-	 * {@link #unregisterObserver()} is called.
+	 * owns the native observer wrapper; it is freed when replaced, when
+	 * {@link #unregisterObserver()} is called, and when this instance is
+	 * disposed.
 	 */
 	@SuppressWarnings("unused")
 	private long observerHandle;
@@ -135,21 +141,39 @@ public class RTCDtmfSender extends NativeObject {
 	 * Registers an observer to receive notifications about DTMF-related events.
 	 * <p>
 	 * Only one observer can be registered at a time. Registering a new observer
-	 * when one is already registered will replace the existing observer.
+	 * when one is already registered will replace the existing observer, also
+	 * one registered through another RTCDtmfSender instance of the same
+	 * {@link RTCRtpSender}.
 	 *
 	 * @param observer The DTMF sender observer to register.
 	 */
 	public native void registerObserver(RTCDtmfSenderObserver observer);
 
 	/**
-	 * Unregisters the previously registered DTMF sender observer.
+	 * Unregisters the DTMF sender observer last registered through this
+	 * instance.
 	 * <p>
-	 * After calling this method, no observer will receive notifications about
-	 * DTMF-related events until a new observer is registered.
+	 * After calling this method, that observer receives no more notifications
+	 * about DTMF-related events. An observer that another instance has
+	 * registered since stays registered.
 	 * <p>
-	 * If no observer is currently registered, this method has no effect.
+	 * If no observer is currently registered through this instance, this
+	 * method has no effect.
 	 */
 	public native void unregisterObserver();
+
+	/**
+	 * Unregisters the observer registered through this instance, if any, and
+	 * releases the native reference held by this instance.
+	 * <p>
+	 * The DTMF sender is not exclusively owned by this instance: its {@link
+	 * RTCRtpSender} and other RTCDtmfSender instances obtained via separate
+	 * calls to {@link RTCRtpSender#getDtmfSender()} keep their own references.
+	 * Disposing this instance does not affect the DTMF sender itself or any
+	 * other instance referring to it.
+	 */
+	@Override
+	public native void dispose();
 
 	/**
 	 * Two RTCDtmfSender instances are equal if they are bound to the same

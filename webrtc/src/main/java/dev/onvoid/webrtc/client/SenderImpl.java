@@ -350,7 +350,8 @@ final class SenderImpl implements Sender {
 		removed = true;
 
 		if (dtmf != null) {
-			dtmf.unregisterObserver();
+			// Unregisters the observer as well.
+			dtmf.dispose();
 			dtmf = null;
 		}
 		if (pendingTones != null) {

@@ -226,6 +226,68 @@ class RTCDtlsTransportTests extends TestBase {
 	}
 
 	@Test
+	void unregisterKeepsObserverOfOtherInstance() throws Exception {
+		assertObserverOfOtherInstanceStays(false);
+	}
+
+	@Test
+	void disposeKeepsObserverOfOtherInstance() throws Exception {
+		assertObserverOfOtherInstanceStays(true);
+	}
+
+	private void assertObserverOfOtherInstanceStays(boolean dispose) throws Exception {
+		RTCDtlsTransport other = sender.getTransport();
+
+		AtomicInteger firstObserverCalls = new AtomicInteger();
+		CompletableFuture<RTCDtlsTransportState> closedState = new CompletableFuture<>();
+
+		try {
+			transport.registerObserver(new RTCDtlsTransportObserver() {
+				@Override
+				public void onStateChange(RTCDtlsTransportState state) {
+					firstObserverCalls.incrementAndGet();
+				}
+
+				@Override
+				public void onError(String error) { }
+			});
+			other.registerObserver(new RTCDtlsTransportObserver() {
+				@Override
+				public void onStateChange(RTCDtlsTransportState state) {
+					if (state == RTCDtlsTransportState.CLOSED) {
+						closedState.complete(state);
+					}
+				}
+
+				@Override
+				public void onError(String error) { }
+			});
+
+			// The observer registered through the other instance replaced the
+			// first one, which leaves this instance nothing to remove from the
+			// transport.
+			if (dispose) {
+				transport.dispose();
+				transport = null;
+			}
+			else {
+				transport.unregisterObserver();
+			}
+
+			caller.close();
+			callee.close();
+			sender.dispose();
+
+			assertEquals(RTCDtlsTransportState.CLOSED, closedState.get(5, TimeUnit.SECONDS),
+					"The observer of the other instance was removed");
+			assertEquals(0, firstObserverCalls.get(), "The replaced observer must not receive events");
+		}
+		finally {
+			other.dispose();
+		}
+	}
+
+	@Test
 	void observerCanUseRtpSender() throws Exception {
 		// WebRTC reports DTLS states on the network thread, which is also the
 		// worker thread. Getting a sender's parameters blocks the signaling

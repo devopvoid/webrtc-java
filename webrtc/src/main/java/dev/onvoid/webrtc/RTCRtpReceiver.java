@@ -58,11 +58,11 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	 * RTP packet, replacing any observer set before. {@code null} removes the
 	 * observer.
 	 * <p>
-	 * A receiver has one observer. It belongs to the RTCRtpReceiver object it
-	 * was set through: disposing that object removes it, also when it was set
-	 * through another object of the same receiver in the meantime, so set it
-	 * through one object, such as the one {@link
-	 * PeerConnectionObserver#onTrack} provides.
+	 * A receiver has one observer, also when several RTCRtpReceiver objects
+	 * stand for it: setting it through one replaces the observer set through
+	 * another. Removing it, or disposing this object, removes only the
+	 * observer set through this object, and only while no other object has
+	 * replaced it.
 	 *
 	 * @param observer The observer, or {@code null}.
 	 */
