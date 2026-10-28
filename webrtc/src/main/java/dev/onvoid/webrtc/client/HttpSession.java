@@ -381,14 +381,8 @@ abstract class HttpSession implements AutoCloseable {
 						counterOfferExpiry(response.header("Content-Type"), System.currentTimeMillis()), response);
 			}
 
-			String body = response.body;
-
-			if (body.length() > HttpCall.MAX_ERROR_BODY) {
-				body = body.substring(0, HttpCall.MAX_ERROR_BODY);
-			}
-
-			throw new WebRtcException("The endpoint " + endpoint + " answered the offer with status "
-					+ response.status + ": " + body);
+			throw new WebRtcException("The endpoint " + endpoint + " answered the offer with "
+					+ response.describe());
 		});
 	}
 
@@ -431,8 +425,7 @@ abstract class HttpSession implements AutoCloseable {
 								}
 								if (response.status / 100 != 2) {
 									throw new WebRtcException("The endpoint answered the answer for "
-											+ reply.session + " with status " + response.status + ": "
-											+ response.body);
+											+ reply.session + " with " + response.describe());
 								}
 
 								ice.attach(reply.session, response.header("ETag"), answer.sdp);
@@ -582,7 +575,7 @@ abstract class HttpSession implements AutoCloseable {
 
 					if (failure == null && response.status / 100 != 2) {
 						failure = new WebRtcException("The endpoint answered the deletion of " + resource
-								+ " with status " + response.status + ": " + response.body);
+								+ " with " + response.describe());
 					}
 					if (failure == null) {
 						return null;

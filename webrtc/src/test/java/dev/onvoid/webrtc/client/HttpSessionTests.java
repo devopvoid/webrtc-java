@@ -323,6 +323,23 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void refusalProblemDescribed() throws Exception {
+		// RFC 9725, 4.1: an endpoint may say why with problem details (RFC 9457).
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "{\"title\":\"Forbidden\","
+				+ "\"status\":403,\"detail\":\"The stream key has expired\"}", 201)) {
+			endpoint.answerStatus = 403;
+			endpoint.answerContentType = "application/problem+json";
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whip.to(endpoint.uri()).track(video).publish(rtc)));
+
+			assertTrue(failed.getCause().getMessage().endsWith(
+					"answered the offer with status 403: Forbidden: The stream key has expired"),
+					failed.getCause().getMessage());
+		}
+	}
+
+	@Test
 	void foreignTrackLeavesNothing() throws Exception {
 		WebRtc other = clientRuntime(UnaryOperator.identity());
 
