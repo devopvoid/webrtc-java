@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import dev.onvoid.webrtc.media.video.I420Buffer;
@@ -523,6 +524,10 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	@Test
 	void hardwareDecodesVp9FixedInterpolationFilter() throws Exception {
 		assumeVp9Platform();
+		// Without a VP9 hardware decoder, both calls would decode with libvpx,
+		// compare nothing and be skipped only at the end, after a call that
+		// needs every frame of the stream to reach the sink.
+		assumeVp9HardwareDecoder();
 
 		List<ByteBuffer> stream = readIvf("vp9-fixed-filter.ivf");
 
@@ -582,7 +587,14 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			call.awaitConnected();
 			call.startMedia();
 
-			assertTrue(received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "too few frames received");
+			if (!received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+				// Tells whether the frames were lost before or after decoding.
+				Map<String, Object> inbound = call.getInboundVideoStats();
+
+				fail("too few frames received: " + (stream.size() - received.getCount()) + " of " + stream.size()
+						+ (inbound == null ? "" : ", decoded " + inbound.get("framesDecoded") + ", dropped "
+								+ inbound.get("framesDropped") + ", key frames asked for " + inbound.get("pliCount")));
+			}
 
 			implementation = decoderImplementationOf(call);
 
@@ -901,6 +913,23 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 	private static boolean isHardware(String implementation) {
 		return implementation.contains("VideoToolbox") || implementation.contains("MediaFoundation")
 				|| implementation.contains("NVDEC") || implementation.contains("VA-API");
+	}
+
+	/**
+	 * Where a hardware decoder is required, the test fails without one for
+	 * VP9; elsewhere it is skipped before it starts a call.
+	 */
+	private static void assumeVp9HardwareDecoder() {
+		boolean required = OS.contains("mac") ? HARDWARE_REQUIRED : HARDWARE_VP9_REQUIRED;
+		boolean available = new HardwareVideoDecoderFactory().getHardwareCodecs().stream()
+				.anyMatch(codec -> "VP9".equalsIgnoreCase(codec.getName()));
+
+		if (required) {
+			assertTrue(available, "no hardware VP9 decoder");
+		}
+		else {
+			assumeTrue(available, "no hardware VP9 decoder");
+		}
 	}
 
 	/**
