@@ -61,9 +61,12 @@ public final class Whep {
 	}
 
 	/**
-	 * @param endpoint the WHEP endpoint, an http or https URL.
+	 * @param endpoint the WHEP endpoint, an https URL, or an http one on this
+	 *                 machine: {@code localhost}, 127.0.0.0/8 or {@code ::1}.
 	 *
 	 * @return a builder that receives video and audio from the endpoint.
+	 *
+	 * @throws IllegalArgumentException if the endpoint is neither.
 	 */
 	public static Builder from(URI endpoint) {
 		return new Builder(HttpSession.checkEndpoint(endpoint));

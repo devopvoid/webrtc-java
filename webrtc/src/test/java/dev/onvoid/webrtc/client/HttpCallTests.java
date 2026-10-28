@@ -146,6 +146,20 @@ class HttpCallTests {
 	}
 
 	@Test
+	void redirectLeavesNoLoopbackInClear() throws Exception {
+		// Plain http is for this machine only, wherever a redirect points.
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> ANSWER, 201)) {
+			endpoint.redirectAnswers(307, "http://media.example/live/endpoint");
+
+			HttpCall call = post(HttpCall.newClient(false), endpoint.uri()).followRedirects();
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(call.send("application/sdp", new byte[1], 1024, head -> { })));
+
+			assertTrue(failed.getCause().getMessage().contains("without TLS"), failed.getCause().getMessage());
+		}
+	}
+
+	@Test
 	void proxyForwardsRequest() throws Exception {
 		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> ANSWER, 201);
 				TestHttpProxy proxy = new TestHttpProxy()) {

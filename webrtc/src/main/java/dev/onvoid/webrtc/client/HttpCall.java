@@ -20,9 +20,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.Authenticator;
 import java.net.CookieHandler;
+import java.net.InetAddress;
 import java.net.PasswordAuthentication;
 import java.net.ProxySelector;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
@@ -474,8 +476,45 @@ final class HttpCall {
 		if ("https".equalsIgnoreCase(from.getScheme()) && !"https".equalsIgnoreCase(scheme)) {
 			throw new IOException("The server redirected to a URL without TLS: " + target);
 		}
+		if (!"https".equalsIgnoreCase(scheme) && !isLoopback(target.getHost())) {
+			throw new IOException("The server redirected to a URL without TLS: " + target);
+		}
 
 		return target;
+	}
+
+	/**
+	 * Tells whether a host is this machine, where WHIP and WHEP may go over
+	 * plain http, to a media server beside the application; anywhere else they
+	 * ask for TLS (RFC 9725, 5). The machine is known by name only as {@code
+	 * localhost}, and otherwise by an address written out, in 127.0.0.0/8 or
+	 * {@code ::1}: a name that resolves to it now may resolve elsewhere later.
+	 *
+	 * @param host the host of a URL, an IPv6 address in brackets, or null.
+	 *
+	 * @return whether the host is this machine.
+	 */
+	static boolean isLoopback(String host) {
+		if (host == null) {
+			return false;
+		}
+
+		String name = host.startsWith("[") && host.endsWith("]") ? host.substring(1, host.length() - 1) : host;
+
+		if (name.equalsIgnoreCase("localhost")) {
+			return true;
+		}
+		// Only an address written out, which is parsed without asking DNS.
+		if (!name.matches("\\d{1,3}(\\.\\d{1,3}){3}") && !name.contains(":")) {
+			return false;
+		}
+
+		try {
+			return InetAddress.getByName(name).isLoopbackAddress();
+		}
+		catch (UnknownHostException e) {
+			return false;
+		}
 	}
 
 	private long remainingNanos() {

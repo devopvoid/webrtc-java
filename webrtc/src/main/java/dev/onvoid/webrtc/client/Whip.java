@@ -59,9 +59,12 @@ public final class Whip {
 	}
 
 	/**
-	 * @param endpoint the WHIP endpoint, an http or https URL.
+	 * @param endpoint the WHIP endpoint, an https URL, or an http one on this
+	 *                 machine: {@code localhost}, 127.0.0.0/8 or {@code ::1}.
 	 *
 	 * @return a builder that publishes to the endpoint.
+	 *
+	 * @throws IllegalArgumentException if the endpoint is neither.
 	 */
 	public static Builder to(URI endpoint) {
 		return new Builder(HttpSession.checkEndpoint(endpoint));
