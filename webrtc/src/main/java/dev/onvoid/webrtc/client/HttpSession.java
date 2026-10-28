@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -194,6 +195,8 @@ abstract class HttpSession implements AutoCloseable {
 	 * a server that does not answer holds no connection; what it creates for
 	 * an offer it had yet to answer is left for it to time out.
 	 *
+	 * @param prepared  the steps that set the peer up for the offer, which
+	 *                  fail the session if they fail.
 	 * @param gathering when the initial offer is sent.
 	 * @param protocol what WHIP or WHEP asks beyond the offer and its answer.
 	 * @param factory  makes the session of the connected peer.
@@ -201,11 +204,13 @@ abstract class HttpSession implements AutoCloseable {
 	 * @return the future handed to the application.
 	 */
 	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
-			String bearerToken, Duration timeout, Gathering gathering, Protocol protocol, Factory<S> factory) {
+			String bearerToken, Duration timeout, CompletableFuture<?> prepared, Gathering gathering,
+			Protocol protocol, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
 		HttpIce ice = new HttpIce(rtc, rtc.httpClient(bearerToken != null), peer, bearerToken, timeout);
-		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, gathering, protocol,
-				ice, abandoned).thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout, ice)),
+		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, prepared,
+				gathering, protocol, ice, abandoned)
+				.thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout, ice)),
 				HttpSession::close);
 
 		// Once the session was handed out, this finds the negotiation finished.
@@ -225,6 +230,7 @@ abstract class HttpSession implements AutoCloseable {
 	 * the initial offer is applied and gathered before POST; endpoint-provided
 	 * ICE servers then arrive too late for this gathering and are ignored.
 	 *
+	 * @param prepared  completes once the peer is set up for the offer.
 	 * @param ice       the ICE of the session once the offer is answered.
 	 * @param abandoned completes when no one waits for the session anymore,
 	 *                  which then ends as if it had failed.
@@ -232,7 +238,8 @@ abstract class HttpSession implements AutoCloseable {
 	 * @return a future with the resource the server named, or null.
 	 */
 	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String bearerToken,
-			Duration timeout, Gathering gathering, Protocol protocol, HttpIce ice, CompletableFuture<?> abandoned) {
+			Duration timeout, CompletableFuture<?> prepared, Gathering gathering, Protocol protocol, HttpIce ice,
+			CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
 		long started = System.nanoTime();
 		// The resource the server created. Whoever takes it out owns it: the
@@ -277,8 +284,8 @@ abstract class HttpSession implements AutoCloseable {
 			fail.accept(new CancellationException("The session with " + endpoint + " was abandoned"));
 		});
 
-		CompletableFuture<RTCSessionDescription> initial = gathering == Gathering.COMPLETE
-				? peer.negotiator().createOffer(Gathering.COMPLETE) : peer.offer();
+		CompletableFuture<RTCSessionDescription> initial = prepared.thenCompose(ready -> gathering == Gathering.COMPLETE
+				? peer.negotiator().createOffer(Gathering.COMPLETE) : peer.offer());
 		initial
 				.thenCompose(offer -> post(offerRequest, endpoint, withRtcpMuxOnly(offer.sdp), protocol, resource)
 						.whenComplete((reply, error) -> {
@@ -706,6 +713,31 @@ abstract class HttpSession implements AutoCloseable {
 			throw new WebRtcException("The session " + response.uri + " answered with Content-Type "
 					+ type + "; expected " + expected);
 		}
+	}
+
+	/**
+	 * Checks the codec names given to a builder.
+	 *
+	 * @return the names, trimmed, in their order.
+	 *
+	 * @throws IllegalArgumentException if there are none, or one is blank.
+	 */
+	static List<String> codecNames(String... names) {
+		if (names.length == 0) {
+			throw new IllegalArgumentException("Name at least one codec");
+		}
+
+		List<String> checked = new ArrayList<>();
+
+		for (String name : names) {
+			if (requireNonNull(name, "name").trim().isEmpty()) {
+				throw new IllegalArgumentException("A codec name is blank");
+			}
+
+			checked.add(name.trim());
+		}
+
+		return Collections.unmodifiableList(checked);
 	}
 
 	static URI checkEndpoint(URI endpoint) {

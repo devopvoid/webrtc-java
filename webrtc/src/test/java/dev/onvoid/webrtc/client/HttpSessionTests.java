@@ -34,7 +34,12 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -363,6 +368,80 @@ class HttpSessionTests extends ClientTestBase {
 			// RFC 9725, 4.2: a WHIP client should only send.
 			assertEquals(2, offer.split("\r\na=sendonly\r\n", -1).length - 1, offer);
 			assertFalse(offer.contains("a=sendrecv"), offer);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void namedCodecsOffered() throws Exception {
+		// Only those named, in that order, by name or MIME type, any case.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Session session = await(Whip.to(endpoint.uri())
+					.videoCodecs("vp9", "H264")
+					.audioCodecs("audio/opus")
+					.track(video)
+					.track(rtc.media().customAudio("audio"))
+					.publish(rtc));
+			String offer = endpoint.request("POST /live/endpoint").body;
+
+			assertEquals(List.of("VP9", "H264"), mediaCodecs(offer, "video"));
+			assertEquals(List.of("opus"), mediaCodecs(offer, "audio"));
+			// Retransmission goes along.
+			assertTrue(offer.contains(" rtx/90000"), offer);
+
+			// Each codec once, although WebRTC both sends and receives it.
+			for (String line : offer.split("\r\n")) {
+				if (line.startsWith("m=")) {
+					String[] fields = line.split(" ");
+					List<String> payloads = Arrays.asList(fields).subList(3, fields.length);
+					assertEquals(new HashSet<>(payloads).size(), payloads.size(), line);
+				}
+			}
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void unknownCodecLeavesNothing() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			assertThrows(IllegalArgumentException.class, () -> Whip.to(endpoint.uri()).videoCodecs());
+			assertThrows(IllegalArgumentException.class, () -> Whip.to(endpoint.uri()).audioCodecs(" "));
+
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(Whip.to(endpoint.uri()).videoCodecs("NOPE").track(video).publish(rtc)));
+
+			assertInstanceOf(ConfigurationException.class, failed.getCause());
+			assertTrue(failed.getCause().getMessage().contains("NOPE"), failed.getCause().getMessage());
+			assertTrue(endpoint.requests.isEmpty());
+		}
+	}
+
+	@Test
+	void videoOfferedWithoutTrack() throws Exception {
+		// Some endpoints, such as Amazon IVS, refuse an offer without video,
+		// even for audio alone.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Session session = await(Whip.to(endpoint.uri())
+					.track(rtc.media().customAudio("audio"))
+					.videoCodecs("H264")
+					.alwaysOfferVideo()
+					.publish(rtc));
+			String offer = endpoint.request("POST /live/endpoint").body;
+			List<String> streams = new ArrayList<>();
+
+			for (String line : offer.split("\r\n")) {
+				if (line.startsWith("a=msid:")) {
+					streams.add(line.substring("a=msid:".length()).split(" ")[0]);
+				}
+			}
+
+			assertEquals(List.of("H264"), mediaCodecs(offer, "video"));
+			assertEquals(2, offer.split("\r\na=sendonly\r\n", -1).length - 1, offer);
+			// RFC 9725, 4.4.2: all m-lines in one stream.
+			assertEquals(2, streams.size(), offer);
+			assertEquals(1, new HashSet<>(streams).size(), offer);
 
 			await(session.closeAsync());
 		}
@@ -852,6 +931,26 @@ class HttpSessionTests extends ClientTestBase {
 			assertFalse(answers.get(0).contains("\nm=video 0 "), answers.get(0));
 			// The handler, which takes every track as video, saw no audio.
 			assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void counterOfferAnsweredWithNamedCodecs() throws Exception {
+		// The transceivers of the endpoint's offer are new, and take the
+		// codecs named all the same.
+		List<String> answers = new CopyOnWriteArrayList<>();
+
+		try (TestHttpEndpoint endpoint = counteringEndpoint("application/sdp", answers)) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).videoCodecs("VP9").play(rtc));
+
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+
+			assertEquals(160, (int) await(width));
+			assertEquals(List.of("VP9"), mediaCodecs(endpoint.request("POST /live/endpoint").body, "video"));
+			assertEquals(List.of("VP9"), mediaCodecs(answers.get(0), "video"));
 
 			await(session.closeAsync());
 		}
@@ -1432,6 +1531,45 @@ class HttpSessionTests extends ClientTestBase {
 	/**
 	 * An endpoint whose side of the session sends the video.
 	 */
+	/**
+	 * The media codecs of the m-line of a kind, in the order it lists them,
+	 * each once, without retransmission, redundancy, FEC, comfort noise and
+	 * DTMF.
+	 */
+	private static List<String> mediaCodecs(String sdp, String kind) {
+		Set<String> companions = Set.of("rtx", "red", "ulpfec", "flexfec-03", "cn", "telephone-event");
+		Map<String, String> names = new HashMap<>();
+		List<String> payloads = new ArrayList<>();
+		boolean section = false;
+
+		for (String line : sdp.split("\r\n")) {
+			if (line.startsWith("m=")) {
+				section = line.startsWith("m=" + kind + " ");
+
+				if (section) {
+					String[] fields = line.split(" ");
+					payloads.addAll(Arrays.asList(fields).subList(3, fields.length));
+				}
+			}
+			else if (section && line.startsWith("a=rtpmap:")) {
+				String[] fields = line.substring("a=rtpmap:".length()).split("[ /]");
+				names.put(fields[0], fields[1]);
+			}
+		}
+
+		List<String> codecs = new ArrayList<>();
+
+		for (String payload : payloads) {
+			String name = names.get(payload);
+
+			if (name != null && !companions.contains(name.toLowerCase(Locale.ROOT)) && !codecs.contains(name)) {
+				codecs.add(name);
+			}
+		}
+
+		return codecs;
+	}
+
 	private TestHttpEndpoint sendingEndpoint() throws Exception {
 		return new TestHttpEndpoint(offer -> {
 			Peer server = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());

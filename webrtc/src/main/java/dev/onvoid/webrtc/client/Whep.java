@@ -20,7 +20,10 @@ import static java.util.Objects.requireNonNull;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -94,6 +97,8 @@ public final class Whep {
 
 		private final Set<MediaKind> receive = EnumSet.of(MediaKind.VIDEO, MediaKind.AUDIO);
 
+		private final Map<MediaKind, List<String>> codecs = new EnumMap<>(MediaKind.class);
+
 		private String bearerToken;
 
 		private Gathering gathering = Gathering.TRICKLE;
@@ -108,12 +113,47 @@ public final class Whep {
 
 		/**
 		 * @param token the token the endpoint authorizes the request with,
-		 *              sent as {@code Authorization: Bearer <token>}.
+		 *              sent as {@code Authorization: Bearer <token>}. Servers
+		 *              that ask for a user and password, such as MediaMTX,
+		 *              take them this way as {@code user:password}.
 		 *
 		 * @return this builder.
 		 */
 		public Builder bearerToken(String token) {
 			this.bearerToken = requireNonNull(token, "token");
+			return this;
+		}
+
+		/**
+		 * Receives video only with the codecs of the given names, in this
+		 * order of preference, so that the endpoint sends one of them, such as
+		 * H.264 for a decoder in hardware. This holds for the answer to a
+		 * counter-offer as well. By default, the offer holds every video codec
+		 * WebRTC has, in its own order, and the endpoint picks.
+		 *
+		 * @param names codec names, such as {@code H264}, {@code VP8},
+		 *              {@code VP9} or {@code AV1}, or MIME types, such as
+		 *              {@code video/H264}; case does not matter.
+		 *
+		 * @return this builder.
+		 */
+		public Builder videoCodecs(String... names) {
+			codecs.put(MediaKind.VIDEO, HttpSession.codecNames(names));
+			return this;
+		}
+
+		/**
+		 * Receives audio only with the codecs of the given names, in this
+		 * order of preference, as {@link #videoCodecs} does for video.
+		 *
+		 * @param names codec names, such as {@code opus}, {@code G722} or
+		 *              {@code PCMU}, or MIME types, such as {@code audio/opus};
+		 *              case does not matter.
+		 *
+		 * @return this builder.
+		 */
+		public Builder audioCodecs(String... names) {
+			codecs.put(MediaKind.AUDIO, HttpSession.codecNames(names));
 			return this;
 		}
 
@@ -196,7 +236,8 @@ public final class Whep {
 		 * @return a future with the session once its peer is connected. It
 		 * fails if the endpoint refuses the offer or the peer does not connect
 		 * in time, with nothing left behind on the server. Cancelling it ends
-		 * the session the same way.
+		 * the session the same way. It fails with a {@link
+		 * ConfigurationException} if WebRTC has no codec of a name given.
 		 */
 		public CompletableFuture<Session> play(WebRtc rtc) {
 			requireNonNull(rtc, "rtc");
@@ -207,10 +248,12 @@ public final class Whep {
 			// what it started with, so that its DELETE is authorized like its POST.
 			String token = bearerToken;
 			Duration limit = timeout;
+			Map<MediaKind, List<String>> names = new EnumMap<>(codecs);
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
-				return HttpSession.start(rtc, peer, endpoint, token, limit, gathering, PROTOCOL, Session::new);
+				return HttpSession.start(rtc, peer, endpoint, token, limit, peer.preferCodecs(names), gathering,
+						PROTOCOL, Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.

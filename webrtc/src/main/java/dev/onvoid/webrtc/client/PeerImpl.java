@@ -21,11 +21,16 @@ import static java.util.Objects.requireNonNull;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -56,6 +61,8 @@ import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCOfferOptions;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
+import dev.onvoid.webrtc.RTCRtpCapabilities;
+import dev.onvoid.webrtc.RTCRtpCodecCapability;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiverDirection;
@@ -95,6 +102,13 @@ final class PeerImpl implements Peer {
 
 	/** How long an impolite peer waits for an answer after it ignored an offer. */
 	private static final long COLLISION_TIMEOUT_MS = 5000;
+
+	/**
+	 * The codecs that go along with those a session names: retransmission,
+	 * redundancy, FEC, comfort noise and DTMF, which serve the media codecs.
+	 */
+	private static final Set<String> COMPANION_CODECS = Set.of("rtx", "red", "ulpfec", "flexfec-03", "cn",
+			"telephone-event");
 
 	final WebRtc rtc;
 
@@ -179,6 +193,12 @@ final class PeerImpl implements Peer {
 	 * executor.
 	 */
 	private final Set<MediaKind> declinedKinds = EnumSet.noneOf(MediaKind.class);
+
+	/**
+	 * The codecs each kind of media is negotiated with, in order, for the
+	 * kinds a session named codecs of. Only on the control executor.
+	 */
+	private final Map<MediaKind, List<RTCRtpCodecCapability>> codecs = new EnumMap<>(MediaKind.class);
 
 	/** Gets the local candidates as well, or null. Called on the control executor. */
 	private volatile Consumer<RTCIceCandidate> candidateListener;
@@ -480,6 +500,135 @@ final class PeerImpl implements Peer {
 	}
 
 	/**
+	 * Adds video that only sends, without a track, to the stream of the
+	 * tracks added without stream ids, for endpoints that take no offer
+	 * without video. Ordered with the negotiation steps.
+	 */
+	CompletableFuture<Void> addVideoWithoutTrack() {
+		return negotiator.run(() -> {
+			RTCRtpTransceiverInit init = new RTCRtpTransceiverInit();
+			init.direction = RTCRtpTransceiverDirection.SEND_ONLY;
+			init.streamIds.add(defaultStreamId);
+
+			connection.addTransceiver(MediaType.VIDEO, init).dispose();
+
+			return CompletableFuture.completedFuture(null);
+		});
+	}
+
+	/**
+	 * Negotiates only the codecs of the given names, in that order, for each
+	 * kind of media given, together with the companion codecs WebRTC pairs
+	 * with them. This holds for the transceivers there are, and for those an
+	 * offer adds later, as a counter-offer this peer answers instead of its
+	 * own. Ordered with the negotiation steps, so it takes effect on the next
+	 * offer or answer.
+	 *
+	 * @param names the codec names of each kind, such as H264 or opus.
+	 *
+	 * @return a future that fails if WebRTC has no codec of a name.
+	 */
+	CompletableFuture<Void> preferCodecs(Map<MediaKind, List<String>> names) {
+		return negotiator.run(() -> {
+			for (Map.Entry<MediaKind, List<String>> entry : names.entrySet()) {
+				codecs.put(entry.getKey(), codecsNamed(entry.getKey(), entry.getValue()));
+			}
+
+			applyCodecs();
+
+			return CompletableFuture.completedFuture(null);
+		});
+	}
+
+	/**
+	 * Finds the codecs of the given names that WebRTC sends or receives,
+	 * followed by the companion codecs.
+	 *
+	 * @throws ConfigurationException if WebRTC has no codec of a name.
+	 */
+	private List<RTCRtpCodecCapability> codecsNamed(MediaKind kind, List<String> names) {
+		MediaType type = kind == MediaKind.AUDIO ? MediaType.AUDIO : MediaType.VIDEO;
+		// Those WebRTC sends and receives, each once. WebRTC tells codecs
+		// apart as this key does, not by their scalability modes, in which
+		// the two lists differ; one codec twice would be offered twice.
+		Map<List<Object>, RTCRtpCodecCapability> available = new LinkedHashMap<>();
+
+		for (RTCRtpCapabilities capabilities : List.of(rtc.factory.getRtpSenderCapabilities(type),
+				rtc.factory.getRtpReceiverCapabilities(type))) {
+			for (RTCRtpCodecCapability codec : capabilities.getCodecs()) {
+				available.putIfAbsent(Arrays.asList(codec.getMimeType().toLowerCase(Locale.ROOT),
+						codec.getClockRate(), codec.getSDPFmtp()), codec);
+			}
+		}
+
+		List<RTCRtpCodecCapability> named = new ArrayList<>();
+
+		for (String name : names) {
+			boolean found = false;
+
+			for (RTCRtpCodecCapability codec : available.values()) {
+				if ((codec.getName().equalsIgnoreCase(name) || codec.getMimeType().equalsIgnoreCase(name))
+						&& !named.contains(codec)) {
+					named.add(codec);
+					found = true;
+				}
+			}
+
+			if (!found) {
+				Set<String> known = new LinkedHashSet<>();
+				available.values().forEach(codec -> known.add(codec.getName()));
+
+				throw new ConfigurationException("WebRTC has no " + kind.name().toLowerCase(Locale.ROOT)
+						+ " codec " + name + " for " + this.name + ", only " + known);
+			}
+		}
+
+		for (RTCRtpCodecCapability codec : available.values()) {
+			if (COMPANION_CODECS.contains(codec.getName().toLowerCase(Locale.ROOT)) && !named.contains(codec)) {
+				named.add(codec);
+			}
+		}
+
+		return named;
+	}
+
+	/**
+	 * Sets the codecs of {@link #preferCodecs} on every transceiver that has
+	 * not stopped.
+	 */
+	private void applyCodecs() {
+		if (codecs.isEmpty()) {
+			return;
+		}
+
+		for (RTCRtpTransceiver transceiver : connection.getTransceivers()) {
+			try {
+				if (transceiver.stopped()) {
+					continue;
+				}
+
+				RTCRtpReceiver receiver = transceiver.getReceiver();
+				MediaStreamTrack track = receiver.getTrack();
+				MediaKind kind = MediaStreamTrack.AUDIO_TRACK_KIND.equals(track.getKind())
+						? MediaKind.AUDIO
+						: MediaKind.VIDEO;
+
+				track.dispose();
+				receiver.dispose();
+
+				List<RTCRtpCodecCapability> preferred = codecs.get(kind);
+
+				if (preferred != null) {
+					transceiver.setCodecPreferences(preferred);
+				}
+			}
+			finally {
+				transceiver.dispose();
+			}
+		}
+	}
+
+	/**
 	 * Gathers candidates from now on with the given ICE servers, unless the
 	 * peer was built with servers of its own, which take precedence.
 	 *
@@ -658,6 +807,8 @@ final class PeerImpl implements Peer {
 					.thenCompose(ignored -> setRemote(offer))
 					.thenCompose(ignored -> {
 						stopTransceivers(rejected);
+						// The offer made transceivers of its own.
+						applyCodecs();
 						releaseHeldCandidates();
 						return createAnswer();
 					})

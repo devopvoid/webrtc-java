@@ -22,8 +22,10 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -96,7 +98,11 @@ public final class Whip {
 
 		private final List<LocalTrack> tracks = new ArrayList<>();
 
+		private final Map<MediaKind, List<String>> codecs = new EnumMap<>(MediaKind.class);
+
 		private String bearerToken;
+
+		private boolean alwaysOfferVideo;
 
 		private Gathering gathering = Gathering.TRICKLE;
 
@@ -123,12 +129,60 @@ public final class Whip {
 		/**
 		 * @param token the token the endpoint authorizes the request with,
 		 *              sent as {@code Authorization: Bearer <token>}; for many
-		 *              services, the stream key.
+		 *              services, the stream key. Servers that ask for a user
+		 *              and password, such as MediaMTX, take them this way as
+		 *              {@code user:password}.
 		 *
 		 * @return this builder.
 		 */
 		public Builder bearerToken(String token) {
 			this.bearerToken = requireNonNull(token, "token");
+			return this;
+		}
+
+		/**
+		 * Offers only the video codecs of the given names, in this order of
+		 * preference, for endpoints that take only some, such as H.264 alone.
+		 * Retransmission and FEC go along. By default, the offer holds every
+		 * video codec WebRTC has, in its own order, and the endpoint picks.
+		 *
+		 * @param names codec names, such as {@code H264}, {@code VP8},
+		 *              {@code VP9} or {@code AV1}, or MIME types, such as
+		 *              {@code video/H264}; case does not matter.
+		 *
+		 * @return this builder.
+		 */
+		public Builder videoCodecs(String... names) {
+			codecs.put(MediaKind.VIDEO, HttpSession.codecNames(names));
+			return this;
+		}
+
+		/**
+		 * Offers only the audio codecs of the given names, in this order of
+		 * preference. Redundancy, comfort noise and DTMF go along. By default,
+		 * the offer holds every audio codec WebRTC has, in its own order.
+		 *
+		 * @param names codec names, such as {@code opus}, {@code G722} or
+		 *              {@code PCMU}, or MIME types, such as {@code audio/opus};
+		 *              case does not matter.
+		 *
+		 * @return this builder.
+		 */
+		public Builder audioCodecs(String... names) {
+			codecs.put(MediaKind.AUDIO, HttpSession.codecNames(names));
+			return this;
+		}
+
+		/**
+		 * Offers video even when no video track is published, for endpoints
+		 * that refuse an offer without video, such as Amazon IVS. The offer
+		 * then holds video that only sends, in the stream of the tracks, and
+		 * nothing is sent on it. With a video track, this changes nothing.
+		 *
+		 * @return this builder.
+		 */
+		public Builder alwaysOfferVideo() {
+			this.alwaysOfferVideo = true;
 			return this;
 		}
 
@@ -193,7 +247,8 @@ public final class Whip {
 		 * @return a future with the session once its peer is connected. It
 		 * fails if the endpoint refuses the offer or the peer does not connect
 		 * in time, with nothing left behind on the server. Cancelling it ends
-		 * the session the same way.
+		 * the session the same way. It fails with a {@link
+		 * ConfigurationException} if WebRTC has no codec of a name given.
 		 *
 		 * @throws IllegalStateException    if no track was given.
 		 * @throws IllegalArgumentException if a track was not created by the
@@ -225,6 +280,8 @@ public final class Whip {
 			// what it started with, so that its DELETE is authorized like its POST.
 			String token = bearerToken;
 			Duration limit = timeout;
+			Map<MediaKind, List<String>> names = new EnumMap<>(codecs);
+			boolean placeholder = alwaysOfferVideo && !kinds.contains(MediaKind.VIDEO);
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
@@ -232,12 +289,19 @@ public final class Whip {
 					peer.addTrack(track);
 				}
 
+				CompletableFuture<Void> video = placeholder
+						? peer.addVideoWithoutTrack()
+						: CompletableFuture.completedFuture(null);
+
 				// Before the offer, which follows in the same order: WHIP only
 				// sends (RFC 9725, 4.2). Should WebRTC refuse, the offer stays
 				// sendrecv, which WHIP allows as well.
 				peer.sendOnly();
 
-				return HttpSession.start(rtc, peer, endpoint, token, limit, gathering, PROTOCOL, Session::new);
+				CompletableFuture<Void> prepared = CompletableFuture.allOf(video, peer.preferCodecs(names));
+
+				return HttpSession.start(rtc, peer, endpoint, token, limit, prepared, gathering, PROTOCOL,
+						Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.
