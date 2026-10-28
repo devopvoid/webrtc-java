@@ -32,6 +32,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import javax.net.ssl.SSLContext;
@@ -40,8 +41,8 @@ import javax.net.ssl.SSLServerSocket;
 /**
  * Just enough HTTP for WHIP and WHEP tests. A POST is answered with what the
  * handler returns for the offer, and creates a resource; a DELETE of that
- * resource returns 200, unless the test sets another status. Requests are
- * served one at a time, in the order they arrive.
+ * resource returns 200, unless the test sets another status. Each connection
+ * is served on a thread of its own, as a server does.
  */
 final class TestHttpEndpoint implements AutoCloseable {
 
@@ -54,11 +55,26 @@ final class TestHttpEndpoint implements AutoCloseable {
 
 		final String authorization;
 
+		/** The If-Match header field, or null. */
+		final String ifMatch;
+
+		/** The Content-Type header field, or null. */
+		final String contentType;
+
+		final String body;
+
 
 		Request(String method, String path, String authorization) {
+			this(method, path, authorization, null, null, "");
+		}
+
+		Request(String method, String path, String authorization, String ifMatch, String contentType, String body) {
 			this.method = method;
 			this.path = path;
 			this.authorization = authorization;
+			this.ifMatch = ifMatch;
+			this.contentType = contentType;
+			this.body = body;
 		}
 
 		@Override
@@ -109,6 +125,21 @@ final class TestHttpEndpoint implements AutoCloseable {
 
 	/** The status a PATCH is answered with. */
 	volatile int patchStatus = 204;
+
+	/** Header fields an answer of 201 carries beyond Location, each ended by CRLF. */
+	volatile String answerHeaders = "";
+
+	/**
+	 * Takes the fragment of an ICE restart, a PATCH with If-Match *, and
+	 * returns the endpoint's own, or is null for an endpoint that refuses ICE
+	 * restarts with 405. Answered with 200 and the ETag "restart-n".
+	 */
+	volatile Function<String, String> iceRestarts;
+
+	/** The status an ICE restart is answered with; with another than 200, the restart fails. */
+	volatile int iceRestartStatus = 200;
+
+	private int restarts;
 
 	/** Where POSTs are redirected to, or null. */
 	private volatile String redirectLocation;
@@ -303,6 +334,43 @@ final class TestHttpEndpoint implements AutoCloseable {
 	}
 
 	/**
+	 * Waits until the endpoint has received a request that matches.
+	 *
+	 * @return the request.
+	 */
+	synchronized Request awaitRequest(Predicate<Request> matching, String what, long timeoutSeconds)
+			throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+
+		while (true) {
+			for (Request request : requests) {
+				if (matching.test(request)) {
+					return request;
+				}
+			}
+
+			long left = deadline - System.nanoTime();
+
+			if (left <= 0) {
+				throw new AssertionError("No " + what + " within " + timeoutSeconds + " s. Requests: " + requests);
+			}
+
+			TimeUnit.NANOSECONDS.timedWait(this, left);
+		}
+	}
+
+	/**
+	 * @return the first request received that is the given one, such as
+	 * "DELETE /live/session/1".
+	 */
+	Request request(String request) {
+		return requests.stream()
+				.filter(r -> r.toString().equals(request))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("No " + request + ". Requests: " + requests));
+	}
+
+	/**
 	 * @return how many of the requests received are the given one.
 	 */
 	long count(String request) {
@@ -316,8 +384,11 @@ final class TestHttpEndpoint implements AutoCloseable {
 
 	private void serve() {
 		while (!server.isClosed()) {
-			try (Socket socket = server.accept()) {
-				handle(socket);
+			try {
+				Socket socket = server.accept();
+				Thread thread = new Thread(() -> serve(socket), "test-http-endpoint-connection");
+				thread.setDaemon(true);
+				thread.start();
 			}
 			catch (IOException e) {
 				// Closed.
@@ -325,10 +396,25 @@ final class TestHttpEndpoint implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * Serves one connection, apart from the others: one that a client opened
+	 * and gave up before it sent anything holds up no other.
+	 */
+	private void serve(Socket socket) {
+		try (Socket connection = socket) {
+			handle(connection);
+		}
+		catch (IOException e) {
+			// The client went away.
+		}
+	}
+
 	private void handle(Socket socket) throws IOException {
 		InputStream in = socket.getInputStream();
 		String[] requestLine = readLine(in).split(" ");
 		String authorization = null;
+		String ifMatch = null;
+		String contentType = null;
 		int length = 0;
 		String line;
 
@@ -342,6 +428,12 @@ final class TestHttpEndpoint implements AutoCloseable {
 			else if (name.equals("authorization")) {
 				authorization = value;
 			}
+			else if (name.equals("if-match")) {
+				ifMatch = value;
+			}
+			else if (name.equals("content-type")) {
+				contentType = value;
+			}
 		}
 
 		byte[] body = new byte[length];
@@ -351,7 +443,8 @@ final class TestHttpEndpoint implements AutoCloseable {
 		}
 
 		synchronized (this) {
-			requests.add(new Request(requestLine[0], requestLine[1], authorization));
+			requests.add(new Request(requestLine[0], requestLine[1], authorization, ifMatch, contentType,
+					new String(body, StandardCharsets.UTF_8)));
 			notifyAll();
 		}
 
@@ -408,7 +501,36 @@ final class TestHttpEndpoint implements AutoCloseable {
 				answered++;
 			}
 
-			respond(out, "201 Created", "Location: " + location + "\r\n", answer);
+			respond(out, "201 Created", "Location: " + location + "\r\n" + answerHeaders, answer);
+			return;
+		}
+
+		if (requestLine[0].equals("PATCH") && "*".equals(ifMatch)) {
+			Function<String, String> restarter = iceRestarts;
+
+			if (restarter == null) {
+				respond(out, "405 Method Not Allowed", "", "");
+				return;
+			}
+			if (iceRestartStatus != 200) {
+				respond(out, iceRestartStatus + " Status", "", "");
+				return;
+			}
+
+			byte[] fragment = restarter.apply(new String(body, StandardCharsets.UTF_8))
+					.getBytes(StandardCharsets.UTF_8);
+			int restart;
+
+			synchronized (this) {
+				restart = ++restarts;
+			}
+
+			String head = "HTTP/1.1 200 OK\r\nContent-Type: application/trickle-ice-sdpfrag\r\nETag: \"restart-"
+					+ restart + "\"\r\nContent-Length: " + fragment.length + "\r\nConnection: close\r\n\r\n";
+
+			out.write(head.getBytes(StandardCharsets.US_ASCII));
+			out.write(fragment);
+			out.flush();
 			return;
 		}
 

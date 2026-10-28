@@ -35,8 +35,8 @@ import dev.onvoid.webrtc.client.Whep;
  *   <li>Ending the session, which deletes it on the server</li>
  * </ul>
  * <p>
- * {@link Whep} sends an offer with all local candidates, applies the answer and waits until
- * the peer is connected. The Client API guide shows the same steps by hand, through the
+ * {@link Whep} sends an offer, trickles the local candidates after it, applies the answer and
+ * waits until the peer is connected. The Client API guide shows the same steps by hand, through the
  * peer's negotiator, for servers that speak a protocol of their own.
  * <p>
  * Run it against a WHEP endpoint, such as one of MediaMTX, for a number of seconds:

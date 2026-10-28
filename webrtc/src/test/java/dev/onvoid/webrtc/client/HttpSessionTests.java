@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.client;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -45,6 +46,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
+import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
@@ -107,7 +109,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			await(session.closeAsync());
 
-			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
 			assertEquals(PeerState.CLOSED, session.peer().state());
 		}
 	}
@@ -128,7 +130,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			// Before the endpoint goes, which would fail the DELETE.
 			await(session.closeAsync());
-			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
 		}
 	}
 
@@ -339,6 +341,192 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void candidatesTrickled() throws Exception {
+		// The offer goes out at once, without candidates. They follow by
+		// PATCH, with the entity-tag of the ICE session, as RFC 9725 asks.
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerHeaders = "ETag: \"ice-1\"\r\n";
+
+			Whep.Session session = await(Whep.from(endpoint.uri()).bearerToken("secret").play(rtc));
+			TestHttpEndpoint.Request offer = endpoint.request("POST /live/endpoint");
+			TestHttpEndpoint.Request last = endpoint.awaitRequest(request -> request.method.equals("PATCH")
+					&& request.body.contains("a=end-of-candidates"), "PATCH that ends the candidates", TIMEOUT_SECONDS);
+
+			assertFalse(offer.body.contains("a=candidate:"), offer.body);
+			assertEquals(HttpIce.FRAGMENT_TYPE, last.contentType);
+			assertEquals("\"ice-1\"", last.ifMatch);
+			assertEquals("Bearer secret", last.authorization);
+			// The ICE information of the offer, then the candidates.
+			assertTrue(last.body.startsWith(HttpIce.Fragment.of(offer.body).text), last.body);
+			assertTrue(endpoint.requests.stream().anyMatch(request -> request.method.equals("PATCH")
+					&& request.body.contains("a=candidate:")), () -> "Requests: " + endpoint.requests);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void iceServersFromLink() throws Exception {
+		// The STUN and TURN servers the endpoint names, which the peer gathers
+		// its candidates with.
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerHeaders = "Link: <stun:127.0.0.1:3478>; rel=\"ice-server\"\r\n"
+					+ "Link: <turn:127.0.0.1:3478?transport=udp>; rel=\"ice-server\"; username=\"user\"; "
+					+ "credential=\"secret\"\r\n";
+
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			List<RTCIceServer> servers = await(session.peer().withNative(connection ->
+					connection.getConfiguration().iceServers));
+
+			assertEquals(2, servers.size(), () -> "Servers: " + servers);
+			assertEquals(Arrays.asList("stun:127.0.0.1:3478"), servers.get(0).urls);
+			assertEquals(Arrays.asList("turn:127.0.0.1:3478?transport=udp"), servers.get(1).urls);
+			assertEquals("user", servers.get(1).username);
+			assertEquals("secret", servers.get(1).password);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void ownIceServersWin() throws Exception {
+		// Servers the application names override the endpoint's, as RFC 9725
+		// allows.
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerHeaders = "Link: <stun:127.0.0.1:3478>; rel=\"ice-server\"\r\n";
+
+			Whep.Session session = await(Whep.from(endpoint.uri()).iceServer("stun:127.0.0.2:3478").play(rtc));
+			List<RTCIceServer> servers = await(session.peer().withNative(connection ->
+					connection.getConfiguration().iceServers));
+
+			assertEquals(1, servers.size(), () -> "Servers: " + servers);
+			assertEquals(Arrays.asList("stun:127.0.0.2:3478"), servers.get(0).urls);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void iceRestarted() throws Exception {
+		// Only the ICE information goes to the session, which answers with its
+		// own; the media go on, and later candidates carry the new entity-tag.
+		List<String> fragments = new CopyOnWriteArrayList<>();
+
+		try (TestHttpEndpoint endpoint = restartingEndpoint(fragments)) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			String offered = HttpIce.Fragment.of(endpoint.request("POST /live/endpoint").body).ufrag;
+
+			await(session.restartIce());
+
+			TestHttpEndpoint.Request restart = endpoint.awaitRequest(request -> "*".equals(request.ifMatch),
+					"ICE restart", TIMEOUT_SECONDS);
+			String remote = await(session.peer().withNative(connection -> connection.getRemoteDescription().sdp));
+
+			assertEquals(HttpIce.FRAGMENT_TYPE, restart.contentType);
+			assertNotEquals(offered, HttpIce.Fragment.parse(restart.body).ufrag);
+			assertTrue(remote.contains("a=ice-ufrag:" + HttpIce.Fragment.parse(fragments.get(0)).ufrag), remote);
+
+			endpoint.awaitRequest(request -> "\"restart-1\"".equals(request.ifMatch),
+					"candidates after the restart", TIMEOUT_SECONDS);
+
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			assertEquals(160, (int) await(width));
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void refusedIceRestartKeepsSession() throws Exception {
+		// The endpoint takes no ICE restarts: the new offer is taken back, and
+		// the ICE session before goes on.
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+			String offered = HttpIce.Fragment.of(endpoint.request("POST /live/endpoint").body).ufrag;
+
+			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.restartIce()));
+			String local = await(session.peer().withNative(connection -> connection.getLocalDescription().sdp));
+
+			assertTrue(failed.getCause().getMessage().contains("takes no ICE restarts"),
+					failed.getCause().getMessage());
+			assertEquals(offered, HttpIce.Fragment.of(local).ufrag);
+			assertEquals(PeerState.CONNECTED, session.peer().state());
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void failedConnectionRestartsIce() throws Exception {
+		List<String> fragments = new CopyOnWriteArrayList<>();
+
+		try (TestHttpEndpoint endpoint = restartingEndpoint(fragments)) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+
+			session.ice().stateChanged(PeerState.FAILED);
+
+			endpoint.awaitRequest(request -> "*".equals(request.ifMatch), "ICE restart", TIMEOUT_SECONDS);
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void disconnectedWaitsBeforeRestart() throws Exception {
+		// A connection that comes back by itself needs no restart.
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			Whep.Session session = await(Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).play(client));
+
+			session.ice().stateChanged(PeerState.DISCONNECTED);
+			assertEquals(1, timer.scheduled(HttpIce.DISCONNECTED_GRACE));
+
+			session.ice().stateChanged(PeerState.CONNECTED);
+			assertEquals(0, timer.scheduled(HttpIce.DISCONNECTED_GRACE));
+
+			// Still connected when the wait is over: no restart either.
+			session.ice().stateChanged(PeerState.DISCONNECTED);
+			assertEquals(1, timer.fire(HttpIce.DISCONNECTED_GRACE));
+			assertEquals(0, endpoint.requests.stream().filter(request -> "*".equals(request.ifMatch)).count());
+
+			await(session.closeAsync());
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void automaticRestartsLimited() throws Exception {
+		// Restarts that fail are not made forever: three in a row at most.
+		List<String> fragments = new CopyOnWriteArrayList<>();
+
+		try (TestHttpEndpoint endpoint = restartingEndpoint(fragments)) {
+			endpoint.iceRestartStatus = 500;
+
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(rtc));
+
+			for (int i = 0; i <= HttpIce.MAX_AUTOMATIC_RESTARTS; i++) {
+				session.ice().stateChanged(PeerState.FAILED);
+			}
+
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+			while (errors.size() < HttpIce.MAX_AUTOMATIC_RESTARTS && System.nanoTime() < deadline) {
+				Thread.sleep(10);
+			}
+
+			assertEquals(HttpIce.MAX_AUTOMATIC_RESTARTS, errors.size(), () -> "Errors: " + errors);
+			assertEquals(HttpIce.MAX_AUTOMATIC_RESTARTS,
+					endpoint.requests.stream().filter(request -> "*".equals(request.ifMatch)).count());
+			errors.clear();
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
 	void counterOfferAnswered() throws Exception {
 		// The endpoint rejects the player's offer and makes its own, which the
 		// player answers by PATCH to the session the endpoint named.
@@ -527,7 +715,7 @@ class HttpSessionTests extends ClientTestBase {
 		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
 			Peer peer = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
 			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), null,
-					Duration.ofSeconds(1));
+					Duration.ofSeconds(1), null);
 
 			endpoint.trickleDeletes();
 
@@ -754,7 +942,7 @@ class HttpSessionTests extends ClientTestBase {
 		IllegalStateException peerError = new IllegalStateException("The peer did not close");
 
 		// Nothing to delete: the session fails as the peer did.
-		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, null, SESSION_TIMEOUT);
+		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, null, SESSION_TIMEOUT, null);
 		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
 		assertSame(peerError, failed.getCause());
 
@@ -763,7 +951,7 @@ class HttpSessionTests extends ClientTestBase {
 			endpoint.deleteStatus = 500;
 
 			HttpSession both = new Whep.Session(rtc, failingToClose(peerError),
-					endpoint.uri().resolve("/live/session/1"), null, SESSION_TIMEOUT);
+					endpoint.uri().resolve("/live/session/1"), null, SESSION_TIMEOUT, null);
 			Throwable error = assertCloseFails(both, "500");
 
 			assertEquals(Arrays.asList(peerError), Arrays.asList(error.getSuppressed()));
@@ -801,8 +989,8 @@ class HttpSessionTests extends ClientTestBase {
 			await(await(session).closeAsync());
 
 			assertEquals("Bearer first", endpoint.requests.get(0).authorization);
-			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
-			assertEquals("Bearer first", endpoint.requests.get(1).authorization);
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+			assertEquals("Bearer first", endpoint.request("DELETE /live/session/1").authorization);
 		}
 
 		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
@@ -815,8 +1003,8 @@ class HttpSessionTests extends ClientTestBase {
 			answer.countDown();
 			await(await(session).closeAsync());
 
-			assertEquals("DELETE /live/session/1", endpoint.requests.get(1).toString());
-			assertEquals("Bearer first", endpoint.requests.get(1).authorization);
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+			assertEquals("Bearer first", endpoint.request("DELETE /live/session/1").authorization);
 		}
 	}
 
@@ -902,6 +1090,42 @@ class HttpSessionTests extends ClientTestBase {
 				throw new IllegalStateException(e);
 			}
 		});
+
+		return endpoint;
+	}
+
+	/**
+	 * An endpoint whose side sends the video and takes ICE restarts, as a WHEP
+	 * session that supports them: it restarts ICE with the player's new ICE
+	 * information and answers with its own.
+	 *
+	 * @param fragments gets the fragments the endpoint answers with.
+	 */
+	private TestHttpEndpoint restartingEndpoint(List<String> fragments) throws Exception {
+		Peer[] server = new Peer[1];
+		TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> {
+			server[0] = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+			server[0].addTrack(video);
+			return answer(server[0], offer);
+		}, 201);
+
+		endpoint.iceRestarts = fragment -> {
+			try {
+				String offer = server[0].withNative(connection -> connection.getRemoteDescription().sdp)
+						.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+				String answer = answer(server[0], HttpIce.Fragment.parse(fragment).applyTo(offer));
+				StringBuilder own = new StringBuilder(HttpIce.Fragment.of(answer).text);
+
+				HttpIce.Fragment.parse(answer).candidates.forEach(candidate -> own.append(candidate).append("\r\n"));
+				own.append("a=end-of-candidates\r\n");
+				fragments.add(own.toString());
+
+				return own.toString();
+			}
+			catch (Exception e) {
+				throw new IllegalStateException(e);
+			}
+		};
 
 		return endpoint;
 	}

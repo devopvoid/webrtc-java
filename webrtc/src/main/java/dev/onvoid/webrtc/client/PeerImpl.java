@@ -42,14 +42,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 
 import dev.onvoid.webrtc.AddIceCandidateObserver;
 import dev.onvoid.webrtc.CreateSessionDescriptionObserver;
 import dev.onvoid.webrtc.PeerConnectionObserver;
 import dev.onvoid.webrtc.RTCAnswerOptions;
+import dev.onvoid.webrtc.RTCConfiguration;
 import dev.onvoid.webrtc.RTCDataChannel;
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCIceGatheringState;
+import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCOfferOptions;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
@@ -176,6 +179,12 @@ final class PeerImpl implements Peer {
 	 * executor.
 	 */
 	private final Set<MediaKind> declinedKinds = EnumSet.noneOf(MediaKind.class);
+
+	/** Gets the local candidates as well, or null. Called on the control executor. */
+	private volatile Consumer<RTCIceCandidate> candidateListener;
+
+	/** Runs once gathering is complete, or null. Called on the control executor. */
+	private volatile Runnable gatheredListener;
 
 
 	PeerImpl(WebRtc rtc, PeerOptions options, String name) {
@@ -430,6 +439,131 @@ final class PeerImpl implements Peer {
 	}
 
 	/**
+	 * Creates an offer without applying it, so that the configuration can
+	 * still change before candidates are gathered for it, as WHIP and WHEP do
+	 * with the ICE servers the endpoint names in its answer.
+	 *
+	 * @return a future with the offer, which {@link #applyLocal} applies.
+	 */
+	CompletableFuture<RTCSessionDescription> offer() {
+		return negotiator.run(this::createOffer);
+	}
+
+	/**
+	 * Applies a description this peer created, which starts the gathering of
+	 * candidates for it.
+	 */
+	CompletableFuture<Void> applyLocal(RTCSessionDescription description) {
+		return negotiator.run(() -> setLocal(description));
+	}
+
+	/**
+	 * Gathers candidates from now on with the given ICE servers, unless the
+	 * peer was built with servers of its own, which take precedence.
+	 *
+	 * @param servers the ICE servers; none leaves the configuration as it is.
+	 *
+	 * @return a future that fails if WebRTC refuses the servers.
+	 */
+	CompletableFuture<Void> useIceServers(List<RTCIceServer> servers) {
+		if (servers.isEmpty() || !options.iceServers.isEmpty()) {
+			return CompletableFuture.completedFuture(null);
+		}
+
+		return negotiator.run(() -> {
+			try {
+				RTCConfiguration config = connection.getConfiguration();
+				config.iceServers = new ArrayList<>(servers);
+				connection.setConfiguration(config);
+
+				return CompletableFuture.completedFuture(null);
+			}
+			catch (RuntimeException e) {
+				return CompletableFuture.failedFuture(new ConfigurationException("WebRTC refused the ICE servers "
+						+ servers + " for " + name + ": " + e.getMessage(), e));
+			}
+		});
+	}
+
+	/**
+	 * Hands the candidates this peer gathers to the given listener as well,
+	 * on the control executor, and tells it when gathering is complete.
+	 *
+	 * @param candidates gets each local candidate.
+	 * @param gathered   runs once gathering is complete, each time.
+	 */
+	void onLocalCandidates(Consumer<RTCIceCandidate> candidates, Runnable gathered) {
+		this.candidateListener = candidates;
+		this.gatheredListener = gathered;
+	}
+
+	/**
+	 * Restarts ICE as WHIP and WHEP do, without a renegotiation: only the ICE
+	 * information of a new offer goes to the remote peer, and the remote
+	 * answer applied before stays, with the ICE information that comes back.
+	 * An exchange that fails takes the new offer back, and the ICE session
+	 * before goes on.
+	 *
+	 * @param exchange sends the ICE information of the new offer, and returns
+	 *                 how to change the remote answer.
+	 *
+	 * @return a future that completes once the new ICE information is applied.
+	 */
+	CompletableFuture<Void> restartIce(
+			Function<RTCSessionDescription, CompletableFuture<UnaryOperator<String>>> exchange) {
+		return negotiator.run(() -> {
+			RTCSessionDescription remote = connection.getRemoteDescription();
+
+			if (connection.getSignalingState() != RTCSignalingState.STABLE || remote == null
+					|| remote.sdpType != RTCSdpType.ANSWER) {
+				return CompletableFuture.failedFuture(new NegotiationException("The peer " + name
+						+ " has no answer to its own offer to restart ICE with"));
+			}
+
+			connection.restartIce();
+
+			return createOffer()
+					.thenCompose(offer -> setLocal(offer).thenApply(ignored -> offer))
+					.thenCompose(offer -> onControl(exchange.apply(offer)))
+					.thenCompose(change -> {
+						RTCSessionDescription answer = connection.getRemoteDescription();
+
+						return setRemote(new RTCSessionDescription(RTCSdpType.ANSWER, change.apply(answer.sdp)));
+					})
+					.handle((applied, error) -> {
+						if (error == null) {
+							return CompletableFuture.<Void>completedFuture(null);
+						}
+
+						CompletableFuture<Void> failed = CompletableFuture.failedFuture(unwrap(error));
+
+						if (closed || connection.getSignalingState() == RTCSignalingState.STABLE) {
+							return failed;
+						}
+
+						// Back to the ICE session before, which the server keeps.
+						return setLocal(new RTCSessionDescription(RTCSdpType.ROLLBACK, ""))
+								.handle((ignored, rollbackError) -> null)
+								.thenCompose(ignored -> failed);
+					})
+					.thenCompose(result -> result);
+		});
+	}
+
+	/**
+	 * @return a future that completes as the given one, but on the control
+	 * executor, or fails once the peer is closed.
+	 */
+	private <T> CompletableFuture<T> onControl(CompletableFuture<T> future) {
+		CompletableFuture<T> result = new CompletableFuture<>();
+
+		future.whenComplete((value, error) -> control.execute(() -> complete(result, value, error),
+				() -> result.completeExceptionally(closedError())));
+
+		return result;
+	}
+
+	/**
 	 * Takes this peer's own offer back and answers the given one instead, as
 	 * a WHEP player does when the server counters its offer. Unlike {@link
 	 * Negotiator#answer}, which fails while an offer of this peer is out.
@@ -462,7 +596,12 @@ final class PeerImpl implements Peer {
 				}
 			}
 
-			return setLocal(new RTCSessionDescription(RTCSdpType.ROLLBACK, ""))
+			// An offer created but not applied yet needs no taking back.
+			CompletableFuture<Void> stable = connection.getSignalingState() == RTCSignalingState.STABLE
+					? CompletableFuture.completedFuture(null)
+					: setLocal(new RTCSessionDescription(RTCSdpType.ROLLBACK, ""));
+
+			return stable
 					.thenCompose(ignored -> setRemote(offer))
 					.thenCompose(ignored -> {
 						stopTransceivers(rejected);
@@ -1214,6 +1353,12 @@ final class PeerImpl implements Peer {
 			gatheringWaiters.clear();
 
 			waiters.forEach(waiter -> waiter.complete(null));
+
+			Runnable listener = gatheredListener;
+
+			if (listener != null && !closed) {
+				listener.run();
+			}
 		}
 	}
 
@@ -1415,6 +1560,12 @@ final class PeerImpl implements Peer {
 		public void onIceCandidate(RTCIceCandidate candidate) {
 			control.execute(() -> {
 				if (!closed) {
+					Consumer<RTCIceCandidate> listener = candidateListener;
+
+					if (listener != null) {
+						listener.accept(candidate);
+					}
+
 					send(SignalMessage.of(candidate));
 				}
 			});

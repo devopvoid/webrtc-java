@@ -37,6 +37,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -107,6 +108,9 @@ final class HttpCall {
 
 	/** Statuses other than 2xx whose body is read as that of a 2xx one. */
 	private Set<Integer> answerStatuses = Collections.emptySet();
+
+	/** Header fields the request carries beyond those it sets itself. */
+	private final Map<String, String> headers = new LinkedHashMap<>();
 
 	/** The exchange under way, which an abort cancels. */
 	private CompletableFuture<?> exchange;
@@ -186,6 +190,16 @@ final class HttpCall {
 	HttpCall retry(ScheduledExecutorService timer, Set<Integer> statuses) {
 		this.retryTimer = timer;
 		this.retryStatuses = statuses;
+		return this;
+	}
+
+	/**
+	 * Adds a header field to the request, such as If-Match.
+	 *
+	 * @return this request.
+	 */
+	HttpCall header(String name, String value) {
+		headers.put(name, value);
 		return this;
 	}
 
@@ -290,6 +304,8 @@ final class HttpCall {
 			if (bearerToken != null) {
 				builder.header("Authorization", "Bearer " + bearerToken);
 			}
+
+			headers.forEach(builder::header);
 			if (content != null) {
 				builder.header("Content-Type", contentType)
 						.header("Accept", contentType)
