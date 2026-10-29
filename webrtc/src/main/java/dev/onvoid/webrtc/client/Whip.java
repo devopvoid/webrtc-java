@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.internal.Timeouts;
 
@@ -328,6 +329,22 @@ public final class Whip {
 		 */
 		public Builder timeout(Duration timeout) {
 			this.timeout = Timeouts.requirePositive(timeout, "timeout");
+			return this;
+		}
+
+		/**
+		 * Sets the transform that every encoded frame sent passes through,
+		 * after the encoder and before the packetizer, as end-to-end
+		 * encryption needs. It is in place before the offer goes out, so no
+		 * frame leaves without it. See {@link
+		 * PeerOptions.Builder#sendTransform}.
+		 *
+		 * @param transform the transform of every sender.
+		 *
+		 * @return this builder.
+		 */
+		public Builder sendTransform(RTCEncodedFrameTransformer transform) {
+			options.sendTransform(transform);
 			return this;
 		}
 
