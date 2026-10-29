@@ -147,9 +147,9 @@ peer.onTrack(track -> {
 });
 ```
 
-The client API has no audio subscription on a local track. To detect speech at
-the microphone, attach the adapter as an `AudioTrackSink` to an `AudioTrack` of
-the native API:
+An `AudioTrack` of the native API takes the adapter as an `AudioTrackSink`, as
+long as the track's source hands its audio to sinks. A remote track and a track
+over a `CustomAudioSource` do:
 
 ```java
 VoiceActivityExample sink = new VoiceActivityExample(speech -> {
@@ -164,6 +164,11 @@ finally {
     sink.close();
 }
 ```
+
+A microphone track does not: WebRTC passes captured audio from the audio device
+module straight to the senders, and the source of the track hands nothing to
+sinks. An [`AudioRecorder`](/tools/audio/audio-recorder) captures a microphone
+on its own, apart from any peer connection.
 
 The adapter invokes the consumer on the thread that delivers the audio: a thread
 of the `onAudio` subscription, or the audio callback thread of a sink. Keep work
