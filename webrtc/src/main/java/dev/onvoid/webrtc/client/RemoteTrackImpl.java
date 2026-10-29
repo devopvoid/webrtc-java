@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.internal.NativeApi;
@@ -132,6 +133,31 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 
 			return endedHandlers.add(ignored -> handler.run());
 		});
+	}
+
+	@Override
+	public CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform) {
+		CompletableFuture<Void> result = new CompletableFuture<>();
+
+		peer.control.execute(() -> {
+			try {
+				if (peer.isClosed()) {
+					throw peer.closedError();
+				}
+				if (ended) {
+					throw new IllegalStateException("The track " + id + " ended");
+				}
+
+				receiver.setTransform(peer.guard(transform, "the track " + id + " of " + peer.name));
+				result.complete(null);
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e instanceof IllegalStateException
+						? e : PeerImpl.asWebRtcException(e, "Setting the transform of the track " + id + " failed"));
+			}
+		}, () -> result.completeExceptionally(new PeerClosedException("The runtime is closed")));
+
+		return peer.toPublic(result);
 	}
 
 	@Override

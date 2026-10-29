@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCConfiguration;
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCIceTransportPolicy;
 import dev.onvoid.webrtc.internal.Timeouts;
@@ -66,6 +67,10 @@ public final class PeerOptions {
 
 	final long channelReceiveLimit;
 
+	final RTCEncodedFrameTransformer sendTransform;
+
+	final RTCEncodedFrameTransformer receiveTransform;
+
 
 	private PeerOptions(Builder builder) {
 		this.name = builder.name;
@@ -80,6 +85,8 @@ public final class PeerOptions {
 		this.gatheringTimeout = builder.gatheringTimeout;
 		this.channelSendLimit = builder.channelSendLimit;
 		this.channelReceiveLimit = builder.channelReceiveLimit;
+		this.sendTransform = builder.sendTransform;
+		this.receiveTransform = builder.receiveTransform;
 	}
 
 	/**
@@ -142,6 +149,10 @@ public final class PeerOptions {
 		private long channelSendLimit = 16 * 1024 * 1024;
 
 		private long channelReceiveLimit = 16 * 1024 * 1024;
+
+		private RTCEncodedFrameTransformer sendTransform;
+
+		private RTCEncodedFrameTransformer receiveTransform;
 
 
 		private Builder() {
@@ -300,6 +311,50 @@ public final class PeerOptions {
 			}
 
 			this.channelReceiveLimit = bytes;
+			return this;
+		}
+
+		/**
+		 * Sets the transform that every encoded frame the peer sends passes
+		 * through, after the encoder and before the packetizer, as end-to-end
+		 * encryption needs. It is set on each sender as the track is added,
+		 * before negotiation, so no frame leaves without it and the encoder
+		 * needs no restart. {@link Sender#transform} replaces it for one
+		 * sender.
+		 * <p>
+		 * The transform runs on a thread of each sender, not on the peer's
+		 * event thread; see {@link RTCEncodedFrameTransformer}. A frame it
+		 * throws on is dropped, and the first such failure of each sender
+		 * reaches the peer's {@code onError} handlers.
+		 *
+		 * @param transform the transform of every sender.
+		 *
+		 * @return this builder.
+		 */
+		public Builder sendTransform(RTCEncodedFrameTransformer transform) {
+			this.sendTransform = requireNonNull(transform, "transform");
+			return this;
+		}
+
+		/**
+		 * Sets the transform that every encoded frame the peer receives passes
+		 * through, after the depacketizer and before the decoder, as
+		 * end-to-end encryption needs. It is set on each receiver before
+		 * {@link Peer#onTrack} hands its track out, so it is in place before
+		 * the first frame arrives. {@link RemoteTrack#transform} replaces it
+		 * for one track.
+		 * <p>
+		 * The transform runs on a thread of each receiver, not on the peer's
+		 * event thread; see {@link RTCEncodedFrameTransformer}. A frame it
+		 * throws on is dropped, and the first such failure of each receiver
+		 * reaches the peer's {@code onError} handlers.
+		 *
+		 * @param transform the transform of every receiver.
+		 *
+		 * @return this builder.
+		 */
+		public Builder receiveTransform(RTCEncodedFrameTransformer transform) {
+			this.receiveTransform = requireNonNull(transform, "transform");
 			return this;
 		}
 

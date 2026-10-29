@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
+
 /**
  * Sends one track on one peer, made by {@link Peer#addTrack}.
  */
@@ -47,6 +49,25 @@ public interface Sender {
 	 * @return a future that completes once the values are applied.
 	 */
 	CompletableFuture<Void> configure(Encoding encoding);
+
+	/**
+	 * Sets the transform that every encoded frame of this sender passes
+	 * through, after the encoder and before the packetizer, in place of the
+	 * one set before, such as the {@link PeerOptions.Builder#sendTransform
+	 * send transform} of the peer. The first transform set on a video sender
+	 * that already sends restarts its encoder, which costs a key frame; set
+	 * the peer's send transform to have it in place from the start.
+	 * <p>
+	 * The transform stays with the sender when its track is replaced. It runs
+	 * on a thread of this sender, not on the peer's event thread; see {@link
+	 * RTCEncodedFrameTransformer}. A frame it throws on is dropped, and the
+	 * first such failure reaches the peer's {@code onError} handlers.
+	 *
+	 * @param transform the transform, or null to send frames unchanged.
+	 *
+	 * @return a future that completes once the transform is set.
+	 */
+	CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform);
 
 	/**
 	 * Sends DTMF tones on an audio sender, 100 ms each with 70 ms between

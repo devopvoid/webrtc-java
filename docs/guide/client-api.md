@@ -204,6 +204,7 @@ Every method of the client API may be called from any thread, including from ins
 | Your calls into the API | your thread | They don't block. The exceptions are `WebRtc.createPeer`, which waits briefly for the connection, and `WebRtc.close()`, which waits up to the close timeout. |
 | Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
 | `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
+| [Encoded transforms](#encoded-transforms) | a thread of each sender and receiver | Better not. A slow transform delays only its own frames, and one that falls several seconds behind has frames dropped. |
 | `LocalTrack.onEnded` and `Devices.onChange` handlers, callbacks of the futures of local tracks and devices | the event thread of the runtime's local media | Yes, but that delays the other events of local media. They must not wait for a future of this API either. A track is released before its `onEnded` handlers run, so they never hold up a release. |
 | WebRTC's own callbacks | WebRTC's threads | Not your code. The library only copies what they report and queues it. |
 
@@ -547,6 +548,31 @@ try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
 ```
 
 Closing the peer, or removing a sender, during a recording ends that track in the file, and `stop()` still finishes it. The [Media Recording](/guide/media/media-recording) guide covers containers and the recorder's events.
+
+### Encoded Transforms
+
+An [encoded transform](/guide/advanced/encoded-transforms) sees every encoded frame between the encoder and the network, or between the network and the decoder, which is where end-to-end encryption goes. The transforms of the peer options apply to every sender and every remote track of the peer:
+
+```java
+Peer peer = rtc.createPeer(PeerOptions.builder()
+        .signaling(signaling)
+        .sendTransform(frame -> encrypt(frame))
+        .receiveTransform(frame -> decrypt(frame))
+        .build());
+```
+
+The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives.
+
+A single sender or remote track takes a transform of its own, in place of the peer's, and `null` removes it:
+
+```java
+videoSender.transform(frame -> addMetadata(frame));
+remoteTrack.transform(null);                   // frames reach the decoder unchanged
+```
+
+The first transform set on a video sender that already sends restarts its encoder, which costs a key frame. A transform set on a remote track misses the frames that arrive before its future completes, so a transform that every frame needs, such as decryption, belongs in the peer options. A recording of a sender holds its frames before the transform, a recording of a remote track after it.
+
+Transforms run on a thread of each sender and receiver, not on the peer's event thread. A frame a transform throws on is dropped rather than passed on, so a failed encryption never sends a frame in the clear. The first such failure of each sender or receiver goes to the peer's `onError` handlers. The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call with AES-GCM this way.
 
 ## Data Channels
 
