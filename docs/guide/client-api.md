@@ -681,7 +681,19 @@ Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
         .get(15, TimeUnit.SECONDS);
 ```
 
-A normal SDP answer must have status 201, a nonempty session `Location`, and Content-Type `application/sdp` (parameters are allowed). Invalid responses fail the session; a resource already named by the server is deleted even when its SDP response cannot be used. The message of a failure an endpoint answered with an error names the status, and what the endpoint says of it: the title and detail of problem details (RFC 9457, `application/problem+json`), as in `status 403: Forbidden: The stream key has expired`, or else the start of the body.
+A normal SDP answer must have status 201, a nonempty session `Location`, and Content-Type `application/sdp` (parameters are allowed). Invalid responses fail the session; a resource already named by the server is deleted even when its SDP response cannot be used. The message of a failure an endpoint answered with an error names the status, and what the endpoint says of it: the title and detail of problem details (RFC 9457, `application/problem+json`), as in `status 403: Forbidden: The stream key has expired`, or else the start of the body. The failure is an `HttpStatusException`, whose `status()`, `title()`, `detail()` and `problemType()` give the same to a program; for a deletion or for candidates, it is the cause of the failure reported. As RFC 9725 asks, read no specific cause into a status beyond its class, since endpoints use them differently:
+
+```java
+try {
+    session = Whip.to(url).bearerToken(key).track(camera).publish(rtc).get(15, TimeUnit.SECONDS);
+}
+catch (ExecutionException e) {
+    if (e.getCause() instanceof HttpStatusException) {
+        HttpStatusException refused = (HttpStatusException) e.getCause();
+        System.err.println("Refused, " + refused.status() + ": " + refused.detail());
+    }
+}
+```
 
 When the connection fails, or stays disconnected for two seconds, the session restarts ICE: the peer gathers new candidates, and only the new ICE username fragment and password go to the session, by `PATCH` with `If-Match: *`, while the media go on as negotiated. The session's answer, with status 200 and Content-Type `application/trickle-ice-sdpfrag`, brings its own ICE information and a new `ETag`. Its candidate set replaces the old one completely, including when it is empty. Three restarts in a row that do not bring the connection back, or an endpoint that takes no restarts, end the attempts, which the error handler hears of. `session.restartIce()` restarts ICE at once, say after the network changed; a restart that fails leaves the ICE session before as it was. Restarts also work after a WHEP counter-offer; the player keeps its answerer role and updates only the ICE information.
 
@@ -803,6 +815,7 @@ Failures arrive as exceptions, thrown or as the cause of a failed future, all of
 | `MediaException` | A device is missing, busy, refused access, or already open with other options. |
 | `ConfigurationException` | A call does not fit how the runtime was built, or WebRTC refused a configuration. |
 | `BlockingCallException` | A future was waited on from an event thread. |
+| `HttpStatusException` | A WHIP or WHEP endpoint answered with an error status, which `status()` gives, with the `title()`, `detail()` and `problemType()` of the problem details it sent, if any. |
 
 Failures that no caller waits for, such as a remote description rejected during automatic negotiation, go to the peer's `onError` handlers:
 

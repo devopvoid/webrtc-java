@@ -633,10 +633,26 @@ final class HttpCall {
 		 */
 		String describe() {
 			String description = "status " + status;
-			String problem = problem();
+			Map<?, ?> problem = problemDetails();
 
 			if (problem != null) {
-				return problem.isEmpty() ? description : description + ": " + problem;
+				List<String> parts = new ArrayList<>();
+				String title = member(problem, "title");
+				String detail = member(problem, "detail");
+				String type = member(problem, "type");
+
+				if (title != null) {
+					parts.add(title);
+				}
+				if (detail != null) {
+					parts.add(detail);
+				}
+				// RFC 9457, 4.2.1: about:blank says no more than the status.
+				if (parts.isEmpty() && type != null && !"about:blank".equals(type)) {
+					parts.add(type);
+				}
+
+				return parts.isEmpty() ? description : description + ": " + String.join(": ", parts);
 			}
 			if (body == null || body.isEmpty()) {
 				return description;
@@ -646,11 +662,28 @@ final class HttpCall {
 		}
 
 		/**
-		 * @return what the problem details of the body say, empty if no more
-		 * than the status, or null if the body has none, or none that can be
-		 * read.
+		 * @param message what failed, which describes the response, as {@link
+		 *                #describe()} does.
+		 *
+		 * @return an exception with the message, the status of the response
+		 * and what its problem details say.
 		 */
-		private String problem() {
+		HttpStatusException error(String message) {
+			Map<?, ?> problem = problemDetails();
+
+			if (problem == null) {
+				return new HttpStatusException(message, status, null, null, null);
+			}
+
+			return new HttpStatusException(message, status, member(problem, "type"), member(problem, "title"),
+					member(problem, "detail"));
+		}
+
+		/**
+		 * @return the members of the problem details of the body (RFC 9457),
+		 * or null if the body has none, or none that can be read.
+		 */
+		private Map<?, ?> problemDetails() {
 			String type = header("Content-Type");
 
 			if (body == null || type == null
@@ -668,29 +701,17 @@ final class HttpCall {
 				return null;
 			}
 
-			if (!(parsed instanceof Map)) {
-				return null;
-			}
+			return parsed instanceof Map ? (Map<?, ?>) parsed : null;
+		}
 
-			Map<?, ?> members = (Map<?, ?>) parsed;
-			List<String> parts = new ArrayList<>();
+		/**
+		 * @return the string member of the name, trimmed, or null if there is
+		 * none, or one that is not a string or is blank.
+		 */
+		private static String member(Map<?, ?> members, String name) {
+			Object value = members.get(name);
 
-			for (String name : List.of("title", "detail")) {
-				Object value = members.get(name);
-
-				if (value instanceof String && !((String) value).trim().isEmpty()) {
-					parts.add(((String) value).trim());
-				}
-			}
-
-			Object problemType = members.get("type");
-
-			// RFC 9457, 4.2.1: about:blank says no more than the status.
-			if (parts.isEmpty() && problemType instanceof String && !"about:blank".equals(problemType)) {
-				parts.add((String) problemType);
-			}
-
-			return String.join(": ", parts);
+			return value instanceof String && !((String) value).trim().isEmpty() ? ((String) value).trim() : null;
 		}
 	}
 

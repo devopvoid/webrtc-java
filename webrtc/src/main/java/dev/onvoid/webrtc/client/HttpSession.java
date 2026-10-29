@@ -408,8 +408,7 @@ abstract class HttpSession implements AutoCloseable {
 						protocol);
 			}
 
-			throw new WebRtcException("The endpoint " + endpoint + " answered the offer with "
-					+ response.describe());
+			throw response.error("The endpoint " + endpoint + " answered the offer with " + response.describe());
 		});
 	}
 
@@ -451,7 +450,7 @@ abstract class HttpSession implements AutoCloseable {
 											+ error.getMessage(), error);
 								}
 								if (response.status / 100 != 2) {
-									throw new WebRtcException("The endpoint answered the answer for "
+									throw response.error("The endpoint answered the answer for "
 											+ reply.session + " with " + response.describe());
 								}
 
@@ -611,7 +610,7 @@ abstract class HttpSession implements AutoCloseable {
 					Throwable failure = error;
 
 					if (failure == null && response.status / 100 != 2) {
-						failure = new WebRtcException("The endpoint answered the deletion of " + resource
+						failure = response.error("The endpoint answered the deletion of " + resource
 								+ " with " + response.describe());
 					}
 					if (failure == null) {

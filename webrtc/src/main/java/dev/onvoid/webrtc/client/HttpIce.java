@@ -271,11 +271,10 @@ final class HttpIce {
 				restartsRefused = true;
 			}
 
-			throw new WebRtcException("The session " + target + " takes no ICE restarts: " + response.describe());
+			throw response.error("The session " + target + " takes no ICE restarts: " + response.describe());
 		}
 		if (response.status / 100 != 2) {
-			throw new WebRtcException("The session " + target + " answered the ICE restart with "
-					+ response.describe());
+			throw response.error("The session " + target + " answered the ICE restart with " + response.describe());
 		}
 
 		HttpSession.requireContentType(response, FRAGMENT_TYPE);
@@ -379,10 +378,16 @@ final class HttpIce {
 					}
 
 					if (report) {
+						// An error status is the cause, for its status.
+						Throwable cause = error != null
+								? error
+								: response.error("The session " + target + " answered the candidates with "
+										+ response.describe());
+
 						rtc.reportError(new WebRtcException("Sending ICE candidates to the session " + target
 								+ " failed, and no more are sent: " + (error != null
 								? error.getMessage()
-								: response.describe()), error));
+								: response.describe()), cause));
 					}
 
 					flush();
