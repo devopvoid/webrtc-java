@@ -21,18 +21,24 @@ import java.nio.ByteOrder;
 import java.util.function.Consumer;
 import java.util.Objects;
 
+import dev.onvoid.webrtc.client.AudioChunk;
+import dev.onvoid.webrtc.client.RemoteAudio;
+import dev.onvoid.webrtc.client.Subscription;
 import dev.onvoid.webrtc.media.audio.AudioConverter;
 import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 import dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector;
 
 /**
- * Attach to an AudioTrack with addSink(), then removeSink() before close().
- * Buffers arbitrary callback lengths into 10 ms frames and converts interleaved
+ * With the client API, subscribe it to a remote track with
+ * {@link RemoteAudio#onAudio(Consumer)}, then close the {@link Subscription}
+ * before close(). An AudioTrack of the native API, such as a microphone's,
+ * takes it with addSink(), then removeSink() before close().
+ * Buffers arbitrary chunk lengths into 10 ms frames and converts interleaved
  * signed 16-bit PCM to 16 kHz mono, including input at 44.1 kHz. The consumer runs
- * on the audio callback thread and should return promptly. It receives raw frame
- * decisions; a UI should apply its own speaking-state timing off this thread.
+ * on the thread that delivers the audio and should return promptly. It receives raw
+ * frame decisions; a UI should apply its own speaking-state timing off this thread.
  */
-public final class VoiceActivityExample implements AudioTrackSink, AutoCloseable {
+public final class VoiceActivityExample implements Consumer<AudioChunk>, AudioTrackSink, AutoCloseable {
 
     private final Consumer<Boolean> onDecision;
     private final StandaloneVoiceActivityDetector detector;
@@ -49,6 +55,11 @@ public final class VoiceActivityExample implements AudioTrackSink, AutoCloseable
     public VoiceActivityExample(Consumer<Boolean> onDecision) {
         this.onDecision = Objects.requireNonNull(onDecision, "onDecision");
         detector = new StandaloneVoiceActivityDetector(StandaloneVoiceActivityDetector.Mode.AGGRESSIVE);
+    }
+
+    @Override
+    public void accept(AudioChunk chunk) {
+        onData(chunk.samples(), 16, chunk.sampleRate(), chunk.channels(), chunk.frames());
     }
 
     @Override

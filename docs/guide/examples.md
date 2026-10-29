@@ -149,13 +149,13 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.JavaFxCameraExample"
 
 ## Encrypted Recording
 
-The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call end to end with encoded frame transforms, and records what the receiving side decrypted into a media file. See the [Encoded Transforms](/guide/advanced/encoded-transforms) and [Media Recording](/guide/media/media-recording) guides for the APIs it uses.
+The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call end to end with encoded frame transforms, with the [Client API](/guide/client-api#encoded-transforms), and records what the receiving side decrypted into a media file. See the [Encoded Transforms](/guide/advanced/encoded-transforms) and [Media Recording](/guide/media/media-recording) guides for the APIs it uses.
 
 **Key features demonstrated:**
-- Encrypting every encoded audio and video frame with AES-GCM in an `RTCEncodedFrameTransformer` on the senders, and decrypting it on the receivers
+- Encrypting every encoded audio and video frame with AES-GCM in the send transform of the peer options, and decrypting it in the receive transform, from the first frame on
 - Keeping the codec header of each frame in the clear for the packetizer, and authenticating it instead
 - Dropping frames that fail to encrypt or to authenticate, rather than passing them on
-- Recording the receivers with a `MediaRecorder`, without decoding or re-encoding
+- Recording the remote tracks with a `MediaRecorder`, without decoding or re-encoding
 
 ::: info
 Like the [Media File](#media-file) example, this one needs the `webrtc-java-media` module. The output file is optional; its extension picks the container.

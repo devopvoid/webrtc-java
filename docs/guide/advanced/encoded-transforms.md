@@ -41,6 +41,20 @@ Set the transform of a video sender before negotiating when you can. The first t
 
 The transform belongs to the native sender or receiver, not to the Java object: every `RTCRtpSender` instance for the same sender shares it, setting it through one replaces what was set through another, and disposing of an instance leaves it in place.
 
+### With the Client API
+
+The [Client API](/guide/client-api#encoded-transforms) takes the same transforms. Those of the peer options apply to every sender and remote track of the peer, and are set before the first frame passes either way:
+
+```java
+PeerOptions.builder()
+        .signaling(signaling)
+        .sendTransform(frame -> encrypt(frame))
+        .receiveTransform(frame -> decrypt(frame))
+        .build();
+```
+
+`Sender.transform(...)` and `RemoteTrack.transform(...)` replace them for one sender or track.
+
 ## Reading and Changing the Payload
 
 `getData()` returns the payload in a `ByteBuffer`, from position zero to its size. The buffer holds a copy, which may be changed freely; `setData(...)` then writes it back:
@@ -91,7 +105,7 @@ Both do nothing for audio.
 
 ## End-to-End Encryption
 
-A complete example with AES-GCM is in [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java). Two points matter for any encrypting transform:
+A complete example with AES-GCM, on the transforms of the client API's peer options, is in [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java). Two points matter for any encrypting transform:
 
 - **Keep the codec header in the clear.** The packetizer and depacketizer read the start of each frame: a VP8 receiver finds key frames and the frame size in the first bytes. Browsers leave 10 bytes of a VP8 key frame, 3 of a VP8 delta frame and 1 of an Opus frame unencrypted, and authenticate them as associated data instead. H.264 is split at its NAL unit start codes before it is sent, so encrypting it whole breaks the packetizer; prefer VP8, VP9 or AV1 for encrypted calls, or leave the NAL unit headers in the clear.
 - **Make each frame self-contained.** Frames are lost, so each needs what it takes to be decrypted, such as its IV, and a receiver must drop a frame that fails to authenticate rather than pass it on.
