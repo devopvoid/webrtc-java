@@ -87,7 +87,7 @@ final class HttpCall {
 
 	private final String method;
 
-	private final String bearerToken;
+	private final String authorization;
 
 	private final Duration timeout;
 
@@ -126,14 +126,16 @@ final class HttpCall {
 
 
 	/**
-	 * @param timeout how long the request may take, from now on, until its
-	 *                response has been read; redirects included.
+	 * @param authorization the value of the Authorization header, such as
+	 *                      {@code Bearer <token>}, or null for none.
+	 * @param timeout       how long the request may take, from now on, until
+	 *                      its response has been read; redirects included.
 	 */
-	HttpCall(HttpClient client, URI uri, String method, String bearerToken, Duration timeout) {
+	HttpCall(HttpClient client, URI uri, String method, String authorization, Duration timeout) {
 		this.client = client;
 		this.uri = uri;
 		this.method = method;
-		this.bearerToken = bearerToken;
+		this.authorization = authorization;
 		this.timeout = timeout;
 		this.start = System.nanoTime();
 
@@ -160,7 +162,7 @@ final class HttpCall {
 	 *                      Basic credentials with those of the default {@link
 	 *                      Authenticator} of the moment. A client that does
 	 *                      drops the Authorization header of its requests, so
-	 *                      it cannot send a bearer token.
+	 *                      it cannot send the credentials of a session.
 	 *
 	 * @return the client.
 	 */
@@ -220,7 +222,7 @@ final class HttpCall {
 
 	/**
 	 * Follows redirects with status 307 and 308, up to {@link #MAX_REDIRECTS}
-	 * of them, with the bearer token. One from https to plain http fails.
+	 * of them, with the credentials. One from https to plain http fails.
 	 *
 	 * @return this request.
 	 */
@@ -302,8 +304,8 @@ final class HttpCall {
 		try {
 			HttpRequest.Builder builder = HttpRequest.newBuilder(target).timeout(Duration.ofNanos(left));
 
-			if (bearerToken != null) {
-				builder.header("Authorization", "Bearer " + bearerToken);
+			if (authorization != null) {
+				builder.header("Authorization", authorization);
 			}
 
 			headers.forEach(builder::header);

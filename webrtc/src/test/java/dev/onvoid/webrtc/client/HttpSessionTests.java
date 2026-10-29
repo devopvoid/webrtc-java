@@ -29,11 +29,13 @@ import java.lang.reflect.Proxy;
 import java.net.URI;
 import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -139,6 +141,48 @@ class HttpSessionTests extends ClientTestBase {
 			// Before the endpoint goes, which would fail the DELETE.
 			await(session.closeAsync());
 			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+		}
+	}
+
+	@Test
+	void basicAuthSent() throws Exception {
+		// RFC 9725, 4.7: HTTP authentication besides bearer tokens, here Basic
+		// (RFC 7617) in UTF-8, on every request of the session.
+		String expected = "Basic " + Base64.getEncoder().encodeToString(
+				"user:pässword".getBytes(StandardCharsets.UTF_8));
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			Whep.Session session = await(Whep.from(endpoint.uri())
+					.bearerToken("replaced")
+					.basicAuth("user", "pässword")
+					.play(rtc));
+
+			endpoint.awaitRequest(r -> r.method.equals("PATCH"), "candidates", TIMEOUT_SECONDS);
+			await(session.closeAsync());
+
+			assertEquals(1, endpoint.count("DELETE /live/session/1"));
+
+			for (TestHttpEndpoint.Request request : endpoint.requests) {
+				assertEquals(expected, request.authorization, request.toString());
+			}
+		}
+	}
+
+	@Test
+	void basicUserWithoutColon() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			assertThrows(IllegalArgumentException.class, () -> Whip.to(endpoint.uri()).basicAuth("us:er", "x"));
+
+			// The credentials given last count.
+			Whip.Session session = await(Whip.to(endpoint.uri())
+					.basicAuth("user", "password")
+					.bearerToken("secret")
+					.track(video)
+					.publish(rtc));
+
+			assertEquals("Bearer secret", endpoint.request("POST /live/endpoint").authorization);
+
+			await(session.closeAsync());
 		}
 	}
 

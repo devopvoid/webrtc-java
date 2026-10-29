@@ -26,6 +26,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -71,7 +72,7 @@ abstract class HttpSession implements AutoCloseable {
 
 	private final URI resource;
 
-	private final String bearerToken;
+	private final String authorization;
 
 	private final Duration timeout;
 
@@ -85,11 +86,11 @@ abstract class HttpSession implements AutoCloseable {
 	private final CompletableFuture<Void> closed = new CompletableFuture<>();
 
 
-	HttpSession(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout, HttpIce ice) {
+	HttpSession(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice) {
 		this.rtc = rtc;
 		this.peer = peer;
 		this.resource = resource;
-		this.bearerToken = bearerToken;
+		this.authorization = authorization;
 		this.timeout = timeout;
 		this.ice = ice;
 
@@ -139,7 +140,7 @@ abstract class HttpSession implements AutoCloseable {
 			}
 
 			CompletableFuture<Throwable> peerClosed = peer.closeAsync().handle((ignored, error) -> error);
-			CompletableFuture<WebRtcException> deleted = discard(rtc, resource, bearerToken, timeout);
+			CompletableFuture<WebRtcException> deleted = discard(rtc, resource, authorization, timeout);
 
 			deleted.thenAcceptBoth(peerClosed, (deleteError, peerError) -> {
 				Throwable error = PeerImpl.unwrap(peerError);
@@ -204,13 +205,13 @@ abstract class HttpSession implements AutoCloseable {
 	 * @return the future handed to the application.
 	 */
 	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
-			String bearerToken, Duration timeout, CompletableFuture<?> prepared, Gathering gathering,
+			String authorization, Duration timeout, CompletableFuture<?> prepared, Gathering gathering,
 			Protocol protocol, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
-		HttpIce ice = new HttpIce(rtc, rtc.httpClient(bearerToken != null), peer, bearerToken, timeout);
-		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, bearerToken, timeout, prepared,
+		HttpIce ice = new HttpIce(rtc, rtc.httpClient(authorization != null), peer, authorization, timeout);
+		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, authorization, timeout, prepared,
 				gathering, protocol, ice, abandoned)
-				.thenApply(resource -> factory.create(rtc, peer, resource, bearerToken, timeout, ice)),
+				.thenApply(resource -> factory.create(rtc, peer, resource, authorization, timeout, ice)),
 				HttpSession::close);
 
 		// Once the session was handed out, this finds the negotiation finished.
@@ -237,7 +238,7 @@ abstract class HttpSession implements AutoCloseable {
 	 *
 	 * @return a future with the resource the server named, or null.
 	 */
-	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String bearerToken,
+	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String authorization,
 			Duration timeout, CompletableFuture<?> prepared, Gathering gathering, Protocol protocol, HttpIce ice,
 			CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
@@ -246,10 +247,10 @@ abstract class HttpSession implements AutoCloseable {
 		// session that connected, or whoever deletes it.
 		AtomicReference<URI> resource = new AtomicReference<>();
 		AtomicBoolean finished = new AtomicBoolean();
-		HttpClient client = rtc.httpClient(bearerToken != null);
+		HttpClient client = rtc.httpClient(authorization != null);
 		// Made now, so that it ends with the session's deadline at the latest,
 		// however long the offer takes.
-		HttpCall offerRequest = new HttpCall(client, endpoint, "POST", bearerToken, timeout)
+		HttpCall offerRequest = new HttpCall(client, endpoint, "POST", authorization, timeout)
 				.followRedirects()
 				.retry(rtc.timer, protocol.retried)
 				.readBodies(protocol.counterOffers ? COUNTER_OFFER : Collections.emptySet());
@@ -272,7 +273,7 @@ abstract class HttpSession implements AutoCloseable {
 			result.completeExceptionally(PeerImpl.asWebRtcException(error,
 					"The session with " + endpoint + " could not be set up"));
 
-			discard(rtc, resource.getAndSet(null), bearerToken, timeout);
+			discard(rtc, resource.getAndSet(null), authorization, timeout);
 		};
 
 		ScheduledFuture<?> deadline = rtc.timer.schedule(() -> fail.accept(new WebRtcException(
@@ -293,7 +294,7 @@ abstract class HttpSession implements AutoCloseable {
 								// The session ended while the offer was out,
 								// after the server named what it created, which
 								// then has no one else to delete it.
-								discard(rtc, resource.getAndSet(null), bearerToken, timeout);
+								discard(rtc, resource.getAndSet(null), authorization, timeout);
 							}
 						})
 						.thenCompose(reply -> (gathering == Gathering.COMPLETE
@@ -322,7 +323,7 @@ abstract class HttpSession implements AutoCloseable {
 							// The rest of the session's time, which the answer has.
 							Duration left = timeout.minusNanos(System.nanoTime() - started);
 
-							return answerCounterOffer(rtc, client, peer, reply, bearerToken,
+							return answerCounterOffer(rtc, client, peer, reply, authorization,
 									left.isNegative() || left.isZero() ? Duration.ofNanos(1) : left, resource, ice,
 									request, finished);
 						}))
@@ -395,7 +396,7 @@ abstract class HttpSession implements AutoCloseable {
 	 * @param timeout what is left of the session's timeout.
 	 */
 	private static CompletableFuture<Void> answerCounterOffer(WebRtc rtc, HttpClient client, PeerImpl peer,
-			Reply reply, String bearerToken, Duration timeout, AtomicReference<URI> resource, HttpIce ice,
+			Reply reply, String authorization, Duration timeout, AtomicReference<URI> resource, HttpIce ice,
 			AtomicReference<HttpCall> request, AtomicBoolean finished) {
 		return peer.answerInstead(new RTCSessionDescription(RTCSdpType.OFFER, reply.sdp), Gathering.COMPLETE)
 				.thenCompose(answer -> {
@@ -404,7 +405,7 @@ abstract class HttpSession implements AutoCloseable {
 								+ " expired before it was answered");
 					}
 
-					HttpCall answerRequest = new HttpCall(client, reply.session, "PATCH", bearerToken, timeout);
+					HttpCall answerRequest = new HttpCall(client, reply.session, "PATCH", authorization, timeout);
 					request.set(answerRequest);
 
 					if (finished.get()) {
@@ -544,7 +545,7 @@ abstract class HttpSession implements AutoCloseable {
 	 */
 	interface Factory<S extends HttpSession> {
 
-		S create(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout, HttpIce ice);
+		S create(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice);
 	}
 
 	/**
@@ -554,7 +555,7 @@ abstract class HttpSession implements AutoCloseable {
 	 *
 	 * @return a future with the failure reported, or null.
 	 */
-	private static CompletableFuture<WebRtcException> discard(WebRtc rtc, URI resource, String bearerToken,
+	private static CompletableFuture<WebRtcException> discard(WebRtc rtc, URI resource, String authorization,
 			Duration timeout) {
 		if (resource == null) {
 			return CompletableFuture.completedFuture(null);
@@ -563,7 +564,7 @@ abstract class HttpSession implements AutoCloseable {
 		HttpCall request;
 
 		try {
-			request = new HttpCall(rtc.httpClient(bearerToken != null), resource, "DELETE", bearerToken, timeout);
+			request = new HttpCall(rtc.httpClient(authorization != null), resource, "DELETE", authorization, timeout);
 		}
 		catch (RejectedExecutionException e) {
 			return CompletableFuture.completedFuture(leftOnServer(rtc, resource));
@@ -617,7 +618,7 @@ abstract class HttpSession implements AutoCloseable {
 
 	/**
 	 * Resolves the resource the server named for a session. It may be on
-	 * another host, as WHIP and WHEP allow, but the bearer token goes along to
+	 * another host, as WHIP and WHEP allow, but the credentials go along to
 	 * delete it, so an https endpoint cannot name a plain http resource.
 	 */
 	static URI resourceOf(URI endpoint, String location) {
@@ -706,6 +707,34 @@ abstract class HttpSession implements AutoCloseable {
 			throw new WebRtcException("The session " + response.uri + " answered with Content-Type "
 					+ type + "; expected " + expected);
 		}
+	}
+
+	/**
+	 * @return the value of an Authorization header with a bearer token (RFC
+	 * 6750), as WHIP and WHEP ask clients to support.
+	 */
+	static String bearer(String token) {
+		return "Bearer " + requireNonNull(token, "token");
+	}
+
+	/**
+	 * @return the value of an Authorization header with Basic credentials (RFC
+	 * 7617), in UTF-8.
+	 *
+	 * @throws IllegalArgumentException if the user contains a colon, which
+	 *                                  Basic cannot tell from the one that
+	 *                                  separates the password.
+	 */
+	static String basic(String user, String password) {
+		requireNonNull(user, "user");
+		requireNonNull(password, "password");
+
+		if (user.indexOf(':') >= 0) {
+			throw new IllegalArgumentException("The user of Basic authentication must not contain a colon");
+		}
+
+		return "Basic " + Base64.getEncoder().encodeToString((user + ":" + password)
+				.getBytes(StandardCharsets.UTF_8));
 	}
 
 	/**

@@ -605,22 +605,23 @@ public final class WebRtc implements AutoCloseable {
 	}
 
 	/**
-	 * @param bearerToken whether the requests carry a bearer token.
+	 * @param authorizes whether the requests carry credentials of their own,
+	 *                   in the Authorization header.
 	 *
 	 * @return the client of WHIP and WHEP requests.
 	 *
 	 * @throws RejectedExecutionException once the runtime has stopped its
 	 *                                    threads.
 	 */
-	HttpClient httpClient(boolean bearerToken) {
-		int index = bearerToken ? 0 : 1;
+	HttpClient httpClient(boolean authorizes) {
+		int index = authorizes ? 0 : 1;
 
 		synchronized (httpLock) {
 			if (httpStopped) {
 				throw new RejectedExecutionException("The runtime is closed");
 			}
 			if (httpClients[index] == null) {
-				httpClients[index] = HttpCall.newClient(!bearerToken);
+				httpClients[index] = HttpCall.newClient(!authorizes);
 			}
 
 			return httpClients[index];
