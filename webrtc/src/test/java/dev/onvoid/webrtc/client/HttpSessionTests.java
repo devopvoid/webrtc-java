@@ -137,6 +137,7 @@ class HttpSessionTests extends ClientTestBase {
 			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
 
 			assertEquals(MediaKind.VIDEO, await(published).kind());
+			assertTrue(session.extensions().isEmpty());
 
 			// Before the endpoint goes, which would fail the DELETE.
 			await(session.closeAsync());
@@ -566,6 +567,42 @@ class HttpSessionTests extends ClientTestBase {
 			assertThrows(IllegalStateException.class, () -> whip.publish(rtc));
 			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
 			assertTrue(endpoint.requests.isEmpty());
+		}
+	}
+
+	@Test
+	void extensionLinksRead() {
+		// RFC 9725, 4.9: the links of extension relations, resolved; those of
+		// other relations a client ignores.
+		Map<String, URI> extensions = HttpSession.extensions(List.of(
+				"<stun:stun.example.com>; rel=\"ice-server\", "
+						+ "</live/sse>; rel=\"urn:ietf:params:whip:ext:example:server-sent-events\"",
+				"<https://other.example.com/layer>; rel=\"next URN:ietf:params:whip:ext:example:layer\"",
+				"</live/second>; rel=\"URN:ietf:params:whip:ext:example:layer\"",
+				"</live/whep>; rel=\"urn:ietf:params:whep:ext:example:layer\"",
+				"</live/bare>; rel=\"urn:ietf:params:whip:ext:\""),
+				URI.create("https://example.com/live/endpoint"), "urn:ietf:params:whip:ext:");
+
+		assertEquals(List.of("urn:ietf:params:whip:ext:example:server-sent-events",
+				"URN:ietf:params:whip:ext:example:layer"), new ArrayList<>(extensions.keySet()));
+		assertEquals(URI.create("https://example.com/live/sse"),
+				extensions.get("urn:ietf:params:whip:ext:example:server-sent-events"));
+		// Of a relation named twice, the first.
+		assertEquals(URI.create("https://other.example.com/layer"),
+				extensions.get("URN:ietf:params:whip:ext:example:layer"));
+	}
+
+	@Test
+	void extensionsOfSession() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			endpoint.answerHeaders = "Link: </live/sse>; rel=\"urn:ietf:params:whip:ext:example:server-sent-events\"\r\n";
+
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
+
+			assertEquals(Map.of("urn:ietf:params:whip:ext:example:server-sent-events",
+					endpoint.uri().resolve("/live/sse")), session.extensions());
+
+			await(session.closeAsync());
 		}
 	}
 
@@ -1215,8 +1252,8 @@ class HttpSessionTests extends ClientTestBase {
 		// a byte at a time and never ends, and the session's timeout ends it.
 		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
 			Peer peer = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
-			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), null,
-					Duration.ofSeconds(1), null);
+			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), Map.of(),
+					null, Duration.ofSeconds(1), null);
 
 			endpoint.trickleDeletes();
 
@@ -1443,7 +1480,8 @@ class HttpSessionTests extends ClientTestBase {
 		IllegalStateException peerError = new IllegalStateException("The peer did not close");
 
 		// Nothing to delete: the session fails as the peer did.
-		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, null, SESSION_TIMEOUT, null);
+		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, Map.of(), null, SESSION_TIMEOUT,
+				null);
 		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
 		assertSame(peerError, failed.getCause());
 
@@ -1452,7 +1490,7 @@ class HttpSessionTests extends ClientTestBase {
 			endpoint.deleteStatus = 500;
 
 			HttpSession both = new Whep.Session(rtc, failingToClose(peerError),
-					endpoint.uri().resolve("/live/session/1"), null, SESSION_TIMEOUT, null);
+					endpoint.uri().resolve("/live/session/1"), Map.of(), null, SESSION_TIMEOUT, null);
 			Throwable error = assertCloseFails(both, "500");
 
 			assertEquals(Arrays.asList(peerError), Arrays.asList(error.getSuppressed()));

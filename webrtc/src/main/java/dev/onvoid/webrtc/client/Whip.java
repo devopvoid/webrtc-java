@@ -57,9 +57,11 @@ public final class Whip {
 
 	/**
 	 * An endpoint under load answers 503, with Retry-After (RFC 9725, 4.5).
-	 * WHIP has no counter-offers.
+	 * WHIP has no counter-offers. Its extensions have relation types under
+	 * urn:ietf:params:whip:ext (4.9).
 	 */
-	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(503), false);
+	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(503), false,
+			"urn:ietf:params:whip:ext:");
 
 
 	/**
@@ -111,8 +113,9 @@ public final class Whip {
 	/** Tracks published over WHIP. Closing it ends the session on the server. */
 	public static final class Session extends HttpSession {
 
-		Session(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice) {
-			super(rtc, peer, resource, authorization, timeout, ice);
+		Session(WebRtc rtc, Peer peer, URI resource, Map<String, URI> extensions, String authorization,
+				Duration timeout, HttpIce ice) {
+			super(rtc, peer, resource, extensions, authorization, timeout, ice);
 		}
 	}
 
