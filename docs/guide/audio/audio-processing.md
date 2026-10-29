@@ -296,6 +296,21 @@ audioProcessing.processStream(
     highRateBuffer, highRateConfig, lowRateConfig, lowRateDestBuffer);
 ```
 
+## Processed Microphone Audio
+
+WebRTC passes the microphone's audio from the audio device module straight to the senders, so a sink on a microphone track gets nothing. The audio as it is sent, after echo cancellation, noise suppression and gain control, goes to the sink of the factory's audio processing instead, such as for a voice activity detector or a level meter:
+
+```java
+factory.setCapturedAudioSink((data, bitsPerSample, sampleRate, channels, frames) -> {
+    // 10 ms of 16-bit PCM, on WebRTC's capture thread: hand it on and return.
+});
+
+// Later, to stop it.
+factory.setCapturedAudioSink(null);
+```
+
+It works with the `AudioProcessing` the factory was built with as well as with the one it builds itself; for a module of its own, `AudioProcessing.setCapturedAudioSink` sets the same sink and also gets what `processStream` puts out. Audio arrives while the audio device module records, which WebRTC starts once a peer connection sends a microphone track, at the rate and channel count the module processes at. The sink must not set the sink itself. The [Client API](/guide/client-api#audio) offers the same through `LocalAudio.onAudio`.
+
 ## Statistics
 
 The `AudioProcessing` class provides statistics about the audio processing performance:

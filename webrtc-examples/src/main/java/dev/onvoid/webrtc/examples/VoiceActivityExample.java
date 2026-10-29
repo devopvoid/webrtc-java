@@ -22,6 +22,7 @@ import java.util.function.Consumer;
 import java.util.Objects;
 
 import dev.onvoid.webrtc.client.AudioChunk;
+import dev.onvoid.webrtc.client.LocalAudio;
 import dev.onvoid.webrtc.client.RemoteAudio;
 import dev.onvoid.webrtc.client.Subscription;
 import dev.onvoid.webrtc.media.audio.AudioConverter;
@@ -29,9 +30,11 @@ import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 import dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector;
 
 /**
- * With the client API, subscribe it to a remote track with
- * {@link RemoteAudio#onAudio(Consumer)}, then close the {@link Subscription}
- * before close(). An AudioTrack of the native API takes it with addSink(),
+ * With the client API, subscribe it to the microphone with
+ * {@link LocalAudio#onAudio(Consumer)}, whose audio arrives after echo
+ * cancellation, or to a remote track with {@link RemoteAudio#onAudio(Consumer)},
+ * then close the {@link Subscription} before close(). An AudioTrack of the
+ * native API takes it with addSink(),
  * then removeSink() before close(), if its source hands audio to sinks: that
  * of a remote track or a CustomAudioSource does, a microphone's does not.
  * Buffers arbitrary chunk lengths into 10 ms frames and converts interleaved

@@ -125,8 +125,21 @@ The examples module includes `VoiceActivityExample`, an adapter using
 converts mono or stereo input to 16 kHz mono with `AudioConverter`, and reports
 each boolean decision. It also supports 44.1 kHz input.
 
-With the [Client API](/guide/client-api), it takes the `AudioChunk`s of a remote
-track's `onAudio` subscription:
+With the [Client API](/guide/client-api), it takes the `AudioChunk`s of an
+`onAudio` subscription. To detect speech at the microphone, subscribe to the
+microphone track. Its audio arrives after echo cancellation and noise
+suppression, so the remote peer's voice from the speakers does not count as
+this side speaking:
+
+```java
+VoiceActivityExample vad = new VoiceActivityExample(speech -> {
+    // Enqueue the decision for your application/UI; return promptly.
+});
+Subscription audio = microphone.onAudio(Duration.ofMillis(200), vad);
+```
+
+The microphone's audio flows while a peer sends the track. For what the remote
+peer sends, subscribe to its track:
 
 ```java
 import dev.onvoid.webrtc.client.Subscription;
@@ -167,7 +180,9 @@ finally {
 
 A microphone track does not: WebRTC passes captured audio from the audio device
 module straight to the senders, and the source of the track hands nothing to
-sinks. An [`AudioRecorder`](/tools/audio/audio-recorder) captures a microphone
+sinks. Its audio after processing goes to the sink set with
+`PeerConnectionFactory.setCapturedAudioSink`, which is what `LocalAudio.onAudio`
+uses. An [`AudioRecorder`](/tools/audio/audio-recorder) captures a microphone
 on its own, apart from any peer connection.
 
 The adapter invokes the consumer on the thread that delivers the audio: a thread
