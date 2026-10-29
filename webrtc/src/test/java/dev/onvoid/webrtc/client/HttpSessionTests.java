@@ -50,6 +50,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
@@ -142,6 +143,58 @@ class HttpSessionTests extends ClientTestBase {
 			await(session.closeAsync());
 			assertEquals(1, endpoint.count("DELETE /live/session/1"));
 		}
+	}
+
+	@Test
+	void whipAndWhepTransform() throws Exception {
+		// Frames are marked on one side and the mark stripped on the other:
+		// a frame without it got past a transform, and one that keeps it
+		// would not be what the decoder decodes.
+		AtomicInteger played = new AtomicInteger();
+		AtomicInteger unmarked = new AtomicInteger();
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> {
+			Peer server = rtc.createPeer(PeerOptions.builder()
+					.negotiation(Negotiation.MANUAL)
+					.sendTransform(TransformTests::mark)
+					.build());
+			server.addTrack(video);
+			return answer(server, offer);
+		}, 201)) {
+			Whep.Session session = await(Whep.from(endpoint.uri())
+					.receiveTransform(frame -> (TransformTests.unmark(frame) ? played : unmarked).incrementAndGet())
+					.play(rtc));
+
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+
+			assertEquals(160, (int) await(width));
+			await(session.closeAsync());
+		}
+
+		AtomicInteger published = new AtomicInteger();
+		CompletableFuture<Integer> width = new CompletableFuture<>();
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> {
+			Peer server = rtc.createPeer(PeerOptions.builder()
+					.negotiation(Negotiation.MANUAL)
+					.receiveTransform(frame -> (TransformTests.unmark(frame) ? published : unmarked).incrementAndGet())
+					.build());
+			server.onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			return answer(server, offer);
+		}, 201)) {
+			Whip.Session session = await(Whip.to(endpoint.uri())
+					.track(video)
+					.sendTransform(TransformTests::mark)
+					.publish(rtc));
+
+			assertEquals(160, (int) await(width));
+			await(session.closeAsync());
+		}
+
+		// A frame is decoded only after its transform returned.
+		assertTrue(played.get() > 0 && published.get() > 0, () -> "Played " + played + ", published " + published);
+		assertEquals(0, unmarked.get());
 	}
 
 	@Test

@@ -561,7 +561,7 @@ Peer peer = rtc.createPeer(PeerOptions.builder()
         .build());
 ```
 
-The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives.
+The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives. The builders of [WHIP and WHEP](#whip-and-whep) take them too, `Whip`'s as `sendTransform(...)`, `Whep`'s as `receiveTransform(...)`.
 
 A single sender or remote track takes a transform of its own, in place of the peer's, and `null` removes it:
 
@@ -709,6 +709,8 @@ Requests go through Java's `HttpClient`, with the default `SSLContext` and the H
 | `videoCodecs(String...)`, `audioCodecs(String...)` | The only codecs to negotiate, in order of preference; every codec WebRTC has by default. |
 | `alwaysOfferVideo()` | Video in the offer even without a video track, WHIP only, for endpoints that refuse an offer without video. |
 | `simulcast()`, `simulcast(Encoding...)` | The video track in layers, as simulcast, WHIP only: three by default (`f`, `h`, `q`), or two or three given, the largest first. |
+| `sendTransform(RTCEncodedFrameTransformer)` | The [encoded transform](#encoded-transforms) of every frame sent, WHIP only, in place before the offer goes out. |
+| `receiveTransform(RTCEncodedFrameTransformer)` | The [encoded transform](#encoded-transforms) of every frame received, WHEP only, in place before the first frame, also for a counter-offer. |
 | `timeout(Duration)` | How long the session may take to be connected, and its deletion to be answered. |
 
 ## Manual Negotiation

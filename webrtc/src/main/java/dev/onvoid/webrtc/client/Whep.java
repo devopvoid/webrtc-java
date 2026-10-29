@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
@@ -242,6 +243,22 @@ public final class Whep {
 		 */
 		public Builder timeout(Duration timeout) {
 			this.timeout = Timeouts.requirePositive(timeout, "timeout");
+			return this;
+		}
+
+		/**
+		 * Sets the transform that every encoded frame received passes through,
+		 * after the depacketizer and before the decoder, as end-to-end
+		 * encryption needs. It is in place before the session hands out a
+		 * track, including the tracks of a counter-offer, so it sees the first
+		 * frame. See {@link PeerOptions.Builder#receiveTransform}.
+		 *
+		 * @param transform the transform of every receiver.
+		 *
+		 * @return this builder.
+		 */
+		public Builder receiveTransform(RTCEncodedFrameTransformer transform) {
+			options.receiveTransform(transform);
 			return this;
 		}
 
