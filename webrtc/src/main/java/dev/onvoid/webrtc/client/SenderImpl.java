@@ -29,6 +29,8 @@ import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.RTCRtpSendParameters;
 import dev.onvoid.webrtc.RTCRtpSender;
+import dev.onvoid.webrtc.RTCRtpTransceiver;
+import dev.onvoid.webrtc.RTCRtpTransceiverInit;
 import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.internal.NativeApi;
 
@@ -71,7 +73,11 @@ final class SenderImpl implements Sender {
 		this.toneHandlers = new Handlers<>(peer.rtc::reportError);
 	}
 
-	void attach(RTCPeerConnection connection, List<String> streamIds) {
+	/**
+	 * @param encodings the encodings to send the track in, as one per layer
+	 *                  of simulcast, or none for WebRTC's single one.
+	 */
+	void attach(RTCPeerConnection connection, List<String> streamIds, List<RTCRtpEncodingParameters> encodings) {
 		LocalTrackImpl local = track;
 
 		if (!local.register(this)) {
@@ -79,7 +85,26 @@ final class SenderImpl implements Sender {
 		}
 
 		try {
-			RTCRtpSender added = connection.addTrack(local.nativeTrack(), streamIds);
+			RTCRtpSender added;
+
+			if (encodings.isEmpty()) {
+				added = connection.addTrack(local.nativeTrack(), streamIds);
+			}
+			else {
+				// Only a transceiver made for the track takes its encodings.
+				RTCRtpTransceiverInit init = new RTCRtpTransceiverInit();
+				init.streamIds.addAll(streamIds);
+				init.sendEncodings.addAll(encodings);
+
+				RTCRtpTransceiver transceiver = connection.addTransceiver(local.nativeTrack(), init);
+
+				try {
+					added = transceiver.getSender();
+				}
+				finally {
+					transceiver.dispose();
+				}
+			}
 
 			if (added == null) {
 				throw new WebRtcException("WebRTC refused the track " + local.id());

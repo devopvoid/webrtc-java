@@ -53,6 +53,8 @@ import java.util.function.UnaryOperator;
 
 import dev.onvoid.webrtc.RTCBundlePolicy;
 import dev.onvoid.webrtc.RTCIceServer;
+import dev.onvoid.webrtc.RTCRtpEncodingParameters;
+import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
@@ -444,6 +446,65 @@ class HttpSessionTests extends ClientTestBase {
 			assertEquals(1, new HashSet<>(streams).size(), offer);
 
 			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void simulcastOffered() throws Exception {
+		// RFC 9725, 4.8: simulcast is negotiated in the offer, as RFC 8853 says.
+		// WebRTC, which answers for the endpoint here, takes no simulcast, so
+		// the answer takes it as a forwarding server would.
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> answer(rtc.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL).build()), offer).replace("\r\na=recvonly\r\n",
+				"\r\na=recvonly\r\na=rid:f recv\r\na=rid:h recv\r\na=rid:q recv\r\na=simulcast:recv f;h;q\r\n"),
+				201)) {
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).simulcast().publish(rtc));
+			String offer = endpoint.request("POST /live/endpoint").body;
+			String answer = await(session.peer().withNative(c -> c.getRemoteDescription().sdp));
+
+			assertTrue(offer.contains("\r\na=simulcast:send f;h;q\r\n"), offer);
+			assertTrue(offer.contains("\r\na=rid:f send\r\n"), offer);
+			assertTrue(offer.contains("\r\na=rid:h send\r\n"), offer);
+			assertTrue(offer.contains("\r\na=rid:q send\r\n"), offer);
+			assertTrue(answer.contains("\r\na=simulcast:recv f;h;q\r\n"), answer);
+			assertEquals(List.of("f/1.0", "h/2.0", "q/4.0"), layers(session.peer()));
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void simulcastDeclinedSendsFirstLayer() throws Exception {
+		// An endpoint that takes no simulcast leaves it out of its answer, as
+		// WebRTC does, which answers for the endpoint here.
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).simulcast().publish(rtc));
+			String answer = await(session.peer().withNative(c -> c.getRemoteDescription().sdp));
+			List<String> layers = layers(session.peer());
+
+			assertFalse(answer.contains("a=simulcast"), answer);
+
+			assertEquals(1, layers.size(), layers::toString);
+			assertTrue(layers.get(0).endsWith("/1.0"), layers::toString);
+
+			await(session.closeAsync());
+		}
+	}
+
+	@Test
+	void simulcastNeedsVideoTrack() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			Encoding layer = Encoding.builder().build();
+
+			assertThrows(IllegalArgumentException.class, () -> Whip.to(endpoint.uri()).simulcast(layer));
+			assertThrows(IllegalArgumentException.class,
+					() -> Whip.to(endpoint.uri()).simulcast(layer, layer, layer, layer));
+
+			Whip.Builder whip = Whip.to(endpoint.uri()).track(rtc.media().customAudio("audio")).simulcast();
+
+			assertThrows(IllegalStateException.class, () -> whip.publish(rtc));
+			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
+			assertTrue(endpoint.requests.isEmpty());
 		}
 	}
 
@@ -1568,6 +1629,31 @@ class HttpSessionTests extends ClientTestBase {
 		}
 
 		return codecs;
+	}
+
+	/**
+	 * The rid and the factor of each encoding the only sender of the peer
+	 * sends in.
+	 */
+	private List<String> layers(Peer peer) throws Exception {
+		return await(peer.withNative(connection -> {
+			List<String> layers = new ArrayList<>();
+			RTCRtpSender[] senders = connection.getSenders();
+
+			try {
+				for (RTCRtpEncodingParameters encoding : senders[0].getParameters().encodings) {
+					layers.add(encoding.rid + "/" + encoding.scaleResolutionDownBy);
+				}
+			}
+			finally {
+				// Each holds the track, which could not be released otherwise.
+				for (RTCRtpSender sender : senders) {
+					sender.dispose();
+				}
+			}
+
+			return layers;
+		}));
 	}
 
 	private TestHttpEndpoint sendingEndpoint() throws Exception {
