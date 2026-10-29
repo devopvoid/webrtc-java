@@ -698,6 +698,16 @@ The timeout bounds the requests as a whole, not each read, so a server that send
 
 `session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. Both start at once, so a slow server does not keep the peer open, and the deletion takes at most the session's timeout. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler, and also fails the future of `closeAsync()`, which completes once both are done; a peer that did not close fails it too.
 
+`session.extensions()` gives the protocol extensions the endpoint offers for the session (RFC 9725, 4.9): the URL of each by its relation type, such as `urn:ietf:params:whip:ext:example:server-sent-events` (`urn:ietf:params:whep:ext:...` for WHEP), as the endpoint named them in `Link` header fields of its answer, resolved against it. Of a relation type named twice, the first counts. Links of other relation types are ignored, as WHIP and WHEP ask, apart from `ice-server`. The session uses none of the extensions itself; an application uses those it knows, and the map is empty if the endpoint named none.
+
+`Whep.from(url).detect(rtc)` asks a URL with `HEAD` whether it is a WHEP endpoint, as a player may before it plays a URL it was given (draft-ietf-wish-whep-05, 4.2). Its future holds `true` when the endpoint answers 200 with the Content-Type `application/sdp` and a `Link` to the profile `urn:ietf:params:whep`; the Content-Type alone does not count. It holds `false` for any other answer, such as that of an endpoint that takes no `HEAD`, and fails when the request does. The request carries the credentials of the builder, takes its timeout at most, and follows the redirects the offer follows:
+
+```java
+if (Whep.from(url).detect(rtc).get(15, TimeUnit.SECONDS)) {
+    Whep.Session viewer = Whep.from(url).play(rtc).get(15, TimeUnit.SECONDS);
+}
+```
+
 Endpoints have to be `https` URLs, as WHIP and WHEP ask, except on the machine the application runs on: there plain `http` will do, for a media server beside it, at `localhost`, an address in 127.0.0.0/8 or `::1`. A name that merely resolves to one of them does not count, since it may resolve elsewhere later. The same holds for the session an endpoint names and for where a redirect points.
 
 The credentials of a session, its bearer token or its Basic user and password, go to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. The offer follows redirects with status 307 and 308, as WHIP and WHEP ask of clients, such as those of a load balancer: up to five of them, all within the timeout, and the credentials go along. A redirect from `https` to plain `http` fails the session, and so does one with status 301, 302 or 303, which would turn the offer into a `GET`. The deletion follows no redirect; one fails it with its status.

@@ -126,6 +126,12 @@ final class TestHttpEndpoint implements AutoCloseable {
 	/** The status a PATCH is answered with. */
 	volatile int patchStatus = 204;
 
+	/** The status a HEAD is answered with. */
+	volatile int headStatus = 405;
+
+	/** Header fields an answer to HEAD carries, each ended by CRLF. */
+	volatile String headHeaders = "";
+
 	/** Header fields an answer of 201 carries beyond Location, each ended by CRLF. */
 	volatile String answerHeaders = "";
 
@@ -463,6 +469,16 @@ final class TestHttpEndpoint implements AutoCloseable {
 		}
 
 		OutputStream out = socket.getOutputStream();
+
+		if (requestLine[0].equals("HEAD")) {
+			// The head a GET would get, without a body (draft-ietf-wish-whep-05, 4.2).
+			String head = "HTTP/1.1 " + headStatus + " Status\r\n" + headHeaders
+					+ "Content-Length: 0\r\nConnection: close\r\n\r\n";
+
+			out.write(head.getBytes(StandardCharsets.US_ASCII));
+			out.flush();
+			return;
+		}
 
 		if (requestLine[0].equals("POST")) {
 			boolean refused;

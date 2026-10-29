@@ -30,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 import dev.onvoid.webrtc.RTCIceCandidate;
@@ -492,6 +493,34 @@ final class HttpIce {
 	static List<RTCIceServer> iceServers(List<String> fields) {
 		List<RTCIceServer> servers = new ArrayList<>();
 
+		forEachLink(fields, (target, parameters) -> {
+			boolean iceServer = false;
+
+			for (String relation : relations(parameters)) {
+				iceServer |= relation.equalsIgnoreCase("ice-server");
+			}
+
+			if (iceServer) {
+				RTCIceServer server = new RTCIceServer();
+				server.urls.add(target);
+				server.username = parameters.get("username");
+				server.password = parameters.get("credential");
+				servers.add(server);
+			}
+		});
+
+		return servers;
+	}
+
+	/**
+	 * Hands over each link of Link header fields (RFC 8288) with a target,
+	 * in order.
+	 *
+	 * @param fields the values of the Link header fields.
+	 * @param link   gets the target of a link, as written, and its
+	 *               parameters, by their names in lower case.
+	 */
+	static void forEachLink(List<String> fields, BiConsumer<String, Map<String, String>> link) {
 		for (String field : fields) {
 			int i = 0;
 
@@ -507,24 +536,21 @@ final class HttpIce {
 				Map<String, String> parameters = new HashMap<>();
 				i = parameters(field, close + 1, parameters);
 
-				String rel = parameters.getOrDefault("rel", "");
-				boolean iceServer = false;
-
-				for (String relation : rel.trim().split("\\s+")) {
-					iceServer |= relation.equalsIgnoreCase("ice-server");
-				}
-
-				if (iceServer && !target.isEmpty()) {
-					RTCIceServer server = new RTCIceServer();
-					server.urls.add(target);
-					server.username = parameters.get("username");
-					server.password = parameters.get("credential");
-					servers.add(server);
+				if (!target.isEmpty()) {
+					link.accept(target, parameters);
 				}
 			}
 		}
+	}
 
-		return servers;
+	/**
+	 * @return the relation types of a link, which its "rel" parameter
+	 * separates by spaces.
+	 */
+	static List<String> relations(Map<String, String> parameters) {
+		String rel = parameters.getOrDefault("rel", "").trim();
+
+		return rel.isEmpty() ? List.of() : List.of(rel.split("\\s+"));
 	}
 
 	/**

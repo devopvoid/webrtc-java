@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.net.URI;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -138,6 +139,7 @@ class HttpSessionTests extends ClientTestBase {
 			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
 
 			assertEquals(MediaKind.VIDEO, await(published).kind());
+			assertTrue(session.extensions().isEmpty());
 
 			// Before the endpoint goes, which would fail the DELETE.
 			await(session.closeAsync());
@@ -619,6 +621,84 @@ class HttpSessionTests extends ClientTestBase {
 			assertThrows(IllegalStateException.class, () -> whip.publish(rtc));
 			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
 			assertTrue(endpoint.requests.isEmpty());
+		}
+	}
+
+	@Test
+	void whepProfileDetected() {
+		// draft-ietf-wish-whep-05, 4.2: application/sdp and a Link to the WHEP
+		// profile, never the Content-Type alone.
+		String profile = "<urn:ietf:params:whep>; rel=\"profile\"";
+
+		assertTrue(Whep.servesWhep(headResponse(200, "application/sdp", profile)));
+		assertTrue(Whep.servesWhep(headResponse(200, "application/sdp; charset=utf-8",
+				"<stun:stun.example.com>; rel=\"ice-server\", " + profile)));
+		assertFalse(Whep.servesWhep(headResponse(200, "application/sdp", null)));
+		assertFalse(Whep.servesWhep(headResponse(200, "text/html", profile)));
+		assertFalse(Whep.servesWhep(headResponse(405, "application/sdp", profile)));
+		assertFalse(Whep.servesWhep(headResponse(200, "application/sdp", "<urn:ietf:params:whip>; rel=\"profile\"")));
+	}
+
+	@Test
+	void whepEndpointDetected() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			// One that takes no HEAD is no WHEP endpoint, as far as a player
+			// can tell.
+			assertFalse(await(Whep.from(endpoint.uri()).detect(rtc)));
+
+			endpoint.headStatus = 200;
+			endpoint.headHeaders = "Content-Type: application/sdp\r\nLink: <urn:ietf:params:whep>; rel=\"profile\"\r\n";
+
+			assertTrue(await(Whep.from(endpoint.uri()).bearerToken("secret").detect(rtc)));
+			assertEquals("HEAD /live/endpoint", endpoint.requests.get(1).toString());
+			assertEquals("Bearer secret", endpoint.requests.get(1).authorization);
+		}
+
+		URI gone;
+
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			gone = endpoint.uri();
+		}
+
+		ExecutionException failed = assertThrows(ExecutionException.class,
+				() -> await(Whep.from(gone).detect(rtc)));
+
+		assertInstanceOf(WebRtcException.class, failed.getCause());
+	}
+
+	@Test
+	void extensionLinksRead() {
+		// RFC 9725, 4.9: the links of extension relations, resolved; those of
+		// other relations a client ignores.
+		Map<String, URI> extensions = HttpSession.extensions(List.of(
+				"<stun:stun.example.com>; rel=\"ice-server\", "
+						+ "</live/sse>; rel=\"urn:ietf:params:whip:ext:example:server-sent-events\"",
+				"<https://other.example.com/layer>; rel=\"next URN:ietf:params:whip:ext:example:layer\"",
+				"</live/second>; rel=\"URN:ietf:params:whip:ext:example:layer\"",
+				"</live/whep>; rel=\"urn:ietf:params:whep:ext:example:layer\"",
+				"</live/bare>; rel=\"urn:ietf:params:whip:ext:\""),
+				URI.create("https://example.com/live/endpoint"), "urn:ietf:params:whip:ext:");
+
+		assertEquals(List.of("urn:ietf:params:whip:ext:example:server-sent-events",
+				"URN:ietf:params:whip:ext:example:layer"), new ArrayList<>(extensions.keySet()));
+		assertEquals(URI.create("https://example.com/live/sse"),
+				extensions.get("urn:ietf:params:whip:ext:example:server-sent-events"));
+		// Of a relation named twice, the first.
+		assertEquals(URI.create("https://other.example.com/layer"),
+				extensions.get("URN:ietf:params:whip:ext:example:layer"));
+	}
+
+	@Test
+	void extensionsOfSession() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			endpoint.answerHeaders = "Link: </live/sse>; rel=\"urn:ietf:params:whip:ext:example:server-sent-events\"\r\n";
+
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
+
+			assertEquals(Map.of("urn:ietf:params:whip:ext:example:server-sent-events",
+					endpoint.uri().resolve("/live/sse")), session.extensions());
+
+			await(session.closeAsync());
 		}
 	}
 
@@ -1268,8 +1348,8 @@ class HttpSessionTests extends ClientTestBase {
 		// a byte at a time and never ends, and the session's timeout ends it.
 		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
 			Peer peer = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
-			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), null,
-					Duration.ofSeconds(1), null);
+			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), Map.of(),
+					null, Duration.ofSeconds(1), null);
 
 			endpoint.trickleDeletes();
 
@@ -1496,7 +1576,8 @@ class HttpSessionTests extends ClientTestBase {
 		IllegalStateException peerError = new IllegalStateException("The peer did not close");
 
 		// Nothing to delete: the session fails as the peer did.
-		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, null, SESSION_TIMEOUT, null);
+		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, Map.of(), null, SESSION_TIMEOUT,
+				null);
 		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
 		assertSame(peerError, failed.getCause());
 
@@ -1505,7 +1586,7 @@ class HttpSessionTests extends ClientTestBase {
 			endpoint.deleteStatus = 500;
 
 			HttpSession both = new Whep.Session(rtc, failingToClose(peerError),
-					endpoint.uri().resolve("/live/session/1"), null, SESSION_TIMEOUT, null);
+					endpoint.uri().resolve("/live/session/1"), Map.of(), null, SESSION_TIMEOUT, null);
 			Throwable error = assertCloseFails(both, "500");
 
 			assertEquals(Arrays.asList(peerError), Arrays.asList(error.getSuppressed()));
@@ -1743,6 +1824,24 @@ class HttpSessionTests extends ClientTestBase {
 		}
 
 		return codecs;
+	}
+
+	/**
+	 * An answer to HEAD, with the Content-Type and Link header fields given,
+	 * where not null.
+	 */
+	private static HttpCall.Response headResponse(int status, String type, String link) {
+		Map<String, List<String>> fields = new HashMap<>();
+
+		if (type != null) {
+			fields.put("Content-Type", List.of(type));
+		}
+		if (link != null) {
+			fields.put("Link", List.of(link));
+		}
+
+		return new HttpCall.Response(URI.create("https://example.com/live/whep"), status,
+				HttpHeaders.of(fields, (name, value) -> true), "");
 	}
 
 	/**
