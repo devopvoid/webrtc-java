@@ -120,14 +120,38 @@ state, or transmitted audio.
 
 ## Audio track integration
 
-The examples module includes `VoiceActivityExample`, an `AudioTrackSink` adapter
-using `StandaloneVoiceActivityDetector`. It buffers callback data into 10 ms
-frames, converts mono or stereo input to 16 kHz mono with `AudioConverter`, and
-reports each boolean decision. It also supports 44.1 kHz input.
+The examples module includes `VoiceActivityExample`, an adapter using
+`StandaloneVoiceActivityDetector`. It buffers incoming audio into 10 ms frames,
+converts mono or stereo input to 16 kHz mono with `AudioConverter`, and reports
+each boolean decision. It also supports 44.1 kHz input.
+
+With the [Client API](/guide/client-api), it takes the `AudioChunk`s of a remote
+track's `onAudio` subscription:
 
 ```java
+import dev.onvoid.webrtc.client.Subscription;
 import dev.onvoid.webrtc.examples.VoiceActivityExample;
 
+peer.onTrack(track -> {
+    if (track.isAudio()) {
+        VoiceActivityExample vad = new VoiceActivityExample(speech -> {
+            // Enqueue the decision for your application/UI; return promptly.
+        });
+        Subscription audio = track.asAudio().onAudio(vad);
+
+        track.onEnded(() -> {
+            audio.close();
+            vad.close();
+        });
+    }
+});
+```
+
+The client API has no audio subscription on a local track. To detect speech at
+the microphone, attach the adapter as an `AudioTrackSink` to an `AudioTrack` of
+the native API:
+
+```java
 VoiceActivityExample sink = new VoiceActivityExample(speech -> {
     // Enqueue the decision for your application/UI; return promptly.
 });
@@ -141,8 +165,11 @@ finally {
 }
 ```
 
-The adapter invokes the consumer on the audio callback thread. Keep work there
-short. Apply application-level timing to produce stable speech-start/speech-end
+The adapter invokes the consumer on the thread that delivers the audio: a thread
+of the `onAudio` subscription, or the audio callback thread of a sink. Keep work
+there short. A subscription that falls behind loses the oldest audio beyond its
+buffer, so a detector that must stay live passes a short one, as in
+`onAudio(Duration.ofMillis(200), vad)`. Apply application-level timing to produce stable speech-start/speech-end
 events, rather than toggling a UI or recording for every frame. Audio format
 changes clear the adapter's partial frame and reset its detector.
 
