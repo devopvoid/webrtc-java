@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.net.URI;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -568,6 +569,48 @@ class HttpSessionTests extends ClientTestBase {
 			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
 			assertTrue(endpoint.requests.isEmpty());
 		}
+	}
+
+	@Test
+	void whepProfileDetected() {
+		// draft-ietf-wish-whep-05, 4.2: application/sdp and a Link to the WHEP
+		// profile, never the Content-Type alone.
+		String profile = "<urn:ietf:params:whep>; rel=\"profile\"";
+
+		assertTrue(Whep.servesWhep(headResponse(200, "application/sdp", profile)));
+		assertTrue(Whep.servesWhep(headResponse(200, "application/sdp; charset=utf-8",
+				"<stun:stun.example.com>; rel=\"ice-server\", " + profile)));
+		assertFalse(Whep.servesWhep(headResponse(200, "application/sdp", null)));
+		assertFalse(Whep.servesWhep(headResponse(200, "text/html", profile)));
+		assertFalse(Whep.servesWhep(headResponse(405, "application/sdp", profile)));
+		assertFalse(Whep.servesWhep(headResponse(200, "application/sdp", "<urn:ietf:params:whip>; rel=\"profile\"")));
+	}
+
+	@Test
+	void whepEndpointDetected() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			// One that takes no HEAD is no WHEP endpoint, as far as a player
+			// can tell.
+			assertFalse(await(Whep.from(endpoint.uri()).detect(rtc)));
+
+			endpoint.headStatus = 200;
+			endpoint.headHeaders = "Content-Type: application/sdp\r\nLink: <urn:ietf:params:whep>; rel=\"profile\"\r\n";
+
+			assertTrue(await(Whep.from(endpoint.uri()).bearerToken("secret").detect(rtc)));
+			assertEquals("HEAD /live/endpoint", endpoint.requests.get(1).toString());
+			assertEquals("Bearer secret", endpoint.requests.get(1).authorization);
+		}
+
+		URI gone;
+
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			gone = endpoint.uri();
+		}
+
+		ExecutionException failed = assertThrows(ExecutionException.class,
+				() -> await(Whep.from(gone).detect(rtc)));
+
+		assertInstanceOf(WebRtcException.class, failed.getCause());
 	}
 
 	@Test
@@ -1728,6 +1771,24 @@ class HttpSessionTests extends ClientTestBase {
 		}
 
 		return codecs;
+	}
+
+	/**
+	 * An answer to HEAD, with the Content-Type and Link header fields given,
+	 * where not null.
+	 */
+	private static HttpCall.Response headResponse(int status, String type, String link) {
+		Map<String, List<String>> fields = new HashMap<>();
+
+		if (type != null) {
+			fields.put("Content-Type", List.of(type));
+		}
+		if (link != null) {
+			fields.put("Link", List.of(link));
+		}
+
+		return new HttpCall.Response(URI.create("https://example.com/live/whep"), status,
+				HttpHeaders.of(fields, (name, value) -> true), "");
 	}
 
 	/**

@@ -639,6 +639,49 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
+	 * Sends a HEAD request to an endpoint, which follows the redirects the
+	 * offer follows. It takes at most the timeout from now on.
+	 *
+	 * @return a future with the response, whatever its status, which fails
+	 * with a {@link WebRtcException} if the request does.
+	 */
+	static CompletableFuture<HttpCall.Response> head(WebRtc rtc, URI endpoint, String authorization,
+			Duration timeout) {
+		HttpCall request;
+
+		try {
+			request = new HttpCall(rtc.httpClient(authorization != null), endpoint, "HEAD", authorization, timeout)
+					.followRedirects();
+		}
+		catch (RejectedExecutionException e) {
+			return CompletableFuture.failedFuture(new WebRtcException("The runtime is closed", e));
+		}
+
+		CompletableFuture<HttpCall.Response> response = request.send(null, null, 0, head -> { })
+				.handle((value, error) -> {
+					if (error != null) {
+						throw new WebRtcException("Asking " + endpoint + " with HEAD failed: " + error.getMessage(),
+								error);
+					}
+
+					return value;
+				});
+
+		try {
+			// The request's own timeout bounds the head of the answer; this ends
+			// the body of an error that does not come.
+			ScheduledFuture<?> deadline = rtc.timer.schedule(request::abort, Timeouts.toMillis(timeout),
+					TimeUnit.MILLISECONDS);
+			response.whenComplete((value, error) -> deadline.cancel(false));
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing, and the request's own timeout bounds it.
+		}
+
+		return response;
+	}
+
+	/**
 	 * @return the failure reported, or null if there was no resource.
 	 */
 	private static WebRtcException leftOnServer(WebRtc rtc, URI resource) {
