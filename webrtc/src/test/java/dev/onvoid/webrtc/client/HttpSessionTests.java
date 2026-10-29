@@ -412,6 +412,10 @@ class HttpSessionTests extends ClientTestBase {
 
 			assertInstanceOf(WebRtcException.class, failed.getCause());
 			assertTrue(failed.getCause().getMessage().contains("403"), failed.getCause().getMessage());
+			// Without problem details, the status alone.
+			HttpStatusException refused = assertInstanceOf(HttpStatusException.class, failed.getCause());
+			assertEquals(403, refused.status());
+			assertNull(refused.title());
 
 			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
 			while (!rtc.peers().isEmpty() && System.nanoTime() < deadline) {
@@ -435,6 +439,14 @@ class HttpSessionTests extends ClientTestBase {
 			assertTrue(failed.getCause().getMessage().endsWith(
 					"answered the offer with status 403: Forbidden: The stream key has expired"),
 					failed.getCause().getMessage());
+
+			// The same, for a program to read.
+			HttpStatusException refused = assertInstanceOf(HttpStatusException.class, failed.getCause());
+
+			assertEquals(403, refused.status());
+			assertEquals("Forbidden", refused.title());
+			assertEquals("The stream key has expired", refused.detail());
+			assertNull(refused.problemType());
 		}
 	}
 
@@ -1007,6 +1019,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			assertTrue(failed.getCause().getMessage().contains("takes no ICE restarts"),
 					failed.getCause().getMessage());
+			assertEquals(405, assertInstanceOf(HttpStatusException.class, failed.getCause()).status());
 			assertEquals(offered, HttpIce.Fragment.of(local).ufrag);
 			assertEquals(PeerState.CONNECTED, session.peer().state());
 
@@ -1542,7 +1555,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
 
-			assertCloseFails(session, "500");
+			assertCloseFails(session, 500);
 			// Closed all the same.
 			assertEquals(PeerState.CLOSED, session.peer().state());
 			assertDeleteReported("500");
@@ -1587,7 +1600,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			HttpSession both = new Whep.Session(rtc, failingToClose(peerError),
 					endpoint.uri().resolve("/live/session/1"), Map.of(), null, SESSION_TIMEOUT, null);
-			Throwable error = assertCloseFails(both, "500");
+			Throwable error = assertCloseFails(both, 500);
 
 			assertEquals(Arrays.asList(peerError), Arrays.asList(error.getSuppressed()));
 			assertDeleteReported("500");
@@ -1602,7 +1615,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			Whip.Session session = await(Whip.to(endpoint.uri()).bearerToken("secret").track(video).publish(rtc));
 
-			assertCloseFails(session, "307");
+			assertCloseFails(session, 307);
 			assertDeleteReported("307");
 			assertFalse(endpoint.requests.stream().anyMatch(request -> request.path.equals(endpoint.redirect)),
 					() -> "Requests: " + endpoint.requests);
@@ -1953,13 +1966,15 @@ class HttpSessionTests extends ClientTestBase {
 	 *
 	 * @return the failure.
 	 */
-	private static Throwable assertCloseFails(HttpSession session, String status) {
+	private static Throwable assertCloseFails(HttpSession session, int status) {
 		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
 		Throwable error = failed.getCause();
 
 		assertInstanceOf(WebRtcException.class, error);
 		assertTrue(error.getMessage().contains("Deleting the session"), error::getMessage);
-		assertTrue(error.getCause().getMessage().contains(status), () -> error.getCause().getMessage());
+		assertTrue(error.getCause().getMessage().contains("status " + status), () -> error.getCause().getMessage());
+		// The status of the deletion's answer, for a program to read.
+		assertEquals(status, assertInstanceOf(HttpStatusException.class, error.getCause()).status());
 
 		return error;
 	}
