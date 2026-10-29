@@ -213,6 +213,15 @@ final class SenderImpl implements Sender {
 	}
 
 	@Override
+	public CompletableFuture<Void> generateKeyFrame() {
+		return run(() -> {
+			if (kind == MediaKind.VIDEO) {
+				sender.generateKeyFrame();
+			}
+		});
+	}
+
+	@Override
 	public CompletableFuture<Void> sendTones(String tones) {
 		return sendTones(tones, Duration.ofMillis(100), Duration.ofMillis(70));
 	}

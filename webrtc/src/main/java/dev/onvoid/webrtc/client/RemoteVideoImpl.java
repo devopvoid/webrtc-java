@@ -20,6 +20,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCRtpReceiver;
@@ -79,6 +80,11 @@ final class RemoteVideoImpl extends RemoteTrackImpl implements RemoteVideo {
 				}
 			});
 		};
+	}
+
+	@Override
+	public CompletableFuture<Void> requestKeyFrame() {
+		return onReceiver("Requesting a key frame", RTCRtpReceiver::requestKeyFrame);
 	}
 
 	@Override
