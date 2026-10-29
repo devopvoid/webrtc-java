@@ -82,7 +82,7 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 
 
 	CustomAudioImpl(LocalMediaImpl media, AudioTrack track, CustomAudioSource source) {
-		super(media, track, source::dispose);
+		super(media, track, source::dispose, false);
 
 		this.source = source;
 	}

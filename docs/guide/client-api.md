@@ -522,6 +522,15 @@ A handler that falls behind gets the audio of the last 5 seconds; the oldest aud
 track.asAudio().onAudio(Duration.ofMillis(200), chunk -> recognizer.feed(chunk.samples()));
 ```
 
+A local audio track has `onAudio` too, with the same buffers, for what this side sends, such as for a voice activity detector or a level meter:
+
+```java
+LocalAudio microphone = rtc.media().microphone();
+microphone.onAudio(Duration.ofMillis(200), chunk -> detector.feed(chunk));
+```
+
+Pushed audio arrives as pushed. A microphone's audio arrives after audio processing, with echo cancellation, noise suppression and gain control applied as configured, which is what the remote peer hears: the remote peer's voice from the speakers does not count as this side speaking. It flows while WebRTC records, which it does while a peer sends a microphone track. Every microphone track of a runtime has the same audio, as WebRTC records one microphone for all of them.
+
 ### Receiving Without Sending
 
 A viewer that sends nothing asks for what it wants to receive, so that the offer includes it:

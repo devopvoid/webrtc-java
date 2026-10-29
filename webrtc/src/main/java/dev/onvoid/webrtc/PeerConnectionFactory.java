@@ -23,6 +23,7 @@ import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModuleBase;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioProcessing;
+import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
@@ -101,6 +102,9 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 
 	@SuppressWarnings("unused")
 	private long audioModuleHandle;
+
+	@SuppressWarnings("unused")
+	private long captureTapHandle;
 
 	/** Guards {@link #audioInputMode}. */
 	private final Object audioInputLock = new Object();
@@ -406,6 +410,26 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * @return The supported capabilities for an {@link RTCRtpSender}.
 	 */
 	public native RTCRtpCapabilities getRtpSenderCapabilities(MediaType type);
+
+	/**
+	 * Sets the sink that gets the microphone audio after audio processing,
+	 * with echo cancellation, noise suppression and gain control applied as
+	 * configured: the audio the senders send. It comes from the {@link
+	 * AudioProcessing} the factory was built with, or else from the one the
+	 * factory built itself, and is the same sink as that module's {@link
+	 * AudioProcessing#setCapturedAudioSink}.
+	 * <p>
+	 * Audio arrives while the audio device module records, which WebRTC starts
+	 * once a peer connection sends a track of {@link #createAudioSource}. Each
+	 * call holds 10 ms of 16-bit PCM with interleaved channels, at the rate
+	 * the module processes at. The sink runs on WebRTC's capture thread, so it
+	 * must return promptly, and it must not set the sink itself. Audio pushed
+	 * through a {@link CustomAudioSource} does not pass audio processing and
+	 * does not arrive.
+	 *
+	 * @param sink The sink, or {@code null} to stop the delivery.
+	 */
+	public native void setCapturedAudioSink(AudioTrackSink sink);
 
 	@Override
 	public native void dispose();

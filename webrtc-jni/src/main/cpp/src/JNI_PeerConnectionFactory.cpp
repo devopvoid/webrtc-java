@@ -33,6 +33,8 @@
 #include "WebRTCContext.h"
 
 #include "api/audio/builtin_audio_processing_builder.h"
+#include "api/AudioTrackSink.h"
+#include "media/audio/AudioCaptureTap.h"
 #include "api/audio/create_audio_device_module.h"
 #include "api/create_modular_peer_connection_factory.h"
 #include "api/enable_media.h"
@@ -157,9 +159,29 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 		dependencies.adm = proxy;
 		dependencies.audio_encoder_factory = audioEncoderFactory;
 		dependencies.audio_decoder_factory = audioDecoderFactory;
-		dependencies.audio_processing_builder = (processing != nullptr)
-			? webrtc::CustomAudioProcessing(webrtc::scoped_refptr<webrtc::AudioProcessing>(processing))
-			: std::make_unique<webrtc::BuiltinAudioProcessingBuilder>();
+		// The tap of the module that processes the captured audio: that of the
+		// application's module, or of the one built here.
+		std::shared_ptr<jni::AudioCaptureTap> tap;
+
+		if (processing != nullptr) {
+			auto moduleTap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, audioProcessing, "captureTapHandle");
+
+			if (moduleTap == nullptr) {
+				throw jni::Exception("The AudioProcessing was disposed");
+			}
+
+			tap = *moduleTap;
+			dependencies.audio_processing_builder = webrtc::CustomAudioProcessing(
+				webrtc::scoped_refptr<webrtc::AudioProcessing>(processing));
+		}
+		else {
+			tap = std::make_shared<jni::AudioCaptureTap>();
+
+			auto builder = std::make_unique<webrtc::BuiltinAudioProcessingBuilder>();
+			builder->SetCapturePostProcessing(jni::AudioCaptureTap::CreateProcessing(tap));
+
+			dependencies.audio_processing_builder = std::move(builder);
+		}
 		dependencies.video_encoder_factory = std::move(videoEncoderFactory);
 		dependencies.video_decoder_factory = std::move(videoDecoderFactory);
 
@@ -172,6 +194,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			SetHandle(env, caller, "networkThreadHandle", networkThread.release());
 			SetHandle(env, caller, "signalingThreadHandle", signalingThread.release());
 			SetHandle(env, caller, "audioModuleHandle", proxy.release());
+			SetHandle(env, caller, "captureTapHandle", new std::shared_ptr<jni::AudioCaptureTap>(std::move(tap)));
 		}
 		else {
 			throw jni::Exception("Create PeerConnectionFactory failed");
@@ -222,6 +245,30 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 
 			SetHandle<std::nullptr_t>(env, caller, "audioModuleHandle", nullptr);
 		}
+
+		// The module, if anything still holds it, keeps a share of the tap.
+		delete GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
+
+		SetHandle<std::nullptr_t>(env, caller, "captureTapHandle", nullptr);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setCapturedAudioSink
+(JNIEnv * env, jobject caller, jobject jSink)
+{
+	try {
+		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		CHECK_HANDLE(factory);
+
+		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
+		CHECK_HANDLE(tap);
+
+		(*tap)->SetSink(jSink == nullptr
+			? nullptr
+			: std::make_unique<jni::AudioTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jSink), false));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

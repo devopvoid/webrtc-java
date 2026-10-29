@@ -25,6 +25,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
+	 * Method:    setCapturedAudioSink
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioTrackSink;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setCapturedAudioSink
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    setDeviceCaptureEnabled
 	 * Signature: (Z)V
 	 */

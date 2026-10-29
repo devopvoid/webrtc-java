@@ -132,7 +132,10 @@ public final class WebRtc implements AutoCloseable {
 
 	private final AudioDeviceModuleBase audioModule;
 
-	private final AudioProcessing audioProcessing;
+	/** Created when the runtime was built with an audio processing config. */
+	final AudioProcessing audioProcessing;
+
+	final CapturedAudio capturedAudio;
 
 	private final Duration closeTimeout;
 
@@ -260,6 +263,7 @@ public final class WebRtc implements AutoCloseable {
 		this.audioModule = module;
 		this.audioProcessing = processing;
 		this.factory = created;
+		this.capturedAudio = new CapturedAudio(created);
 		this.media = new LocalMediaImpl(this, module);
 	}
 

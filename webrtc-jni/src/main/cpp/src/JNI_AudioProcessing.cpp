@@ -25,6 +25,8 @@
 #include "JavaUtils.h"
 #include "WebRTCContext.h"
 
+#include "api/AudioTrackSink.h"
+#include "media/audio/AudioCaptureTap.h"
 #include "media/audio/AudioProcessing.h"
 #include "media/audio/AudioProcessingConfig.h"
 #include "media/audio/AudioProcessingStreamConfig.h"
@@ -37,6 +39,25 @@
 
 #include <algorithm>
 #include <memory>
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setCapturedAudioSink
+(JNIEnv * env, jobject caller, jobject jSink)
+{
+	try {
+		webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+		CHECK_HANDLE(apm);
+
+		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
+		CHECK_HANDLE(tap);
+
+		(*tap)->SetSink(jSink == nullptr
+			? nullptr
+			: std::make_unique<jni::AudioTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jSink), false));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
+}
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyConfig
 (JNIEnv * env, jobject caller, jobject config)
@@ -168,6 +189,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispos
 	SetHandle<std::nullptr_t>(env, caller, nullptr);
 
 	apm = nullptr;
+
+	// The module, if a factory still uses it, keeps a share of the tap.
+	delete GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
+
+	SetHandle<std::nullptr_t>(env, caller, "captureTapHandle", nullptr);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
@@ -175,7 +201,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initia
 {
 	jni::WebRTCContext * context = static_cast<jni::WebRTCContext*>(javaContext);
 
-	webrtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::BuiltinAudioProcessingBuilder().Build(context->webrtcEnv);
+	auto tap = std::make_shared<jni::AudioCaptureTap>();
+
+	webrtc::scoped_refptr<webrtc::AudioProcessing> apm = webrtc::BuiltinAudioProcessingBuilder()
+		.SetCapturePostProcessing(jni::AudioCaptureTap::CreateProcessing(tap))
+		.Build(context->webrtcEnv);
 
 	if (!apm) {
 		env->Throw(jni::JavaError(env, "Create AudioProcessing failed"));
@@ -183,6 +213,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initia
 	}
 
 	SetHandle(env, caller, apm.release());
+	SetHandle(env, caller, "captureTapHandle", new std::shared_ptr<jni::AudioCaptureTap>(std::move(tap)));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_updateStats
