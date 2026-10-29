@@ -55,6 +55,7 @@ import dev.onvoid.webrtc.PeerConnectionObserver;
 import dev.onvoid.webrtc.RTCAnswerOptions;
 import dev.onvoid.webrtc.RTCConfiguration;
 import dev.onvoid.webrtc.RTCDataChannel;
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCIceGatheringState;
 import dev.onvoid.webrtc.RTCIceServer;
@@ -360,7 +361,7 @@ final class PeerImpl implements Peer {
 			}
 
 			try {
-				sender.attach(connection, ids, encodings);
+				sender.attach(connection, ids, encodings, guard(options.sendTransform, "a sender of " + name));
 				added.complete(null);
 			}
 			catch (Throwable e) {
@@ -1118,6 +1119,38 @@ final class PeerImpl implements Peer {
 		return result;
 	}
 
+	/**
+	 * Wraps a transform of the application, so that a frame it throws on is
+	 * dropped rather than sent on, and only the first failure reaches the
+	 * error handlers of the peer, not every one the uncaught exception
+	 * handler of the transform's thread.
+	 *
+	 * @param owner names the sender or receiver in the error.
+	 *
+	 * @return the wrapped transform, or null for none.
+	 */
+	RTCEncodedFrameTransformer guard(RTCEncodedFrameTransformer transform, String owner) {
+		if (transform == null) {
+			return null;
+		}
+
+		AtomicBoolean reported = new AtomicBoolean();
+
+		return frame -> {
+			try {
+				transform.transform(frame);
+			}
+			catch (Throwable e) {
+				frame.drop();
+
+				if (reported.compareAndSet(false, true)) {
+					deliverError(new WebRtcException("The transform of " + owner
+							+ " failed, and drops each frame it fails on", e));
+				}
+			}
+		};
+	}
+
 	void deliverError(WebRtcException error) {
 		events.execute(() -> {
 			if (errorHandlers.isEmpty()) {
@@ -1619,6 +1652,19 @@ final class PeerImpl implements Peer {
 			track.dispose();
 			receiver.dispose();
 			return;
+		}
+
+		if (options.receiveTransform != null) {
+			String owner = "the track " + id + " of " + name;
+
+			try {
+				// Before the application hears of the track, and so before
+				// its first frame arrives.
+				receiver.setTransform(guard(options.receiveTransform, owner));
+			}
+			catch (Throwable e) {
+				deliverError(asWebRtcException(e, "Setting the receive transform of " + owner + " failed"));
+			}
 		}
 
 		RemoteTrackImpl remote = track instanceof VideoTrack

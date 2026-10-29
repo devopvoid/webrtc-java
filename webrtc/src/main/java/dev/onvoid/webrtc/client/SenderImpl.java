@@ -25,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCDtmfSender;
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.RTCRtpSendParameters;
@@ -76,8 +77,10 @@ final class SenderImpl implements Sender {
 	/**
 	 * @param encodings the encodings to send the track in, as one per layer
 	 *                  of simulcast, or none for WebRTC's single one.
+	 * @param transform the transform of the frames, or null for none.
 	 */
-	void attach(RTCPeerConnection connection, List<String> streamIds, List<RTCRtpEncodingParameters> encodings) {
+	void attach(RTCPeerConnection connection, List<String> streamIds, List<RTCRtpEncodingParameters> encodings,
+			RTCEncodedFrameTransformer transform) {
 		LocalTrackImpl local = track;
 
 		if (!local.register(this)) {
@@ -108,6 +111,18 @@ final class SenderImpl implements Sender {
 
 			if (added == null) {
 				throw new WebRtcException("WebRTC refused the track " + local.id());
+			}
+			if (transform != null) {
+				try {
+					added.setTransform(transform);
+				}
+				catch (RuntimeException e) {
+					// Never sends the track without its transform, which may
+					// be what encrypts it.
+					connection.removeTrack(added);
+					added.dispose();
+					throw e;
+				}
 			}
 
 			this.connection = connection;
@@ -190,6 +205,11 @@ final class SenderImpl implements Sender {
 
 			sender.setParameters(parameters);
 		});
+	}
+
+	@Override
+	public CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform) {
+		return run(() -> sender.setTransform(peer.guard(transform, "a sender of " + peer.name)));
 	}
 
 	@Override
