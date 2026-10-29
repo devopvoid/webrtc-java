@@ -80,8 +80,8 @@ public final class Whep {
 	/** A stream received over WHEP. Closing it ends the session on the server. */
 	public static final class Session extends HttpSession {
 
-		Session(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout, HttpIce ice) {
-			super(rtc, peer, resource, bearerToken, timeout, ice);
+		Session(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice) {
+			super(rtc, peer, resource, authorization, timeout, ice);
 		}
 	}
 
@@ -99,7 +99,8 @@ public final class Whep {
 
 		private final Map<MediaKind, List<String>> codecs = new EnumMap<>(MediaKind.class);
 
-		private String bearerToken;
+		/** The value of the Authorization header, or null. */
+		private String authorization;
 
 		private Gathering gathering = Gathering.TRICKLE;
 
@@ -112,15 +113,32 @@ public final class Whep {
 		}
 
 		/**
-		 * @param token the token the endpoint authorizes the request with,
-		 *              sent as {@code Authorization: Bearer <token>}. Servers
-		 *              that ask for a user and password, such as MediaMTX,
-		 *              take them this way as {@code user:password}.
+		 * @param token the token the endpoint authorizes the requests with,
+		 *              sent as {@code Authorization: Bearer <token>}. It
+		 *              replaces the credentials of {@link #basicAuth}.
 		 *
 		 * @return this builder.
 		 */
 		public Builder bearerToken(String token) {
-			this.bearerToken = requireNonNull(token, "token");
+			this.authorization = HttpSession.bearer(token);
+			return this;
+		}
+
+		/**
+		 * Authorizes the requests with a user and password, by HTTP Basic
+		 * authentication (RFC 7617), as servers such as MediaMTX take them.
+		 * They go with every request of the session, as {@code
+		 * Authorization: Basic}, in UTF-8, and replace a {@link #bearerToken}.
+		 *
+		 * @param user     the user, without a colon.
+		 * @param password the password.
+		 *
+		 * @return this builder.
+		 *
+		 * @throws IllegalArgumentException if the user contains a colon.
+		 */
+		public Builder basicAuth(String user, String password) {
+			this.authorization = HttpSession.basic(user, password);
 			return this;
 		}
 
@@ -246,13 +264,13 @@ public final class Whep {
 
 			// The builder may change while the session starts; the session keeps
 			// what it started with, so that its DELETE is authorized like its POST.
-			String token = bearerToken;
+			String credentials = authorization;
 			Duration limit = timeout;
 			Map<MediaKind, List<String>> names = new EnumMap<>(codecs);
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
-				return HttpSession.start(rtc, peer, endpoint, token, limit, peer.preferCodecs(names), gathering,
+				return HttpSession.start(rtc, peer, endpoint, credentials, limit, peer.preferCodecs(names), gathering,
 						PROTOCOL, Session::new);
 			}
 			catch (RuntimeException | Error e) {

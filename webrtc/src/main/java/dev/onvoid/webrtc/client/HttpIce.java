@@ -70,7 +70,7 @@ final class HttpIce {
 
 	private final PeerImpl peer;
 
-	private final String bearerToken;
+	private final String authorization;
 
 	private final Duration timeout;
 
@@ -110,11 +110,11 @@ final class HttpIce {
 	private boolean closed;
 
 
-	HttpIce(WebRtc rtc, HttpClient client, PeerImpl peer, String bearerToken, Duration timeout) {
+	HttpIce(WebRtc rtc, HttpClient client, PeerImpl peer, String authorization, Duration timeout) {
 		this.rtc = rtc;
 		this.client = client;
 		this.peer = peer;
-		this.bearerToken = bearerToken;
+		this.authorization = authorization;
 		this.timeout = timeout;
 
 		peer.onLocalCandidates(this::candidate, this::gathered);
@@ -191,7 +191,7 @@ final class HttpIce {
 				pending.clear();
 				gathered = false;
 
-				request = new HttpCall(client, session, "PATCH", bearerToken, timeout).header("If-Match", "*");
+				request = new HttpCall(client, session, "PATCH", authorization, timeout).header("If-Match", "*");
 				restartRequest = request;
 			}
 
@@ -343,7 +343,7 @@ final class HttpIce {
 			pending.clear();
 			gathered = false;
 
-			request = new HttpCall(client, session, "PATCH", bearerToken, timeout);
+			request = new HttpCall(client, session, "PATCH", authorization, timeout);
 
 			if (etag != null) {
 				request.header("If-Match", etag);
