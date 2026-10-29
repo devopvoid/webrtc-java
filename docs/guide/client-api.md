@@ -626,6 +626,21 @@ Whep.Session viewer = Whep.from(endpoint)
 
 Both builders support these methods. `turnServer` is separate from `iceServer(String...)`, so passing three URLs to `iceServer` still means three URLs. The gathering setting controls the initial POST only; ICE restarts continue to use PATCH and trickled candidates.
 
+By default, the offer holds every codec WebRTC has, in WebRTC's order, and the endpoint picks; one that follows the offer's order picks VP8 for video. Endpoints that pass the stream on unchanged, to HLS or a recording, often take only H.264 and Opus. `videoCodecs(...)` and `audioCodecs(...)` offer only the codecs named, in that order of preference, by name (`H264`, `VP8`, `VP9`, `AV1`, `opus`, `G722`, ...) or MIME type (`video/H264`), whatever the case. Retransmission, redundancy, FEC, comfort noise and DTMF go along. For WHEP, they decide what the endpoint sends, also in the answer to a counter-offer. A name WebRTC has no codec of fails the session with a `ConfigurationException` before the offer goes out.
+
+Some endpoints, Amazon IVS among them, refuse a WHIP offer without video, even for audio alone. `alwaysOfferVideo()` then adds video that only sends, in the stream of the tracks, without a track, so that nothing is sent on it; with a video track, it changes nothing:
+
+```java
+Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
+        .bearerToken(token)
+        .videoCodecs("H264")
+        .audioCodecs("opus")
+        .track(rtc.media().microphone())
+        .alwaysOfferVideo()
+        .publish(rtc)
+        .get(15, TimeUnit.SECONDS);
+```
+
 A normal SDP answer must have status 201, a nonempty session `Location`, and Content-Type `application/sdp` (parameters are allowed). Invalid responses fail the session; a resource already named by the server is deleted even when its SDP response cannot be used.
 
 When the connection fails, or stays disconnected for two seconds, the session restarts ICE: the peer gathers new candidates, and only the new ICE username fragment and password go to the session, by `PATCH` with `If-Match: *`, while the media go on as negotiated. The session's answer, with status 200 and Content-Type `application/trickle-ice-sdpfrag`, brings its own ICE information and a new `ETag`. Its candidate set replaces the old one completely, including when it is empty. Three restarts in a row that do not bring the connection back, or an endpoint that takes no restarts, end the attempts, which the error handler hears of. `session.restartIce()` restarts ICE at once, say after the network changed; a restart that fails leaves the ICE session before as it was. Restarts also work after a WHEP counter-offer; the player keeps its answerer role and updates only the ICE information.
@@ -638,16 +653,20 @@ Endpoints have to be `https` URLs, as WHIP and WHEP ask, except on the machine t
 
 The bearer token goes to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. The offer follows redirects with status 307 and 308, as WHIP and WHEP ask of clients, such as those of a load balancer: up to five of them, all within the timeout, and the token goes along. A redirect from `https` to plain `http` fails the session, and so does one with status 301, 302 or 303, which would turn the offer into a `GET`. The deletion follows no redirect; one fails it with its status.
 
+Servers that ask for a user and password rather than a token, such as MediaMTX, take them as the token, the way OBS Studio sends them: `bearerToken("user:password")` sends `Authorization: Bearer user:password`.
+
 Requests go through Java's `HttpClient`, with the default `SSLContext` and the HTTP proxy Java is configured with, the first the default `ProxySelector` names: `-Dhttps.proxyHost` and `-Dhttps.proxyPort`, `-Dhttp.proxyHost`, or `-Djava.net.useSystemProxies=true`. `HttpClient` takes no SOCKS proxies. A proxy that asks for credentials gets Basic ones from the default `Authenticator`, but only for sessions without a bearer token: `HttpClient` drops the token of a request once it answers for credentials itself. As in Java, Basic is not used for the tunnel of an `https` request unless `jdk.http.auth.tunneling.disabledSchemes` allows it. Other schemes, such as Digest, NTLM and Negotiate, are not supported.
 
 | Builder method | What it sets |
 |---|---|
-| `bearerToken(String)` | The token sent as `Authorization: Bearer`; for many services, the stream key. |
+| `bearerToken(String)` | The token sent as `Authorization: Bearer`; for many services, the stream key, for MediaMTX `user:password`. |
 | `iceServer(String...)` | A STUN or TURN server without credentials, overriding endpoint-provided servers. |
 | `turnServer(String, String, String)` | A TURN URL, username and password, overriding endpoint-provided servers. |
 | `gathering(Gathering)` | When the initial offer is sent: `TRICKLE` by default, or `COMPLETE` to gather first. |
 | `track(LocalTrack)` | A track to publish, WHIP only. The tracks share one stream, which holds one audio and one video track at most. |
 | `receive(MediaKind...)` | What to receive, WHEP only; video and audio by default. |
+| `videoCodecs(String...)`, `audioCodecs(String...)` | The only codecs to negotiate, in order of preference; every codec WebRTC has by default. |
+| `alwaysOfferVideo()` | Video in the offer even without a video track, WHIP only, for endpoints that refuse an offer without video. |
 | `timeout(Duration)` | How long the session may take to be connected, and its deletion to be answered. |
 
 ## Manual Negotiation
