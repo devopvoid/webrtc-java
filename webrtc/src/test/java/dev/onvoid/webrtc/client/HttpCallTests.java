@@ -30,6 +30,7 @@ import java.net.ProxySelector;
 import java.net.SocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -39,6 +40,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -77,6 +79,25 @@ class HttpCallTests {
 			endpoint.answerUntilClose();
 			assertEquals(ANSWER, readAnswer(client, endpoint.uri()));
 		}
+	}
+
+	@Test
+	void problemDetailsDescribed() {
+		// RFC 9457: the title and the detail say what went wrong.
+		assertEquals("status 403: Forbidden: The stream key has expired", response(403, "application/problem+json",
+				"{\"type\":\"https://example.com/probs/key\",\"title\":\"Forbidden\",\"status\":403,"
+						+ "\"detail\":\"The stream key has expired\"}").describe());
+		// The type when there is nothing else, unless it says no more than
+		// the status.
+		assertEquals("status 409: https://example.com/probs/busy", response(409,
+				"application/problem+json; charset=utf-8", "{\"type\":\"https://example.com/probs/busy\"}").describe());
+		assertEquals("status 500", response(500, "application/problem+json", "{\"type\":\"about:blank\"}").describe());
+		// Problem details that cannot be read, and other bodies, as they are.
+		assertEquals("status 400: {\"title\":", response(400, "application/problem+json", "{\"title\":").describe());
+		assertEquals("status 404: not found", response(404, "text/plain", "not found").describe());
+		assertEquals("status 503", response(503, null, "").describe());
+		assertEquals("status 502: ".length() + HttpCall.MAX_ERROR_BODY,
+				response(502, "text/html", "a".repeat(5000)).describe().length());
 	}
 
 	@Test
@@ -272,6 +293,13 @@ class HttpCallTests {
 
 	private static <T> T await(CompletableFuture<T> future) throws Exception {
 		return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+	}
+
+	private static HttpCall.Response response(int status, String type, String body) {
+		Map<String, List<String>> fields = type == null ? Map.of() : Map.of("Content-Type", List.of(type));
+
+		return new HttpCall.Response(URI.create("https://example.com/whip"), status,
+				HttpHeaders.of(fields, (name, value) -> true), body);
 	}
 
 	private static String basic(String user, String password) {

@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -616,6 +617,78 @@ final class HttpCall {
 		 */
 		String header(String name) {
 			return headers.firstValue(name).orElse(null);
+		}
+
+		/**
+		 * Describes the response for a message: its status, and what its body
+		 * says. Of problem details (RFC 9457), which WHIP and WHEP endpoints
+		 * may send with an error, those are the title and the detail, or the
+		 * type if there are neither; any other body is given as it is, up to
+		 * {@link #MAX_ERROR_BODY} chars.
+		 *
+		 * @return the description, such as {@code status 403: Forbidden: The
+		 * stream key has expired}.
+		 */
+		String describe() {
+			String description = "status " + status;
+			String problem = problem();
+
+			if (problem != null) {
+				return problem.isEmpty() ? description : description + ": " + problem;
+			}
+			if (body == null || body.isEmpty()) {
+				return description;
+			}
+
+			return description + ": " + (body.length() > MAX_ERROR_BODY ? body.substring(0, MAX_ERROR_BODY) : body);
+		}
+
+		/**
+		 * @return what the problem details of the body say, empty if no more
+		 * than the status, or null if the body has none, or none that can be
+		 * read.
+		 */
+		private String problem() {
+			String type = header("Content-Type");
+
+			if (body == null || type == null
+					|| !type.split(";", 2)[0].trim().equalsIgnoreCase("application/problem+json")) {
+				return null;
+			}
+
+			Object parsed;
+
+			try {
+				parsed = Json.parse(body);
+			}
+			catch (IllegalArgumentException e) {
+				// Cut short at the size read, or not JSON at all.
+				return null;
+			}
+
+			if (!(parsed instanceof Map)) {
+				return null;
+			}
+
+			Map<?, ?> members = (Map<?, ?>) parsed;
+			List<String> parts = new ArrayList<>();
+
+			for (String name : List.of("title", "detail")) {
+				Object value = members.get(name);
+
+				if (value instanceof String && !((String) value).trim().isEmpty()) {
+					parts.add(((String) value).trim());
+				}
+			}
+
+			Object problemType = members.get("type");
+
+			// RFC 9457, 4.2.1: about:blank says no more than the status.
+			if (parts.isEmpty() && problemType instanceof String && !"about:blank".equals(problemType)) {
+				parts.add((String) problemType);
+			}
+
+			return String.join(": ", parts);
 		}
 	}
 
