@@ -572,6 +572,15 @@ remoteTrack.transform(null);                   // frames reach the decoder uncha
 
 The first transform set on a video sender that already sends restarts its encoder, which costs a key frame. A transform set on a remote track misses the frames that arrive before its future completes, so a transform that every frame needs, such as decryption, belongs in the peer options. A recording of a sender holds its frames before the transform, a recording of a remote track after it.
 
+A transform that changes its key needs a key frame to start over with, since the frames before depend on the old key:
+
+```java
+videoSender.generateKeyFrame();                // the local encoder makes the next frame a key frame
+remoteTrack.asVideo().requestKeyFrame();       // asks the remote sender for one
+```
+
+`generateKeyFrame()` does nothing for an audio sender, and nothing before the peer is negotiated, as the stream starts with a key frame anyway. `requestKeyFrame()` fails once the track ended.
+
 Transforms run on a thread of each sender and receiver, not on the peer's event thread. A frame a transform throws on is dropped rather than passed on, so a failed encryption never sends a frame in the clear. The first such failure of each sender or receiver goes to the peer's `onError` handlers. The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call with AES-GCM this way.
 
 ## Data Channels

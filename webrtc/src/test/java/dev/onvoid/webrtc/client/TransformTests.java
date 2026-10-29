@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
 import dev.onvoid.webrtc.RTCEncodedFrame;
+import dev.onvoid.webrtc.RTCEncodedVideoFrame;
 import dev.onvoid.webrtc.RTCStats;
 import dev.onvoid.webrtc.RTCStatsType;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
@@ -165,6 +166,66 @@ class TransformTests extends ClientTestBase {
 		assertInstanceOf(IllegalStateException.class, failures.get(0).getCause());
 		// No frame got past the transform to the decoder.
 		assertEquals(0, framesDecoded(peers[1]));
+	}
+
+	@Test
+	void keyFramesOnRequest() throws Exception {
+		AtomicInteger frames = new AtomicInteger();
+		AtomicInteger keyFrames = new AtomicInteger();
+		Peer[] peers = pair(options -> options.sendTransform(frame -> {
+			frames.incrementAndGet();
+
+			if (((RTCEncodedVideoFrame) frame).isKeyFrame()) {
+				keyFrames.incrementAndGet();
+			}
+		}));
+		CustomVideo video = rtc.media().customVideo("video");
+		CompletableFuture<RemoteTrack> received = new CompletableFuture<>();
+
+		peers[1].onTrack(received::complete);
+		Sender sender = peers[0].addTrack(video);
+
+		feedVideo(video);
+		RemoteVideo track = await(received).asVideo();
+		// Past the key frame the stream starts with.
+		waitFor(() -> frames.get() >= 30);
+
+		// The local encoder.
+		int before = keyFrames.get();
+		await(sender.generateKeyFrame());
+		waitFor(() -> keyFrames.get() > before);
+
+		// The remote encoder, asked by the receiver.
+		int requested = keyFrames.get();
+		await(track.requestKeyFrame());
+		waitFor(() -> keyFrames.get() > requested);
+	}
+
+	@Test
+	void keyFrameRequestsOutsideCall() throws Exception {
+		// Before negotiation the sender has no encoder to ask, which WebRTC
+		// takes as nothing to do.
+		Peer peer = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+		Sender unnegotiated = peer.addTrack(rtc.media().customVideo("unnegotiated"));
+
+		await(unnegotiated.generateKeyFrame());
+
+		Peer[] peers = pair();
+		CompletableFuture<RemoteTrack> received = new CompletableFuture<>();
+		CompletableFuture<Void> ended = new CompletableFuture<>();
+
+		peers[1].onTrack(track -> {
+			received.complete(track);
+			track.onEnded(() -> ended.complete(null));
+		});
+		Sender sender = peers[0].addTrack(rtc.media().customVideo("video"));
+		RemoteVideo track = await(received).asVideo();
+
+		await(sender.remove());
+		await(ended);
+
+		assertFailure(IllegalStateException.class, sender.generateKeyFrame());
+		assertFailure(IllegalStateException.class, track.requestKeyFrame());
 	}
 
 	@Test
