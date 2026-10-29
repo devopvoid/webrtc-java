@@ -212,7 +212,7 @@ class TransformTests extends ClientTestBase {
 		assertFailure(PeerClosedException.class, track.transform(frame -> { }));
 	}
 
-	private static void mark(RTCEncodedFrame frame) {
+	static void mark(RTCEncodedFrame frame) {
 		ByteBuffer data = frame.getData();
 		ByteBuffer marked = ByteBuffer.allocate(data.remaining() + MARK.length);
 
@@ -223,7 +223,7 @@ class TransformTests extends ClientTestBase {
 	/**
 	 * @return true if the frame was marked, which it no longer is.
 	 */
-	private static boolean unmark(RTCEncodedFrame frame) {
+	static boolean unmark(RTCEncodedFrame frame) {
 		if (!hasMark(frame)) {
 			return false;
 		}
