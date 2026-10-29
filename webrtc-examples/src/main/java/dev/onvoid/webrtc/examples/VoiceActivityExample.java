@@ -31,8 +31,9 @@ import dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector;
 /**
  * With the client API, subscribe it to a remote track with
  * {@link RemoteAudio#onAudio(Consumer)}, then close the {@link Subscription}
- * before close(). An AudioTrack of the native API, such as a microphone's,
- * takes it with addSink(), then removeSink() before close().
+ * before close(). An AudioTrack of the native API takes it with addSink(),
+ * then removeSink() before close(), if its source hands audio to sinks: that
+ * of a remote track or a CustomAudioSource does, a microphone's does not.
  * Buffers arbitrary chunk lengths into 10 ms frames and converts interleaved
  * signed 16-bit PCM to 16 kHz mono, including input at 44.1 kHz. The consumer runs
  * on the thread that delivers the audio and should return promptly. It receives raw
