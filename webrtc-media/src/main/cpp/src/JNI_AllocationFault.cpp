@@ -42,6 +42,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_failN
 	ffmpeg::AllocationFault::FailNextThreadStart();
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_failWriterAllocation
+(JNIEnv * env, jclass caller, jint afterFrames)
+{
+	ffmpeg::AllocationFault::FailWriterAllocation(afterFrames);
+}
+
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_isArmed
 (JNIEnv * env, jclass caller)
 {

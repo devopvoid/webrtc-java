@@ -46,9 +46,10 @@ public interface MediaRecorderListener {
 	}
 
 	/**
-	 * Writing the file failed, e.g. because the disk is full. Nothing more
-	 * goes into the file; what is in it stays, and {@link MediaRecorder#stop()}
-	 * still finishes it as far as it can. Finishing and closing the file when
+	 * Writing the file failed, e.g. because the disk is full, or the native
+	 * writer ran out of memory. Nothing more goes into the file; what is in it
+	 * stays, and {@link MediaRecorder#stop()} still finishes it as far as it
+	 * can. Finishing and closing the file when
 	 * stopping may fail as well, and are reported here too. Once stopped,
 	 * {@link MediaRecorder#getResult()} tells what is left.
 	 *

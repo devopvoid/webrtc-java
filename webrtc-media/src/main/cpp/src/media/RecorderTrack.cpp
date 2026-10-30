@@ -38,6 +38,16 @@ namespace ffmpeg
 		// put a frame means the sender restarted its RTP clock.
 		constexpr int64_t kMaxDriftSeconds = 10;
 
+		struct BsfDeleter
+		{
+			void operator()(AVBSFContext * bsf) const
+			{
+				av_bsf_free(&bsf);
+			}
+		};
+
+		using BsfPtr = std::unique_ptr<AVBSFContext, BsfDeleter>;
+
 		struct CodecInfo
 		{
 			const char * mime_type;
@@ -452,41 +462,45 @@ namespace ffmpeg
 	bool RecorderTrack::ExtractExtradata(const AVPacket * packet)
 	{
 		const AVBitStreamFilter * filter = av_bsf_get_by_name("extract_extradata");
-		AVBSFContext * bsf = nullptr;
+		AVBSFContext * context = nullptr;
 
-		if (filter == nullptr || av_bsf_alloc(filter, &bsf) < 0) {
+		if (filter == nullptr || av_bsf_alloc(filter, &context) < 0) {
 			return false;
 		}
+
+		// Owned, so that the filter and the packet are freed also when the
+		// copy of what it found throws.
+		BsfPtr bsf(context);
 
 		bsf->par_in->codec_type = AVMEDIA_TYPE_VIDEO;
 		bsf->par_in->codec_id = codec_id_;
 
-		bool found = false;
-
-		if (av_bsf_init(bsf) >= 0) {
-			// The filter takes the packet over, so it gets a reference of its
-			// own rather than the frame's.
-			AVPacket * copy = av_packet_clone(packet);
-
-			if (copy != nullptr && av_bsf_send_packet(bsf, copy) >= 0) {
-				while (av_bsf_receive_packet(bsf, copy) >= 0) {
-					size_t size = 0;
-					const uint8_t * data = av_packet_get_side_data(copy,
-							AV_PKT_DATA_NEW_EXTRADATA, &size);
-
-					if (data != nullptr && size > 0) {
-						extradata_.assign(data, data + size);
-						found = true;
-					}
-
-					av_packet_unref(copy);
-				}
-			}
-
-			av_packet_free(&copy);
+		if (av_bsf_init(bsf.get()) < 0) {
+			return false;
 		}
 
-		av_bsf_free(&bsf);
+		// The filter takes the packet over, so it gets a reference of its own
+		// rather than the frame's.
+		PacketPtr copy(av_packet_clone(packet));
+
+		if (copy == nullptr || av_bsf_send_packet(bsf.get(), copy.get()) < 0) {
+			return false;
+		}
+
+		bool found = false;
+
+		while (av_bsf_receive_packet(bsf.get(), copy.get()) >= 0) {
+			size_t size = 0;
+			const uint8_t * data = av_packet_get_side_data(copy.get(),
+					AV_PKT_DATA_NEW_EXTRADATA, &size);
+
+			if (data != nullptr && size > 0) {
+				extradata_.assign(data, data + size);
+				found = true;
+			}
+
+			av_packet_unref(copy.get());
+		}
 
 		return found;
 	}

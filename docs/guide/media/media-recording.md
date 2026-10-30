@@ -104,6 +104,8 @@ Calls arrive in order on a thread the recorder keeps for them, so a listener may
 
 `onError` also hears of a file that cannot be finished or closed when the recorder stops, e.g. because the last data does not fit on the disk. The recording then ends as `PARTIAL`.
 
+Running out of native memory while writing ends the recording the same way: `onError` is told, the frames still waiting are dropped, and the file is finished right away, so what is in it still plays. The recording ends as `PARTIAL`, or as `FAILED` if nothing had gone into the file yet.
+
 ## How Tracks Are Recorded
 
 - **Video starts at a key frame.** A decoder can do nothing with the frames before one, so they are skipped. The recorder asks the sender or receiver for a key frame, so recording starts within moments instead of waiting until WebRTC sends one of its own accord, which it rarely does.

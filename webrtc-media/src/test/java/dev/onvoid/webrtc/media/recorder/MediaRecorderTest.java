@@ -500,6 +500,64 @@ class MediaRecorderTest {
 	}
 
 	@Test
+	void writerOutOfMemoryFailsRecording() throws Exception {
+		Path file = tempDir.resolve("writer-oom-early.mkv");
+		Listener listener = new Listener();
+
+		// The first frame, which is held back until the header is written.
+		AllocationFault.failWriterAllocation(0);
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+			assertFalse(AllocationFault.isArmed());
+
+			assertFalse(recorder.stop());
+			assertEquals(MediaRecorderResult.FAILED, recorder.getResult());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertErrorStartsWith(listener, "Recording to " + file.toAbsolutePath() + " failed: ");
+		assertEquals(1, listener.started.getCount(), "reported as started");
+		assertFalse(Files.exists(file));
+	}
+
+	@Test
+	void writerOutOfMemoryKeepsPartialRecording() throws Exception {
+		Path file = tempDir.resolve("writer-oom-late.mkv");
+		Listener listener = new Listener();
+
+		// Well into the recording, once there is media in the file.
+		AllocationFault.failWriterAllocation(30);
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+			assertEquals(0, listener.started.getCount(), "not started");
+
+			// The writer has ended, and the file was finished then.
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.PARTIAL, recorder.getResult());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertErrorStartsWith(listener, "Recording to " + file.toAbsolutePath() + " failed: ");
+		assertTrue(readInfo(file).hasVideo());
+	}
+
+	@Test
 	void failedTrailerKeepsPartialRecording() throws Exception {
 		assertFailedFinishKeepsFile("failed-trailer.mkv", WriteFault::failTrailer, "Finishing ");
 	}
