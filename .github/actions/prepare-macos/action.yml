@@ -11,7 +11,7 @@ runs:
         HOMEBREW_NO_AUTO_UPDATE: '1'
         HOMEBREW_NO_INSTALL_CLEANUP: '1'
       run: |
-        # Required on macos-14
+        # Required since macos-14
         brew install python-setuptools
         # nasm is what FFmpeg assembles its x86 code with, which the Intel
         # build needs even though the runner itself is Apple Silicon.
