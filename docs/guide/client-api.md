@@ -570,7 +570,7 @@ Peer peer = rtc.createPeer(PeerOptions.builder()
         .build());
 ```
 
-The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives.
+The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives. The builders of [WHIP and WHEP](#whip-and-whep) take them too, `Whip`'s as `sendTransform(...)`, `Whep`'s as `receiveTransform(...)`.
 
 A single sender or remote track takes a transform of its own, in place of the peer's, and `null` removes it:
 
@@ -580,6 +580,15 @@ remoteTrack.transform(null);                   // frames reach the decoder uncha
 ```
 
 The first transform set on a video sender that already sends restarts its encoder, which costs a key frame. A transform set on a remote track misses the frames that arrive before its future completes, so a transform that every frame needs, such as decryption, belongs in the peer options. A recording of a sender holds its frames before the transform, a recording of a remote track after it.
+
+A transform that changes its key needs a key frame to start over with, since the frames before depend on the old key:
+
+```java
+videoSender.generateKeyFrame();                // the local encoder makes the next frame a key frame
+remoteTrack.asVideo().requestKeyFrame();       // asks the remote sender for one
+```
+
+`generateKeyFrame()` does nothing for an audio sender, and nothing before the peer is negotiated, as the stream starts with a key frame anyway. `requestKeyFrame()` fails once the track ended.
 
 Transforms run on a thread of each sender and receiver, not on the peer's event thread. A frame a transform throws on is dropped rather than passed on, so a failed encryption never sends a frame in the clear. The first such failure of each sender or receiver goes to the peer's `onError` handlers. The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call with AES-GCM this way.
 
@@ -690,13 +699,35 @@ Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
         .get(15, TimeUnit.SECONDS);
 ```
 
-A normal SDP answer must have status 201, a nonempty session `Location`, and Content-Type `application/sdp` (parameters are allowed). Invalid responses fail the session; a resource already named by the server is deleted even when its SDP response cannot be used. The message of a failure an endpoint answered with an error names the status, and what the endpoint says of it: the title and detail of problem details (RFC 9457, `application/problem+json`), as in `status 403: Forbidden: The stream key has expired`, or else the start of the body.
+A normal SDP answer must have status 201, a nonempty session `Location`, and Content-Type `application/sdp` (parameters are allowed). Invalid responses fail the session; a resource already named by the server is deleted even when its SDP response cannot be used. The message of a failure an endpoint answered with an error names the status, and what the endpoint says of it: the title and detail of problem details (RFC 9457, `application/problem+json`), as in `status 403: Forbidden: The stream key has expired`, or else the start of the body. The failure is an `HttpStatusException`, whose `status()`, `title()`, `detail()` and `problemType()` give the same to a program; for a deletion or for candidates, it is the cause of the failure reported. As RFC 9725 asks, read no specific cause into a status beyond its class, since endpoints use them differently:
+
+```java
+try {
+    session = Whip.to(url).bearerToken(key).track(camera).publish(rtc).get(15, TimeUnit.SECONDS);
+}
+catch (ExecutionException e) {
+    if (e.getCause() instanceof HttpStatusException) {
+        HttpStatusException refused = (HttpStatusException) e.getCause();
+        System.err.println("Refused, " + refused.status() + ": " + refused.detail());
+    }
+}
+```
 
 When the connection fails, or stays disconnected for two seconds, the session restarts ICE: the peer gathers new candidates, and only the new ICE username fragment and password go to the session, by `PATCH` with `If-Match: *`, while the media go on as negotiated. The session's answer, with status 200 and Content-Type `application/trickle-ice-sdpfrag`, brings its own ICE information and a new `ETag`. Its candidate set replaces the old one completely, including when it is empty. Three restarts in a row that do not bring the connection back, or an endpoint that takes no restarts, end the attempts, which the error handler hears of. `session.restartIce()` restarts ICE at once, say after the network changed; a restart that fails leaves the ICE session before as it was. Restarts also work after a WHEP counter-offer; the player keeps its answerer role and updates only the ICE information.
 
 The timeout bounds the requests as a whole, not each read, so a server that sends its answer a byte at a time cannot stretch it. A request still out when the session times out or is cancelled is cut off at once; one still waiting for the head of its answer only from Java 16 on, and before that at its timeout. Once the server has named the session, in the head of its answer, it is deleted all the same; a session the server created for an answer that had not come yet is left for the server to time out.
 
 `session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. Both start at once, so a slow server does not keep the peer open, and the deletion takes at most the session's timeout. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler, and also fails the future of `closeAsync()`, which completes once both are done; a peer that did not close fails it too.
+
+`session.extensions()` gives the protocol extensions the endpoint offers for the session (RFC 9725, 4.9): the URL of each by its relation type, such as `urn:ietf:params:whip:ext:example:server-sent-events` (`urn:ietf:params:whep:ext:...` for WHEP), as the endpoint named them in `Link` header fields of its answer, resolved against it. Of a relation type named twice, the first counts. Links of other relation types are ignored, as WHIP and WHEP ask, apart from `ice-server`. The session uses none of the extensions itself; an application uses those it knows, and the map is empty if the endpoint named none.
+
+`Whep.from(url).detect(rtc)` asks a URL with `HEAD` whether it is a WHEP endpoint, as a player may before it plays a URL it was given (draft-ietf-wish-whep-05, 4.2). Its future holds `true` when the endpoint answers 200 with the Content-Type `application/sdp` and a `Link` to the profile `urn:ietf:params:whep`; the Content-Type alone does not count. It holds `false` for any other answer, such as that of an endpoint that takes no `HEAD`, and fails when the request does. The request carries the credentials of the builder, takes its timeout at most, and follows the redirects the offer follows:
+
+```java
+if (Whep.from(url).detect(rtc).get(15, TimeUnit.SECONDS)) {
+    Whep.Session viewer = Whep.from(url).play(rtc).get(15, TimeUnit.SECONDS);
+}
+```
 
 Endpoints have to be `https` URLs, as WHIP and WHEP ask, except on the machine the application runs on: there plain `http` will do, for a media server beside it, at `localhost`, an address in 127.0.0.0/8 or `::1`. A name that merely resolves to one of them does not count, since it may resolve elsewhere later. The same holds for the session an endpoint names and for where a redirect points.
 
@@ -718,6 +749,8 @@ Requests go through Java's `HttpClient`, with the default `SSLContext` and the H
 | `videoCodecs(String...)`, `audioCodecs(String...)` | The only codecs to negotiate, in order of preference; every codec WebRTC has by default. |
 | `alwaysOfferVideo()` | Video in the offer even without a video track, WHIP only, for endpoints that refuse an offer without video. |
 | `simulcast()`, `simulcast(Encoding...)` | The video track in layers, as simulcast, WHIP only: three by default (`f`, `h`, `q`), or two or three given, the largest first. |
+| `sendTransform(RTCEncodedFrameTransformer)` | The [encoded transform](#encoded-transforms) of every frame sent, WHIP only, in place before the offer goes out. |
+| `receiveTransform(RTCEncodedFrameTransformer)` | The [encoded transform](#encoded-transforms) of every frame received, WHEP only, in place before the first frame, also for a counter-offer. |
 | `timeout(Duration)` | How long the session may take to be connected, and its deletion to be answered. |
 
 ## Manual Negotiation
@@ -802,6 +835,7 @@ Failures arrive as exceptions, thrown or as the cause of a failed future, all of
 | `MediaException` | A device is missing, busy, refused access, or already open with other options. |
 | `ConfigurationException` | A call does not fit how the runtime was built, or WebRTC refused a configuration. |
 | `BlockingCallException` | A future was waited on from an event thread. |
+| `HttpStatusException` | A WHIP or WHEP endpoint answered with an error status, which `status()` gives, with the `title()`, `detail()` and `problemType()` of the problem details it sent, if any. |
 
 Failures that no caller waits for, such as a remote description rejected during automatic negotiation, go to the peer's `onError` handlers:
 

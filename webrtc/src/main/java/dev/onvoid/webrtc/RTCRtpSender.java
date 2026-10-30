@@ -184,10 +184,10 @@ public class RTCRtpSender extends DisposableNativeObject {
 	/**
 	 * Asks the encoder to make the next video frame a key frame, e.g. so that
 	 * a newly joined receiver or a recording can start decoding at once. Does
-	 * nothing for an audio sender.
+	 * nothing for an audio sender, and nothing before the connection is
+	 * negotiated, when the sender has no encoder yet.
 	 *
-	 * @throws RuntimeException If the sender has no encoder yet, before the
-	 *                          connection is negotiated.
+	 * @throws RuntimeException If WebRTC refuses the request.
 	 */
 	public native void generateKeyFrame();
 

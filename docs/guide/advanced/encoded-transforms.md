@@ -101,7 +101,7 @@ videoSender.generateKeyFrame();    // the local encoder makes the next frame a k
 videoReceiver.requestKeyFrame();   // asks the remote sender for one
 ```
 
-Both do nothing for audio.
+Both do nothing for audio, and `generateKeyFrame()` nothing before the connection is negotiated. In the client API, `Sender.generateKeyFrame()` and `RemoteVideo.requestKeyFrame()` do the same.
 
 ## End-to-End Encryption
 

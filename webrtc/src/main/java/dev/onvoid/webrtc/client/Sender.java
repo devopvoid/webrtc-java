@@ -70,6 +70,17 @@ public interface Sender {
 	CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform);
 
 	/**
+	 * Asks the encoder to make the next video frame a key frame, as a
+	 * transform that changed its key needs, or a receiver that cannot decode
+	 * what came before. Does nothing for audio, and nothing before the peer
+	 * is negotiated, when there is no encoder yet; the stream starts with a
+	 * key frame anyway.
+	 *
+	 * @return a future that completes once the encoder was asked.
+	 */
+	CompletableFuture<Void> generateKeyFrame();
+
+	/**
 	 * Sends DTMF tones on an audio sender, 100 ms each with 70 ms between
 	 * them. See {@link #sendTones(String, Duration, Duration)}.
 	 *

@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.net.URI;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -50,6 +51,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
@@ -137,11 +139,64 @@ class HttpSessionTests extends ClientTestBase {
 			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
 
 			assertEquals(MediaKind.VIDEO, await(published).kind());
+			assertTrue(session.extensions().isEmpty());
 
 			// Before the endpoint goes, which would fail the DELETE.
 			await(session.closeAsync());
 			assertEquals(1, endpoint.count("DELETE /live/session/1"));
 		}
+	}
+
+	@Test
+	void whipAndWhepTransform() throws Exception {
+		// Frames are marked on one side and the mark stripped on the other:
+		// a frame without it got past a transform, and one that keeps it
+		// would not be what the decoder decodes.
+		AtomicInteger played = new AtomicInteger();
+		AtomicInteger unmarked = new AtomicInteger();
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> {
+			Peer server = rtc.createPeer(PeerOptions.builder()
+					.negotiation(Negotiation.MANUAL)
+					.sendTransform(TransformTests::mark)
+					.build());
+			server.addTrack(video);
+			return answer(server, offer);
+		}, 201)) {
+			Whep.Session session = await(Whep.from(endpoint.uri())
+					.receiveTransform(frame -> (TransformTests.unmark(frame) ? played : unmarked).incrementAndGet())
+					.play(rtc));
+
+			CompletableFuture<Integer> width = new CompletableFuture<>();
+			session.peer().onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+
+			assertEquals(160, (int) await(width));
+			await(session.closeAsync());
+		}
+
+		AtomicInteger published = new AtomicInteger();
+		CompletableFuture<Integer> width = new CompletableFuture<>();
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> {
+			Peer server = rtc.createPeer(PeerOptions.builder()
+					.negotiation(Negotiation.MANUAL)
+					.receiveTransform(frame -> (TransformTests.unmark(frame) ? published : unmarked).incrementAndGet())
+					.build());
+			server.onTrack(track -> track.asVideo().onFrame(frame -> width.complete(frame.buffer.getWidth())));
+			return answer(server, offer);
+		}, 201)) {
+			Whip.Session session = await(Whip.to(endpoint.uri())
+					.track(video)
+					.sendTransform(TransformTests::mark)
+					.publish(rtc));
+
+			assertEquals(160, (int) await(width));
+			await(session.closeAsync());
+		}
+
+		// A frame is decoded only after its transform returned.
+		assertTrue(played.get() > 0 && published.get() > 0, () -> "Played " + played + ", published " + published);
+		assertEquals(0, unmarked.get());
 	}
 
 	@Test
@@ -357,6 +412,10 @@ class HttpSessionTests extends ClientTestBase {
 
 			assertInstanceOf(WebRtcException.class, failed.getCause());
 			assertTrue(failed.getCause().getMessage().contains("403"), failed.getCause().getMessage());
+			// Without problem details, the status alone.
+			HttpStatusException refused = assertInstanceOf(HttpStatusException.class, failed.getCause());
+			assertEquals(403, refused.status());
+			assertNull(refused.title());
 
 			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
 			while (!rtc.peers().isEmpty() && System.nanoTime() < deadline) {
@@ -380,6 +439,14 @@ class HttpSessionTests extends ClientTestBase {
 			assertTrue(failed.getCause().getMessage().endsWith(
 					"answered the offer with status 403: Forbidden: The stream key has expired"),
 					failed.getCause().getMessage());
+
+			// The same, for a program to read.
+			HttpStatusException refused = assertInstanceOf(HttpStatusException.class, failed.getCause());
+
+			assertEquals(403, refused.status());
+			assertEquals("Forbidden", refused.title());
+			assertEquals("The stream key has expired", refused.detail());
+			assertNull(refused.problemType());
 		}
 	}
 
@@ -566,6 +633,84 @@ class HttpSessionTests extends ClientTestBase {
 			assertThrows(IllegalStateException.class, () -> whip.publish(rtc));
 			assertTrue(rtc.peers().isEmpty(), () -> "Peers left: " + rtc.peers());
 			assertTrue(endpoint.requests.isEmpty());
+		}
+	}
+
+	@Test
+	void whepProfileDetected() {
+		// draft-ietf-wish-whep-05, 4.2: application/sdp and a Link to the WHEP
+		// profile, never the Content-Type alone.
+		String profile = "<urn:ietf:params:whep>; rel=\"profile\"";
+
+		assertTrue(Whep.servesWhep(headResponse(200, "application/sdp", profile)));
+		assertTrue(Whep.servesWhep(headResponse(200, "application/sdp; charset=utf-8",
+				"<stun:stun.example.com>; rel=\"ice-server\", " + profile)));
+		assertFalse(Whep.servesWhep(headResponse(200, "application/sdp", null)));
+		assertFalse(Whep.servesWhep(headResponse(200, "text/html", profile)));
+		assertFalse(Whep.servesWhep(headResponse(405, "application/sdp", profile)));
+		assertFalse(Whep.servesWhep(headResponse(200, "application/sdp", "<urn:ietf:params:whip>; rel=\"profile\"")));
+	}
+
+	@Test
+	void whepEndpointDetected() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			// One that takes no HEAD is no WHEP endpoint, as far as a player
+			// can tell.
+			assertFalse(await(Whep.from(endpoint.uri()).detect(rtc)));
+
+			endpoint.headStatus = 200;
+			endpoint.headHeaders = "Content-Type: application/sdp\r\nLink: <urn:ietf:params:whep>; rel=\"profile\"\r\n";
+
+			assertTrue(await(Whep.from(endpoint.uri()).bearerToken("secret").detect(rtc)));
+			assertEquals("HEAD /live/endpoint", endpoint.requests.get(1).toString());
+			assertEquals("Bearer secret", endpoint.requests.get(1).authorization);
+		}
+
+		URI gone;
+
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			gone = endpoint.uri();
+		}
+
+		ExecutionException failed = assertThrows(ExecutionException.class,
+				() -> await(Whep.from(gone).detect(rtc)));
+
+		assertInstanceOf(WebRtcException.class, failed.getCause());
+	}
+
+	@Test
+	void extensionLinksRead() {
+		// RFC 9725, 4.9: the links of extension relations, resolved; those of
+		// other relations a client ignores.
+		Map<String, URI> extensions = HttpSession.extensions(List.of(
+				"<stun:stun.example.com>; rel=\"ice-server\", "
+						+ "</live/sse>; rel=\"urn:ietf:params:whip:ext:example:server-sent-events\"",
+				"<https://other.example.com/layer>; rel=\"next URN:ietf:params:whip:ext:example:layer\"",
+				"</live/second>; rel=\"URN:ietf:params:whip:ext:example:layer\"",
+				"</live/whep>; rel=\"urn:ietf:params:whep:ext:example:layer\"",
+				"</live/bare>; rel=\"urn:ietf:params:whip:ext:\""),
+				URI.create("https://example.com/live/endpoint"), "urn:ietf:params:whip:ext:");
+
+		assertEquals(List.of("urn:ietf:params:whip:ext:example:server-sent-events",
+				"URN:ietf:params:whip:ext:example:layer"), new ArrayList<>(extensions.keySet()));
+		assertEquals(URI.create("https://example.com/live/sse"),
+				extensions.get("urn:ietf:params:whip:ext:example:server-sent-events"));
+		// Of a relation named twice, the first.
+		assertEquals(URI.create("https://other.example.com/layer"),
+				extensions.get("URN:ietf:params:whip:ext:example:layer"));
+	}
+
+	@Test
+	void extensionsOfSession() throws Exception {
+		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
+			endpoint.answerHeaders = "Link: </live/sse>; rel=\"urn:ietf:params:whip:ext:example:server-sent-events\"\r\n";
+
+			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
+
+			assertEquals(Map.of("urn:ietf:params:whip:ext:example:server-sent-events",
+					endpoint.uri().resolve("/live/sse")), session.extensions());
+
+			await(session.closeAsync());
 		}
 	}
 
@@ -874,6 +1019,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			assertTrue(failed.getCause().getMessage().contains("takes no ICE restarts"),
 					failed.getCause().getMessage());
+			assertEquals(405, assertInstanceOf(HttpStatusException.class, failed.getCause()).status());
 			assertEquals(offered, HttpIce.Fragment.of(local).ufrag);
 			assertEquals(PeerState.CONNECTED, session.peer().state());
 
@@ -1215,8 +1361,8 @@ class HttpSessionTests extends ClientTestBase {
 		// a byte at a time and never ends, and the session's timeout ends it.
 		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
 			Peer peer = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
-			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), null,
-					Duration.ofSeconds(1), null);
+			HttpSession session = new Whep.Session(rtc, peer, endpoint.uri().resolve("/live/session/1"), Map.of(),
+					null, Duration.ofSeconds(1), null);
 
 			endpoint.trickleDeletes();
 
@@ -1409,7 +1555,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			Whip.Session session = await(Whip.to(endpoint.uri()).track(video).publish(rtc));
 
-			assertCloseFails(session, "500");
+			assertCloseFails(session, 500);
 			// Closed all the same.
 			assertEquals(PeerState.CLOSED, session.peer().state());
 			assertDeleteReported("500");
@@ -1443,7 +1589,8 @@ class HttpSessionTests extends ClientTestBase {
 		IllegalStateException peerError = new IllegalStateException("The peer did not close");
 
 		// Nothing to delete: the session fails as the peer did.
-		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, null, SESSION_TIMEOUT, null);
+		HttpSession session = new Whep.Session(rtc, failingToClose(peerError), null, Map.of(), null, SESSION_TIMEOUT,
+				null);
 		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
 		assertSame(peerError, failed.getCause());
 
@@ -1452,8 +1599,8 @@ class HttpSessionTests extends ClientTestBase {
 			endpoint.deleteStatus = 500;
 
 			HttpSession both = new Whep.Session(rtc, failingToClose(peerError),
-					endpoint.uri().resolve("/live/session/1"), null, SESSION_TIMEOUT, null);
-			Throwable error = assertCloseFails(both, "500");
+					endpoint.uri().resolve("/live/session/1"), Map.of(), null, SESSION_TIMEOUT, null);
+			Throwable error = assertCloseFails(both, 500);
 
 			assertEquals(Arrays.asList(peerError), Arrays.asList(error.getSuppressed()));
 			assertDeleteReported("500");
@@ -1468,7 +1615,7 @@ class HttpSessionTests extends ClientTestBase {
 
 			Whip.Session session = await(Whip.to(endpoint.uri()).bearerToken("secret").track(video).publish(rtc));
 
-			assertCloseFails(session, "307");
+			assertCloseFails(session, 307);
 			assertDeleteReported("307");
 			assertFalse(endpoint.requests.stream().anyMatch(request -> request.path.equals(endpoint.redirect)),
 					() -> "Requests: " + endpoint.requests);
@@ -1693,6 +1840,24 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	/**
+	 * An answer to HEAD, with the Content-Type and Link header fields given,
+	 * where not null.
+	 */
+	private static HttpCall.Response headResponse(int status, String type, String link) {
+		Map<String, List<String>> fields = new HashMap<>();
+
+		if (type != null) {
+			fields.put("Content-Type", List.of(type));
+		}
+		if (link != null) {
+			fields.put("Link", List.of(link));
+		}
+
+		return new HttpCall.Response(URI.create("https://example.com/live/whep"), status,
+				HttpHeaders.of(fields, (name, value) -> true), "");
+	}
+
+	/**
 	 * The rid and the factor of each encoding the only sender of the peer
 	 * sends in.
 	 */
@@ -1801,13 +1966,15 @@ class HttpSessionTests extends ClientTestBase {
 	 *
 	 * @return the failure.
 	 */
-	private static Throwable assertCloseFails(HttpSession session, String status) {
+	private static Throwable assertCloseFails(HttpSession session, int status) {
 		ExecutionException failed = assertThrows(ExecutionException.class, () -> await(session.closeAsync()));
 		Throwable error = failed.getCause();
 
 		assertInstanceOf(WebRtcException.class, error);
 		assertTrue(error.getMessage().contains("Deleting the session"), error::getMessage);
-		assertTrue(error.getCause().getMessage().contains(status), () -> error.getCause().getMessage());
+		assertTrue(error.getCause().getMessage().contains("status " + status), () -> error.getCause().getMessage());
+		// The status of the deletion's answer, for a program to read.
+		assertEquals(status, assertInstanceOf(HttpStatusException.class, error.getCause()).status());
 
 		return error;
 	}

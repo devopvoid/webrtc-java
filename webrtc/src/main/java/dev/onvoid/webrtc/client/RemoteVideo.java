@@ -16,6 +16,7 @@
 
 package dev.onvoid.webrtc.client;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.media.video.VideoFrame;
@@ -48,5 +49,15 @@ public interface RemoteVideo extends RemoteTrack {
 	 * @return the subscription that stops the frames.
 	 */
 	Subscription onFrame(FrameDelivery delivery, Consumer<VideoFrame> handler);
+
+	/**
+	 * Asks the remote sender for a key frame, as a transform that changed its
+	 * key needs, or a decoder that lost what it depends on. WebRTC senders
+	 * rarely send one of their own accord.
+	 *
+	 * @return a future that completes once the request is on its way, and
+	 * fails with an {@link IllegalStateException} once the track ended.
+	 */
+	CompletableFuture<Void> requestKeyFrame();
 
 }

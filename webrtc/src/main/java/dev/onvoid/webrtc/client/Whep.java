@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
@@ -56,11 +57,42 @@ public final class Whep {
 	 * An endpoint under load answers 503, and one whose stream has yet to
 	 * start 409, both with Retry-After; and an endpoint may counter the offer
 	 * with one of its own (draft-ietf-wish-whep-05, 4.7, 4.3.9 and 4.3.2).
+	 * Its extensions have relation types under urn:ietf:params:whep:ext
+	 * (4.10).
 	 */
-	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(409, 503), true);
+	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(409, 503), true,
+			"urn:ietf:params:whep:ext:");
+
+	/** The profile a WHEP endpoint links to (draft-ietf-wish-whep-05, 4.2). */
+	private static final String PROFILE = "urn:ietf:params:whep";
 
 
 	private Whep() {
+	}
+
+	/**
+	 * Tells from the answer to HEAD whether an endpoint serves WHEP
+	 * (draft-ietf-wish-whep-05, 4.2): it answers 200, with the Content-Type
+	 * application/sdp and a Link to the WHEP profile with the relation
+	 * "profile". The Content-Type alone does not count.
+	 */
+	static boolean servesWhep(HttpCall.Response response) {
+		String type = response.header("Content-Type");
+
+		if (response.status != 200 || type == null
+				|| !type.split(";", 2)[0].trim().equalsIgnoreCase("application/sdp")) {
+			return false;
+		}
+
+		boolean[] profile = new boolean[1];
+
+		HttpIce.forEachLink(response.headers.allValues("Link"), (target, parameters) -> {
+			for (String relation : HttpIce.relations(parameters)) {
+				profile[0] |= relation.equalsIgnoreCase("profile") && target.equalsIgnoreCase(PROFILE);
+			}
+		});
+
+		return profile[0];
 	}
 
 	/**
@@ -80,8 +112,9 @@ public final class Whep {
 	/** A stream received over WHEP. Closing it ends the session on the server. */
 	public static final class Session extends HttpSession {
 
-		Session(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice) {
-			super(rtc, peer, resource, authorization, timeout, ice);
+		Session(WebRtc rtc, Peer peer, URI resource, Map<String, URI> extensions, String authorization,
+				Duration timeout, HttpIce ice) {
+			super(rtc, peer, resource, extensions, authorization, timeout, ice);
 		}
 	}
 
@@ -243,6 +276,45 @@ public final class Whep {
 		public Builder timeout(Duration timeout) {
 			this.timeout = Timeouts.requirePositive(timeout, "timeout");
 			return this;
+		}
+
+		/**
+		 * Sets the transform that every encoded frame received passes through,
+		 * after the depacketizer and before the decoder, as end-to-end
+		 * encryption needs. It is in place before the session hands out a
+		 * track, including the tracks of a counter-offer, so it sees the first
+		 * frame. See {@link PeerOptions.Builder#receiveTransform}.
+		 *
+		 * @param transform the transform of every receiver.
+		 *
+		 * @return this builder.
+		 */
+		public Builder receiveTransform(RTCEncodedFrameTransformer transform) {
+			options.receiveTransform(transform);
+			return this;
+		}
+
+		/**
+		 * Asks the endpoint with HEAD whether it serves WHEP, as a player may
+		 * before it plays a URL it was given (draft-ietf-wish-whep-05, 4.2): a
+		 * WHEP endpoint answers 200, with the Content-Type {@code
+		 * application/sdp} and a Link to the profile {@code
+		 * urn:ietf:params:whep}. The Content-Type alone does not count. The
+		 * request carries the credentials of this builder, takes its timeout
+		 * at most, and follows the redirects the offer follows.
+		 *
+		 * @param rtc the runtime whose HTTP client sends the request.
+		 *
+		 * @return a future with whether the endpoint serves WHEP; false for one
+		 * that answers otherwise, such as one that takes no HEAD. It fails with
+		 * a {@link WebRtcException} if the request does, as when the endpoint
+		 * cannot be reached in time.
+		 */
+		public CompletableFuture<Boolean> detect(WebRtc rtc) {
+			requireNonNull(rtc, "rtc");
+
+			return ClientFuture.copyOf(HttpSession.head(rtc, endpoint, authorization, timeout)
+					.thenApply(Whep::servesWhep));
 		}
 
 		/**

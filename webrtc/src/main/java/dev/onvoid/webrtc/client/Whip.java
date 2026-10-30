@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.internal.Timeouts;
 
@@ -57,9 +58,11 @@ public final class Whip {
 
 	/**
 	 * An endpoint under load answers 503, with Retry-After (RFC 9725, 4.5).
-	 * WHIP has no counter-offers.
+	 * WHIP has no counter-offers. Its extensions have relation types under
+	 * urn:ietf:params:whip:ext (4.9).
 	 */
-	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(503), false);
+	private static final HttpSession.Protocol PROTOCOL = new HttpSession.Protocol(Set.of(503), false,
+			"urn:ietf:params:whip:ext:");
 
 
 	/**
@@ -111,8 +114,9 @@ public final class Whip {
 	/** Tracks published over WHIP. Closing it ends the session on the server. */
 	public static final class Session extends HttpSession {
 
-		Session(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice) {
-			super(rtc, peer, resource, authorization, timeout, ice);
+		Session(WebRtc rtc, Peer peer, URI resource, Map<String, URI> extensions, String authorization,
+				Duration timeout, HttpIce ice) {
+			super(rtc, peer, resource, extensions, authorization, timeout, ice);
 		}
 	}
 
@@ -325,6 +329,22 @@ public final class Whip {
 		 */
 		public Builder timeout(Duration timeout) {
 			this.timeout = Timeouts.requirePositive(timeout, "timeout");
+			return this;
+		}
+
+		/**
+		 * Sets the transform that every encoded frame sent passes through,
+		 * after the encoder and before the packetizer, as end-to-end
+		 * encryption needs. It is in place before the offer goes out, so no
+		 * frame leaves without it. See {@link
+		 * PeerOptions.Builder#sendTransform}.
+		 *
+		 * @param transform the transform of every sender.
+		 *
+		 * @return this builder.
+		 */
+		public Builder sendTransform(RTCEncodedFrameTransformer transform) {
+			options.sendTransform(transform);
 			return this;
 		}
 

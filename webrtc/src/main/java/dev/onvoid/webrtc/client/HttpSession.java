@@ -28,7 +28,9 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -72,6 +74,8 @@ abstract class HttpSession implements AutoCloseable {
 
 	private final URI resource;
 
+	private final Map<String, URI> extensions;
+
 	private final String authorization;
 
 	private final Duration timeout;
@@ -86,10 +90,12 @@ abstract class HttpSession implements AutoCloseable {
 	private final CompletableFuture<Void> closed = new CompletableFuture<>();
 
 
-	HttpSession(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice) {
+	HttpSession(WebRtc rtc, Peer peer, URI resource, Map<String, URI> extensions, String authorization,
+			Duration timeout, HttpIce ice) {
 		this.rtc = rtc;
 		this.peer = peer;
 		this.resource = resource;
+		this.extensions = extensions;
 		this.authorization = authorization;
 		this.timeout = timeout;
 		this.ice = ice;
@@ -112,6 +118,18 @@ abstract class HttpSession implements AutoCloseable {
 	 */
 	public URI resource() {
 		return resource;
+	}
+
+	/**
+	 * @return the protocol extensions the endpoint offers for the session
+	 * (RFC 9725, 4.9): the URL of each by its relation type, such as {@code
+	 * urn:ietf:params:whip:ext:example:server-sent-events}, as the endpoint
+	 * named them in Link header fields of its answer, resolved against it.
+	 * Empty if it named none. This API uses none of them itself; an
+	 * application uses those it knows.
+	 */
+	public Map<String, URI> extensions() {
+		return extensions;
 	}
 
 	/**
@@ -208,10 +226,12 @@ abstract class HttpSession implements AutoCloseable {
 			String authorization, Duration timeout, CompletableFuture<?> prepared, Gathering gathering,
 			Protocol protocol, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
+		AtomicReference<Map<String, URI>> extensions = new AtomicReference<>(Map.of());
 		HttpIce ice = new HttpIce(rtc, rtc.httpClient(authorization != null), peer, authorization, timeout);
 		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, authorization, timeout, prepared,
-				gathering, protocol, ice, abandoned)
-				.thenApply(resource -> factory.create(rtc, peer, resource, authorization, timeout, ice)),
+				gathering, protocol, ice, extensions, abandoned)
+				.thenApply(resource -> factory.create(rtc, peer, resource, extensions.get(), authorization, timeout,
+						ice)),
 				HttpSession::close);
 
 		// Once the session was handed out, this finds the negotiation finished.
@@ -232,7 +252,8 @@ abstract class HttpSession implements AutoCloseable {
 	 * ICE servers then arrive too late for this gathering and are ignored.
 	 *
 	 * @param prepared  completes once the peer is set up for the offer.
-	 * @param ice       the ICE of the session once the offer is answered.
+	 * @param ice        the ICE of the session once the offer is answered.
+	 * @param extensions gets the protocol extensions the endpoint named.
 	 * @param abandoned completes when no one waits for the session anymore,
 	 *                  which then ends as if it had failed.
 	 *
@@ -240,7 +261,7 @@ abstract class HttpSession implements AutoCloseable {
 	 */
 	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String authorization,
 			Duration timeout, CompletableFuture<?> prepared, Gathering gathering, Protocol protocol, HttpIce ice,
-			CompletableFuture<?> abandoned) {
+			AtomicReference<Map<String, URI>> extensions, CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
 		long started = System.nanoTime();
 		// The resource the server created. Whoever takes it out owns it: the
@@ -296,6 +317,10 @@ abstract class HttpSession implements AutoCloseable {
 								// then has no one else to delete it.
 								discard(rtc, resource.getAndSet(null), authorization, timeout);
 							}
+						})
+						.thenApply(reply -> {
+							extensions.set(reply.extensions);
+							return reply;
 						})
 						.thenCompose(reply -> (gathering == Gathering.COMPLETE
 								? CompletableFuture.<Void>completedFuture(null)
@@ -368,7 +393,7 @@ abstract class HttpSession implements AutoCloseable {
 					throw new WebRtcException("The endpoint " + endpoint + " answered without a session Location");
 				}
 				requireContentType(response, "application/sdp");
-				return new Reply(response.body, false, null, 0, response);
+				return new Reply(response.body, false, null, 0, response, protocol);
 			}
 			if (protocol.counterOffers && isCounterOffer(response)) {
 				URI session = resourceOf(response.uri, response.header("Location"));
@@ -379,11 +404,11 @@ abstract class HttpSession implements AutoCloseable {
 				}
 
 				return new Reply(response.body, true, session,
-						counterOfferExpiry(response.header("Content-Type"), System.currentTimeMillis()), response);
+						counterOfferExpiry(response.header("Content-Type"), System.currentTimeMillis()), response,
+						protocol);
 			}
 
-			throw new WebRtcException("The endpoint " + endpoint + " answered the offer with "
-					+ response.describe());
+			throw response.error("The endpoint " + endpoint + " answered the offer with " + response.describe());
 		});
 	}
 
@@ -425,7 +450,7 @@ abstract class HttpSession implements AutoCloseable {
 											+ error.getMessage(), error);
 								}
 								if (response.status / 100 != 2) {
-									throw new WebRtcException("The endpoint answered the answer for "
+									throw response.error("The endpoint answered the answer for "
 											+ reply.session + " with " + response.describe());
 								}
 
@@ -493,10 +518,14 @@ abstract class HttpSession implements AutoCloseable {
 		/** Whether the endpoint may counter the offer with one of its own. */
 		final boolean counterOffers;
 
+		/** What the relation types of protocol extensions start with. */
+		final String extensions;
 
-		Protocol(Set<Integer> retried, boolean counterOffers) {
+
+		Protocol(Set<Integer> retried, boolean counterOffers, String extensions) {
 			this.retried = retried;
 			this.counterOffers = counterOffers;
+			this.extensions = extensions;
 		}
 	}
 
@@ -525,14 +554,19 @@ abstract class HttpSession implements AutoCloseable {
 		/** The STUN and TURN servers the endpoint named. */
 		final List<RTCIceServer> iceServers;
 
+		/** The protocol extensions the endpoint named. */
+		final Map<String, URI> extensions;
 
-		Reply(String sdp, boolean counterOffer, URI session, long validUntil, HttpCall.Response response) {
+
+		Reply(String sdp, boolean counterOffer, URI session, long validUntil, HttpCall.Response response,
+				Protocol protocol) {
 			this.sdp = sdp;
 			this.counterOffer = counterOffer;
 			this.session = session;
 			this.validUntil = validUntil;
 			this.etag = response.header("ETag");
 			this.iceServers = HttpIce.iceServers(response.headers.allValues("Link"));
+			this.extensions = extensions(response.headers.allValues("Link"), response.uri, protocol.extensions);
 		}
 	}
 
@@ -545,7 +579,8 @@ abstract class HttpSession implements AutoCloseable {
 	 */
 	interface Factory<S extends HttpSession> {
 
-		S create(WebRtc rtc, Peer peer, URI resource, String authorization, Duration timeout, HttpIce ice);
+		S create(WebRtc rtc, Peer peer, URI resource, Map<String, URI> extensions, String authorization,
+				Duration timeout, HttpIce ice);
 	}
 
 	/**
@@ -575,7 +610,7 @@ abstract class HttpSession implements AutoCloseable {
 					Throwable failure = error;
 
 					if (failure == null && response.status / 100 != 2) {
-						failure = new WebRtcException("The endpoint answered the deletion of " + resource
+						failure = response.error("The endpoint answered the deletion of " + resource
 								+ " with " + response.describe());
 					}
 					if (failure == null) {
@@ -600,6 +635,49 @@ abstract class HttpSession implements AutoCloseable {
 		}
 
 		return deleted;
+	}
+
+	/**
+	 * Sends a HEAD request to an endpoint, which follows the redirects the
+	 * offer follows. It takes at most the timeout from now on.
+	 *
+	 * @return a future with the response, whatever its status, which fails
+	 * with a {@link WebRtcException} if the request does.
+	 */
+	static CompletableFuture<HttpCall.Response> head(WebRtc rtc, URI endpoint, String authorization,
+			Duration timeout) {
+		HttpCall request;
+
+		try {
+			request = new HttpCall(rtc.httpClient(authorization != null), endpoint, "HEAD", authorization, timeout)
+					.followRedirects();
+		}
+		catch (RejectedExecutionException e) {
+			return CompletableFuture.failedFuture(new WebRtcException("The runtime is closed", e));
+		}
+
+		CompletableFuture<HttpCall.Response> response = request.send(null, null, 0, head -> { })
+				.handle((value, error) -> {
+					if (error != null) {
+						throw new WebRtcException("Asking " + endpoint + " with HEAD failed: " + error.getMessage(),
+								error);
+					}
+
+					return value;
+				});
+
+		try {
+			// The request's own timeout bounds the head of the answer; this ends
+			// the body of an error that does not come.
+			ScheduledFuture<?> deadline = rtc.timer.schedule(request::abort, Timeouts.toMillis(timeout),
+					TimeUnit.MILLISECONDS);
+			response.whenComplete((value, error) -> deadline.cancel(false));
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing, and the request's own timeout bounds it.
+		}
+
+		return response;
 	}
 
 	/**
@@ -707,6 +785,45 @@ abstract class HttpSession implements AutoCloseable {
 			throw new WebRtcException("The session " + response.uri + " answered with Content-Type "
 					+ type + "; expected " + expected);
 		}
+	}
+
+	/**
+	 * Reads the protocol extensions an endpoint names in Link header fields
+	 * (RFC 9725, 4.9): the links with a relation type that starts with the
+	 * prefix of the protocol. Links of other relation types, which a client
+	 * has to ignore, are left out.
+	 *
+	 * @param fields the values of the Link header fields.
+	 * @param base   the URL that answered, which relative targets resolve
+	 *               against.
+	 * @param prefix what the relation types of extensions start with, case
+	 *               aside.
+	 *
+	 * @return the target of each extension by its relation type, in order;
+	 * of one named twice, the first. A target that is no URL is left out.
+	 */
+	static Map<String, URI> extensions(List<String> fields, URI base, String prefix) {
+		Map<String, URI> extensions = new LinkedHashMap<>();
+
+		HttpIce.forEachLink(fields, (target, parameters) -> {
+			URI resolved;
+
+			try {
+				resolved = base.resolve(target);
+			}
+			catch (IllegalArgumentException e) {
+				return;
+			}
+
+			for (String relation : HttpIce.relations(parameters)) {
+				if (relation.length() > prefix.length()
+						&& relation.regionMatches(true, 0, prefix, 0, prefix.length())) {
+					extensions.putIfAbsent(relation, resolved);
+				}
+			}
+		});
+
+		return Collections.unmodifiableMap(extensions);
 	}
 
 	/**

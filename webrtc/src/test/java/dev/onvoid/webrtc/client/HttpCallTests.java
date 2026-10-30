@@ -101,6 +101,26 @@ class HttpCallTests {
 	}
 
 	@Test
+	void problemDetailsOfError() {
+		// The status and the problem details, for a program to read.
+		HttpStatusException typed = response(409, "application/problem+json",
+				"{\"type\":\"https://example.com/probs/busy\",\"title\":\" Busy \"}").error("refused");
+
+		assertEquals("refused", typed.getMessage());
+		assertEquals(409, typed.status());
+		assertEquals("https://example.com/probs/busy", typed.problemType());
+		assertEquals("Busy", typed.title());
+		assertNull(typed.detail());
+
+		HttpStatusException plain = response(404, "text/plain", "not found").error("gone");
+
+		assertEquals(404, plain.status());
+		assertNull(plain.problemType());
+		assertNull(plain.title());
+		assertNull(plain.detail());
+	}
+
+	@Test
 	void oversizedAnswerRefused() throws Exception {
 		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> ANSWER, 201)) {
 			CompletableFuture<HttpCall.Response> response = post(HttpCall.newClient(false), endpoint.uri())

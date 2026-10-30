@@ -137,27 +137,9 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 
 	@Override
 	public CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform) {
-		CompletableFuture<Void> result = new CompletableFuture<>();
+		RTCEncodedFrameTransformer guarded = peer.guard(transform, "the track " + id + " of " + peer.name);
 
-		peer.control.execute(() -> {
-			try {
-				if (peer.isClosed()) {
-					throw peer.closedError();
-				}
-				if (ended) {
-					throw new IllegalStateException("The track " + id + " ended");
-				}
-
-				receiver.setTransform(peer.guard(transform, "the track " + id + " of " + peer.name));
-				result.complete(null);
-			}
-			catch (Throwable e) {
-				result.completeExceptionally(e instanceof IllegalStateException
-						? e : PeerImpl.asWebRtcException(e, "Setting the transform of the track " + id + " failed"));
-			}
-		}, () -> result.completeExceptionally(new PeerClosedException("The runtime is closed")));
-
-		return peer.toPublic(result);
+		return onReceiver("Setting the transform", receiver -> receiver.setTransform(guarded));
 	}
 
 	@Override
@@ -200,6 +182,39 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 				}
 			}));
 		});
+	}
+
+	/**
+	 * Uses the native receiver on the peer's control executor, for an
+	 * operation of the application.
+	 *
+	 * @param what names the operation in the error of a failure.
+	 *
+	 * @return a future that completes once the receiver was used, and fails
+	 * once the track ended or the peer closed.
+	 */
+	CompletableFuture<Void> onReceiver(String what, Consumer<RTCRtpReceiver> operation) {
+		CompletableFuture<Void> result = new CompletableFuture<>();
+
+		peer.control.execute(() -> {
+			try {
+				if (peer.isClosed()) {
+					throw peer.closedError();
+				}
+				if (ended) {
+					throw new IllegalStateException("The track " + id + " ended");
+				}
+
+				operation.accept(receiver);
+				result.complete(null);
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e instanceof IllegalStateException
+						? e : PeerImpl.asWebRtcException(e, what + " of the track " + id + " failed"));
+			}
+		}, () -> result.completeExceptionally(new PeerClosedException("The runtime is closed")));
+
+		return peer.toPublic(result);
 	}
 
 	/** Detaches everything from the native track, on the control executor. */

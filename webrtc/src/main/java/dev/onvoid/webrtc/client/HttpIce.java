@@ -30,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.UnaryOperator;
 
 import dev.onvoid.webrtc.RTCIceCandidate;
@@ -270,11 +271,10 @@ final class HttpIce {
 				restartsRefused = true;
 			}
 
-			throw new WebRtcException("The session " + target + " takes no ICE restarts: " + response.describe());
+			throw response.error("The session " + target + " takes no ICE restarts: " + response.describe());
 		}
 		if (response.status / 100 != 2) {
-			throw new WebRtcException("The session " + target + " answered the ICE restart with "
-					+ response.describe());
+			throw response.error("The session " + target + " answered the ICE restart with " + response.describe());
 		}
 
 		HttpSession.requireContentType(response, FRAGMENT_TYPE);
@@ -378,10 +378,16 @@ final class HttpIce {
 					}
 
 					if (report) {
+						// An error status is the cause, for its status.
+						Throwable cause = error != null
+								? error
+								: response.error("The session " + target + " answered the candidates with "
+										+ response.describe());
+
 						rtc.reportError(new WebRtcException("Sending ICE candidates to the session " + target
 								+ " failed, and no more are sent: " + (error != null
 								? error.getMessage()
-								: response.describe()), error));
+								: response.describe()), cause));
 					}
 
 					flush();
@@ -492,6 +498,34 @@ final class HttpIce {
 	static List<RTCIceServer> iceServers(List<String> fields) {
 		List<RTCIceServer> servers = new ArrayList<>();
 
+		forEachLink(fields, (target, parameters) -> {
+			boolean iceServer = false;
+
+			for (String relation : relations(parameters)) {
+				iceServer |= relation.equalsIgnoreCase("ice-server");
+			}
+
+			if (iceServer) {
+				RTCIceServer server = new RTCIceServer();
+				server.urls.add(target);
+				server.username = parameters.get("username");
+				server.password = parameters.get("credential");
+				servers.add(server);
+			}
+		});
+
+		return servers;
+	}
+
+	/**
+	 * Hands over each link of Link header fields (RFC 8288) with a target,
+	 * in order.
+	 *
+	 * @param fields the values of the Link header fields.
+	 * @param link   gets the target of a link, as written, and its
+	 *               parameters, by their names in lower case.
+	 */
+	static void forEachLink(List<String> fields, BiConsumer<String, Map<String, String>> link) {
 		for (String field : fields) {
 			int i = 0;
 
@@ -507,24 +541,21 @@ final class HttpIce {
 				Map<String, String> parameters = new HashMap<>();
 				i = parameters(field, close + 1, parameters);
 
-				String rel = parameters.getOrDefault("rel", "");
-				boolean iceServer = false;
-
-				for (String relation : rel.trim().split("\\s+")) {
-					iceServer |= relation.equalsIgnoreCase("ice-server");
-				}
-
-				if (iceServer && !target.isEmpty()) {
-					RTCIceServer server = new RTCIceServer();
-					server.urls.add(target);
-					server.username = parameters.get("username");
-					server.password = parameters.get("credential");
-					servers.add(server);
+				if (!target.isEmpty()) {
+					link.accept(target, parameters);
 				}
 			}
 		}
+	}
 
-		return servers;
+	/**
+	 * @return the relation types of a link, which its "rel" parameter
+	 * separates by spaces.
+	 */
+	static List<String> relations(Map<String, String> parameters) {
+		String rel = parameters.getOrDefault("rel", "").trim();
+
+		return rel.isEmpty() ? List.of() : List.of(rel.split("\\s+"));
 	}
 
 	/**
