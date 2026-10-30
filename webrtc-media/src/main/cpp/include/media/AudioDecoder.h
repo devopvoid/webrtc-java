@@ -72,8 +72,16 @@ namespace ffmpeg
 			void Close();
 
 			// Drops the decoder's state and the partial chunk being gathered,
-			// which is what a seek needs.
+			// which is what a seek needs. Forgets a position set with
+			// DiscardBefore.
 			void Flush();
+
+			// Makes the audio after a flush start at the given time on the
+			// source's timeline. A seek lands on a keyframe before it, and the
+			// audio decoded from there up to the position asked for is
+			// dropped: frames that end before it entirely, and the start of
+			// the frame it falls in, so the first chunk starts at it.
+			void DiscardBefore(int64_t timestamp_us);
 
 			// Hands a packet to the decoder, or null to start draining at the
 			// end of the stream. Returns 0 or a negative AVERROR.
@@ -141,6 +149,12 @@ namespace ffmpeg
 			// video, which follows its own timestamps, expects it.
 			int64_t next_timestamp_us_ = 0;
 			bool have_timestamp_ = false;
+
+			// Where the audio after a seek is to start. Only acted on while
+			// there is no timestamp yet, which is up to the first frame that
+			// reaches it.
+			int64_t discard_before_us_ = 0;
+			bool discarding_ = false;
 
 			// Set once the resampler has been drained at the end of the
 			// stream, so that it is drained once and not on every call.

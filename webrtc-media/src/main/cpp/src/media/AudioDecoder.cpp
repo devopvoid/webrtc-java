@@ -121,6 +121,7 @@ namespace ffmpeg
 		channels_ = 0;
 		next_timestamp_us_ = 0;
 		have_timestamp_ = false;
+		discarding_ = false;
 		resampler_drained_ = false;
 	}
 
@@ -141,6 +142,13 @@ namespace ffmpeg
 
 		// The next frame decoded tells where the audio now starts.
 		have_timestamp_ = false;
+		discarding_ = false;
+	}
+
+	void AudioDecoder::DiscardBefore(int64_t timestamp_us)
+	{
+		discard_before_us_ = timestamp_us;
+		discarding_ = true;
 	}
 
 	int AudioDecoder::SendPacket(const AVPacket * packet)
@@ -232,8 +240,28 @@ namespace ffmpeg
 		int skip = 0;
 
 		if (!have_timestamp_) {
-			next_timestamp_us_ = pts != AV_NOPTS_VALUE
+			int64_t start_us = pts != AV_NOPTS_VALUE
 					? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) : 0;
+
+			// A frame without a timestamp cannot be placed against the
+			// position, and is taken to start there.
+			if (discarding_ && pts != AV_NOPTS_VALUE) {
+				const int64_t cut = av_rescale(discard_before_us_ - start_us,
+						in_rate_, AV_TIME_BASE);
+
+				if (cut >= frame->nb_samples) {
+					// Before the position as a whole. The audio still has no
+					// timestamp, so the next frame is measured the same way.
+					return 0;
+				}
+				if (cut > 0) {
+					skip = static_cast<int>(cut);
+					start_us += av_rescale(cut, AV_TIME_BASE, in_rate_);
+				}
+			}
+
+			discarding_ = false;
+			next_timestamp_us_ = start_us;
 			have_timestamp_ = true;
 		}
 		else if (pts != AV_NOPTS_VALUE) {

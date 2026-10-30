@@ -267,9 +267,7 @@ class MediaPlayerTest {
 	@Test
 	void seekMovesPlayback() throws Exception {
 		try (Playback playback = new Playback()) {
-			// A seek lands on the keyframe at or before the target, so asking
-			// for 2.5 s starts playback at the 2 s keyframe, leaving about a
-			// second to play out.
+			// Half a second is left to play out from 2.5 s.
 			playback.player.seek(2_500_000);
 			playback.player.play();
 
@@ -279,6 +277,51 @@ class MediaPlayerTest {
 			assertTrue(playback.frames.get() < EXPECTED_FRAMES / 2,
 					"played more than the tail: " + playback.frames.get());
 			assertTrue(playback.frames.get() > 0, "played nothing after the seek");
+		}
+	}
+
+	@Test
+	void seekStartsAtThePositionAskedFor() throws Exception {
+		try (Playback playback = new Playback()) {
+			// Between the keyframes at 1 s and 2 s. The reader lands on the
+			// one at 1 s, and what lies between it and 1.5 s is decoded only
+			// to get there.
+			playback.player.seek(1_500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The first frame at or after 1.5 s is the one at 23 / 15 s.
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 1_500_000 && first < 1_500_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// 1.533 s to 2.933 s, and 1.5 s to 3.008 s of audio. Starting at
+			// the keyframe would have played 15 frames and 50 chunks more.
+			assertTrue(Math.abs(playback.frames.get() - 22) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 151) <= 2,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void seekCutsTheAudioFrameItFallsIn() throws Exception {
+		// Two seconds in frames of 100 ms, at the rate WebRTC takes, so that
+		// nothing is resampled and every sample played is one of the file's.
+		Path flac = TestMedia.constantFlac(tempDir, 48000, 20, (short) 1000);
+
+		try (Playback playback = new Playback(new MediaReader(flac))) {
+			// Half way into the frame at 1 s, which the reader lands on.
+			playback.player.seek(1_050_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// 0.95 s is exactly 95 chunks, none of them padded.
+			assertEquals(95, playback.chunks.get());
+			assertEquals(95 * 480, playback.nonZeroSamples.get());
 		}
 	}
 
@@ -781,12 +824,19 @@ class MediaPlayerTest {
 		final AtomicInteger framesPerChunk = new AtomicInteger();
 		final AtomicReference<String> error = new AtomicReference<>();
 		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
+		final AtomicLong firstFramePositionUs = new AtomicLong(-1);
 		final AtomicLong firstChunkNs = new AtomicLong();
 		final AtomicInteger unevenChunks = new AtomicInteger();
 		final AtomicLong nonZeroSamples = new AtomicLong();
 		final List<Integer> silentChunks = Collections.synchronizedList(new ArrayList<>());
 
 		private final VideoTrackSink videoSink = frame -> {
+			// The pacer delivers on its own thread, having just moved the
+			// position to the frame's presentation time.
+			if (firstFramePositionUs.get() < 0) {
+				firstFramePositionUs.set(Playback.this.player.getPositionUs());
+			}
+
 			frameTimes.add(System.nanoTime());
 			frames.incrementAndGet();
 			width.set(frame.buffer.getWidth());
