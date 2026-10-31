@@ -27,7 +27,7 @@ namespace jni
 		listener(listener),
 		javaClass(JavaClasses::get<JavaVoiceActivityListenerClass>(env)),
 		threshold(threshold),
-		hangoverChunks((hangoverMs + 9) / 10),
+		hangoverChunks(hangoverMs / 10 + (hangoverMs % 10 != 0)),
 		quietChunks(0),
 		speaking(false)
 	{
