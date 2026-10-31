@@ -122,7 +122,7 @@ public class AudioTrack extends MediaStreamTrack {
 		}
 
 		final long nativeSink = addVoiceActivityListenerInternal(listener, (float) config.getThreshold(),
-				(int) config.getHangover().toMillis());
+				config.getHangover().toNanos());
 
 		voiceActivityListeners.put(listener, nativeSink);
 	}
@@ -177,7 +177,7 @@ public class AudioTrack extends MediaStreamTrack {
 	private native void removeSinkInternal(long sinkHandle);
 
 	private native long addVoiceActivityListenerInternal(VoiceActivityListener listener, float threshold,
-			int hangoverMs);
+			long hangoverNanos);
 
 	private native void removeVoiceActivityListenerInternal(long sinkHandle);
 

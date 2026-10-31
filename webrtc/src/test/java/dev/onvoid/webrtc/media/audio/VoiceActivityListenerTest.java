@@ -26,6 +26,8 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.TestBase;
@@ -110,6 +112,65 @@ class VoiceActivityListenerTest extends TestBase {
 
 		assertTrue(Math.abs(longer - shorter - 50) <= 3, () -> "Ended after " + shorter + " and " + longer
 				+ " chunks");
+	}
+
+	@Test
+	void trackHangoverBoundaries() {
+		assertHangoverBoundaries(track::addVoiceActivityListener, pcm -> push(pcm, 16000, 1));
+	}
+
+	@Test
+	void factoryHangoverBoundaries() {
+		AudioProcessing processing = new AudioProcessing();
+		HeadlessAudioDeviceModule module = new HeadlessAudioDeviceModule();
+		PeerConnectionFactory processed = new PeerConnectionFactory(module, processing);
+
+		try {
+			assertHangoverBoundaries(processed::addVoiceActivityListener,
+					pcm -> process(processing, pcm, 16000));
+		}
+		finally {
+			processed.dispose();
+			module.dispose();
+			processing.dispose();
+		}
+	}
+
+	private void assertHangoverBoundaries(
+			BiConsumer<VoiceActivityConfig, VoiceActivityListener> addListener,
+			Consumer<byte[]> deliver) {
+		Duration[] hangovers = { Duration.ZERO, Duration.ofNanos(1), Duration.ofMillis(10),
+				Duration.ofMillis(10).plusNanos(1), Duration.ofNanos(10500000), Duration.ofMillis(20) };
+		int[] chunk = { 0 };
+		int[] lastEnd = new int[hangovers.length];
+		Arrays.fill(lastEnd, -1);
+
+		for (int i = 0; i < hangovers.length; i++) {
+			final int index = i;
+			addListener.accept(new VoiceActivityConfig(0.5, hangovers[i]), speaking -> {
+				if (!speaking) {
+					lastEnd[index] = chunk[0];
+				}
+			});
+		}
+
+		List<Boolean> maximumChanges = new CopyOnWriteArrayList<>();
+		addListener.accept(new VoiceActivityConfig(0.5, Duration.ofMillis(Integer.MAX_VALUE)),
+				maximumChanges::add);
+
+		byte[] pcm = SpeechFixture.concat(speech(16000, 1), silence(2000, 16000, 1));
+		for (int offset = 0; offset + 320 <= pcm.length; offset += 320) {
+			deliver.accept(Arrays.copyOfRange(pcm, offset, offset + 320));
+			chunk[0]++;
+		}
+
+		assertTrue(lastEnd[0] >= 0, "Speech must end for the rounding comparisons");
+		assertEquals(lastEnd[0] + 1, lastEnd[1], "1 ns rounds up to 10 ms");
+		assertEquals(lastEnd[1], lastEnd[2], "Exactly 10 ms stays one chunk");
+		assertEquals(lastEnd[2] + 1, lastEnd[3], "10 ms + 1 ns rounds up to 20 ms");
+		assertEquals(lastEnd[3], lastEnd[4], "10.5 ms rounds up to 20 ms");
+		assertEquals(lastEnd[4], lastEnd[5], "Exactly 20 ms stays two chunks");
+		assertEquals(List.of(true), maximumChanges, "The maximum hangover must keep speech active");
 	}
 
 	@Test
@@ -278,6 +339,8 @@ class VoiceActivityListenerTest extends TestBase {
 
 		assertThrows(IllegalArgumentException.class, () -> new VoiceActivityConfig(0.5, Duration.ofMillis(-10)));
 		assertThrows(IllegalArgumentException.class, () -> new VoiceActivityConfig(0.5, Duration.ofDays(30)));
+		assertThrows(IllegalArgumentException.class, () -> new VoiceActivityConfig(0.5,
+				Duration.ofMillis(Integer.MAX_VALUE).plusNanos(1)));
 		assertThrows(NullPointerException.class, () -> new VoiceActivityConfig(0.5, null));
 	}
 

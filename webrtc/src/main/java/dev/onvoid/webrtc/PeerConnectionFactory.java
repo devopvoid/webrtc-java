@@ -447,7 +447,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 			}
 
 			long nativeListener = addVoiceActivityListenerInternal(listener, (float) config.getThreshold(),
-					(int) config.getHangover().toMillis());
+					config.getHangover().toNanos());
 
 			voiceActivityListeners.put(listener, nativeListener);
 		}
@@ -489,7 +489,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	private native void disposeInternal();
 
 	private native long addVoiceActivityListenerInternal(VoiceActivityListener listener, float threshold,
-			int hangoverMs);
+			long hangoverNanos);
 
 	private native void removeVoiceActivityListenerInternal(long listenerHandle);
 
