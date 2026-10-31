@@ -170,14 +170,6 @@ namespace ffmpeg
 			// asks it to start again.
 			bool ended_ = false;
 
-			// Where the video after a seek is to start. A seek lands on a
-			// keyframe before it, and the frames decoded from there up to it
-			// are dropped. Cleared by the first frame that reaches it, so
-			// that a source whose timestamps start over, as a loop's do,
-			// loses nothing after that.
-			int64_t discard_video_before_us_ = 0;
-			bool discarding_video_ = false;
-
 			// The largest presentation time seen, used to advance the loop
 			// offset when the container does not say how long it runs.
 			int64_t max_source_pts_us_ = 0;

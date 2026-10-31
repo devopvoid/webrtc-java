@@ -331,11 +331,6 @@ namespace ffmpeg
 				video_decoder_.Flush();
 				audio_decoder_.Flush();
 
-				// A seek past the last frame leaves the video waiting for a
-				// position this pass never reached, and the next one starts
-				// below it.
-				discarding_video_ = false;
-
 				// The pacer keeps its queue and its mapping, so the seam
 				// between one pass and the next is not heard or seen.
 				continue;
@@ -465,17 +460,6 @@ namespace ffmpeg
 				return result;
 			}
 
-			if (discarding_video_) {
-				if (timestamp_us < discard_video_before_us_) {
-					// Decoded only because the frames after it depend on it.
-					av_frame_free(&frame);
-
-					continue;
-				}
-
-				discarding_video_ = false;
-			}
-
 			if (timestamp_us > max_source_pts_us_) {
 				max_source_pts_us_ = timestamp_us;
 			}
@@ -533,8 +517,7 @@ namespace ffmpeg
 		// is where decoding has to begin. Playback begins at the position
 		// itself: what comes before it is decoded and dropped, and the audio
 		// frame it falls in is cut there.
-		discard_video_before_us_ = position_us;
-		discarding_video_ = true;
+		video_decoder_.DiscardBefore(position_us);
 		audio_decoder_.DiscardBefore(position_us);
 
 		// A seek starts a timeline of its own: the pacer maps the first item
