@@ -20,7 +20,6 @@
 #include "JavaClass.h"
 #include "JavaRef.h"
 
-#include <cstdint>
 #include <jni.h>
 #include <memory>
 
@@ -35,7 +34,7 @@ namespace jni
 	{
 		public:
 			VoiceActivityListener(JNIEnv * env, const JavaGlobalRef<jobject> & listener, float threshold,
-				int64_t hangoverNanos);
+				int hangoverMs);
 			~VoiceActivityListener() = default;
 
 			// Called on the thread that delivers the audio.

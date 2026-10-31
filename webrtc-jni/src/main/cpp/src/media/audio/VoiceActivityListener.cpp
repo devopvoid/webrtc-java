@@ -23,11 +23,11 @@
 namespace jni
 {
 	VoiceActivityListener::VoiceActivityListener(JNIEnv * env, const JavaGlobalRef<jobject> & listener,
-		float threshold, int64_t hangoverNanos) :
+		float threshold, int hangoverMs) :
 		listener(listener),
 		javaClass(JavaClasses::get<JavaVoiceActivityListenerClass>(env)),
 		threshold(threshold),
-		hangoverChunks(static_cast<int>(hangoverNanos / 10000000 + (hangoverNanos % 10000000 != 0))),
+		hangoverChunks(hangoverMs / 10 + (hangoverMs % 10 != 0)),
 		quietChunks(0),
 		speaking(false)
 	{

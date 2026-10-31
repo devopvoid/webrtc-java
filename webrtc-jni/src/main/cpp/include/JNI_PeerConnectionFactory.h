@@ -26,10 +26,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    addVoiceActivityListenerInternal
-	 * Signature: (Ldev/onvoid/webrtc/media/audio/VoiceActivityListener;FJ)J
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/VoiceActivityListener;FI)J
 	 */
 	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_addVoiceActivityListenerInternal
-	(JNIEnv *, jobject, jobject, jfloat, jlong);
+	(JNIEnv *, jobject, jobject, jfloat, jint);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory

@@ -257,14 +257,14 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_disposeInter
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_addVoiceActivityListenerInternal
-(JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jlong hangoverNanos)
+(JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jint hangoverMs)
 {
 	try {
 		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
 		CHECK_HANDLEV(tap, 0);
 
 		auto listener = std::make_unique<jni::VoiceActivityListener>(env, jni::JavaGlobalRef<jobject>(env, jListener),
-			threshold, hangoverNanos);
+			threshold, hangoverMs);
 
 		return reinterpret_cast<jlong>((*tap)->AddListener(std::move(listener)));
 	}

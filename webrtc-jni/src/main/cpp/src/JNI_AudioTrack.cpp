@@ -62,14 +62,14 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeSinkI
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addVoiceActivityListenerInternal
-(JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jlong hangoverNanos)
+(JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jint hangoverMs)
 {
 	try {
 		webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
 		CHECK_HANDLEV(track, 0);
 
 		auto sink = new jni::VoiceActivitySink(std::make_unique<jni::VoiceActivityListener>(env,
-			jni::JavaGlobalRef<jobject>(env, jListener), threshold, hangoverNanos));
+			jni::JavaGlobalRef<jobject>(env, jListener), threshold, hangoverMs));
 
 		track->AddSink(sink);
 

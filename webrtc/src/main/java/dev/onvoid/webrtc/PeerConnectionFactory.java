@@ -446,8 +446,12 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 				return;
 			}
 
+			// Preserve partial milliseconds before native code rounds to 10 ms chunks.
+			int hangoverMs = (int) config.getHangover().toMillis()
+					+ (config.getHangover().getNano() % 1_000_000 == 0 ? 0 : 1);
+
 			long nativeListener = addVoiceActivityListenerInternal(listener, (float) config.getThreshold(),
-					config.getHangover().toNanos());
+					hangoverMs);
 
 			voiceActivityListeners.put(listener, nativeListener);
 		}
@@ -489,7 +493,7 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	private native void disposeInternal();
 
 	private native long addVoiceActivityListenerInternal(VoiceActivityListener listener, float threshold,
-			long hangoverNanos);
+			int hangoverMs);
 
 	private native void removeVoiceActivityListenerInternal(long listenerHandle);
 
