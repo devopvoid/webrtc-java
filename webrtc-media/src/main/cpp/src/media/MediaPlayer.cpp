@@ -121,6 +121,7 @@ namespace ffmpeg
 				ended_ = false;
 				seek_pending_ = true;
 				seek_position_us_ = 0;
+				seek_precise_ = true;
 			}
 
 			// Under the lock, together with the flag: the decode thread stops
@@ -158,7 +159,7 @@ namespace ffmpeg
 		}
 	}
 
-	void MediaPlayer::Seek(int64_t position_us)
+	void MediaPlayer::Seek(int64_t position_us, bool precise)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
@@ -168,6 +169,7 @@ namespace ffmpeg
 
 		seek_pending_ = true;
 		seek_position_us_ = position_us;
+		seek_precise_ = precise;
 		ended_ = false;
 
 		// The decode thread may be held up by a full queue, and it cannot act
@@ -273,6 +275,7 @@ namespace ffmpeg
 
 		for (;;) {
 			int64_t seek_to = 0;
+			bool seek_precise = true;
 			bool do_seek = false;
 
 			{
@@ -289,12 +292,13 @@ namespace ffmpeg
 				if (seek_pending_) {
 					seek_pending_ = false;
 					seek_to = seek_position_us_;
+					seek_precise = seek_precise_;
 					do_seek = true;
 				}
 			}
 
 			if (do_seek) {
-				PerformSeek(seek_to);
+				PerformSeek(seek_to, seek_precise);
 
 				continue;
 			}
@@ -509,9 +513,10 @@ namespace ffmpeg
 		}
 	}
 
-	void MediaPlayer::PerformSeek(int64_t position_us)
+	void MediaPlayer::PerformSeek(int64_t position_us, bool precise)
 	{
 		seek_target_us_ = position_us;
+		seek_target_precise_ = precise;
 		seek_back_us_ = 0;
 
 		int result = SeekReader(position_us);
@@ -523,6 +528,10 @@ namespace ffmpeg
 
 	bool MediaPlayer::SeekFurtherBack()
 	{
+		if (!seek_target_precise_) {
+			return false;
+		}
+
 		const int64_t back = seek_back_us_ == 0 ? kFirstSeekBackUs : seek_back_us_ * 2;
 		const int64_t from = std::max<int64_t>(seek_target_us_ - back, 0);
 
@@ -555,11 +564,14 @@ namespace ffmpeg
 		audio_decoder_.Flush();
 
 		// The reader lands on the keyframe at or before the position, which
-		// is where decoding has to begin. Playback begins at the position
-		// itself: what comes before it is decoded and dropped, and the audio
-		// frame it falls in is cut there.
-		video_decoder_.DiscardBefore(position_us);
-		audio_decoder_.DiscardBefore(position_us);
+		// is where decoding has to begin. A precise seek begins playback at
+		// the position itself: what comes before it is decoded and dropped,
+		// and the audio frame it falls in is cut there. Otherwise it begins
+		// at that keyframe, video and audio alike.
+		if (seek_target_precise_) {
+			video_decoder_.DiscardBefore(position_us);
+			audio_decoder_.DiscardBefore(position_us);
+		}
 
 		// A seek starts a timeline of its own: the pacer maps the first item
 		// that arrives onto the clock afresh, so the offset that kept looping

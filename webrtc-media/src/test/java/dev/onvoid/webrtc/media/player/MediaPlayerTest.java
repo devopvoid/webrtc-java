@@ -24,9 +24,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -317,6 +319,28 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void fastSeekPlaysFromTheKeyframeBefore() throws Exception {
+		try (Playback playback = new Playback()) {
+			// Between the keyframes at 1 s and 2 s: playback starts at the one
+			// at 1 s, with nothing dropped.
+			playback.player.fastSeek(1_500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(1_000_000, playback.firstFramePositionUs.get());
+
+			// 1 s to 2.933 s, and the audio from the first packet the reader
+			// lands on, a few milliseconds after 1 s, uncut: about half a
+			// second more of each than seek gives.
+			assertTrue(Math.abs(playback.frames.get() - 30) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 198) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
 	void seekCutsTheAudioFrameItFallsIn() throws Exception {
 		// Two seconds in frames of 100 ms, at the rate WebRTC takes, so that
 		// nothing is resampled and every sample played is one of the file's.
@@ -373,6 +397,46 @@ class MediaPlayerTest {
 			assertEquals(133_333, playback.firstFramePositionUs.get(), 1);
 			assertTrue(Math.abs(playback.frames.get() - 150) <= 1,
 					"video frames: " + playback.frames.get());
+		}
+	}
+
+	@Test
+	void loopAfterASeekWithoutIndexThatLandedLateStartsOver() throws Exception {
+		// The asset cut off after its last keyframe, at 8.133 s. A search for
+		// 7.8 s lands past the one at 4.133 s, and the decoder, holding
+		// pictures back for its B-frames, gives the one at 8.133 s only once
+		// it is drained at the end, where a seek that landed late is not
+		// retried.
+		Path ts = cutAfterLastKeyFrame(
+				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI()),
+				tempDir.resolve("cut.ts"));
+
+		try (Playback playback = new Playback(new MediaReader(ts))) {
+			playback.player.setLooping(true);
+			playback.player.seek(7_800_000);
+			playback.player.play();
+
+			// Past the seam and well into the next pass.
+			assertFalse(playback.ended.await(2000, TimeUnit.MILLISECONDS),
+					"a looping player reported an end of stream");
+
+			List<Long> positions = new ArrayList<>(playback.framePositionsUs);
+
+			assertTrue(positions.size() > 10, "frames: " + positions);
+
+			// The picture at 8.133 s, and then the next pass from the start.
+			// The late landing, left over from the seek once the source had
+			// started over, used to send the reader back before 7.8 s, so that
+			// the last pictures played again before the next pass. What the
+			// first frame reports depends on whether the decoding thread has
+			// already started over, which it does long before the frame is
+			// due; the frames after it are all from the next pass.
+			assertTrue(positions.get(1) < 1_000_000, "next pass not from the start: " + positions);
+
+			for (int i = 2; i < positions.size(); i++) {
+				assertTrue(positions.get(i) > positions.get(i - 1),
+						"position went back at frame " + i + ": " + positions);
+			}
 		}
 	}
 
@@ -828,6 +892,45 @@ class MediaPlayerTest {
 		return true;
 	}
 
+	/**
+	 * Copies an MPEG-TS file up to the next packet of its video stream after
+	 * its last keyframe, so that the keyframe is the last picture. The muxer
+	 * marks the first packet of a keyframe with the random access indicator
+	 * of its adaptation field.
+	 */
+	private static Path cutAfterLastKeyFrame(Path source, Path target) throws IOException {
+		final int size = 188;
+		byte[] data = Files.readAllBytes(source);
+
+		int keyFrame = -1;
+		int keyPid = -1;
+
+		for (int i = 0; i + size <= data.length; i += size) {
+			boolean adaptation = (data[i + 3] & 0x20) != 0 && (data[i + 4] & 0xff) > 0;
+
+			if (adaptation && (data[i + 5] & 0x40) != 0) {
+				keyFrame = i;
+				keyPid = ((data[i + 1] & 0x1f) << 8) | (data[i + 2] & 0xff);
+			}
+		}
+
+		assertTrue(keyFrame >= 0, "no keyframe marked in " + source);
+
+		int end = data.length;
+
+		for (int i = keyFrame + size; i + size <= data.length; i += size) {
+			int pid = ((data[i + 1] & 0x1f) << 8) | (data[i + 2] & 0xff);
+			boolean start = (data[i + 1] & 0x40) != 0;
+
+			if (pid == keyPid && start) {
+				end = i;
+				break;
+			}
+		}
+
+		return Files.write(target, Arrays.copyOf(data, end));
+	}
+
 	private static Path asset() throws Exception {
 		URL url = MediaPlayerTest.class.getResource(ASSET);
 
@@ -876,6 +979,7 @@ class MediaPlayerTest {
 		final AtomicReference<String> error = new AtomicReference<>();
 		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
 		final AtomicLong firstFramePositionUs = new AtomicLong(-1);
+		final List<Long> framePositionsUs = Collections.synchronizedList(new ArrayList<>());
 		final AtomicLong firstChunkNs = new AtomicLong();
 		final AtomicInteger unevenChunks = new AtomicInteger();
 		final AtomicLong nonZeroSamples = new AtomicLong();
@@ -884,9 +988,13 @@ class MediaPlayerTest {
 		private final VideoTrackSink videoSink = frame -> {
 			// The pacer delivers on its own thread, having just moved the
 			// position to the frame's presentation time.
+			long positionUs = Playback.this.player.getPositionUs();
+
 			if (firstFramePositionUs.get() < 0) {
-				firstFramePositionUs.set(Playback.this.player.getPositionUs());
+				firstFramePositionUs.set(positionUs);
 			}
+
+			framePositionsUs.add(positionUs);
 
 			frameTimes.add(System.nanoTime());
 			frames.incrementAndGet();

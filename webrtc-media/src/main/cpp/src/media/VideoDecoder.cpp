@@ -360,6 +360,12 @@ namespace ffmpeg
 		awaiting_key_frame_ = false;
 		skipped_ = 0;
 		discarding_ = false;
+
+		// A late landing not asked about before the flush, as at the end of
+		// the stream, belongs to the position that was left too: taken after
+		// it, it would send the reader back from wherever decoding goes on.
+		dropped_before_ = false;
+		landed_past_ = false;
 	}
 
 	void VideoDecoder::DiscardBefore(int64_t timestamp_us)
