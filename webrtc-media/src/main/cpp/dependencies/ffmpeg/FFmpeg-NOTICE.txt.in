@@ -26,6 +26,16 @@ META-INF/licenses/dav1d/COPYING of this jar. It is built from the release tag
   https://code.videolan.org/videolan/dav1d/-/tree/@DAV1D_VERSION@
 
 
+libva loader
+------------
+
+In the Linux platform jars for x86-64 and ARM64, libavutil and libavcodec
+contain a small loader for libva (VA-API), part of webrtc-java and under its
+license, linked in statically in place of libva itself. It loads the libva
+installed on the machine, if there is one, when a player first asks for VA-API.
+libva is not part of this jar, and the libraries do not need it to load.
+
+
 Source code
 -----------
 
@@ -57,7 +67,7 @@ HEVC/H.265
 Disclaimer regarding HEVC/H.265:
 This project decodes HEVC/H.265 video through hardware acceleration only, using
 the hardware decoders of the operating system or GPU (VideoToolbox, Direct3D
-11/12, NVDEC, Vulkan Video). It does not include, bundle, or distribute any
+11/12, NVDEC, VA-API, Vulkan Video). It does not include, bundle, or distribute any
 software-based HEVC encoder (such as x265), and it never decodes HEVC in
 software. The FFmpeg libraries in the webrtc-java-media platform jars that
 decode HEVC in hardware (all but 32-bit ARM Linux) contain FFmpeg's HEVC

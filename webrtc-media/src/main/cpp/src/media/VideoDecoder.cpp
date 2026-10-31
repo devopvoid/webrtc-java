@@ -44,11 +44,16 @@ namespace
 #elif defined(_WIN32)
 		return { AV_HWDEVICE_TYPE_D3D12VA, AV_HWDEVICE_TYPE_D3D11VA };
 #else
-		// NVDEC on NVIDIA GPUs, where it is there; Vulkan Video otherwise,
-		// which is how the GPUs of Intel and AMD decode. A machine without
-		// the CUDA driver fails to create the first device and goes on to the
-		// second.
-		return { AV_HWDEVICE_TYPE_CUDA, AV_HWDEVICE_TYPE_VULKAN };
+		// NVDEC on NVIDIA GPUs, where it is there; VA-API otherwise, which
+		// is how the GPUs of Intel and AMD decode through the drivers
+		// distributions enable by default; Vulkan Video last. A machine
+		// without the CUDA driver or libva fails to create that device and
+		// goes on to the next. VA-API comes before Vulkan because a device is
+		// picked by whether it can be created, not by whether it decodes: a
+		// Mesa with its video extensions switched off creates a Vulkan device
+		// all the same, and the stream would then go to software without
+		// VA-API being tried.
+		return { AV_HWDEVICE_TYPE_CUDA, AV_HWDEVICE_TYPE_VAAPI, AV_HWDEVICE_TYPE_VULKAN };
 #endif
 	}
 

@@ -215,6 +215,24 @@ elseif(LINUX AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64|ar
         --enable-hwaccel=vp9_vulkan
         --enable-hwaccel=av1_vulkan
     )
+    # VA-API, the other way the GPUs of Intel and AMD decode, through the
+    # drivers distributions enable by default (Intel's iHD, Mesa's radeonsi),
+    # where Vulkan Video may still be switched off. FFmpeg links libva and
+    # libva-drm directly rather than loading them, so it is given a stand-in
+    # for them instead, dependencies/libva/va_loader.c, which loads libva with
+    # dlopen on its first call: the libraries load on a machine without libva
+    # as they do without CUDA or Vulkan. The build needs the libva headers of
+    # the host (libva-dev), found below. The display is opened on a DRM render
+    # node; neither X11 nor libdrm is needed.
+    set(FFMPEG_VAAPI TRUE)
+
+    list(APPEND FFMPEG_COMPONENTS
+        --enable-vaapi
+        --enable-hwaccel=h264_vaapi
+        --enable-hwaccel=hevc_vaapi
+        --enable-hwaccel=vp9_vaapi
+        --enable-hwaccel=av1_vaapi
+    )
 endif()
 
 # The parent adds the licenses of the NVDEC and Vulkan headers to the platform
@@ -249,6 +267,50 @@ foreach(PATCH ${FFMPEG_PATCHES})
 
     string(APPEND FFMPEG_COMPONENTS_TEXT "\npatch ${PATCH_NAME} ${PATCH_HASH}")
 endforeach()
+
+#
+# The libva headers, and the stand-in for libva that FFmpeg is linked against.
+# Both belong to the install: another version of the headers changes what
+# configure finds in them, and the stand-in is linked into the libraries.
+#
+if(FFMPEG_VAAPI)
+    # The host's headers, from libva-dev, and only those: a sysroot may have
+    # headers of its own, older ones, and which of them a search turned up
+    # would depend on the toolchain. They are the same for every architecture.
+    find_path(LIBVA_INCLUDE_DIR
+        NAMES va/va.h va/va_drm.h
+        PATHS /usr/include /usr/local/include
+        NO_DEFAULT_PATH
+        NO_CMAKE_FIND_ROOT_PATH)
+
+    if(NOT LIBVA_INCLUDE_DIR)
+        message(FATAL_ERROR
+            "No libva headers (va/va.h, va/va_drm.h), which FFmpeg's VA-API decoders are built "
+            "against. Install them, for example with: sudo apt-get install libva-dev, or set "
+            "LIBVA_INCLUDE_DIR to the directory that holds va/.")
+    endif()
+
+    file(STRINGS "${LIBVA_INCLUDE_DIR}/va/va_version.h" LIBVA_VERSION_LINES
+        REGEX "^#define VA_(MAJOR|MINOR|MICRO)_VERSION +[0-9]+")
+
+    foreach(PART MAJOR MINOR MICRO)
+        if(LIBVA_VERSION_LINES MATCHES "VA_${PART}_VERSION +([0-9]+)")
+            set(LIBVA_${PART} "${CMAKE_MATCH_1}")
+        else()
+            message(FATAL_ERROR "No VA_${PART}_VERSION in ${LIBVA_INCLUDE_DIR}/va/va_version.h")
+        endif()
+    endforeach()
+
+    # The version of the API, which is what libva.pc gives as its version and
+    # what configure compares against (libva >= 0.35.0).
+    set(LIBVA_API_VERSION "${LIBVA_MAJOR}.${LIBVA_MINOR}.${LIBVA_MICRO}")
+
+    get_filename_component(LIBVA_LOADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../libva" ABSOLUTE)
+    file(SHA256 "${LIBVA_LOADER_DIR}/va_loader.c" LIBVA_LOADER_HASH)
+
+    string(APPEND FFMPEG_COMPONENTS_TEXT
+        "\nlibva headers ${LIBVA_API_VERSION} loader ${LIBVA_LOADER_HASH}")
+endif()
 
 #
 # dav1d is the software decoder of AV1, built from the third-party/dav1d
@@ -408,6 +470,52 @@ function(ffmpeg_is_installed RESULT)
     else()
         set(${RESULT} FALSE PARENT_SCOPE)
     endif()
+endfunction()
+
+#
+# Checks that the libraries just built take libva from the stand-in: none of
+# them may name libva as a dependency, which a pkg-config file of the host
+# found ahead of ours would make them do, and none may leave a function of it
+# undefined, which a function FFmpeg calls and the stand-in lacks would.
+# Either way they would not load without libva, or would fail on the call.
+#
+function(ffmpeg_check_libva_loaded_at_run_time)
+    find_program(READELF_EXECUTABLE NAMES ${CMAKE_READELF} readelf)
+
+    if(NOT READELF_EXECUTABLE)
+        message(WARNING "No readelf, so the FFmpeg libraries are not checked for a dependency on libva")
+        return()
+    endif()
+
+    file(GLOB INSTALLED_LIBS "${FFMPEG_INSTALL_DIR}/lib/*.so.*")
+
+    foreach(LIB ${INSTALLED_LIBS})
+        if(IS_SYMLINK "${LIB}")
+            continue()
+        endif()
+
+        execute_process(
+            COMMAND "${READELF_EXECUTABLE}" --dynamic --dyn-syms --wide "${LIB}"
+            OUTPUT_VARIABLE ELF_INFO
+            RESULT_VARIABLE ELF_RESULT
+            ERROR_QUIET)
+
+        if(NOT ELF_RESULT EQUAL 0)
+            message(FATAL_ERROR "readelf could not read ${LIB}")
+        endif()
+
+        if(ELF_INFO MATCHES "Shared library: \\[(libva[-.a-z0-9]*)\\]")
+            message(FATAL_ERROR
+                "${LIB} depends on ${CMAKE_MATCH_1}: FFmpeg was linked against the libva of the "
+                "host instead of the stand-in in ${LIBVA_LOADER_DIR}.")
+        endif()
+
+        if(ELF_INFO MATCHES "UND (va[A-Z][A-Za-z0-9_]*)")
+            message(FATAL_ERROR
+                "${LIB} leaves ${CMAKE_MATCH_1} undefined, a function of libva that FFmpeg calls "
+                "and ${LIBVA_LOADER_DIR}/va_loader.c does not define. Add it there.")
+        endif()
+    endforeach()
 endfunction()
 
 ffmpeg_is_installed(FFMPEG_INSTALLED)
@@ -894,16 +1002,16 @@ fi
         set(FFMPEG_MAKE "${MAKE_EXECUTABLE}")
     endif()
 
-    if(FFMPEG_NVDEC OR FFMPEG_VULKAN)
-        # configure looks for the NVDEC and Vulkan headers through pkg-config,
-        # so that needs to be there, and to know where the vendored headers
+    if(FFMPEG_NVDEC OR FFMPEG_VULKAN OR FFMPEG_VAAPI)
+        # configure looks for the NVDEC, Vulkan and VA-API headers through
+        # pkg-config, so that needs to be there, and to know where the headers
         # are.
         find_program(PKG_CONFIG_EXECUTABLE NAMES pkg-config pkgconf)
 
         if(NOT PKG_CONFIG_EXECUTABLE)
             message(FATAL_ERROR
-                "No pkg-config, which FFmpeg's configure uses to find the NVDEC and Vulkan headers. "
-                "Install it, for example with: sudo apt-get install pkg-config")
+                "No pkg-config, which FFmpeg's configure uses to find the NVDEC, Vulkan and VA-API "
+                "headers. Install it, for example with: sudo apt-get install pkg-config")
         endif()
 
         set(HEADERS_PC_DIR "${CMAKE_CURRENT_BINARY_DIR}/headers-pc")
@@ -918,6 +1026,21 @@ fi
 
             configure_file("${VULKAN_HEADERS_DIR}/vulkan.pc.in" "${HEADERS_PC_DIR}/vulkan.pc" @ONLY)
         endif()
+        if(FFMPEG_VAAPI)
+            # Only the va/ headers, copied, so that the include directory
+            # configure is given holds nothing else of the host's: on a cross
+            # build, -I/usr/include would put the host's C library in front
+            # of the target's.
+            set(LIBVA_STAGED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/libva-include")
+            set(LIBVA_LOADER_LIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/libva-loader")
+
+            file(REMOVE_RECURSE "${LIBVA_STAGED_INCLUDE_DIR}" "${LIBVA_LOADER_LIB_DIR}")
+            file(COPY "${LIBVA_INCLUDE_DIR}/va" DESTINATION "${LIBVA_STAGED_INCLUDE_DIR}")
+            file(MAKE_DIRECTORY "${LIBVA_LOADER_LIB_DIR}")
+
+            configure_file("${LIBVA_LOADER_DIR}/libva.pc.in" "${HEADERS_PC_DIR}/libva.pc" @ONLY)
+            configure_file("${LIBVA_LOADER_DIR}/libva-drm.pc.in" "${HEADERS_PC_DIR}/libva-drm.pc" @ONLY)
+        endif()
 
         # Only our directory: a sysroot or library path of the host would put
         # the includedir somewhere it is not, and the host's own vulkan.pc
@@ -928,12 +1051,37 @@ unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
 ")
     endif()
 
+    # The stand-in for libva is built for the target as FFmpeg is, with the
+    # same compiler and flags, into the static library libva.pc names.
+    # Position-independent, as it goes into shared libraries, and hidden, so
+    # that they do not export it.
+    set(LIBVA_LOADER_STEPS "")
+
+    if(FFMPEG_VAAPI)
+        set(LIBVA_LOADER_CFLAGS "${FFMPEG_EXTRA_CFLAGS}")
+
+        if(CMAKE_SYSROOT)
+            string(APPEND LIBVA_LOADER_CFLAGS " --sysroot=${CMAKE_SYSROOT}")
+        endif()
+
+        if(CMAKE_AR)
+            set(LIBVA_LOADER_AR "${CMAKE_AR}")
+        else()
+            set(LIBVA_LOADER_AR ar)
+        endif()
+
+        set(LIBVA_LOADER_STEPS
+"\"${CMAKE_C_COMPILER}\" ${LIBVA_LOADER_CFLAGS} -O2 -fPIC -fvisibility=hidden -I\"${LIBVA_STAGED_INCLUDE_DIR}\" -c \"${LIBVA_LOADER_DIR}/va_loader.c\" -o \"${LIBVA_LOADER_LIB_DIR}/va_loader.o\"
+\"${LIBVA_LOADER_AR}\" rcs \"${LIBVA_LOADER_LIB_DIR}/libva-loader.a\" \"${LIBVA_LOADER_LIB_DIR}/va_loader.o\"
+")
+    endif()
+
     set(FFMPEG_BUILD_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/build-ffmpeg.sh")
 
     file(WRITE "${FFMPEG_BUILD_SCRIPT}"
 "# Generated by CMake. Builds FFmpeg ${FFMPEG_VERSION} for webrtc-java-media.
 set -e
-${FFMPEG_SHELL_PREAMBLE}${DAV1D_BUILD_STEPS}cd \"${FFMPEG_BUILD_DIR_SH}\"
+${FFMPEG_SHELL_PREAMBLE}${DAV1D_BUILD_STEPS}${LIBVA_LOADER_STEPS}cd \"${FFMPEG_BUILD_DIR_SH}\"
 # FFmpeg names its version after the git tag it finds, and a shallow clone of
 # the submodule has none, so it would name itself after a commit hash. Handing
 # make the release the source says it is names it the same way however the
@@ -1014,6 +1162,10 @@ set MSYS2_PATH_TYPE=inherit
         message(FATAL_ERROR
             "Building FFmpeg failed (${BUILD_RESULT}). The script that ran is "
             "${FFMPEG_BUILD_SCRIPT}.")
+    endif()
+
+    if(FFMPEG_VAAPI)
+        ffmpeg_check_libva_loaded_at_run_time()
     endif()
 
     file(WRITE "${FFMPEG_COMPONENTS_FILE}" "${FFMPEG_COMPONENTS_TEXT}")
