@@ -58,27 +58,46 @@ namespace jni
 		return std::make_unique<CaptureTapProcessing>(std::move(tap));
 	}
 
-	void AudioCaptureTap::SetSink(std::unique_ptr<AudioTrackSink> next)
+	VoiceActivityListener * AudioCaptureTap::AddListener(std::unique_ptr<VoiceActivityListener> listener)
 	{
-		std::unique_ptr<AudioTrackSink> replaced;
+		std::lock_guard<std::mutex> lock(mutex);
+
+		if (listeners.empty()) {
+			// The audio it saw last may be long ago.
+			detector.Reset();
+		}
+
+		listeners.push_back(std::move(listener));
+
+		return listeners.back().get();
+	}
+
+	void AudioCaptureTap::RemoveListener(VoiceActivityListener * listener)
+	{
+		std::unique_ptr<VoiceActivityListener> removed;
 
 		{
 			// Waits for a delivery in progress, which holds the lock.
 			std::lock_guard<std::mutex> lock(mutex);
 
-			replaced = std::move(sink);
-			sink = std::move(next);
+			for (auto it = listeners.begin(); it != listeners.end(); ++it) {
+				if (it->get() == listener) {
+					removed = std::move(*it);
+					listeners.erase(it);
+					break;
+				}
+			}
 		}
 
 		// Deleted outside the lock: it releases a Java reference.
-		replaced.reset();
+		removed.reset();
 	}
 
 	void AudioCaptureTap::Process(const webrtc::AudioBuffer & audio)
 	{
 		std::lock_guard<std::mutex> lock(mutex);
 
-		if (!sink) {
+		if (listeners.empty()) {
 			return;
 		}
 
@@ -86,17 +105,29 @@ namespace jni
 		const size_t frames = audio.num_frames();
 		const float * const * data = audio.channels_const();
 
-		samples.resize(channels * frames);
+		samples.resize(frames);
 
 		// The buffer holds one channel after another, as floats in the range
-		// of 16-bit samples; a sink takes them interleaved.
-		for (size_t channel = 0; channel < channels; channel++) {
-			for (size_t frame = 0; frame < frames; frame++) {
-				samples[frame * channels + channel] = webrtc::FloatS16ToS16(data[channel][frame]);
+		// of 16-bit samples; the detector takes them mixed down to mono.
+		for (size_t frame = 0; frame < frames; frame++) {
+			float sum = 0;
+
+			for (size_t channel = 0; channel < channels; channel++) {
+				sum += data[channel][frame];
 			}
+
+			samples[frame] = webrtc::FloatS16ToS16(sum / static_cast<float>(channels));
 		}
 
 		// AudioProcessing works on 10 ms at a time.
-		sink->OnData(samples.data(), 16, static_cast<int>(frames * 100), channels, frames);
+		std::optional<float> probability = detector.ProcessMono(samples.data(), static_cast<int>(frames * 100), frames);
+
+		if (!probability) {
+			return;
+		}
+
+		for (const auto & listener : listeners) {
+			listener->Update(*probability);
+		}
 	}
 }

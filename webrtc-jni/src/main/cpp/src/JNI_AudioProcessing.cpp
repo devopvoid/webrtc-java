@@ -25,7 +25,6 @@
 #include "JavaUtils.h"
 #include "WebRTCContext.h"
 
-#include "api/AudioTrackSink.h"
 #include "media/audio/AudioCaptureTap.h"
 #include "media/audio/AudioProcessing.h"
 #include "media/audio/AudioProcessingConfig.h"
@@ -39,25 +38,6 @@
 
 #include <algorithm>
 #include <memory>
-
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setCapturedAudioSink
-(JNIEnv * env, jobject caller, jobject jSink)
-{
-	try {
-		webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-		CHECK_HANDLE(apm);
-
-		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
-		CHECK_HANDLE(tap);
-
-		(*tap)->SetSink(jSink == nullptr
-			? nullptr
-			: std::make_unique<jni::AudioTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jSink), false));
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
-}
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyConfig
 (JNIEnv * env, jobject caller, jobject config)

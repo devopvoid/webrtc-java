@@ -29,6 +29,8 @@ public class AudioTrack extends MediaStreamTrack {
 
 	private final Map<AudioTrackSink, Long> sinks = new IdentityHashMap<>();
 
+	private final Map<VoiceActivityListener, Long> voiceActivityListeners = new IdentityHashMap<>();
+
 
 	private AudioTrack() {
 		super();
@@ -41,6 +43,12 @@ public class AudioTrack extends MediaStreamTrack {
 		}
 
 		sinks.clear();
+
+		for (long nativeSink : voiceActivityListeners.values()) {
+			removeVoiceActivityListenerInternal(nativeSink);
+		}
+
+		voiceActivityListeners.clear();
 
 		super.dispose();
 	}
@@ -94,6 +102,49 @@ public class AudioTrack extends MediaStreamTrack {
 	}
 
 	/**
+	 * Adds a listener that hears when speech begins and ends in the audio of
+	 * the track. The audio is analyzed in native code, and only the changes
+	 * reach the listener, on the thread that delivers the audio. Like a sink,
+	 * it gets what the source of the track hands to sinks: that of a remote
+	 * track or a {@link CustomAudioSource} does, a microphone's does not. The
+	 * microphone's speech comes from {@link
+	 * dev.onvoid.webrtc.PeerConnectionFactory#addVoiceActivityListener}.
+	 *
+	 * @param config   when audio counts as speech.
+	 * @param listener the listener. Adding it again does nothing.
+	 */
+	public void addVoiceActivityListener(VoiceActivityConfig config, VoiceActivityListener listener) {
+		if (isNull(config) || isNull(listener)) {
+			throw new NullPointerException();
+		}
+		if (voiceActivityListeners.containsKey(listener)) {
+			return;
+		}
+
+		final long nativeSink = addVoiceActivityListenerInternal(listener, (float) config.getThreshold(),
+				(int) config.getHangover().toMillis());
+
+		voiceActivityListeners.put(listener, nativeSink);
+	}
+
+	/**
+	 * Removes a listener added with {@link #addVoiceActivityListener}. Once
+	 * this returns, it is no longer called. If it was not added, this is a
+	 * no-op.
+	 */
+	public void removeVoiceActivityListener(VoiceActivityListener listener) {
+		if (isNull(listener)) {
+			throw new NullPointerException();
+		}
+
+		final Long nativeSink = voiceActivityListeners.remove(listener);
+
+		if (nonNull(nativeSink)) {
+			removeVoiceActivityListenerInternal(nativeSink);
+		}
+	}
+
+	/**
 	 * Get the signal level from the audio track.
 	 *
 	 * @return The signal level.
@@ -124,5 +175,10 @@ public class AudioTrack extends MediaStreamTrack {
 	private native long addSinkInternal(AudioTrackSink sink, boolean packetInfos);
 
 	private native void removeSinkInternal(long sinkHandle);
+
+	private native long addVoiceActivityListenerInternal(VoiceActivityListener listener, float threshold,
+			int hangoverMs);
+
+	private native void removeVoiceActivityListenerInternal(long sinkHandle);
 
 }

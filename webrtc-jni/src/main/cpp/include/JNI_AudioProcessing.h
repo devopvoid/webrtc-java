@@ -9,14 +9,6 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
-	 * Method:    setCapturedAudioSink
-	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioTrackSink;)V
-	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setCapturedAudioSink
-	(JNIEnv*, jobject, jobject);
-
-	/*
-	 * Class:     dev_onvoid_webrtc_media_audio_AudioProcessing
 	 * Method:    applyConfig
 	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioProcessingConfig;)V
 	 */

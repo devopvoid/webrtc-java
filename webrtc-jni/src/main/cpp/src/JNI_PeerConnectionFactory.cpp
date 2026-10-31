@@ -33,8 +33,8 @@
 #include "WebRTCContext.h"
 
 #include "api/audio/builtin_audio_processing_builder.h"
-#include "api/AudioTrackSink.h"
 #include "media/audio/AudioCaptureTap.h"
+#include "media/audio/VoiceActivityListener.h"
 #include "api/audio/create_audio_device_module.h"
 #include "api/create_modular_peer_connection_factory.h"
 #include "api/enable_media.h"
@@ -205,7 +205,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_disposeInternal
 (JNIEnv * env, jobject caller)
 {
 	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
@@ -256,19 +256,32 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setCapturedAudioSink
-(JNIEnv * env, jobject caller, jobject jSink)
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_addVoiceActivityListenerInternal
+(JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jint hangoverMs)
 {
 	try {
-		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
-		CHECK_HANDLE(factory);
+		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
+		CHECK_HANDLEV(tap, 0);
 
+		auto listener = std::make_unique<jni::VoiceActivityListener>(env, jni::JavaGlobalRef<jobject>(env, jListener),
+			threshold, hangoverMs);
+
+		return reinterpret_cast<jlong>((*tap)->AddListener(std::move(listener)));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return 0;
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_removeVoiceActivityListenerInternal
+(JNIEnv * env, jobject caller, jlong listenerHandle)
+{
+	try {
 		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
 		CHECK_HANDLE(tap);
 
-		(*tap)->SetSink(jSink == nullptr
-			? nullptr
-			: std::make_unique<jni::AudioTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jSink), false));
+		(*tap)->RemoveListener(reinterpret_cast<jni::VoiceActivityListener *>(listenerHandle));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

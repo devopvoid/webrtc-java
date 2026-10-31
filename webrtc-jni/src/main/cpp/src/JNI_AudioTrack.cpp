@@ -18,6 +18,7 @@
 #include "api/AudioTrackSink.h"
 #include "JavaNullPointerException.h"
 #include "JavaUtils.h"
+#include "media/audio/VoiceActivitySink.h"
 
 #include "api/media_stream_interface.h"
 
@@ -54,6 +55,42 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeSinkI
 	auto sink = reinterpret_cast<jni::AudioTrackSink *>(sinkHandle);
 
 	if (sink != nullptr) {
+		track->RemoveSink(sink);
+
+		delete sink;
+	}
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addVoiceActivityListenerInternal
+(JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jint hangoverMs)
+{
+	try {
+		webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+		CHECK_HANDLEV(track, 0);
+
+		auto sink = new jni::VoiceActivitySink(std::make_unique<jni::VoiceActivityListener>(env,
+			jni::JavaGlobalRef<jobject>(env, jListener), threshold, hangoverMs));
+
+		track->AddSink(sink);
+
+		return reinterpret_cast<jlong>(sink);
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return 0;
+	}
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeVoiceActivityListenerInternal
+(JNIEnv * env, jobject caller, jlong sinkHandle)
+{
+	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+	CHECK_HANDLE(track);
+
+	auto sink = reinterpret_cast<jni::VoiceActivitySink *>(sinkHandle);
+
+	if (sink != nullptr) {
+		// Once removed, the source no longer calls it.
 		track->RemoveSink(sink);
 
 		delete sink;

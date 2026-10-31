@@ -296,20 +296,22 @@ audioProcessing.processStream(
     highRateBuffer, highRateConfig, lowRateConfig, lowRateDestBuffer);
 ```
 
-## Processed Microphone Audio
+## Speech in the Processed Microphone Audio
 
-WebRTC passes the microphone's audio from the audio device module straight to the senders, so a sink on a microphone track gets nothing. The audio as it is sent, after echo cancellation, noise suppression and gain control, goes to the sink of the factory's audio processing instead, such as for a voice activity detector or a level meter:
+WebRTC passes the microphone's audio from the audio device module straight to the senders, so a sink on a microphone track gets nothing. The factory detects speech in that audio as it is sent, after echo cancellation, noise suppression and gain control, in native code, and tells a listener only when speech begins and ends:
 
 ```java
-factory.setCapturedAudioSink((data, bitsPerSample, sampleRate, channels, frames) -> {
-    // 10 ms of 16-bit PCM, on WebRTC's capture thread: hand it on and return.
-});
+VoiceActivityListener listener = speaking -> {
+    // On WebRTC's capture thread: hand it on and return.
+};
+
+factory.addVoiceActivityListener(new VoiceActivityConfig(0.5, Duration.ofMillis(300)), listener);
 
 // Later, to stop it.
-factory.setCapturedAudioSink(null);
+factory.removeVoiceActivityListener(listener);
 ```
 
-It works with the `AudioProcessing` the factory was built with as well as with the one it builds itself; for a module of its own, `AudioProcessing.setCapturedAudioSink` sets the same sink and also gets what `processStream` puts out. Audio arrives while the audio device module records, which WebRTC starts once a peer connection sends a microphone track, at the rate and channel count the module processes at. The sink must not set the sink itself. The [Client API](/guide/client-api#audio) offers the same through `LocalAudio.onAudio`.
+It works with the `AudioProcessing` the factory was built with as well as with the one it builds itself. All listeners share one detector, and each decides with the threshold and hangover of its own `VoiceActivityConfig`. Audio arrives while the audio device module records, which WebRTC starts once a peer connection sends a microphone track. A listener must not add or remove a listener. Disposing of the factory removes the listeners it still has. The [Client API](/guide/client-api#audio) offers the same through `LocalAudio.onVoiceActivity`.
 
 ## Statistics
 

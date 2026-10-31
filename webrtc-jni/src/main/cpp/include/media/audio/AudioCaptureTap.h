@@ -17,8 +17,10 @@
 #ifndef JNI_WEBRTC_MEDIA_AUDIO_CAPTURE_TAP_H_
 #define JNI_WEBRTC_MEDIA_AUDIO_CAPTURE_TAP_H_
 
+#include "media/audio/VoiceActivityListener.h"
+#include "media/audio/VoiceDetector.h"
+
 #include "api/audio/audio_processing.h"
-#include "api/AudioTrackSink.h"
 
 #include <cstdint>
 #include <memory>
@@ -27,13 +29,14 @@
 
 namespace jni
 {
-	// Hands the capture signal of an AudioProcessing, after all of its
-	// processing, to a sink: what the senders send. The module calls it
-	// through its capture post-processor, which is put in when the module is
-	// built, so the tap does nothing until a sink is set.
+	// Detects speech in the capture signal of an AudioProcessing, after all
+	// of its processing: what the senders send. The module calls it through
+	// its capture post-processor, which is put in when the module is built,
+	// so the tap does nothing until a listener is added. All listeners share
+	// one detector; each decides with its own threshold and hangover.
 	//
 	// The tap is shared: by the post-processor, for as long as the module
-	// lives, and by the Java objects that set its sink, the module's and the
+	// lives, and by the Java objects that hold it, the module's and the
 	// factory's, for as long as they live. None of them outlives it.
 	class AudioCaptureTap
 	{
@@ -41,10 +44,13 @@ namespace jni
 			// The capture post-processor to build an AudioProcessing with.
 			static std::unique_ptr<webrtc::CustomProcessing> CreateProcessing(std::shared_ptr<AudioCaptureTap> tap);
 
-			// Replaces the sink, or stops the delivery with nullptr. Once this
-			// returns, the sink replaced is no longer called. Must not be
-			// called from within the sink.
-			void SetSink(std::unique_ptr<AudioTrackSink> sink);
+			// Adds a listener, which hears of the speech from the next 10 ms
+			// on. Returns it, as the handle that removes it.
+			VoiceActivityListener * AddListener(std::unique_ptr<VoiceActivityListener> listener);
+
+			// Removes a listener added and deletes it. Once this returns, it is
+			// no longer called. Must not be called from within a listener.
+			void RemoveListener(VoiceActivityListener * listener);
 
 			// Called on the capture thread.
 			void Process(const webrtc::AudioBuffer & audio);
@@ -53,7 +59,10 @@ namespace jni
 			std::mutex mutex;
 
 			// Guarded by mutex.
-			std::unique_ptr<AudioTrackSink> sink;
+			std::vector<std::unique_ptr<VoiceActivityListener>> listeners;
+
+			// Guarded by mutex.
+			VoiceDetector detector;
 
 			// Guarded by mutex.
 			std::vector<int16_t> samples;

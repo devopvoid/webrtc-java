@@ -159,22 +159,6 @@ public class AudioProcessing extends DisposableNativeObject {
 			AudioProcessingStreamConfig inputConfig,
 			AudioProcessingStreamConfig outputConfig, byte[] dest);
 
-	/**
-	 * Sets the sink that gets the capture stream after all processing, as
-	 * {@link #processStream} puts it out, or, for a module a {@link
-	 * dev.onvoid.webrtc.PeerConnectionFactory} was built with, the microphone
-	 * audio its senders send. Each call holds 10 ms of 16-bit PCM with
-	 * interleaved channels, at the rate and channel count the module processes
-	 * at, which may differ from the format {@code processStream} puts out.
-	 * <p>
-	 * The sink runs on the thread that processes the capture stream, WebRTC's
-	 * capture thread for a factory, so it must return promptly, and it must
-	 * not set the sink itself.
-	 *
-	 * @param sink The sink, or {@code null} to stop the delivery.
-	 */
-	public native void setCapturedAudioSink(AudioTrackSink sink);
-
 	@Override
 	public native void dispose();
 

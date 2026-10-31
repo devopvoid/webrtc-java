@@ -16,8 +16,9 @@
 
 package dev.onvoid.webrtc.client;
 
-import java.time.Duration;
 import java.util.function.Consumer;
+
+import dev.onvoid.webrtc.media.audio.VoiceActivityConfig;
 
 /**
  * An audio track this side sends.
@@ -25,36 +26,34 @@ import java.util.function.Consumer;
 public interface LocalAudio extends LocalTrack {
 
 	/**
-	 * Calls the handler with the audio this track sends, in order, such as
-	 * for a voice activity detector or a level meter. Pushed audio arrives as
-	 * pushed. A microphone's audio arrives after audio processing, with echo
-	 * cancellation, noise suppression and gain control applied as configured,
-	 * so that the remote peer's voice from the speakers does not count as
-	 * this side speaking. It flows while WebRTC records, which it does while
-	 * a peer sends a microphone track, and every microphone track of a
-	 * runtime has the same, as WebRTC records one microphone for all of them.
-	 * <p>
-	 * A handler that falls behind gets the audio of the last {@link
-	 * WebRtc.Builder#audioBuffer(Duration) audio buffer} of the runtime; the
-	 * oldest audio beyond that is dropped.
+	 * Like {@link #onVoiceActivity(VoiceActivityConfig, Consumer)}, with the
+	 * default threshold and hangover of {@link VoiceActivityConfig}.
 	 *
-	 * @param handler called on a thread of this subscription.
+	 * @param handler called on the runtime's event executor, in order.
 	 *
-	 * @return the subscription that stops the audio.
+	 * @return the subscription that stops the calls.
 	 */
-	Subscription onAudio(Consumer<AudioChunk> handler);
+	Subscription onVoiceActivity(Consumer<Boolean> handler);
 
 	/**
-	 * Like {@link #onAudio(Consumer)}, with a buffer of its own: a handler
-	 * that falls behind gets the audio of the last {@code buffer}, and the
-	 * oldest audio beyond that is dropped. A buffer shorter than one chunk
-	 * keeps only the newest chunk.
+	 * Calls the handler when this side begins to speak, with {@code true}, and
+	 * when it stops, with {@code false}. The audio is analyzed in native code,
+	 * and only these changes reach Java. Pushed audio is analyzed as pushed. A
+	 * microphone's audio is analyzed after audio processing, with echo
+	 * cancellation, noise suppression and gain control applied as configured,
+	 * so that the remote peer's voice from the speakers does not count as
+	 * this side speaking. It flows while WebRTC records, which it does while a
+	 * peer sends a microphone track, and every microphone track of a runtime
+	 * hears the same, as WebRTC records one microphone for all of them.
+	 * <p>
+	 * Closing the subscription or the track while speech goes on calls the
+	 * handler no more, so it does not hear the end of that speech.
 	 *
-	 * @param buffer  the most audio that waits for the handler.
-	 * @param handler called on a thread of this subscription.
+	 * @param config  when audio counts as speech.
+	 * @param handler called on the runtime's event executor, in order.
 	 *
-	 * @return the subscription that stops the audio.
+	 * @return the subscription that stops the calls.
 	 */
-	Subscription onAudio(Duration buffer, Consumer<AudioChunk> handler);
+	Subscription onVoiceActivity(VoiceActivityConfig config, Consumer<Boolean> handler);
 
 }

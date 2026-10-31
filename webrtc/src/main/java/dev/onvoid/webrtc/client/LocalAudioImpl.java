@@ -18,20 +18,20 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-import dev.onvoid.webrtc.internal.Timeouts;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.VoiceActivityConfig;
+import dev.onvoid.webrtc.media.audio.VoiceActivityListener;
 
 /**
- * A local audio track, from the microphone or pushed audio. Each audio
- * subscription has a thread of its own. Pushed audio reaches it as a sink of
- * the native track. A microphone's source hands no audio to sinks, as WebRTC
+ * A local audio track, from the microphone or pushed audio. Speech is
+ * detected in native code. Pushed audio reaches the detector as a sink of the
+ * native track. A microphone's source hands no audio to sinks, as WebRTC
  * passes captured audio straight to the senders, so a microphone track takes
- * it from the runtime's audio processing instead.
+ * its speech from the runtime's audio processing instead.
  */
 class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 
@@ -39,7 +39,7 @@ class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 
 	// Guarded by this.
 
-	private final List<AudioDispatcher> dispatchers = new ArrayList<>();
+	private final List<VoiceActivity> listeners = new ArrayList<>();
 
 
 	/**
@@ -53,34 +53,39 @@ class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 	}
 
 	@Override
-	public Subscription onAudio(Consumer<AudioChunk> handler) {
-		return onAudio(rtc.audioBuffer, handler);
+	public Subscription onVoiceActivity(Consumer<Boolean> handler) {
+		return onVoiceActivity(new VoiceActivityConfig(), handler);
 	}
 
 	@Override
-	public Subscription onAudio(Duration buffer, Consumer<AudioChunk> handler) {
-		Timeouts.requirePositive(buffer, "buffer");
+	public Subscription onVoiceActivity(VoiceActivityConfig config, Consumer<Boolean> handler) {
+		requireNonNull(config, "config");
 		requireNonNull(handler, "handler");
 
-		SerialExecutor executor = new SerialExecutor(rtc.framePool, rtc::reportError, false, null);
-		AudioDispatcher dispatcher = new AudioDispatcher(handler, buffer, executor, rtc.audioWork,
-				rtc::reportError);
+		VoiceActivity listener = new VoiceActivity(handler);
 
 		synchronized (this) {
 			if (!isLive()) {
 				return () -> { };
 			}
 
-			attach(dispatcher);
-			dispatchers.add(dispatcher);
+			if (microphone) {
+				rtc.factory.addVoiceActivityListener(config, listener);
+			}
+			else {
+				audioTrack().addVoiceActivityListener(config, listener);
+			}
+
+			listeners.add(listener);
 		}
 
 		return () -> {
-			dispatcher.close();
+			listener.closed = true;
 
 			synchronized (LocalAudioImpl.this) {
-				if (dispatchers.remove(dispatcher) && isLive()) {
-					detach(dispatcher);
+				// Once the track ended, the release removes what is left.
+				if (isLive() && listeners.remove(listener)) {
+					detach(listener);
 				}
 			}
 		};
@@ -88,38 +93,60 @@ class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 
 	@Override
 	void beforeRelease() {
-		List<AudioDispatcher> attached;
+		List<VoiceActivity> attached;
 
 		synchronized (this) {
-			attached = new ArrayList<>(dispatchers);
-			dispatchers.clear();
+			attached = new ArrayList<>(listeners);
+			listeners.clear();
 		}
 
-		for (AudioDispatcher dispatcher : attached) {
-			detach(dispatcher);
-			dispatcher.close();
+		for (VoiceActivity listener : attached) {
+			listener.closed = true;
+			detach(listener);
 		}
 	}
 
-	private void attach(AudioDispatcher dispatcher) {
+	private void detach(VoiceActivity listener) {
 		if (microphone) {
-			rtc.capturedAudio.add(dispatcher);
+			rtc.factory.removeVoiceActivityListener(listener);
 		}
 		else {
-			audioTrack().addSink(dispatcher);
-		}
-	}
-
-	private void detach(AudioDispatcher dispatcher) {
-		if (microphone) {
-			rtc.capturedAudio.remove(dispatcher);
-		}
-		else {
-			audioTrack().removeSink(dispatcher);
+			audioTrack().removeVoiceActivityListener(listener);
 		}
 	}
 
 	private AudioTrack audioTrack() {
 		return (AudioTrack) nativeTrack();
+	}
+
+
+
+	/**
+	 * Hands the changes, which arrive on the thread that delivers the audio,
+	 * to the event executor, so that no handler holds up that thread.
+	 */
+	private final class VoiceActivity implements VoiceActivityListener {
+
+		private final Consumer<Boolean> handler;
+
+		volatile boolean closed;
+
+
+		VoiceActivity(Consumer<Boolean> handler) {
+			this.handler = handler;
+		}
+
+		@Override
+		public void onVoiceActivity(boolean speaking) {
+			if (closed) {
+				return;
+			}
+
+			media.events.execute(() -> {
+				if (!closed) {
+					handler.accept(speaking);
+				}
+			});
+		}
 	}
 }
