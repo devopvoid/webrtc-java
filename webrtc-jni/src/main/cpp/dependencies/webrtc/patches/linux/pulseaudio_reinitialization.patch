@@ -1,0 +1,14 @@
+--- a/modules/audio_device/linux/audio_device_pulse_linux.cc
++++ b/modules/audio_device/linux/audio_device_pulse_linux.cc
+@@ -178,3 +178,11 @@ AudioDeviceGeneric::InitStatus AudioDeviceLinuxPulse::Init() {
++  // Terminate() stops both processing threads with this flag. The ADM is
++  // reused when a factory creates another peer after closing its last one.
++  // Reset it before spawning either thread so audio can start again.
++  {
++    MutexLock lock(&mutex_);
++    quit_ = false;
++  }
++
+   // RECORDING
+   const auto attributes =
+       ThreadAttributes().SetPriority(ThreadPriority::kRealtime);
