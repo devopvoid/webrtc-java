@@ -21,6 +21,8 @@
 
 #include <chrono>
 #include <cstring>
+#include <exception>
+#include <new>
 #include <utility>
 
 extern "C" {
@@ -60,7 +62,8 @@ namespace ffmpeg
 
 	MediaRecorder::MediaRecorder(const webrtc_java_api * api, std::string path) :
 		api_(api),
-		path_(std::move(path))
+		path_(std::move(path)),
+		out_of_memory_error_("Recording to " + path_ + " failed: " + ErrorText(AVERROR(ENOMEM)))
 	{
 	}
 
@@ -423,6 +426,19 @@ namespace ffmpeg
 
 	void MediaRecorder::Run()
 	{
+		// An exception that left the thread would end the process. Whatever
+		// the loop held, such as the frames it had taken from the queue, and
+		// the lock, is released on the way out.
+		try {
+			Record();
+		}
+		catch (...) {
+			Abort();
+		}
+	}
+
+	void MediaRecorder::Record()
+	{
 		std::deque<RecordedFrame> batch;
 		std::vector<std::string> warnings;
 		std::vector<int> key_frame_requests;
@@ -486,6 +502,10 @@ namespace ffmpeg
 		if (failed_) {
 			return;
 		}
+
+		// Stands for what handling a frame may allocate, such as describing
+		// its track or holding it back for the header.
+		AllocationFault::CheckWriterAllocation();
 
 		RecorderTrack & track = *tracks_[frame.track];
 
@@ -667,6 +687,77 @@ namespace ffmpeg
 
 		if (observer_ != nullptr) {
 			observer_->OnError(message + ": " + ErrorText(error));
+		}
+	}
+
+	void MediaRecorder::Abort() noexcept
+	{
+		// Nothing more goes into the file, and what waits for it is let go
+		// now rather than once the recorder is stopped, which may be a while.
+		// A recording that had failed already was reported then.
+		const bool reported = failed_;
+
+		failed_ = true;
+
+		std::deque<RecordedFrame> dropped;
+
+		try {
+			std::lock_guard<std::mutex> lock(mutex_);
+
+			accepting_ = false;
+			queue_.swap(dropped);
+			queued_bytes_ = 0;
+		}
+		catch (...) {
+			// Without the lock the callbacks go on queueing, up to the limit,
+			// until the recorder is stopped.
+		}
+
+		dropped.clear();
+		pending_.clear();
+		pending_bytes_ = 0;
+
+		const std::string * message = &out_of_memory_error_;
+		std::string described;
+
+		try {
+			throw;
+		}
+		catch (const std::bad_alloc &) {
+		}
+		catch (const std::exception & e) {
+			try {
+				described = "Recording to " + path_ + " failed: " + e.what();
+				message = &described;
+			}
+			catch (...) {
+			}
+		}
+		catch (...) {
+			try {
+				described = "Recording to " + path_ + " failed";
+				message = &described;
+			}
+			catch (...) {
+			}
+		}
+
+		try {
+			if (observer_ != nullptr && !reported) {
+				observer_->OnError(*message);
+			}
+		}
+		catch (...) {
+		}
+
+		// Once failed, finishing writes no more media and reports nothing,
+		// so it needs no memory: the trailer keeps what is in the file
+		// playable. Should it throw all the same, Stop() still closes the
+		// file.
+		try {
+			Finish();
+		}
+		catch (...) {
 		}
 	}
 

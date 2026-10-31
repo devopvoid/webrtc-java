@@ -35,6 +35,9 @@ namespace ffmpeg
 			// Fails the next thread start that is checked, once, as one does
 			// that the system has no memory for.
 			static void FailNextThreadStart();
+			// Fails an allocation of a recorder's writer thread, once, after
+			// it has handled the given number of frames.
+			static void FailWriterAllocation(int after_frames);
 			// Forgets a fault that has not fired.
 			static void Disarm();
 			// Whether a fault is armed that has not fired.
@@ -45,6 +48,9 @@ namespace ffmpeg
 			static void CheckAllocation();
 			// Throws std::system_error if a fault is armed, and disarms it.
 			static void CheckThreadStart();
+			// Throws std::bad_alloc if a writer fault is armed and its frames
+			// are counted down, and disarms it.
+			static void CheckWriterAllocation();
 	};
 }
 

@@ -141,7 +141,15 @@ namespace ffmpeg
 			// one.
 			void RestartAtKeyFrame(int track);
 
+			// The entry of the writer thread, which runs Record() and lets no
+			// exception out of it.
 			void Run();
+			void Record();
+
+			// Ends a recording that Record() left by an exception: fails it,
+			// lets go of what waits to be written, reports it and finishes
+			// the file. Only to be called from a catch block.
+			void Abort() noexcept;
 
 			void Handle(RecordedFrame frame);
 			void Write(RecordedFrame & frame);
@@ -165,6 +173,9 @@ namespace ffmpeg
 
 			const webrtc_java_api * api_;
 			const std::string path_;
+			// Made in advance, since a writer that ran out of memory may not
+			// get any to describe that.
+			const std::string out_of_memory_error_;
 
 			std::unique_ptr<MediaRecorderObserver> observer_;
 

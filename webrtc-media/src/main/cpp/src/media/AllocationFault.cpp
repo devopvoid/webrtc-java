@@ -25,6 +25,8 @@ namespace
 	std::atomic<bool> fail_string_copy{ false };
 	std::atomic<bool> fail_allocation{ false };
 	std::atomic<bool> fail_thread_start{ false };
+	std::atomic<bool> fail_writer_allocation{ false };
+	std::atomic<int> writer_frames_left{ 0 };
 }
 
 namespace ffmpeg
@@ -44,16 +46,24 @@ namespace ffmpeg
 		fail_thread_start.store(true);
 	}
 
+	void AllocationFault::FailWriterAllocation(int after_frames)
+	{
+		writer_frames_left.store(after_frames);
+		fail_writer_allocation.store(true);
+	}
+
 	void AllocationFault::Disarm()
 	{
 		fail_string_copy.store(false);
 		fail_allocation.store(false);
 		fail_thread_start.store(false);
+		fail_writer_allocation.store(false);
 	}
 
 	bool AllocationFault::IsArmed()
 	{
-		return fail_string_copy.load() || fail_allocation.load() || fail_thread_start.load();
+		return fail_string_copy.load() || fail_allocation.load() || fail_thread_start.load()
+				|| fail_writer_allocation.load();
 	}
 
 	void AllocationFault::CheckStringCopy()
@@ -75,6 +85,16 @@ namespace ffmpeg
 		if (fail_thread_start.load() && fail_thread_start.exchange(false)) {
 			throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again),
 					"Starting a thread failed");
+		}
+	}
+
+	void AllocationFault::CheckWriterAllocation()
+	{
+		if (!fail_writer_allocation.load() || writer_frames_left.fetch_sub(1) > 0) {
+			return;
+		}
+		if (fail_writer_allocation.exchange(false)) {
+			throw std::bad_alloc();
 		}
 	}
 }

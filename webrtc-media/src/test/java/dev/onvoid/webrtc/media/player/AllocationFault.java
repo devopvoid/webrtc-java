@@ -55,6 +55,18 @@ public final class AllocationFault {
 	public static native void failNextThreadStart();
 
 	/**
+	 * Fails an allocation of a recorder's writer thread, as one fails that
+	 * holds back or describes a frame, once that thread has handled the given
+	 * number of frames. Unlike the other faults, it throws on a thread of
+	 * the native library's own, where no entry point turns the C++ exception
+	 * into a Java one.
+	 *
+	 * @param afterFrames How many frames the writer handles before the one
+	 *                    whose allocation fails.
+	 */
+	public static native void failWriterAllocation(int afterFrames);
+
+	/**
 	 * @return True if a fault is armed that has not fired yet.
 	 */
 	public static native boolean isArmed();

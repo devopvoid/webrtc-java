@@ -48,6 +48,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_AllocationFault
+	 * Method:    failWriterAllocation
+	 * Signature: (I)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_failWriterAllocation
+	(JNIEnv *, jclass, jint);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_AllocationFault
 	 * Method:    isArmed
 	 * Signature: ()Z
 	 */
