@@ -175,7 +175,7 @@ final class HttpIce {
 			}
 		}
 
-		Fragment[] before = new Fragment[1];
+		Restart restart = new Restart();
 
 		return peer.restartIce(offer -> {
 			HttpCall request;
@@ -186,26 +186,31 @@ final class HttpIce {
 					return CompletableFuture.failedFuture(new PeerClosedException("The session is closed"));
 				}
 
-				before[0] = local;
+				restart.before = local;
 				local = fragment;
 				restarting = true;
 				pending.clear();
 				gathered = false;
 
 				request = new HttpCall(client, session, "PATCH", authorization, timeout).header("If-Match", "*");
+				restart.request = request;
 				restartRequest = request;
 			}
 
 			return request.send(FRAGMENT_TYPE, fragment.text.getBytes(StandardCharsets.UTF_8), MAX_FRAGMENT,
-					head -> { }).handle((response, error) -> answered(request, response, error));
-		}).whenComplete((restarted, error) -> {
+					head -> { }).handle((response, error) -> sdp -> answered(request, response, error).apply(sdp));
+		}, (restarted, error) -> {
 			synchronized (this) {
+				if (restart.request == null || restartRequest != restart.request) {
+					return;
+				}
 				restarting = false;
 				restartRequest = null;
+				restart.request.abort();
 
-				if (error != null && before[0] != null) {
+				if (error != null && restart.before != null) {
 					// Taken back: the candidates of the new offer go nowhere.
-					local = before[0];
+					local = restart.before;
 					pending.clear();
 					gathered = false;
 				}
@@ -213,6 +218,11 @@ final class HttpIce {
 
 			flush();
 		});
+	}
+
+	private static final class Restart {
+		Fragment before;
+		HttpCall request;
 	}
 
 	/**
