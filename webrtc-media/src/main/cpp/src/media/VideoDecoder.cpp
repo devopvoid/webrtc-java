@@ -366,6 +366,17 @@ namespace ffmpeg
 	{
 		discard_before_us_ = timestamp_us;
 		discarding_ = true;
+		dropped_before_ = false;
+		landed_past_ = false;
+	}
+
+	bool VideoDecoder::LandedPastPosition()
+	{
+		const bool landed_past = landed_past_;
+
+		landed_past_ = false;
+
+		return landed_past;
 	}
 
 	bool VideoDecoder::IsHardwareFailure(int result) const
@@ -465,6 +476,8 @@ namespace ffmpeg
 			}
 			if (*frame == nullptr) {
 				// Dropped before it was read back and converted.
+				dropped_before_ = true;
+
 				continue;
 			}
 
@@ -473,10 +486,15 @@ namespace ffmpeg
 				// probation, which only a picture made in full can end.
 				av_frame_free(frame);
 
+				dropped_before_ = true;
+
 				continue;
 			}
 
-			discarding_ = false;
+			if (discarding_) {
+				landed_past_ = !dropped_before_ && *timestamp_us > discard_before_us_;
+				discarding_ = false;
+			}
 
 			return 0;
 		}

@@ -80,6 +80,16 @@ class MediaPlayerTest {
 	/** 3.008 seconds at 15 frames a second. */
 	private static final int EXPECTED_FRAMES = 45;
 
+	/**
+	 * 320x240 H.264 at 15 fps, ten seconds, in MPEG-TS, with a key frame every
+	 * four seconds, at 0.133, 4.133 and 8.133 s: two B-frames put the first
+	 * picture 0.133 s in. MPEG-TS has no index, so FFmpeg seeks in it by
+	 * searching for a timestamp, which can land past the key frame before the
+	 * position. Made with libx264 (veryfast, CRF 42, keyint 60, no scene cuts,
+	 * two B-frames) from a moving gradient.
+	 */
+	private static final String TS_ASSET = "/media-test-h264.ts";
+
 	/** 3.008 seconds in chunks of 10 ms. */
 	private static final int EXPECTED_CHUNKS = 300;
 
@@ -322,6 +332,47 @@ class MediaPlayerTest {
 			// 0.95 s is exactly 95 chunks, none of them padded.
 			assertEquals(95, playback.chunks.get());
 			assertEquals(95 * 480, playback.nonZeroSamples.get());
+		}
+	}
+
+	@Test
+	void seekWithoutIndexStartsAtThePositionAskedFor() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI())))) {
+			// Just before the key frame at 8.133 s. A search for 7.8 s lands
+			// past the one at 4.133 s, and the decoder has nothing to show
+			// until 8.133 s, so the player has to look further back.
+			playback.player.seek(7_800_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The picture at 7.8 s is the 116th, 0.133 s + 115 / 15 s in.
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 7_800_000 && first < 7_800_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// 7.8 s to the end: the last 35 of the 150 pictures.
+			assertTrue(Math.abs(playback.frames.get() - 35) <= 1,
+					"video frames: " + playback.frames.get());
+		}
+	}
+
+	@Test
+	void seekWithoutIndexToItsStartPlaysItAll() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI())))) {
+			// Before the first picture, which is 0.133 s in: there is nothing
+			// further back to look for, and the player starts at that picture.
+			playback.player.seek(0);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(20, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(133_333, playback.firstFramePositionUs.get(), 1);
+			assertTrue(Math.abs(playback.frames.get() - 150) <= 1,
+					"video frames: " + playback.frames.get());
 		}
 	}
 

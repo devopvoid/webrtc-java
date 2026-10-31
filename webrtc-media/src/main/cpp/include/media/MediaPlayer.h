@@ -125,10 +125,25 @@ namespace ffmpeg
 			// of a stream and a loop both need.
 			void DrainDecoders();
 
-			int DecodeVideo();
+			// Takes the decoded video and hands it to the pacer. At the end
+			// of the stream a seek that landed too late is not retried: the
+			// source is about to end or start over, and that would be lost.
+			int DecodeVideo(bool at_end);
 			int DecodeAudio();
 
 			void PerformSeek(int64_t position_us);
+
+			// Moves the reader to the given time and starts decoding from
+			// there towards the position of the seek being carried out.
+			// Returns 0 or a negative AVERROR.
+			int SeekReader(int64_t from_us);
+
+			// Seeks again further back, after the video decoded since a seek
+			// started past its position: the reader landed past the keyframe
+			// before it. Returns whether it did; there is nothing further back
+			// to try once the reader would land where it did already, or the
+			// distance has grown past kMaxSeekBackUs.
+			bool SeekFurtherBack();
 			void SetState(int state);
 
 			// Records the state, with the lock held. Returns whether it
@@ -164,6 +179,19 @@ namespace ffmpeg
 
 			bool seek_pending_ = false;
 			int64_t seek_position_us_ = 0;
+
+			// How far before the position a seek that landed too late looks
+			// next, doubling each time, and how far at most: past that, a
+			// stream whose keyframes are this far apart starts at the next
+			// one, as a reader without an index would leave it.
+			static constexpr int64_t kFirstSeekBackUs = 1000000;
+			static constexpr int64_t kMaxSeekBackUs = 64000000;
+
+			// The seek being carried out, on the decode thread: its position,
+			// how far before it the reader was last sent, and where to.
+			int64_t seek_target_us_ = 0;
+			int64_t seek_back_us_ = 0;
+			int64_t seek_from_us_ = 0;
 
 			// Set once the source has run out and everything queued has been
 			// delivered, so that the thread stops pumping until something

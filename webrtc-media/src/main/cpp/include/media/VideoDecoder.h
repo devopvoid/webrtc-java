@@ -80,6 +80,14 @@ namespace ffmpeg
 			// the first frame that reaches it.
 			void DiscardBefore(int64_t timestamp_us);
 
+			// Whether the first frame since DiscardBefore lay past its
+			// position with none before it to drop: the seek landed past the
+			// keyframe before the position, and the decoder had nothing to
+			// show until the next one. A container without an index, such as
+			// MPEG-TS, is searched by timestamp and can land that way.
+			// Reported once, by the call after that frame was taken.
+			bool LandedPastPosition();
+
 			// Hands a packet to the decoder, or null to start draining at the
 			// end of the stream. Returns 0 or a negative AVERROR.
 			int SendPacket(const AVPacket * packet);
@@ -212,6 +220,11 @@ namespace ffmpeg
 			// Where the frames after a seek are to start.
 			int64_t discard_before_us_ = 0;
 			bool discarding_ = false;
+
+			// Whether a frame before that position has been dropped, and
+			// whether the first frame then came past it without one.
+			bool dropped_before_ = false;
+			bool landed_past_ = false;
 	};
 }
 
