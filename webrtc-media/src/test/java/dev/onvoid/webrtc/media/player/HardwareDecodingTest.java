@@ -502,8 +502,9 @@ class HardwareDecodingTest {
 
 	@Test
 	void seekBetweenKeyFrames() throws Exception {
-		// Half a second in is not a key frame; the player has to start from
-		// the key frame before it, however the reader gets there.
+		// Half a second in is not a key frame; the player has to decode from
+		// the key frame before it, however the reader gets there, and start
+		// playing at half a second.
 		Result software = play(H264, false, 500_000);
 		Result hardware = play(H264, true, 500_000);
 

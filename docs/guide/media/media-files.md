@@ -144,7 +144,7 @@ source.getState();              // IDLE, PLAYING, PAUSED, ENDED or CLOSED
 
 Looping keeps the timing across the seam, so a looping file works as a stand-in for a camera that never stops. A looping source never reports an end of stream.
 
-A seek lands on the keyframe at or before the position asked for, which is how far back the decoder has to go to produce a picture at all. How close that is to the position asked for depends on how often the media was encoded with keyframes.
+A seek starts playback at the position asked for. The decoder has to go back to the keyframe at or before it to produce a picture at all, so the frames from there up to the position are decoded and dropped, and the audio is cut at it. How long a seek takes therefore depends on how often the media was encoded with keyframes.
 
 ## Following Playback
 

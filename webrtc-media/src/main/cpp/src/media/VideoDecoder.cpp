@@ -336,6 +336,7 @@ namespace ffmpeg
 		draining_ = false;
 		awaiting_key_frame_ = false;
 		skipped_ = 0;
+		discarding_ = false;
 		time_base_ = { 0, 1 };
 	}
 
@@ -353,6 +354,13 @@ namespace ffmpeg
 		draining_ = false;
 		awaiting_key_frame_ = false;
 		skipped_ = 0;
+		discarding_ = false;
+	}
+
+	void VideoDecoder::DiscardBefore(int64_t timestamp_us)
+	{
+		discard_before_us_ = timestamp_us;
+		discarding_ = true;
 	}
 
 	bool VideoDecoder::IsHardwareFailure(int result) const
@@ -442,6 +450,35 @@ namespace ffmpeg
 
 	int VideoDecoder::ReceiveFromCodec(AVFrame ** frame, int64_t * timestamp_us)
 	{
+		for (;;) {
+			*frame = nullptr;
+
+			int result = ReceivePicture(frame, timestamp_us);
+
+			if (result < 0) {
+				return result;
+			}
+			if (*frame == nullptr) {
+				// Dropped before it was read back and converted.
+				continue;
+			}
+
+			if (discarding_ && *timestamp_us < discard_before_us_) {
+				// Converted all the same, as the hardware was still on
+				// probation, which only a picture made in full can end.
+				av_frame_free(frame);
+
+				continue;
+			}
+
+			discarding_ = false;
+
+			return 0;
+		}
+	}
+
+	int VideoDecoder::ReceivePicture(AVFrame ** frame, int64_t * timestamp_us)
+	{
 		if (hardware_ && HardwareFault::HoldsPictures()) {
 			while (avcodec_receive_frame(codec_context_, decoded_) >= 0) {
 				av_frame_unref(decoded_);
@@ -476,6 +513,19 @@ namespace ffmpeg
 				? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) : 0;
 
 		const bool hardware_frame = hardware_format_ != AV_PIX_FMT_NONE && decoded_->format == hardware_format_;
+
+		if (discarding_ && !probation_ && *timestamp_us < discard_before_us_) {
+			// Before the position a seek asked for, and decoded only because
+			// the pictures after it depend on it. Reading it back from the
+			// hardware and converting it would be most of what it costs.
+			if (!hardware_frame) {
+				hardware_ = false;
+			}
+
+			av_frame_unref(decoded_);
+
+			return 0;
+		}
 
 		if (hardware_frame) {
 			// The picture is in the memory of the hardware decoder. Bring it
@@ -638,13 +688,22 @@ namespace ffmpeg
 			AVFrame * frame = nullptr;
 			int64_t timestamp_us = 0;
 
-			if (ReceiveFromCodec(&frame, &timestamp_us) < 0) {
+			// Out of pictures when all it held lay before the position of a
+			// seek, and then it takes the packet.
+			int received = ReceiveFromCodec(&frame, &timestamp_us);
+
+			if (received < 0 && received != AVERROR(EAGAIN)) {
 				break;
 			}
-
-			pending_.push_back({ frame, timestamp_us });
+			if (received == 0) {
+				pending_.push_back({ frame, timestamp_us });
+			}
 
 			sent = avcodec_send_packet(codec_context_, packet);
+
+			if (received == AVERROR(EAGAIN)) {
+				break;
+			}
 		}
 	}
 

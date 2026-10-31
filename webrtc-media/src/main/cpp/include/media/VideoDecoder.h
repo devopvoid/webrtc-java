@@ -70,7 +70,15 @@ namespace ffmpeg
 
 			// Drops everything the decoder holds, which is what a seek needs:
 			// the frames in flight belong to the position that was left.
+			// Forgets a position set with DiscardBefore.
 			void Flush();
+
+			// Makes the frames after a flush start at the given time on the
+			// source's timeline. A seek lands on a keyframe before it, and
+			// the frames from there up to it are decoded and dropped, before
+			// they are read back from the hardware and converted. Ends with
+			// the first frame that reaches it.
+			void DiscardBefore(int64_t timestamp_us);
 
 			// Hands a packet to the decoder, or null to start draining at the
 			// end of the stream. Returns 0 or a negative AVERROR.
@@ -114,8 +122,14 @@ namespace ffmpeg
 			static AVPixelFormat ChooseFormat(AVCodecContext * context, const AVPixelFormat * formats);
 
 			// The next picture of the codec, in I420, hardware frames brought
-			// into system memory first.
+			// into system memory first, passing over those before the
+			// position set with DiscardBefore.
 			int ReceiveFromCodec(AVFrame ** frame, int64_t * timestamp_us);
+
+			// One picture of the codec, as ReceiveFromCodec takes them. Leaves
+			// the frame null, and returns 0, for one it dropped before reading
+			// it back and converting it.
+			int ReceivePicture(AVFrame ** frame, int64_t * timestamp_us);
 
 			// Whether a result of the hardware decoder means that it failed.
 			// A stream that cannot be decoded, which is how corrupt data shows,
@@ -194,6 +208,10 @@ namespace ffmpeg
 			bool awaiting_key_frame_ = false;
 			size_t skipped_ = 0;
 			std::deque<Pending> pending_;
+
+			// Where the frames after a seek are to start.
+			int64_t discard_before_us_ = 0;
+			bool discarding_ = false;
 	};
 }
 

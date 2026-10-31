@@ -90,7 +90,8 @@ namespace ffmpeg
 			void Pause();
 
 			// Moves playback to the given position, in microseconds from the
-			// start. What is already queued is dropped.
+			// start. What is already queued is dropped, and what is decoded
+			// between the keyframe the seek lands on and the position as well.
 			void Seek(int64_t position_us);
 
 			void SetLooping(bool looping);

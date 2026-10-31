@@ -513,6 +513,13 @@ namespace ffmpeg
 		video_decoder_.Flush();
 		audio_decoder_.Flush();
 
+		// The reader lands on the keyframe at or before the position, which
+		// is where decoding has to begin. Playback begins at the position
+		// itself: what comes before it is decoded and dropped, and the audio
+		// frame it falls in is cut there.
+		video_decoder_.DiscardBefore(position_us);
+		audio_decoder_.DiscardBefore(position_us);
+
 		// A seek starts a timeline of its own: the pacer maps the first item
 		// that arrives onto the clock afresh, so the offset that kept looping
 		// monotonic is no longer needed and would only skew the position.
