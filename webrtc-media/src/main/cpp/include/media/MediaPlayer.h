@@ -90,9 +90,10 @@ namespace ffmpeg
 			void Pause();
 
 			// Moves playback to the given position, in microseconds from the
-			// start. What is already queued is dropped, and what is decoded
-			// between the keyframe the seek lands on and the position as well.
-			void Seek(int64_t position_us);
+			// start. What is already queued is dropped. A precise seek drops
+			// what is decoded between the keyframe it lands on and the
+			// position as well; one that is not plays from that keyframe.
+			void Seek(int64_t position_us, bool precise);
 
 			void SetLooping(bool looping);
 			bool IsLooping() const;
@@ -131,7 +132,7 @@ namespace ffmpeg
 			int DecodeVideo(bool at_end);
 			int DecodeAudio();
 
-			void PerformSeek(int64_t position_us);
+			void PerformSeek(int64_t position_us, bool precise);
 
 			// Moves the reader to the given time and starts decoding from
 			// there towards the position of the seek being carried out.
@@ -140,9 +141,10 @@ namespace ffmpeg
 
 			// Seeks again further back, after the video decoded since a seek
 			// started past its position: the reader landed past the keyframe
-			// before it. Returns whether it did; there is nothing further back
-			// to try once the reader would land where it did already, or the
-			// distance has grown past kMaxSeekBackUs.
+			// before it. Only a precise seek does: a fast one plays from the
+			// keyframe it lands on. Returns whether it did; there is nothing
+			// further back to try once the reader would land where it did
+			// already, or the distance has grown past kMaxSeekBackUs.
 			bool SeekFurtherBack();
 			void SetState(int state);
 
@@ -179,6 +181,7 @@ namespace ffmpeg
 
 			bool seek_pending_ = false;
 			int64_t seek_position_us_ = 0;
+			bool seek_precise_ = true;
 
 			// How far before the position a seek that landed too late looks
 			// next, doubling each time, and how far at most: past that, a
@@ -188,8 +191,10 @@ namespace ffmpeg
 			static constexpr int64_t kMaxSeekBackUs = 64000000;
 
 			// The seek being carried out, on the decode thread: its position,
-			// how far before it the reader was last sent, and where to.
+			// whether it is precise, how far before it the reader was last
+			// sent, and where to.
 			int64_t seek_target_us_ = 0;
+			bool seek_target_precise_ = true;
 			int64_t seek_back_us_ = 0;
 			int64_t seek_from_us_ = 0;
 

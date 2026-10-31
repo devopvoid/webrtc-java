@@ -49,10 +49,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
 	 * Method:    seek
-	 * Signature: (JJ)V
+	 * Signature: (JJZ)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_seek
-	(JNIEnv *, jclass, jlong, jlong);
+	(JNIEnv *, jclass, jlong, jlong, jboolean);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer

@@ -186,13 +186,34 @@ public class MediaPlayer implements AutoCloseable {
 
 	/**
 	 * Moves playback to the given position. Whatever has been decoded but not
-	 * yet delivered is dropped.
+	 * yet delivered is dropped. Video is decoded from the keyframe at or
+	 * before the position, and what comes before the position is dropped, so
+	 * the further the keyframes are apart, the longer this takes.
 	 *
 	 * @param positionUs The position in microseconds from the start.
+	 *
+	 * @see #fastSeek(long)
 	 */
 	public void seek(long positionUs) {
 		synchronized (lock) {
-			seek(handle, positionUs);
+			seek(handle, positionUs, true);
+		}
+	}
+
+	/**
+	 * Moves playback to the keyframe at or before the given position, and
+	 * plays from there. Nothing before the position is dropped, so this takes
+	 * no longer however far the keyframes are apart, which is what a slider
+	 * being dragged needs; a {@link #seek(long)} once it is let go lands on
+	 * the position itself. Whatever has been decoded but not yet delivered is
+	 * dropped. In a container without an index, such as MPEG-TS, the keyframe
+	 * can be the one after the position.
+	 *
+	 * @param positionUs The position in microseconds from the start.
+	 */
+	public void fastSeek(long positionUs) {
+		synchronized (lock) {
+			seek(handle, positionUs, false);
 		}
 	}
 
@@ -350,7 +371,7 @@ public class MediaPlayer implements AutoCloseable {
 
 	private static native void suspend(long handle);
 
-	private static native void seek(long handle, long positionUs);
+	private static native void seek(long handle, long positionUs, boolean precise);
 
 	private static native void setLooping(long handle, boolean looping);
 

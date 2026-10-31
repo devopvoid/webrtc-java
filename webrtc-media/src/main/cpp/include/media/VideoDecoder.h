@@ -85,7 +85,8 @@ namespace ffmpeg
 			// keyframe before the position, and the decoder had nothing to
 			// show until the next one. A container without an index, such as
 			// MPEG-TS, is searched by timestamp and can land that way.
-			// Reported once, by the call after that frame was taken.
+			// Reported once, by the call after that frame was taken, and
+			// forgotten by a flush.
 			bool LandedPastPosition();
 
 			// Hands a packet to the decoder, or null to start draining at the
