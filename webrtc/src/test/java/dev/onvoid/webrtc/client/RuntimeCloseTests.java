@@ -117,6 +117,39 @@ class RuntimeCloseTests extends ClientTestBase {
 	}
 
 	@Test
+	void closeWaitsForTasksQueuedBehindTeardown() throws Exception {
+		// A callback of WebRTC queued a task while the teardown waited to run,
+		// as one does for a channel the remote side opens. The task reaches
+		// the peer once it has closed and still calls into the native channel,
+		// whose calls run on the factory's threads: the runtime must not free
+		// the factory before it ran, as it did once, crashing the process.
+		ManualExecutor control = new ManualExecutor();
+		WebRtc runtime = runtime(control);
+
+		CompletableFuture<Peer> created = CompletableFuture.supplyAsync(() -> runtime.createPeer(manualOptions()));
+		control.runUntil(created::isDone, TIMEOUT_SECONDS);
+
+		PeerImpl peer = (PeerImpl) await(created);
+
+		CompletableFuture<Void> closed = runtime.closeAsync();
+		control.awaitQueued(TIMEOUT_SECONDS);
+
+		AtomicBoolean ran = new AtomicBoolean();
+		AtomicBoolean closedBefore = new AtomicBoolean();
+
+		peer.control.execute(() -> {
+			ran.set(true);
+			closedBefore.set(peer.closeInternal().isDone());
+		});
+
+		control.runUntil(closed::isDone, TIMEOUT_SECONDS);
+		await(closed);
+
+		assertTrue(ran.get());
+		assertFalse(closedBefore.get(), "the peer counted as closed before the task queued behind its teardown ran");
+	}
+
+	@Test
 	void closeTimeoutReported() throws Exception {
 		// The peer's teardown never runs, so neither close finishes.
 		ManualExecutor control = new ManualExecutor();
