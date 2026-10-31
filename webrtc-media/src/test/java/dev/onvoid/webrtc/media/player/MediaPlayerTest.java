@@ -307,6 +307,28 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void fastSeekPlaysFromTheKeyframeBefore() throws Exception {
+		try (Playback playback = new Playback()) {
+			// Between the keyframes at 1 s and 2 s: playback starts at the one
+			// at 1 s, with nothing dropped.
+			playback.player.fastSeek(1_500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(1_000_000, playback.firstFramePositionUs.get());
+
+			// 1 s to 2.933 s, and the audio from the first packet the reader
+			// lands on, a few milliseconds after 1 s, uncut: about half a
+			// second more of each than seek gives.
+			assertTrue(Math.abs(playback.frames.get() - 30) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 198) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
 	void seekCutsTheAudioFrameItFallsIn() throws Exception {
 		// Two seconds in frames of 100 ms, at the rate WebRTC takes, so that
 		// nothing is resampled and every sample played is one of the file's.

@@ -90,9 +90,10 @@ namespace ffmpeg
 			void Pause();
 
 			// Moves playback to the given position, in microseconds from the
-			// start. What is already queued is dropped, and what is decoded
-			// between the keyframe the seek lands on and the position as well.
-			void Seek(int64_t position_us);
+			// start. What is already queued is dropped. A precise seek drops
+			// what is decoded between the keyframe it lands on and the
+			// position as well; one that is not plays from that keyframe.
+			void Seek(int64_t position_us, bool precise);
 
 			void SetLooping(bool looping);
 			bool IsLooping() const;
@@ -128,7 +129,7 @@ namespace ffmpeg
 			int DecodeVideo();
 			int DecodeAudio();
 
-			void PerformSeek(int64_t position_us);
+			void PerformSeek(int64_t position_us, bool precise);
 			void SetState(int state);
 
 			// Records the state, with the lock held. Returns whether it
@@ -164,6 +165,7 @@ namespace ffmpeg
 
 			bool seek_pending_ = false;
 			int64_t seek_position_us_ = 0;
+			bool seek_precise_ = true;
 
 			// Set once the source has run out and everything queued has been
 			// delivered, so that the thread stops pumping until something

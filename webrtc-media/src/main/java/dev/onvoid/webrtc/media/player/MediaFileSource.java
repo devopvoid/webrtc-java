@@ -244,9 +244,23 @@ public class MediaFileSource implements AutoCloseable {
 	 * Moves playback to the given position.
 	 *
 	 * @param positionUs The position in microseconds from the start.
+	 *
+	 * @see MediaPlayer#seek(long)
 	 */
 	public void seek(long positionUs) {
 		player.seek(positionUs);
+	}
+
+	/**
+	 * Moves playback to the keyframe at or before the given position, which
+	 * takes no longer however far the keyframes are apart.
+	 *
+	 * @param positionUs The position in microseconds from the start.
+	 *
+	 * @see MediaPlayer#fastSeek(long)
+	 */
+	public void fastSeek(long positionUs) {
+		player.fastSeek(positionUs);
 	}
 
 	/**

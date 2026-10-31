@@ -120,6 +120,7 @@ namespace ffmpeg
 				ended_ = false;
 				seek_pending_ = true;
 				seek_position_us_ = 0;
+				seek_precise_ = true;
 			}
 
 			// Under the lock, together with the flag: the decode thread stops
@@ -157,7 +158,7 @@ namespace ffmpeg
 		}
 	}
 
-	void MediaPlayer::Seek(int64_t position_us)
+	void MediaPlayer::Seek(int64_t position_us, bool precise)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
@@ -167,6 +168,7 @@ namespace ffmpeg
 
 		seek_pending_ = true;
 		seek_position_us_ = position_us;
+		seek_precise_ = precise;
 		ended_ = false;
 
 		// The decode thread may be held up by a full queue, and it cannot act
@@ -272,6 +274,7 @@ namespace ffmpeg
 
 		for (;;) {
 			int64_t seek_to = 0;
+			bool seek_precise = true;
 			bool do_seek = false;
 
 			{
@@ -288,12 +291,13 @@ namespace ffmpeg
 				if (seek_pending_) {
 					seek_pending_ = false;
 					seek_to = seek_position_us_;
+					seek_precise = seek_precise_;
 					do_seek = true;
 				}
 			}
 
 			if (do_seek) {
-				PerformSeek(seek_to);
+				PerformSeek(seek_to, seek_precise);
 
 				continue;
 			}
@@ -500,7 +504,7 @@ namespace ffmpeg
 		}
 	}
 
-	void MediaPlayer::PerformSeek(int64_t position_us)
+	void MediaPlayer::PerformSeek(int64_t position_us, bool precise)
 	{
 		int result = reader_->Seek(position_us);
 
@@ -514,11 +518,14 @@ namespace ffmpeg
 		audio_decoder_.Flush();
 
 		// The reader lands on the keyframe at or before the position, which
-		// is where decoding has to begin. Playback begins at the position
-		// itself: what comes before it is decoded and dropped, and the audio
-		// frame it falls in is cut there.
-		video_decoder_.DiscardBefore(position_us);
-		audio_decoder_.DiscardBefore(position_us);
+		// is where decoding has to begin. A precise seek begins playback at
+		// the position itself: what comes before it is decoded and dropped,
+		// and the audio frame it falls in is cut there. Otherwise it begins
+		// at that keyframe, video and audio alike.
+		if (precise) {
+			video_decoder_.DiscardBefore(position_us);
+			audio_decoder_.DiscardBefore(position_us);
+		}
 
 		// A seek starts a timeline of its own: the pacer maps the first item
 		// that arrives onto the clock afresh, so the offset that kept looping

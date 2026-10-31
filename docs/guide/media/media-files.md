@@ -137,6 +137,7 @@ Duration is `0` for a source whose container does not say how long it runs, whic
 source.play();                  // start, or resume after a pause
 source.pause();                 // hold playback where it is
 source.seek(30_000_000);        // move to 30 seconds
+source.fastSeek(30_000_000);    // move to the keyframe at or before 30 seconds
 source.setLooping(true);        // start over instead of ending
 source.getPositionUs();         // where playback has got to
 source.getState();              // IDLE, PLAYING, PAUSED, ENDED or CLOSED
@@ -145,6 +146,8 @@ source.getState();              // IDLE, PLAYING, PAUSED, ENDED or CLOSED
 Looping keeps the timing across the seam, so a looping file works as a stand-in for a camera that never stops. A looping source never reports an end of stream.
 
 A seek starts playback at the position asked for. The decoder has to go back to the keyframe at or before it to produce a picture at all, so the frames from there up to the position are decoded and dropped, and the audio is cut at it. How long a seek takes therefore depends on how often the media was encoded with keyframes.
+
+`fastSeek` moves to that keyframe and plays from there, without decoding up to the position, so it takes no longer however far the keyframes are apart. That suits a slider being dragged, as browsers' `fastSeek()` does: fast seeks while it moves, and a `seek` once it is let go. In a container without an index, such as MPEG-TS, the keyframe can be the one after the position.
 
 ## Following Playback
 

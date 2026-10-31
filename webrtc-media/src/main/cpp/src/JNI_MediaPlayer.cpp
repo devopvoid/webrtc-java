@@ -125,11 +125,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_suspend
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_seek
-(JNIEnv * env, jclass caller, jlong handle, jlong positionUs)
+(JNIEnv * env, jclass caller, jlong handle, jlong positionUs, jboolean precise)
 {
 	ffmpeg::CallFromJava(env, [&] {
 		if (handle != 0) {
-			PlayerOf(handle)->Seek(positionUs);
+			PlayerOf(handle)->Seek(positionUs, precise == JNI_TRUE);
 		}
 	});
 }
