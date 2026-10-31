@@ -354,6 +354,13 @@ namespace ffmpeg
 
 		if (recorded.packet == nullptr
 				|| av_new_packet(recorded.packet.get(), static_cast<int>(frame->size)) < 0) {
+			// Dropped like a frame the queue has no room for: video goes on
+			// from the next key frame.
+			if (video) {
+				input->waiting_for_key_frame = true;
+				WantKeyFrameLocked(input);
+			}
+
 			return;
 		}
 

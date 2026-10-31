@@ -145,7 +145,7 @@ source.getState();              // IDLE, PLAYING, PAUSED, ENDED or CLOSED
 
 Looping keeps the timing across the seam, so a looping file works as a stand-in for a camera that never stops. A looping source never reports an end of stream.
 
-A seek starts playback at the position asked for. The decoder has to go back to the keyframe at or before it to produce a picture at all, so the frames from there up to the position are decoded and dropped, and the audio is cut at it. How long a seek takes therefore depends on how often the media was encoded with keyframes.
+A seek starts playback at the position asked for. The decoder has to go back to the keyframe at or before it to produce a picture at all, so the frames from there up to the position are decoded and dropped, and the audio is cut at it. How long a seek takes therefore depends on how often the media was encoded with keyframes, not on how long the media is: MKV and MP4 have an index that takes the reader straight to that keyframe. MPEG-TS has none, and a search for the position by its timestamps can land past the keyframe before it. The player then searches again further back, a second before the position, then two, four and so on, so that the seek still starts at the position.
 
 `fastSeek` moves to that keyframe and plays from there, without decoding up to the position, so it takes no longer however far the keyframes are apart. That suits a slider being dragged, as browsers' `fastSeek()` does: fast seeks while it moves, and a `seek` once it is let go. In a container without an index, such as MPEG-TS, the keyframe can be the one after the position.
 

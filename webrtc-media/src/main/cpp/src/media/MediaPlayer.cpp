@@ -18,6 +18,7 @@
 #include "media/AllocationFault.h"
 #include "media/ErrorText.h"
 
+#include <algorithm>
 #include <chrono>
 #include <utility>
 
@@ -426,7 +427,7 @@ namespace ffmpeg
 		}
 
 		if (video) {
-			return DecodeVideo() >= 0;
+			return DecodeVideo(false) >= 0;
 		}
 		if (audio) {
 			return DecodeAudio() >= 0;
@@ -439,7 +440,7 @@ namespace ffmpeg
 	{
 		if (has_video_) {
 			video_decoder_.SendPacket(nullptr);
-			DecodeVideo();
+			DecodeVideo(true);
 		}
 		if (has_audio_) {
 			audio_decoder_.SendPacket(nullptr);
@@ -447,7 +448,7 @@ namespace ffmpeg
 		}
 	}
 
-	int MediaPlayer::DecodeVideo()
+	int MediaPlayer::DecodeVideo(bool at_end)
 	{
 		for (;;) {
 			AVFrame * frame = nullptr;
@@ -462,6 +463,14 @@ namespace ffmpeg
 				ReportError("Decoding video failed", result);
 
 				return result;
+			}
+
+			if (!at_end && video_decoder_.LandedPastPosition() && SeekFurtherBack()) {
+				// From a later keyframe than the one the seek needs; decoding
+				// starts again from an earlier one.
+				av_frame_free(&frame);
+
+				return 0;
 			}
 
 			if (timestamp_us > max_source_pts_us_) {
@@ -506,13 +515,50 @@ namespace ffmpeg
 
 	void MediaPlayer::PerformSeek(int64_t position_us, bool precise)
 	{
-		int result = reader_->Seek(position_us);
+		seek_target_us_ = position_us;
+		seek_target_precise_ = precise;
+		seek_back_us_ = 0;
+
+		int result = SeekReader(position_us);
 
 		if (result < 0) {
 			ReportError("Seeking failed", result);
-
-			return;
 		}
+	}
+
+	bool MediaPlayer::SeekFurtherBack()
+	{
+		if (!seek_target_precise_) {
+			return false;
+		}
+
+		const int64_t back = seek_back_us_ == 0 ? kFirstSeekBackUs : seek_back_us_ * 2;
+		const int64_t from = std::max<int64_t>(seek_target_us_ - back, 0);
+
+		// Before the start the reader lands where it did, at the first
+		// picture, which is the one to play.
+		if (back > kMaxSeekBackUs || from >= seek_from_us_) {
+			return false;
+		}
+
+		seek_back_us_ = back;
+
+		// Where it failed, the reader stays where it was, and the frame that
+		// came too late is played after all.
+		return SeekReader(from) >= 0;
+	}
+
+	int MediaPlayer::SeekReader(int64_t from_us)
+	{
+		const int64_t position_us = seek_target_us_;
+
+		int result = reader_->Seek(from_us);
+
+		if (result < 0) {
+			return result;
+		}
+
+		seek_from_us_ = std::max<int64_t>(from_us, 0);
 
 		video_decoder_.Flush();
 		audio_decoder_.Flush();
@@ -522,7 +568,7 @@ namespace ffmpeg
 		// the position itself: what comes before it is decoded and dropped,
 		// and the audio frame it falls in is cut there. Otherwise it begins
 		// at that keyframe, video and audio alike.
-		if (precise) {
+		if (seek_target_precise_) {
 			video_decoder_.DiscardBefore(position_us);
 			audio_decoder_.DiscardBefore(position_us);
 		}
@@ -534,6 +580,8 @@ namespace ffmpeg
 		max_source_pts_us_ = position_us;
 
 		pacer_->Flush(position_us);
+
+		return 0;
 	}
 
 	void MediaPlayer::SetState(int state)

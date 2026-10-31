@@ -1024,7 +1024,8 @@ final class PeerImpl implements Peer {
 	 * Starts closing, once.
 	 *
 	 * @return a future that completes on the control executor once the
-	 * connection is closed, before the handlers hear of it.
+	 * connection is closed and the control tasks queued before that have run,
+	 * before the handlers hear of it.
 	 */
 	CompletableFuture<Void> closeInternal() {
 		if (closing.compareAndSet(false, true)) {
@@ -1774,6 +1775,19 @@ final class PeerImpl implements Peer {
 
 		state = PeerState.CLOSED;
 		rtc.removePeer(this);
+
+		// Finished only once the tasks queued before the connection closed
+		// have run: a callback of WebRTC may have queued one behind this
+		// teardown, such as a channel the remote side opened, and that task
+		// still calls into its native objects. The runtime frees the factory,
+		// and with it WebRTC's threads, as soon as closedInternal completes.
+		// Nothing is queued for the connection once it has closed.
+		Runnable finish = () -> finishTeardown(ended, error);
+
+		control.execute(finish, finish);
+	}
+
+	private void finishTeardown(List<RemoteTrackImpl> ended, PeerClosedException error) {
 		closedInternal.complete(null);
 
 		events.execute(() -> {
