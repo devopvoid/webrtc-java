@@ -44,6 +44,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -148,6 +149,11 @@ final class PeerImpl implements Peer {
 	private boolean operationRunning;
 
 	private CompletableFuture<?> runningOperation;
+
+	/** The unfinished steps of the current operation, owned by control. */
+	private Operation activeOperation;
+
+	private boolean teardownStarted;
 
 	private boolean negotiationQueued;
 
@@ -710,6 +716,12 @@ final class PeerImpl implements Peer {
 	 */
 	CompletableFuture<Void> restartIce(
 			Function<RTCSessionDescription, CompletableFuture<UnaryOperator<String>>> exchange) {
+		return restartIce(exchange, (value, error) -> { });
+	}
+
+	CompletableFuture<Void> restartIce(
+			Function<RTCSessionDescription, CompletableFuture<UnaryOperator<String>>> exchange,
+			BiConsumer<Void, Throwable> finished) {
 		return negotiator.run(() -> {
 			RTCSessionDescription remote = connection.getRemoteDescription();
 
@@ -775,7 +787,7 @@ final class PeerImpl implements Peer {
 								.thenCompose(ignored -> failed);
 					})
 					.thenCompose(result -> result);
-		});
+		}, finished);
 	}
 
 	/**
@@ -783,7 +795,7 @@ final class PeerImpl implements Peer {
 	 * executor, or fails once the peer is closed.
 	 */
 	private <T> CompletableFuture<T> onControl(CompletableFuture<T> future) {
-		CompletableFuture<T> result = new CompletableFuture<>();
+		CompletableFuture<T> result = operationStep();
 
 		future.whenComplete((value, error) -> control.execute(() -> complete(result, value, error),
 				() -> result.completeExceptionally(closedError())));
@@ -1256,9 +1268,16 @@ final class PeerImpl implements Peer {
 	 * @return a future that completes on the control executor.
 	 */
 	private <T> CompletableFuture<T> enqueue(Supplier<CompletableFuture<T>> operation) {
+		return enqueue(operation, (value, error) -> { });
+	}
+
+	private <T> CompletableFuture<T> enqueue(Supplier<CompletableFuture<T>> operation,
+			BiConsumer<T, Throwable> finished) {
 		CompletableFuture<T> result = new CompletableFuture<>();
 
 		operations.add(() -> {
+			Operation scope = new Operation();
+			activeOperation = scope;
 			CompletableFuture<T> running;
 
 			if (closed) {
@@ -1279,18 +1298,37 @@ final class PeerImpl implements Peer {
 			runningOperation = current;
 
 			// One that is done already, as on a closed peer, needs no timeout.
-			ScheduledFuture<?> timeout = current.isDone() ? null : timeOut(current);
+			ScheduledFuture<?> timeout = current.isDone() ? null : timeOut(current, scope);
 
 			current.whenComplete((value, error) -> control.execute(() -> {
 				if (timeout != null) {
 					timeout.cancel(false);
 				}
 
-				runningOperation = null;
-				operationRunning = false;
-
-				complete(result, value, error);
-				runNextOperation();
+				CompletableFuture<Void> stable = scope.expired && !closed ? rollback() :
+						CompletableFuture.completedFuture(null);
+				stable.whenComplete((ignored, cleanupError) -> control.execute(() -> {
+					Throwable failure = cleanupError == null ? error : cleanupError;
+					if (cleanupError != null && !closed) {
+						// A peer whose signaling cannot be restored must not run
+						// another negotiation against the abandoned description.
+						teardown();
+					}
+					if (scope.cleanupTimeout != null) {
+						scope.cleanupTimeout.cancel(false);
+					}
+					activeOperation = null;
+					runningOperation = null;
+					operationRunning = false;
+					try {
+						finished.accept(value, failure);
+					}
+					catch (Throwable e) {
+						failure = e;
+					}
+					complete(result, value, failure);
+					runNextOperation();
+				}));
 			}));
 		});
 
@@ -1304,11 +1342,37 @@ final class PeerImpl implements Peer {
 	 *
 	 * @return the timeout, or null once the runtime has stopped its timer.
 	 */
-	private ScheduledFuture<?> timeOut(CompletableFuture<?> operation) {
+	private ScheduledFuture<?> timeOut(CompletableFuture<?> operation, Operation scope) {
 		try {
-			return rtc.timer.schedule(() -> control.execute(() ->
-					operation.completeExceptionally(new TimeoutException("WebRTC did not finish an operation of "
-							+ name + " within " + rtc.operationTimeout))),
+			return rtc.timer.schedule(() -> control.execute(() -> {
+				if (operation.isDone()) {
+					return;
+				}
+				scope.expired = true;
+				// Recovery calls are native operations too. If they stop
+				// answering, close the peer instead of leaving its queue open.
+				try {
+					scope.cleanupTimeout = rtc.timer.schedule(() -> control.execute(() -> {
+						if (activeOperation == scope && !closed) {
+							teardown();
+						}
+					}), Timeouts.toMillis(rtc.operationTimeout), TimeUnit.MILLISECONDS);
+				}
+				catch (RejectedExecutionException e) {
+					// Runtime shutdown closes the peer and its unfinished steps.
+				}
+				TimeoutException error = new TimeoutException("WebRTC did not finish an operation of "
+						+ name + " within " + rtc.operationTimeout);
+				// Fail the awaited steps, so dependent stages cannot apply a
+				// late answer. Their error paths finish before the queue moves.
+				List<CompletableFuture<?>> steps = new ArrayList<>(scope.steps);
+				for (CompletableFuture<?> step : steps) {
+					step.completeExceptionally(error);
+				}
+				if (steps.isEmpty()) {
+					operation.completeExceptionally(error);
+				}
+			}),
 					Timeouts.toMillis(rtc.operationTimeout), TimeUnit.MILLISECONDS);
 		}
 		catch (RejectedExecutionException e) {
@@ -1316,6 +1380,32 @@ final class PeerImpl implements Peer {
 			// and it fails the futures they leave open.
 			return null;
 		}
+	}
+
+	private CompletableFuture<Void> rollback() {
+		RTCSignalingState state = connection.getSignalingState();
+		if (state == RTCSignalingState.STABLE) {
+			return CompletableFuture.completedFuture(null);
+		}
+		RTCSessionDescription description = new RTCSessionDescription(RTCSdpType.ROLLBACK, "");
+		return state == RTCSignalingState.HAVE_REMOTE_OFFER || state == RTCSignalingState.HAVE_LOCAL_PR_ANSWER
+				? setRemote(description) : setLocal(description);
+	}
+
+	private <T> CompletableFuture<T> operationStep() {
+		CompletableFuture<T> future = new CompletableFuture<>();
+		Operation scope = activeOperation;
+		if (scope != null) {
+			scope.steps.add(future);
+			future.whenComplete((value, error) -> scope.steps.remove(future));
+		}
+		return future;
+	}
+
+	private static final class Operation {
+		final Set<CompletableFuture<?>> steps = new HashSet<>();
+		boolean expired;
+		ScheduledFuture<?> cleanupTimeout;
 	}
 
 	private void runNextOperation() {
@@ -1332,32 +1422,32 @@ final class PeerImpl implements Peer {
 	}
 
 	private CompletableFuture<Void> setLocal() {
-		CompletableFuture<Void> future = new CompletableFuture<>();
+		CompletableFuture<Void> future = operationStep();
 		connection.setLocalDescription(descriptionObserver(future, "Applying the local description failed"));
 		return future;
 	}
 
 	private CompletableFuture<Void> setLocal(RTCSessionDescription description) {
-		CompletableFuture<Void> future = new CompletableFuture<>();
+		CompletableFuture<Void> future = operationStep();
 		connection.setLocalDescription(description, descriptionObserver(future, "Applying the local description failed"));
 		return future;
 	}
 
 	private CompletableFuture<Void> setRemote(RTCSessionDescription description) {
-		CompletableFuture<Void> future = new CompletableFuture<>();
+		CompletableFuture<Void> future = operationStep();
 		connection.setRemoteDescription(description, descriptionObserver(future,
 				"Applying the remote " + description.sdpType.name().toLowerCase() + " failed"));
 		return future;
 	}
 
 	private CompletableFuture<RTCSessionDescription> createOffer() {
-		CompletableFuture<RTCSessionDescription> future = new CompletableFuture<>();
+		CompletableFuture<RTCSessionDescription> future = operationStep();
 		connection.createOffer(new RTCOfferOptions(), createObserver(future, "Creating the offer failed"));
 		return future;
 	}
 
 	private CompletableFuture<RTCSessionDescription> createAnswer() {
-		CompletableFuture<RTCSessionDescription> future = new CompletableFuture<>();
+		CompletableFuture<RTCSessionDescription> future = operationStep();
 		connection.createAnswer(new RTCAnswerOptions(), createObserver(future, "Creating the answer failed"));
 		return future;
 	}
@@ -1398,7 +1488,7 @@ final class PeerImpl implements Peer {
 	 * description to add it to.
 	 */
 	private CompletableFuture<Void> addRemoteCandidate(RTCIceCandidate candidate) {
-		CompletableFuture<Void> future = new CompletableFuture<>();
+		CompletableFuture<Void> future = operationStep();
 
 		if (connection.getRemoteDescription() == null) {
 			heldCandidates.add(new HeldCandidate(candidate, future));
@@ -1447,7 +1537,7 @@ final class PeerImpl implements Peer {
 			return CompletableFuture.completedFuture(null);
 		}
 
-		CompletableFuture<Void> future = new CompletableFuture<>();
+		CompletableFuture<Void> future = operationStep();
 		gatheringWaiters.add(future);
 
 		// A STUN or TURN server that cannot be reached holds up the end of
@@ -1724,10 +1814,20 @@ final class PeerImpl implements Peer {
 	}
 
 	private void teardown() {
+		if (teardownStarted) {
+			return;
+		}
+		teardownStarted = true;
+		closing.set(true);
 		closed = true;
 
 		PeerClosedException error = closedError();
 
+		if (activeOperation != null) {
+			for (CompletableFuture<?> step : new ArrayList<>(activeOperation.steps)) {
+				step.completeExceptionally(error);
+			}
+		}
 		if (runningOperation != null) {
 			runningOperation.completeExceptionally(error);
 		}
@@ -1969,9 +2069,14 @@ final class PeerImpl implements Peer {
 		}
 
 		private <T> CompletableFuture<T> run(Supplier<CompletableFuture<T>> operation) {
+			return run(operation, (value, error) -> { });
+		}
+
+		private <T> CompletableFuture<T> run(Supplier<CompletableFuture<T>> operation,
+				BiConsumer<T, Throwable> finished) {
 			CompletableFuture<T> result = new CompletableFuture<>();
 
-			control.execute(() -> enqueue(operation)
+			control.execute(() -> enqueue(operation, finished)
 					.whenComplete((value, error) -> complete(result, value, error)));
 
 			return toPublic(result);
