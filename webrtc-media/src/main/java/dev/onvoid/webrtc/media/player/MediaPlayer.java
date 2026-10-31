@@ -107,7 +107,7 @@ public class MediaPlayer implements AutoCloseable {
 	 * With {@code hardwareDecoding} the player decodes H.264, H.265/HEVC, VP9
 	 * and AV1 video on the media engine or GPU of the machine where there is one the platform
 	 * offers (VideoToolbox on macOS, Direct3D 12 or 11 on Windows, NVDEC on
-	 * NVIDIA GPUs and Vulkan Video on others on Linux), which takes less
+	 * NVIDIA GPUs and VA-API or Vulkan Video on others on Linux), which takes less
 	 * processor time, by an amount
 	 * that depends on the platform and the stream. The
 	 * pictures are the same as software decoding gives. A stream the

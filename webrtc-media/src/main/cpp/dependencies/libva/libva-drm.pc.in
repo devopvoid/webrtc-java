@@ -1,0 +1,7 @@
+includedir=@LIBVA_STAGED_INCLUDE_DIR@
+
+Name: libva-drm
+Description: The libva DRM headers of the host; vaGetDisplayDRM is in the stand-in libva.pc names
+Version: @LIBVA_API_VERSION@
+Requires: libva
+Cflags: -I${includedir}

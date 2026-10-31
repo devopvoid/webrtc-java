@@ -29,8 +29,10 @@ git submodule update --init --depth 1 webrtc-media/third-party/ffmpeg webrtc-med
 Linux builds run on an x86-64 host and cross-compile for ARM. Install the build tools (Debian/Ubuntu package names):
 
 ```shell
-sudo apt-get install binutils cmake git make meson nasm ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
+sudo apt-get install binutils cmake git libva-dev make meson nasm ninja-build pkg-config python3 python3-setuptools rsync unzip wget xz-utils
 ```
+
+`libva-dev` provides the VA-API headers FFmpeg is built against, for every target architecture, cross builds included. Only the headers are used: FFmpeg is linked against a small loader in `webrtc-media/src/main/cpp/dependencies/libva` instead of libva itself, so the libraries load on machines without libva. Set `-DLIBVA_INCLUDE_DIR=<dir>` (the directory holding `va/`) for headers somewhere other than `/usr/include` or `/usr/local/include`.
 
 The JNI library compiles against the libc++ headers of the WebRTC build. Those headers only support the Clang that the WebRTC branch pins, so the toolchain files expect that exact Clang in `/opt/clang`. Install it this way (the package name is in `.github/actions/prepare-linux/action.yml` and changes with the WebRTC branch):
 

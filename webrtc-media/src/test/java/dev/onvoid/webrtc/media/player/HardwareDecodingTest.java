@@ -90,7 +90,7 @@ class HardwareDecodingTest {
 
 	private static final String VP9 = "/media-test-vp9.webm";
 
-	/** VP9 profile 1, 4:4:4, which no hardware decoder takes. */
+	/** VP9 profile 1, 4:4:4, which Intel's hardware takes through VA-API and no other does. */
 	private static final String VP9_444 = "/media-test-vp9-444.webm";
 
 	/**
@@ -318,14 +318,14 @@ class HardwareDecodingTest {
 
 	@Test
 	void streamTheHardwareDoesNotTakeFallsBack() throws Exception {
-		Result software = play(VP9_444, false, 0);
-		Result hardware = play(VP9_444, true, 0);
+		Result hardware = playNotTakenByHardware();
+		Result software = play(hardware.asset, false, 0);
 
 		assertNull(hardware.error);
 
 		// Asked for hardware, it plays in software, with the same pictures.
 		assertFalse(hardware.hardware);
-		assertEquals(FRAMES, hardware.frames.size());
+		assertEquals(software.frames.size(), hardware.frames.size());
 		assertEquals(software.frames, hardware.frames);
 	}
 
@@ -458,13 +458,13 @@ class HardwareDecodingTest {
 
 		requireHardwareContext();
 
-		// VP9 in 4:4:4: the hardware decoder offers no format for it, and the
-		// stream is decoded in software. The decoder made for the hardware has
-		// one thread, so it is replaced by one that has the cores of the
-		// machine.
+		// A stream the hardware decoder offers no format for is decoded in
+		// software. The decoder made for the hardware has one thread, so it is
+		// replaced by one that has the cores of the machine. The stream played
+		// last is the one that counts.
 		HardwareFault.disarm();
 
-		Result hardware = play(VP9_444, true, 0);
+		Result hardware = playNotTakenByHardware();
 
 		assertNull(hardware.error);
 		assertFalse(hardware.hardware);
@@ -754,22 +754,32 @@ class HardwareDecodingTest {
 		assertPlaysAsInSoftware(H264_444);
 	}
 
+	@Test
+	void vp9444PlaysAsInSoftware() throws Exception {
+		assertPlaysAsInSoftware(VP9_444, FRAMES);
+	}
+
 	/**
 	 * A stream that not every hardware decoder takes plays with the pictures
 	 * software decoding gives and no error: in software where the hardware does
 	 * not take it, and in hardware where it does. VideoToolbox decodes High 10
 	 * and 4:4:4 H.264 on macOS 15, and hands the pictures over as P010 and
 	 * NV24, whose luma swscale brings to 8 bits exactly as it does that of the
-	 * planar formats of software decoding.
+	 * planar formats of software decoding. Intel's hardware decodes 4:4:4 VP9
+	 * through VA-API.
 	 */
 	private void assertPlaysAsInSoftware(String asset) throws Exception {
+		assertPlaysAsInSoftware(asset, 15);
+	}
+
+	private void assertPlaysAsInSoftware(String asset, int frames) throws Exception {
 		Result software = play(asset, false, 0);
 		Result hardware = play(asset, true, 0);
 
 		assertNull(software.error);
 		assertNull(hardware.error);
 
-		assertEquals(15, hardware.frames.size());
+		assertEquals(frames, hardware.frames.size());
 		assertEquals(software.frames, hardware.frames);
 	}
 
@@ -917,12 +927,40 @@ class HardwareDecodingTest {
 	}
 
 	/**
+	 * Streams in formats that some hardware decoders take and others do not:
+	 * VP9 in 4:4:4, which Intel's takes through VA-API, and H.264 in 4:4:4 and
+	 * High 10, which VideoToolbox takes on macOS 15.
+	 */
+	private static final String[] NOT_ALWAYS_TAKEN = { VP9_444, H264_444, H264_10BIT };
+
+	/**
+	 * Plays, asking for hardware, the first stream of {@link #NOT_ALWAYS_TAKEN}
+	 * that the hardware of this machine does not take, and returns what that
+	 * played. Skips the test where the hardware takes them all, as there is no
+	 * stream to fall back with.
+	 */
+	private Result playNotTakenByHardware() throws Exception {
+		for (String asset : NOT_ALWAYS_TAKEN) {
+			Result result = play(asset, true, 0);
+
+			if (!result.hardware) {
+				return result;
+			}
+		}
+
+		assumeTrue(false, "the hardware takes every stream that some hardware does not");
+
+		return null;
+	}
+
+	/**
 	 * Plays the asset from the given position to its end, in real time, and
 	 * returns what a sink on the track saw: a checksum of the luma of each
 	 * frame.
 	 */
 	private Result play(String asset, boolean hardware, long positionUs) throws Exception {
 		Result result = new Result();
+		result.asset = asset;
 		CountDownLatch ended = new CountDownLatch(1);
 
 		CustomVideoSource source = new CustomVideoSource();
@@ -1047,6 +1085,7 @@ class HardwareDecodingTest {
 	private static final class Result {
 
 		final List<Long> frames = Collections.synchronizedList(new ArrayList<>());
+		volatile String asset;
 		volatile String error;
 		volatile boolean hardware;
 		volatile String size;
