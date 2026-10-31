@@ -52,10 +52,10 @@ jobs:
             runs-on: ubuntu-22.04
             profile: linux-aarch32
           - name: macos_arm64
-            runs-on: macos-14
+            runs-on: macos-15
             profile: ''
           - name: macos_x86-64
-            runs-on: macos-14
+            runs-on: macos-15
             profile: macos-cross-x86_64
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
@@ -132,7 +132,7 @@ jobs:
             java-distribution: liberica
             java-architecture: armv7
           - name: macos_arm64
-            runs-on: macos-14
+            runs-on: macos-15
             classifier: macos-aarch64
             java-distribution: temurin
             java-architecture: ''

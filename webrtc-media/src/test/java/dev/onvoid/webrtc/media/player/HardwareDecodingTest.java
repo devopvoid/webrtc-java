@@ -98,7 +98,8 @@ class HardwareDecodingTest {
 	 * every eight frames: 1080p H.264 High with B-frames, 1080p VP9, 4K H.264,
 	 * and H.264 at 1366x768. {@code media-test-h264-10bit.mkv} (High 10) and
 	 * {@code media-test-h264-444.mkv} (High 4:4:4 Predictive) are 320x240, in
-	 * formats no hardware decoder takes. All were made with FFmpeg (libx264 and
+	 * formats most hardware decoders do not take; VideoToolbox does on macOS 15.
+	 * All were made with FFmpeg (libx264 and
 	 * libvpx-vp9) from a moving gradient with a little noise, for example:
 	 * <pre>
 	 * ffmpeg -f lavfi -i "gradients=s=1920x1080:r=15:d=1:speed=0.02,noise=alls=4:allf=t,format=yuv420p" \
@@ -743,27 +744,30 @@ class HardwareDecodingTest {
 	}
 
 	@Test
-	void tenBitH264FallsBack() throws Exception {
-		assertFallsBack(H264_10BIT);
+	void tenBitH264PlaysAsInSoftware() throws Exception {
+		assertPlaysAsInSoftware(H264_10BIT);
 	}
 
 	@Test
-	void h264444FallsBack() throws Exception {
-		assertFallsBack(H264_444);
+	void h264444PlaysAsInSoftware() throws Exception {
+		assertPlaysAsInSoftware(H264_444);
 	}
 
 	/**
-	 * A stream that hardware decoders do not take is played in software, with
-	 * the pictures software decoding gives and no error.
+	 * A stream that not every hardware decoder takes plays with the pictures
+	 * software decoding gives and no error: in software where the hardware does
+	 * not take it, and in hardware where it does. VideoToolbox decodes High 10
+	 * and 4:4:4 H.264 on macOS 15, and hands the pictures over as P010 and
+	 * NV24, whose luma swscale brings to 8 bits exactly as it does that of the
+	 * planar formats of software decoding.
 	 */
-	private void assertFallsBack(String asset) throws Exception {
+	private void assertPlaysAsInSoftware(String asset) throws Exception {
 		Result software = play(asset, false, 0);
 		Result hardware = play(asset, true, 0);
 
 		assertNull(software.error);
 		assertNull(hardware.error);
 
-		assertFalse(hardware.hardware);
 		assertEquals(15, hardware.frames.size());
 		assertEquals(software.frames, hardware.frames);
 	}
