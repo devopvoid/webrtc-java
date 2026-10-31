@@ -450,7 +450,7 @@ if (PATCHES)
 
         if (RESULT EQUAL 0)
             message(STATUS "Patch applied: ${PATCH}")
-        elseif(PATCH MATCHES "/patches/common/")
+        elseif(PATCH MATCHES "/patches/common/" OR PATCH MATCHES "/pulseaudio_reinitialization[.]patch$")
             message(FATAL_ERROR "Required WebRTC patch could not be applied: ${PATCH}")
         else()
             message(STATUS "Warning: Patch ${PATCH} not applied ....")
