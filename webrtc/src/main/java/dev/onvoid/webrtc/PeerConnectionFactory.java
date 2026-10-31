@@ -26,6 +26,8 @@ import dev.onvoid.webrtc.media.audio.AudioProcessing;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.audio.VoiceActivityConfig;
+import dev.onvoid.webrtc.media.audio.VoiceActivityListener;
 import dev.onvoid.webrtc.media.audio.codec.AudioDecoderFactory;
 import dev.onvoid.webrtc.media.audio.codec.AudioEncoderFactory;
 import dev.onvoid.webrtc.media.audio.codec.BuiltinAudioDecoderFactory;
@@ -39,6 +41,7 @@ import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
 import dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory;
 import dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory;
 
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -101,6 +104,15 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 
 	@SuppressWarnings("unused")
 	private long audioModuleHandle;
+
+	@SuppressWarnings("unused")
+	private long captureTapHandle;
+
+	/**
+	 * The listeners added to the audio processing, which may outlive the
+	 * factory; guarded by itself.
+	 */
+	private final Map<VoiceActivityListener, Long> voiceActivityListeners = new IdentityHashMap<>();
 
 	/** Guards {@link #audioInputMode}. */
 	private final Object audioInputLock = new Object();
@@ -407,8 +419,80 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 */
 	public native RTCRtpCapabilities getRtpSenderCapabilities(MediaType type);
 
+	/**
+	 * Adds a listener that hears when speech begins and ends in the
+	 * microphone audio after audio processing, with echo cancellation, noise
+	 * suppression and gain control applied as configured: the audio the
+	 * senders send, so that the remote peer's voice from the speakers does not
+	 * count as this side speaking. The audio is analyzed in native code, in
+	 * the {@link AudioProcessing} the factory was built with, or else in the
+	 * one the factory built itself, and only the changes reach the listener.
+	 * <p>
+	 * Audio arrives while the audio device module records, which WebRTC starts
+	 * once a peer connection sends a track of {@link #createAudioSource}. The
+	 * listener runs on WebRTC's capture thread. Audio pushed through a {@link
+	 * CustomAudioSource} does not pass audio processing: its speech comes from
+	 * {@link AudioTrack#addVoiceActivityListener}.
+	 *
+	 * @param config   when audio counts as speech.
+	 * @param listener the listener. Adding it again does nothing.
+	 */
+	public void addVoiceActivityListener(VoiceActivityConfig config, VoiceActivityListener listener) {
+		Objects.requireNonNull(config, "config");
+		Objects.requireNonNull(listener, "listener");
+
+		synchronized (voiceActivityListeners) {
+			if (voiceActivityListeners.containsKey(listener)) {
+				return;
+			}
+
+			long nativeListener = addVoiceActivityListenerInternal(listener, (float) config.getThreshold(),
+					(int) config.getHangover().toMillis());
+
+			voiceActivityListeners.put(listener, nativeListener);
+		}
+	}
+
+	/**
+	 * Removes a listener added with {@link #addVoiceActivityListener}. Once
+	 * this returns, it is no longer called. If it was not added, this is a
+	 * no-op.
+	 *
+	 * @param listener the listener.
+	 */
+	public void removeVoiceActivityListener(VoiceActivityListener listener) {
+		Objects.requireNonNull(listener, "listener");
+
+		synchronized (voiceActivityListeners) {
+			Long nativeListener = voiceActivityListeners.remove(listener);
+
+			if (nativeListener != null) {
+				removeVoiceActivityListenerInternal(nativeListener);
+			}
+		}
+	}
+
 	@Override
-	public native void dispose();
+	public void dispose() {
+		// An AudioProcessing of the application lives on with its listeners.
+		synchronized (voiceActivityListeners) {
+			for (long nativeListener : voiceActivityListeners.values()) {
+				removeVoiceActivityListenerInternal(nativeListener);
+			}
+
+			voiceActivityListeners.clear();
+		}
+
+		disposeInternal();
+	}
+
+	private native void disposeInternal();
+
+	private native long addVoiceActivityListenerInternal(VoiceActivityListener listener, float threshold,
+			int hangoverMs);
+
+	private native void removeVoiceActivityListenerInternal(long listenerHandle);
+
 
 	/**
 	 * Creates the native factory. A null codec factory stands for the

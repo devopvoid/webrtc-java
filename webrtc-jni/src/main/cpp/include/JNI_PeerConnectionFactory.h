@@ -25,6 +25,22 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
+	 * Method:    addVoiceActivityListenerInternal
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/VoiceActivityListener;FI)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_addVoiceActivityListenerInternal
+	(JNIEnv *, jobject, jobject, jfloat, jint);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
+	 * Method:    removeVoiceActivityListenerInternal
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_removeVoiceActivityListenerInternal
+	(JNIEnv *, jobject, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    setDeviceCaptureEnabled
 	 * Signature: (Z)V
 	 */
@@ -73,10 +89,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    dispose
+	 * Method:    disposeInternal
 	 * Signature: ()V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_dispose
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_disposeInternal
 	(JNIEnv *, jobject);
 
 	/*

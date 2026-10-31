@@ -41,6 +41,9 @@ public class AudioProcessing extends DisposableNativeObject {
 	/** Cached statistics object to avoid recreation. */
 	private final AudioProcessingStats stats = new AudioProcessingStats();
 
+	@SuppressWarnings("unused")
+	private long captureTapHandle;
+
 
 	/**
 	 * Creates a new instance of {@code AudioProcessing}. Make sure to call

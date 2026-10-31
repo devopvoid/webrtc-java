@@ -522,6 +522,17 @@ A handler that falls behind gets the audio of the last 5 seconds; the oldest aud
 track.asAudio().onAudio(Duration.ofMillis(200), chunk -> recognizer.feed(chunk.samples()));
 ```
 
+A local audio track tells when this side speaks. `onVoiceActivity` calls its handler with `true` when speech begins and `false` when it ends, on the event executor. The audio is analyzed in native code, and only these changes reach Java:
+
+```java
+LocalAudio microphone = rtc.media().microphone();
+Subscription speaking = microphone.onVoiceActivity(
+        new VoiceActivityConfig(0.6, Duration.ofMillis(400)),
+        active -> System.out.println(active ? "speaking" : "quiet"));
+```
+
+`VoiceActivityConfig` sets the threshold, the voice probability from 0 to 1 at which audio counts as speech (0.5 by default), and the hangover, how long speech goes on once the audio fell below it (300 ms by default), which bridges the pauses between words. Pushed audio is analyzed as pushed. A microphone's audio is analyzed after audio processing, with echo cancellation, noise suppression and gain control applied as configured, so the remote peer's voice from the speakers does not count as this side speaking. It flows while WebRTC records, which it does while a peer sends a microphone track. Every microphone track of a runtime hears the same, as WebRTC records one microphone for all of them.
+
 ### Receiving Without Sending
 
 A viewer that sends nothing asks for what it wants to receive, so that the offer includes it:

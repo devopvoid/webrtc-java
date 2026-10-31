@@ -13,6 +13,10 @@ The existing `VoiceActivityDetector.process()` and `getLastVoiceProbability()`
 methods remain available with the original probability estimator. No migration
 is required. The standalone detector is an additional class, with its own state.
 
+To learn only when speech begins and ends in a stream, without handing its
+audio to Java, add a `VoiceActivityListener`, see
+[Speech events in native code](#speech-events-in-native-code).
+
 ## Probability estimator
 
 `dev.onvoid.webrtc.media.audio.VoiceActivityDetector` combines the standalone VAD
@@ -118,6 +122,50 @@ they receive the same audio. Feeding, configuring, resetting, or disposing one
 does not update the other. Neither API automatically changes encoding, DTX, mute
 state, or transmitted audio.
 
+## Speech events in native code
+
+A `VoiceActivityListener` gets the changes only: `true` when speech begins and
+`false` when it ends. The probability estimator runs in native code on the
+audio as it flows, and a `VoiceActivityConfig` sets when audio counts as speech:
+
+- the threshold, the probability from which on audio counts as speech, above 0
+  and at most 1, 0.5 by default;
+- the hangover, how long speech goes on once the audio fell below the
+  threshold, 300 ms by default, which bridges the pauses between words.
+
+Audio of any rate and channel count is mixed down to mono and resampled to
+16 kHz first. The estimator's initial probability of `1.0` never counts.
+
+An `AudioTrack` whose source hands its audio to sinks, a remote track or a
+track over a `CustomAudioSource`, takes a listener for its audio:
+
+```java
+VoiceActivityListener listener = speaking -> {
+    // On the thread that delivers the audio: enqueue it and return promptly.
+};
+track.addVoiceActivityListener(new VoiceActivityConfig(), listener);
+try {
+    // Keep the listener while receiving audio.
+}
+finally {
+    track.removeVoiceActivityListener(listener);
+}
+```
+
+A microphone track does not hand its audio to sinks. Its speech comes from the
+factory, after echo cancellation and noise suppression, so the remote peer's
+voice from the speakers does not count as this side speaking:
+`PeerConnectionFactory.addVoiceActivityListener`, see
+[Audio Processing](/guide/audio/audio-processing#speech-in-the-processed-microphone-audio).
+With the [Client API](/guide/client-api#audio), `LocalAudio.onVoiceActivity`
+covers both, for the microphone and for pushed audio:
+
+```java
+Subscription speaking = microphone.onVoiceActivity(active -> {
+    // On the event executor.
+});
+```
+
 ## Audio track integration
 
 The examples module includes `VoiceActivityExample`, an adapter using
@@ -167,8 +215,10 @@ finally {
 
 A microphone track does not: WebRTC passes captured audio from the audio device
 module straight to the senders, and the source of the track hands nothing to
-sinks. An [`AudioRecorder`](/tools/audio/audio-recorder) captures a microphone
-on its own, apart from any peer connection.
+sinks. Its speech comes from a listener on the factory, see
+[Speech events in native code](#speech-events-in-native-code). An
+[`AudioRecorder`](/tools/audio/audio-recorder) captures a microphone on its
+own, apart from any peer connection.
 
 The adapter invokes the consumer on the thread that delivers the audio: a thread
 of the `onAudio` subscription, or the audio callback thread of a sink. Keep work

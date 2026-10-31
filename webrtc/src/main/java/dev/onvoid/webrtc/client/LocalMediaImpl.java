@@ -162,7 +162,7 @@ final class LocalMediaImpl implements LocalMedia {
 			try {
 				AudioTrack track = rtc.factory.createAudioTrack(newId("microphone"), source);
 
-				return register(new LocalAudioImpl(this, track, source::dispose));
+				return register(new LocalAudioImpl(this, track, source::dispose, true));
 			}
 			catch (RuntimeException e) {
 				source.dispose();
@@ -254,7 +254,7 @@ final class LocalMediaImpl implements LocalMedia {
 			AudioTrack track = rtc.factory.createAudioTrack(label, source);
 
 			// The source is the caller's, and outlives the track.
-			return register(new LocalAudioImpl(this, track, () -> { }));
+			return register(new LocalAudioImpl(this, track, () -> { }, !pushed));
 		}
 	}
 

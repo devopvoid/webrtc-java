@@ -132,7 +132,8 @@ public final class WebRtc implements AutoCloseable {
 
 	private final AudioDeviceModuleBase audioModule;
 
-	private final AudioProcessing audioProcessing;
+	/** Created when the runtime was built with an audio processing config. */
+	final AudioProcessing audioProcessing;
 
 	private final Duration closeTimeout;
 

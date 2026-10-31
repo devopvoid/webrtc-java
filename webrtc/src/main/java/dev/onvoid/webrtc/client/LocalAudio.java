@@ -16,9 +16,44 @@
 
 package dev.onvoid.webrtc.client;
 
+import java.util.function.Consumer;
+
+import dev.onvoid.webrtc.media.audio.VoiceActivityConfig;
+
 /**
  * An audio track this side sends.
  */
 public interface LocalAudio extends LocalTrack {
+
+	/**
+	 * Like {@link #onVoiceActivity(VoiceActivityConfig, Consumer)}, with the
+	 * default threshold and hangover of {@link VoiceActivityConfig}.
+	 *
+	 * @param handler called on the runtime's event executor, in order.
+	 *
+	 * @return the subscription that stops the calls.
+	 */
+	Subscription onVoiceActivity(Consumer<Boolean> handler);
+
+	/**
+	 * Calls the handler when this side begins to speak, with {@code true}, and
+	 * when it stops, with {@code false}. The audio is analyzed in native code,
+	 * and only these changes reach Java. Pushed audio is analyzed as pushed. A
+	 * microphone's audio is analyzed after audio processing, with echo
+	 * cancellation, noise suppression and gain control applied as configured,
+	 * so that the remote peer's voice from the speakers does not count as
+	 * this side speaking. It flows while WebRTC records, which it does while a
+	 * peer sends a microphone track, and every microphone track of a runtime
+	 * hears the same, as WebRTC records one microphone for all of them.
+	 * <p>
+	 * Closing the subscription or the track while speech goes on calls the
+	 * handler no more, so it does not hear the end of that speech.
+	 *
+	 * @param config  when audio counts as speech.
+	 * @param handler called on the runtime's event executor, in order.
+	 *
+	 * @return the subscription that stops the calls.
+	 */
+	Subscription onVoiceActivity(VoiceActivityConfig config, Consumer<Boolean> handler);
 
 }
