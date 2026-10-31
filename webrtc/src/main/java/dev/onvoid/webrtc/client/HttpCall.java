@@ -32,10 +32,10 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -60,7 +60,7 @@ import javax.net.ssl.SSLContext;
  * The request takes no thread while it waits. Its timeout counts from the
  * moment it is made and bounds it as a whole, redirects included: the head of
  * the response by the client's own request timeout, set to what is left, and
- * the body read by read, so that one that trickles in ends with it as well.
+ * an independent deadline through the body, including when no more data arrives.
  * {@link #abort()} ends it from any thread: a body being read at once, and on
  * Java 16 and later a request still waiting for its head too; before that,
  * such a request ends with its timeout.
@@ -248,7 +248,23 @@ final class HttpCall {
 	 * passed.
 	 */
 	CompletableFuture<Response> send(String contentType, byte[] content, int maxBody, Consumer<Response> onHead) {
-		exchange(uri, contentType, content, maxBody, onHead, 0);
+		// The client's timeout ends at the response head. Keep a deadline
+		// through the body and retries, even when the server goes silent.
+		// Completing this guard removes its timeout from the JDK's timer.
+		CompletableFuture<Void> deadline = new CompletableFuture<>();
+		deadline.orTimeout(Math.max(0, remainingNanos()), TimeUnit.NANOSECONDS)
+				.exceptionally(error -> {
+					abort();
+					return null;
+				});
+		result.whenComplete((response, error) -> deadline.complete(null));
+
+		try {
+			exchange(uri, contentType, content, maxBody, onHead, 0);
+		}
+		catch (RuntimeException e) {
+			result.completeExceptionally(e);
+		}
 
 		return result;
 	}
@@ -369,6 +385,11 @@ final class HttpCall {
 			catch (IOException e) {
 				result.completeExceptionally(e);
 			}
+		}).exceptionally(error -> {
+			// A failure while processing a response must reach the caller,
+			// rather than only the discarded completion stage.
+			result.completeExceptionally(unwrap(error));
+			return null;
 		});
 	}
 
@@ -466,9 +487,9 @@ final class HttpCall {
 		try {
 			long date = ZonedDateTime.parse(field, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli();
 
-			return Math.max(0, date - nowMillis);
+			return Math.max(0, Math.subtractExact(date, nowMillis));
 		}
-		catch (DateTimeParseException e) {
+		catch (DateTimeException | ArithmeticException e) {
 			return -1;
 		}
 	}

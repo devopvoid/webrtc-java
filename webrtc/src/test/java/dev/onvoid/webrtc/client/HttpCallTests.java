@@ -31,6 +31,7 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,10 +42,13 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLHandshakeException;
@@ -128,6 +132,27 @@ class HttpCallTests {
 
 			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(response));
 			assertTrue(failed.getCause().getMessage().contains("larger than 1024"), failed.getCause().getMessage());
+		}
+	}
+
+	@Test
+	void deadlineEndsSilentBody() throws Exception {
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "v=0 and the rest", 201)) {
+			endpoint.stallBodies();
+			CountDownLatch head = new CountDownLatch(1);
+			HttpCall call = new HttpCall(HttpCall.newClient(false), endpoint.uri(), "POST", null,
+					Duration.ofSeconds(2));
+			CompletableFuture<HttpCall.Response> response = call.send("application/sdp", new byte[] { 'o' },
+					1024, received -> head.countDown());
+			try {
+				assertTrue(head.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+				ExecutionException failed = assertThrows(ExecutionException.class, () -> await(response));
+				assertInstanceOf(HttpTimeoutException.class, failed.getCause());
+				endpoint.awaitHangUp(TIMEOUT_SECONDS);
+			}
+			finally {
+				call.abort();
+			}
 		}
 	}
 
@@ -277,6 +302,29 @@ class HttpCallTests {
 	}
 
 	@Test
+	void overflowingRetryDateReturnsResponse() throws Exception {
+		ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor();
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "come back later", 201)) {
+			endpoint.answerStatus = 503;
+			endpoint.answerHeaders = "Retry-After: 31 Dec 999999999 23:59:59 GMT\r\n";
+			HttpCall call = post(HttpCall.newClient(false), endpoint.uri()).retry(timer, Set.of(503));
+			try {
+				HttpCall.Response response = await(call.send("application/sdp", new byte[] { 'o' }, 1024,
+						head -> { }));
+				assertEquals(503, response.status);
+				assertEquals("come back later", response.body);
+				assertEquals(1, endpoint.requests.size());
+			}
+			finally {
+				call.abort();
+			}
+		}
+		finally {
+			timer.shutdownNow();
+		}
+	}
+
+	@Test
 	void retryAfterRead() {
 		long now = 1_000_000_000_000L;
 		String inFive = DateTimeFormatter.RFC_1123_DATE_TIME.format(
@@ -289,6 +337,7 @@ class HttpCallTests {
 		assertEquals(5000, HttpCall.retryDelayMillis(inFive, now));
 		assertEquals(0, HttpCall.retryDelayMillis(past, now));
 		assertEquals(Long.MAX_VALUE, HttpCall.retryDelayMillis("99999999999999999999", now));
+		assertEquals(-1, HttpCall.retryDelayMillis("31 Dec 999999999 23:59:59 GMT", now));
 		assertEquals(-1, HttpCall.retryDelayMillis("soon", now));
 		assertEquals(-1, HttpCall.retryDelayMillis("", now));
 		assertEquals(-1, HttpCall.retryDelayMillis(null, now));
