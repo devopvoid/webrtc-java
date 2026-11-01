@@ -57,7 +57,12 @@ namespace jni
 		initialized(false),
 		qpParsingEnabled(true)
 	{
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "getImplementationName");
+
+		if (!localFrame.pushed()) {
+			// A decoder without a name, taken for a software one.
+			return;
+		}
 
 		jobject name = env->CallObjectMethod(decoder, javaClass->getImplementationName);
 
@@ -102,7 +107,16 @@ namespace jni
 
 	bool VideoDecoderWrapper::ConfigureInternal(JNIEnv * env)
 	{
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "initDecode");
+
+		if (!localFrame.pushed()) {
+			// Detaching the earlier callback makes no local reference.
+			InvalidateCallback(env);
+
+			initialized = false;
+
+			return false;
+		}
 
 		webrtc::RenderResolution resolution = settings.max_render_resolution();
 
@@ -154,7 +168,13 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_ERROR;
 		}
 
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "decode");
+
+		if (!localFrame.pushed()) {
+			// Given up before a record of the image is made, so the decoder
+			// is not waited for.
+			return WEBRTC_VIDEO_CODEC_ERROR;
+		}
 
 		// The capture time identifies the frame, and received images carry
 		// none, so it is derived from the RTP timestamp.
@@ -215,10 +235,17 @@ namespace jni
 
 	int32_t VideoDecoderWrapper::ReleaseInternal(JNIEnv * env)
 	{
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		// Releasing goes ahead without a frame, since giving it up would keep
+		// the Java decoder's resources, and the status is the only reference
+		// it makes.
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "release");
 
 		jobject status = env->CallObjectMethod(decoder, javaClass->release);
 		int32_t result = ToNativeCodecStatus(env, status, "release");
+
+		if (!localFrame.pushed() && status != nullptr) {
+			env->DeleteLocalRef(status);
+		}
 
 		RTC_LOG(LS_INFO) << "Java decoder release: " << result;
 
