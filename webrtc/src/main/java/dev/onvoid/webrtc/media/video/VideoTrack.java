@@ -57,21 +57,41 @@ public class VideoTrack extends MediaStreamTrack {
 	}
 
 	/**
+	 * Adds a VideoSink to the track, which gets a copy of each frame of its
+	 * own, as with {@link VideoFrameAccess#COPY}. A track can have any number
+	 * of VideoSinks.
+	 *
+	 * @param sink The video sink to add. Adding it again does nothing.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
+	 *
+	 * @see #addSink(VideoTrackSink, VideoFrameAccess)
+	 */
+	public void addSink(VideoTrackSink sink) {
+		addSink(sink, VideoFrameAccess.COPY);
+	}
+
+	/**
 	 * Adds a VideoSink to the track. A track can have any number of
 	 * VideoSinks. Called from within the callback of a sink, it returns
 	 * before the sink is registered, and the sink gets the frames that follow
 	 * once it is.
 	 *
-	 * @param sink The video sink to add. Adding it again does nothing.
+	 * @param sink   The video sink to add. Adding it again does nothing,
+	 *               whatever the access.
+	 * @param access Whether the sink gets a writable copy of each frame or
+	 *               the read-only pixels the source handed out.
 	 *
 	 * @throws IllegalStateException if the track has been disposed.
 	 */
-	public void addSink(VideoTrackSink sink) {
-		if (isNull(sink)) {
+	public void addSink(VideoTrackSink sink, VideoFrameAccess access) {
+		if (isNull(sink) || isNull(access)) {
 			throw new NullPointerException();
 		}
 
-		sinks.add(sink, (s, registration) -> addSinkInternal(new Delivery(s, registration)));
+		boolean shared = access == VideoFrameAccess.SHARED;
+
+		sinks.add(sink, (s, registration) -> addSinkInternal(new Delivery(s, registration), shared));
 	}
 
 	/**
@@ -88,7 +108,7 @@ public class VideoTrack extends MediaStreamTrack {
 		sinks.remove(sink);
 	}
 
-	private native long addSinkInternal(VideoTrackSink sink);
+	private native long addSinkInternal(VideoTrackSink sink, boolean shared);
 
 	private native void removeSinkInternal(long sinkHandle);
 

@@ -25,8 +25,9 @@
 
 namespace jni
 {
-	VideoTrackSink::VideoTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink) :
+	VideoTrackSink::VideoTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink, bool shared) :
 		sink(sink),
+		shared(shared),
 		javaClass(JavaClasses::get<JavaVideoTrackSinkClass>(env)),
 		javaFrameClass(JavaClasses::get<JavaVideoFrameClass>(env)),
 		javaBufferClass(JavaClasses::get<JavaNativeI420BufferClass>(env))
@@ -48,22 +49,30 @@ namespace jni
 			return;
 		}
 
-		webrtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
+		// The copy keeps sinks from seeing what another one writes into its
+		// pixels, at the cost of a full copy of each frame for each sink. A
+		// shared sink gets the pixels the source handed out instead, which it
+		// can only read, so that sinks and the encoder share one buffer.
+		webrtc::scoped_refptr<webrtc::I420BufferInterface> javaBuffer = i420Buffer;
+
+		if (!shared) {
+			javaBuffer = webrtc::I420Buffer::Copy(*i420Buffer);
+		}
 
 		jint rotation = static_cast<jint>(frame.rotation());
 		jlong timestamp = frame.timestamp_us() * webrtc::kNumNanosecsPerMicrosec;
 
 		try {
-			JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
+			JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, javaBuffer, shared);
 
 			// The reference the Java frame gives up when it is released.
-			i420BufferCopy->AddRef();
+			javaBuffer->AddRef();
 
 			JavaLocalRef<jobject> jFrame(env, env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp));
 
 			if (jFrame.get() == nullptr) {
 				// No frame got the buffer that would release it.
-				i420BufferCopy->Release();
+				javaBuffer->Release();
 				ExceptionCheck(env);
 			}
 			else {

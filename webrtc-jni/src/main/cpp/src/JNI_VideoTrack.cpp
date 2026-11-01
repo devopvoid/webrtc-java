@@ -22,7 +22,7 @@
 #include "api/media_stream_interface.h"
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInternal
-(JNIEnv * env, jobject caller, jobject jsink)
+(JNIEnv * env, jobject caller, jobject jsink, jboolean shared)
 {
 	try {
 		if (jsink == nullptr) {
@@ -33,7 +33,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInt
 		webrtc::VideoTrackInterface * track = GetHandle<webrtc::VideoTrackInterface>(env, caller);
 		CHECK_HANDLEV(track, 0);
 
-		auto sink = new jni::VideoTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
+		auto sink = new jni::VideoTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink), shared == JNI_TRUE);
 
 		track->AddOrUpdateSink(sink, webrtc::VideoSinkWants());
 

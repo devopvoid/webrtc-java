@@ -46,6 +46,15 @@ namespace jni
 			return plane;
 		}
 
+		// A read-only view of a plane, or throws.
+		JavaLocalRef<jobject> ReadOnlyPlane(JNIEnv * env, jmethodID asReadOnlyBuffer, const JavaLocalRef<jobject> & plane)
+		{
+			JavaLocalRef<jobject> view(env, env->CallObjectMethod(plane, asReadOnlyBuffer));
+			ExceptionCheck(env);
+
+			return view;
+		}
+
 		// Throws unless the plane holds every byte a copy reads: the last row ends at the width.
 		void CheckPlane(JNIEnv * env, const char * name, const JavaRef<jobject> & data, jint stride, jint width, jint height)
 		{
@@ -193,7 +202,8 @@ namespace jni
 
 	namespace I420Buffer
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<webrtc::I420BufferInterface> & buffer)
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<webrtc::I420BufferInterface> & buffer,
+			bool readOnly)
 		{
 			const auto javaClass = JavaClasses::get<JavaNativeI420BufferClass>(env);
 
@@ -205,6 +215,12 @@ namespace jni
 			JavaLocalRef<jobject> yBuffer = NewPlane(env, "Y", buffer->DataY(), planeSize(buffer->StrideY(), buffer->width(), buffer->height()));
 			JavaLocalRef<jobject> uBuffer = NewPlane(env, "U", buffer->DataU(), planeSize(buffer->StrideU(), buffer->ChromaWidth(), buffer->ChromaHeight()));
 			JavaLocalRef<jobject> vBuffer = NewPlane(env, "V", buffer->DataV(), planeSize(buffer->StrideV(), buffer->ChromaWidth(), buffer->ChromaHeight()));
+
+			if (readOnly) {
+				yBuffer = ReadOnlyPlane(env, javaClass->asReadOnlyBuffer, yBuffer);
+				uBuffer = ReadOnlyPlane(env, javaClass->asReadOnlyBuffer, uBuffer);
+				vBuffer = ReadOnlyPlane(env, javaClass->asReadOnlyBuffer, vBuffer);
+			}
 
 			JavaLocalRef<jobject> jBuffer(env, env->NewObject(javaClass->cls, javaClass->ctor, buffer->width(), buffer->height(),
 				yBuffer.get(), buffer->StrideY(), uBuffer.get(), buffer->StrideU(), vBuffer.get(), buffer->StrideV()));
@@ -269,5 +285,9 @@ namespace jni
 		strideV = GetFieldID(env, cls, "strideV", "I");
 		width = GetFieldID(env, cls, "width", "I");
 		height = GetFieldID(env, cls, "height", "I");
+
+		jclass byteBufferClass = FindClass(env, "java/nio/ByteBuffer");
+
+		asReadOnlyBuffer = GetMethod(env, byteBufferClass, "asReadOnlyBuffer", "()" BYTE_BUFFER_SIG);
 	}
 }

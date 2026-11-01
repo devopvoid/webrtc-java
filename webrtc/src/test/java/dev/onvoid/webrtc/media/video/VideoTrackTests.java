@@ -21,7 +21,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.internal.SinkRegistry;
 
+import java.nio.ByteBuffer;
+import java.nio.ReadOnlyBufferException;
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -185,6 +189,68 @@ class VideoTrackTests extends TestBase {
 
 		track.dispose();
 		source.dispose();
+	}
+
+	@Test
+	void addSinkWithoutAccess() {
+		assertThrows(NullPointerException.class, () -> videoTrack.addSink(frame -> { }, null));
+	}
+
+	@Test
+	void sharedSinksShareThePixels() {
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("shared", source);
+		List<VideoFrame> shared = new CopyOnWriteArrayList<>();
+		List<VideoFrame> copied = new CopyOnWriteArrayList<>();
+
+		track.addSink(shared::add, VideoFrameAccess.SHARED);
+		track.addSink(shared::add, VideoFrameAccess.SHARED);
+		track.addSink(copied::add);
+
+		NativeI420Buffer pushed = NativeI420Buffer.allocate(320, 240);
+		pushed.getDataY().put(0, (byte) 1);
+
+		VideoFrame frame = new VideoFrame(pushed, 0);
+		source.pushFrame(frame);
+
+		assertEquals(2, shared.size());
+		assertEquals(1, copied.size());
+
+		// The pixels of the source change under the shared sinks, which got
+		// them without a copy, and not under the copy.
+		pushed.getDataY().put(0, (byte) 7);
+
+		for (VideoFrame sharedFrame : shared) {
+			ByteBuffer y = dataY(sharedFrame);
+
+			assertTrue(y.isReadOnly());
+			assertEquals(7, y.get(0));
+			assertThrows(ReadOnlyBufferException.class, () -> y.put(0, (byte) 9));
+		}
+
+		ByteBuffer copiedY = dataY(copied.get(0));
+
+		assertFalse(copiedY.isReadOnly());
+		assertEquals(1, copiedY.get(0));
+
+		// A sink that wants to write asks for a copy.
+		VideoFrame writable = shared.get(0).copy();
+		dataY(writable).put(0, (byte) 9);
+
+		assertEquals(9, dataY(writable).get(0));
+		assertEquals(7, dataY(shared.get(1)).get(0));
+
+		writable.release();
+		shared.forEach(VideoFrame::release);
+		copied.forEach(VideoFrame::release);
+		frame.release();
+
+		track.dispose();
+		source.dispose();
+	}
+
+	private static ByteBuffer dataY(VideoFrame frame) {
+		return ((I420Buffer) frame.buffer).getDataY();
 	}
 
 	private static void pushFrame(CustomVideoSource source) {
