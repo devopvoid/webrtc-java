@@ -10,10 +10,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoTrack
 	 * Method:    addSinkInternal
-	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoTrackSink;)J
+	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoTrackSink;Z)J
 	 */
 	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInternal
-	(JNIEnv *, jobject, jobject);
+	(JNIEnv *, jobject, jobject, jboolean);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoTrack

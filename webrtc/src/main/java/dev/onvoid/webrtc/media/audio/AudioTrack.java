@@ -17,58 +17,73 @@
 package dev.onvoid.webrtc.media.audio;
 
 import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
 
 import dev.onvoid.webrtc.RTCRtpPacketInfo;
+import dev.onvoid.webrtc.internal.SinkRegistry;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
-import java.util.IdentityHashMap;
-import java.util.Map;
-
+/**
+ * An audio track. Its sinks and voice activity listeners may be added and
+ * removed from any thread, also at the same time, and also from within the
+ * callback of a sink or listener, its own included.
+ * <p>
+ * WebRTC holds a lock while it hands audio to the sinks of some sources, such
+ * as that of a remote track or a {@link CustomAudioSource}, which adding and
+ * removing a sink take as well. A change made from within a callback
+ * therefore takes effect for the sinks at once, but the native sink is added
+ * or removed on another thread right after the callback has returned.
+ */
 public class AudioTrack extends MediaStreamTrack {
 
-	private final Map<AudioTrackSink, Long> sinks = new IdentityHashMap<>();
+	private final SinkRegistry<AudioTrackSink> sinks = new SinkRegistry<>(this::removeSinkInternal);
 
-	private final Map<VoiceActivityListener, Long> voiceActivityListeners = new IdentityHashMap<>();
+	private final SinkRegistry<VoiceActivityListener> voiceActivityListeners =
+			new SinkRegistry<>(this::removeVoiceActivityListenerInternal);
 
 
 	private AudioTrack() {
 		super();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>
+	 * Removes the sinks and voice activity listeners of the track first, and
+	 * waits for those that other threads are still adding or removing.
+	 *
+	 * @throws IllegalStateException if called from within the callback of a
+	 *                               sink or listener, of this track or any
+	 *                               other.
+	 */
 	@Override
 	public void dispose() {
-		for (long nativeSink : sinks.values()) {
-			removeSinkInternal(nativeSink);
+		try {
+			sinks.close();
 		}
-
-		sinks.clear();
-
-		for (long nativeSink : voiceActivityListeners.values()) {
-			removeVoiceActivityListenerInternal(nativeSink);
+		finally {
+			voiceActivityListeners.close();
 		}
-
-		voiceActivityListeners.clear();
 
 		super.dispose();
 	}
 
 	/**
 	 * Adds an AudioSink to the track. A track can have any number of AudioSinks.
+	 * Called from within the callback of a sink, it returns before the sink is
+	 * registered, and the sink gets the audio that follows once it is.
 	 *
 	 * @param sink The audio sink that will receive audio data from the track.
+	 *             Adding it again does nothing.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
 	 */
 	public void addSink(AudioTrackSink sink) {
 		if (isNull(sink)) {
 			throw new NullPointerException();
 		}
-		if (sinks.containsKey(sink)) {
-			return;
-		}
 
-		final long nativeSink = addSinkInternal(sink, takesPacketInfos(sink));
-
-		sinks.put(sink, nativeSink);
+		sinks.add(sink, (s, registration) -> addSinkInternal(new SinkDelivery(s, registration),
+				takesPacketInfos(s)));
 	}
 
 	/**
@@ -87,18 +102,16 @@ public class AudioTrack extends MediaStreamTrack {
 
 	/**
 	 * Removes an AudioSink from the track. If the AudioSink was not attached to
-	 * the track, this is a no-op.
+	 * the track, this is a no-op. Once this returns, the sink gets no further
+	 * audio, except what another thread is handing it at that moment. A sink
+	 * may remove itself in its {@code onData}.
 	 */
 	public void removeSink(AudioTrackSink sink) {
 		if (isNull(sink)) {
 			throw new NullPointerException();
 		}
 
-		final Long nativeSink = sinks.remove(sink);
-
-		if (nonNull(nativeSink)) {
-			removeSinkInternal(nativeSink);
-		}
+		sinks.remove(sink);
 	}
 
 	/**
@@ -112,40 +125,34 @@ public class AudioTrack extends MediaStreamTrack {
 	 *
 	 * @param config   when audio counts as speech.
 	 * @param listener the listener. Adding it again does nothing.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
 	 */
 	public void addVoiceActivityListener(VoiceActivityConfig config, VoiceActivityListener listener) {
 		if (isNull(config) || isNull(listener)) {
 			throw new NullPointerException();
-		}
-		if (voiceActivityListeners.containsKey(listener)) {
-			return;
 		}
 
 		// Preserve partial milliseconds before native code rounds to 10 ms chunks.
 		int hangoverMs = (int) config.getHangover().toMillis()
 				+ (config.getHangover().getNano() % 1_000_000 == 0 ? 0 : 1);
 
-		final long nativeSink = addVoiceActivityListenerInternal(listener, (float) config.getThreshold(),
-				hangoverMs);
-
-		voiceActivityListeners.put(listener, nativeSink);
+		voiceActivityListeners.add(listener, (l, registration) -> addVoiceActivityListenerInternal(
+				new ListenerDelivery(l, registration), (float) config.getThreshold(), hangoverMs));
 	}
 
 	/**
 	 * Removes a listener added with {@link #addVoiceActivityListener}. Once
-	 * this returns, it is no longer called. If it was not added, this is a
-	 * no-op.
+	 * this returns, it is no longer called, except by a call that another
+	 * thread is making at that moment. If it was not added, this is a no-op. A
+	 * listener may remove itself in its callback.
 	 */
 	public void removeVoiceActivityListener(VoiceActivityListener listener) {
 		if (isNull(listener)) {
 			throw new NullPointerException();
 		}
 
-		final Long nativeSink = voiceActivityListeners.remove(listener);
-
-		if (nonNull(nativeSink)) {
-			removeVoiceActivityListenerInternal(nativeSink);
-		}
+		voiceActivityListeners.remove(listener);
 	}
 
 	/**
@@ -184,5 +191,86 @@ public class AudioTrack extends MediaStreamTrack {
 			int hangoverMs);
 
 	private native void removeVoiceActivityListenerInternal(long sinkHandle);
+
+
+
+	/**
+	 * What the native sink calls: it tells the registry when a thread hands
+	 * the sink audio, and drops the audio of a removed sink.
+	 */
+	private static final class SinkDelivery implements AudioTrackSink {
+
+		private final AudioTrackSink sink;
+
+		private final SinkRegistry.Registration registration;
+
+
+		SinkDelivery(AudioTrackSink sink, SinkRegistry.Registration registration) {
+			this.sink = sink;
+			this.registration = registration;
+		}
+
+		@Override
+		public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames) {
+			if (!registration.enter()) {
+				return;
+			}
+
+			try {
+				sink.onData(data, bitsPerSample, sampleRate, channels, frames);
+			}
+			finally {
+				registration.exit();
+			}
+		}
+
+		@Override
+		public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames,
+				RTCRtpPacketInfo[] packetInfos) {
+			if (!registration.enter()) {
+				return;
+			}
+
+			try {
+				sink.onData(data, bitsPerSample, sampleRate, channels, frames, packetInfos);
+			}
+			finally {
+				registration.exit();
+			}
+		}
+	}
+
+
+
+	/**
+	 * What the native sink of a voice activity listener calls, like {@link
+	 * SinkDelivery}.
+	 */
+	private static final class ListenerDelivery implements VoiceActivityListener {
+
+		private final VoiceActivityListener listener;
+
+		private final SinkRegistry.Registration registration;
+
+
+		ListenerDelivery(VoiceActivityListener listener, SinkRegistry.Registration registration) {
+			this.listener = listener;
+			this.registration = registration;
+		}
+
+		@Override
+		public void onVoiceActivity(boolean speaking) {
+			if (!registration.enter()) {
+				return;
+			}
+
+			try {
+				listener.onVoiceActivity(speaking);
+			}
+			finally {
+				registration.exit();
+			}
+		}
+	}
 
 }

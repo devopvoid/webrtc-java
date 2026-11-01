@@ -48,7 +48,11 @@ namespace jni
 
 	namespace I420Buffer
 	{
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<webrtc::I420BufferInterface> & buffer);
+		// Wraps the pixels of the buffer in a NativeI420Buffer without
+		// copying them. With readOnly its planes are read-only byte buffers,
+		// for pixels that others share.
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<webrtc::I420BufferInterface> & buffer,
+			bool readOnly = false);
 	}
 
 	class JavaVideoFrameClass : public JavaClass
@@ -96,6 +100,7 @@ namespace jni
 			jfieldID strideV;
 			jfieldID width;
 			jfieldID height;
+			jmethodID asReadOnlyBuffer;
 	};
 }
 

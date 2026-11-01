@@ -26,6 +26,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -305,4 +306,33 @@ class CustomAudioSourceTest extends TestBase {
         audioTrack.removeSink(testSink);
         audioTrack.dispose();
     }
+
+    @Test
+    void sinkRemovesItself() {
+        AudioTrack audioTrack = factory.createAudioTrack("audioTrack", customAudioSource);
+        AtomicInteger chunks = new AtomicInteger();
+
+        audioTrack.addSink(new AudioTrackSink() {
+
+            @Override
+            public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames) {
+                chunks.incrementAndGet();
+
+                // The source holds the lock that removing takes while it is here.
+                audioTrack.removeSink(this);
+            }
+        });
+
+        byte[] data = new byte[480 * 2 * 2];
+
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+            customAudioSource.pushAudio(data, 16, 48000, 2, 480);
+            customAudioSource.pushAudio(data, 16, 48000, 2, 480);
+        });
+
+        assertEquals(1, chunks.get());
+
+        audioTrack.dispose();
+    }
+
 }
