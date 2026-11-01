@@ -60,7 +60,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getTransport
 
 		// The Java object holds a reference until it is disposed, since the
 		// connection frees the transport once it closes or drops it.
-		return jni::JavaFactories::create(env, transport.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(transport)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

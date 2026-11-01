@@ -58,7 +58,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getSender
 		// Transfer the reference this local scoped_refptr holds into the Java
 		// wrapper, which owns and disposes it -- otherwise the wrapper would be
 		// left with a pointer nothing on the Java/JNI side keeps alive.
-		return jni::JavaFactories::create(env, sender.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(sender)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -78,7 +78,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getReceiver
 		// Transfer the reference this local scoped_refptr holds into the Java
 		// wrapper, which owns and disposes it -- otherwise the wrapper would be
 		// left with a pointer nothing on the Java/JNI side keeps alive.
-		return jni::JavaFactories::create(env, receiver.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(receiver)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

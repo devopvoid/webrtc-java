@@ -323,7 +323,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 			return nullptr;
 		}
 
-		return jni::JavaFactories::create(env, audioSource.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(audioSource)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -354,7 +354,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 
 		webrtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
 
-		return jni::JavaFactories::create(env, audioTrack.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(audioTrack)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -414,7 +414,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 		webrtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(
 			webrtc::scoped_refptr<webrtc::VideoTrackSourceInterface>(source), label);
 
-		return jni::JavaFactories::create(env, videoTrack.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(videoTrack)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -468,17 +468,29 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 
 	auto pc = result.MoveValue();
 
-	if (pc != nullptr) {
-		auto javaPeerConnection = jni::JavaFactories::create(env, pc.release());
+	if (pc == nullptr) {
+		delete observer;
+		return nullptr;
+	}
 
-		SetHandle(env, javaPeerConnection.get(), "observerHandle", observer);
+	try {
+		// The observer is bound before the Java object takes the connection, so
+		// that it ends up with both of them or with neither.
+		auto javaPeerConnection = jni::JavaFactories::createOwning(env, std::move(pc), [&](jobject object) {
+			SetHandle(env, object, "observerHandle", observer);
+		});
 
 		return javaPeerConnection.release();
 	}
+	catch (...) {
+		// The connection is still ours. It calls the observer while it closes,
+		// so it goes first.
+		pc = nullptr;
+		delete observer;
 
-	delete observer;
-
-	return nullptr;
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpReceiverCapabilities
