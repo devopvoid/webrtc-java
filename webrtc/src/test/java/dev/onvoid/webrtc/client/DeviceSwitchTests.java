@@ -16,7 +16,9 @@
 
 package dev.onvoid.webrtc.client;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
@@ -68,6 +70,51 @@ class DeviceSwitchTests {
 		assertEquals(Arrays.asList("select", "stop", "select", "start"), steps);
 	}
 
+	@Test
+	void retryAndRestartFail() {
+		// The second selection fails, and so does the restart. Thrown is why
+		// the switch failed; the restart and the refusal are kept in it.
+		Error refused = new Error("busy");
+		Error failed = new Error("still busy");
+		Error restart = new Error("restart failed");
+
+		Error e = assertThrows(Error.class, () -> DevicesImpl.switchDevice(
+				select(refused, failed), stop(), start(restart)));
+
+		assertSame(failed, e);
+		assertArrayEquals(new Throwable[] { restart, refused }, e.getSuppressed());
+		assertEquals(Arrays.asList("select", "stop", "select", "start"), steps);
+	}
+
+	@Test
+	void restartFailureKeepsRefusal() {
+		Error refused = new Error("busy");
+		IllegalStateException restart = new IllegalStateException("restart failed");
+
+		IllegalStateException e = assertThrows(IllegalStateException.class, () -> DevicesImpl.switchDevice(
+				select(refused, null), stop(), start(restart)));
+
+		assertSame(restart, e);
+		assertArrayEquals(new Throwable[] { refused }, e.getSuppressed());
+	}
+
+	@Test
+	void failedStopStillRestarts() {
+		// Not stopped, so not selected again, but started as best it can.
+		Error refused = new Error("busy");
+		IllegalStateException stopped = new IllegalStateException("stop failed");
+
+		IllegalStateException e = assertThrows(IllegalStateException.class, () -> DevicesImpl.switchDevice(
+				select(refused, null), () -> {
+					steps.add("stop");
+					throw stopped;
+				}, start()));
+
+		assertSame(stopped, e);
+		assertArrayEquals(new Throwable[] { refused }, e.getSuppressed());
+		assertEquals(Arrays.asList("select", "stop", "start"), steps);
+	}
+
 	/**
 	 * Selects by throwing the given errors, one per attempt, and succeeding
 	 * once they run out or the next one is null.
@@ -97,5 +144,19 @@ class DeviceSwitchTests {
 
 	private Runnable start() {
 		return () -> steps.add("start");
+	}
+
+	private Runnable start(RuntimeException failure) {
+		return () -> {
+			steps.add("start");
+			throw failure;
+		};
+	}
+
+	private Runnable start(Error failure) {
+		return () -> {
+			steps.add("start");
+			throw failure;
+		};
 	}
 }

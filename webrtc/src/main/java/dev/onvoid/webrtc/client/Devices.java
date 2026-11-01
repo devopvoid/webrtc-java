@@ -29,22 +29,30 @@ import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
  * the background, so reading them is cheap on any thread. Where the system
  * reports no device changes, as a Linux machine without PulseAudio, they are
  * read on each call. A kind of device the system cannot list, such as audio
- * devices without an audio system, comes back as an empty list.
+ * devices without an audio system, comes back as an empty list. A query that
+ * fails otherwise throws a {@link MediaException}, so that an empty list means
+ * that there are no such devices.
  */
 public interface Devices {
 
 	/**
 	 * @return the cameras.
+	 *
+	 * @throws MediaException if the cameras could not be read.
 	 */
 	List<VideoDevice> cameras();
 
 	/**
 	 * @return the microphones.
+	 *
+	 * @throws MediaException if the microphones could not be read.
 	 */
 	List<AudioDevice> microphones();
 
 	/**
 	 * @return the speakers.
+	 *
+	 * @throws MediaException if the speakers could not be read.
 	 */
 	List<AudioDevice> speakers();
 
