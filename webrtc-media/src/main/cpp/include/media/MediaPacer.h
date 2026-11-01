@@ -109,7 +109,8 @@ namespace ffmpeg
 			// delivered, in the timestamps the items are pushed with.
 			void Flush(int64_t position_us);
 
-			// True once everything handed over has been delivered.
+			// True once everything handed over has been delivered: the
+			// queues are empty and no item is being handed to a source.
 			bool IsDrained() const;
 
 			// The presentation time of the item delivered last, which is where
@@ -170,6 +171,9 @@ namespace ffmpeg
 
 			bool running_ = false;
 			bool paused_ = false;
+
+			// Items taken from a queue whose delivery has not returned yet.
+			int delivering_ = 0;
 
 			// Presentation time plus this is a time on the WebRTC clock.
 			int64_t base_us_ = 0;
