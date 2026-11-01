@@ -82,7 +82,7 @@ namespace jni
         }
 
         if (!captureDevice) {
-            throw new Exception("No video capture devices available");
+            throw Exception("No video capture devices available");
         }
 
         VideoTrackDeviceSourceCallback * callback = [[VideoTrackDeviceSourceCallback alloc] init];
