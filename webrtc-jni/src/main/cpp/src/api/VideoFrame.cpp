@@ -31,6 +31,21 @@ namespace jni
 {
 	namespace
 	{
+		// A direct buffer over a plane, or throws: the allocation may fail, with or without an exception pending.
+		JavaLocalRef<jobject> NewPlane(JNIEnv * env, const char * name, const uint8_t * data, jlong size)
+		{
+			JavaLocalRef<jobject> plane(env, env->NewDirectByteBuffer(const_cast<uint8_t *>(data), size));
+
+			if (plane.get() == nullptr) {
+				ExceptionCheck(env);
+
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The %s plane could not be wrapped in a direct buffer", name)));
+			}
+
+			return plane;
+		}
+
 		// Throws unless the plane holds every byte a copy reads: the last row ends at the width.
 		void CheckPlane(JNIEnv * env, const char * name, const JavaRef<jobject> & data, jint stride, jint width, jint height)
 		{
@@ -187,20 +202,26 @@ namespace jni
 				return static_cast<jlong>(stride) * (height - 1) + width;
 			};
 
-			jobject yBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataY()), planeSize(buffer->StrideY(), buffer->width(), buffer->height()));
-			jobject uBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataU()), planeSize(buffer->StrideU(), buffer->ChromaWidth(), buffer->ChromaHeight()));
-			jobject vBuffer = env->NewDirectByteBuffer(const_cast<uint8_t *>(buffer->DataV()), planeSize(buffer->StrideV(), buffer->ChromaWidth(), buffer->ChromaHeight()));
+			JavaLocalRef<jobject> yBuffer = NewPlane(env, "Y", buffer->DataY(), planeSize(buffer->StrideY(), buffer->width(), buffer->height()));
+			JavaLocalRef<jobject> uBuffer = NewPlane(env, "U", buffer->DataU(), planeSize(buffer->StrideU(), buffer->ChromaWidth(), buffer->ChromaHeight()));
+			JavaLocalRef<jobject> vBuffer = NewPlane(env, "V", buffer->DataV(), planeSize(buffer->StrideV(), buffer->ChromaWidth(), buffer->ChromaHeight()));
 
-			jobject jBuffer = env->NewObject(javaClass->cls, javaClass->ctor, buffer->width(), buffer->height(),
-				yBuffer, buffer->StrideY(), uBuffer, buffer->StrideU(), vBuffer, buffer->StrideV());
+			JavaLocalRef<jobject> jBuffer(env, env->NewObject(javaClass->cls, javaClass->ctor, buffer->width(), buffer->height(),
+				yBuffer.get(), buffer->StrideY(), uBuffer.get(), buffer->StrideU(), vBuffer.get(), buffer->StrideV()));
 
-			SetHandle(env, jBuffer, buffer.get());
+			if (jBuffer.get() == nullptr) {
+				ExceptionCheck(env);
 
-			env->DeleteLocalRef(yBuffer);
-			env->DeleteLocalRef(uBuffer);
-			env->DeleteLocalRef(vBuffer);
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The I420 buffer could not be created")));
+			}
 
-			return JavaLocalRef<jobject>(env, jBuffer);
+			// Last, once nothing can fail: the caller hands the wrapper its
+			// reference only when it gets the wrapper back.
+			SetHandle(env, jBuffer.get(), buffer.get());
+			ExceptionCheck(env);
+
+			return jBuffer;
 		}
 	}
 

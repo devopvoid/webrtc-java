@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
@@ -158,26 +159,46 @@ public class MediaFileSource implements AutoCloseable {
 	 * @throws IOException if the source cannot be opened in time, or decoded.
 	 */
 	public MediaFileSource(String source, Duration timeout, boolean hardwareDecoding) throws IOException {
-		MediaReader reader = new MediaReader(source, timeout);
+		this(new MediaReader(source, timeout), CustomVideoSource::new, CustomAudioSource::new,
+				hardwareDecoding);
+	}
 
-		// Read while the reader is still ours: the player takes it over.
-		info = reader.getInfo();
-
-		videoSource = info.hasVideo() ? new CustomVideoSource() : null;
-		audioSource = info.hasAudio() ? new CustomAudioSource() : null;
+	/**
+	 * Builds on a reader that is open, which this source takes over whether
+	 * or not it is made. The suppliers make the media sources, which tests
+	 * fail on purpose.
+	 */
+	MediaFileSource(MediaReader reader, Supplier<CustomVideoSource> videoSources,
+			Supplier<CustomAudioSource> audioSources, boolean hardwareDecoding) throws IOException {
+		MediaInfo readerInfo;
+		CustomVideoSource video = null;
+		CustomAudioSource audio = null;
+		MediaPlayer created;
 
 		try {
-			player = new MediaPlayer(reader, videoSource, audioSource, hardwareDecoding);
-		}
-		catch (IOException | RuntimeException | Error e) {
-			// The player did not take charge, so what was made here has to be
-			// unwound rather than left to leak.
-			disposeSources();
+			// Read while the reader is still ours: the player takes it over.
+			readerInfo = reader.getInfo();
 
-			reader.close();
+			video = readerInfo.hasVideo() ? videoSources.get() : null;
+			audio = readerInfo.hasAudio() ? audioSources.get() : null;
+
+			created = new MediaPlayer(reader, video, audio, hardwareDecoding);
+		}
+		catch (Throwable e) {
+			// Nothing was taken over by a player, so whatever was made here,
+			// the reader with its open file included, is released rather than
+			// left to leak. Closing a reader a player took over does nothing.
+			release(e, video != null ? video::dispose : null);
+			release(e, audio != null ? audio::dispose : null);
+			release(e, reader::close);
 
 			throw e;
 		}
+
+		info = readerInfo;
+		videoSource = video;
+		audioSource = audio;
+		player = created;
 	}
 
 	/**
@@ -311,6 +332,23 @@ public class MediaFileSource implements AutoCloseable {
 		}
 		if (audioSource != null) {
 			audioSource.dispose();
+		}
+	}
+
+	/**
+	 * Releases something made before the error, which a failing release only
+	 * adds to.
+	 */
+	private static void release(Throwable error, Runnable release) {
+		if (release == null) {
+			return;
+		}
+
+		try {
+			release.run();
+		}
+		catch (Throwable e) {
+			error.addSuppressed(e);
 		}
 	}
 

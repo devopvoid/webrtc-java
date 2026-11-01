@@ -23,9 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -54,6 +57,21 @@ class LoadTests extends ClientTestBase {
 		IllegalStateException e = assertThrows(IllegalStateException.class,
 				() -> builder.eventThreads(2).eventExecutor(Runnable::run).build());
 		assertTrue(e.getMessage().contains("eventExecutor"), e::getMessage);
+	}
+
+	@Test
+	void cancelledTimeoutsDequeued() {
+		// As an operation that completes long before its timeout is due.
+		for (ScheduledExecutorService scheduler : Arrays.asList(rtc.timer, rtc.audioPacer)) {
+			ScheduledThreadPoolExecutor pool = assertInstanceOf(ScheduledThreadPoolExecutor.class, scheduler);
+			int before = pool.getQueue().size();
+
+			for (int i = 0; i < 100; i++) {
+				pool.schedule(() -> { }, 1, TimeUnit.HOURS).cancel(false);
+			}
+
+			assertEquals(before, pool.getQueue().size());
+		}
 	}
 
 	@Test

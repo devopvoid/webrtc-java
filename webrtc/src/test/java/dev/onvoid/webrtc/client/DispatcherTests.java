@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -164,6 +165,36 @@ class DispatcherTests {
 		buffers.forEach(buffer -> assertEquals(1, buffer.released));
 		assertEquals(2, work.snapshot().dropped());
 		assertEquals(0, work.snapshot().queued());
+	}
+
+	@Test
+	void rejectedFramesReleased() {
+		List<Integer> shown = new ArrayList<>();
+		CountedBuffer rejected = new CountedBuffer();
+		CountedBuffer accepted = new CountedBuffer();
+		FrameDispatcher video = new FrameDispatcher(frame -> shown.add((int) frame.timestampNs),
+				FrameDelivery.queue(2), executor(), work, errors::add);
+
+		pool.rejecting(true);
+		video.onVideoFrame(new VideoFrame(rejected, 0));
+
+		// Let go of at once, not only at close.
+		assertEquals(1, rejected.released);
+		assertEquals(1, work.snapshot().dropped());
+		assertEquals(0, work.snapshot().queued());
+		assertEquals(1, errors.size());
+		assertInstanceOf(WebRtcException.class, errors.remove(0));
+
+		// Nothing is left scheduled, so the next frame tries again.
+		pool.rejecting(false);
+		video.onVideoFrame(new VideoFrame(accepted, 1));
+		pool.runAll();
+
+		assertEquals(Arrays.asList(1), shown);
+		assertEquals(1, accepted.released);
+		assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+
+		video.close();
 	}
 
 	private AudioDispatcher audio(Duration buffer, Consumer<AudioChunk> handler) {

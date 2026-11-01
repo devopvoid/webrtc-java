@@ -27,7 +27,9 @@ import dev.onvoid.webrtc.media.video.VideoDeviceSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -189,6 +191,40 @@ class RTCPeerConnectionTests extends TestBase {
 		assertDoesNotThrow(() -> secondSenders[0].dispose());
 		assertDoesNotThrow(() -> secondReceivers[0].dispose());
 		assertDoesNotThrow(() -> secondTransceivers[0].dispose());
+	}
+
+	@Test
+	void hashStableAfterDispose() {
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+
+		peerConnection.addTrack(audioTrack, List.of("stream-0"));
+
+		RTCRtpSender sender = peerConnection.getSenders()[0];
+		RTCRtpReceiver receiver = peerConnection.getReceivers()[0];
+		RTCRtpTransceiver transceiver = peerConnection.getTransceivers()[0];
+		RTCRtpSender sameSender = peerConnection.getSenders()[0];
+
+		Set<Object> wrappers = new HashSet<>(List.of(sender, receiver, transceiver));
+		int senderHash = sender.hashCode();
+
+		// Another wrapper of the same sender finds it while both are bound.
+		assertTrue(wrappers.contains(sameSender));
+
+		sender.dispose();
+		receiver.dispose();
+		transceiver.dispose();
+
+		// Hashed as when they were added, so they are still found.
+		assertEquals(senderHash, sender.hashCode());
+		assertTrue(wrappers.contains(sender));
+		assertFalse(wrappers.contains(sameSender));
+		assertTrue(wrappers.remove(sender));
+		assertTrue(wrappers.remove(receiver));
+		assertTrue(wrappers.remove(transceiver));
+		assertTrue(wrappers.isEmpty());
+
+		sameSender.dispose();
 	}
 
 	@Test

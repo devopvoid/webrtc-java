@@ -49,16 +49,24 @@ namespace jni
 		}
 
 		webrtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
-        i420BufferCopy->AddRef();
 
 		jint rotation = static_cast<jint>(frame.rotation());
 		jlong timestamp = frame.timestamp_us() * webrtc::kNumNanosecsPerMicrosec;
 
 		try {
 			JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
+
+			// The reference the Java frame gives up when it is released.
+			i420BufferCopy->AddRef();
+
 			JavaLocalRef<jobject> jFrame(env, env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp));
 
-			if (jFrame.get() != nullptr) {
+			if (jFrame.get() == nullptr) {
+				// No frame got the buffer that would release it.
+				i420BufferCopy->Release();
+				ExceptionCheck(env);
+			}
+			else {
 				env->CallVoidMethod(sink, javaClass->onFrame, jFrame.get());
 			}
 		}
