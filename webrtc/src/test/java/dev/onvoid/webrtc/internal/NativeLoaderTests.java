@@ -16,7 +16,10 @@
 
 package dev.onvoid.webrtc.internal;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
@@ -51,6 +54,32 @@ class NativeLoaderTests extends TestBase {
 	@TempDir
 	Path root;
 
+
+	@Test
+	void preservesLoadFailure() throws Exception {
+		Path library = Files.write(root.resolve("invalid-library"), new byte[] { 0 });
+
+		UnsatisfiedLinkError error = assertThrows(UnsatisfiedLinkError.class,
+				() -> NativeLoader.loadFromDirectory(root, library.getFileName().toString()));
+
+		assertEquals(0, error.getSuppressed().length);
+		assertFalse(Files.exists(library));
+	}
+
+	@Test
+	void suppressesCleanupFailure() throws Exception {
+		// Loading a directory fails; its child makes deletion fail on every OS,
+		// without depending on permissions or timing.
+		Path library = Files.createDirectory(root.resolve("invalid-library"));
+		Files.createFile(library.resolve("child"));
+
+		UnsatisfiedLinkError error = assertThrows(UnsatisfiedLinkError.class,
+				() -> NativeLoader.loadFromDirectory(root, library.getFileName().toString()));
+
+		assertEquals(1, error.getSuppressed().length);
+		assertInstanceOf(IOException.class, error.getSuppressed()[0]);
+		assertTrue(error.getMessage().contains(library.toAbsolutePath().toString()));
+	}
 
 	@Test
 	void sweepsEndedProcess() throws Exception {

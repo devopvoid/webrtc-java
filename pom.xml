@@ -44,9 +44,10 @@
 	</scm>
 
 	<properties>
-		<timestamp>${maven.build.timestamp}</timestamp>
+		<!-- Version-controlled timestamp; Maven Release updates it for releases. -->
+		<project.build.outputTimestamp>2026-10-31T23:43:19Z</project.build.outputTimestamp>
+		<api.compatibility.version>0.20.0</api.compatibility.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<maven.build.timestamp.format>yyyy-MM-dd HH:mm</maven.build.timestamp.format>
 	</properties>
 
 	<modules>
@@ -61,6 +62,47 @@
 		<pluginManagement>
 			<!-- Set versions of common plugins for reproducibility, ordered alphabetically. -->
 			<plugins>
+				<plugin>
+					<groupId>com.github.siom79.japicmp</groupId>
+					<artifactId>japicmp-maven-plugin</artifactId>
+					<version>0.26.3</version>
+					<configuration>
+						<oldVersion>
+							<dependency>
+								<groupId>${project.groupId}</groupId>
+								<artifactId>${project.artifactId}</artifactId>
+								<version>${api.compatibility.version}</version>
+							</dependency>
+						</oldVersion>
+						<newVersion>
+							<file>
+								<path>${project.build.directory}/${project.build.finalName}.jar</path>
+							</file>
+						</newVersion>
+						<parameter>
+							<accessModifier>protected</accessModifier>
+							<onlyModified>true</onlyModified>
+							<breakBuildOnBinaryIncompatibleModifications>true</breakBuildOnBinaryIncompatibleModifications>
+							<breakBuildOnSourceIncompatibleModifications>true</breakBuildOnSourceIncompatibleModifications>
+							<excludes>
+								<!-- Changes already made after 0.20.0: #395 removed the
+								     obsolete logging switch; #421 hid an unsafe JNI entry point.
+								     Remove these exceptions when advancing the baseline. -->
+								<exclude>dev.onvoid.webrtc.logging.Logging#logThreads(boolean)</exclude>
+								<exclude>dev.onvoid.webrtc.media.audio.AudioConverter#convertInternal(byte[],int,byte[],int)</exclude>
+								<exclude>dev.onvoid.webrtc.internal</exclude>
+								<exclude>dev.onvoid.webrtc.client.internal</exclude>
+							</excludes>
+						</parameter>
+					</configuration>
+					<executions>
+						<execution>
+							<id>api-compatibility</id>
+							<phase>verify</phase>
+							<goals><goal>cmp</goal></goals>
+						</execution>
+					</executions>
+				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-antrun-plugin</artifactId>
@@ -145,7 +187,6 @@
 							<compress>true</compress>
 							<manifestEntries>
 								<Version>${project.version}</Version>
-								<Build-Date>${maven.build.timestamp}</Build-Date>
 							</manifestEntries>
 						</archive>
 						<skipIfEmpty>true</skipIfEmpty>

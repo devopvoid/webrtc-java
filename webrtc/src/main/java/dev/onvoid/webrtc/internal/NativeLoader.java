@@ -293,7 +293,7 @@ public class NativeLoader {
 	 * @throws Exception if the library is not in the JAR or could not be
 	 *                   loaded.
 	 */
-	private static void loadFromDirectory(Path directory, String fileName)
+	static void loadFromDirectory(Path directory, String fileName)
 			throws Exception {
 		Path libPath = directory.resolve(fileName);
 
@@ -313,7 +313,12 @@ public class NativeLoader {
 			System.load(libPath.toAbsolutePath().toString());
 		}
 		catch (Throwable e) {
-			Files.deleteIfExists(libPath);
+			try {
+				Files.deleteIfExists(libPath);
+			}
+			catch (IOException | RuntimeException cleanupError) {
+				e.addSuppressed(cleanupError);
+			}
 
 			throw e;
 		}

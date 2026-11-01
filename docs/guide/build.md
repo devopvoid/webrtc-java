@@ -95,6 +95,36 @@ mvn install
 
 On the first run, the WebRTC source tree is loaded into the `/<user home>/webrtc` directory, and FFmpeg and dav1d are built into `/<user home>/ffmpeg`. This takes a long time. Later builds reuse both as long as their configuration is unchanged. To build the native libraries without running the tests, use `mvn package -DskipTests`, as CI does.
 
+## Java artifact reproducibility and compatibility
+
+Java archives use the version-controlled `project.build.outputTimestamp` in the
+parent pom instead of the current build time. Keep the JDK and Maven versions
+fixed when comparing hashes. A source archive needs no Git metadata to reproduce
+this timestamp; it can also be overridden with
+`-Dproject.build.outputTimestamp=<ISO-8601 timestamp>`. Native binaries require
+additional measures before their builds can be considered reproducible.
+
+After building or installing the host native artifact, compare the public core
+and media APIs against the pinned previous release:
+
+```shell
+mvn -pl webrtc,webrtc-media -am verify -Papi-compatibility -DskipNativeBuild
+```
+
+The baseline is `api.compatibility.version` in the parent pom. Advance it after a
+release. The two member-level exceptions record breaks already made since
+0.20.0 (#395 and #421); remove them when advancing that baseline. Internal
+packages are excluded. Reports are written to each module's `target/japicmp/`.
+JavaFX is new since that release and has no published baseline yet; enable the
+same profile there once its first release is available.
+
+CI additionally packages all three Java libraries on JDK 11 with tests skipped
+(JUnit 6 itself requires 17), then compiles and runs the consumers under
+`.github/consumers/` separately on the classpath and modulepath. They resolve the
+public client, media and JavaFX APIs and exercise native factory creation and
+FFmpeg loading without hardware or a display. They use the Linux native jars
+from the platform build, without `--add-exports` or `--add-opens`.
+
 ## Build Parameters
 
 | Parameter          | Description                                            | Default Value               |

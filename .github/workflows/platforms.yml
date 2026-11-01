@@ -157,3 +157,42 @@ jobs:
           java-distribution: ${{ matrix.platform.java-distribution }}
           java-architecture: ${{ matrix.platform.java-architecture }}
           version: ${{ inputs.version }}
+
+      # JUnit 6 needs Java 17. Compile and run independent consumers on Java 11
+      # instead, using the same Linux natives the suite has just tested.
+      - name: Set up minimum runtime JDK 11
+        if: matrix.platform.name == 'linux_x86-64'
+        uses: actions/setup-java@v6
+        with:
+          java-version: '11'
+          distribution: temurin
+
+      - name: Check API compatibility and package Java artifacts
+        if: matrix.platform.name == 'linux_x86-64'
+        run: |
+          rm -rf webrtc/target/classes webrtc-media/target/classes webrtc-javafx/target/classes
+          mvn -B -pl webrtc,webrtc-media,webrtc-javafx -am verify \
+            -Papi-compatibility -DskipNativeBuild -Dmaven.test.skip=true \
+            -Dmaven.antrun.skip=true
+
+      - name: Resolve JavaFX for consumer compilation
+        if: matrix.platform.name == 'linux_x86-64'
+        run: >-
+          mvn -B -pl webrtc-javafx -am
+          org.apache.maven.plugins:maven-dependency-plugin:3.7.0:copy-dependencies
+          -DincludeGroupIds=org.openjfx -DincludeScope=compile
+
+      - name: Compile and run classpath and modulepath consumers on Java 11
+        if: matrix.platform.name == 'linux_x86-64'
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml | head -n 1)
+          bash .github/consumers/check.sh "$VERSION"
+
+      - name: Upload API compatibility reports
+        if: failure() && matrix.platform.name == 'linux_x86-64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-compatibility-reports
+          path: '**/target/japicmp/'
+          if-no-files-found: ignore

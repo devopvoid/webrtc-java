@@ -187,6 +187,18 @@
 	</dependencies>
 
 	<profiles>
+
+		<profile>
+			<id>api-compatibility</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>com.github.siom79.japicmp</groupId>
+						<artifactId>japicmp-maven-plugin</artifactId>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 		<!-- Runs the tests against natives built elsewhere, as the
 		     test-natives lane does after unpacking them into target/natives,
 		     which is where Surefire is already told to look. -->
