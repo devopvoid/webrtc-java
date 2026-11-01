@@ -130,9 +130,7 @@ public class RTCDtlsTransport extends DisposableNativeObject {
 
 	@Override
 	public int hashCode() {
-		long handle = getNativeHandle();
-
-		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+		return nativeHashCode();
 	}
 
 }
