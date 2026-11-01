@@ -133,7 +133,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrackInter
 		if (result.ok()) {
 			auto sender = result.MoveValue();
 
-			return jni::JavaFactories::create(env, sender.release()).release();
+			return jni::JavaFactories::createOwning(env, std::move(sender)).release();
 		}
 	
 		env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result.error()).c_str()));
@@ -197,7 +197,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceive
 		if (result.ok()) {
 			auto transceiver = result.MoveValue();
 
-			return jni::JavaFactories::create(env, transceiver.release()).release();
+			return jni::JavaFactories::createOwning(env, std::move(transceiver)).release();
 		}
 
 		env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result.error()).c_str()));
@@ -238,7 +238,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceive
 		if (result.ok()) {
 			auto transceiver = result.MoveValue();
 
-			return jni::JavaFactories::create(env, transceiver.release()).release();
+			return jni::JavaFactories::createOwning(env, std::move(transceiver)).release();
 		}
 
 		env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result.error()).c_str()));
@@ -280,7 +280,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_createDataCha
 
 		auto dataChannel = result.MoveValue();
 
-		return jni::JavaFactories::create(env, dataChannel.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(dataChannel)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
