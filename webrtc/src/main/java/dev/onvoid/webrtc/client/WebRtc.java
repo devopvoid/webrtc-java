@@ -34,6 +34,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -189,9 +190,9 @@ public final class WebRtc implements AutoCloseable {
 				: Executors.newCachedThreadPool(threads("webrtc-client-control-" + runtime + "-"));
 		this.framePool = pool(builder.frameThreads, "webrtc-client-frames-" + runtime + "-");
 		this.timer = builder.timer != null ? builder.timer
-				: Executors.newSingleThreadScheduledExecutor(threads("webrtc-client-timer-" + runtime + "-"));
+				: scheduler("webrtc-client-timer-" + runtime + "-");
 		this.audioPacer = builder.audioPacer != null ? builder.audioPacer
-				: Executors.newSingleThreadScheduledExecutor(threads("webrtc-client-audio-" + runtime + "-"));
+				: scheduler("webrtc-client-audio-" + runtime + "-");
 		this.clock = builder.clock;
 
 		if (builder.eventExecutor != null) {
@@ -676,6 +677,18 @@ public final class WebRtc implements AutoCloseable {
 
 	private static int poolSize(Executor executor) {
 		return executor instanceof ThreadPoolExecutor ? ((ThreadPoolExecutor) executor).getPoolSize() : 0;
+	}
+
+	/**
+	 * A scheduler of one thread that forgets a task once it is cancelled.
+	 * Operations cancel their timeouts as they complete, and without that each
+	 * would stay queued until it was due, for as long as the timeout.
+	 */
+	static ScheduledThreadPoolExecutor scheduler(String prefix) {
+		ScheduledThreadPoolExecutor scheduler = new ScheduledThreadPoolExecutor(1, threads(prefix));
+		scheduler.setRemoveOnCancelPolicy(true);
+
+		return scheduler;
 	}
 
 	private static ThreadFactory threads(String prefix) {
