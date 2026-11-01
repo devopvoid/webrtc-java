@@ -16,8 +16,24 @@
 #include "JavaThreadEnv.h"
 #include "JavaWrappedException.h"
 
+#include <atomic>
 #include <exception>
 #include <ios>
+
+namespace
+{
+	std::atomic<JavaVM *> javaVM { nullptr };
+}
+
+void SetJavaVM(JavaVM * vm)
+{
+	javaVM.store(vm);
+}
+
+JavaVM * GetJavaVM()
+{
+	return javaVM.load();
+}
 
 bool ExceptionCheck(JNIEnv * env)
 {
@@ -181,7 +197,7 @@ jfieldID GetFieldID(JNIEnv * env, jclass cls, const std::string & fieldName, con
 
 JNIEnv * AttachCurrentThread()
 {
-	thread_local std::unique_ptr<jni::JavaThreadEnv> threadEnv(new jni::JavaThreadEnv(javaContext->getVM()));
+	thread_local std::unique_ptr<jni::JavaThreadEnv> threadEnv(new jni::JavaThreadEnv(GetJavaVM()));
 
 	return threadEnv->getEnv();
 }

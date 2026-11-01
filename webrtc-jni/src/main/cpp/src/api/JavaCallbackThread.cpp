@@ -15,7 +15,7 @@
  */
 
 #include "api/JavaCallbackThread.h"
-#include "JavaContext.h"
+#include "JavaUtils.h"
 
 #include "rtc_base/logging.h"
 
@@ -38,7 +38,7 @@ namespace jni
 
 		void Run(Queue * queue)
 		{
-			JavaVM * vm = javaContext->getVM();
+			JavaVM * vm = GetJavaVM();
 			JNIEnv * env = nullptr;
 
 			JavaVMAttachArgs args;

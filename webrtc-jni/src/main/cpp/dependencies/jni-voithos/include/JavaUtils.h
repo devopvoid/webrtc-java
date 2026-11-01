@@ -46,6 +46,12 @@
 // Uses JNI directly, so reporting an allocation failure needs no C++ allocation.
 void ThrowJavaException(JNIEnv * env, const char * className, const char * message) noexcept;
 void ThrowCxxJavaException(JNIEnv * env);
+// The VM the library is loaded into. JNI_OnLoad sets it before anything else,
+// independently of the library's JavaContext, which is published only once it
+// is fully initialized: its initialization already needs the VM, through the
+// JNI references and AttachCurrentThread.
+void SetJavaVM(JavaVM * vm);
+JavaVM * GetJavaVM();
 JNIEnv * AttachCurrentThread();
 bool ExceptionCheck(JNIEnv * env);
 jclass FindClass(JNIEnv * env, const char * name);
