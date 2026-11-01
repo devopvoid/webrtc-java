@@ -6,6 +6,7 @@
  */
 
 #include "JavaThrowable.h"
+#include "JavaString.h"
 #include "JavaUtils.h"
 
 #include <stdarg.h>
@@ -25,6 +26,13 @@ namespace jni
 
 			this->message = buffer;
 		}
+	}
+
+	jstring JavaThrowable::createMessage() const
+	{
+		// The message is standard UTF-8 and may come from WebRTC or the
+		// application, which NewStringUTF and its Modified UTF-8 would mangle.
+		return JavaString::toJava(env, message).release();
 	}
 
 	JavaThrowable::operator jthrowable() const

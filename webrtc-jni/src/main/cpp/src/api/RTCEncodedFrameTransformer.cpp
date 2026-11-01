@@ -17,6 +17,7 @@
 #include "api/RTCEncodedFrameTransformer.h"
 #include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
+#include "JavaString.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
@@ -116,7 +117,7 @@ namespace jni
 			return found->second->get();
 		}
 
-		jstring text = env->NewStringUTF(mimeType.c_str());
+		jstring text = JavaString::toJava(env, mimeType).release();
 
 		if (text == nullptr) {
 			return nullptr;
@@ -142,7 +143,7 @@ namespace jni
 		jstring jRid = nullptr;
 
 		if (rid.has_value() && !rid->empty()) {
-			jRid = env->NewStringUTF(rid->c_str());
+			jRid = JavaString::toJava(env, *rid).release();
 		}
 
 		return env->NewObject(javaVideoFrameClass->cls, javaVideoFrameClass->ctor,

@@ -61,7 +61,7 @@ namespace jni
 					env->CallVoidMethod(callback.get(), javaClass->onSuccess);
 				}
 				else {
-					JavaLocalRef<jstring> jMessage(env, env->NewStringUTF(message->c_str()));
+					JavaLocalRef<jstring> jMessage = jni::JavaString::toJava(env, *message);
 					if (!env->ExceptionCheck()) {
 						env->CallVoidMethod(callback.get(), javaClass->onFailure, jMessage.get());
 					}

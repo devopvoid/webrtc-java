@@ -45,8 +45,27 @@ void ThrowJavaException(JNIEnv * env, const char * className, const char * messa
 
 	jni::JavaLocalRef<jclass> cls(env, env->FindClass(className));
 
-	if (cls.get() != nullptr) {
-		env->ThrowNew(cls.get(), message);
+	if (cls.get() == nullptr) {
+		return;
+	}
+
+	// ThrowNew takes Modified UTF-8; messages may carry what WebRTC reports.
+	jmethodID ctor = env->GetMethodID(cls.get(), "<init>", "(Ljava/lang/String;)V");
+
+	if (ctor == nullptr) {
+		return;
+	}
+
+	jni::JavaLocalRef<jstring> text = message != nullptr ? jni::JavaString::toJava(env, message) : nullptr;
+
+	if (message != nullptr && text.get() == nullptr) {
+		return;
+	}
+
+	jni::JavaLocalRef<jthrowable> throwable(env, static_cast<jthrowable>(env->NewObject(cls.get(), ctor, text.get())));
+
+	if (throwable.get() != nullptr) {
+		env->Throw(throwable.get());
 	}
 }
 
@@ -65,10 +84,10 @@ void ThrowCxxJavaException(JNIEnv * env)
 		env->Throw(e.exception().get());
 	}
 	catch (const std::ios_base::failure & e) {
-		env->Throw(jni::JavaIOException(env, e.what()));
+		env->Throw(jni::JavaIOException(env, "%s", e.what()));
 	}
 	catch (const std::exception & e) {
-		env->Throw(jni::JavaError(env, e.what()));
+		env->Throw(jni::JavaError(env, "%s", e.what()));
 	}
 	catch (...) {
 		env->Throw(jni::JavaError(env, "Unhandled Exception"));
