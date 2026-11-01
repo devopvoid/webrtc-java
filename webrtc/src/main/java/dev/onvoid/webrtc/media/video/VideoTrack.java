@@ -17,16 +17,17 @@
 package dev.onvoid.webrtc.media.video;
 
 import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
 
+import dev.onvoid.webrtc.internal.SinkRegistry;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
-import java.util.IdentityHashMap;
-import java.util.Map;
-
+/**
+ * A video track. Its sinks may be added and removed from any thread, also at
+ * the same time.
+ */
 public class VideoTrack extends MediaStreamTrack {
 
-	private final Map<VideoTrackSink, Long> sinks = new IdentityHashMap<>();
+	private final SinkRegistry<VideoTrackSink> sinks = new SinkRegistry<>(this::removeSinkInternal);
 
 
 	private VideoTrack() {
@@ -35,11 +36,8 @@ public class VideoTrack extends MediaStreamTrack {
 
 	@Override
 	public void dispose() {
-		for (long nativeSink : sinks.values()) {
-			removeSinkInternal(nativeSink);
-		}
-
-		sinks.clear();
+		// Waits for sinks that other threads are still adding or removing.
+		sinks.close();
 
 		super.dispose();
 	}
@@ -48,19 +46,16 @@ public class VideoTrack extends MediaStreamTrack {
 	 * Adds a VideoSink to the track. A track can have any number of
 	 * VideoSinks.
 	 *
-	 * @param sink The video sink to add.
+	 * @param sink The video sink to add. Adding it again does nothing.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
 	 */
 	public void addSink(VideoTrackSink sink) {
 		if (isNull(sink)) {
 			throw new NullPointerException();
 		}
-		if (sinks.containsKey(sink)) {
-			return;
-		}
 
-		final long nativeSink = addSinkInternal(sink);
-
-		sinks.put(sink, nativeSink);
+		sinks.add(sink, this::addSinkInternal);
 	}
 
 	/**
@@ -72,11 +67,7 @@ public class VideoTrack extends MediaStreamTrack {
 			throw new NullPointerException();
 		}
 
-		final Long nativeSink = sinks.remove(sink);
-
-		if (nonNull(nativeSink)) {
-			removeSinkInternal(nativeSink);
-		}
+		sinks.remove(sink);
 	}
 
 	private native long addSinkInternal(VideoTrackSink sink);

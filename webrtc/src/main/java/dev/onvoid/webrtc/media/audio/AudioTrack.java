@@ -17,19 +17,21 @@
 package dev.onvoid.webrtc.media.audio;
 
 import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
 
 import dev.onvoid.webrtc.RTCRtpPacketInfo;
+import dev.onvoid.webrtc.internal.SinkRegistry;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
-import java.util.IdentityHashMap;
-import java.util.Map;
-
+/**
+ * An audio track. Its sinks and voice activity listeners may be added and
+ * removed from any thread, also at the same time.
+ */
 public class AudioTrack extends MediaStreamTrack {
 
-	private final Map<AudioTrackSink, Long> sinks = new IdentityHashMap<>();
+	private final SinkRegistry<AudioTrackSink> sinks = new SinkRegistry<>(this::removeSinkInternal);
 
-	private final Map<VoiceActivityListener, Long> voiceActivityListeners = new IdentityHashMap<>();
+	private final SinkRegistry<VoiceActivityListener> voiceActivityListeners =
+			new SinkRegistry<>(this::removeVoiceActivityListenerInternal);
 
 
 	private AudioTrack() {
@@ -38,17 +40,13 @@ public class AudioTrack extends MediaStreamTrack {
 
 	@Override
 	public void dispose() {
-		for (long nativeSink : sinks.values()) {
-			removeSinkInternal(nativeSink);
+		// Each waits for what other threads are still adding or removing.
+		try {
+			sinks.close();
 		}
-
-		sinks.clear();
-
-		for (long nativeSink : voiceActivityListeners.values()) {
-			removeVoiceActivityListenerInternal(nativeSink);
+		finally {
+			voiceActivityListeners.close();
 		}
-
-		voiceActivityListeners.clear();
 
 		super.dispose();
 	}
@@ -57,18 +55,16 @@ public class AudioTrack extends MediaStreamTrack {
 	 * Adds an AudioSink to the track. A track can have any number of AudioSinks.
 	 *
 	 * @param sink The audio sink that will receive audio data from the track.
+	 *             Adding it again does nothing.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
 	 */
 	public void addSink(AudioTrackSink sink) {
 		if (isNull(sink)) {
 			throw new NullPointerException();
 		}
-		if (sinks.containsKey(sink)) {
-			return;
-		}
 
-		final long nativeSink = addSinkInternal(sink, takesPacketInfos(sink));
-
-		sinks.put(sink, nativeSink);
+		sinks.add(sink, s -> addSinkInternal(s, takesPacketInfos(s)));
 	}
 
 	/**
@@ -94,11 +90,7 @@ public class AudioTrack extends MediaStreamTrack {
 			throw new NullPointerException();
 		}
 
-		final Long nativeSink = sinks.remove(sink);
-
-		if (nonNull(nativeSink)) {
-			removeSinkInternal(nativeSink);
-		}
+		sinks.remove(sink);
 	}
 
 	/**
@@ -112,23 +104,20 @@ public class AudioTrack extends MediaStreamTrack {
 	 *
 	 * @param config   when audio counts as speech.
 	 * @param listener the listener. Adding it again does nothing.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
 	 */
 	public void addVoiceActivityListener(VoiceActivityConfig config, VoiceActivityListener listener) {
 		if (isNull(config) || isNull(listener)) {
 			throw new NullPointerException();
-		}
-		if (voiceActivityListeners.containsKey(listener)) {
-			return;
 		}
 
 		// Preserve partial milliseconds before native code rounds to 10 ms chunks.
 		int hangoverMs = (int) config.getHangover().toMillis()
 				+ (config.getHangover().getNano() % 1_000_000 == 0 ? 0 : 1);
 
-		final long nativeSink = addVoiceActivityListenerInternal(listener, (float) config.getThreshold(),
-				hangoverMs);
-
-		voiceActivityListeners.put(listener, nativeSink);
+		voiceActivityListeners.add(listener, l -> addVoiceActivityListenerInternal(l,
+				(float) config.getThreshold(), hangoverMs));
 	}
 
 	/**
@@ -141,11 +130,7 @@ public class AudioTrack extends MediaStreamTrack {
 			throw new NullPointerException();
 		}
 
-		final Long nativeSink = voiceActivityListeners.remove(listener);
-
-		if (nonNull(nativeSink)) {
-			removeVoiceActivityListenerInternal(nativeSink);
-		}
+		voiceActivityListeners.remove(listener);
 	}
 
 	/**
