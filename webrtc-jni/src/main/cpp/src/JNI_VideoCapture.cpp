@@ -82,7 +82,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoS
 	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
 	CHECK_HANDLE(videoSource);
 
-	videoSource->setVideoSink(std::make_unique<jni::VideoTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jsink), false));
+	try {
+		videoSource->setVideoSink(std::make_unique<jni::VideoTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jsink), false));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_start
@@ -90,6 +95,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_start
 {
 	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
 	CHECK_HANDLE(videoSource);
+
+	if (!videoSource->hasDevice()) {
+		ThrowJavaException(env, "java/lang/IllegalStateException", "No video capture device set");
+		return;
+	}
 
 	try {
 		videoSource->start();
@@ -121,7 +131,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_dispose
 
 	SetHandle<std::nullptr_t>(env, caller, nullptr);
 
-	videoSource = nullptr;
+	// The destructor stops a running capture and detaches the sink before
+	// both are destroyed.
+	delete videoSource;
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_initialize

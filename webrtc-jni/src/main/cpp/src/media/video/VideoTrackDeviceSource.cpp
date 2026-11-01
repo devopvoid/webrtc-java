@@ -39,13 +39,13 @@ namespace jni
 		std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
 
 		if (!info) {
-			throw new Exception("Create video DeviceInfo failed");
+			throw Exception("Create video DeviceInfo failed");
 		}
 
 		uint32_t num = info->NumberOfDevices();
 
 		if (num < 1) {
-			throw new Exception("No video capture devices available");
+			throw Exception("No video capture devices available");
 		}
 
 		if (device) {
@@ -70,19 +70,19 @@ namespace jni
 			}
 
 			if (devUid.empty()) {
-				throw new Exception("Device %s not found", device->getName().c_str());
+				throw Exception("Device %s not found", device->getName().c_str());
 			}
 
 			captureModule = webrtc::VideoCaptureFactory::Create(devUid.c_str());
 
 			if (!captureModule) {
-				throw new Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
+				throw Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
 			}
 
 			if (!startCapture()) {
 				destroy();
 
-				throw new Exception("Start video capture for UID %s failed", devUid.c_str());
+				throw Exception("Start video capture for UID %s failed", devUid.c_str());
 			}
 		}
 
@@ -118,7 +118,7 @@ namespace jni
 		}
 
 		if (!captureModule || !captureModule->CaptureStarted()) {
-			throw new Exception("Start video capture failed");
+			throw Exception("Start video capture failed");
 		}
 	}
 

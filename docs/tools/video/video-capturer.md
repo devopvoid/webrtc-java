@@ -91,7 +91,10 @@ If you need pixel format conversion, see `VideoBufferConverter`.
 ## Error handling and lifecycle
 
 - Constructor: Initializes native resources; failures may surface as runtime exceptions from native code.
-- `IllegalStateException`: Thrown if methods are invoked after disposal or when prerequisites are missing.
+- `IllegalStateException`: Thrown by `start()` if no device was selected with `setVideoCaptureDevice`.
+- `NullPointerException`: Thrown if methods are invoked after disposal.
+- Other native failures (e.g. the selected device is not available) surface as an `Error` carrying the native message.
+- Restart: after `stop()`, `start()` can be called again; the sink set earlier stays registered.
 - Idempotency: `start()` and `stop()` are intended to be safe to call multiple times (implementation‑dependent no‑op if already in that state).
 - Always call `dispose()` in a `finally` block to avoid leaking native resources.
 
