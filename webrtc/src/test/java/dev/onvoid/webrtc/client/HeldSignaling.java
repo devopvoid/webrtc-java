@@ -103,10 +103,13 @@ final class HeldSignaling {
 		}
 
 		@Override
-		public void attach(Consumer<SignalMessage> inbound) {
+		public Subscription attach(Consumer<SignalMessage> inbound) {
 			synchronized (HeldSignaling.this) {
 				this.inbound = inbound;
 			}
+
+			// Kept for the test's lifetime, as is the peer.
+			return () -> { };
 		}
 
 		/** Delivers what this end sent to the other end's peer. */

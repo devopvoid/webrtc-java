@@ -123,7 +123,25 @@ Signaling signaling = message -> socket.send(message.toJson());
 socket.onText(text -> peer.signal(SignalMessage.fromJson(text)));
 ```
 
-A transport class can implement both directions by overriding `Signaling.attach(Consumer<SignalMessage>)`, which the peer calls once when it is created, with the consumer to push received messages into.
+A transport class can implement both directions by overriding `Signaling.attach(Consumer<SignalMessage>)`, which the peer calls once when it is created, with the consumer to push received messages into. It returns a `Subscription` that removes that consumer, and only that one: the peer closes it when it closes, after its last `send`, on its event thread. The transport itself stays open, so a WebSocket can outlive the peer and take the next one, or serve several peers at once. A transport that keeps the consumer must drop it there, or the closed peer and the runtime with it stay reachable:
+
+```java
+@Override
+public synchronized Subscription attach(Consumer<SignalMessage> inbound) {
+    this.inbound = inbound;
+
+    return () -> {
+        synchronized (this) {
+            // A peer closed after the next one attached leaves that one in place.
+            if (this.inbound == inbound) {
+                this.inbound = null;
+            }
+        }
+    };
+}
+```
+
+Each end of `Signaling.loopback()` takes one peer at a time; once that peer has closed, the next one can attach, and receives what was sent to the end in between.
 
 A `SignalMessage` is a session description (`OFFER`, `ANSWER`) or an ICE candidate (`CANDIDATE`). `toJson()` writes the shapes the browser API uses, so a JavaScript peer can pass them to `setRemoteDescription` and `addIceCandidate` as they are:
 
@@ -792,19 +810,24 @@ peer.onStats(Duration.ofSeconds(1), stats -> System.out.printf(
         "%s candidate, rtt %s, %d kbit/s out, %d kbit/s in, %.1f%% lost%n",
         stats.candidateType(), stats.roundTripTime(),
         stats.outgoingBitrate() / 1000, stats.incomingBitrate() / 1000,
-        stats.packetLoss() * 100));
+        stats.recentPacketLoss() * 100));
 ```
 
 | Method | Value |
 |---|---|
-| `candidateType()` | The type of the local candidate in use: `host`, `srflx`, `prflx` or `relay`. Null while not connected. |
-| `roundTripTime()` | The current round trip time, or null while not measured. |
-| `bytesSent()`, `bytesReceived()` | The bytes sent and received on the connection so far. |
+| `transport()` | The transport in use, whose candidate type and round trip time the sample reports. Null while no transport has a candidate pair in use. |
+| `transports()` | Every transport of the peer, ordered by id, each with its id, the id of its candidate pair in use, candidate type, round trip time and bytes. |
+| `candidateType()` | The type of the local candidate in use on `transport()`: `host`, `srflx`, `prflx` or `relay`. Null while not connected. |
+| `roundTripTime()` | The current round trip time on `transport()`, or null while not measured. |
+| `bytesSent()`, `bytesReceived()` | The bytes sent and received on all transports so far. |
 | `timestamp()` | When WebRTC measured the statistics. |
 | `outgoingBitrate()`, `incomingBitrate()` | Bits per second between the measurement times of the previous sample and this one, or -1 when there is none to compare with: for a peer's first sample, after the clock went back, or after the byte counter started again. A report WebRTC hands out again within its short cache lifetime repeats the previous bitrates. |
-| `packetLoss()` | The share of received packets lost so far, 0 to 1. |
+| `packetLoss()` | The share of received packets lost so far, 0 to 1. After a long session it barely moves. |
+| `recentPacketLoss()` | The share of packets lost of those expected since the previous sample, 0 to 1, and 0 if none were expected; -1 for the first sample and after the clock went back. A stream that came up or whose counters started again counts all it has. |
 | `outboundVideo()`, `inboundVideo()` | Codec, resolution and frame rate of each video stream, and what limits a sent one. |
 | `report()` | The whole `RTCStatsReport`. |
+
+A peer bundles its media on one transport by default. When the remote side refuses to bundle, each m-line has a transport of its own. `transport()` is then the one with a candidate pair in use that carried the most bytes, sent and received, and of transports that carried as many, the one with the lowest id. Read `transports()` to watch each connection by itself.
 
 ## Closing
 

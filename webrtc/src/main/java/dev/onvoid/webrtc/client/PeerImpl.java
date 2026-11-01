@@ -190,6 +190,14 @@ final class PeerImpl implements Peer {
 	/** Runs once gathering is complete, or null. Called on the control executor. */
 	private volatile Runnable gatheredListener;
 
+	/**
+	 * What {@link Signaling#attach} returned, or null before, and {@link
+	 * #DETACHED} once the peer has let go of the signaling on close.
+	 */
+	private final AtomicReference<Subscription> signalingSubscription = new AtomicReference<>();
+
+	private static final Subscription DETACHED = () -> { };
+
 
 	PeerImpl(WebRtc rtc, PeerOptions options, String name) {
 		this.rtc = rtc;
@@ -279,8 +287,14 @@ final class PeerImpl implements Peer {
 			throw new ConfigurationException("Creating " + name + " failed: " + cause.getMessage(), cause);
 		}
 
-		if (signaling != null) {
-			signaling.attach(this::signal);
+		if (signaling != null && !closing.get()) {
+			Subscription subscription = signaling.attach(this::signal);
+
+			if (subscription != null && !signalingSubscription.compareAndSet(null, subscription)) {
+				// Closed while attaching: the close found nothing to let go of
+				// yet, so this lets go of what attach returned.
+				detach(subscription);
+			}
 		}
 	}
 
@@ -1264,6 +1278,11 @@ final class PeerImpl implements Peer {
 		}
 
 		events.execute(() -> {
+			if (signalingSubscription.get() == DETACHED) {
+				// The transport may take another peer by now.
+				return;
+			}
+
 			try {
 				signaling.send(message);
 			}
@@ -1455,6 +1474,10 @@ final class PeerImpl implements Peer {
 		closedInternal.complete(null);
 
 		events.execute(() -> {
+			// Behind the messages queued for sending, so that the transport
+			// hears of none once it was let go of.
+			detachSignaling();
+
 			for (RemoteTrackImpl remote : ended) {
 				remote.fireEnded();
 			}
@@ -1471,9 +1494,32 @@ final class PeerImpl implements Peer {
 			stateHandlers.clear();
 			errorHandlers.clear();
 		}, () -> {
+			detachSignaling();
+
 			connected.completeExceptionally(error);
 			closedFuture.complete(null);
 		});
+	}
+
+	/**
+	 * Lets go of the signaling, once: a transport that outlives the peer must
+	 * not keep it, and the runtime with it, reachable.
+	 */
+	private void detachSignaling() {
+		Subscription subscription = signalingSubscription.getAndSet(DETACHED);
+
+		if (subscription != null && subscription != DETACHED) {
+			detach(subscription);
+		}
+	}
+
+	private void detach(Subscription subscription) {
+		try {
+			subscription.close();
+		}
+		catch (Throwable e) {
+			rtc.reportError(new WebRtcException("Detaching " + name + " from its signaling failed", e));
+		}
 	}
 
 	// On the event executor.

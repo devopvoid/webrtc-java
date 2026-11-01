@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc.client;
 
+import static java.util.Objects.requireNonNull;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -23,7 +25,9 @@ import java.util.function.Consumer;
 /**
  * Two linked {@link Signaling} ends, made by {@link Signaling#loopback()}.
  * Messages sent through one end reach the peer attached to the other end, in
- * order. Messages sent before that peer exists are held until it attaches.
+ * order. Messages sent while no peer is attached there, before the first one
+ * or after it closed, are held until the next one attaches. An end takes one
+ * peer at a time.
  */
 public final class SignalingPair {
 
@@ -68,7 +72,9 @@ public final class SignalingPair {
 		}
 
 		@Override
-		public synchronized void attach(Consumer<SignalMessage> inbound) {
+		public synchronized Subscription attach(Consumer<SignalMessage> inbound) {
+			requireNonNull(inbound, "inbound");
+
 			if (this.inbound != null) {
 				throw new IllegalStateException("This end of the loopback is already attached to a peer");
 			}
@@ -79,6 +85,16 @@ public final class SignalingPair {
 			// A peer's inbound only queues the message.
 			held.forEach(inbound);
 			held.clear();
+
+			return () -> detach(inbound);
+		}
+
+		private synchronized void detach(Consumer<SignalMessage> inbound) {
+			// Only the registration it was made for: closed again once the
+			// next peer has attached, it leaves that one alone.
+			if (this.inbound == inbound) {
+				this.inbound = null;
+			}
 		}
 
 		private synchronized void deliver(SignalMessage message) {
