@@ -83,7 +83,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoS
 	CHECK_HANDLE(videoSource);
 
 	try {
-		videoSource->setVideoSink(std::make_unique<jni::VideoTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jsink)));
+		videoSource->setVideoSink(std::make_unique<jni::VideoTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jsink), false));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

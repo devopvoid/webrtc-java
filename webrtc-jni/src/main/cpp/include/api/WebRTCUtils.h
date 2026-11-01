@@ -56,6 +56,12 @@ namespace jni
 	// and nothing else already guarantees the pointer outlives the call --
 	// callers of the returned array elements are then responsible for
 	// disposing them.
+	//
+	// The references are handed over only once the whole array is filled, as
+	// JavaFactories::createOwning does for a single object: if a wrapper
+	// cannot be created, `vector` frees all of them, and the wrappers made so
+	// far, which only the dropped array refers to, are left to the garbage
+	// collector.
 	template <class T>
 	JavaLocalRef<jobjectArray> createOwningObjectArray(JNIEnv * env, std::vector<webrtc::scoped_refptr<T>> vector)
 	{
@@ -68,9 +74,15 @@ namespace jni
 		}
 
 		for (jsize i = 0; i < vectorSize; i++) {
-			JavaLocalRef<jobject> obj = JavaFactories::create(env, vector[i].release());
+			JavaLocalRef<jobject> obj = JavaFactories::create(env, vector[i].get());
 
 			env->SetObjectArrayElement(objectArray, i, obj.get());
+			ExceptionCheck(env);
+		}
+
+		// The Java objects hold the references now.
+		for (auto & item : vector) {
+			static_cast<void>(item.release());
 		}
 
 		return objectArray;

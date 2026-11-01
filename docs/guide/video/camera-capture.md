@@ -162,6 +162,37 @@ videoTrack.addSink(localVideoSink);
 videoTrack.removeSink(localVideoSink);
 ```
 
+### Threads and Sink Changes
+
+`addSink` and `removeSink` may be called from any thread, also at the same time, and from within `onVideoFrame`, so a sink can remove itself once it has seen what it wanted:
+
+```java
+videoTrack.addSink(new VideoTrackSink() {
+    @Override
+    public void onVideoFrame(VideoFrame frame) {
+        saveSnapshot(frame);
+        frame.release();
+
+        // Gets no further frames.
+        videoTrack.removeSink(this);
+    }
+});
+```
+
+WebRTC holds a lock while it hands a frame to the sinks, and adding or removing a sink takes the same lock. A change made from within a callback therefore takes effect for the sinks at once, while the native sink is added or removed on another thread right after the callback returned. Disposing the track is the one thing a callback cannot do: `dispose()` throws an `IllegalStateException` there, and belongs on another thread.
+
+### Sharing Frames Between Sinks
+
+By default each sink gets an I420 copy of each frame of its own, which it may write into without the other sinks or the encoder seeing it. That costs a full copy of the pixels per frame and sink: at 1080p and 30 frames a second about 89 MiB a second, for each sink. A sink that only reads the frames can share them instead:
+
+```java
+import dev.onvoid.webrtc.media.video.VideoFrameAccess;
+
+videoTrack.addSink(previewSink, VideoFrameAccess.SHARED);
+```
+
+A shared sink gets the pixels the source handed out, without a copy, which the other shared sinks and the encoder use as well. The planes of its `NativeI420Buffer` are read-only, so a write throws a `ReadOnlyBufferException`; a sink that wants to change a frame takes a writable copy with `frame.copy()`. The frames may come from a pool of the decoder or capturer, so a shared sink should not hold on to them for long: keep a copy instead, and release the frame.
+
 ### Receiving Remote Video Frames
 
 To receive frames from a remote peer, you need to add a sink to the remote video track when it's received. This is typically done in the `onTrack` method of your `PeerConnectionObserver`:
