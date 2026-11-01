@@ -56,6 +56,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -198,14 +201,26 @@ class VideoCodecFactoryTests extends TestBase {
 
 	@Test
 	void javaCodecRoundTrips() throws Exception {
-		assertRoundTrip(new VideoCodecInfo(TEST_CODEC), false);
+		assertRoundTrip(new VideoCodecInfo(TEST_CODEC), false, false);
 	}
 
 	@Test
 	void javaFrameBufferRoundTrips() throws Exception {
 		// The decoder hands back frames whose buffer is no NativeI420Buffer,
 		// which WebRTC has to copy.
-		assertRoundTrip(new VideoCodecInfo(TEST_CODEC), true);
+		assertRoundTrip(new VideoCodecInfo(TEST_CODEC), true, false);
+	}
+
+	@Test
+	void asyncJavaDecoderRoundTrips() throws Exception {
+		// The decoder hands its frames over on a thread of its own, now with
+		// a QP and now without, which switches the wrapper's QP parsing on
+		// and off while WebRTC's decoder thread goes on decoding.
+		TestDecoderFactory decoderFactory = assertRoundTrip(new VideoCodecInfo(TEST_CODEC), false, true);
+		TestDecoder decoder = decoderFactory.last.get();
+
+		assertTrue(decoder.framesWithQp.get() > 0, "no frame was handed over with a QP");
+		assertTrue(decoder.framesWithoutQp.get() > 0, "no frame was handed over without a QP");
 	}
 
 	@Test
@@ -213,17 +228,19 @@ class VideoCodecFactoryTests extends TestBase {
 		// WebRTC has no H.265 codec of its own, so this is H.265 as a codec
 		// factory brings it: negotiated, packetized into RTP and depacketized
 		// as H.265, which WebRTC does only when built with it.
-		assertRoundTrip(H265, false);
+		assertRoundTrip(H265, false, false);
 	}
 
 	/**
 	 * Sends a call through the test codec and checks that every frame
 	 * received is one that was sent, and how WebRTC used the codecs.
 	 */
-	private void assertRoundTrip(VideoCodecInfo codec, boolean javaBuffers) throws Exception {
+	private TestDecoderFactory assertRoundTrip(VideoCodecInfo codec, boolean javaBuffers, boolean asyncOutput)
+			throws Exception {
 		TestEncoderFactory encoderFactory = new TestEncoderFactory(codec);
 		TestDecoderFactory decoderFactory = new TestDecoderFactory(codec);
 		decoderFactory.javaBuffers = javaBuffers;
+		decoderFactory.asyncOutput = asyncOutput;
 		PeerConnectionFactory built = testCodecFactory(encoderFactory, decoderFactory);
 
 		Set<String> encodedSizes = ConcurrentHashMap.newKeySet();
@@ -279,6 +296,8 @@ class VideoCodecFactoryTests extends TestBase {
 		assertTrue(encoder.rates.get() > 0, "rates were never set");
 		assertTrue(encoder.released.get(), "encoder was never released");
 		assertTrue(decoderFactory.last.get().released.get(), "decoder was never released");
+
+		return decoderFactory;
 	}
 
 	@Test
@@ -681,6 +700,8 @@ class VideoCodecFactoryTests extends TestBase {
 
 		volatile boolean javaBuffers;
 
+		volatile boolean asyncOutput;
+
 
 		TestDecoderFactory() {
 			this(new VideoCodecInfo(TEST_CODEC, Collections.emptyMap()));
@@ -706,7 +727,7 @@ class VideoCodecFactoryTests extends TestBase {
 				return builtIn.createDecoder(info);
 			}
 
-			TestDecoder decoder = new TestDecoder(javaBuffers, isH265(codec));
+			TestDecoder decoder = new TestDecoder(javaBuffers, isH265(codec), asyncOutput);
 			last.set(decoder);
 			return decoder;
 		}
@@ -810,22 +831,31 @@ class VideoCodecFactoryTests extends TestBase {
 
 	/**
 	 * Decodes what {@link TestEncoder} produces into a frame of the encoded
-	 * size, filled with the encoded luma sample.
+	 * size, filled with the encoded luma sample. With asynchronous output it
+	 * hands the frames over on a thread of its own, every other one with a
+	 * QP, as a hardware decoder does from its output queue.
 	 */
 	static class TestDecoder implements VideoDecoder {
 
 		final AtomicReference<Boolean> released = new AtomicReference<>(false);
+		final AtomicInteger framesWithQp = new AtomicInteger();
+		final AtomicInteger framesWithoutQp = new AtomicInteger();
 
 		private final boolean javaBuffers;
 
 		private final boolean h265;
 
+		private final ExecutorService output;
+
 		private Callback callback;
 
+		private int frames;
 
-		TestDecoder(boolean javaBuffers, boolean h265) {
+
+		TestDecoder(boolean javaBuffers, boolean h265, boolean asyncOutput) {
 			this.javaBuffers = javaBuffers;
 			this.h265 = h265;
+			this.output = asyncOutput ? Executors.newSingleThreadExecutor() : null;
 		}
 
 		@Override
@@ -836,6 +866,17 @@ class VideoCodecFactoryTests extends TestBase {
 
 		@Override
 		public VideoCodecStatus release() {
+			if (output != null) {
+				output.shutdown();
+
+				try {
+					output.awaitTermination(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			}
+
 			released.set(true);
 			return VideoCodecStatus.OK;
 		}
@@ -868,8 +909,28 @@ class VideoCodecFactoryTests extends TestBase {
 			}
 
 			VideoFrame frame = new VideoFrame(buffer, image.getCaptureTimeNs());
-			callback.onDecodedFrame(frame, null, null);
-			frame.release();
+
+			if (output == null) {
+				callback.onDecodedFrame(frame, null, null);
+				frame.release();
+
+				return VideoCodecStatus.OK;
+			}
+
+			Callback frameCallback = callback;
+			Integer qp = frames++ % 2 == 0 ? 30 : null;
+
+			try {
+				output.execute(() -> {
+					frameCallback.onDecodedFrame(frame, null, qp);
+					frame.release();
+
+					(qp != null ? framesWithQp : framesWithoutQp).incrementAndGet();
+				});
+			}
+			catch (RejectedExecutionException e) {
+				frame.release();
+			}
 
 			return VideoCodecStatus.OK;
 		}
