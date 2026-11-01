@@ -63,6 +63,24 @@ namespace jni
 				return JavaLocalRef<jobject>(env, f.create(env, nativeObject));
 			}
 
+			// Creates the Java wrapper for the object `owner` holds and hands
+			// the reference `owner` owns over to the wrapper, which releases it
+			// when disposed. The reference is handed over only once the wrapper
+			// exists and has its handle bound: if creating it throws, `owner`
+			// still holds the reference and drops it while unwinding, instead of
+			// leaking it. `owner` is a smart pointer with get() and release(),
+			// such as webrtc::scoped_refptr or std::unique_ptr; pass it with
+			// std::move().
+			template <class P>
+			static JavaLocalRef<jobject> createOwning(JNIEnv * env, P owner)
+			{
+				JavaLocalRef<jobject> object = create(env, owner.get());
+
+				static_cast<void>(owner.release());
+
+				return object;
+			}
+
 			template <class T>
 			static JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const jsize & length)
 			{
@@ -117,6 +135,24 @@ namespace jni
 				const JavaFactory<T> * f = static_cast<JavaFactory<T> *>(p.get());
 
 				return JavaLocalRef<jobject>(env, f->create(env, nativeObject));
+			}
+
+			// Creates the Java wrapper for the object `owner` holds and hands
+			// the reference `owner` owns over to the wrapper, which releases it
+			// when disposed. The reference is handed over only once the wrapper
+			// exists and has its handle bound: if creating it throws, `owner`
+			// still holds the reference and drops it while unwinding, instead of
+			// leaking it. `owner` is a smart pointer with get() and release(),
+			// such as webrtc::scoped_refptr or std::unique_ptr; pass it with
+			// std::move().
+			template <class P>
+			static JavaLocalRef<jobject> createOwning(JNIEnv * env, P owner)
+			{
+				JavaLocalRef<jobject> object = create(env, owner.get());
+
+				static_cast<void>(owner.release());
+
+				return object;
 			}
 
 			template <class T>

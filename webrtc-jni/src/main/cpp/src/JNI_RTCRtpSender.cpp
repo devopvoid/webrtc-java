@@ -60,7 +60,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTransport
 
 		// The Java object holds a reference until it is disposed, since the
 		// connection frees the transport once it closes or drops it.
-		return jni::JavaFactories::create(env, transport.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(transport)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -223,9 +223,14 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createVideoFrameIn
 			return nullptr;
 		}
 
-		auto jInjector = jni::JavaFactories::create(env, injector.release());
+		// The wrapper takes the injector and the observer only once both
+		// handles are bound, so a failure on the way leaves them owned here.
+		auto jInjector = jni::JavaFactories::create(env, injector.get());
 
-		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
+		SetHandle(env, jInjector.get(), "observerHandle", observer.get());
+
+		static_cast<void>(injector.release());
+		static_cast<void>(observer.release());
 
 		return jInjector.release();
 	}
@@ -259,9 +264,14 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createAudioFrameIn
 			return nullptr;
 		}
 
-		auto jInjector = jni::JavaFactories::create(env, injector.release());
+		// The wrapper takes the injector and the observer only once both
+		// handles are bound, so a failure on the way leaves them owned here.
+		auto jInjector = jni::JavaFactories::create(env, injector.get());
 
-		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
+		SetHandle(env, jInjector.get(), "observerHandle", observer.get());
+
+		static_cast<void>(injector.release());
+		static_cast<void>(observer.release());
 
 		return jInjector.release();
 	}

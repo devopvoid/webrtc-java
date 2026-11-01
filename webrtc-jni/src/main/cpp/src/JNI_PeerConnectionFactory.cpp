@@ -323,7 +323,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 			return nullptr;
 		}
 
-		return jni::JavaFactories::create(env, audioSource.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(audioSource)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -354,7 +354,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 
 		webrtc::scoped_refptr<webrtc::AudioTrackInterface> audioTrack = factory->CreateAudioTrack(label, source);
 
-		return jni::JavaFactories::create(env, audioTrack.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(audioTrack)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -414,7 +414,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 		webrtc::scoped_refptr<webrtc::VideoTrackInterface> videoTrack = factory->CreateVideoTrack(
 			webrtc::scoped_refptr<webrtc::VideoTrackSourceInterface>(source), label);
 
-		return jni::JavaFactories::create(env, videoTrack.release()).release();
+		return jni::JavaFactories::createOwning(env, std::move(videoTrack)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -447,38 +447,51 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 		return nullptr;
 	}
 
-	webrtc::PeerConnectionObserver * observer = new jni::PeerConnectionObserver(env, jni::JavaGlobalRef<jobject>(env, jobserver));
-	webrtc::PeerConnectionDependencies dependencies(observer);
+	try {
+		// Declared before the peer connection, so that when creating the
+		// wrapper fails the peer connection is released, and closed, before
+		// the observer it reports to is deleted.
+		std::unique_ptr<webrtc::PeerConnectionObserver> observer =
+			std::make_unique<jni::PeerConnectionObserver>(env, jni::JavaGlobalRef<jobject>(env, jobserver));
+		webrtc::PeerConnectionDependencies dependencies(observer.get());
 
-	auto result = factory->CreatePeerConnectionOrError(configuration, std::move(dependencies));
+		auto result = factory->CreatePeerConnectionOrError(configuration, std::move(dependencies));
 
-	if (!result.ok()) {
-		// No peer connection took the observer.
-		delete observer;
+		if (!result.ok()) {
+			// No peer connection took the observer, which is deleted on return.
 
-		// The type is a string_view, which is not terminated and cannot be
-		// passed through varargs as it is.
-		const std::string type(ToString(result.error().type()));
+			// The type is a string_view, which is not terminated and cannot be
+			// passed through varargs as it is.
+			const std::string type(ToString(result.error().type()));
 
-		env->Throw(jni::JavaRuntimeException(env, "Create PeerConnection failed: %s %s",
-			type.c_str(), result.error().message()));
+			env->Throw(jni::JavaRuntimeException(env, "Create PeerConnection failed: %s %s",
+				type.c_str(), result.error().message()));
 
-		return nullptr;
-	}
+			return nullptr;
+		}
 
-	auto pc = result.MoveValue();
+		auto pc = result.MoveValue();
 
-	if (pc != nullptr) {
-		auto javaPeerConnection = jni::JavaFactories::create(env, pc.release());
+		if (pc == nullptr) {
+			return nullptr;
+		}
 
-		SetHandle(env, javaPeerConnection.get(), "observerHandle", observer);
+		// The wrapper takes the peer connection and the observer only once
+		// both handles are bound, so a failure on the way leaves them owned
+		// here.
+		auto javaPeerConnection = jni::JavaFactories::create(env, pc.get());
+
+		SetHandle(env, javaPeerConnection.get(), "observerHandle", observer.get());
+
+		static_cast<void>(pc.release());
+		static_cast<void>(observer.release());
 
 		return javaPeerConnection.release();
 	}
-
-	delete observer;
-
-	return nullptr;
+	catch (...) {
+		ThrowCxxJavaException(env);
+		return nullptr;
+	}
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpReceiverCapabilities

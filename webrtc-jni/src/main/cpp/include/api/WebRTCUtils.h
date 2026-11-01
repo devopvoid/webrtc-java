@@ -68,9 +68,16 @@ namespace jni
 		}
 
 		for (jsize i = 0; i < vectorSize; i++) {
-			JavaLocalRef<jobject> obj = JavaFactories::create(env, vector[i].release());
+			JavaLocalRef<jobject> obj = JavaFactories::create(env, vector[i].get());
 
 			env->SetObjectArrayElement(objectArray, i, obj.get());
+		}
+
+		// Only now that every wrapper exists do they take their references:
+		// if one fails, `vector` still holds them all and drops them, and the
+		// wrappers made so far are discarded with the array.
+		for (auto & item : vector) {
+			static_cast<void>(item.release());
 		}
 
 		return objectArray;
