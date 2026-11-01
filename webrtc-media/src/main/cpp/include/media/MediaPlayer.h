@@ -27,6 +27,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -55,6 +56,12 @@ namespace ffmpeg
 	// Decoding runs ahead of playback only as far as the pacer's queues allow.
 	// Once those are full the decode thread blocks, which is what keeps a
 	// whole file from being decoded into memory at once.
+	//
+	// What the observer is told goes through a thread of its own. Each report
+	// is queued under the lock, in the same step as the change it reports,
+	// and that thread makes the calls one after the other, in that order.
+	// Neither a command nor the decode thread calls the observer itself, so
+	// the calls never overlap, and a slow observer holds up no decoding.
 	class MediaPlayer
 	{
 		public:
@@ -69,9 +76,9 @@ namespace ffmpeg
 			MediaPlayer & operator=(const MediaPlayer &) = delete;
 
 			// Takes over the observer, which then lives as long as the
-			// player does. Call this before Initialize: the observer is read
-			// without the lock while it is being called, on the assumption
-			// that it does not change once the thread is running.
+			// player does. Call this before Initialize: the observer is
+			// called without the lock, on the assumption that it does not
+			// change once the threads are running.
 			void SetObserver(std::unique_ptr<MediaPlayerObserver> observer);
 
 			// Asks for video to be decoded in hardware where the platform can.
@@ -98,8 +105,9 @@ namespace ffmpeg
 			void SetLooping(bool looping);
 			bool IsLooping() const;
 
-			// Stops playback and releases the thread. The player cannot be
-			// used afterwards.
+			// Stops playback and releases the threads. What was reported
+			// before, and the closed state after it, has reached the observer
+			// once this returns. The player cannot be used afterwards.
 			void Close();
 
 			// Where playback has got to within the current pass, in
@@ -116,7 +124,31 @@ namespace ffmpeg
 			bool IsOwnThread() const;
 
 		private:
+			// A report waiting for the event thread.
+			struct Event
+			{
+				enum Kind
+				{
+					kState,
+					kEndOfStream,
+					kError
+				};
+
+				Kind kind = kState;
+				int state = kIdle;
+				std::string message;
+			};
+
 			void Run();
+
+			// The event thread: hands what is queued to the observer, one
+			// report after the other, until the player closes.
+			void DeliverEvents();
+			static void Deliver(MediaPlayerObserver & observer, const Event & event);
+
+			// Queues a report, with the lock held. Allocates, and so may
+			// throw, in which case nothing has been queued.
+			void PostLocked(Event::Kind kind, int state, std::string message);
 
 			// Reads and decodes until the source is exhausted. Returns false
 			// if playback should stop, either on error or on close.
@@ -146,13 +178,10 @@ namespace ffmpeg
 			// further back to try once the reader would land where it did
 			// already, or the distance has grown past kMaxSeekBackUs.
 			bool SeekFurtherBack();
-			void SetState(int state);
 
-			// Records the state, with the lock held. Returns whether it
-			// changed, in which case the caller reports it with NotifyState
-			// once the lock is released.
+			// Records the state, with the lock held, and queues the report of
+			// it if it changed. Returns whether it did.
 			bool UpdateStateLocked(int state);
-			void NotifyState(int state);
 
 			// Stops playback where it is, as a pause does, and reports the
 			// error. The thread stays, so that playback can be resumed.
@@ -169,9 +198,18 @@ namespace ffmpeg
 			bool has_audio_ = false;
 
 			std::thread thread_;
+			std::thread event_thread_;
 
 			mutable std::mutex mutex_;
 			std::condition_variable command_;
+
+			// The reports for the event thread, and what wakes it, all under
+			// the lock. The closed state is not queued, as queueing could
+			// fail: it is what stopping the thread delivers, after the rest.
+			std::deque<Event> events_;
+			std::condition_variable event_posted_;
+			bool events_stopping_ = false;
+			bool closed_pending_ = false;
 
 			std::unique_ptr<MediaPlayerObserver> observer_;
 			bool running_ = false;

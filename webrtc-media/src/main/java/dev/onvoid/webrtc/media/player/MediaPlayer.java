@@ -71,7 +71,7 @@ public class MediaPlayer implements AutoCloseable {
 	/** The native player, or 0 once this player has been closed. */
 	private long handle;
 
-	/** Read on the native player's thread, so never a stale value. */
+	/** Read on the native player's event thread, so never a stale value. */
 	private volatile MediaPlayerListener listener;
 
 	/**
@@ -270,7 +270,9 @@ public class MediaPlayer implements AutoCloseable {
 
 	/**
 	 * Stops playback, releases the native player and the reader it took over,
-	 * and waits for the player's thread to finish. Closing a player that is
+	 * and waits for the player's threads to finish. By the time this returns,
+	 * the listener has been told of everything that happened before, and of
+	 * the {@link MediaPlayerState#CLOSED} state last. Closing a player that is
 	 * already closed does nothing.
 	 * <p>
 	 * Closing from within a {@link MediaPlayerListener} call, or from a sink
@@ -322,7 +324,7 @@ public class MediaPlayer implements AutoCloseable {
 		releaser.start();
 	}
 
-	/** Called by native code on the player's thread. */
+	/** Called by native code on the player's event thread. */
 	private void onNativeStateChanged(int state) {
 		MediaPlayerListener current = listener;
 
@@ -331,7 +333,7 @@ public class MediaPlayer implements AutoCloseable {
 		}
 	}
 
-	/** Called by native code on the player's thread. */
+	/** Called by native code on the player's event thread. */
 	private void onNativeEndOfStream() {
 		MediaPlayerListener current = listener;
 
@@ -340,7 +342,7 @@ public class MediaPlayer implements AutoCloseable {
 		}
 	}
 
-	/** Called by native code on the player's thread. */
+	/** Called by native code on the player's event thread. */
 	private void onNativeError(String message) {
 		MediaPlayerListener current = listener;
 

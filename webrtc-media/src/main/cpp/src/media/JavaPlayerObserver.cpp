@@ -64,6 +64,39 @@ namespace ffmpeg
 		Detach(attached);
 	}
 
+	void JavaPlayerObserver::OnThreadStart()
+	{
+		if (vm_ == nullptr) {
+			return;
+		}
+
+		JNIEnv * env = nullptr;
+
+		if (vm_->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_EDETACHED) {
+			return;
+		}
+
+		// A daemon, so that a player left open does not keep the JVM from
+		// exiting. Every call made on this thread from here on finds it
+		// attached, and leaves it so.
+		JavaVMAttachArgs args;
+		args.version = JNI_VERSION_1_6;
+		args.name = const_cast<char *>("MediaPlayer-events");
+		args.group = nullptr;
+
+		thread_attached_ = vm_->AttachCurrentThreadAsDaemon(
+				reinterpret_cast<void **>(&env), &args) == JNI_OK;
+	}
+
+	void JavaPlayerObserver::OnThreadStop()
+	{
+		if (thread_attached_) {
+			thread_attached_ = false;
+
+			vm_->DetachCurrentThread();
+		}
+	}
+
 	void JavaPlayerObserver::OnStateChanged(int state)
 	{
 		if (on_state_changed_ == nullptr) {

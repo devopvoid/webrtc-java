@@ -26,10 +26,11 @@ namespace ffmpeg
 	// Passes a player's reports on to its Java MediaPlayer, which turns them
 	// into calls on whatever listener the application set.
 	//
-	// The calls arrive on the player's own thread, which the JVM knows nothing
-	// about, so each one attaches that thread, makes the call and detaches
-	// again. Attaching is not free, but these are state changes and errors,
-	// not frames: they happen a handful of times over a whole playback.
+	// The calls arrive on the player's event thread, which the JVM knows
+	// nothing about. That thread is attached when it starts and detached when
+	// it stops, so that every call of a player is made on one and the same
+	// Java thread, "MediaPlayer-events". A call on any other thread, such as
+	// the release of the global reference, attaches for itself.
 	class JavaPlayerObserver : public MediaPlayerObserver
 	{
 		public:
@@ -41,6 +42,8 @@ namespace ffmpeg
 			JavaPlayerObserver(const JavaPlayerObserver &) = delete;
 			JavaPlayerObserver & operator=(const JavaPlayerObserver &) = delete;
 
+			void OnThreadStart() override;
+			void OnThreadStop() override;
 			void OnStateChanged(int state) override;
 			void OnEndOfStream() override;
 			void OnError(const std::string & message) override;
@@ -63,6 +66,10 @@ namespace ffmpeg
 			jmethodID on_state_changed_ = nullptr;
 			jmethodID on_end_of_stream_ = nullptr;
 			jmethodID on_error_ = nullptr;
+
+			// Whether OnThreadStart attached the event thread, which only
+			// that thread reads or changes.
+			bool thread_attached_ = false;
 	};
 }
 

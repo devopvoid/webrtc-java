@@ -19,10 +19,18 @@ package dev.onvoid.webrtc.media.player;
 /**
  * What a {@link MediaPlayer} reports while it runs.
  * <p>
- * Calls arrive on the player's own thread, not on the thread that asked for
- * playback, and that thread is the one decoding the media. An implementation
- * must therefore return promptly and must not call back into the player in a
- * way that waits for it.
+ * Calls arrive on the player's own event thread, never on the thread that
+ * asked for playback, nor on the one decoding the media. They come one at a
+ * time, never overlapping, in the order the player went through what they
+ * report, and all calls of one player arrive on the same thread. A command
+ * such as {@link MediaPlayer#play()} returns without waiting for its state
+ * change to be reported, so {@link MediaPlayer#getState()} may already read a
+ * later state than the call in progress reports.
+ * <p>
+ * The reports behind a call wait for it to return, and so does closing the
+ * player from another thread. An implementation must therefore return
+ * promptly and must not call back into the player in a way that waits for
+ * it.
  * <p>
  * Closing the player from here, or the {@link MediaFileSource} it belongs to,
  * is fine: the native player is then released once this call has returned,
