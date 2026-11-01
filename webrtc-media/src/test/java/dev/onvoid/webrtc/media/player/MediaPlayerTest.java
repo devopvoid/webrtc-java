@@ -733,6 +733,59 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void endsOnlyOnceTheLastDeliveryHasReturned() throws Exception {
+		try (Sources sources = new Sources()) {
+			AudioTrack track = factory.createAudioTrack("audio", sources.audio);
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch ended = new CountDownLatch(1);
+			AtomicInteger held = new AtomicInteger();
+			AtomicInteger endedWhileHeld = new AtomicInteger();
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+			});
+
+			// Every chunk, the last one among them, is held on the pacing
+			// thread, by then out of its queue and on its way into WebRTC. An
+			// end of the stream reported while one is held comes before
+			// everything has been delivered, and an application closing a
+			// recorder or a receiver on it would cut that chunk off.
+			AudioTrackSink sink = (data, bits, rate, ch, count) -> {
+				held.incrementAndGet();
+
+				try {
+					if (ended.await(200, TimeUnit.MILLISECONDS)) {
+						endedWhileHeld.incrementAndGet();
+					}
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			};
+
+			track.addSink(sink);
+
+			// Close to the end, so that only a few chunks are held.
+			player.seek(2_950_000);
+			player.play();
+
+			assertTrue(ended.await(10, TimeUnit.SECONDS), "not ended");
+			assertTrue(held.get() > 0, "no audio");
+			assertEquals(0, endedWhileHeld.get(), "ended while a chunk was being delivered");
+
+			player.close();
+
+			track.removeSink(sink);
+			track.dispose();
+		}
+	}
+
+	@Test
 	void outlivesDisposedSources() throws Exception {
 		CustomVideoSource videoSource = new CustomVideoSource();
 		CustomAudioSource audioSource = new CustomAudioSource();

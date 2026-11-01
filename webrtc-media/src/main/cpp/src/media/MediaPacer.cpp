@@ -242,7 +242,10 @@ namespace ffmpeg
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		return video_queue_.empty() && audio_queue_.empty();
+		// An item leaves its queue before it is handed over, so empty queues
+		// alone would call the source played out while its last item is
+		// still on its way into WebRTC.
+		return video_queue_.empty() && audio_queue_.empty() && delivering_ == 0;
 	}
 
 	int64_t MediaPacer::GetPositionUs() const
@@ -303,9 +306,11 @@ namespace ffmpeg
 					// capacity.
 					audio_space_.notify_one();
 
+					++delivering_;
 					lock.unlock();
 					DeliverVideo(std::move(item), due);
 					lock.lock();
+					--delivering_;
 
 					delivered = true;
 				}
@@ -325,9 +330,11 @@ namespace ffmpeg
 
 					audio_space_.notify_one();
 
+					++delivering_;
 					lock.unlock();
 					DeliverAudio(item, due);
 					lock.lock();
+					--delivering_;
 
 					delivered = true;
 				}
