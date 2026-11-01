@@ -23,6 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -569,10 +575,66 @@ class PeerTests extends ClientTestBase {
 				.negotiation(Negotiation.MANUAL)
 				.channelSendLimit(10)
 				.build());
+		DataChannel small = other.createChannel("small");
 		ExecutionException tooLarge = assertThrows(ExecutionException.class,
-				() -> await(other.createChannel("small").send(new byte[11])));
+				() -> await(small.send(new byte[11])));
+		ExecutionException tooLong = assertThrows(ExecutionException.class,
+				() -> await(small.send("x".repeat(11))));
 
 		assertInstanceOf(ChannelFullException.class, tooLarge.getCause());
+		assertInstanceOf(ChannelFullException.class, tooLong.getCause());
+		assertEquals(0, small.bufferedAmount());
+	}
+
+	@Test
+	void oversizedBufferNotCopied() throws Exception {
+		// A sparse file mapped read-only, whose pages are never touched: a
+		// copy of its 2 GiB could not even be allocated as a byte array.
+		Path dir = Files.createTempDirectory("channel-send");
+		Path file = dir.resolve("sparse.bin");
+
+		try {
+			try (FileChannel writer = FileChannel.open(file, StandardOpenOption.CREATE_NEW,
+					StandardOpenOption.WRITE, StandardOpenOption.SPARSE)) {
+				writer.write(ByteBuffer.wrap(new byte[1]), Integer.MAX_VALUE - 1);
+			}
+
+			ByteBuffer huge;
+
+			try (FileChannel reader = FileChannel.open(file, StandardOpenOption.READ)) {
+				huge = reader.map(FileChannel.MapMode.READ_ONLY, 0, Integer.MAX_VALUE);
+			}
+
+			Peer peer = rtc.createPeer(PeerOptions.builder()
+					.negotiation(Negotiation.MANUAL)
+					.channelSendLimit(1000)
+					.build());
+			DataChannel channel = peer.createChannel("bounded");
+
+			ExecutionException full = assertThrows(ExecutionException.class, () -> await(channel.send(huge)));
+
+			assertInstanceOf(ChannelFullException.class, full.getCause());
+			assertEquals(0, channel.bufferedAmount());
+
+			// Nothing of the limit stayed taken.
+			CompletableFuture<Void> fitting = channel.send(new byte[1000]);
+
+			assertEquals(1000, channel.bufferedAmount());
+			assertFalse(fitting.isDone());
+
+			peer.close();
+		}
+		finally {
+			// Windows keeps a mapped file until the mapping is collected.
+			try {
+				Files.deleteIfExists(file);
+				Files.deleteIfExists(dir);
+			}
+			catch (IOException e) {
+				file.toFile().deleteOnExit();
+				dir.toFile().deleteOnExit();
+			}
+		}
 	}
 
 	private static PeerOptions manualOptions() {

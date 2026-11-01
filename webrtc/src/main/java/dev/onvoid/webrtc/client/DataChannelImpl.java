@@ -27,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import dev.onvoid.webrtc.RTCDataChannel;
 import dev.onvoid.webrtc.RTCDataChannelBuffer;
@@ -164,24 +165,37 @@ final class DataChannelImpl implements DataChannel {
 	public CompletableFuture<Void> send(String text) {
 		requireNonNull(text, "text");
 
-		return enqueue(text.getBytes(StandardCharsets.UTF_8), false);
+		// UTF-8 takes at least a byte for each char, so a text that cannot
+		// fit is refused before it is encoded.
+		long waiting = held.get();
+
+		if (waiting + text.length() > sendLimit) {
+			return full(waiting, "at least " + text.length());
+		}
+
+		byte[] encoded = text.getBytes(StandardCharsets.UTF_8);
+
+		return enqueue(encoded.length, false, () -> encoded);
 	}
 
 	@Override
 	public CompletableFuture<Void> send(byte[] data) {
 		requireNonNull(data, "data");
 
-		return enqueue(data.clone(), true);
+		return enqueue(data.length, true, data::clone);
 	}
 
 	@Override
 	public CompletableFuture<Void> send(ByteBuffer data) {
 		requireNonNull(data, "data");
 
-		byte[] copy = new byte[data.remaining()];
-		data.duplicate().get(copy);
+		int size = data.remaining();
 
-		return enqueue(copy, true);
+		return enqueue(size, true, () -> {
+			byte[] copy = new byte[size];
+			data.duplicate().get(copy);
+			return copy;
+		});
 	}
 
 	@Override
@@ -281,30 +295,51 @@ final class DataChannelImpl implements DataChannel {
 				() -> settleOpened(ChannelState.CLOSED, error));
 	}
 
-	private CompletableFuture<Void> enqueue(byte[] data, boolean binary) {
-		long size = data.length;
+	/**
+	 * Takes the size out of the send limit, and only then makes the copy that
+	 * waits: a message too large for the limit is refused without the memory
+	 * of a copy. A copy that fails gives its share back.
+	 */
+	private CompletableFuture<Void> enqueue(long size, boolean binary, Supplier<byte[]> copy) {
 		long before = held.getAndUpdate(amount -> amount + size <= sendLimit ? amount + size : amount);
 
 		if (before + size > sendLimit) {
-			return peer.toPublic(ClientFuture.failed(new ChannelFullException("The data channel " + label
-					+ " holds " + before + " bytes waiting to be sent, and " + size + " more would exceed "
-					+ "its limit of " + sendLimit)));
+			return full(before, Long.toString(size));
+		}
+
+		byte[] data;
+
+		try {
+			data = copy.get();
+		}
+		catch (Throwable e) {
+			held.addAndGet(-size);
+			throw e;
 		}
 
 		CompletableFuture<Void> sent = new CompletableFuture<>();
+		Runnable closed = () -> {
+			held.addAndGet(-size);
+			sent.completeExceptionally(new PeerClosedException("The data channel " + label + " is closed"));
+		};
 
 		peer.control.execute(() -> {
 			if (released || state == ChannelState.CLOSING || state == ChannelState.CLOSED) {
-				held.addAndGet(-data.length);
-				sent.completeExceptionally(new PeerClosedException("The data channel " + label + " is closed"));
+				closed.run();
 				return;
 			}
 
 			pending.add(new Pending(data, binary, sent));
 			pump();
-		});
+		}, closed);
 
 		return peer.toPublic(sent);
+	}
+
+	private CompletableFuture<Void> full(long waiting, String size) {
+		return peer.toPublic(ClientFuture.failed(new ChannelFullException("The data channel " + label
+				+ " holds " + waiting + " bytes waiting to be sent, and " + size + " more would exceed "
+				+ "its limit of " + sendLimit)));
 	}
 
 	/** Hands waiting messages to the transport while it has room. */
