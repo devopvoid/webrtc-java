@@ -31,8 +31,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -600,26 +603,66 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void reportsInOrderOnOneThreadWithoutOverlap() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			RecordingListener listener = new RecordingListener(player);
+
+			player.setListener(listener);
+			player.seek(2_500_000);
+
+			// Three changes from this thread, the end from the decode thread.
+			// The listener holds on to the second PLAYING until the decode
+			// thread has ended the source, which it does whatever the
+			// listener does, so a report of the end that did not wait for
+			// that call would overlap it.
+			player.play();
+			player.pause();
+			player.play();
+
+			assertTrue(listener.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			player.close();
+
+			// Everything has been reported once close() returns.
+			assertEquals(Arrays.asList("PLAYING", "PAUSED", "PLAYING", "ENDED",
+					"end of stream", "CLOSED"), listener.reports);
+			assertTrue(listener.endedWhileHeld.get(), "the source did not end while the listener was held");
+			assertEquals(0, listener.overlaps.get(), "listener calls overlapped");
+			assertEquals(1, listener.threads.size(), "listener called on: " + listener.threads);
+			assertFalse(listener.threads.contains(Thread.currentThread()),
+					"listener called on the thread giving the commands");
+		}
+	}
+
+	@Test
 	void closesFromStateChangeOfCommand() throws Exception {
 		try (Sources sources = new Sources()) {
 			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
 					sources.video, sources.audio);
 			AtomicInteger closes = new AtomicInteger();
+			CountDownLatch closed = new CountDownLatch(1);
 
 			player.setListener(new MediaPlayerListener() {
 
 				@Override
 				public void onStateChanged(MediaPlayerState state) {
-					// Called from within play(), on the calling thread.
+					// On the player's event thread, which the close cannot
+					// wait for, and after play() may already have returned.
 					if (state == MediaPlayerState.PLAYING) {
 						player.close();
 						closes.incrementAndGet();
+					}
+					else if (state == MediaPlayerState.CLOSED) {
+						closed.countDown();
 					}
 				}
 			});
 
 			player.play();
 
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
 			assertEquals(1, closes.get());
 			assertEquals(MediaPlayerState.CLOSED, player.getState());
 
@@ -937,6 +980,94 @@ class MediaPlayerTest {
 		assertNotNull(url, "Test asset " + ASSET + " is missing");
 
 		return Paths.get(url.toURI());
+	}
+
+	/**
+	 * Records what a player reports, which thread it reports it on, and
+	 * whether a report came in while another was still being handled.
+	 */
+	private static final class RecordingListener implements MediaPlayerListener {
+
+		final List<String> reports = Collections.synchronizedList(new ArrayList<>());
+		final Set<Thread> threads = ConcurrentHashMap.newKeySet();
+		final AtomicInteger overlaps = new AtomicInteger();
+		final AtomicBoolean endedWhileHeld = new AtomicBoolean();
+		final CountDownLatch ended = new CountDownLatch(1);
+
+		private final MediaPlayer player;
+		private final AtomicBoolean inCall = new AtomicBoolean();
+		private int playing;
+
+
+		RecordingListener(MediaPlayer player) {
+			this.player = player;
+		}
+
+		@Override
+		public void onStateChanged(MediaPlayerState state) {
+			enter(state.name());
+
+			try {
+				if (state == MediaPlayerState.PLAYING && ++playing == 2) {
+					endedWhileHeld.set(awaitEnded());
+				}
+			}
+			finally {
+				leave();
+			}
+		}
+
+		@Override
+		public void onEndOfStream() {
+			enter("end of stream");
+			leave();
+
+			ended.countDown();
+		}
+
+		@Override
+		public void onError(String message) {
+			enter("error: " + message);
+			leave();
+		}
+
+		private void enter(String report) {
+			if (!inCall.compareAndSet(false, true)) {
+				overlaps.incrementAndGet();
+			}
+
+			threads.add(Thread.currentThread());
+			reports.add(report);
+		}
+
+		private void leave() {
+			inCall.set(false);
+		}
+
+		/**
+		 * Waits for the player to read as ended, which the decode thread sets
+		 * without waiting for this call to return.
+		 */
+		private boolean awaitEnded() {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+
+			while (player.getState() != MediaPlayerState.ENDED) {
+				if (System.nanoTime() > deadline) {
+					return false;
+				}
+
+				try {
+					Thread.sleep(5);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+
+					return false;
+				}
+			}
+
+			return true;
+		}
 	}
 
 	/**

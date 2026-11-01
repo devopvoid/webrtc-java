@@ -23,13 +23,20 @@ namespace ffmpeg
 {
 	// What a player reports while it runs.
 	//
-	// Every call arrives on the player's own thread, never on the thread that
-	// asked for playback, so an implementation must not block: the thread it
-	// holds up is the one decoding the media.
+	// Every call arrives on the player's event thread, never on the thread
+	// that asked for playback, one at a time and in the order the player went
+	// through what it reports. An implementation should still return
+	// promptly: the reports behind it wait, and so does a close.
 	class MediaPlayerObserver
 	{
 		public:
 			virtual ~MediaPlayerObserver() = default;
+
+			// Called on the event thread before the first report and after
+			// the last, so that what the thread needs set up, such as being
+			// known to the JVM, is set up once rather than for every call.
+			virtual void OnThreadStart() {}
+			virtual void OnThreadStop() {}
 
 			// The player moved to another state, as a MediaPlayerState value.
 			virtual void OnStateChanged(int state) = 0;
