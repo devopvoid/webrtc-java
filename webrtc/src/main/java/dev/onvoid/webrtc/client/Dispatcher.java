@@ -46,6 +46,8 @@ abstract class Dispatcher<T> {
 
 	private final Runnable next = this::handleNext;
 
+	private final Runnable dropped = this::dropWaiting;
+
 	private final Workload.Backlog backlog = this::count;
 
 	private long queuedWeight;
@@ -115,7 +117,7 @@ abstract class Dispatcher<T> {
 		}
 
 		if (schedule) {
-			executor.execute(next);
+			executor.execute(next, dropped);
 		}
 	}
 
@@ -180,7 +182,29 @@ abstract class Dispatcher<T> {
 		if (more) {
 			// Behind what else the executor has, which ends its turn on the
 			// pool once the turn has run long enough.
-			executor.execute(next);
+			executor.execute(next, dropped);
+		}
+	}
+
+	/**
+	 * Runs instead of the next item when the executor rejects the task: lets
+	 * go of what waits, counted as dropped, and leaves nothing scheduled, so
+	 * that the next item offered tries the executor again.
+	 */
+	private void dropWaiting() {
+		synchronized (queue) {
+			if (!queue.isEmpty()) {
+				workload.dropped(queue.size());
+				workload.idle(backlog);
+			}
+
+			for (Entry<T> entry : queue) {
+				release(entry.item);
+			}
+
+			queue.clear();
+			queuedWeight = 0;
+			scheduled = false;
 		}
 	}
 
