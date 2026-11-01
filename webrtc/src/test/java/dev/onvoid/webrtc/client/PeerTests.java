@@ -48,6 +48,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCSessionDescription;
 
@@ -743,6 +744,78 @@ class PeerTests extends ClientTestBase {
 		assertThrows(IllegalStateException.class,
 				() -> rtc.createPeer(PeerOptions.builder().signaling(link.first()).build()));
 		assertEquals(1, rtc.peers().size());
+	}
+
+	@Test
+	void closeDetachesSignaling() throws Exception {
+		List<Consumer<SignalMessage>> attached = new CopyOnWriteArrayList<>();
+		AtomicInteger detached = new AtomicInteger();
+		Signaling transport = new Signaling() {
+
+			@Override
+			public void send(SignalMessage message) {
+			}
+
+			@Override
+			public Subscription attach(Consumer<SignalMessage> inbound) {
+				attached.add(inbound);
+				return detached::incrementAndGet;
+			}
+		};
+
+		Peer peer = rtc.createPeer(PeerOptions.builder().signaling(transport).build());
+
+		assertEquals(1, attached.size());
+		assertEquals(0, detached.get());
+
+		// Once, by the time the close completes.
+		await(peer.closeAsync());
+		await(peer.closeAsync());
+		assertEquals(1, detached.get());
+	}
+
+	@Test
+	void closeWhileAttaching() throws Exception {
+		// The peer has closed, and found nothing to let go of, before attach
+		// returns. The subscription it then gets is closed all the same.
+		AtomicInteger detached = new AtomicInteger();
+		Signaling transport = new Signaling() {
+
+			@Override
+			public void send(SignalMessage message) {
+			}
+
+			@Override
+			public Subscription attach(Consumer<SignalMessage> inbound) {
+				rtc.peers().forEach(peer -> peer.closeAsync().join());
+				return detached::incrementAndGet;
+			}
+		};
+
+		Peer peer = rtc.createPeer(PeerOptions.builder().signaling(transport).build());
+
+		assertEquals(PeerState.CLOSED, peer.state());
+		assertEquals(1, detached.get());
+	}
+
+	@Test
+	void signalingOutlivesPeer() throws Exception {
+		// A closed peer frees its end of the loopback for the next one, which
+		// connects through it.
+		SignalingPair link = Signaling.loopback();
+		await(rtc.createPeer(PeerOptions.builder().signaling(link.first()).build()).closeAsync());
+
+		Peer caller = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
+		Peer callee = rtc.createPeer(PeerOptions.builder().signaling(link.second()).polite(true).build());
+		CompletableFuture<String> reply = new CompletableFuture<>();
+
+		callee.onChannel(channel -> channel.onMessage(message -> channel.send("pong:" + message.text())));
+
+		DataChannel channel = caller.createChannel("chat");
+		channel.onMessage(message -> reply.complete(message.text()));
+		channel.send("ping");
+
+		assertEquals("pong:ping", await(reply));
 	}
 
 	@Test
