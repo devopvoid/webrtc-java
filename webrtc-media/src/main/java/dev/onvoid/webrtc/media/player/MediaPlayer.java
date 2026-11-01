@@ -139,6 +139,13 @@ public class MediaPlayer implements AutoCloseable {
 			throw new IllegalArgumentException("A player needs at least one media source");
 		}
 
+		// Before the reader is taken over: should these fail, such as when the
+		// library of the sources cannot be loaded, the caller still has the
+		// reader to close.
+		long tableAddress = NativeApi.tableAddress();
+		long videoSourceHandle = videoSource != null ? NativeApi.handleOf(videoSource) : 0;
+		long audioSourceHandle = audioSource != null ? NativeApi.handleOf(audioSource) : 0;
+
 		// Taking the reader over rather than sharing it: the native player
 		// owns it from here, and a Java reader that still held the same
 		// pointer would release it a second time.
@@ -148,9 +155,7 @@ public class MediaPlayer implements AutoCloseable {
 			throw new IOException("The reader is closed");
 		}
 
-		handle = create(readerHandle, NativeApi.tableAddress(),
-				videoSource != null ? NativeApi.handleOf(videoSource) : 0,
-				audioSource != null ? NativeApi.handleOf(audioSource) : 0,
+		handle = create(readerHandle, tableAddress, videoSourceHandle, audioSourceHandle,
 				hardwareDecoding);
 	}
 

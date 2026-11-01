@@ -36,6 +36,7 @@ import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioLayer;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.AudioTrackSink;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 
@@ -131,6 +132,32 @@ class MediaFileSourceTest {
 	@Test
 	void missingFileFails() {
 		assertThrows(IOException.class, () -> new MediaFileSource(Paths.get("no-such-file.webm")));
+	}
+
+	@Test
+	void failedSetupReleasesReader() throws Exception {
+		// As when the library of the sources cannot be loaded: the video
+		// source was made, the audio source fails, and no player was made.
+		MediaReader reader = new MediaReader(asset());
+		AtomicInteger disposed = new AtomicInteger();
+
+		assertThrows(UnsatisfiedLinkError.class, () -> new MediaFileSource(reader,
+				() -> new CustomVideoSource() {
+
+					@Override
+					public void dispose() {
+						disposed.incrementAndGet();
+						super.dispose();
+					}
+				},
+				() -> {
+					throw new UnsatisfiedLinkError("no library");
+				},
+				false));
+
+		// Closed, which releases the file it had open.
+		assertThrows(IllegalStateException.class, reader::getInfo);
+		assertEquals(1, disposed.get());
 	}
 
 	@Test
