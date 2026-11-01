@@ -55,7 +55,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getAudio
 		ThrowCxxJavaException(env);
 	}
 
-	return objectArray;
+	return objectArray.release();
 }
 
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getVideoTracks
@@ -73,7 +73,7 @@ JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getVideo
 		ThrowCxxJavaException(env);
 	}
 
-	return objectArray;
+	return objectArray.release();
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_addTrack
