@@ -30,7 +30,9 @@ namespace jni
 			VideoCapture();
 			~VideoCapture();
 
-            void start() override;
+			void setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink) override;
+
+			void start() override;
 			void stop() override;
 			void destroy() override;
 

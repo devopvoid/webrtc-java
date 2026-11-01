@@ -97,8 +97,15 @@ public class VideoCapture extends NativeObject {
 	 * Idempotency:
 	 * Calling start() while already started should be a no-op (implementation-dependent).
 	 *
+	 * <p>
+	 * May be called again after {@link #stop()}; the sink set before stays
+	 * registered.
+	 *
 	 * @throws NullPointerException if the instance is disposed.
-	 * @throws IllegalStateException if prerequisites (device/capability) are missing.
+	 * @throws IllegalStateException if no device was set with
+	 *         {@link #setVideoCaptureDevice(VideoDevice)}.
+	 * @throws Error if the native capture cannot be started, e.g. because the
+	 *         device is not available; the message describes the cause.
 	 */
 	public native void start();
 
