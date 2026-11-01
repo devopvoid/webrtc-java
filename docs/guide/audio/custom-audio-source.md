@@ -204,6 +204,8 @@ audioTrack.addSink(monitorSink);
 audioTrack.removeSink(monitorSink);
 ```
 
+As with video tracks, sinks may be added and removed from any thread, and also from within `onData`, the sink's own included. Only `dispose()` must not be called from within a callback.
+
 ## Cleanup
 
 When you're done with the custom audio source, make sure to clean up resources:

@@ -162,6 +162,25 @@ videoTrack.addSink(localVideoSink);
 videoTrack.removeSink(localVideoSink);
 ```
 
+### Threads and Sink Changes
+
+`addSink` and `removeSink` may be called from any thread, also at the same time, and from within `onVideoFrame`, so a sink can remove itself once it has seen what it wanted:
+
+```java
+videoTrack.addSink(new VideoTrackSink() {
+    @Override
+    public void onVideoFrame(VideoFrame frame) {
+        saveSnapshot(frame);
+        frame.release();
+
+        // Gets no further frames.
+        videoTrack.removeSink(this);
+    }
+});
+```
+
+WebRTC holds a lock while it hands a frame to the sinks, and adding or removing a sink takes the same lock. A change made from within a callback therefore takes effect for the sinks at once, while the native sink is added or removed on another thread right after the callback returned. Disposing the track is the one thing a callback cannot do: `dispose()` throws an `IllegalStateException` there, and belongs on another thread.
+
 ### Receiving Remote Video Frames
 
 To receive frames from a remote peer, you need to add a sink to the remote video track when it's received. This is typically done in the `onTrack` method of your `PeerConnectionObserver`:

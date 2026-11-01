@@ -19,6 +19,11 @@ package dev.onvoid.webrtc.media.video;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.onvoid.webrtc.TestBase;
+import dev.onvoid.webrtc.internal.SinkRegistry;
+
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,6 +73,125 @@ class VideoTrackTests extends TestBase {
 
 		videoTrack.addSink(sink);
 		videoTrack.removeSink(sink);
+	}
+
+	@Test
+	void sinkRemovesItself() {
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("selfRemoving", source);
+		AtomicInteger frames = new AtomicInteger();
+
+		track.addSink(new VideoTrackSink() {
+
+			@Override
+			public void onVideoFrame(VideoFrame frame) {
+				frames.incrementAndGet();
+				frame.release();
+
+				// WebRTC holds the lock that removing takes while it is here.
+				track.removeSink(this);
+			}
+		});
+
+		assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+			pushFrame(source);
+			pushFrame(source);
+		});
+
+		assertEquals(1, frames.get());
+
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
+	void sinkRemovesOtherSink() {
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("removingOther", source);
+		AtomicInteger otherFrames = new AtomicInteger();
+
+		VideoTrackSink other = frame -> {
+			otherFrames.incrementAndGet();
+			frame.release();
+		};
+
+		// Called first, as it was added first.
+		track.addSink(frame -> {
+			frame.release();
+			track.removeSink(other);
+		});
+		track.addSink(other);
+
+		assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+			pushFrame(source);
+			pushFrame(source);
+		});
+
+		assertEquals(0, otherFrames.get());
+
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
+	void sinkAddsSink() throws Exception {
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("adding", source);
+		AtomicInteger addedFrames = new AtomicInteger();
+
+		VideoTrackSink added = frame -> {
+			addedFrames.incrementAndGet();
+			frame.release();
+		};
+
+		track.addSink(frame -> {
+			frame.release();
+			track.addSink(added);
+		});
+
+		assertTimeoutPreemptively(Duration.ofSeconds(5), () -> pushFrame(source));
+
+		// The native sink is added once the callback returned.
+		SinkRegistry.awaitDeferred();
+
+		pushFrame(source);
+
+		assertEquals(1, addedFrames.get());
+
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
+	void disposeInCallbackFails() {
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("disposing", source);
+		AtomicReference<RuntimeException> failure = new AtomicReference<>();
+
+		track.addSink(frame -> {
+			frame.release();
+
+			try {
+				track.dispose();
+			}
+			catch (RuntimeException e) {
+				failure.set(e);
+			}
+		});
+
+		assertTimeoutPreemptively(Duration.ofSeconds(5), () -> pushFrame(source));
+
+		assertInstanceOf(IllegalStateException.class, failure.get());
+
+		track.dispose();
+		source.dispose();
+	}
+
+	private static void pushFrame(CustomVideoSource source) {
+		VideoFrame frame = new VideoFrame(NativeI420Buffer.allocate(320, 240), 0);
+
+		source.pushFrame(frame);
+		frame.release();
 	}
 
 }

@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,7 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.ToLongFunction;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
@@ -146,7 +147,7 @@ class SinkRegistryTests {
 		Object sink = new Object();
 		RuntimeException failure = new RuntimeException("Not added");
 
-		RuntimeException thrown = assertThrows(RuntimeException.class, () -> registry.add(sink, s -> {
+		RuntimeException thrown = assertThrows(RuntimeException.class, () -> registry.add(sink, (s, r) -> {
 			throw failure;
 		}));
 
@@ -158,8 +159,143 @@ class SinkRegistryTests {
 		assertEquals(List.of("add 1", "remove 1"), calls);
 	}
 
-	private ToLongFunction<Object> add() {
-		return sink -> {
+	@Test
+	void removeInCallbackIsDeferred() throws Exception {
+		Object sink = new Object();
+		AtomicReference<SinkRegistry.Registration> registration = new AtomicReference<>();
+
+		registry.add(sink, (s, r) -> {
+			registration.set(r);
+			return add().add(s, r);
+		});
+
+		assertTrue(registration.get().enter());
+
+		try {
+			// WebRTC holds its lock here, so the native removal must wait.
+			registry.remove(sink);
+
+			assertEquals(List.of("add 1"), calls);
+
+			// Removed for the Java side at once.
+			assertFalse(registration.get().enter());
+		}
+		finally {
+			registration.get().exit();
+		}
+
+		SinkRegistry.awaitDeferred();
+
+		assertEquals(List.of("add 1", "remove 1"), calls);
+	}
+
+	@Test
+	void addInCallbackIsDeferred() throws Exception {
+		SinkRegistry.Registration callback = callback();
+		Object sink = new Object();
+
+		assertTrue(callback.enter());
+
+		try {
+			registry.add(sink, add());
+			registry.add(sink, add());
+
+			assertEquals(List.of("add 1"), calls);
+		}
+		finally {
+			callback.exit();
+		}
+
+		SinkRegistry.awaitDeferred();
+
+		assertEquals(List.of("add 1", "add 2"), calls);
+	}
+
+	@Test
+	void addAndRemoveInCallback() throws Exception {
+		SinkRegistry.Registration callback = callback();
+		Object sink = new Object();
+
+		assertTrue(callback.enter());
+
+		try {
+			registry.add(sink, add());
+			registry.remove(sink);
+		}
+		finally {
+			callback.exit();
+		}
+
+		SinkRegistry.awaitDeferred();
+
+		// Removed before the deferred add got to it, so never registered.
+		assertEquals(List.of("add 1"), calls);
+	}
+
+	@Test
+	void closeInCallbackFails() throws Exception {
+		SinkRegistry.Registration callback = callback();
+
+		assertTrue(callback.enter());
+
+		try {
+			assertThrows(IllegalStateException.class, registry::close);
+		}
+		finally {
+			callback.exit();
+		}
+
+		// Still open, and closes on another thread.
+		registry.add(new Object(), add());
+		registry.close();
+
+		assertEquals(List.of("add 1", "add 2", "remove 2"), calls);
+	}
+
+	@Test
+	void closeWaitsForDeferredChanges() throws Exception {
+		SinkRegistry.Registration callback = callback();
+		BlockedAdd blocked = new BlockedAdd();
+
+		assertTrue(callback.enter());
+
+		try {
+			registry.add(new Object(), blocked);
+		}
+		finally {
+			callback.exit();
+		}
+
+		blocked.awaitEntered();
+
+		CompletableFuture<Void> closing = CompletableFuture.runAsync(() -> {
+			registry.close();
+			calls.add("closed");
+		});
+
+		blocked.proceed();
+		closing.get(5, TimeUnit.SECONDS);
+
+		assertEquals(List.of("add 1", "add 2", "remove 2", "closed"), calls);
+	}
+
+	/**
+	 * The registration of a sink of another registry, whose callback the test
+	 * pretends to be in.
+	 */
+	private SinkRegistry.Registration callback() {
+		AtomicReference<SinkRegistry.Registration> registration = new AtomicReference<>();
+
+		new SinkRegistry<>(handle -> { }).add(new Object(), (s, r) -> {
+			registration.set(r);
+			return add().add(s, r);
+		});
+
+		return registration.get();
+	}
+
+	private SinkRegistry.NativeAdd<Object> add() {
+		return (sink, registration) -> {
 			long handle = nextHandle.incrementAndGet();
 			calls.add("add " + handle);
 			return handle;
@@ -169,7 +305,7 @@ class SinkRegistryTests {
 
 
 	/** A native add that waits, once it has been entered, until the test lets it return. */
-	private final class BlockedAdd implements ToLongFunction<Object> {
+	private final class BlockedAdd implements SinkRegistry.NativeAdd<Object> {
 
 		private final CountDownLatch entered = new CountDownLatch(1);
 
@@ -177,7 +313,7 @@ class SinkRegistryTests {
 
 
 		@Override
-		public long applyAsLong(Object sink) {
+		public long add(Object sink, SinkRegistry.Registration registration) {
 			entered.countDown();
 
 			try {
@@ -187,7 +323,7 @@ class SinkRegistryTests {
 				throw new IllegalStateException(e);
 			}
 
-			return add().applyAsLong(sink);
+			return SinkRegistryTests.this.add().add(sink, registration);
 		}
 
 		void awaitEntered() throws InterruptedException {
