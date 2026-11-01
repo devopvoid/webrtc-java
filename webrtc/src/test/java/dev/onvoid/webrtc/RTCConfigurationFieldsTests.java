@@ -41,28 +41,8 @@ class RTCConfigurationFieldsTests extends TestBase {
 
 	private static final long TIMEOUT_SECONDS = 10;
 
-	// A self-signed P-256 certificate, valid until 2049-12-31T23:59:59Z.
-	private static final String KEY_PEM =
-			"-----BEGIN PRIVATE KEY-----\n" +
-			"MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgejZcBA1yI8ptZtCF\n" +
-			"RUjGQ/DDktwLeqN+7hjULCMqoQehRANCAAShfg85M6ss3gmaqGaxseKa7z9XLnV4\n" +
-			"shMtYBi33Hrk2jRpR/kJqoLVsCWYB2jX2SR1pN4I1Kx20/2XelXeKDQn\n" +
-			"-----END PRIVATE KEY-----\n";
-
-	private static final String CERTIFICATE_PEM =
-			"-----BEGIN CERTIFICATE-----\n" +
-			"MIIBizCCATGgAwIBAgIUP0ZmlGlDx3zZ0q/DgiL6mYFhHuUwCgYIKoZIzj0EAwIw\n" +
-			"GzEZMBcGA1UEAwwQd2VicnRjLWphdmEtdGVzdDAeFw0yNjAxMDEwMDAwMDBaFw00\n" +
-			"OTEyMzEyMzU5NTlaMBsxGTAXBgNVBAMMEHdlYnJ0Yy1qYXZhLXRlc3QwWTATBgcq\n" +
-			"hkjOPQIBBggqhkjOPQMBBwNCAAShfg85M6ss3gmaqGaxseKa7z9XLnV4shMtYBi3\n" +
-			"3Hrk2jRpR/kJqoLVsCWYB2jX2SR1pN4I1Kx20/2XelXeKDQno1MwUTAdBgNVHQ4E\n" +
-			"FgQUHug09bThs69Rvu3uQX7xJr4vtDAwHwYDVR0jBBgwFoAUHug09bThs69Rvu3u\n" +
-			"QX7xJr4vtDAwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNIADBFAiEAg9Kr\n" +
-			"mern5M4S475PECo3S8chGsOEYlexai+r04iXkbACIG4JHalZdx0sF2rhZYIJZl2R\n" +
-			"oqimaBTvYtQRfkg3Bvv3\n" +
-			"-----END CERTIFICATE-----\n";
-
-	// 2049-12-31T23:59:59Z in milliseconds.
+	// 2049-12-31T23:59:59Z, as UTCTime and in milliseconds.
+	private static final String CERTIFICATE_NOT_AFTER = "491231235959Z";
 	private static final long CERTIFICATE_EXPIRES = 2524607999000L;
 
 
@@ -193,12 +173,11 @@ class RTCConfigurationFieldsTests extends TestBase {
 	}
 
 	@Test
-	void certificateExpiresFromCertificate() {
+	void certificateExpiresFromCertificate() throws Exception {
 		// The expiration time given in Java is not passed on: the one read
 		// back is that of the certificate, in milliseconds. It used to be 0.
 		RTCConfiguration config = new RTCConfiguration();
-		config.certificates.add(new RTCCertificatePEM(KEY_PEM, CERTIFICATE_PEM,
-				RTCCertificatePEM.EXPIRES_UNKNOWN));
+		config.certificates.add(TestCertificates.selfSigned("260101000000Z", CERTIFICATE_NOT_AFTER));
 
 		RTCPeerConnection connection = factory.createPeerConnection(config, new Observer());
 
