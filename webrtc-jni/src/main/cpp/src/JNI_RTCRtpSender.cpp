@@ -94,7 +94,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setParameters
 		webrtc::RTCError result = sender->SetParameters(rtp_parameters);
 
 		if (!result.ok()) {
-			env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result).c_str()));
+			env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result).c_str()));
 		}
 	}
 	catch (...) {
@@ -194,7 +194,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_generateKeyFrame
 	webrtc::RTCError result = sender->GenerateKeyFrame({});
 
 	if (!result.ok()) {
-		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result).c_str()));
+		env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result).c_str()));
 	}
 }
 

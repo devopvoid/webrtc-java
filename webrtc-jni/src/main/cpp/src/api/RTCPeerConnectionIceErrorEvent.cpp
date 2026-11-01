@@ -30,9 +30,13 @@ namespace jni
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCPeerConnectionIceErrorEventClass>(env);
 
+			// WebRTC clears the address it must not expose, and then both
+			// address and port are null.
+			const bool hasAddress = !address.empty();
+
 			jobject jEvent = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, address).get(),
-				Integer::create(env, port).get(),
+				JavaString::toJavaOrNull(env, address).get(),
+				hasAddress ? Integer::create(env, port).get() : nullptr,
 				JavaString::toJava(env, url).get(),
 				error_code,
 				JavaString::toJava(env, error_text).get());

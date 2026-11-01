@@ -35,7 +35,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_dispose
 	SetHandle<std::nullptr_t>(env, caller, nullptr);
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize__
 (JNIEnv * env, jobject caller)
 {
 	try {
@@ -48,7 +48,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initial
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize__III
 (JNIEnv* env, jobject caller, jint srcSamplesPerChannel, jint dstSamplesPerChannel, jint channels)
 {
 	try {

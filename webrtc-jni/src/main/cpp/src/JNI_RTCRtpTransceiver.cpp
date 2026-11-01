@@ -35,7 +35,10 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getMid
 		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
 		CHECK_HANDLEV(transceiver, nullptr);
 
-		return jni::JavaString::toJava(env, transceiver->mid().value_or("")).release();
+		// Null until negotiated, and again after a rollback.
+		const auto mid = transceiver->mid();
+
+		return mid ? jni::JavaString::toJava(env, *mid).release() : nullptr;
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

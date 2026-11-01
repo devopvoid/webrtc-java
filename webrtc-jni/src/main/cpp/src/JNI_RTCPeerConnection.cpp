@@ -136,7 +136,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTrackInter
 			return jni::JavaFactories::create(env, sender.release()).release();
 		}
 	
-		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result.error()).c_str()));
+		env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result.error()).c_str()));
 
 		return nullptr;
 	}
@@ -200,7 +200,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceive
 			return jni::JavaFactories::create(env, transceiver.release()).release();
 		}
 
-		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result.error()).c_str()));
+		env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result.error()).c_str()));
 
 		return nullptr;
 	}
@@ -241,7 +241,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_addTransceive
 			return jni::JavaFactories::create(env, transceiver.release()).release();
 		}
 
-		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result.error()).c_str()));
+		env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result.error()).c_str()));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -622,7 +622,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setBitrate
 		webrtc::RTCError error = pc->SetBitrate(settings);
 
 		if (!error.ok()) {
-			env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(error).c_str()));
+			env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(error).c_str()));
 		}
 	}
 	catch (...) {
@@ -740,7 +740,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_setConfiguration
 		webrtc::RTCError error = pc->SetConfiguration(config);
 
 		if (!error.ok()) {
-			env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(error).c_str()));
+			env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(error).c_str()));
 		}
 	}
 	catch (...) {

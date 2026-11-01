@@ -70,7 +70,7 @@ namespace jni
 			env->CallVoidMethod(callback.get(), javaClass->onSuccess);
 		}
 		else {
-			JavaLocalRef<jstring> message(env, env->NewStringUTF(error));
+			JavaLocalRef<jstring> message = JavaString::toJava(env, error);
 
 			if (!env->ExceptionCheck()) {
 				env->CallVoidMethod(callback.get(), javaClass->onFailure, message.get());

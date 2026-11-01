@@ -51,9 +51,10 @@ namespace jni
 				ecList.add(JavaString::toJava(env, ec));
 			}
 
-			auto username = JavaString::toJava(env, server.username);
-			auto password = JavaString::toJava(env, server.password);
-			auto hostname = JavaString::toJava(env, server.hostname);
+			// WebRTC keeps unset credentials as empty strings.
+			auto username = JavaString::toJavaOrNull(env, server.username);
+			auto password = JavaString::toJavaOrNull(env, server.password);
+			auto hostname = JavaString::toJavaOrNull(env, server.hostname);
 			auto certPolicy = JavaEnums::toJava(env, server.tls_cert_policy);
 
 			jobject iceServer = env->NewObject(javaClass->cls, javaClass->ctor);
