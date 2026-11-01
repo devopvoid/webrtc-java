@@ -26,8 +26,15 @@ package dev.onvoid.webrtc;
 public class RTCCertificatePEM {
 
 	/**
+	 * The value of {@link #getExpires()} for a certificate whose expiration
+	 * time cannot be read. No actual expiration time has this value: those
+	 * are whole seconds, multiples of 1000 in milliseconds.
+	 */
+	public static final long EXPIRES_UNKNOWN = -1;
+
+	/**
 	 * Indicates the time in milliseconds relative to the Unix epoch after which
-	 * the certificate will be considered invalid.
+	 * the certificate will be considered invalid, or {@link #EXPIRES_UNKNOWN}.
 	 */
 	private final long expires;
 
@@ -48,7 +55,11 @@ public class RTCCertificatePEM {
 	 *
 	 * @param privateKey  Private key as PEM string.
 	 * @param certificate Certificate as PEM string.
-	 * @param expires     The expiration date of this certificate.
+	 * @param expires     The expiration time of this certificate in
+	 *                    milliseconds relative to the Unix epoch, or
+	 *                    {@link #EXPIRES_UNKNOWN}. It is informational only:
+	 *                    WebRTC reads the expiration time from the PEM
+	 *                    certificate itself.
 	 */
 	public RTCCertificatePEM(String privateKey, String certificate, long expires) {
 		this.privateKey = privateKey;
@@ -72,7 +83,11 @@ public class RTCCertificatePEM {
 
 	/**
 	 * @return The expiration time in milliseconds of this certificate relative
-	 * to the Unix epoch.
+	 * to the Unix epoch, or {@link #EXPIRES_UNKNOWN} if it cannot be read from
+	 * the certificate. Certificates returned by the native API, such as those of
+	 * {@link RTCDtlsTransport#getRemoteCertificates()} and
+	 * {@link RTCPeerConnection#getConfiguration()}, carry the time read from
+	 * the certificate.
 	 */
 	public long getExpires() {
 		return expires;

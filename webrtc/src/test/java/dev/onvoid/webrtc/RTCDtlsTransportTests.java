@@ -159,8 +159,19 @@ class RTCDtlsTransportTests extends TestBase {
 
 		assertFalse(certificates.isEmpty());
 
+		long now = System.currentTimeMillis();
+
 		for (RTCCertificatePEM certificate : certificates) {
 			assertTrue(certificate.getCertificate().startsWith("-----BEGIN CERTIFICATE-----"));
+
+			// WebRTC generates the certificate of each connection valid for
+			// 30 days. The time is read from the certificate in whole seconds
+			// and given in milliseconds; it used to be 0.
+			long expires = certificate.getExpires();
+
+			assertTrue(expires > now, "Expires " + expires + " is not after " + now);
+			assertTrue(expires <= now + TimeUnit.DAYS.toMillis(31), "Expires " + expires);
+			assertEquals(0, expires % 1000);
 		}
 	}
 

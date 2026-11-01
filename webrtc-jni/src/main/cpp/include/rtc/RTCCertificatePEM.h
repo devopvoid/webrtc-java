@@ -21,6 +21,7 @@
 #include "JavaRef.h"
 
 #include "rtc_base/rtc_certificate.h"
+#include "rtc_base/ssl_certificate.h"
 
 #include <jni.h>
 
@@ -40,7 +41,20 @@ namespace jni
 				jfieldID certificate;
 		};
 
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCCertificatePEM & certificate);
+		// The value of RTCCertificatePEM.EXPIRES_UNKNOWN, for a certificate whose
+		// expiration time cannot be read.
+		constexpr jlong kExpiresUnknown = -1;
+
+		// The expiration time of the certificate in milliseconds relative to the
+		// Unix epoch, or kExpiresUnknown.
+		jlong ExpiresMillis(const webrtc::SSLCertificate & certificate);
+
+		// A local certificate, with its private key.
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCCertificate & certificate);
+		// A remote certificate, whose private key is not known.
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::SSLCertificate & certificate);
+		// `expires` in milliseconds relative to the Unix epoch, or kExpiresUnknown.
+		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RTCCertificatePEM & certificate, jlong expires);
 		webrtc::RTCCertificatePEM toNative(JNIEnv * env, const JavaRef<jobject> & certificate);
 	}
 }
