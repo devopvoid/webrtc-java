@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCDataChannel.h"
+#include "NativeHandle.h"
 #include "api/RTCDataChannelObserver.h"
 #include "api/RTCDataChannelSendObserver.h"
 #include "JavaEnums.h"
@@ -34,7 +35,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLE(channel);
 
 		// Unregister and free a previously registered observer before replacing
@@ -54,7 +55,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_unregisterObserver
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLE(channel);
 
 	channel->UnregisterObserver();
@@ -66,7 +67,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getLabel
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLEV(channel, nullptr);
 
 		return jni::JavaString::toJava(env, channel->label()).release();
@@ -80,7 +81,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getLabel
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isReliable
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLEV(channel, false);
 
 	return static_cast<jboolean>(channel->reliable());
@@ -89,7 +90,7 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isReliable
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isOrdered
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLEV(channel, false);
 
 	return static_cast<jboolean>(channel->ordered());
@@ -98,7 +99,7 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isOrdered
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getMaxPacketLifeTime
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLEV(channel, 0);
 
 	return static_cast<jint>(channel->maxPacketLifeTime().value_or(0));
@@ -107,7 +108,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getMaxPacketLifeTim
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getMaxRetransmits
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLEV(channel, 0);
 
 	return static_cast<jint>(channel->maxRetransmitsOpt().value_or(0));
@@ -117,7 +118,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getProtocol
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLEV(channel, nullptr);
 
 		return jni::JavaString::toJava(env, channel->protocol()).release();
@@ -131,7 +132,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getProtocol
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_isNegotiated
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLEV(channel, false);
 
 	return static_cast<jboolean>(channel->negotiated());
@@ -141,7 +142,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getPriority
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLEV(channel, nullptr);
 
 		// The priority is a number on the wire; a remote peer may announce one
@@ -167,7 +168,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getPriority
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getId
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLEV(channel, 0);
 
 	return static_cast<jint>(channel->id());
@@ -177,7 +178,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getState
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLEV(channel, nullptr);
 
 		return jni::JavaEnums::toJava(env, channel->state()).release();
@@ -191,7 +192,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getState
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getBufferedAmount
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLEV(channel, 0);
 
 	return static_cast<jlong>(channel->buffered_amount());
@@ -200,7 +201,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getBufferedAmount
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_close
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 	CHECK_HANDLE(channel);
 
 	channel->Close();
@@ -209,29 +210,28 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_close
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
-	CHECK_HANDLE(channel);
+	webrtc::DataChannelInterface * channel = jni::TakeHandle<webrtc::DataChannelInterface>(env, caller);
+
+	if (channel == nullptr) {
+		return;
+	}
 
 	channel->UnregisterObserver();
 
 	ClearNativeObserver<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
 
-	webrtc::RefCountReleaseStatus status = channel->Release();
-
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
-	}
-
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
-
-	channel = nullptr;
+	jni::ReleaseHandle(env, channel, [channel](bool deferred) {
+		if (channel->Release() != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+			jni::NativeHandle::ReportNotDeleted(deferred);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendDirectBuffer
 (JNIEnv * env, jobject caller, jobject jBuffer, jboolean isBinary)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLE(channel);
 
 		uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(jBuffer));
@@ -258,7 +258,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_sendByteArrayBuffer
 (JNIEnv * env, jobject caller, jbyteArray jBufferArray, jboolean isBinary)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLE(channel);
 
 		auto releaseArray = [env, jBufferArray](jbyte * bytes) {
@@ -319,7 +319,7 @@ static void sendDirectBufferAsync(JNIEnv * env, jobject caller, jobject jBuffer,
 	jint position, jint length, jboolean isBinary, jobject jObserver)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLE(channel);
 
 		uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(jBuffer));
@@ -350,7 +350,7 @@ static void sendByteArrayBufferAsync(JNIEnv * env, jobject caller, jbyteArray jB
 	jboolean isBinary, jobject jObserver)
 {
 	try {
-		webrtc::DataChannelInterface * channel = GetHandle<webrtc::DataChannelInterface>(env, caller);
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLE(channel);
 
 		auto releaseArray = [env, jBufferArray](jbyte * bytes) {

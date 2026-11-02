@@ -17,27 +17,28 @@
 #include <vector>
 
 
+// Return from a native method whose native object is gone, with an
+// IllegalStateException thrown unless an exception is pending already. The
+// handle is a raw pointer or a lease, which names its object's class.
 #define CHECK_HANDLE(handle)															\
 	do {																				\
-		if (handle == NULL) {															\
-			JNIEnv * env = AttachCurrentThread();										\
-			env->Throw(jni::JavaNullPointerException(env, "Object handle is null"));	\
+		if (!(handle)) {																\
+			ThrowNullHandle(handle);													\
 			return;																		\
 		}																				\
 	} while(0)
 
 #define CHECK_HANDLEV(handle, retValue)													\
 	do {																				\
-		if (handle == NULL) {															\
-			JNIEnv * env = AttachCurrentThread();										\
-			env->Throw(jni::JavaNullPointerException(env, "Object handle is null"));	\
+		if (!(handle)) {																\
+			ThrowNullHandle(handle);													\
 			return retValue;															\
 		}																				\
 	} while(0)
 
 #define CHECK_HANDLE_DEFAULT(handle, retValue)											\
 	do {																				\
-		if (handle == NULL) {															\
+		if (!(handle)) {																\
 			return retValue;															\
 		}																				\
 	} while(0)
@@ -53,6 +54,16 @@ void ThrowCxxJavaException(JNIEnv * env);
 void SetJavaVM(JavaVM * vm);
 JavaVM * GetJavaVM();
 JNIEnv * AttachCurrentThread();
+
+// Throws the IllegalStateException of a missing native object for
+// CHECK_HANDLE on a raw pointer. A lease has an overload of its own, found by
+// argument-dependent lookup, that names the object's class.
+template<typename T>
+void ThrowNullHandle(T *)
+{
+	ThrowJavaException(AttachCurrentThread(), "java/lang/IllegalStateException", "Native object is disposed");
+}
+
 bool ExceptionCheck(JNIEnv * env);
 jclass FindClass(JNIEnv * env, const char * name);
 jmethodID GetMethod(JNIEnv * env, jclass cls, const char * name, const char * sig);

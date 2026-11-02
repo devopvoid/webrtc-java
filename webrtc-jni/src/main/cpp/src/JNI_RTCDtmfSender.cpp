@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCDtmfSender.h"
+#include "NativeHandle.h"
 #include "api/RegisteredObservers.h"
 #include "api/RTCDtmfSenderObserver.h"
 #include "JavaString.h"
@@ -43,7 +44,7 @@ namespace
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_canInsertDtmf
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
 	CHECK_HANDLEV(sender, false);
 
 	return static_cast<jboolean>(sender->CanInsertDtmf());
@@ -53,7 +54,7 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_insertDtmf
 (JNIEnv * env, jobject caller, jstring jTones, jint duration, jint interToneGap)
 {
 	try {
-		webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, false);
 
 		std::string tones = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jTones));
@@ -70,7 +71,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_tones
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		return jni::JavaString::toJava(env, sender->tones()).release();
@@ -84,7 +85,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_tones
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_duration
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
 	CHECK_HANDLEV(sender, 0);
 
 	return static_cast<jint>(sender->duration());
@@ -93,7 +94,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_duration
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_interToneGap
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
 	CHECK_HANDLEV(sender, 0);
 
 	return static_cast<jint>(sender->inter_tone_gap());
@@ -103,7 +104,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
 	try {
-		webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
 		CHECK_HANDLE(sender);
 
 		auto observer = new jni::RTCDtmfSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
@@ -126,7 +127,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
 	CHECK_HANDLE(sender);
 
 	UnregisterOwnObserver(env, caller, sender);
@@ -135,8 +136,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtmfSenderInterface * sender = GetHandle<webrtc::DtmfSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	webrtc::DtmfSenderInterface * sender = jni::TakeHandle<webrtc::DtmfSenderInterface>(env, caller);
+
+	if (sender == nullptr) {
+		return;
+	}
 
 	// WebRTC must let go of an observer registered through this object before
 	// it is deleted.
@@ -144,7 +148,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_dispose
 
 	// The RTCRtpSender and other Java objects keep their own references, so
 	// this one need not be the last.
-	sender->Release();
-
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	jni::ReleaseHandle(env, sender, [sender](bool) {
+		sender->Release();
+	});
 }

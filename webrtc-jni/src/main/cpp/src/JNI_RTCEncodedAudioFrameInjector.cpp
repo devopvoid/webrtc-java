@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCEncodedAudioFrameInjector.h"
+#include "NativeHandle.h"
 #include "api/EncodedFrameInjectorObserver.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
@@ -54,7 +55,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injec
 (JNIEnv * env, jobject caller, jobject jBuffer, jint position, jint length, jint payloadType,
 	jlong rtpTimestamp, jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime)
 {
-	webrtc::EncodedAudioFrameInjectorInterface * injector = GetHandle<webrtc::EncodedAudioFrameInjectorInterface>(env, caller);
+	jni::NativeLease<webrtc::EncodedAudioFrameInjectorInterface> injector(env, caller);
 	CHECK_HANDLE(injector);
 
 	try {
@@ -85,7 +86,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injec
 (JNIEnv * env, jobject caller, jbyteArray jData, jint payloadType, jlong rtpTimestamp,
 	jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime)
 {
-	webrtc::EncodedAudioFrameInjectorInterface * injector = GetHandle<webrtc::EncodedAudioFrameInjectorInterface>(env, caller);
+	jni::NativeLease<webrtc::EncodedAudioFrameInjectorInterface> injector(env, caller);
 	CHECK_HANDLE(injector);
 
 	try {
@@ -111,14 +112,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injec
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::EncodedAudioFrameInjectorInterface * injector = GetHandle<webrtc::EncodedAudioFrameInjectorInterface>(env, caller);
-	CHECK_HANDLE(injector);
+	webrtc::EncodedAudioFrameInjectorInterface * injector = jni::TakeHandle<webrtc::EncodedAudioFrameInjectorInterface>(env, caller);
+
+	if (injector == nullptr) {
+		return;
+	}
 
 	// The sender keeps the injector and its callbacks; only the Java observer
 	// stops hearing from them here.
 	ClearNativeObserver<jni::EncodedFrameInjectorObserver>(env, caller, "observerHandle");
 
-	injector->Release();
-
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	jni::ReleaseHandle(env, injector, [injector](bool) {
+		injector->Release();
+	});
 }

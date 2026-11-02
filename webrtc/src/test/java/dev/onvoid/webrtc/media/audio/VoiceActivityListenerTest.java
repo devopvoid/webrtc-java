@@ -320,7 +320,7 @@ class VoiceActivityListenerTest extends TestBase {
 			module.dispose();
 		}
 
-		assertThrows(NullPointerException.class, () -> own.addVoiceActivityListener(ONE_SEGMENT, listener));
+		assertThrows(IllegalStateException.class, () -> own.addVoiceActivityListener(ONE_SEGMENT, listener));
 	}
 
 	@Test

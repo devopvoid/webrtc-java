@@ -15,6 +15,7 @@
  */
 
 #include "JNI_NativeI420Buffer.h"
+#include "NativeHandle.h"
 #include "api/VideoFrame.h"
 #include "JavaRuntimeException.h"
 #include "JavaUtils.h"
@@ -71,7 +72,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_co
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_crop
 (JNIEnv * env, jobject caller, jint cropX, jint cropY, jint cropW, jint cropH)
 {
-	webrtc::I420BufferInterface * buffer = GetHandle<webrtc::I420BufferInterface>(env, caller);
+	jni::NativeLease<webrtc::I420BufferInterface> buffer(env, caller);
 	CHECK_HANDLEV(buffer, nullptr);
 
 	try {

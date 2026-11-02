@@ -20,6 +20,13 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 /**
  * Binds a native object pointer to a Java object extending this class.
+ * <p>
+ * Disposing (or closing) such an object unbinds its native object in one
+ * step, so that of several threads disposing it only one frees anything, and
+ * a repeated dispose does nothing. Methods called once it is disposed throw an
+ * {@link IllegalStateException}, see {@link #disposedException()}. A native
+ * method that is running on another thread at that moment keeps the native
+ * object: what the dispose frees is freed once that method has returned.
  *
  * @author Alex Andres
  */
@@ -61,6 +68,17 @@ public abstract class NativeObject {
 	 */
 	protected final long getNativeHandle() {
 		return nativeHandle;
+	}
+
+	/**
+	 * Returns the exception that a method of this object throws once the
+	 * object has been disposed (or closed) and no native object is bound to
+	 * it any more. The native side throws it.
+	 *
+	 * @return the exception naming this object's class.
+	 */
+	protected IllegalStateException disposedException() {
+		return new IllegalStateException(getClass().getSimpleName() + " is disposed");
 	}
 
 	/**

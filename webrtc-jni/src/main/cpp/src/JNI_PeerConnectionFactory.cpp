@@ -15,6 +15,7 @@
  */
 
 #include "JNI_PeerConnectionFactory.h"
+#include "NativeHandle.h"
 #include "api/AudioOptions.h"
 #include "api/CreateSessionDescriptionObserver.h"
 #include "api/FieldTrialsView.h"
@@ -55,6 +56,7 @@
 #include "rtc_base/thread.h"
 
 #include <map>
+#include <thread>
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 (JNIEnv * env, jobject caller, jobject jFieldTrials, jobject audioModule, jobject audioProcessing,
@@ -208,24 +210,29 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_disposeInternal
 (JNIEnv * env, jobject caller)
 {
-	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
-	CHECK_HANDLE(factory);
+	webrtc::PeerConnectionFactoryInterface * factory = jni::TakeHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+
+	if (factory == nullptr) {
+		return;
+	}
 
 	webrtc::Thread * networkThread = GetHandle<webrtc::Thread>(env, caller, "networkThreadHandle");
 	webrtc::Thread * signalingThread = GetHandle<webrtc::Thread>(env, caller, "signalingThreadHandle");
 	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
+	auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
 
-	webrtc::RefCountReleaseStatus status = factory->Release();
+	// The calls that use them hold the factory's handle, so they are freed
+	// with it.
+	SetHandle<std::nullptr_t>(env, caller, "networkThreadHandle", nullptr);
+	SetHandle<std::nullptr_t>(env, caller, "signalingThreadHandle", nullptr);
+	SetHandle<std::nullptr_t>(env, caller, "audioModuleHandle", nullptr);
+	SetHandle<std::nullptr_t>(env, caller, "captureTapHandle", nullptr);
 
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
-	}
+	auto release = [factory, networkThread, signalingThread, audioModule, tap](bool deferred) {
+		if (factory->Release() != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+			jni::NativeHandle::ReportNotDeleted(deferred);
+		}
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
-
-	factory = nullptr;
-
-	try {
 		if (networkThread) {
 			networkThread->Stop();
 			delete networkThread;
@@ -242,14 +249,26 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_disposeInter
 			if (admStatus != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 				RTC_LOG(LS_WARNING) << "ProxyAudioDeviceModule was not deleted. A reference is still around somewhere.";
 			}
-
-			SetHandle<std::nullptr_t>(env, caller, "audioModuleHandle", nullptr);
 		}
 
 		// The module, if anything still holds it, keeps a share of the tap.
-		delete GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
+		delete tap;
+	};
 
-		SetHandle<std::nullptr_t>(env, caller, "captureTapHandle", nullptr);
+	try {
+		jni::ReleaseHandle(env, factory, [release, networkThread, signalingThread](bool deferred) {
+			// A call that held the factory may have run on one of its threads,
+			// which cannot stop itself.
+			bool onOwnThread = (networkThread && networkThread->IsCurrent()) ||
+				(signalingThread && signalingThread->IsCurrent());
+
+			if (onOwnThread) {
+				std::thread([release]() { release(true); }).detach();
+			}
+			else {
+				release(deferred);
+			}
+		});
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -260,6 +279,10 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_addVoiceAct
 (JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jint hangoverMs)
 {
 	try {
+		// Keeps the tap, which a dispose frees with the factory.
+		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
+		CHECK_HANDLEV(factory, 0);
+
 		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
 		CHECK_HANDLEV(tap, 0);
 
@@ -278,6 +301,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_removeVoiceA
 (JNIEnv * env, jobject caller, jlong listenerHandle)
 {
 	try {
+		// Keeps the tap, which a dispose frees with the factory.
+		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
+		CHECK_HANDLE(factory);
+
 		auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
 		CHECK_HANDLE(tap);
 
@@ -291,6 +318,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_removeVoiceA
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCaptureEnabled
 (JNIEnv * env, jobject caller, jboolean enabled)
 {
+	// Keeps the module, which a dispose releases with the factory.
+	jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
+	CHECK_HANDLE(factory);
+
 	jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
 	CHECK_HANDLE(audioModule);
 
@@ -311,7 +342,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 			return nullptr;
 		}
 
-		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
 		CHECK_HANDLEV(factory, nullptr);
 
 		auto audioOptions = jni::AudioOptions::toNative(env, jni::JavaLocalRef<jobject>(env, jAudioOptions));
@@ -344,10 +375,10 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 			return nullptr;
 		}
 
-		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
 		CHECK_HANDLEV(factory, nullptr);
 
-		webrtc::AudioSourceInterface * source = GetHandle<webrtc::AudioSourceInterface>(env, jsource);
+		jni::NativeLease<webrtc::AudioSourceInterface> source(env, jsource);
 		CHECK_HANDLEV(source, nullptr);
 
 		std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
@@ -369,13 +400,13 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFe
 		return JNI_FALSE;
 	}
 
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
 
 	if (track == nullptr || track->kind() != webrtc::MediaStreamTrackInterface::kAudioKind) {
 		return JNI_FALSE;
 	}
 
-	webrtc::AudioSourceInterface * source = static_cast<webrtc::AudioTrackInterface *>(track)->GetSource();
+	webrtc::AudioSourceInterface * source = static_cast<webrtc::AudioTrackInterface *>(track.get())->GetSource();
 
 	if (source == nullptr) {
 		return JNI_FALSE;
@@ -403,10 +434,10 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVid
 			return nullptr;
 		}
 
-		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
 		CHECK_HANDLEV(factory, nullptr);
 
-		webrtc::VideoTrackSourceInterface * source = GetHandle<webrtc::VideoTrackSourceInterface>(env, jsource);
+		jni::NativeLease<webrtc::VideoTrackSourceInterface> source(env, jsource);
 		CHECK_HANDLEV(source, nullptr);
 
 		std::string label = jni::JavaString::toNative(env, jni::JavaLocalRef<jstring>(env, jlabel));
@@ -434,7 +465,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createPee
 		return nullptr;
 	}
 
-	webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+	jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
 	CHECK_HANDLEV(factory, nullptr);
 
 	webrtc::PeerConnectionInterface::RTCConfiguration configuration;
@@ -497,7 +528,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpRec
 (JNIEnv * env, jobject caller, jobject mediaType)
 {
 	try {
-		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
 		CHECK_HANDLEV(factory, nullptr);
 
 		auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);
@@ -515,7 +546,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_getRtpSen
 (JNIEnv * env, jobject caller, jobject mediaType)
 {
 	try {
-		webrtc::PeerConnectionFactoryInterface * factory = GetHandle<webrtc::PeerConnectionFactoryInterface>(env, caller);
+		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
 		CHECK_HANDLEV(factory, nullptr);
 
 		auto type = jni::JavaEnums::toNative<webrtc::MediaType>(env, mediaType);

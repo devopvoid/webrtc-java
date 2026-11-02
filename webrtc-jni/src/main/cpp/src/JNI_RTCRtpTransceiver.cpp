@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCRtpTransceiver.h"
+#include "NativeHandle.h"
 #include "api/RTCRtpCodecCapability.h"
 #include "JavaEnums.h"
 #include "JavaError.h"
@@ -32,7 +33,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getMid
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 		CHECK_HANDLEV(transceiver, nullptr);
 
 		// Null until negotiated, and again after a rollback.
@@ -50,7 +51,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getSender
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 		CHECK_HANDLEV(transceiver, nullptr);
 
 		webrtc::scoped_refptr<webrtc::RtpSenderInterface> sender = transceiver->sender();
@@ -70,7 +71,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getReceiver
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 		CHECK_HANDLEV(transceiver, nullptr);
 
 		webrtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver = transceiver->receiver();
@@ -90,7 +91,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getDirection
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 		CHECK_HANDLEV(transceiver, nullptr);
 
 		return jni::JavaEnums::toJava(env, transceiver->direction()).release();
@@ -105,7 +106,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setDirection
 (JNIEnv * env, jobject caller, jobject jDirection)
 {
 	try {
-		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 		CHECK_HANDLE(transceiver);
 
 		webrtc::RTCError result = transceiver->SetDirectionWithError(jni::JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, jDirection));
@@ -124,7 +125,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCurrentDir
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 		CHECK_HANDLEV(transceiver, nullptr);
 
 		auto directionOpt = transceiver->current_direction();
@@ -144,7 +145,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCurrentDir
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stop
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 	CHECK_HANDLE(transceiver);
 
 	webrtc::RTCError result = transceiver->StopStandard();
@@ -158,7 +159,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stop
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopImmediately
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 	CHECK_HANDLE(transceiver);
 
 	// Unlike StopStandard, stopped() is true at once, so that an answer
@@ -169,7 +170,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopImmediately
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopped
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 	CHECK_HANDLEV(transceiver, true);
 
 	return static_cast<jboolean>(transceiver->stopped());
@@ -179,7 +180,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCodecPrefe
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 		CHECK_HANDLEV(transceiver, nullptr);
 
 		auto capabilities = jni::JavaList::toArrayList(env, transceiver->codec_preferences(), jni::RTCRtpCodecCapability::toJava);
@@ -195,7 +196,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCodecPrefe
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferences
 (JNIEnv * env, jobject caller, jobject jPreferences)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
 	CHECK_HANDLE(transceiver);
 
 	try {
@@ -216,15 +217,18 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferen
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = GetHandle<webrtc::RtpTransceiverInterface>(env, caller);
-	CHECK_HANDLE(transceiver);
+	webrtc::RtpTransceiverInterface * transceiver = jni::TakeHandle<webrtc::RtpTransceiverInterface>(env, caller);
+
+	if (transceiver == nullptr) {
+		return;
+	}
 
 	// Unlike e.g. MediaStreamTrack, an RTCRtpTransceiver is not exclusively
 	// owned by one Java wrapper: the owning PeerConnection keeps its own
 	// reference, and other Java wrappers may have been obtained via separate
 	// getTransceivers() calls. Dropping our reference here is expected to
 	// leave others around, so it is not reported as an error.
-	transceiver->Release();
-
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	jni::ReleaseHandle(env, transceiver, [transceiver](bool) {
+		transceiver->Release();
+	});
 }

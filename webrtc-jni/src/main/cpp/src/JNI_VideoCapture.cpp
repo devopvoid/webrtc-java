@@ -15,6 +15,7 @@
  */
 
 #include "JNI_VideoCapture.h"
+#include "NativeHandle.h"
 #include "api/VideoTrackSink.h"
 #include "media/video/VideoCapture.h"
 #include "media/video/VideoDevice.h"
@@ -36,7 +37,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoC
 			return;
 		}
 
-		jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
+		jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
 		CHECK_HANDLE(videoSource);
 
 		const auto dev = jni::VideoDevice::toNativeVideoDevice(env, jni::JavaLocalRef<jobject>(env, device));
@@ -51,7 +52,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoC
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoCaptureCapability
 (JNIEnv * env, jobject caller, jobject jcapability)
 {
-	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
+	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	if (!jcapability) {
@@ -79,7 +80,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoS
 		return;
 	}
 
-	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
+	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	try {
@@ -93,7 +94,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoS
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_start
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
+	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	if (!videoSource->hasDevice()) {
@@ -112,7 +113,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_start
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_stop
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
+	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
 	CHECK_HANDLE(videoSource);
 
 	try {
@@ -126,14 +127,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_stop
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoCaptureBase * videoSource = GetHandle<jni::VideoCaptureBase>(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::VideoCaptureBase * videoSource = jni::TakeHandle<jni::VideoCaptureBase>(env, caller);
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	if (videoSource == nullptr) {
+		return;
+	}
 
 	// The destructor stops a running capture and detaches the sink before
 	// both are destroyed.
-	delete videoSource;
+	jni::ReleaseHandle(env, videoSource, [videoSource](bool) {
+		delete videoSource;
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_initialize

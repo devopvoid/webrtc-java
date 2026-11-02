@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RefCountedObject.h"
+#include "NativeHandle.h"
 #include "JavaUtils.h"
 
 #include "rtc_base/ref_count.h"
@@ -22,7 +23,7 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_retain
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RefCountInterface * ref = GetHandle<webrtc::RefCountInterface>(env, caller);
+	jni::NativeLease<webrtc::RefCountInterface> ref(env, caller);
 	CHECK_HANDLE(ref);
 
 	ref->AddRef();
@@ -31,7 +32,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_retain
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_RefCountedObject_release
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RefCountInterface * ref = GetHandle<webrtc::RefCountInterface>(env, caller);
+	jni::NativeLease<webrtc::RefCountInterface> ref(env, caller);
 	CHECK_HANDLE(ref);
 
 	const auto status = ref->Release();

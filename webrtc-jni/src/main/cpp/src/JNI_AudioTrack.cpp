@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioTrack.h"
+#include "NativeHandle.h"
 #include "api/AudioTrackSink.h"
 #include "JavaNullPointerException.h"
 #include "JavaUtils.h"
@@ -31,7 +32,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInt
 			return 0;
 		}
 
-		webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+		jni::NativeLease<webrtc::AudioTrackInterface> track(env, caller);
 		CHECK_HANDLEV(track, 0);
 
 		auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink), packetInfos);
@@ -49,7 +50,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInt
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeSinkInternal
 (JNIEnv * env, jobject caller, jlong sinkHandle)
 {
-	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::AudioTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	auto sink = reinterpret_cast<jni::AudioTrackSink *>(sinkHandle);
@@ -65,7 +66,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addVoiceAc
 (JNIEnv * env, jobject caller, jobject jListener, jfloat threshold, jint hangoverMs)
 {
 	try {
-		webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+		jni::NativeLease<webrtc::AudioTrackInterface> track(env, caller);
 		CHECK_HANDLEV(track, 0);
 
 		auto sink = new jni::VoiceActivitySink(std::make_unique<jni::VoiceActivityListener>(env,
@@ -84,7 +85,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addVoiceAc
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeVoiceActivityListenerInternal
 (JNIEnv * env, jobject caller, jlong sinkHandle)
 {
-	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::AudioTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	auto sink = reinterpret_cast<jni::VoiceActivitySink *>(sinkHandle);
@@ -100,7 +101,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeVoice
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_setVolumeInternal
 (JNIEnv * env, jobject caller, jdouble volume)
 {
-	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::AudioTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	// Only the source of a remote track, a RemoteAudioSource, applies the
@@ -117,7 +118,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_getSignalLe
 {
 	int level = 0;
 
-	webrtc::AudioTrackInterface * track = GetHandle<webrtc::AudioTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::AudioTrackInterface> track(env, caller);
 	CHECK_HANDLEV(track, level);
 
 	track->GetSignalLevel(&level);

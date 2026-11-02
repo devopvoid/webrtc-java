@@ -15,6 +15,7 @@
  */
 
 #include "JNI_MediaStreamTrack.h"
+#include "NativeHandle.h"
 #include "JavaContext.h"
 #include "JavaEnums.h"
 #include "JavaError.h"
@@ -32,13 +33,15 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+	webrtc::MediaStreamTrackInterface * track = jni::TakeHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+
+	if (track == nullptr) {
+		return;
+	}
 
 	// A view holds no reference to the track and does not own its listeners:
 	// the track lives on with whatever owns it, so only this object detaches.
 	if (jni::MediaStreamTrackView::isView(env, caller)) {
-		SetHandle<std::nullptr_t>(env, caller, nullptr);
 		return;
 	}
 
@@ -50,25 +53,18 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 		track->UnregisterObserver(observer.get());
 	}
 
-	webrtc::RefCountReleaseStatus status = track->Release();
-
-	// Our reference is gone the moment Release() returns, regardless of
-	// whether it was the last one, so the handle must not be reused either
-	// way -- otherwise a retry would Release() a reference this object no
-	// longer owns.
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
-	track = nullptr;
-
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		env->Throw(jni::JavaError(env, "Native object was not deleted. A reference is still around somewhere."));
-	}
+	jni::ReleaseHandle(env, track, [track](bool deferred) {
+		if (track->Release() != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+			jni::NativeHandle::ReportNotDeleted(deferred);
+		}
+	});
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getKind
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 		CHECK_HANDLEV(track, nullptr);
 
 		return jni::JavaString::toJava(env, track->kind()).release();
@@ -83,7 +79,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getId
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 		CHECK_HANDLEV(track, nullptr);
 
 		return jni::JavaString::toJava(env, track->id()).release();
@@ -97,7 +93,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getId
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_isEnabled
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 	CHECK_HANDLEV(track, false);
 
 	return static_cast<jboolean>(track->enabled());
@@ -106,7 +102,7 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_isEnabl
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_setEnabled
 (JNIEnv * env, jobject caller, jboolean enabled)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	track->set_enabled(static_cast<bool>(enabled));
@@ -116,7 +112,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getState
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 		CHECK_HANDLEV(track, nullptr);
 
 		return jni::JavaEnums::toJava(env, track->state()).release();
@@ -130,7 +126,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getState
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addEndedEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	try {
@@ -149,7 +145,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addEndedEve
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeEndedEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	try {
@@ -167,7 +163,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeEnded
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addMuteEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	try {
@@ -186,7 +182,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addMuteEven
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeMuteEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	webrtc::MediaStreamTrackInterface * track = GetHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
 	CHECK_HANDLE(track);
 
 	try {

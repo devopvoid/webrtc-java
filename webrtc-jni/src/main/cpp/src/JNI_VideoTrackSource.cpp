@@ -15,6 +15,7 @@
  */
 
 #include "JNI_VideoTrackSource.h"
+#include "NativeHandle.h"
 #include "api/VideoFrame.h"
 #include "media/video/VideoProcessorHost.h"
 #include "JavaClasses.h"
@@ -30,6 +31,10 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrackSource_setVideoProcessorNative
 (JNIEnv * env, jobject caller, jobject jProcessor)
 {
+	// Keeps the source, which the host is part of, from being freed meanwhile.
+	jni::NativeLease<void> source(env, caller);
+	CHECK_HANDLE(source);
+
 	jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle");
 
 	if (host == nullptr) {
@@ -53,7 +58,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrackSource_deliv
 		return;
 	}
 
-	jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle");
+	// Keeps the source, which the host is part of, from being freed meanwhile.
+	jni::NativeLease<void> source(env, caller);
+
+	jni::VideoProcessorHost * host = source
+		? GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle")
+		: nullptr;
 
 	// The source has been disposed.
 	if (host == nullptr) {

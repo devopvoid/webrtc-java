@@ -15,6 +15,7 @@
  */
 
 #include "JNI_MediaSource.h"
+#include "NativeHandle.h"
 #include "JavaEnums.h"
 #include "JavaUtils.h"
 
@@ -24,7 +25,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaSource_getState
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::MediaSourceInterface * source = GetHandle<webrtc::MediaSourceInterface>(env, caller);
+		jni::NativeLease<webrtc::MediaSourceInterface> source(env, caller);
 		CHECK_HANDLEV(source, nullptr);
 
 		return jni::JavaEnums::toJava(env, source->state()).release();
