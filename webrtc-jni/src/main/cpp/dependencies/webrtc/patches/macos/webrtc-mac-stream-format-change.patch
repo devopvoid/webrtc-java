@@ -1,0 +1,386 @@
+diff --git a/modules/audio_device/mac/audio_device_mac.cc b/modules/audio_device/mac/audio_device_mac.cc
+index 3fdb71b..e4b26f5 100644
+--- a/modules/audio_device/mac/audio_device_mac.cc
++++ b/modules/audio_device/mac/audio_device_mac.cc
+@@ -119,6 +119,9 @@ AudioDeviceMac::AudioDeviceMac()
+       _doStopRec(false),
+       _macBookPro(false),
+       _macBookProPanRight(false),
++      _captureConverter(NULL),
++      _renderConverter(NULL),
++      _captureFormatChangePending(false),
+       _captureLatencyUs(0),
+       _renderLatencyUs(0),
+       _captureDelayUs(0),
+@@ -135,6 +138,7 @@ AudioDeviceMac::AudioDeviceMac()
+   memset(&_outDesiredFormat, 0, sizeof(AudioStreamBasicDescription));
+   memset(&_inStreamFormat, 0, sizeof(AudioStreamBasicDescription));
+   memset(&_inDesiredFormat, 0, sizeof(AudioStreamBasicDescription));
++  memset(&_pendingInStreamFormat, 0, sizeof(_pendingInStreamFormat));
+ }
+ 
+ AudioDeviceMac::~AudioDeviceMac() {
+@@ -1029,6 +1033,11 @@ int32_t AudioDeviceMac::InitRecording() {
+     return 0;
+   }
+ 
++  {
++    MutexLock formatLock(&_captureFormatMutex);
++    _captureFormatChangePending.store(false, std::memory_order_release);
++  }
++
+   // Initialize the microphone (devices might have been added or removed)
+   if (InitMicrophoneLocked() == -1) {
+     RTC_LOG(LS_WARNING) << "InitMicrophone() failed";
+@@ -1099,40 +1108,10 @@ int32_t AudioDeviceMac::InitRecording() {
+   RTC_LOG(LS_VERBOSE) << "mFormatFlags = " << _inStreamFormat.mFormatFlags;
+   logCAMsg(LS_VERBOSE, "mFormatID", (const char*)&_inStreamFormat.mFormatID);
+ 
+-  // Our preferred format to work with
+-  if (_inStreamFormat.mChannelsPerFrame >= 2 && (_recChannels == 2)) {
+-    _inDesiredFormat.mChannelsPerFrame = 2;
+-  } else {
+-    // Disable stereo recording when we only have one channel on the device.
+-    _inDesiredFormat.mChannelsPerFrame = 1;
+-    _recChannels = 1;
+-    RTC_LOG(LS_VERBOSE) << "Stereo recording unavailable on this device";
+-  }
+-
+-  if (_ptrAudioBuffer) {
+-    // Update audio buffer with the selected parameters
+-    _ptrAudioBuffer->SetRecordingSampleRate(N_REC_SAMPLES_PER_SEC);
+-    _ptrAudioBuffer->SetRecordingChannels((uint8_t)_recChannels);
++  if (!ConfigureCaptureConverter(_inStreamFormat)) {
++    return -1;
+   }
+ 
+-  _inDesiredFormat.mSampleRate = N_REC_SAMPLES_PER_SEC;
+-  _inDesiredFormat.mBytesPerPacket =
+-      _inDesiredFormat.mChannelsPerFrame * sizeof(SInt16);
+-  _inDesiredFormat.mFramesPerPacket = 1;
+-  _inDesiredFormat.mBytesPerFrame =
+-      _inDesiredFormat.mChannelsPerFrame * sizeof(SInt16);
+-  _inDesiredFormat.mBitsPerChannel = sizeof(SInt16) * 8;
+-
+-  _inDesiredFormat.mFormatFlags =
+-      kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
+-#ifdef WEBRTC_ARCH_BIG_ENDIAN
+-  _inDesiredFormat.mFormatFlags |= kLinearPCMFormatFlagIsBigEndian;
+-#endif
+-  _inDesiredFormat.mFormatID = kAudioFormatLinearPCM;
+-
+-  WEBRTC_CA_RETURN_ON_ERR(AudioConverterNew(&_inStreamFormat, &_inDesiredFormat,
+-                                            &_captureConverter));
+-
+   // First try to set buffer size to desired value (10 ms * N_BLOCKS_IO)
+   // TODO(xians): investigate this block.
+   UInt32 bufByteCount =
+@@ -1211,6 +1190,97 @@ int32_t AudioDeviceMac::InitRecording() {
+   return 0;
+ }
+ 
++bool AudioDeviceMac::ConfigureCaptureConverter(
++    const AudioStreamBasicDescription& input_format) {
++  if (input_format.mFormatID != kAudioFormatLinearPCM ||
++      input_format.mSampleRate == 0 ||
++      input_format.mChannelsPerFrame == 0 ||
++      input_format.mChannelsPerFrame > N_DEVICE_CHANNELS) {
++    RTC_LOG(LS_ERROR) << "Unsupported input stream format";
++    return false;
++  }
++
++  _inStreamFormat = input_format;
++
++  // Our preferred format to work with.
++  if (_inStreamFormat.mChannelsPerFrame >= 2 && (_recChannels == 2)) {
++    _inDesiredFormat.mChannelsPerFrame = 2;
++  } else {
++    // Disable stereo recording when we only have one channel on the device.
++    _inDesiredFormat.mChannelsPerFrame = 1;
++    _recChannels = 1;
++    RTC_LOG(LS_VERBOSE) << "Stereo recording unavailable on this device";
++  }
++
++  if (_ptrAudioBuffer) {
++    // Update audio buffer with the selected parameters.
++    _ptrAudioBuffer->SetRecordingSampleRate(N_REC_SAMPLES_PER_SEC);
++    _ptrAudioBuffer->SetRecordingChannels((uint8_t)_recChannels);
++  }
++
++  _inDesiredFormat.mSampleRate = N_REC_SAMPLES_PER_SEC;
++  _inDesiredFormat.mBytesPerPacket =
++      _inDesiredFormat.mChannelsPerFrame * sizeof(SInt16);
++  _inDesiredFormat.mFramesPerPacket = 1;
++  _inDesiredFormat.mBytesPerFrame =
++      _inDesiredFormat.mChannelsPerFrame * sizeof(SInt16);
++  _inDesiredFormat.mBitsPerChannel = sizeof(SInt16) * 8;
++
++  _inDesiredFormat.mFormatFlags =
++      kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
++#ifdef WEBRTC_ARCH_BIG_ENDIAN
++  _inDesiredFormat.mFormatFlags |= kLinearPCMFormatFlagIsBigEndian;
++#endif
++  _inDesiredFormat.mFormatID = kAudioFormatLinearPCM;
++
++  AudioConverterRef capture_converter = NULL;
++  OSStatus err = AudioConverterNew(&_inStreamFormat, &_inDesiredFormat,
++                                   &capture_converter);
++  if (err != noErr) {
++    logCAMsg(LS_ERROR, "AudioConverterNew() failed", (const char*)&err);
++    return false;
++  }
++
++  if (_captureConverter) {
++    WEBRTC_CA_LOG_WARN(AudioConverterDispose(_captureConverter));
++  }
++  _captureConverter = capture_converter;
++
++  return true;
++}
++
++void AudioDeviceMac::ApplyPendingCaptureFormat() {
++  AudioStreamBasicDescription format;
++  {
++    MutexLock lock(&_captureFormatMutex);
++    if (!_captureFormatChangePending.load(std::memory_order_acquire)) {
++      return;
++    }
++    format = _pendingInStreamFormat;
++    _captureFormatChangePending.store(false, std::memory_order_release);
++  }
++
++  if (format.mSampleRate == _inStreamFormat.mSampleRate &&
++      format.mChannelsPerFrame == _inStreamFormat.mChannelsPerFrame &&
++      format.mBytesPerPacket == _inStreamFormat.mBytesPerPacket &&
++      format.mBytesPerFrame == _inStreamFormat.mBytesPerFrame &&
++      format.mBitsPerChannel == _inStreamFormat.mBitsPerChannel &&
++      format.mFormatFlags == _inStreamFormat.mFormatFlags &&
++      format.mFormatID == _inStreamFormat.mFormatID) {
++    return;
++  }
++
++  RTC_LOG(LS_INFO) << "Applying capture stream format: sample_rate="
++                   << format.mSampleRate
++                   << ", channels=" << format.mChannelsPerFrame;
++
++  if (!ConfigureCaptureConverter(format)) {
++    // Keep capturing with the previous converter instead of stopping the
++    // worker. The stream is still better than no audio at all.
++    RTC_LOG(LS_ERROR) << "Failed to apply the new capture stream format";
++  }
++}
++
+ int32_t AudioDeviceMac::StartRecording() {
+   RTC_LOG(LS_INFO) << "StartRecording";
+   MutexLock lock(&mutex_);
+@@ -1323,7 +1393,10 @@ int32_t AudioDeviceMac::StopRecording() {
+     mutex_.Lock();
+   }
+ 
+-  WEBRTC_CA_LOG_WARN(AudioConverterDispose(_captureConverter));
++  if (_captureConverter) {
++    WEBRTC_CA_LOG_WARN(AudioConverterDispose(_captureConverter));
++    _captureConverter = NULL;
++  }
+ 
+   // Remove listeners.
+   AudioObjectPropertyAddress propertyAddress = {
+@@ -1335,6 +1408,11 @@ int32_t AudioDeviceMac::StopRecording() {
+   WEBRTC_CA_LOG_WARN(AudioObjectRemovePropertyListener(
+       _inputDeviceID, &propertyAddress, &objectListenerProc, this));
+ 
++  {
++    MutexLock formatLock(&_captureFormatMutex);
++    _captureFormatChangePending.store(false, std::memory_order_release);
++  }
++
+   _recIsInitialized = false;
+   _recording = false;
+ 
+@@ -1942,12 +2020,6 @@ int32_t AudioDeviceMac::HandleStreamFormatChange(
+     return -1;
+   }
+ 
+-  if (_ptrAudioBuffer && streamFormat.mChannelsPerFrame != _recChannels) {
+-    RTC_LOG(LS_ERROR) << "Changing channels not supported (mChannelsPerFrame = "
+-                      << streamFormat.mChannelsPerFrame << ")";
+-    return -1;
+-  }
+-
+   RTC_LOG(LS_VERBOSE) << "Stream format:";
+   RTC_LOG(LS_VERBOSE) << "mSampleRate = " << streamFormat.mSampleRate
+                       << ", mChannelsPerFrame = "
+@@ -1973,33 +2045,40 @@ int32_t AudioDeviceMac::HandleStreamFormatChange(
+       return -1;
+     }
+ 
+-    memcpy(&_inStreamFormat, &streamFormat, sizeof(streamFormat));
+-
+-    if (_inStreamFormat.mChannelsPerFrame >= 2 && (_recChannels == 2)) {
+-      _inDesiredFormat.mChannelsPerFrame = 2;
+-    } else {
+-      // Disable stereo recording when we only have one channel on the device.
+-      _inDesiredFormat.mChannelsPerFrame = 1;
+-      _recChannels = 1;
+-      RTC_LOG(LS_VERBOSE) << "Stereo recording unavailable on this device";
++    // The capture worker owns `_captureConverter`. Recreating it here, on the
++    // CoreAudio listener thread, races with the worker using the converter.
++    // Remember the new format and let the worker apply it.
++    {
++      MutexLock lock(&_captureFormatMutex);
++      _pendingInStreamFormat = streamFormat;
++      _captureFormatChangePending.store(true, std::memory_order_release);
+     }
++    semaphore_signal_all(_captureSemaphore);
+ 
+-    // Recreate the converter with the new format
+-    // TODO(xians): make this thread safe
+-    WEBRTC_CA_RETURN_ON_ERR(AudioConverterDispose(_captureConverter));
++    RTC_LOG(LS_INFO) << "Capture stream format changed: sample_rate="
++                     << streamFormat.mSampleRate
++                     << ", channels=" << streamFormat.mChannelsPerFrame;
++    return 0;
++  }
+ 
+-    WEBRTC_CA_RETURN_ON_ERR(AudioConverterNew(&streamFormat, &_inDesiredFormat,
+-                                              &_captureConverter));
+-  } else {
+-    memcpy(&_outStreamFormat, &streamFormat, sizeof(streamFormat));
++  // A Bluetooth headset can change the playout stream format at runtime,
++  // e.g. A2DP (48 kHz) -> HFP after the microphone is enabled. Apply the
++  // new format instead of rejecting it: SetDesiredPlayoutFormat() rebuilds
++  // the render converter and the device buffer for the new sample rate. A
++  // channel-count downgrade is handled below.
++  RTC_LOG(LS_INFO) << "Applying playout stream format change: sample_rate="
++                   << streamFormat.mSampleRate
++                   << ", channels=" << streamFormat.mChannelsPerFrame;
+ 
+-    // Our preferred format to work with
+-    if (_outStreamFormat.mChannelsPerFrame < 2) {
+-      _playChannels = 1;
+-      RTC_LOG(LS_VERBOSE) << "Stereo playout unavailable on this device";
+-    }
+-    WEBRTC_CA_RETURN_ON_ERR(SetDesiredPlayoutFormat());
++  memcpy(&_outStreamFormat, &streamFormat, sizeof(streamFormat));
++
++  // Our preferred format to work with
++  if (_outStreamFormat.mChannelsPerFrame < 2) {
++    _playChannels = 1;
++    RTC_LOG(LS_VERBOSE) << "Stereo playout unavailable on this device";
+   }
++  WEBRTC_CA_RETURN_ON_ERR(SetDesiredPlayoutFormat());
++
+   return 0;
+ }
+ 
+@@ -2235,6 +2314,12 @@ OSStatus AudioDeviceMac::implInDeviceIOProc(const AudioBufferList* inputData,
+     return 0;
+   }
+ 
++  if (_captureFormatChangePending.load(std::memory_order_acquire)) {
++    // Drop frames until the capture worker has applied the new format. The
++    // old converter must not consume samples captured with the new format.
++    return 0;
++  }
++
+   size_t bufSizeSamples = _captureBuffer.AvailableToRead();
+ 
+   int32_t captureDelayUs =
+@@ -2247,9 +2332,10 @@ OSStatus AudioDeviceMac::implInDeviceIOProc(const AudioBufferList* inputData,
+   _captureDelayUs = captureDelayUs;
+ 
+   RTC_DCHECK(inputData->mNumberBuffers == 1);
+-  size_t numSamples = inputData->mBuffers->mDataByteSize *
+-                      _inStreamFormat.mChannelsPerFrame /
+-                      _inStreamFormat.mBytesPerPacket;
++  // The input data is interleaved 32-bit float. Using the actual buffer size
++  // keeps the sample count correct even if the device format has just changed
++  // and `_inStreamFormat` has not been updated by the capture worker yet.
++  size_t numSamples = inputData->mBuffers->mDataByteSize / sizeof(Float32);
+   _captureBuffer.Write(std::span<const Float32>(
+       static_cast<const Float32*>(inputData->mBuffers->mData), numSamples));
+ 
+@@ -2264,9 +2350,20 @@ OSStatus AudioDeviceMac::implInDeviceIOProc(const AudioBufferList* inputData,
+ OSStatus AudioDeviceMac::implInConverterProc(UInt32* numberDataPackets,
+                                              AudioBufferList* data) {
+   RTC_DCHECK(data->mNumberBuffers == 1);
++
++  if (_captureFormatChangePending.load(std::memory_order_acquire)) {
++    *numberDataPackets = 0;
++    return 1;
++  }
++
+   size_t numSamples = *numberDataPackets * _inStreamFormat.mChannelsPerFrame;
+ 
+   while (_captureBuffer.AvailableToRead() < numSamples) {
++    if (_captureFormatChangePending.load(std::memory_order_acquire)) {
++      *numberDataPackets = 0;
++      return 1;
++    }
++
+     mach_timespec_t timeout;
+     timeout.tv_sec = 0;
+     timeout.tv_nsec = TIMER_PERIOD_MS;
+@@ -2361,6 +2458,10 @@ bool AudioDeviceMac::RenderWorkerThread() {
+ }
+ 
+ bool AudioDeviceMac::CaptureWorkerThread() {
++  if (_captureFormatChangePending.load(std::memory_order_acquire)) {
++    ApplyPendingCaptureFormat();
++  }
++
+   OSStatus err = noErr;
+   UInt32 noRecSamples =
+       ENGINE_REC_BUF_SIZE_IN_SAMPLES * _inDesiredFormat.mChannelsPerFrame;
+@@ -2378,8 +2479,10 @@ bool AudioDeviceMac::CaptureWorkerThread() {
+                                         this, &size, &engineBuffer, NULL);
+   if (err != noErr) {
+     if (err == 1) {
+-      // This is our own error.
+-      return false;
++      // Our own error: either the device is gone or a format update was
++      // requested while the converter was running. Keep the worker alive so
++      // it can apply the new format.
++      return _captureFormatChangePending.load(std::memory_order_acquire);
+     } else {
+       logCAMsg(LS_ERROR, "Error in AudioConverterFillComplexBuffer()",
+                (const char*)&err);
+diff --git a/modules/audio_device/mac/audio_device_mac.h b/modules/audio_device/mac/audio_device_mac.h
+index 07a93e2..83e7625 100644
+--- a/modules/audio_device/mac/audio_device_mac.h
++++ b/modules/audio_device/mac/audio_device_mac.h
+@@ -259,12 +259,21 @@ class AudioDeviceMac : public AudioDeviceGeneric {
+   bool CaptureWorkerThread();
+   bool RenderWorkerThread();
+ 
++  void ApplyPendingCaptureFormat();
++  bool ConfigureCaptureConverter(
++      const AudioStreamBasicDescription& input_format);
++
+   bool KeyPressed();
+ 
+   AudioDeviceBuffer* _ptrAudioBuffer;
+ 
+   Mutex mutex_;
+ 
++  // Protects `_pendingInStreamFormat`. Kept separate from `mutex_` so the
++  // CoreAudio stream-format listener never blocks on the device lock while the
++  // device is being stopped and property listeners are removed.
++  Mutex _captureFormatMutex;
++
+   Event _stopEventRec;
+   Event _stopEvent;
+ 
+@@ -311,6 +320,12 @@ class AudioDeviceMac : public AudioDeviceGeneric {
+   AudioConverterRef _captureConverter;
+   AudioConverterRef _renderConverter;
+ 
++  // Set by the CoreAudio stream-format listener and applied by the capture
++  // worker, which owns `_captureConverter`. Recreating the converter from the
++  // listener would race with the capture worker using it.
++  std::atomic<bool> _captureFormatChangePending;
++  AudioStreamBasicDescription _pendingInStreamFormat;
++
+   AudioStreamBasicDescription _outStreamFormat;
+   AudioStreamBasicDescription _outDesiredFormat;
+   AudioStreamBasicDescription _inStreamFormat;
