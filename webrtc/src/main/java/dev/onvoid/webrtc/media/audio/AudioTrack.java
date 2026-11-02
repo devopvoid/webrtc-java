@@ -68,22 +68,43 @@ public class AudioTrack extends MediaStreamTrack {
 	}
 
 	/**
-	 * Adds an AudioSink to the track. A track can have any number of AudioSinks.
-	 * Called from within the callback of a sink, it returns before the sink is
-	 * registered, and the sink gets the audio that follows once it is.
+	 * Adds an AudioSink to the track, which gets a new array in each call, as
+	 * with {@link AudioDataAccess#COPY}. A track can have any number of
+	 * AudioSinks.
 	 *
 	 * @param sink The audio sink that will receive audio data from the track.
 	 *             Adding it again does nothing.
 	 *
 	 * @throws IllegalStateException if the track has been disposed.
+	 *
+	 * @see #addSink(AudioTrackSink, AudioDataAccess)
 	 */
 	public void addSink(AudioTrackSink sink) {
-		if (isNull(sink)) {
+		addSink(sink, AudioDataAccess.COPY);
+	}
+
+	/**
+	 * Adds an AudioSink to the track. A track can have any number of
+	 * AudioSinks. Called from within the callback of a sink, it returns
+	 * before the sink is registered, and the sink gets the audio that follows
+	 * once it is.
+	 *
+	 * @param sink   The audio sink that will receive audio data from the
+	 *               track. Adding it again does nothing, whatever the access.
+	 * @param access Whether the sink gets a new array in each call, which it
+	 *               may keep, or the same one, valid until the call returns.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
+	 */
+	public void addSink(AudioTrackSink sink, AudioDataAccess access) {
+		if (isNull(sink) || isNull(access)) {
 			throw new NullPointerException();
 		}
 
+		boolean reused = access == AudioDataAccess.REUSED;
+
 		sinks.add(sink, (s, registration) -> addSinkInternal(new SinkDelivery(s, registration),
-				takesPacketInfos(s)));
+				takesPacketInfos(s), reused));
 	}
 
 	/**
@@ -183,7 +204,7 @@ public class AudioTrack extends MediaStreamTrack {
 
 	private native void setVolumeInternal(double volume);
 
-	private native long addSinkInternal(AudioTrackSink sink, boolean packetInfos);
+	private native long addSinkInternal(AudioTrackSink sink, boolean packetInfos, boolean reuseData);
 
 	private native void removeSinkInternal(long sinkHandle);
 

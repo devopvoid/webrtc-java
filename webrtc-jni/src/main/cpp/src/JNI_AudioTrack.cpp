@@ -24,7 +24,7 @@
 #include "api/media_stream_interface.h"
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInternal
-(JNIEnv * env, jobject caller, jobject jsink, jboolean packetInfos)
+(JNIEnv * env, jobject caller, jobject jsink, jboolean packetInfos, jboolean reuseData)
 {
 	try {
 		if (jsink == nullptr) {
@@ -35,7 +35,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInt
 		jni::NativeLease<webrtc::AudioTrackInterface> track(env, caller);
 		CHECK_HANDLEV(track, 0);
 
-		auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink), packetInfos);
+		auto sink = new jni::AudioTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink), packetInfos, reuseData);
 
 		track->AddSink(sink);
 
