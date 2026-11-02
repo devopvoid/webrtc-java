@@ -43,6 +43,7 @@ final class AudioDispatcher extends Dispatcher<AudioChunk> implements AudioTrack
 			return;
 		}
 
+		// The track reuses the array for the next chunk.
 		offer(new AudioChunk(data.clone(), sampleRate, channels, frames));
 	}
 

@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.internal.Timeouts;
+import dev.onvoid.webrtc.media.audio.AudioDataAccess;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 
 /**
@@ -68,7 +69,8 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 
 		onControl(() -> {
 			dispatchers.add(dispatcher);
-			track.addSink(dispatcher);
+			// The dispatcher copies each chunk, so it needs no new array per call.
+			track.addSink(dispatcher, AudioDataAccess.REUSED);
 		});
 
 		return () -> {

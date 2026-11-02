@@ -23,9 +23,14 @@
 
 namespace jni
 {
-	AudioTrackSink::AudioTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink, bool packetInfos) :
+	AudioTrackSink::AudioTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink, bool packetInfos,
+		bool reuseData) :
 		sink(sink),
 		packetInfos(packetInfos),
+		reuseData(reuseData),
+		reusedArray(nullptr),
+		reusedSize(0),
+		reusedInUse(false),
 		javaClass(JavaClasses::get<JavaAudioTrackSinkClass>(env))
 	{
 	}
@@ -59,10 +64,30 @@ namespace jni
 		const jbyte * buffer = static_cast<const jbyte *>(data);
 		jsize dataSize = static_cast<jsize>(frames * channels * (bitsPerSample / 8));
 
-		JavaLocalRef<jbyteArray> dataArray(env, env->NewByteArray(dataSize));
+		// The reused array belongs to one call at a time. A call that finds it
+		// in use, should a source deliver on two threads at once, falls back
+		// to an array of its own.
+		const bool reusing = reuseData && !reusedInUse.exchange(true, std::memory_order_acquire);
 
-		if (dataArray.get() != nullptr) {
-			env->SetByteArrayRegion(dataArray.get(), 0, dataSize, buffer);
+		JavaLocalRef<jbyteArray> ownArray(env, reusing ? nullptr : env->NewByteArray(dataSize));
+		jbyteArray dataArray = ownArray.get();
+
+		if (reusing) {
+			if (reusedArray.get() == nullptr || reusedSize != dataSize) {
+				// Its length is that of the audio, as with a new array per call.
+				JavaLocalRef<jbyteArray> array(env, env->NewByteArray(dataSize));
+
+				reusedArray = (array.get() != nullptr)
+					? JavaGlobalRef<jbyteArray>(env, array.get())
+					: JavaGlobalRef<jbyteArray>(nullptr);
+				reusedSize = dataSize;
+			}
+
+			dataArray = reusedArray.get();
+		}
+
+		if (dataArray != nullptr) {
+			env->SetByteArrayRegion(dataArray, 0, dataSize, buffer);
 
 			if (packetInfos) {
 				try {
@@ -70,7 +95,7 @@ namespace jni
 						? RTCRtpPacketInfo::toJavaArray(env, *infos)
 						: RTCRtpPacketInfo::toJavaArray(env, webrtc::RtpPacketInfos());
 
-					env->CallVoidMethod(sink, javaClass->onDataWithPacketInfos, dataArray.get(),
+					env->CallVoidMethod(sink, javaClass->onDataWithPacketInfos, dataArray,
 						static_cast<jint>(bitsPerSample), static_cast<jint>(sampleRate),
 						static_cast<jint>(channels), static_cast<jint>(frames), infoArray.get());
 				}
@@ -79,9 +104,13 @@ namespace jni
 				}
 			}
 			else {
-				env->CallVoidMethod(sink, javaClass->onData, dataArray.get(), static_cast<jint>(bitsPerSample),
+				env->CallVoidMethod(sink, javaClass->onData, dataArray, static_cast<jint>(bitsPerSample),
 					static_cast<jint>(sampleRate), static_cast<jint>(channels), static_cast<jint>(frames));
 			}
+		}
+
+		if (reusing) {
+			reusedInUse.store(false, std::memory_order_release);
 		}
 
 		ReportPendingException(env);

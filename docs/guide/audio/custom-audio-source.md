@@ -206,6 +206,17 @@ audioTrack.removeSink(monitorSink);
 
 As with video tracks, sinks may be added and removed from any thread, and also from within `onData`, the sink's own included. Only `dispose()` must not be called from within a callback.
 
+Each call hands a sink a new array, which it may keep, for example in a queue for another thread. A sink that reads the audio only while it is called can take the same array in every call instead, so that no array is allocated for it a hundred times a second:
+
+```java
+import dev.onvoid.webrtc.media.audio.AudioDataAccess;
+
+// The array holds the audio only until onData returns; copy what you keep.
+audioTrack.addSink(monitorSink, AudioDataAccess.REUSED);
+```
+
+The array is replaced when the size of the chunks changes, so its length is always that of the audio.
+
 ## Cleanup
 
 When you're done with the custom audio source, make sure to clean up resources:

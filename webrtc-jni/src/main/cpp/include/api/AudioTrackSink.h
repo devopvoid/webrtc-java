@@ -24,6 +24,7 @@
 #include "api/rtp_packet_infos.h"
 
 #include <jni.h>
+#include <atomic>
 #include <memory>
 #include <optional>
 
@@ -33,8 +34,9 @@ namespace jni
 	{
 		public:
 			// With packetInfos, the Java sink is called with the RTP packets
-			// the audio was assembled from.
-			AudioTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink, bool packetInfos);
+			// the audio was assembled from. With reuseData, it gets the same
+			// array in every call instead of a new one.
+			AudioTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink, bool packetInfos, bool reuseData);
 			~AudioTrackSink() = default;
 
 			// AudioTrackSinkInterface implementation. WebRTC calls the variant
@@ -62,6 +64,16 @@ namespace jni
 			JavaGlobalRef<jobject> sink;
 
 			const bool packetInfos;
+
+			const bool reuseData;
+
+			// The array handed to the Java sink in every call when reuseData
+			// is set. Only the call that has set reusedInUse touches it.
+			JavaGlobalRef<jbyteArray> reusedArray;
+
+			jsize reusedSize;
+
+			std::atomic<bool> reusedInUse;
 
 			const std::shared_ptr<JavaAudioTrackSinkClass> javaClass;
 	};
