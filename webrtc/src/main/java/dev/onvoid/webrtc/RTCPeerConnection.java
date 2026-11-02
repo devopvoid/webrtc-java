@@ -512,8 +512,22 @@ public class RTCPeerConnection extends NativeObject {
 	 * same factory, the connection is closed once that callback has returned,
 	 * since WebRTC goes on with it afterwards. Until then, the {@link
 	 * PeerConnectionObserver} may still hear of the operation in progress.
+	 * <p>
+	 * It may be called from any thread, also while other threads still call
+	 * methods of this connection, and more than once: only the first call
+	 * closes the connection, later and concurrent ones return without doing
+	 * anything. Methods called after it throw an {@link
+	 * IllegalStateException}, except the state getters, which report a closed
+	 * connection. A method that another thread is running when
+	 * the connection is closed goes on with the native connection, which is
+	 * then closed and freed once that method has returned.
 	 */
 	public native void close();
+
+	@Override
+	protected IllegalStateException disposedException() {
+		return new IllegalStateException("RTCPeerConnection is closed");
+	}
 
 	/**
 	 * Two RTCPeerConnection instances are equal if they are bound to the

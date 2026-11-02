@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioConverter.h"
+#include "NativeHandle.h"
 #include "api/audio/audio_processing.h"
 #include "media/audio/AudioConverter.h"
 #include "JavaUtils.h"
@@ -25,7 +26,7 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_convertInternal
 (JNIEnv * env, jobject caller, jbyteArray src, jint nSrcSamples, jbyteArray dst, jint nDstSamples)
 {
-	jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
+	jni::NativeLease<jni::AudioConverter> converter(env, caller);
 	CHECK_HANDLE(converter);
 
 	if (src == nullptr || dst == nullptr) {
@@ -73,12 +74,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_convert
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::AudioConverter * converter = GetHandle<jni::AudioConverter>(env, caller);
-	CHECK_HANDLE(converter);
+	jni::AudioConverter * converter = jni::TakeHandle<jni::AudioConverter>(env, caller);
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	if (converter == nullptr) {
+		return;
+	}
 
-	delete converter;
+	jni::ReleaseHandle(env, converter, [converter](bool) {
+		delete converter;
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_initialize

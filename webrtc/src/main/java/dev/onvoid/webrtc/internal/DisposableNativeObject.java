@@ -26,6 +26,12 @@ public abstract class DisposableNativeObject extends NativeObject {
 
 	/**
 	 * Invoke native object destructors and free native resources.
+	 * <p>
+	 * It may be called from any thread and more than once: only the first call
+	 * disposes the object, later and concurrent ones do nothing. Methods
+	 * called afterwards throw an {@link IllegalStateException}. A method that
+	 * another thread is running meanwhile goes on with the native object, which
+	 * is freed once that method has returned.
 	 */
 	public abstract void dispose();
 

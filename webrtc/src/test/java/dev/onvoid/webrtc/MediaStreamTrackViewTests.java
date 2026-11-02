@@ -72,7 +72,7 @@ class MediaStreamTrackViewTests extends TestBase {
 		MediaStreamTrack view = sender.getTrack();
 
 		assertDoesNotThrow(view::dispose);
-		assertThrows(NullPointerException.class, view::getId);
+		assertThrows(IllegalStateException.class, view::getId);
 
 		// The track itself is untouched.
 		assertEquals(audioTrack.getId(), sender.getTrack().getId());

@@ -462,6 +462,8 @@ peerConnection.close();
 factory.dispose();
 ```
 
+`dispose()` and `close()` may be called from any thread and more than once: only the first call frees anything, later ones do nothing. Once an object is disposed, its methods throw an `IllegalStateException` (a closed connection still reports its state). A method that another thread is running at that moment keeps the native object until it returns, and what the dispose frees is freed then.
+
 ## Next Steps
 
 Now that you have a basic understanding of webrtc-java, you can explore more advanced features:

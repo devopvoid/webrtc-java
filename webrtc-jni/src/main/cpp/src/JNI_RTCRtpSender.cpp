@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCRtpSender.h"
+#include "NativeHandle.h"
 #include "api/EncodedFrameInjectorObserver.h"
 #include "api/RegisteredObservers.h"
 #include "api/RTCRtpSenderObserver.h"
@@ -36,7 +37,7 @@
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTrack
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLEV(sender, nullptr);
 
 	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = sender->track();
@@ -49,7 +50,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTransport
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		auto transport = sender->dtls_transport();
@@ -71,12 +72,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTransport
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_replaceTrack
 (JNIEnv * env, jobject caller, jobject jTrack)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLE(sender);
 
-	webrtc::MediaStreamTrackInterface * track = jTrack == nullptr
-		? nullptr
-		: GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
+	// Null without a track, which detaches the sender's.
+	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
+
+	if (jTrack != nullptr) {
+		CHECK_HANDLE(track);
+	}
 
 	if (!sender->SetTrack(track)) {
 		env->Throw(jni::JavaRuntimeException(env, "Set track failed"));
@@ -87,7 +91,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setParameters
 (JNIEnv * env, jobject caller, jobject jParams)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLE(sender);
 
 		webrtc::RtpParameters rtp_parameters = jni::RTCRtpSendParameters::toNative(env, jni::JavaLocalRef<jobject>(env, jParams));
@@ -106,7 +110,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getParameters
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		return jni::RTCRtpSendParameters::toJava(env, sender->GetParameters()).release();
@@ -121,7 +125,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setStreams
 (JNIEnv * env, jobject caller, jobject streamIdList)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLE(sender);
 
 		std::vector<std::string> streamIDs = jni::JavaList::toStringVector(env, jni::JavaLocalRef<jobject>(env, streamIdList));
@@ -137,7 +141,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		auto dtmfSender = sender->GetDtmfSender();
@@ -163,7 +167,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setTransform
 (JNIEnv * env, jobject caller, jobject jTransformer)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLE(sender);
 
 	try {
@@ -184,7 +188,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setTransform
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_generateKeyFrame
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLE(sender);
 
 	// Audio has no key frames, so there is nothing to ask for.
@@ -202,7 +206,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_generateKeyFrame
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createVideoFrameInjector
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLEV(sender, nullptr);
 
 	try {
@@ -245,7 +249,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createVideoFrameIn
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createAudioFrameInjector
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLEV(sender, nullptr);
 
 	try {
@@ -287,7 +291,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getId
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		return jni::JavaString::toJava(env, sender->id()).release();
@@ -301,7 +305,7 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getId
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getStreams
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLEV(sender, nullptr);
 
 	try {
@@ -324,7 +328,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getStreams
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+	jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 	CHECK_HANDLE(sender);
 
 	try {
@@ -358,8 +362,11 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	webrtc::RtpSenderInterface * sender = jni::TakeHandle<webrtc::RtpSenderInterface>(env, caller);
+
+	if (sender == nullptr) {
+		return;
+	}
 
 	// WebRTC must let go of an observer set through this object before it is
 	// deleted. One that another Java object has set since stays.
@@ -374,7 +381,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_dispose
 	// and other Java wrappers may have been obtained via separate
 	// getSenders()/getSender() calls. Dropping our reference here is
 	// expected to leave others around, so it is not reported as an error.
-	sender->Release();
-
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	jni::ReleaseHandle(env, sender, [sender](bool) {
+		sender->Release();
+	});
 }

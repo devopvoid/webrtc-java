@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.media.video;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -86,7 +87,8 @@ class VideoCaptureTests extends TestBase {
 		VideoCapture capture = new VideoCapture();
 		capture.dispose();
 
-		assertThrows(NullPointerException.class, capture::dispose);
+		assertDoesNotThrow(capture::dispose);
+		assertThrows(IllegalStateException.class, capture::start);
 	}
 
 	private static WeakReference<VideoTrackSink> setSink(VideoCapture capture) {

@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioProcessing.h"
+#include "NativeHandle.h"
 #include "Exception.h"
 #include "JavaArrayList.h"
 #include "JavaEnums.h"
@@ -43,7 +44,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyC
 (JNIEnv * env, jobject caller, jobject config)
 {
 	try {
-		webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+		jni::NativeLease<webrtc::AudioProcessing> apm(env, caller);
 		CHECK_HANDLE(apm);
 
 		apm->ApplyConfig(jni::AudioProcessingConfig::toNative(env, jni::JavaLocalRef<jobject>(env, config)));
@@ -56,7 +57,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_applyC
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setStreamDelayMs
 (JNIEnv * env, jobject caller, jint delayMs)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+	jni::NativeLease<webrtc::AudioProcessing> apm(env, caller);
 	CHECK_HANDLE(apm);
 
 	apm->set_stream_delay_ms(delayMs);
@@ -65,7 +66,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_setStr
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_getStreamDelayMs
 (JNIEnv * env, jobject caller)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+	jni::NativeLease<webrtc::AudioProcessing> apm(env, caller);
 	CHECK_HANDLEV(apm, 0);
 
 	return apm->stream_delay_ms();
@@ -77,7 +78,7 @@ static jint processFrame(JNIEnv * env, jobject caller, jbyteArray src, jobject i
 	jobject outputConfig, jbyteArray dest, bool reverse)
 {
 	try {
-		webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+		jni::NativeLease<webrtc::AudioProcessing> apm(env, caller);
 		CHECK_HANDLEV(apm, 0);
 
 		webrtc::StreamConfig srcConfig = jni::AudioProcessingStreamConfig::toNative(env, jni::JavaLocalRef<jobject>(env, inputConfig));
@@ -157,23 +158,26 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_proces
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
-	CHECK_HANDLE(apm);
+	webrtc::AudioProcessing * apm = jni::TakeHandle<webrtc::AudioProcessing>(env, caller);
 
-	webrtc::RefCountReleaseStatus status = apm->Release();
-
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+	if (apm == nullptr) {
+		return;
 	}
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
-
-	apm = nullptr;
-
-	// The module, if a factory still uses it, keeps a share of the tap.
-	delete GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
+	auto tap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, caller, "captureTapHandle");
 
 	SetHandle<std::nullptr_t>(env, caller, "captureTapHandle", nullptr);
+
+	jni::ReleaseHandle(env, apm, [apm, tap](bool) {
+		webrtc::RefCountReleaseStatus status = apm->Release();
+
+		if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+			RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+		}
+
+		// The module, if a factory still uses it, keeps a share of the tap.
+		delete tap;
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initialize
@@ -199,7 +203,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_initia
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioProcessing_updateStats
 (JNIEnv* env, jobject caller)
 {
-	webrtc::AudioProcessing * apm = GetHandle<webrtc::AudioProcessing>(env, caller);
+	jni::NativeLease<webrtc::AudioProcessing> apm(env, caller);
 	CHECK_HANDLE(apm);
 
 	jni::AudioProcessing::updateStats(apm->GetStatistics(), env, jni::JavaLocalRef<jobject>(env, caller));

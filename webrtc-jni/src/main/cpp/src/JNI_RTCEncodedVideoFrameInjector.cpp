@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCEncodedVideoFrameInjector.h"
+#include "NativeHandle.h"
 #include "api/EncodedFrameInjectorObserver.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
@@ -50,7 +51,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedVideoFrameInjector_injec
 (JNIEnv * env, jobject caller, jobject jBuffer, jint position, jint length, jlong rtpTimestamp,
 	jboolean keyFrame, jint width, jint height, jlong captureTimeMs, jboolean hasCaptureTime)
 {
-	webrtc::EncodedVideoFrameInjectorInterface * injector = GetHandle<webrtc::EncodedVideoFrameInjectorInterface>(env, caller);
+	jni::NativeLease<webrtc::EncodedVideoFrameInjectorInterface> injector(env, caller);
 	CHECK_HANDLE(injector);
 
 	try {
@@ -81,7 +82,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedVideoFrameInjector_injec
 (JNIEnv * env, jobject caller, jbyteArray jData, jlong rtpTimestamp, jboolean keyFrame,
 	jint width, jint height, jlong captureTimeMs, jboolean hasCaptureTime)
 {
-	webrtc::EncodedVideoFrameInjectorInterface * injector = GetHandle<webrtc::EncodedVideoFrameInjectorInterface>(env, caller);
+	jni::NativeLease<webrtc::EncodedVideoFrameInjectorInterface> injector(env, caller);
 	CHECK_HANDLE(injector);
 
 	try {
@@ -107,14 +108,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedVideoFrameInjector_injec
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedVideoFrameInjector_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::EncodedVideoFrameInjectorInterface * injector = GetHandle<webrtc::EncodedVideoFrameInjectorInterface>(env, caller);
-	CHECK_HANDLE(injector);
+	webrtc::EncodedVideoFrameInjectorInterface * injector = jni::TakeHandle<webrtc::EncodedVideoFrameInjectorInterface>(env, caller);
+
+	if (injector == nullptr) {
+		return;
+	}
 
 	// The sender keeps the injector and its callbacks; only the Java observer
 	// stops hearing from them here.
 	ClearNativeObserver<jni::EncodedFrameInjectorObserver>(env, caller, "observerHandle");
 
-	injector->Release();
-
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+	jni::ReleaseHandle(env, injector, [injector](bool) {
+		injector->Release();
+	});
 }

@@ -15,6 +15,7 @@
  */
 
 #include "JNI_CustomVideoSource.h"
+#include "NativeHandle.h"
 #include "JavaUtils.h"
 #include "api/VideoFrame.h"
 
@@ -39,7 +40,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_init
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_initializeWithClock
 (JNIEnv * env, jobject caller, jobject javaClock)
 {
-    auto clock = GetHandle<std::shared_ptr<jni::SyncClock>>(env, javaClock);
+    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, javaClock);
     CHECK_HANDLE(clock);
 
     // The source shares the clock, so disposing the Java clock while the
@@ -52,24 +53,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_init
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_dispose
 (JNIEnv * env, jobject caller)
 {
-    jni::CustomVideoSource * source = GetHandle<jni::CustomVideoSource>(env, caller);
-    CHECK_HANDLE(source);
+    jni::CustomVideoSource * source = jni::TakeHandle<jni::CustomVideoSource>(env, caller);
 
-    webrtc::RefCountReleaseStatus status = source->Release();
-
-    if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-        RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+    if (source == nullptr) {
+        return;
     }
 
-    SetHandle<std::nullptr_t>(env, caller, nullptr);
+    jni::ReleaseHandle(env, source, [source](bool) {
+        webrtc::RefCountReleaseStatus status = source->Release();
 
-    source = nullptr;
+        if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+            RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+        }
+    });
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_pushFrame
 (JNIEnv * env, jobject caller, jobject javaFrame)
 {
-    jni::CustomVideoSource * source = GetHandle<jni::CustomVideoSource>(env, caller);
+    jni::NativeLease<jni::CustomVideoSource> source(env, caller);
     CHECK_HANDLE(source);
 
     if (javaFrame != nullptr) {
@@ -88,7 +90,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_push
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_pushFrameTimestamped
 (JNIEnv * env, jobject caller, jobject javaFrame, jlong timestampUs)
 {
-    jni::CustomVideoSource * source = GetHandle<jni::CustomVideoSource>(env, caller);
+    jni::NativeLease<jni::CustomVideoSource> source(env, caller);
     CHECK_HANDLE(source);
 
     if (javaFrame != nullptr) {
