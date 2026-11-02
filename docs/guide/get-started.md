@@ -114,6 +114,23 @@ implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VER
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "linux-aarch32"
 ```
 
+### Where the Native Library Is Loaded From
+
+The native library is looked for in this order:
+
+1. In the directory named by the system property `webrtc.java.library.dir`, if the library is there. It is loaded in place, nothing is extracted. Use this when the library is installed with the application, for example by a jpackage installer or a distribution package.
+2. In the native JAR on the class path. The library is extracted into the directory named by `webrtc.java.extract.dir`, or into the temporary directory (`java.io.tmpdir`) if that is not set, and loaded from there. Set `webrtc.java.extract.dir` when the temporary directory does not allow running code, as when `/tmp` is mounted with `noexec`.
+3. Where `System.loadLibrary` looks: the libraries of the Java runtime, which is where a jlink image keeps those of its modules, then `java.library.path`.
+
+```shell
+java -Dwebrtc.java.library.dir=/opt/myapp/lib -jar myapp.jar
+java -Dwebrtc.java.extract.dir=/var/lib/myapp/natives -jar myapp.jar
+```
+
+A library loaded from a directory keeps the file name it has in the native JAR, for example `libwebrtc-java-linux-x86_64.so`. The media module's library is found the same way; its FFmpeg libraries go next to it under their names in its native JAR (`libavcodec.so.62` and so on). If the library is found nowhere, the `UnsatisfiedLinkError` lists every place that was tried.
+
+The Linux libraries are built against glibc. They do not load on a system with the musl C library, such as Alpine Linux; the error says so when it finds one.
+
 ## Your First Call
 
 webrtc-java has two APIs. The [Client API](/guide/client-api) in `dev.onvoid.webrtc.client` negotiates by itself, keeps your code off WebRTC's threads, and closes everything it created with one call. The core API in `dev.onvoid.webrtc` mirrors WebRTC's own classes one to one, for full control. Start with the client API; [Using the Core API](#using-the-core-api) below shows the same steps with the core API.
