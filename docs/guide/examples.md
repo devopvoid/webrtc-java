@@ -118,7 +118,7 @@ The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/mas
 - Running the peers' handlers on the Swing event dispatch thread
 - Keeping audio and video in sync by sending both tracks in the same media stream
 - Raising the video sender's maximum bitrate once it is connected, so a high-resolution file is not held to a fraction of its size
-- Rendering received video in the Swing `VideoView`
+- Rendering received video in the Swing `VideoView` of the `webrtc-java-swing` module
 - Showing the source's format, the playback position, and live receive metrics (codec, resolution, frame rate, bitrate, packet loss, jitter, audio level) read from `onStats`
 - Recording the received tracks into a Matroska file with `MediaRecorder`
 - Closing the peers, then the tracks, then the source on Stop

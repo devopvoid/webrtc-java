@@ -134,15 +134,16 @@ runs:
         ls -l
       shell: bash
 
-    # One reactor for both, so that webrtc-java-media resolves webrtc-java
-    # from it. Testing rather than installing: webrtc attaches the host
+    # One reactor for all, so that webrtc-java-media and webrtc-java-swing
+    # resolve webrtc-java from it. The Swing view paints into images, which
+    # needs no display. Testing rather than installing: webrtc attaches the host
     # natives from webrtc-jni/target during its package phase, and on a runner
     # that only downloaded them there is no such directory.
     #
     # The native build is off: these natives were cross compiled by another
     # job, and this runner is here to run them, not to build them again.
     - name: Test
-      run: mvn -B -pl webrtc,webrtc-media test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
+      run: mvn -B -pl webrtc,webrtc-media,webrtc-swing test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
       shell: bash
 
     # What failed, for runners that cannot be reproduced locally.

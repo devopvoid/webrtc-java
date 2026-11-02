@@ -162,9 +162,6 @@
 	"name": "dev.onvoid.webrtc.media.video.desktop.DesktopCaptureCallback"
   },
   {
-	"name": "dev.onvoid.webrtc.media.video.desktop.DesktopFrame"
-  },
-  {
 	"name": "dev.onvoid.webrtc.media.video.desktop.DesktopSource"
   }
 ]

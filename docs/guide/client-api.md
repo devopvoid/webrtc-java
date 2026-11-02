@@ -287,7 +287,17 @@ hangUpButton.addActionListener(event -> peer.close());   // never blocks the EDT
 
 The order of each peer's events is kept with any executor, including a thread pool. Frame handlers stay on their own threads even then, since frames come far too often for a UI thread.
 
-`VideoView` in `dev.onvoid.webrtc.client.swing` shows video in a Swing window. It converts each frame on the frame's own thread and leaves only the painting to the EDT. It keeps the picture's aspect ratio and rotation, and can mirror a local camera preview:
+The `webrtc-java-swing` module has a `VideoView` in `dev.onvoid.webrtc.client.swing` that shows video in a Swing window. The core `webrtc-java` module does not depend on `java.desktop`, so headless applications and trimmed runtime images need neither AWT nor Swing:
+
+```xml
+<dependency>
+    <groupId>dev.onvoid.webrtc</groupId>
+    <artifactId>webrtc-java-swing</artifactId>
+    <version>{{ VERSION }}</version>
+</dependency>
+```
+
+The view converts each frame on the frame's own thread and leaves only the painting to the EDT. It keeps the picture's aspect ratio and rotation, and can mirror a local camera preview:
 
 ```java
 import dev.onvoid.webrtc.client.swing.VideoView;

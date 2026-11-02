@@ -26,7 +26,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 - **[Cameras and microphones](https://jrtc.dev/guide/media/media-devices)** - Capture from any local device
 - **[Screen sharing](https://jrtc.dev/guide/video/desktop-capture)** - Share the full desktop or single application windows
 - **[Video processing](https://jrtc.dev/guide/video/camera-capture#changing-frames-before-they-are-sent)** - Blur a background, draw an overlay or blank out part of the screen before frames are sent
-- **[Video views](https://jrtc.dev/guide/client-api#handlers-on-the-ui-thread)** - Ready-made components that show video in Swing, or in JavaFX with the `webrtc-java-javafx` module
+- **[Video views](https://jrtc.dev/guide/client-api#handlers-on-the-ui-thread)** - Ready-made components that show video in Swing with the `webrtc-java-swing` module, or in JavaFX with the `webrtc-java-javafx` module
 
 **Codecs and encoded media**
 
