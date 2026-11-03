@@ -83,7 +83,7 @@ runs:
         PROFILES: ${{ inputs.profiles }}
         SKIP_UPLOAD: ${{ inputs.skip-upload }}
       run: >
-        mvn -B deploy -pl .,webrtc,webrtc-media,webrtc-javafx -DskipTests
+        mvn -B deploy -pl .,webrtc,webrtc-media,webrtc-swing,webrtc-javafx -DskipTests
         -Dmaven.repository.credentialScope=id
         ${PROFILES:+-P$PROFILES}
         -Dnatives.dir="$PWD/natives"

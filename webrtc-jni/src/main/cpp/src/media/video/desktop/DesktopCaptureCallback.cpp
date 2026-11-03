@@ -15,7 +15,6 @@
  */
 
 #include "media/video/desktop/DesktopCaptureCallback.h"
-#include "media/video/desktop/DesktopFrame.h"
 #include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
 #include "JavaEnums.h"

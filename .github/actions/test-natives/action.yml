@@ -137,17 +137,27 @@ runs:
         "$JAVA_HOME/bin/jar" xf "$WEBRTC_JAR"
         rm -rf META-INF
         ls -l
+        cd - > /dev/null
+
+        # The Swing module's tests need only webrtc-java's natives, and read
+        # them from a directory of the same name for the same reason.
+        mkdir -p webrtc-swing/target/natives
+        cd webrtc-swing/target/natives
+        "$JAVA_HOME/bin/jar" xf "$WEBRTC_JAR"
+        rm -rf META-INF
+        ls -l
       shell: bash
 
-    # One reactor for both, so that webrtc-java-media resolves webrtc-java
-    # from it. Testing rather than installing: webrtc attaches the host
+    # One reactor for all, so that webrtc-java-media and webrtc-java-swing
+    # resolve webrtc-java from it. The Swing view paints into images, which
+    # needs no display. Testing rather than installing: webrtc attaches the host
     # natives from webrtc-jni/target during its package phase, and on a runner
     # that only downloaded them there is no such directory.
     #
     # The native build is off: these natives were cross compiled by another
     # job, and this runner is here to run them, not to build them again.
     - name: Test
-      run: mvn -B -pl webrtc,webrtc-media test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
+      run: mvn -B -pl webrtc,webrtc-media,webrtc-swing test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
       shell: bash
       if: inputs.jni-check != 'true'
 

@@ -815,6 +815,8 @@ Next:
 - `VideoView` for JavaFX lives in the `webrtc-java-javafx` module, package
   `dev.onvoid.webrtc.client.javafx`, compiled for Java 11 since OpenJFX is; JavaFX is an optional
   dependency the application brings. `JavaFxCameraExample` in `webrtc-examples` uses it.
+- `VideoView` for Swing lives in the `webrtc-java-swing` module, package
+  `dev.onvoid.webrtc.client.swing`, so that the core module does not need `java.desktop`.
 - phase 2 is done: `Whip.to(...).publish(rtc)` and
   `Whep.from(...).play(rtc)` return sessions over `java.net.http.HttpClient`, and `VideoView` is in
   `dev.onvoid.webrtc.client.swing`;

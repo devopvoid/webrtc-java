@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.onvoid.webrtc.client;
+package dev.onvoid.webrtc.client.swing;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,17 +26,53 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import dev.onvoid.webrtc.client.swing.VideoView;
+import dev.onvoid.webrtc.client.AudioMode;
+import dev.onvoid.webrtc.client.CustomVideo;
+import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.PeerOptions;
+import dev.onvoid.webrtc.client.Signaling;
+import dev.onvoid.webrtc.client.SignalingPair;
+import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
-class VideoViewTests extends ClientTestBase {
+@Execution(ExecutionMode.SAME_THREAD)
+class VideoViewTests {
+
+	private static final long TIMEOUT_SECONDS = 15;
+
+	private final List<Throwable> errors = new CopyOnWriteArrayList<>();
+
+	private WebRtc rtc;
+
+
+	@BeforeEach
+	void createRuntime() {
+		// Also loads the native library the frames need.
+		rtc = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.build();
+	}
+
+	@AfterEach
+	void closeRuntime() {
+		rtc.close();
+
+		assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+	}
 
 	@Test
 	void showsFrame() {
@@ -127,6 +163,22 @@ class VideoViewTests extends ClientTestBase {
 		BufferedImage snapshot = view.snapshot();
 		assertNotNull(snapshot, "No frame reached the view");
 		assertEquals(320, snapshot.getWidth());
+	}
+
+	private Peer[] pair() {
+		SignalingPair link = Signaling.loopback();
+
+		Peer caller = rtc.createPeer(PeerOptions.builder()
+				.name("caller")
+				.signaling(link.first())
+				.build());
+		Peer callee = rtc.createPeer(PeerOptions.builder()
+				.name("callee")
+				.signaling(link.second())
+				.polite(true)
+				.build());
+
+		return new Peer[] { caller, callee };
 	}
 
 	/** The pixels a 64x48 view paints of a 64x48 two-tone frame with the given rotation. */

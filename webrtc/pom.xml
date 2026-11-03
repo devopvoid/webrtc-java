@@ -14,14 +14,36 @@
 
 	<build>
 		<plugins>
+			<!-- The module does not read java.desktop, but a desktop capture test
+			     opens an AWT window of its own to capture. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>default-testCompile</id>
+						<configuration>
+							<compilerArgs>
+								<arg>--add-modules</arg>
+								<arg>java.desktop</arg>
+								<arg>--add-reads</arg>
+								<arg>webrtc.java=java.desktop</arg>
+							</compilerArgs>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<!-- add-exports: dev.onvoid.webrtc.internal is not exported to
 					     applications, but the tests cover NativeApi, which native
-					     extension modules use to reach the native sources. -->
+					     extension modules use to reach the native sources.
+					     add-reads: see the test compilation above. -->
 					<argLine>
+						--add-modules java.desktop
+						--add-reads webrtc.java=java.desktop
 						--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
 						--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
 						--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
@@ -73,6 +95,8 @@
 							<forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory" />
 							<argLine>
 								-Xcheck:jni
+								--add-modules java.desktop
+								--add-reads webrtc.java=java.desktop
 								--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
 								--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
 								--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED

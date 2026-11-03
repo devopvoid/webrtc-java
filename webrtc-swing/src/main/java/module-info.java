@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Alex Andres
+ * Copyright 2026 Alex Andres
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,32 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef JNI_WEBRTC_MEDIA_DESKTOP_FRAME_H_
-#define JNI_WEBRTC_MEDIA_DESKTOP_FRAME_H_
+/**
+ * Shows the video of the webrtc-java client API in Swing windows.
+ */
+module webrtc.java.swing {
 
-#include "JavaClass.h"
-#include "JavaRef.h"
+	requires transitive webrtc.java;
+	requires transitive java.desktop;
 
-#include "modules/desktop_capture/desktop_frame.h"
+	exports dev.onvoid.webrtc.client.swing;
 
-#include <jni.h>
-#include <string>
-
-namespace jni
-{
-	namespace DesktopFrame
-	{
-		class JavaDesktopFrameClass : public JavaClass
-		{
-			public:
-				explicit JavaDesktopFrameClass(JNIEnv * env);
-
-				jclass cls;
-				jmethodID ctor;
-		};
-
-		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::DesktopFrame * frame);
-	}
 }
-
-#endif

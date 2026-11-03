@@ -224,6 +224,7 @@ jobs:
             echo '```'
             ls -1 webrtc/target/*.jar webrtc/target/*.asc \
               webrtc-media/target/*.jar webrtc-media/target/*.asc \
+              webrtc-swing/target/*.jar webrtc-swing/target/*.asc \
               webrtc-javafx/target/*.jar webrtc-javafx/target/*.asc \
               natives/*.asc 2>/dev/null || true
             echo '```'
@@ -241,6 +242,9 @@ jobs:
             webrtc-media/target/central-*/**
             webrtc-media/target/*.jar
             webrtc-media/target/*.asc
+            webrtc-swing/target/central-*/**
+            webrtc-swing/target/*.jar
+            webrtc-swing/target/*.asc
             webrtc-javafx/target/central-*/**
             webrtc-javafx/target/*.jar
             webrtc-javafx/target/*.asc
