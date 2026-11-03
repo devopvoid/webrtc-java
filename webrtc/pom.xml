@@ -12,6 +12,24 @@
 
 	<name>webrtc-java</name>
 
+	<properties>
+		<!-- The JVM arguments of every test run, the jni-check profile's
+		     included. add-modules and add-reads: see the test compilation
+		     below. add-exports: dev.onvoid.webrtc.internal is not exported to
+		     applications, but the tests cover NativeApi, which native extension
+		     modules use to reach the native sources. -->
+		<webrtc.test.argLine>
+			--add-modules java.desktop
+			--add-reads webrtc.java=java.desktop
+			--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.media=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.media.audio=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.media.video=ALL-UNNAMED
+		</webrtc.test.argLine>
+	</properties>
+
 	<build>
 		<plugins>
 			<!-- The module does not read java.desktop, but a desktop capture test
@@ -37,20 +55,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<!-- add-exports: dev.onvoid.webrtc.internal is not exported to
-					     applications, but the tests cover NativeApi, which native
-					     extension modules use to reach the native sources.
-					     add-reads: see the test compilation above. -->
-					<argLine>
-						--add-modules java.desktop
-						--add-reads webrtc.java=java.desktop
-						--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.media=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.media.audio=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.media.video=ALL-UNNAMED
-					</argLine>
+					<argLine>${webrtc.test.argLine}</argLine>
 				</configuration>
 			</plugin>
 		</plugins>
@@ -93,17 +98,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory" />
-							<argLine>
-								-Xcheck:jni
-								--add-modules java.desktop
-								--add-reads webrtc.java=java.desktop
-								--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.media=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.media.audio=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.media.video=ALL-UNNAMED
-							</argLine>
+							<argLine>-Xcheck:jni ${webrtc.test.argLine}</argLine>
 						</configuration>
 					</plugin>
 				</plugins>

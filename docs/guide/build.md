@@ -11,7 +11,7 @@ You don't have to install Chromium's `depot_tools`, Siso or GN: the build clones
 | Tool                  | Notes                                                                                     |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | JDK 17 or newer       | The libraries target Java 11, and the examples need 17.                                   |
-| Maven 3.6.3 or newer  |                                                                                           |
+| Maven 3.9.6 or newer  | Needed by the native builds' CMake plugin. The build checks it, and the JDK, first.       |
 | Git                   | Clones `depot_tools`, the WebRTC sources and the submodules.                              |
 | CMake 3.13 or newer   | Must be on the `PATH`. The Maven build does not download it.                              |
 | Python 3              | Runs `depot_tools` and the Linux sysroot script. On macOS it also needs `setuptools`.     |
@@ -133,6 +133,13 @@ with the release version, signs and assembles a deployment bundle, and uploads
 it as `deployment-bundle-dry-run`. It pushes no commits or tags, dispatches no
 publication workflow, and uses placeholder Central credentials with uploads
 disabled.
+
+The jars are reproducible: every entry and the manifest's `Build-Date` carry
+`project.build.outputTimestamp` from the root pom instead of the time of the
+build, so the same commit builds into the same Java jars. Release preparation
+sets it to the time of the release commit and again for the next development
+version; it needs no manual change. The native library jars are not covered,
+since CMake and the compilers do not build byte for byte the same libraries.
 
 If preparation pushed the tag but dispatch failed, start Publish release manually
 and select that tag. Before retrying a failed publication, check whether Maven
