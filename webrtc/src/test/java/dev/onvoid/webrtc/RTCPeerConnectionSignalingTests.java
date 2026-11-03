@@ -209,6 +209,7 @@ class RTCPeerConnectionSignalingTests extends TestBase {
 		connection.createDataChannel("data", new RTCDataChannelInit());
 
 		TestSetDescObserver applied = new TestSetDescObserver();
+		CountDownLatch issued = new CountDownLatch(1);
 		CountDownLatch closed = new CountDownLatch(1);
 		AtomicReference<Throwable> failure = new AtomicReference<>();
 
@@ -219,8 +220,15 @@ class RTCPeerConnectionSignalingTests extends TestBase {
 				// waits for the offer, whose result is posted to that thread.
 				// Closing from here takes effect once this returns, before the
 				// result of setting the description is posted in turn, and
-				// WebRTC drops that result with the connection.
+				// WebRTC drops that result with the connection. It does so
+				// only when the connection is freed right away, which waits
+				// for every method still running on another thread: here the
+				// createOffer below, which may not have returned yet.
 				try {
+					if (!issued.await(5, TimeUnit.SECONDS)) {
+						throw new IllegalStateException("createOffer did not return");
+					}
+
 					connection.createOffer(new RTCOfferOptions(), new TestCreateDescObserver());
 					connection.setLocalDescription(applied);
 					connection.close();
@@ -237,6 +245,8 @@ class RTCPeerConnectionSignalingTests extends TestBase {
 				closed.countDown();
 			}
 		});
+
+		issued.countDown();
 
 		assertTrue(closed.await(5, TimeUnit.SECONDS), "Offer was not created");
 		assertNull(failure.get());
