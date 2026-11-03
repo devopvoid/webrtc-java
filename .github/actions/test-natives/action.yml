@@ -132,6 +132,15 @@ runs:
         "$JAVA_HOME/bin/jar" xf "$WEBRTC_JAR"
         rm -rf META-INF
         ls -l
+        cd - > /dev/null
+
+        # The Swing module's tests need only webrtc-java's natives, and read
+        # them from a directory of the same name for the same reason.
+        mkdir -p webrtc-swing/target/natives
+        cd webrtc-swing/target/natives
+        "$JAVA_HOME/bin/jar" xf "$WEBRTC_JAR"
+        rm -rf META-INF
+        ls -l
       shell: bash
 
     # One reactor for all, so that webrtc-java-media and webrtc-java-swing

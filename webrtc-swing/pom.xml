@@ -15,6 +15,26 @@
 		Swing extension for webrtc-java. Shows the video of the client API in Swing windows.
 	</description>
 
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- Where the test-natives lane unpacks webrtc-java's natives.
+					     In a reactor that runs only up to the test phase, Maven
+					     answers webrtc-java's classifier artifact with that
+					     module's output directory, which holds no native
+					     library. Elsewhere the directory does not exist and the
+					     natives come from the classifier jar as usual. -->
+					<additionalClasspathElements>
+						<additionalClasspathElement>${project.build.directory}/natives</additionalClasspathElement>
+					</additionalClasspathElements>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
 	<dependencies>
 		<dependency>
 			<groupId>dev.onvoid.webrtc</groupId>
