@@ -19,6 +19,7 @@
 #include "JavaRef.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
+#include "LeakDetection.h"
 
 #include "rtc_base/logging.h"
 
@@ -216,14 +217,18 @@ namespace jni
 				return 0;
 			}
 
-			Stripe & stripe = StripeOf(handle);
-			std::lock_guard<std::mutex> lock(stripe.mutex);
+			{
+				Stripe & stripe = StripeOf(handle);
+				std::lock_guard<std::mutex> lock(stripe.mutex);
 
-			if (env->GetLongField(object, field) != handle) {
-				return 0;
+				if (env->GetLongField(object, field) != handle) {
+					return 0;
+				}
+
+				env->SetLongField(object, field, 0);
 			}
 
-			env->SetLongField(object, field, 0);
+			LeakDetection::Released(env, object);
 
 			return handle;
 		}
