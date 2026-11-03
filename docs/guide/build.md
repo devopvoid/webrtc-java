@@ -11,7 +11,7 @@ You don't have to install Chromium's `depot_tools`, Siso or GN: the build clones
 | Tool                  | Notes                                                                                     |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | JDK 17 or newer       | The libraries target Java 11, and the examples need 17.                                   |
-| Maven 3.6.3 or newer  |                                                                                           |
+| Maven 3.9.6 or newer  | Needed by the native builds' CMake plugin. The build checks it, and the JDK, first.       |
 | Git                   | Clones `depot_tools`, the WebRTC sources and the submodules.                              |
 | CMake 3.13 or newer   | Must be on the `PATH`. The Maven build does not download it.                              |
 | Python 3              | Runs `depot_tools` and the Linux sysroot script. On macOS it also needs `setuptools`.     |

@@ -92,6 +92,11 @@
 					</configuration>
 				</plugin>
 				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-clean-plugin</artifactId>
+					<version>3.5.0</version>
+				</plugin>
+				<plugin>
 					<groupId>org.sonatype.central</groupId>
 					<artifactId>central-publishing-maven-plugin</artifactId>
 					<version>0.12.0</version>
@@ -109,6 +114,35 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-deploy-plugin</artifactId>
 					<version>3.2.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-enforcer-plugin</artifactId>
+					<version>3.6.3</version>
+					<executions>
+						<execution>
+							<id>enforce-build-environment</id>
+							<goals>
+								<goal>enforce</goal>
+							</goals>
+							<configuration>
+								<rules>
+									<!-- The cmake-maven-plugin of the native builds needs 3.9.6,
+									     the central-publishing-maven-plugin 3.9.2. -->
+									<requireMavenVersion>
+										<version>[3.9.6,)</version>
+									</requireMavenVersion>
+									<!-- The libraries target Java 11, but the examples need 17. -->
+									<requireJavaVersion>
+										<version>[17,)</version>
+									</requireJavaVersion>
+									<requirePluginVersions>
+										<message>Give every plugin a version in the root pom's pluginManagement.</message>
+									</requirePluginVersions>
+								</rules>
+							</configuration>
+						</execution>
+					</executions>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -223,6 +257,10 @@
 		</pluginManagement>
 
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
