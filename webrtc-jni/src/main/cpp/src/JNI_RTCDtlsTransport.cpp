@@ -16,6 +16,7 @@
 
 #include "JNI_RTCDtlsTransport.h"
 #include "NativeHandle.h"
+#include "api/ObserverSlot.h"
 #include "api/RegisteredObservers.h"
 #include "api/RTCDtlsTransportObserver.h"
 #include "rtc/RTCCertificatePEM.h"
@@ -90,19 +91,18 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_getRemoteCerti
 
 namespace
 {
-	// Unregisters and frees the observer registered through the Java object.
-	// WebRTC is told only while that observer is still the registered one:
-	// another Java object for the same transport may have registered its own
-	// since, which stays.
-	void UnregisterOwnObserver(JNIEnv * env, jobject caller, webrtc::DtlsTransportInterface * transport)
+	using DtlsTransportObserverSlot = jni::ObserverSlot<jni::RTCDtlsTransportObserver>;
+
+	// Registering replaces whatever observer the transport had, also one
+	// registered through another Java object. WebRTC is told of a removal only
+	// while the observer removed is still the registered one: another Java
+	// object for the same transport may have registered its own since, which
+	// stays.
+	DtlsTransportObserverSlot::Apply ApplyTo(webrtc::DtlsTransportInterface * transport)
 	{
-		auto observer = GetHandle<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
-
-		if (jni::RegisteredObservers::Remove(transport, observer)) {
-			transport->UnregisterObserver();
-		}
-
-		ClearNativeObserver<jni::RTCDtlsTransportObserver>(env, caller, "observerHandle");
+		return jni::RegisteredObservers::Apply<jni::RTCDtlsTransportObserver>(transport,
+			[transport](jni::RTCDtlsTransportObserver * observer) { transport->RegisterObserver(observer); },
+			[transport]() { transport->UnregisterObserver(); });
 	}
 }
 
@@ -115,14 +115,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 
 		auto newObserver = new jni::RTCDtlsTransportObserver(env, jni::JavaGlobalRef<jobject>(env, observer));
 
-		// Registering replaces whatever observer the transport had, also one
-		// registered through another Java object, so the one registered
-		// through this object before is out of use and can be freed.
-		jni::RegisteredObservers::Set(transport, newObserver);
-
-		transport->RegisterObserver(newObserver);
-
-		ReplaceNativeObserver(env, caller, "observerHandle", newObserver);
+		DtlsTransportObserverSlot::Set(env, caller, "observerHandle", newObserver, ApplyTo(transport));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -132,10 +125,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserver
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::DtlsTransportInterface> transport(env, caller);
-	CHECK_HANDLE(transport);
+	try {
+		jni::NativeLease<webrtc::DtlsTransportInterface> transport(env, caller);
+		CHECK_HANDLE(transport);
 
-	UnregisterOwnObserver(env, caller, transport);
+		DtlsTransportObserverSlot::Set(env, caller, "observerHandle", nullptr, ApplyTo(transport));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_dispose
@@ -147,13 +145,18 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_dispose
 		return;
 	}
 
-	// WebRTC must let go of an observer registered through this object before
-	// it is deleted.
-	UnregisterOwnObserver(env, caller, transport);
+	auto slot = DtlsTransportObserverSlot::Take(env, caller, "observerHandle");
 
-	// The connection, its senders and receivers, and other Java objects keep
-	// their own references, so this one need not be the last.
-	jni::ReleaseHandle(env, transport, [transport](bool) {
+	// Runs once no other thread registers through this object any more. WebRTC
+	// must let go of an observer registered through this object before it is
+	// deleted with the slot. The connection, its senders and receivers, and
+	// other Java objects keep their own references, so this one need not be
+	// the last.
+	jni::ReleaseHandle(env, transport, [transport, slot](bool) {
+		if (slot && jni::RegisteredObservers::Remove(transport, slot->applied())) {
+			transport->UnregisterObserver();
+		}
+
 		transport->Release();
 	});
 }

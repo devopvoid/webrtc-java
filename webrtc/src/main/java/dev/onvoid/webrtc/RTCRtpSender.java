@@ -65,6 +65,12 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * another. Removing it, or disposing this object, removes only the
 	 * observer set through this object, and only while no other object has
 	 * replaced it.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The observer, or {@code null}.
 	 */

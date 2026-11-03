@@ -144,6 +144,12 @@ public class RTCDtmfSender extends DisposableNativeObject {
 	 * when one is already registered will replace the existing observer, also
 	 * one registered through another RTCDtmfSender instance of the same
 	 * {@link RTCRtpSender}.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The DTMF sender observer to register.
 	 */
@@ -153,8 +159,9 @@ public class RTCDtmfSender extends DisposableNativeObject {
 	 * Unregisters the DTMF sender observer last registered through this
 	 * instance.
 	 * <p>
-	 * After calling this method, that observer receives no more notifications
-	 * about DTMF-related events. An observer that another instance has
+	 * Once this method has returned, or the call of another thread that was
+	 * handing an observer to WebRTC through this instance at the same time,
+	 * that observer receives no more notifications about DTMF-related events. An observer that another instance has
 	 * registered since stays registered.
 	 * <p>
 	 * If no observer is currently registered through this instance, this
