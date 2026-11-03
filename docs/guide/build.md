@@ -134,6 +134,13 @@ it as `deployment-bundle-dry-run`. It pushes no commits or tags, dispatches no
 publication workflow, and uses placeholder Central credentials with uploads
 disabled.
 
+The jars are reproducible: every entry and the manifest's `Build-Date` carry
+`project.build.outputTimestamp` from the root pom instead of the time of the
+build, so the same commit builds into the same Java jars. Release preparation
+sets it to the time of the release commit and again for the next development
+version; it needs no manual change. The native library jars are not covered,
+since CMake and the compilers do not build byte for byte the same libraries.
+
 If preparation pushed the tag but dispatch failed, start Publish release manually
 and select that tag. Before retrying a failed publication, check whether Maven
 Central already accepted the version; published releases cannot be overwritten.

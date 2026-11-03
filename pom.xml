@@ -44,9 +44,12 @@
 	</scm>
 
 	<properties>
-		<timestamp>${maven.build.timestamp}</timestamp>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<maven.build.timestamp.format>yyyy-MM-dd HH:mm</maven.build.timestamp.format>
+		<!-- The time every jar entry and the jars' Build-Date carry, so that the
+		     same sources build into the same jars. release:prepare sets it to
+		     the time of the release commit and again for the next development
+		     version; snapshots keep the time of the last release. -->
+		<project.build.outputTimestamp>2026-10-16T19:14:36Z</project.build.outputTimestamp>
 	</properties>
 
 	<modules>
@@ -146,7 +149,7 @@
 							<compress>true</compress>
 							<manifestEntries>
 								<Version>${project.version}</Version>
-								<Build-Date>${maven.build.timestamp}</Build-Date>
+								<Build-Date>${project.build.outputTimestamp}</Build-Date>
 							</manifestEntries>
 						</archive>
 						<skipIfEmpty>true</skipIfEmpty>
