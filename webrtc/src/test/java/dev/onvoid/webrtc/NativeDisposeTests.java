@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.onvoid.webrtc.media.audio.AudioConverter;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
@@ -28,10 +29,13 @@ import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.AbstractList;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -135,18 +139,75 @@ class NativeDisposeTests extends TestBase {
 
 		streamIds.reached.await();
 
-		// Returns although addTrack still uses the connection, which must
-		// not be freed under it.
+		// Closes at once, although addTrack still uses the connection, which
+		// must not be freed under it.
 		peerConnection.close();
+
+		assertEquals(RTCPeerConnectionState.CLOSED, peerConnection.getConnectionState());
 
 		streamIds.release.countDown();
 
-		RTCRtpSender sender = added.get();
+		// addTrack goes on with a closed connection.
+		ExecutionException e = assertThrows(ExecutionException.class, added::get);
 
-		assertNotNull(sender);
+		assertTrue(e.getCause().getMessage().contains("INVALID_STATE"), e.getCause().getMessage());
 		assertDisposed("RTCPeerConnection is closed", peerConnection::getSenders);
 
-		sender.dispose();
+		track.dispose();
+		source.dispose();
+	}
+
+
+	@Test
+	void closeInCallbackDuringCall() throws Exception {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		RTCPeerConnection other = factory.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		HeldList streamIds = new HeldList();
+		TestCreateDescObserver afterClose = new TestCreateDescObserver();
+		CompletableFuture<Void> closed = new CompletableFuture<>();
+
+		Future<RTCRtpSender> added = executor.submit(() -> peerConnection.addTrack(track, streamIds));
+
+		streamIds.reached.await();
+
+		peerConnection.createOffer(new RTCOfferOptions(), new CreateSessionDescriptionObserver() {
+			@Override
+			public void onSuccess(RTCSessionDescription description) {
+				// On the signaling thread: the close runs once this returns,
+				// although addTrack still uses the connection. The offer of the
+				// other connection is posted to this thread after it.
+				try {
+					peerConnection.close();
+					other.createOffer(new RTCOfferOptions(), afterClose);
+					closed.complete(null);
+				}
+				catch (Throwable e) {
+					closed.completeExceptionally(e);
+				}
+			}
+
+			@Override
+			public void onFailure(String error) {
+				closed.completeExceptionally(new IllegalStateException(error));
+			}
+		});
+
+		try {
+			closed.get(5, TimeUnit.SECONDS);
+			afterClose.get(5, TimeUnit.SECONDS);
+		}
+		finally {
+			streamIds.release.countDown();
+		}
+
+		// addTrack goes on with a connection closed meanwhile.
+		ExecutionException e = assertThrows(ExecutionException.class, added::get);
+
+		assertTrue(e.getCause().getMessage().contains("INVALID_STATE"), e.getCause().getMessage());
+
+		other.close();
 		track.dispose();
 		source.dispose();
 	}
@@ -189,8 +250,8 @@ class NativeDisposeTests extends TestBase {
 
 		streamIds.reached.await();
 
-		// Two threads close at once; only one may get the connection, whose
-		// close then waits for addTrack.
+		// Two threads close at once; only one may get the connection, which
+		// is freed only once addTrack has returned.
 		CountDownLatch start = new CountDownLatch(1);
 		Future<?> first = executor.submit(() -> awaitAndRun(start, peerConnection::close));
 		Future<?> second = executor.submit(() -> awaitAndRun(start, peerConnection::close));
@@ -201,12 +262,10 @@ class NativeDisposeTests extends TestBase {
 
 		streamIds.release.countDown();
 
-		RTCRtpSender sender = added.get();
-
-		assertNotNull(sender);
+		// addTrack goes on with a closed connection.
+		assertThrows(ExecutionException.class, added::get);
 		assertDisposed("RTCPeerConnection is closed", peerConnection::getSenders);
 
-		sender.dispose();
 		track.dispose();
 		source.dispose();
 	}

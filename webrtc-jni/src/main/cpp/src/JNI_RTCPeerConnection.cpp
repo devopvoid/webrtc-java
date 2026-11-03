@@ -48,6 +48,7 @@
 #include "api/rtp_sender_interface.h"
 #include "rtc_base/thread.h"
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
@@ -861,29 +862,58 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 
 		SetHandle<std::nullptr_t>(env, caller, "observerHandle", nullptr);
 
-		auto close = [pc, observer]() {
-			pc->Close();
-
-			// The connection lets go of its observer once closed.
-			delete observer;
-
-			// Drop the owning reference taken when the PeerConnection was handed
-			// to Java in PeerConnectionFactory::createPeerConnection.
-			pc->Release();
+		// Closing takes effect at once, also while another thread is still in
+		// a method of the connection: that method finds it closed. Only freeing
+		// the observer and the connection waits, both for the close and for the
+		// last such method, whichever comes later.
+		struct Closing
+		{
+			webrtc::PeerConnectionInterface * pc;
+			webrtc::PeerConnectionObserver * observer;
+			std::atomic<int> pending { 2 };
 		};
+
+		auto closing = std::make_shared<Closing>();
+		closing->pc = pc;
+		closing->observer = observer;
+
+		auto free = [closing]() {
+			if (--closing->pending == 0) {
+				// The connection lets go of its observer once closed.
+				delete closing->observer;
+
+				// Drop the owning reference taken when the PeerConnection was
+				// handed to Java in PeerConnectionFactory::createPeerConnection.
+				closing->pc->Release();
+			}
+		};
+
+		auto close = [closing, free]() {
+			closing->pc->Close();
+			free();
+		};
+
+		// Called from a callback of this or another connection of the same
+		// factory. WebRTC goes on with the connection once the callback has
+		// returned, so it must not be closed and freed under its feet.
+		bool inCallback = signalingThread != nullptr && signalingThread->IsCurrent();
+
+		if (inCallback) {
+			// Runs right after the callback, before what WebRTC posts in turn.
+			signalingThread->PostTask(close);
+		}
+		else {
+			close();
+		}
 
 		// Runs once no other thread is in a method of this connection any
 		// more, which may be later, on the thread of the last such method.
-		jni::ReleaseHandle(env, pc, [close, signalingThread](bool) {
+		jni::ReleaseHandle(env, pc, [free, signalingThread](bool) {
 			if (signalingThread != nullptr && signalingThread->IsCurrent()) {
-				// Called from a callback of this or another connection of the
-				// same factory. WebRTC goes on with the connection once the
-				// callback has returned, so it must not be closed and freed under
-				// its feet.
-				signalingThread->PostTask(close);
+				signalingThread->PostTask(free);
 			}
 			else {
-				close();
+				free();
 			}
 		});
 	}

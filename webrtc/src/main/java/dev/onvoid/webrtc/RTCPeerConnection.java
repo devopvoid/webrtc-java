@@ -518,9 +518,11 @@ public class RTCPeerConnection extends NativeObject {
 	 * closes the connection, later and concurrent ones return without doing
 	 * anything. Methods called after it throw an {@link
 	 * IllegalStateException}, except the state getters, which report a closed
-	 * connection. A method that another thread is running when
-	 * the connection is closed goes on with the native connection, which is
-	 * then closed and freed once that method has returned.
+	 * connection. A method that another thread is running when the connection
+	 * is closed finds it closed from then on; the native connection is freed
+	 * once that method has returned. Until then, observers may still hear of
+	 * operations that WebRTC completed before the close; once it is freed,
+	 * those still unreported fail.
 	 */
 	public native void close();
 
