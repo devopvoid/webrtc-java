@@ -476,6 +476,17 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 		}
 	}
 
+	/**
+	 * Releases the factory and stops its threads. Connections, tracks and the
+	 * other objects it created are to be closed and disposed before.
+	 * <p>
+	 * A connection closed with {@link RTCPeerConnection#close()} is freed on
+	 * the factory's threads, possibly after close() has returned: when it was
+	 * closed from a callback, or while another thread was still in one of its
+	 * methods. Until it is freed, the factory stays: disposing it meanwhile
+	 * returns at once, and the factory is released once the last such
+	 * connection is.
+	 */
 	@Override
 	public void dispose() {
 		// An AudioProcessing of the application lives on with its listeners.

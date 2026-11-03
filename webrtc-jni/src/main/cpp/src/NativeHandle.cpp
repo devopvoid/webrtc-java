@@ -198,6 +198,15 @@ namespace jni
 			}
 		}
 
+		void Pin(jlong handle)
+		{
+			Stripe & stripe = StripeOf(handle);
+			std::lock_guard<std::mutex> lock(stripe.mutex);
+
+			// The caller's own use keeps the entry.
+			stripe.entries[handle].uses++;
+		}
+
 		jlong Take(JNIEnv * env, jobject object)
 		{
 			if (object == nullptr) {

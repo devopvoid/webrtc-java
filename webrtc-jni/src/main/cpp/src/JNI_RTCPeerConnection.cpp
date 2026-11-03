@@ -870,12 +870,22 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 		{
 			webrtc::PeerConnectionInterface * pc;
 			webrtc::PeerConnectionObserver * observer;
+			jlong factoryHandle = 0;
 			std::atomic<int> pending { 2 };
 		};
 
 		auto closing = std::make_shared<Closing>();
 		closing->pc = pc;
 		closing->observer = observer;
+
+		// Until the connection is freed, a dispose of the factory waits for it:
+		// the close and the freeing run on the factory's signaling thread, and
+		// freeing the connection needs that thread.
+		if (factoryLease) {
+			closing->factoryHandle = reinterpret_cast<jlong>(factoryLease.get());
+
+			jni::NativeHandle::Pin(closing->factoryHandle);
+		}
 
 		auto free = [closing]() {
 			if (--closing->pending == 0) {
@@ -885,6 +895,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_close
 				// Drop the owning reference taken when the PeerConnection was
 				// handed to Java in PeerConnectionFactory::createPeerConnection.
 				closing->pc->Release();
+
+				// May release a factory disposed meanwhile, which then stops its
+				// threads on a thread of its own when this is one of them.
+				if (closing->factoryHandle != 0) {
+					jni::NativeHandle::Unuse(AttachCurrentThread(), closing->factoryHandle);
+				}
 			}
 		};
 

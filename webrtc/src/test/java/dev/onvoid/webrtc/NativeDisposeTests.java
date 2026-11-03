@@ -324,6 +324,41 @@ class NativeDisposeTests extends TestBase {
 		source.dispose();
 	}
 
+	@Test
+	void disposeFactoryWhileCloseIsPending() throws Exception {
+		AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory disposable = new PeerConnectionFactory(audioModule);
+		RTCPeerConnection peerConnection = disposable.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = disposable.createVideoTrack("video", source);
+		HeldList streamIds = new HeldList();
+
+		// addTrack reads the stream IDs while it uses the native connection.
+		Future<RTCRtpSender> added = executor.submit(() -> peerConnection.addTrack(track, streamIds));
+
+		streamIds.reached.await();
+
+		// Closed at once, but freed only once addTrack has returned. The track
+		// goes then too.
+		peerConnection.close();
+		track.dispose();
+
+		// Before, this stopped and freed the factory's threads, which addTrack
+		// and the freeing of the connection then still called into.
+		disposable.dispose();
+
+		streamIds.release.countDown();
+
+		ExecutionException e = assertThrows(ExecutionException.class, added::get);
+
+		assertTrue(e.getCause().getMessage().contains("INVALID_STATE"), e.getCause().getMessage());
+		assertDisposed("PeerConnectionFactory is disposed",
+				() -> disposable.createPeerConnection(new RTCConfiguration(), observer));
+
+		source.dispose();
+		audioModule.dispose();
+	}
+
 	private static void disposeTwice(Runnable dispose) {
 		dispose.run();
 
