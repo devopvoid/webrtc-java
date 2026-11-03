@@ -36,17 +36,17 @@
 
 	<profiles>
 		<!--
-			Opt-in JNI reference-discipline check: runs the same tests under
-			-Xcheck:jni, which validates every JNI call's local/global refs and
-			aborts the JVM with "FATAL ERROR in native method: ..." on a real
-			violation (e.g. a double-freed or already-deleted local ref):
-			exactly the class of bug JNI_*.cpp changes are prone to introducing.
-			Not part of the default test run: -Xcheck:jni also emits a
+			Opt-in JNI check: runs the same tests under -Xcheck:jni, which
+			validates every JNI call's local/global refs and aborts the JVM with
+			"FATAL ERROR in native method: ..." on a real violation (e.g. a
+			double-freed or already-deleted local ref): exactly the class of bug
+			JNI_*.cpp changes are prone to introducing. It also warns with
 			"WARNING in native method: JNI call made without checking
-			exceptions" for every native call in this codebase that doesn't
-			immediately check for a pending exception (thousands of them,
-			pre-existing, harmless on their own), which would drown out
-			everything else if left on by default.
+			exceptions" about a JNI call made while the exception the previous
+			one may have thrown was left unchecked. The tests run without any
+			such warning, and CI's jni-check job fails on a single one (see
+			.github/actions/test-natives). Not part of the default test run,
+			since every JNI call gets slower.
 
 			The TCP forkNode is required, not optional: -Xcheck:jni writes its
 			diagnostics straight to the process's native stdout, which is the
@@ -56,8 +56,11 @@
 			directly writing to native stream" instead of reporting test
 			results.
 
-			Run with: mvn -pl webrtc test -Pjni-check
-			Then check for real bugs with: grep "FATAL ERROR" -r target/surefire-reports
+			Run with: mvn -pl webrtc-jni,webrtc package -Pjni-check
+			(package, not test: in the test phase the tests load the native jar
+			installed in ~/.m2, not the one just built). The diagnostics end up
+			in the build output: grep it for "FATAL ERROR in native method" and
+			"WARNING in native method".
 		-->
 		<profile>
 			<id>jni-check</id>

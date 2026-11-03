@@ -157,3 +157,27 @@ jobs:
           java-distribution: ${{ matrix.platform.java-distribution }}
           java-architecture: ${{ matrix.platform.java-architecture }}
           version: ${{ inputs.version }}
+
+  # The tests once more under -Xcheck:jni, on one platform only: the JNI code
+  # is the same on all of them, and its exception checks are what this is
+  # about. It fails on any JNI error or warning, see the test-natives action.
+  jni-check:
+    name: jni-check (linux_x86-64)
+    needs: build
+    timeout-minutes: 30
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Test natives under -Xcheck:jni
+        uses: ./.github/actions/test-natives
+        with:
+          platform-name: linux_x86-64
+          classifier: linux-x86_64
+          profile: linux-x86_64
+          java-distribution: temurin
+          version: ${{ inputs.version }}
+          jni-check: 'true'

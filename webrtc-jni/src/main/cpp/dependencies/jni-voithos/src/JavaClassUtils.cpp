@@ -24,6 +24,7 @@ namespace jni
 
 		jclass cls = env->GetObjectClass(javaRef.get());
 		jstring clsName = static_cast<jstring>(env->CallObjectMethod(cls, classUtils->getClassName));
+		ExceptionCheck(env);
 
 		return JavaString::toNative(env, JavaLocalRef<jstring>(env, clsName));
 	}

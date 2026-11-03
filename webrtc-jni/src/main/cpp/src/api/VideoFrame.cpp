@@ -158,17 +158,28 @@ namespace jni
 				return webrtc::scoped_refptr<webrtc::VideoFrameBuffer>(buffer);
 			}
 
-			const jint width = env->CallIntMethod(i420, javaClass->getWidth);
-			const jint height = env->CallIntMethod(i420, javaClass->getHeight);
-			const jint strideY = env->CallIntMethod(i420, javaClass->getStrideY);
-			const jint strideU = env->CallIntMethod(i420, javaClass->getStrideU);
-			const jint strideV = env->CallIntMethod(i420, javaClass->getStrideV);
-			ExceptionCheck(env);
+			// Each call is checked before the next one: a buffer's getter may
+			// throw, and no JNI call may follow with its exception pending.
+			auto callInt = [&](jmethodID method) {
+				const jint value = env->CallIntMethod(i420, method);
+				ExceptionCheck(env);
+				return value;
+			};
+			auto callObject = [&](jmethodID method) {
+				JavaLocalRef<jobject> value(env, env->CallObjectMethod(i420, method));
+				ExceptionCheck(env);
+				return value;
+			};
 
-			JavaLocalRef<jobject> dataY(env, env->CallObjectMethod(i420, javaClass->getDataY));
-			JavaLocalRef<jobject> dataU(env, env->CallObjectMethod(i420, javaClass->getDataU));
-			JavaLocalRef<jobject> dataV(env, env->CallObjectMethod(i420, javaClass->getDataV));
-			ExceptionCheck(env);
+			const jint width = callInt(javaClass->getWidth);
+			const jint height = callInt(javaClass->getHeight);
+			const jint strideY = callInt(javaClass->getStrideY);
+			const jint strideU = callInt(javaClass->getStrideU);
+			const jint strideV = callInt(javaClass->getStrideV);
+
+			JavaLocalRef<jobject> dataY = callObject(javaClass->getDataY);
+			JavaLocalRef<jobject> dataU = callObject(javaClass->getDataU);
+			JavaLocalRef<jobject> dataV = callObject(javaClass->getDataV);
 
 			if (dataY.get() == nullptr || dataU.get() == nullptr || dataV.get() == nullptr) {
 				return nullptr;

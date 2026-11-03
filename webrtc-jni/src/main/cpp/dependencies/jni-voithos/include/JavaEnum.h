@@ -46,6 +46,7 @@ namespace jni
 				jmethodID enumValues = GetStaticMethod(env, enumClass, "values", valuesSig.c_str());
 
 				jobject val = env->CallStaticObjectMethod(enumClass, enumValues);
+				ExceptionCheck(env);
 
 				values = JavaGlobalRef<jobjectArray>(env, static_cast<jobjectArray>(val));
 				valuesLength = env->GetArrayLength(values.get());

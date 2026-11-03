@@ -145,7 +145,10 @@ namespace jni
 
 		auto javaGet = GetStaticMethod(env, javaClass, "getClassLoader", "()Ljava/lang/ClassLoader;");
 
-		auto loaderRef = jni::JavaGlobalRef<jobject>(env, env->CallStaticObjectMethod(javaClass, javaGet));
+		jni::JavaLocalRef<jobject> loader(env, env->CallStaticObjectMethod(javaClass, javaGet));
+		ExceptionCheck(env);
+
+		auto loaderRef = jni::JavaGlobalRef<jobject>(env, loader.get());
 
 		InitClassLoader(env, loaderRef);
 	}

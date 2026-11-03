@@ -29,6 +29,7 @@ namespace jni
 		}
 
 		iterator = JavaLocalRef<jobject>(env, env->CallObjectMethod(iterable, mapIteratorClass->iterator));
+		ExceptionCheck(env);
 
 		// Start at the first element.
 		++(*this);
@@ -49,6 +50,7 @@ namespace jni
 		}
 
 		bool hasNext = env->CallBooleanMethod(iterator, mapIteratorClass->iteratorHasNext);
+		ExceptionCheck(env);
 
 		if (!hasNext) {
 			iterator = nullptr;
@@ -57,8 +59,11 @@ namespace jni
 		}
 
 		auto mapEntry = JavaLocalRef<jobject>(env, env->CallObjectMethod(iterator, mapIteratorClass->iteratorNext));
+		ExceptionCheck(env);
 		auto key = JavaLocalRef<jobject>(env, env->CallObjectMethod(mapEntry, mapIteratorClass->getKey));
+		ExceptionCheck(env);
 		auto value = JavaLocalRef<jobject>(env, env->CallObjectMethod(mapEntry, mapIteratorClass->getValue));
+		ExceptionCheck(env);
 
 		entry = std::make_pair(key, value);
 

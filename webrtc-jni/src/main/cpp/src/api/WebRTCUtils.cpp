@@ -50,6 +50,11 @@ namespace jni
 		}
 
 		JavaLocalRef<jobject> thread(env, env->CallStaticObjectMethod(threadClass.get(), currentThread));
+		if (env->ExceptionCheck()) {
+			env->ExceptionClear();
+			return;
+		}
+
 		JavaLocalRef<jobject> handler(env, env->CallObjectMethod(thread.get(), getHandler));
 		if (!env->ExceptionCheck() && handler.get()) {
 			env->CallVoidMethod(handler.get(), uncaughtException, thread.get(), exception);

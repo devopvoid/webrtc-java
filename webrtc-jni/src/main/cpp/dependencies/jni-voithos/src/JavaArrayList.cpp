@@ -20,17 +20,26 @@ namespace jni
 
 	bool JavaArrayList::add(const JavaRef<jobject> & obj)
 	{
-		return env->CallBooleanMethod(list, classDef->add, obj.get());
+		const bool added = env->CallBooleanMethod(list, classDef->add, obj.get());
+		ExceptionCheck(env);
+
+		return added;
 	}
 
 	JavaLocalRef<jobject> JavaArrayList::get(int index)
 	{
-		return JavaLocalRef<jobject>(env, env->CallObjectMethod(list, classDef->get, index));
+		JavaLocalRef<jobject> element(env, env->CallObjectMethod(list, classDef->get, index));
+		ExceptionCheck(env);
+
+		return element;
 	}
 
 	int JavaArrayList::size()
 	{
-		return env->CallIntMethod(list, classDef->size);
+		const int size = env->CallIntMethod(list, classDef->size);
+		ExceptionCheck(env);
+
+		return size;
 	}
 
 	JavaLocalRef<jobject> JavaArrayList::listObject()

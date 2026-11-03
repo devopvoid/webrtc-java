@@ -348,8 +348,10 @@
 		</profile>
 
 		<!-- Reruns the tests under -Xcheck:jni, which turns a JNI reference
-		     mistake into a hard error instead of a crash somewhere later. Not
-		     part of the default build: see the note in the root CLAUDE.md. -->
+		     mistake into a hard error instead of a crash somewhere later, and
+		     warns about a JNI call made with the previous one's exception left
+		     unchecked. CI's jni-check job fails on either; see the profile of
+		     the same name in webrtc/pom.xml. -->
 		<profile>
 			<id>jni-check</id>
 			<build>

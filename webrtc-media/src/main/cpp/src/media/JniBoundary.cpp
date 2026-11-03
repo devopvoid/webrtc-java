@@ -233,6 +233,12 @@ namespace ffmpeg
 		}
 
 		LocalRef<jobject> thread(env, env->CallStaticObjectMethod(thread_class.get(), current_thread));
+
+		if (env->ExceptionCheck() == JNI_TRUE) {
+			env->ExceptionClear();
+			return;
+		}
+
 		LocalRef<jobject> handler(env, env->CallObjectMethod(thread.get(), get_handler));
 
 		if (env->ExceptionCheck() == JNI_FALSE && handler.get() != nullptr) {

@@ -41,6 +41,7 @@ namespace jni
 	JavaMapIterator JavaHashMap::begin()
 	{
 		JavaLocalRef<jobject> entrySet = JavaLocalRef<jobject>(env, env->CallObjectMethod(jMap, mapClass->entrySet));
+		ExceptionCheck(env);
 
 		return JavaMapIterator(env, entrySet);
 	}
