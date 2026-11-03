@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.onvoid.webrtc.media.MediaType;
@@ -14,7 +15,10 @@ import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -124,6 +128,41 @@ class RTCRtpTransceiverTests extends TestBase {
 		finally {
 			offerer.close();
 		}
+	}
+
+	@Test
+	void throwingParametersStopConversion() {
+		RTCRtpCodecCapability codec = factory.getRtpReceiverCapabilities(MediaType.AUDIO)
+				.getCodecs().get(0);
+
+		// A codec WebRTC supports, but whose parameters fail to be read. The
+		// native code used to go on with the exception pending, making more
+		// JNI calls and handing WebRTC a codec without them.
+		Map<String, String> parameters = new HashMap<String, String>() {
+
+			@Override
+			public Set<Map.Entry<String, String>> entrySet() {
+				throw new IllegalStateException("Parameters cannot be read");
+			}
+		};
+
+		RTCRtpCodecCapability preference = new RTCRtpCodecCapability(codec.getMediaType(),
+				codec.getName(), codec.getClockRate(), codec.getChannels(), parameters);
+
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+
+		RTCRtpTransceiver transceiver = connection.getPeerConnection().addTransceiver(audioTrack,
+				new RTCRtpTransceiverInit());
+
+		IllegalStateException e = assertThrows(IllegalStateException.class,
+				() -> transceiver.setCodecPreferences(List.of(preference)));
+
+		assertEquals("Parameters cannot be read", e.getMessage());
+		List<RTCRtpCodecCapability> preferences = transceiver.getCodecPreferences();
+
+		// Still none set, which comes back as null.
+		assertTrue(preferences == null || preferences.isEmpty(), String.valueOf(preferences));
 	}
 
 }
