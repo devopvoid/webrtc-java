@@ -158,14 +158,29 @@ jobs:
           java-architecture: ${{ matrix.platform.java-architecture }}
           version: ${{ inputs.version }}
 
-  # The tests once more under -Xcheck:jni, on one platform only: the JNI code
-  # is the same on all of them, and its exception checks are what this is
-  # about. It fails on any JNI error or warning, see the test-natives action.
+  # The tests once more under -Xcheck:jni, once per OS: the JNI glue is shared,
+  # but the device modules, capturers and hardware codecs that call back into
+  # Java are not, so each OS has JNI code of its own. One architecture each is
+  # enough, since that code is the same across them. It fails on any JNI error
+  # or warning, see the test-natives action.
   jni-check:
-    name: jni-check (linux_x86-64)
+    name: jni-check (${{ matrix.platform.name }})
     needs: build
     timeout-minutes: 30
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: linux_x86-64
+            runs-on: ubuntu-22.04
+            classifier: linux-x86_64
+          - name: macos_arm64
+            runs-on: macos-15
+            classifier: macos-aarch64
+          - name: windows_x86_64
+            runs-on: windows-2022
+            classifier: windows-x86_64
+    runs-on: ${{ matrix.platform.runs-on }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -175,9 +190,9 @@ jobs:
       - name: Test natives under -Xcheck:jni
         uses: ./.github/actions/test-natives
         with:
-          platform-name: linux_x86-64
-          classifier: linux-x86_64
-          profile: linux-x86_64
+          platform-name: ${{ matrix.platform.name }}
+          classifier: ${{ matrix.platform.classifier }}
+          profile: ${{ matrix.platform.classifier }}
           java-distribution: temurin
           version: ${{ inputs.version }}
           jni-check: 'true'
