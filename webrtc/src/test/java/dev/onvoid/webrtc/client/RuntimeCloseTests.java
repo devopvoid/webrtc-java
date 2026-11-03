@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -153,9 +154,24 @@ class RuntimeCloseTests extends ClientTestBase {
 	void closeTimeoutReported() throws Exception {
 		// The peer's teardown never runs, so neither close finishes.
 		ManualExecutor control = new ManualExecutor();
+		CountDownLatch closeReturned = new CountDownLatch(1);
 		WebRtc runtime = WebRtc.builder()
 				.audio(AudioMode.HEADLESS)
-				.errorHandler(errors::add)
+				.errorHandler(error -> {
+					errors.add(error);
+
+					// Closing ends only after close() has returned. Otherwise a
+					// close() that wakes up late finds it ended and has no
+					// timeout to report.
+					if (error.getMessage().contains("left undisposed")) {
+						try {
+							closeReturned.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+						}
+						catch (InterruptedException e) {
+							Thread.currentThread().interrupt();
+						}
+					}
+				})
 				.controlPool(control)
 				.closeTimeout(Duration.ofMillis(100))
 				.build();
@@ -164,7 +180,12 @@ class RuntimeCloseTests extends ClientTestBase {
 		await(created);
 
 		try {
-			runtime.close();
+			try {
+				runtime.close();
+			}
+			finally {
+				closeReturned.countDown();
+			}
 
 			// The runtime cannot tell whether WebRTC still uses the factory,
 			// so it leaves it. That outlasts close(), whose wait ran out first.

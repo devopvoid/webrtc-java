@@ -375,47 +375,59 @@ class MediaTests extends ClientTestBase {
 		Peer[] peers = pair();
 		CustomVideo video = rtc.media().customVideo("video");
 		AtomicInteger handled = new AtomicInteger();
-		CompletableFuture<Void> enough = new CompletableFuture<>();
+		CompletableFuture<Void> busy = new CompletableFuture<>();
+		CompletableFuture<Void> resumed = new CompletableFuture<>();
+		CountDownLatch done = new CountDownLatch(1);
 
 		peers[1].onTrack(track -> track.asVideo().onFrame(frame -> {
-			try {
-				// Much slower than the 30 frames per second sent.
-				Thread.sleep(200);
+			int count = handled.incrementAndGet();
+
+			if (count == 3) {
+				// Busy until the test lets it go, however fast frames come.
+				busy.complete(null);
+
+				try {
+					done.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
 			}
-			catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-			if (handled.incrementAndGet() == 3) {
-				enough.complete(null);
+			else if (count > 3) {
+				resumed.complete(null);
 			}
 		}));
 		peers[0].addTrack(video);
 
 		feedVideo(video, 160, 120);
 
-		await(enough);
+		await(busy);
 
-		// The decoder keeps going while the handler is busy: within the same
-		// time it gets well ahead of the handler, at whatever rate the encoder
-		// has ramped up to on this machine.
+		// The decoder keeps going while the handler is busy, at whatever rate
+		// the encoder has ramped up to on this machine, and the handler gets
+		// none of those frames meanwhile.
 		long decodedBefore = framesDecoded(await(peers[1].stats()));
-		int handledBefore = handled.get();
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
 		long decodedMeanwhile;
-		int handledMeanwhile;
 
-		do {
-			Thread.sleep(100);
-			decodedMeanwhile = framesDecoded(await(peers[1].stats())) - decodedBefore;
-			handledMeanwhile = handled.get() - handledBefore;
+		try {
+			do {
+				Thread.sleep(100);
+				decodedMeanwhile = framesDecoded(await(peers[1].stats())) - decodedBefore;
+			}
+			while (decodedMeanwhile < 10 && System.nanoTime() < deadline);
+
+			long decoded = decodedMeanwhile;
+
+			assertTrue(decoded >= 10, () -> "Meanwhile decoded " + decoded + " frames");
+			assertEquals(3, handled.get());
 		}
-		while ((decodedMeanwhile < 10 || decodedMeanwhile < handledMeanwhile + 5) && System.nanoTime() < deadline);
+		finally {
+			done.countDown();
+		}
 
-		long decoded = decodedMeanwhile;
-		int handledFrames = handledMeanwhile;
-
-		assertTrue(decoded >= 10 && decoded >= handledFrames + 5,
-				() -> "Meanwhile decoded " + decoded + " frames and handled " + handledFrames);
+		// Then gets the newest frame, and the ones after it.
+		await(resumed);
 	}
 
 	private static long framesDecoded(PeerStats stats) {
