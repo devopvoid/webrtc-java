@@ -169,19 +169,21 @@ class SinkRegistryTests {
 			return add().add(s, r);
 		});
 
-		assertTrue(registration.get().enter());
+		try (HeldChanges held = holdDeferredChanges()) {
+			assertTrue(registration.get().enter());
 
-		try {
-			// WebRTC holds its lock here, so the native removal must wait.
-			registry.remove(sink);
+			try {
+				// WebRTC holds its lock here, so the native removal must wait.
+				registry.remove(sink);
 
-			assertEquals(List.of("add 1"), calls);
+				assertEquals(List.of("add 1"), calls);
 
-			// Removed for the Java side at once.
-			assertFalse(registration.get().enter());
-		}
-		finally {
-			registration.get().exit();
+				// Removed for the Java side at once.
+				assertFalse(registration.get().enter());
+			}
+			finally {
+				registration.get().exit();
+			}
 		}
 
 		SinkRegistry.awaitDeferred();
@@ -194,16 +196,18 @@ class SinkRegistryTests {
 		SinkRegistry.Registration callback = callback();
 		Object sink = new Object();
 
-		assertTrue(callback.enter());
+		try (HeldChanges held = holdDeferredChanges()) {
+			assertTrue(callback.enter());
 
-		try {
-			registry.add(sink, add());
-			registry.add(sink, add());
+			try {
+				registry.add(sink, add());
+				registry.add(sink, add());
 
-			assertEquals(List.of("add 1"), calls);
-		}
-		finally {
-			callback.exit();
+				assertEquals(List.of("add 1"), calls);
+			}
+			finally {
+				callback.exit();
+			}
 		}
 
 		SinkRegistry.awaitDeferred();
@@ -216,14 +220,16 @@ class SinkRegistryTests {
 		SinkRegistry.Registration callback = callback();
 		Object sink = new Object();
 
-		assertTrue(callback.enter());
+		try (HeldChanges held = holdDeferredChanges()) {
+			assertTrue(callback.enter());
 
-		try {
-			registry.add(sink, add());
-			registry.remove(sink);
-		}
-		finally {
-			callback.exit();
+			try {
+				registry.add(sink, add());
+				registry.remove(sink);
+			}
+			finally {
+				callback.exit();
+			}
 		}
 
 		SinkRegistry.awaitDeferred();
@@ -294,6 +300,47 @@ class SinkRegistryTests {
 		return registration.get();
 	}
 
+	/**
+	 * Holds the thread that makes the native calls deferred from callbacks,
+	 * so that those a test defers wait until it closes the returned hold:
+	 * otherwise that thread may make them before the test looks.
+	 */
+	private static HeldChanges holdDeferredChanges() throws InterruptedException {
+		HeldChanges held = new HeldChanges();
+		AtomicReference<SinkRegistry.Registration> callback = new AtomicReference<>();
+
+		new SinkRegistry<>(handle -> { }).add(new Object(), (s, r) -> {
+			callback.set(r);
+			return 1;
+		});
+
+		assertTrue(callback.get().enter());
+
+		try {
+			// Deferred, and made first: the deferred calls are made one after
+			// another, so the ones deferred later wait for this one.
+			new SinkRegistry<>(handle -> { }).add(new Object(), (s, r) -> {
+				held.entered.countDown();
+
+				try {
+					assertTrue(held.released.await(5, TimeUnit.SECONDS));
+				}
+				catch (InterruptedException e) {
+					throw new IllegalStateException(e);
+				}
+
+				return 1;
+			});
+		}
+		finally {
+			callback.get().exit();
+		}
+
+		assertTrue(held.entered.await(5, TimeUnit.SECONDS));
+
+		return held;
+	}
+
 	private SinkRegistry.NativeAdd<Object> add() {
 		return (sink, registration) -> {
 			long handle = nextHandle.incrementAndGet();
@@ -303,6 +350,21 @@ class SinkRegistryTests {
 	}
 
 
+
+	/** The thread of the deferred native calls, held until closed. */
+	private static final class HeldChanges implements AutoCloseable {
+
+		private final CountDownLatch entered = new CountDownLatch(1);
+
+		private final CountDownLatch released = new CountDownLatch(1);
+
+
+		@Override
+		public void close() {
+			released.countDown();
+		}
+
+	}
 
 	/** A native add that waits, once it has been entered, until the test lets it return. */
 	private final class BlockedAdd implements SinkRegistry.NativeAdd<Object> {
