@@ -15,6 +15,7 @@
  */
 
 #include "JNI_MediaStream.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/WebRTCUtils.h"
 #include "JavaError.h"
@@ -44,81 +45,91 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStream_id
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getAudioTracks
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
-	CHECK_HANDLEV(stream, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobjectArray {
+		jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
+		CHECK_HANDLEV(stream, nullptr);
 
-	jni::JavaLocalRef<jobjectArray> objectArray;
+		jni::JavaLocalRef<jobjectArray> objectArray;
 
-	try {
-		objectArray = jni::MediaStreamTrackView::createArray(env, stream->GetAudioTracks());
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			objectArray = jni::MediaStreamTrackView::createArray(env, stream->GetAudioTracks());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-	return objectArray.release();
+		return objectArray.release();
+	});
 }
 
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_MediaStream_getVideoTracks
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
-	CHECK_HANDLEV(stream, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobjectArray {
+		jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
+		CHECK_HANDLEV(stream, nullptr);
 
-	jni::JavaLocalRef<jobjectArray> objectArray;
+		jni::JavaLocalRef<jobjectArray> objectArray;
 
-	try {
-		objectArray = jni::MediaStreamTrackView::createArray(env, stream->GetVideoTracks());
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			objectArray = jni::MediaStreamTrackView::createArray(env, stream->GetVideoTracks());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-	return objectArray.release();
+		return objectArray.release();
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_addTrack
 (JNIEnv * env, jobject caller, jobject jTrack)
 {
-	jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
-	CHECK_HANDLE(stream);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
+		CHECK_HANDLE(stream);
 
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
-	CHECK_HANDLE(track);
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
+		CHECK_HANDLE(track);
 
-	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track.get())) {
-		stream->AddTrack(webrtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
-	}
-	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track.get())) {
-		stream->AddTrack(webrtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
-	}
+		if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track.get())) {
+			stream->AddTrack(webrtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
+		}
+		else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track.get())) {
+			stream->AddTrack(webrtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_removeTrack
 (JNIEnv * env, jobject caller, jobject jTrack)
 {
-	jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
-	CHECK_HANDLE(stream);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::MediaStreamInterface> stream(env, caller);
+		CHECK_HANDLE(stream);
 
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
-	CHECK_HANDLE(track);
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
+		CHECK_HANDLE(track);
 
-	if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track.get())) {
-		stream->RemoveTrack(webrtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
-	}
-	else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track.get())) {
-		stream->RemoveTrack(webrtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
-	}
+		if (webrtc::AudioTrackInterface * t = dynamic_cast<webrtc::AudioTrackInterface *>(track.get())) {
+			stream->RemoveTrack(webrtc::scoped_refptr<webrtc::AudioTrackInterface>(t));
+		}
+		else if (webrtc::VideoTrackInterface * t = dynamic_cast<webrtc::VideoTrackInterface *>(track.get())) {
+			stream->RemoveTrack(webrtc::scoped_refptr<webrtc::VideoTrackInterface>(t));
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStream_dispose
 (JNIEnv * env, jobject caller)
 {
-	// Java MediaStreams are only made by PeerConnectionObserver::OnAddTrack,
-	// as views of the peer connection's remote streams that hold no reference.
-	// Releasing one here dropped the peer connection's reference instead, and
-	// could free the stream while WebRTC still used it. Only the Java object
-	// is detached. A Java MediaStream made with a reference of its own would
-	// have to be told apart here, as MediaStreamTrack tells its views apart.
-	jni::NativeHandle::Take(env, caller);
+	jni::CallFromJava(env, [&]() {
+		// Java MediaStreams are only made by PeerConnectionObserver::OnAddTrack,
+		// as views of the peer connection's remote streams that hold no reference.
+		// Releasing one here dropped the peer connection's reference instead, and
+		// could free the stream while WebRTC still used it. Only the Java object
+		// is detached. A Java MediaStream made with a reference of its own would
+		// have to be told apart here, as MediaStreamTrack tells its views apart.
+		jni::NativeHandle::Take(env, caller);
+	});
 }

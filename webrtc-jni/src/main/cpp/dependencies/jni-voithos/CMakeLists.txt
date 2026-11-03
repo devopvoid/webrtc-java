@@ -10,6 +10,7 @@ target_sources(${PROJECT_NAME}
         include/JavaArray.h
         include/JavaArrayList.h
         include/JavaBigInteger.h
+        include/JavaBoundary.h
         include/JavaClasses.h
         include/JavaClass.h
         include/JavaClassLoader.h

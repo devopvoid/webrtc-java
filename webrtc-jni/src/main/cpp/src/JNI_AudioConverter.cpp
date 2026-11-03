@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioConverter.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/audio/audio_processing.h"
 #include "media/audio/AudioConverter.h"
@@ -26,62 +27,66 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_convertInternal
 (JNIEnv * env, jobject caller, jbyteArray src, jint nSrcSamples, jbyteArray dst, jint nDstSamples)
 {
-	jni::NativeLease<jni::AudioConverter> converter(env, caller);
-	CHECK_HANDLE(converter);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::AudioConverter> converter(env, caller);
+		CHECK_HANDLE(converter);
 
-	if (src == nullptr || dst == nullptr) {
-		ThrowJavaException(env, "java/lang/NullPointerException", "Sample arrays must not be null");
-		return;
-	}
-
-	// The counts are samples over all channels. The converter checks them against its format, this the arrays.
-	const jlong bytesPerSample = sizeof(int16_t);
-
-	if (nSrcSamples < 0 || nDstSamples < 0 ||
-		env->GetArrayLength(src) < nSrcSamples * bytesPerSample || env->GetArrayLength(dst) < nDstSamples * bytesPerSample) {
-		ThrowJavaException(env, "java/lang/IllegalArgumentException", "Sample arrays too short for the requested samples");
-		return;
-	}
-
-	try {
-		auto releaseSrc = [env, src](jbyte * bytes) {
-			env->ReleaseByteArrayElements(src, bytes, JNI_ABORT);
-		};
-		std::unique_ptr<jbyte, decltype(releaseSrc)> srcPtr(env->GetByteArrayElements(src, nullptr), releaseSrc);
-		if (!srcPtr) {
+		if (src == nullptr || dst == nullptr) {
+			ThrowJavaException(env, "java/lang/NullPointerException", "Sample arrays must not be null");
 			return;
 		}
 
-		// Mode 0 writes the samples back when the VM handed out a copy.
-		auto releaseDst = [env, dst](jbyte * bytes) {
-			env->ReleaseByteArrayElements(dst, bytes, 0);
-		};
-		std::unique_ptr<jbyte, decltype(releaseDst)> dstPtr(env->GetByteArrayElements(dst, nullptr), releaseDst);
-		if (!dstPtr) {
+		// The counts are samples over all channels. The converter checks them against its format, this the arrays.
+		const jlong bytesPerSample = sizeof(int16_t);
+
+		if (nSrcSamples < 0 || nDstSamples < 0 ||
+			env->GetArrayLength(src) < nSrcSamples * bytesPerSample || env->GetArrayLength(dst) < nDstSamples * bytesPerSample) {
+			ThrowJavaException(env, "java/lang/IllegalArgumentException", "Sample arrays too short for the requested samples");
 			return;
 		}
 
-		converter->convert(reinterpret_cast<const int16_t *>(srcPtr.get()), nSrcSamples, reinterpret_cast<int16_t *>(dstPtr.get()), nDstSamples);
-	}
-	catch (const std::invalid_argument & e) {
-		ThrowJavaException(env, "java/lang/IllegalArgumentException", e.what());
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			auto releaseSrc = [env, src](jbyte * bytes) {
+				env->ReleaseByteArrayElements(src, bytes, JNI_ABORT);
+			};
+			std::unique_ptr<jbyte, decltype(releaseSrc)> srcPtr(env->GetByteArrayElements(src, nullptr), releaseSrc);
+			if (!srcPtr) {
+				return;
+			}
+
+			// Mode 0 writes the samples back when the VM handed out a copy.
+			auto releaseDst = [env, dst](jbyte * bytes) {
+				env->ReleaseByteArrayElements(dst, bytes, 0);
+			};
+			std::unique_ptr<jbyte, decltype(releaseDst)> dstPtr(env->GetByteArrayElements(dst, nullptr), releaseDst);
+			if (!dstPtr) {
+				return;
+			}
+
+			converter->convert(reinterpret_cast<const int16_t *>(srcPtr.get()), nSrcSamples, reinterpret_cast<int16_t *>(dstPtr.get()), nDstSamples);
+		}
+		catch (const std::invalid_argument & e) {
+			ThrowJavaException(env, "java/lang/IllegalArgumentException", e.what());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::AudioConverter * converter = jni::TakeHandle<jni::AudioConverter>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		jni::AudioConverter * converter = jni::TakeHandle<jni::AudioConverter>(env, caller);
 
-	if (converter == nullptr) {
-		return;
-	}
+		if (converter == nullptr) {
+			return;
+		}
 
-	jni::ReleaseHandle(env, converter, [converter](bool) {
-		delete converter;
+		jni::ReleaseHandle(env, converter, [converter](bool) {
+			delete converter;
+		});
 	});
 }
 

@@ -15,6 +15,7 @@
  */
 
 #include "JNI_VideoTrackSource.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/VideoFrame.h"
 #include "media/video/VideoProcessorHost.h"
@@ -31,72 +32,76 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrackSource_setVideoProcessorNative
 (JNIEnv * env, jobject caller, jobject jProcessor)
 {
-	// Keeps the source, which the host is part of, from being freed meanwhile.
-	jni::NativeLease<void> source(env, caller);
-	CHECK_HANDLE(source);
+	jni::CallFromJava(env, [&]() {
+		// Keeps the source, which the host is part of, from being freed meanwhile.
+		jni::NativeLease<void> source(env, caller);
+		CHECK_HANDLE(source);
 
-	jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle");
+		jni::VideoProcessorHost * host = GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle");
 
-	if (host == nullptr) {
-		env->Throw(jni::JavaRuntimeException(env, "The video source does not support a VideoProcessor"));
-		return;
-	}
+		if (host == nullptr) {
+			env->Throw(jni::JavaRuntimeException(env, "The video source does not support a VideoProcessor"));
+			return;
+		}
 
-	try {
-		host->SetVideoProcessor(env, jProcessor);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			host->SetVideoProcessor(env, jProcessor);
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrackSource_deliverProcessedFrame
 (JNIEnv * env, jobject caller, jobject jFrame)
 {
-	if (jFrame == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoFrame must not be null"));
-		return;
-	}
-
-	// Keeps the source, which the host is part of, from being freed meanwhile.
-	jni::NativeLease<void> source(env, caller);
-
-	jni::VideoProcessorHost * host = source
-		? GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle")
-		: nullptr;
-
-	// The source has been disposed.
-	if (host == nullptr) {
-		return;
-	}
-
-	try {
-		const auto frameClass = jni::JavaClasses::get<jni::JavaVideoFrameClass>(env);
-
-		const jni::JavaLocalRef<jobject> frameRef(env, jFrame);
-		jni::JavaObject frame(env, frameRef);
-
-		const jint rotation = frame.getInt(frameClass->rotation);
-		const jlong timestampNs = frame.getLong(frameClass->timestampNs);
-
-		webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer =
-			jni::VideoFrame::toNativeBuffer(env, frame.getObject(frameClass->buffer));
-
-		if (buffer == nullptr) {
-			env->Throw(jni::JavaRuntimeException(env, "The buffer of the VideoFrame cannot be read"));
+	jni::CallFromJava(env, [&]() {
+		if (jFrame == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "VideoFrame must not be null"));
 			return;
 		}
 
-		// Java only allows multiples of 90.
-		const int degrees = ((rotation % 360) + 360) % 360;
+		// Keeps the source, which the host is part of, from being freed meanwhile.
+		jni::NativeLease<void> source(env, caller);
 
-		host->DeliverProcessedFrame(webrtc::VideoFrame::Builder()
-			.set_video_frame_buffer(buffer)
-			.set_rotation(static_cast<webrtc::VideoRotation>(degrees))
-			.set_timestamp_us(timestampNs / 1000)
-			.build());
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		jni::VideoProcessorHost * host = source
+			? GetHandle<jni::VideoProcessorHost>(env, caller, "processorHostHandle")
+			: nullptr;
+
+		// The source has been disposed.
+		if (host == nullptr) {
+			return;
+		}
+
+		try {
+			const auto frameClass = jni::JavaClasses::get<jni::JavaVideoFrameClass>(env);
+
+			const jni::JavaLocalRef<jobject> frameRef(env, jFrame);
+			jni::JavaObject frame(env, frameRef);
+
+			const jint rotation = frame.getInt(frameClass->rotation);
+			const jlong timestampNs = frame.getLong(frameClass->timestampNs);
+
+			webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer =
+				jni::VideoFrame::toNativeBuffer(env, frame.getObject(frameClass->buffer));
+
+			if (buffer == nullptr) {
+				env->Throw(jni::JavaRuntimeException(env, "The buffer of the VideoFrame cannot be read"));
+				return;
+			}
+
+			// Java only allows multiples of 90.
+			const int degrees = ((rotation % 360) + 360) % 360;
+
+			host->DeliverProcessedFrame(webrtc::VideoFrame::Builder()
+				.set_video_frame_buffer(buffer)
+				.set_rotation(static_cast<webrtc::VideoRotation>(degrees))
+				.set_timestamp_us(timestampNs / 1000)
+				.build());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }

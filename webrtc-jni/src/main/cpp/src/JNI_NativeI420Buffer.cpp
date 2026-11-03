@@ -15,6 +15,7 @@
  */
 
 #include "JNI_NativeI420Buffer.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/VideoFrame.h"
 #include "JavaRuntimeException.h"
@@ -72,29 +73,31 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_co
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_crop
 (JNIEnv * env, jobject caller, jint cropX, jint cropY, jint cropW, jint cropH)
 {
-	jni::NativeLease<webrtc::I420BufferInterface> buffer(env, caller);
-	CHECK_HANDLEV(buffer, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::I420BufferInterface> buffer(env, caller);
+		CHECK_HANDLEV(buffer, nullptr);
 
-	try {
-		webrtc::scoped_refptr<webrtc::I420BufferInterface> source(buffer);
+		try {
+			webrtc::scoped_refptr<webrtc::I420BufferInterface> source(buffer);
 
-		// The cropped buffer points into the source, which it keeps alive until it is gone itself.
-		webrtc::scoped_refptr<webrtc::I420BufferInterface> cropped = webrtc::WrapI420Buffer(cropW, cropH,
-			source->DataY() + cropX + cropY * source->StrideY(), source->StrideY(),
-			source->DataU() + cropX / 2 + cropY / 2 * source->StrideU(), source->StrideU(),
-			source->DataV() + cropX / 2 + cropY / 2 * source->StrideV(), source->StrideV(),
-			[source]() {});
+			// The cropped buffer points into the source, which it keeps alive until it is gone itself.
+			webrtc::scoped_refptr<webrtc::I420BufferInterface> cropped = webrtc::WrapI420Buffer(cropW, cropH,
+				source->DataY() + cropX + cropY * source->StrideY(), source->StrideY(),
+				source->DataU() + cropX / 2 + cropY / 2 * source->StrideU(), source->StrideU(),
+				source->DataV() + cropX / 2 + cropY / 2 * source->StrideV(), source->StrideV(),
+				[source]() {});
 
-		jni::JavaLocalRef<jobject> jBuffer = jni::I420Buffer::toJava(env, cropped);
+			jni::JavaLocalRef<jobject> jBuffer = jni::I420Buffer::toJava(env, cropped);
 
-		cropped->AddRef();
+			cropped->AddRef();
 
-		return jBuffer.release();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-		return nullptr;
-	}
+			return jBuffer.release();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+			return nullptr;
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_cropAndScale
@@ -103,24 +106,26 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_NativeI420Buffer_cropA
 	jobject jDstY, jint dstStrideY, jobject jDstU, jint dstStrideU, jobject jDstV, jint dstStrideV,
 	jint scaleW, jint scaleH)
 {
-	const uint8_t * src_y = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcY));
-	const uint8_t * src_u = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcU));
-	const uint8_t * src_v = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcV));
-	uint8_t * dst_y = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstY));
-	uint8_t * dst_u = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstU));
-	uint8_t * dst_v = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstV));
+	jni::CallFromJava(env, [&]() {
+		const uint8_t * src_y = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcY));
+		const uint8_t * src_u = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcU));
+		const uint8_t * src_v = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcV));
+		uint8_t * dst_y = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstY));
+		uint8_t * dst_u = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstU));
+		uint8_t * dst_v = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstV));
 
-	// Perform cropping using pointer arithmetic.
-	src_y += cropX + cropY * srcStrideY;
-	src_u += cropX / 2 + cropY / 2 * srcStrideU;
-	src_v += cropX / 2 + cropY / 2 * srcStrideV;
+		// Perform cropping using pointer arithmetic.
+		src_y += cropX + cropY * srcStrideY;
+		src_u += cropX / 2 + cropY / 2 * srcStrideU;
+		src_v += cropX / 2 + cropY / 2 * srcStrideV;
 
-	bool ret = libyuv::I420Scale(
-		src_y, srcStrideY, src_u, srcStrideU, src_v, srcStrideV, cropW,
-		cropH, dst_y, dstStrideY, dst_u, dstStrideU, dst_v,
-		dstStrideV, scaleW, scaleH, libyuv::kFilterBox);
+		bool ret = libyuv::I420Scale(
+			src_y, srcStrideY, src_u, srcStrideU, src_v, srcStrideV, cropW,
+			cropH, dst_y, dstStrideY, dst_u, dstStrideU, dst_v,
+			dstStrideV, scaleW, scaleH, libyuv::kFilterBox);
 
-	if (ret != 0) {
-		env->Throw(jni::JavaRuntimeException(env, "I420Buffer crop and scale failed"));
-	}
+		if (ret != 0) {
+			env->Throw(jni::JavaRuntimeException(env, "I420Buffer crop and scale failed"));
+		}
+	});
 }

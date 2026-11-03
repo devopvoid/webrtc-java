@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioResampler.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "Exception.h"
 #include "JavaObject.h"
@@ -28,14 +29,16 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::PushResampler<int16_t> * resampler = jni::TakeHandle<webrtc::PushResampler<int16_t>>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::PushResampler<int16_t> * resampler = jni::TakeHandle<webrtc::PushResampler<int16_t>>(env, caller);
 
-	if (resampler == nullptr) {
-		return;
-	}
+		if (resampler == nullptr) {
+			return;
+		}
 
-	jni::ReleaseHandle(env, resampler, [resampler](bool) {
-		delete resampler;
+		jni::ReleaseHandle(env, resampler, [resampler](bool) {
+			delete resampler;
+		});
 	});
 }
 

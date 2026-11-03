@@ -15,6 +15,7 @@
  */
 
 #include "JNI_VideoTrack.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/VideoTrackSink.h"
 #include "JavaNullPointerException.h"
@@ -49,14 +50,16 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInt
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_removeSinkInternal
 (JNIEnv * env, jobject caller, jlong sinkHandle)
 {
-	jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
-	CHECK_HANDLE(track);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
 
-	auto sink = reinterpret_cast<webrtc::VideoSinkInterface<webrtc::VideoFrame> *>(sinkHandle);
+		auto sink = reinterpret_cast<webrtc::VideoSinkInterface<webrtc::VideoFrame> *>(sinkHandle);
 	
-	if (sink != nullptr) {
-		track->RemoveSink(sink);
+		if (sink != nullptr) {
+			track->RemoveSink(sink);
 
-		delete sink;
-	}
+			delete sink;
+		}
+	});
 }

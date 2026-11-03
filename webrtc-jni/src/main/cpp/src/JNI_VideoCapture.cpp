@@ -15,6 +15,7 @@
  */
 
 #include "JNI_VideoCapture.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/VideoTrackSink.h"
 #include "media/video/VideoCapture.h"
@@ -52,91 +53,101 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoC
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoCaptureCapability
 (JNIEnv * env, jobject caller, jobject jcapability)
 {
-	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	if (!jcapability) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoCaptureCapability is null"));
-		return;
-	}
+		if (!jcapability) {
+			env->Throw(jni::JavaNullPointerException(env, "VideoCaptureCapability is null"));
+			return;
+		}
 
-	jint width = env->GetIntField(jcapability, GetFieldID(env, jcapability, "width", "I"));
-	jint height = env->GetIntField(jcapability, GetFieldID(env, jcapability, "height", "I"));
-	jint frameRate = env->GetIntField(jcapability, GetFieldID(env, jcapability, "frameRate", "I"));
+		jint width = env->GetIntField(jcapability, GetFieldID(env, jcapability, "width", "I"));
+		jint height = env->GetIntField(jcapability, GetFieldID(env, jcapability, "height", "I"));
+		jint frameRate = env->GetIntField(jcapability, GetFieldID(env, jcapability, "frameRate", "I"));
 
-	webrtc::VideoCaptureCapability capability;
-	capability.width = static_cast<int32_t>(width);
-	capability.height = static_cast<int32_t>(height);
-	capability.maxFPS = static_cast<int32_t>(frameRate);
+		webrtc::VideoCaptureCapability capability;
+		capability.width = static_cast<int32_t>(width);
+		capability.height = static_cast<int32_t>(height);
+		capability.maxFPS = static_cast<int32_t>(frameRate);
 
-	videoSource->setVideoCaptureCapability(capability);
+		videoSource->setVideoCaptureCapability(capability);
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_setVideoSink
 (JNIEnv * env, jobject caller, jobject jsink)
 {
-	if (jsink == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "VideoTrackSink must not be null"));
-		return;
-	}
+	jni::CallFromJava(env, [&]() {
+		if (jsink == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "VideoTrackSink must not be null"));
+			return;
+		}
 
-	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
-	CHECK_HANDLE(videoSource);
+		jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	try {
-		videoSource->setVideoSink(std::make_unique<jni::VideoTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jsink), false));
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			videoSource->setVideoSink(std::make_unique<jni::VideoTrackSink>(env, jni::JavaGlobalRef<jobject>(env, jsink), false));
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_start
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	if (!videoSource->hasDevice()) {
-		ThrowJavaException(env, "java/lang/IllegalStateException", "No video capture device set");
-		return;
-	}
+		if (!videoSource->hasDevice()) {
+			ThrowJavaException(env, "java/lang/IllegalStateException", "No video capture device set");
+			return;
+		}
 
-	try {
-		videoSource->start();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			videoSource->start();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_stop
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoCaptureBase> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	try {
-		videoSource->stop();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			videoSource->stop();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoCapture_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoCaptureBase * videoSource = jni::TakeHandle<jni::VideoCaptureBase>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		jni::VideoCaptureBase * videoSource = jni::TakeHandle<jni::VideoCaptureBase>(env, caller);
 
-	if (videoSource == nullptr) {
-		return;
-	}
+		if (videoSource == nullptr) {
+			return;
+		}
 
-	// The destructor stops a running capture and detaches the sink before
-	// both are destroyed.
-	jni::ReleaseHandle(env, videoSource, [videoSource](bool) {
-		delete videoSource;
+		// The destructor stops a running capture and detaches the sink before
+		// both are destroyed.
+		jni::ReleaseHandle(env, videoSource, [videoSource](bool) {
+			delete videoSource;
+		});
 	});
 }
 
