@@ -22,13 +22,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.onvoid.webrtc.media.MediaStreamTrackMuteListener;
 import dev.onvoid.webrtc.media.audio.AudioConverter;
+import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioLayer;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.AbstractList;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -265,6 +272,53 @@ class NativeDisposeTests extends TestBase {
 		// addTrack goes on with a closed connection.
 		assertThrows(ExecutionException.class, added::get);
 		assertDisposed("RTCPeerConnection is closed", peerConnection::getSenders);
+
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
+	void disposeTrackInListener() {
+		AudioTrackSource source = factory.createAudioSource(new AudioOptions());
+		AudioTrack track = factory.createAudioTrack("audio", source);
+		List<String> calls = Collections.synchronizedList(new ArrayList<>());
+
+		track.addTrackMuteListener((t, muted) -> {
+			calls.add("first");
+			track.dispose();
+		});
+		track.addTrackMuteListener((t, muted) -> calls.add("second"));
+
+		// Mute events are delivered before setEnabled() returns. WebRTC calls
+		// the observers from a copy of their list: before, the dispose freed
+		// them, its own and the second one included, while it went on.
+		track.setEnabled(false);
+
+		assertEquals(List.of("first"), calls);
+		assertDisposed("AudioTrack is disposed", track::isEnabled);
+
+		source.dispose();
+	}
+
+	@Test
+	void removeListenerInListener() {
+		AudioTrackSource source = factory.createAudioSource(new AudioOptions());
+		AudioTrack track = factory.createAudioTrack("audio", source);
+		List<String> calls = Collections.synchronizedList(new ArrayList<>());
+		MediaStreamTrackMuteListener second = (t, muted) -> calls.add("second");
+
+		track.addTrackMuteListener((t, muted) -> {
+			calls.add("first");
+			track.removeTrackMuteListener(second);
+		});
+		track.addTrackMuteListener(second);
+
+		// Before, the second observer was freed while still in the copy of the
+		// list WebRTC was going through.
+		track.setEnabled(false);
+		track.setEnabled(true);
+
+		assertEquals(List.of("first", "first"), calls);
 
 		track.dispose();
 		source.dispose();
