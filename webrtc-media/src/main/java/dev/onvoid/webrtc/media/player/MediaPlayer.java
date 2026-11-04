@@ -194,6 +194,10 @@ public class MediaPlayer implements AutoCloseable {
 	 * yet delivered is dropped. Video is decoded from the keyframe at or
 	 * before the position, and what comes before the position is dropped, so
 	 * the further the keyframes are apart, the longer this takes.
+	 * <p>
+	 * Positions count from the start of the source, which is its first video
+	 * or audio frame, whichever comes first, whatever time the container gives
+	 * that frame. A stream that starts after the other one keeps that distance.
 	 *
 	 * @param positionUs The position in microseconds from the start.
 	 *
@@ -236,7 +240,8 @@ public class MediaPlayer implements AutoCloseable {
 
 	/**
 	 * Returns where playback has got to within the current pass, in
-	 * microseconds. A looping source starts again from zero.
+	 * microseconds from the start of the source, as {@link #seek(long)} counts
+	 * them. A looping source starts again from zero.
 	 *
 	 * @return The position in microseconds.
 	 */

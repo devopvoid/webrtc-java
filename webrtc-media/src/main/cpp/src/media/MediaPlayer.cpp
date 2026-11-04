@@ -65,7 +65,8 @@ namespace ffmpeg
 		}
 
 		if (reader_->HasVideo()) {
-			int result = video_decoder_.Open(reader_->GetVideoStream(), hardware_decoding_);
+			int result = video_decoder_.Open(reader_->GetVideoStream(), hardware_decoding_,
+					reader_->GetStartTimeUs());
 
 			if (result < 0) {
 				return result;
@@ -75,7 +76,7 @@ namespace ffmpeg
 		}
 
 		if (reader_->HasAudio()) {
-			int result = audio_decoder_.Open(reader_->GetAudioStream());
+			int result = audio_decoder_.Open(reader_->GetAudioStream(), reader_->GetStartTimeUs());
 
 			if (result < 0) {
 				return result;

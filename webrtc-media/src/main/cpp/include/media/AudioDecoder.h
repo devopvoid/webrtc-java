@@ -66,8 +66,10 @@ namespace ffmpeg
 
 			// Opens a decoder for the given stream, which must outlive this
 			// decoder. Source audio of more than two channels is downmixed to
-			// stereo. Returns 0 or a negative AVERROR.
-			int Open(const AVStream * stream);
+			// stereo. Timestamps are given out relative to the start time,
+			// which is where the source starts on the container's clock.
+			// Returns 0 or a negative AVERROR.
+			int Open(const AVStream * stream, int64_t start_time_us = 0);
 
 			void Close();
 
@@ -136,6 +138,7 @@ namespace ffmpeg
 			int in_format_ = -1;
 			int in_rate_ = 0;
 			AVRational time_base_ = { 0, 1 };
+			int64_t start_time_us_ = 0;
 			int channels_ = 0;
 
 			// Resampled samples not yet handed out, interleaved.

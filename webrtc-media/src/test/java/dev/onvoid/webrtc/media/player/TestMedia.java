@@ -23,7 +23,10 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import java.util.function.IntFunction;
 
 /**
@@ -185,6 +188,86 @@ final class TestMedia {
 	}
 
 	/**
+	 * Copies a Matroska file holding a video and an audio track, moving each
+	 * track to start at the given time, which is what a recording cut out of
+	 * a longer one or a stream captured part way through looks like. The
+	 * frames stay interleaved by time, and every video keyframe gets a cue.
+	 * The copy does not say how long it runs.
+	 *
+	 * @param directory    Where to write the file.
+	 * @param source       The file to copy.
+	 * @param videoStartMs When the first video frame is to start.
+	 * @param audioStartMs When the first audio frame is to start.
+	 *
+	 * @return The file written.
+	 */
+	static Path shiftedMatroska(Path directory, Path source, long videoStartMs,
+			long audioStartMs) throws IOException {
+		MatroskaContent content = new MatroskaContent(Files.readAllBytes(source));
+		List<Frame> frames = new ArrayList<>();
+
+		for (Frame frame : content.frames) {
+			long start = frame.track == content.videoTrack ? videoStartMs : audioStartMs;
+
+			frames.add(new Frame(frame.track, start + frame.timeMs, frame.key, frame.data));
+		}
+
+		frames.sort(Comparator.comparingLong(frame -> frame.timeMs));
+
+		return Files.write(directory.resolve("shifted.mkv"),
+				matroska(content.tracks, frames, content.videoTrack));
+	}
+
+	/**
+	 * Writes 44.1 kHz, mono, 16-bit PCM in an FLV file, in tags of 100 ms of a
+	 * constant, non-zero value. FLV has no index, and FFmpeg finds its way
+	 * through one by the entries it has made while reading, so a time before
+	 * the first of them cannot be found.
+	 *
+	 * @param directory Where to write the file.
+	 * @param value     The value of every sample.
+	 * @param startMs   When the first tag starts.
+	 * @param tags      How many tags to write.
+	 *
+	 * @return The file written.
+	 */
+	static Path pcmFlv(Path directory, short value, long startMs, int tags) throws IOException {
+		byte[] audio = new byte[1 + 4410 * 2];
+
+		// Little-endian PCM at 44.1 kHz, in 16 bits, mono.
+		audio[0] = 0x3E;
+
+		for (int i = 1; i < audio.length; i += 2) {
+			audio[i] = (byte) value;
+			audio[i + 1] = (byte) (value >> 8);
+		}
+
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+		// The signature, version 1, audio only, the size of this header.
+		writeBytes(out, ascii("FLV"));
+		out.write(1);
+		out.write(0x04);
+		writeInt(out, 9, 4);
+		// The size of the tag before the first one.
+		writeInt(out, 0, 4);
+
+		for (int i = 0; i < tags; i++) {
+			long time = startMs + i * 100L;
+
+			out.write(8);						// An audio tag
+			writeInt(out, audio.length, 3);
+			writeInt(out, time & 0xFFFFFF, 3);
+			out.write((int) (time >>> 24));
+			writeInt(out, 0, 3);				// The stream ID
+			writeBytes(out, audio);
+			writeInt(out, 11 + audio.length, 4);
+		}
+
+		return Files.write(directory.resolve("pcm.flv"), out.toByteArray());
+	}
+
+	/**
 	 * Writes Opus in a Matroska file, with more channels than the eight a
 	 * decoded frame has room for in its data pointers, in 20 ms packets of
 	 * silence. One mono stream feeds every channel.
@@ -238,27 +321,63 @@ final class TestMedia {
 	 */
 	private static byte[] matroska(byte[] track, long[] blockTimes,
 			IntFunction<byte[]> block) {
-		ByteArrayOutputStream segment = new ByteArrayOutputStream();
-
-		// Info, with timestamps in milliseconds.
-		writeBytes(segment, ebml(0x1549A966, ebmlUInt(0x2AD7B1, 1000000)));
-		// Tracks.
-		writeBytes(segment, ebml(0x1654AE6B, track));
+		List<Frame> frames = new ArrayList<>();
 
 		for (int i = 0; i < blockTimes.length; i++) {
+			frames.add(new Frame(1, blockTimes[i], true, block.apply(i)));
+		}
+
+		return matroska(track, frames, -1);
+	}
+
+	/**
+	 * A Matroska file of the given tracks and one frame in each cluster, with
+	 * a cue for every keyframe of the given track, if any. The cues come
+	 * before the clusters, where the demuxer finds them without a seek head.
+	 */
+	private static byte[] matroska(byte[] tracks, List<Frame> frames, int cueTrack) {
+		ByteArrayOutputStream head = new ByteArrayOutputStream();
+
+		// Info, with timestamps in milliseconds.
+		writeBytes(head, ebml(0x1549A966, ebmlUInt(0x2AD7B1, 1000000)));
+		// Tracks.
+		writeBytes(head, ebml(0x1654AE6B, tracks));
+
+		ByteArrayOutputStream clusters = new ByteArrayOutputStream();
+		List<long[]> keyFrames = new ArrayList<>();
+
+		for (Frame frame : frames) {
+			if (frame.track == cueTrack && frame.key) {
+				keyFrames.add(new long[] { frame.timeMs, clusters.size() });
+			}
+
 			ByteArrayOutputStream simpleBlock = new ByteArrayOutputStream();
 
-			// Track 1, no offset from the cluster's time, a keyframe.
-			simpleBlock.write(0x81);
+			// The track, no offset from the cluster's time, the keyframe flag.
+			simpleBlock.write(0x80 | frame.track);
 			writeInt(simpleBlock, 0, 2);
-			simpleBlock.write(0x80);
-			writeBytes(simpleBlock, block.apply(i));
+			simpleBlock.write(frame.key ? 0x80 : 0);
+			writeBytes(simpleBlock, frame.data);
 
 			// A cluster: its time, then the SimpleBlock.
-			writeBytes(segment, ebml(0x1F43B675,
-					ebmlUInt(0xE7, blockTimes[i]),
+			writeBytes(clusters, ebml(0x1F43B675,
+					ebmlUInt(0xE7, frame.timeMs),
 					ebml(0xA3, simpleBlock.toByteArray())));
 		}
+
+		ByteArrayOutputStream segment = new ByteArrayOutputStream();
+
+		writeBytes(segment, head.toByteArray());
+
+		if (!keyFrames.isEmpty()) {
+			// Every number takes eight bytes, so the size of the cues does not
+			// depend on the positions they hold, which depend on that size.
+			int cuesSize = cues(keyFrames, cueTrack, 0).length;
+
+			writeBytes(segment, cues(keyFrames, cueTrack, head.size() + cuesSize));
+		}
+
+		writeBytes(segment, clusters.toByteArray());
 
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
 
@@ -273,6 +392,24 @@ final class TestMedia {
 		writeBytes(out, ebml(0x18538067, segment.toByteArray()));
 
 		return out.toByteArray();
+	}
+
+	/**
+	 * The Cues element for the given pairs of time and position, positions
+	 * being relative to where the clusters start.
+	 */
+	private static byte[] cues(List<long[]> keyFrames, int track, long clustersStart) {
+		ByteArrayOutputStream points = new ByteArrayOutputStream();
+
+		for (long[] keyFrame : keyFrames) {
+			writeBytes(points, ebml(0xBB,
+					ebmlUInt(0xB3, keyFrame[0]),
+					ebml(0xB7,
+							ebmlUInt(0xF7, track),
+							ebmlUInt(0xF1, clustersStart + keyFrame[1]))));
+		}
+
+		return ebml(0x1C53BB6B, points.toByteArray());
 	}
 
 	/**
@@ -481,6 +618,139 @@ final class TestMedia {
 
 	private static byte[] ascii(String text) {
 		return text.getBytes(StandardCharsets.US_ASCII);
+	}
+
+	/** One frame of a Matroska file, with its time in milliseconds. */
+	private static final class Frame {
+
+		final int track;
+		final long timeMs;
+		final boolean key;
+		final byte[] data;
+
+
+		Frame(int track, long timeMs, boolean key, byte[] data) {
+			this.track = track;
+			this.timeMs = timeMs;
+			this.key = key;
+			this.data = data;
+		}
+	}
+
+	/**
+	 * What a Matroska file with timestamps in milliseconds holds, as far as
+	 * the committed assets use the format: no lacing, and track numbers of
+	 * one byte.
+	 */
+	private static final class MatroskaContent {
+
+		final List<Frame> frames = new ArrayList<>();
+		byte[] tracks;
+		int videoTrack;
+
+		private final ByteBuffer data;
+		private long clusterTime;
+		private long trackNumber;
+
+
+		MatroskaContent(byte[] file) {
+			data = ByteBuffer.wrap(file);
+
+			read(file.length);
+		}
+
+		private void read(int end) {
+			while (data.position() < end) {
+				int id = readId();
+				long size = readSize();
+				int start = data.position();
+				int stop = size < 0 ? end : (int) Math.min(start + size, end);
+
+				switch (id) {
+					case 0x18538067:	// Segment
+					case 0x1F43B675:	// Cluster
+					case 0xA0:			// BlockGroup
+					case 0xAE:			// TrackEntry
+						read(stop);
+						break;
+					case 0x1654AE6B:	// Tracks
+						tracks = Arrays.copyOfRange(data.array(), start, stop);
+						read(stop);
+						break;
+					case 0xD7:			// TrackNumber
+						trackNumber = readUInt(stop);
+						break;
+					case 0x83:			// TrackType, which follows the number
+						if (readUInt(stop) == 1) {
+							videoTrack = (int) trackNumber;
+						}
+						break;
+					case 0xE7:			// Timestamp
+						clusterTime = readUInt(stop);
+						break;
+					case 0xA3:			// SimpleBlock
+					case 0xA1:			// Block
+						readBlock(stop, id == 0xA3);
+						break;
+					default:
+						break;
+				}
+
+				data.position(stop);
+			}
+		}
+
+		private void readBlock(int end, boolean simple) {
+			int track = data.get() & 0x7F;
+			long time = clusterTime + data.getShort();
+			int flags = data.get() & 0xFF;
+
+			if ((flags & 0x06) != 0) {
+				throw new IllegalArgumentException("Laced block");
+			}
+
+			frames.add(new Frame(track, time, !simple || (flags & 0x80) != 0,
+					Arrays.copyOfRange(data.array(), data.position(), end)));
+		}
+
+		private long readUInt(int end) {
+			long value = 0;
+
+			while (data.position() < end) {
+				value = (value << 8) | (data.get() & 0xFF);
+			}
+
+			return value;
+		}
+
+		private int readId() {
+			int first = data.get() & 0xFF;
+			int value = first;
+
+			for (int i = Integer.numberOfLeadingZeros(first) - 24; i > 0; i--) {
+				value = (value << 8) | (data.get() & 0xFF);
+			}
+
+			return value;
+		}
+
+		/** Returns the size, or -1 for an element of unknown size. */
+		private long readSize() {
+			int first = data.get() & 0xFF;
+			int length = Integer.numberOfLeadingZeros(first) - 24;
+			int mask = 0xFF >> (length + 1);
+			long value = first & mask;
+			boolean unknown = value == mask;
+
+			for (int i = 0; i < length; i++) {
+				int next = data.get() & 0xFF;
+
+				unknown &= next == 0xFF;
+				value = (value << 8) | next;
+			}
+
+			return unknown ? -1 : value;
+		}
 	}
 
 }

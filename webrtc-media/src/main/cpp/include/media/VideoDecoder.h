@@ -63,8 +63,12 @@ namespace ffmpeg
 			// a hardware decoder for the codec, and in software otherwise.
 			// HEVC goes to the hardware in any case, and without a hardware
 			// decoder for it the result is AVERROR_DECODER_NOT_FOUND.
+			//
+			// Timestamps are given out relative to the start time, which is
+			// where the source starts on the container's clock.
+			//
 			// Returns 0 or a negative AVERROR.
-			int Open(const AVStream * stream, bool hardware = false);
+			int Open(const AVStream * stream, bool hardware = false, int64_t start_time_us = 0);
 
 			void Close();
 
@@ -195,6 +199,7 @@ namespace ffmpeg
 			int pool_width_ = 0;
 			int pool_height_ = 0;
 			AVRational time_base_ = { 0, 1 };
+			int64_t start_time_us_ = 0;
 
 			AVPixelFormat hardware_format_ = AV_PIX_FMT_NONE;
 			std::atomic<bool> hardware_{ false };

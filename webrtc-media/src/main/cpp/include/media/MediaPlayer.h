@@ -57,6 +57,11 @@ namespace ffmpeg
 	// Once those are full the decode thread blocks, which is what keeps a
 	// whole file from being decoded into memory at once.
 	//
+	// Everything here counts in positions, in microseconds from where the
+	// source starts: the reader knows where that is on the container's clock,
+	// and the decoders give out their timestamps relative to it, for video and
+	// audio alike. A stream that starts after the other one keeps that distance.
+	//
 	// What the observer is told goes through a thread of its own. Each report
 	// is queued under the lock, in the same step as the change it reports,
 	// and that thread makes the calls one after the other, in that order.
@@ -97,9 +102,10 @@ namespace ffmpeg
 			void Pause();
 
 			// Moves playback to the given position, in microseconds from the
-			// start. What is already queued is dropped. A precise seek drops
-			// what is decoded between the keyframe it lands on and the
-			// position as well; one that is not plays from that keyframe.
+			// start of the source. What is already queued is dropped. A
+			// precise seek drops what is decoded between the keyframe it
+			// lands on and the position as well; one that is not plays from
+			// that keyframe.
 			void Seek(int64_t position_us, bool precise);
 
 			void SetLooping(bool looping);

@@ -39,6 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -87,8 +88,9 @@ class MediaPlayerTest {
 
 	/**
 	 * 320x240 H.264 at 15 fps, ten seconds, in MPEG-TS, with a key frame every
-	 * four seconds, at 0.133, 4.133 and 8.133 s: two B-frames put the first
-	 * picture 0.133 s in. MPEG-TS has no index, so FFmpeg seeks in it by
+	 * four seconds, at 0, 4 and 8 s. On the container's clock those are 0.133,
+	 * 4.133 and 8.133 s: two B-frames put the first picture 0.133 s in, while
+	 * its decode time is 0. MPEG-TS has no index, so FFmpeg seeks in it by
 	 * searching for a timestamp, which can land past the key frame before the
 	 * position. Made with libx264 (veryfast, CRF 42, keyint 60, no scene cuts,
 	 * two B-frames) from a moving gradient.
@@ -366,22 +368,22 @@ class MediaPlayerTest {
 	void seekWithoutIndexStartsAtThePositionAskedFor() throws Exception {
 		try (Playback playback = new Playback(new MediaReader(
 				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI())))) {
-			// Just before the key frame at 8.133 s. A search for 7.8 s lands
-			// past the one at 4.133 s, and the decoder has nothing to show
-			// until 8.133 s, so the player has to look further back.
+			// Just before the key frame at 8 s. A search for 7.8 s lands past
+			// the one at 4 s, and the decoder has nothing to show until 8 s,
+			// so the player has to look further back.
 			playback.player.seek(7_800_000);
 			playback.player.play();
 
 			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
 
-			// The picture at 7.8 s is the 116th, 0.133 s + 115 / 15 s in.
+			// The picture at 7.8 s is the 118th, 117 / 15 s in.
 			long first = playback.firstFramePositionUs.get();
 
 			assertTrue(first >= 7_800_000 && first < 7_800_000 + 1_000_000 / 15,
 					"first frame at " + first + " us");
 
-			// 7.8 s to the end: the last 35 of the 150 pictures.
-			assertTrue(Math.abs(playback.frames.get() - 35) <= 1,
+			// 7.8 s to the end: the last 33 of the 150 pictures.
+			assertTrue(Math.abs(playback.frames.get() - 33) <= 1,
 					"video frames: " + playback.frames.get());
 		}
 	}
@@ -390,14 +392,15 @@ class MediaPlayerTest {
 	void seekWithoutIndexToItsStartPlaysItAll() throws Exception {
 		try (Playback playback = new Playback(new MediaReader(
 				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI())))) {
-			// Before the first picture, which is 0.133 s in: there is nothing
-			// further back to look for, and the player starts at that picture.
+			// A search for exactly where the first picture is would find the
+			// next key frame: it goes by decode times, and that of the first
+			// picture comes 0.133 s before it.
 			playback.player.seek(0);
 			playback.player.play();
 
 			assertTrue(playback.ended.await(20, TimeUnit.SECONDS), "no end of stream");
 
-			assertEquals(133_333, playback.firstFramePositionUs.get(), 1);
+			assertEquals(0, playback.firstFramePositionUs.get(), 1);
 			assertTrue(Math.abs(playback.frames.get() - 150) <= 1,
 					"video frames: " + playback.frames.get());
 		}
@@ -405,8 +408,8 @@ class MediaPlayerTest {
 
 	@Test
 	void loopAfterASeekWithoutIndexThatLandedLateStartsOver() throws Exception {
-		// The asset cut off after its last keyframe, at 8.133 s. A search for
-		// 7.8 s lands past the one at 4.133 s, and the decoder, holding
+		// The asset cut off after its last keyframe, at 8 s. A search for
+		// 7.8 s lands past the one at 4 s, and the decoder, holding
 		// pictures back for its B-frames, gives the one at 8.133 s only once
 		// it is drained at the end, where a seek that landed late is not
 		// retried.
@@ -427,7 +430,7 @@ class MediaPlayerTest {
 
 			assertTrue(positions.size() > 10, "frames: " + positions);
 
-			// The picture at 8.133 s, and then the next pass from the start.
+			// The picture at 8 s, and then the next pass from the start.
 			// The late landing, left over from the seek once the source had
 			// started over, used to send the reader back before 7.8 s, so that
 			// the last pictures played again before the next pass. What the
@@ -501,6 +504,173 @@ class MediaPlayerTest {
 			// threw away all of it, so that the player ended at once.
 			assertEquals(MediaPlayerState.PLAYING, playback.player.getState());
 			assertTrue(after > 0, "position after seeking back: " + after + " us");
+		}
+	}
+
+	@Test
+	void seekCountsFromTheFirstFrame() throws Exception {
+		// Video at 5 s on the container's clock, audio a second after it. The
+		// source starts where its first frame does, so 2 s in is 7 s there.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.seek(2_000_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 2_000_000 && first < 2_000_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// Video runs up to 3 s, audio from 1 s to 4 s.
+			assertTrue(Math.abs(playback.frames.get() - 15) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 200) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void seekCountsFromAudioThatStartsFirst() throws Exception {
+		// The other way around: audio at 5 s, video a second after it.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			playback.player.seek(2_000_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 2_000_000 && first < 2_000_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// Video runs from 1 s to 4 s, audio up to 3 s.
+			assertTrue(Math.abs(playback.frames.get() - 30) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 100) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void seekBeforeVideoStartsKeepsTheAudio() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			playback.player.seek(500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// All of the video, which starts at 1 s, and audio from 0.5 s.
+			assertTrue(Math.abs(playback.frames.get() - EXPECTED_FRAMES) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 250) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void positionCountsFromTheFirstFrame() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// Video starts a second after the source does.
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(Math.abs(first - 1_000_000) < 20_000, "first frame at " + first + " us");
+
+			long end = playback.player.getPositionUs();
+
+			assertTrue(end > 3_900_000 && end < 4_100_000, "ended at " + end + " us");
+		}
+	}
+
+	@Test
+	void playsAgainFromTheFirstFrame() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			int frames = playback.frames.get();
+			int chunks = playback.chunks.get();
+
+			assertTrue(frames >= EXPECTED_FRAMES - 1, "video frames: " + frames);
+
+			playback.framePositionsUs.clear();
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() >= 2 * frames, 10_000),
+					"second pass played " + (playback.frames.get() - frames) + " of " + frames);
+			assertTrue(playback.framePositionsUs.get(0) < 1_000_000 / 15,
+					"second pass started at " + playback.framePositionsUs.get(0) + " us");
+			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
+					"second pass of audio: " + (playback.chunks.get() - chunks));
+		}
+	}
+
+	@Test
+	void playsAgainFromAudioThatStartsFirst() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			int frames = playback.frames.get();
+			int chunks = playback.chunks.get();
+
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() >= 2 * frames, 10_000),
+					"second pass played " + (playback.frames.get() - frames) + " of " + frames);
+			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
+					"second pass of audio: " + (playback.chunks.get() - chunks) + " of " + chunks);
+		}
+	}
+
+	@Test
+	void playsAgainWithoutAnEntryBeforeTheStart() throws Exception {
+		// Aiming before the start finds nothing in an FLV file, and that is
+		// not the end of the seek.
+		Path flv = TestMedia.pcmFlv(tempDir, (short) 1000, 5000, 10);
+
+		try (Playback playback = new Playback(new MediaReader(flv))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+			assertEquals(null, playback.error.get());
+
+			int chunks = playback.chunks.get();
+
+			assertTrue(chunks > 0, "played nothing");
+
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
+					"second pass of audio: " + (playback.chunks.get() - chunks) + " of " + chunks
+							+ ", error: " + playback.error.get());
+		}
+	}
+
+	@Test
+	void loopsWithoutAGapAtTheSeam() throws Exception {
+		// The file does not say how long it runs, so the next pass is placed
+		// after the last frame seen. That is 4 s from the start of the source,
+		// not from the start of the container's clock.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > EXPECTED_FRAMES + 15, 7_000),
+					"video frames after a pass and a half: " + playback.frames.get());
 		}
 	}
 
@@ -1025,6 +1195,21 @@ class MediaPlayerTest {
 		}
 
 		return Files.write(target, Arrays.copyOf(data, end));
+	}
+
+	private static boolean waitFor(BooleanSupplier condition, long timeoutMs)
+			throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+
+		while (!condition.getAsBoolean()) {
+			if (System.nanoTime() > deadline) {
+				return false;
+			}
+
+			Thread.sleep(5);
+		}
+
+		return true;
 	}
 
 	private static Path asset() throws Exception {

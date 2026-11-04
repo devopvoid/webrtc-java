@@ -16,6 +16,7 @@
 
 #include "media/MediaReader.h"
 
+#include <algorithm>
 #include <mutex>
 
 extern "C" {
@@ -31,6 +32,12 @@ namespace
 	// build also carries HTTP, for RTSP tunnelled over it, which is left out
 	// here: nothing this module plays is meant to fetch an arbitrary URL.
 	constexpr const char * kProtocolWhitelist = "file,pipe,rtsp,rtp,udp,tcp";
+
+	// How far before the first frame a seek to the start aims. A search by
+	// timestamp, which is all a container without an index has, goes by decode
+	// times, and those of the first keyframe come before its presentation
+	// time: aiming at that exactly finds the keyframe after it.
+	constexpr int64_t kStartMarginUs = 1000000;
 
 	std::once_flag network_initialized;
 }
@@ -120,7 +127,33 @@ namespace ffmpeg
 			return AVERROR_STREAM_NOT_FOUND;
 		}
 
+		start_time_us_ = FindStartTimeUs();
+
 		return 0;
+	}
+
+	int64_t MediaReader::FindStartTimeUs() const
+	{
+		int64_t start_us = AV_NOPTS_VALUE;
+
+		// The streams that are played, and not the container's own start: that
+		// also takes in the streams nothing here plays, such as a data track.
+		for (const AVStream * stream : { GetVideoStream(), GetAudioStream() }) {
+			if (stream == nullptr || stream->start_time == AV_NOPTS_VALUE) {
+				continue;
+			}
+
+			const int64_t stream_us = av_rescale_q(stream->start_time, stream->time_base,
+					AV_TIME_BASE_Q);
+
+			start_us = start_us == AV_NOPTS_VALUE ? stream_us : std::min(start_us, stream_us);
+		}
+
+		if (start_us == AV_NOPTS_VALUE) {
+			start_us = format_context_->start_time;
+		}
+
+		return start_us != AV_NOPTS_VALUE ? start_us : 0;
 	}
 
 	void MediaReader::Close()
@@ -137,6 +170,7 @@ namespace ffmpeg
 		format_context_ = nullptr;
 		video_stream_index_ = -1;
 		audio_stream_index_ = -1;
+		start_time_us_ = 0;
 	}
 
 	bool MediaReader::IsOpen() const
@@ -153,6 +187,11 @@ namespace ffmpeg
 		// AVFormatContext::duration is already in AV_TIME_BASE units, which
 		// are microseconds.
 		return format_context_->duration;
+	}
+
+	int64_t MediaReader::GetStartTimeUs() const
+	{
+		return start_time_us_;
 	}
 
 	bool MediaReader::HasVideo() const
@@ -253,14 +292,48 @@ namespace ffmpeg
 			position_us = 0;
 		}
 
+		// libavformat takes the time on the container's clock, which is not
+		// where the source starts.
+		const int64_t target_us = position_us + start_time_us_;
+		const int64_t search_us = position_us > 0 ? target_us
+				: std::min(start_time_us_, std::max<int64_t>(start_time_us_ - kStartMarginUs, 0));
+
+		// libavformat searches the video by default. Before it starts there
+		// is no keyframe to go to, and a demuxer such as Matroska then goes to
+		// its first one and skips the audio that comes before that.
+		const AVStream * video = GetVideoStream();
+		const AVStream * audio = GetAudioStream();
+		const bool audio_first = video != nullptr && audio != nullptr
+				&& video->start_time != AV_NOPTS_VALUE
+				&& target_us < av_rescale_q(video->start_time, video->time_base, AV_TIME_BASE_Q);
+
 		// AVSEEK_FLAG_BACKWARD lands on the keyframe at or before the target,
 		// so that what follows can actually be decoded. Frames between that
 		// keyframe and the target are decoded and dropped by the caller.
+		int result = SeekStream(audio_first ? audio : nullptr, search_us, AVSEEK_FLAG_BACKWARD);
+
+		if (result >= 0 || interrupted_.load() || timed_out_.load()) {
+			return TranslateError(result);
+		}
+
+		// Nothing at or before the target, which some demuxers take for a
+		// failure. A stream that starts late has that for all that comes
+		// before it, and the first keyframe after is the nearest there is.
+		return TranslateError(SeekStream(audio_first ? audio : nullptr, target_us, 0));
+	}
+
+	int MediaReader::SeekStream(const AVStream * stream, int64_t time_us, int flags)
+	{
+		// Without a stream, libavformat picks one and takes the time as it is.
+		const int index = stream != nullptr ? stream->index : -1;
+		const int64_t timestamp = stream != nullptr
+				? av_rescale_q(time_us, AV_TIME_BASE_Q, stream->time_base) : time_us;
+
 		BeginBlocking();
-		int result = av_seek_frame(format_context_, -1, position_us, AVSEEK_FLAG_BACKWARD);
+		int result = av_seek_frame(format_context_, index, timestamp, flags);
 		EndBlocking();
 
-		return TranslateError(result);
+		return result;
 	}
 
 	void MediaReader::Interrupt()
