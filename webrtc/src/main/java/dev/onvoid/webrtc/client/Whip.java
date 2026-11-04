@@ -412,15 +412,15 @@ public final class Whip {
 					}
 				}
 				if (placeholder) {
-					video = peer.addVideoWithoutTrack();
+					video = peer.manual.addVideoWithoutTrack();
 				}
 
 				// Before the offer, which follows in the same order: WHIP only
 				// sends (RFC 9725, 4.2). Should WebRTC refuse, the offer stays
 				// sendrecv, which WHIP allows as well.
-				peer.sendOnly();
+				peer.manual.sendOnly();
 
-				CompletableFuture<Void> prepared = CompletableFuture.allOf(video, peer.preferCodecs(names));
+				CompletableFuture<Void> prepared = CompletableFuture.allOf(video, peer.manual.preferCodecs(names));
 
 				return HttpSession.start(rtc, peer, endpoint, credentials, limit, prepared, gathering, PROTOCOL,
 						Session::new);

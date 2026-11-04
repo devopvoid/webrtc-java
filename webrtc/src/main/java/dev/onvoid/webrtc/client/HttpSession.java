@@ -307,7 +307,7 @@ abstract class HttpSession implements AutoCloseable {
 		});
 
 		CompletableFuture<RTCSessionDescription> initial = prepared.thenCompose(ready -> gathering == Gathering.COMPLETE
-				? peer.negotiator().createOffer(Gathering.COMPLETE) : peer.offer());
+				? peer.negotiator().createOffer(Gathering.COMPLETE) : peer.manual.offer());
 		initial
 				.thenCompose(offer -> post(offerRequest, endpoint, withRtcpMuxOnly(offer.sdp), protocol, resource)
 						.whenComplete((reply, error) -> {
@@ -324,7 +324,7 @@ abstract class HttpSession implements AutoCloseable {
 						})
 						.thenCompose(reply -> (gathering == Gathering.COMPLETE
 								? CompletableFuture.<Void>completedFuture(null)
-								: peer.useIceServers(reply.iceServers)).handle((used, error) -> {
+								: peer.manual.useIceServers(reply.iceServers)).handle((used, error) -> {
 							if (error != null) {
 								// Gathered without them, as if the endpoint had
 								// named none.
@@ -340,7 +340,7 @@ abstract class HttpSession implements AutoCloseable {
 								ice.attach(resource.get(), reply.etag, offer.sdp);
 
 								return (gathering == Gathering.COMPLETE
-										? CompletableFuture.<Void>completedFuture(null) : peer.applyLocal(offer))
+										? CompletableFuture.<Void>completedFuture(null) : peer.manual.applyLocal(offer))
 										.thenCompose(applied -> peer.negotiator()
 										.applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, reply.sdp)));
 							}
@@ -423,7 +423,7 @@ abstract class HttpSession implements AutoCloseable {
 	private static CompletableFuture<Void> answerCounterOffer(WebRtc rtc, HttpClient client, PeerImpl peer,
 			Reply reply, String authorization, Duration timeout, AtomicReference<URI> resource, HttpIce ice,
 			AtomicReference<HttpCall> request, AtomicBoolean finished) {
-		return peer.answerInstead(new RTCSessionDescription(RTCSdpType.OFFER, reply.sdp), Gathering.COMPLETE)
+		return peer.manual.answerInstead(new RTCSessionDescription(RTCSdpType.OFFER, reply.sdp), Gathering.COMPLETE)
 				.thenCompose(answer -> {
 					if (System.currentTimeMillis() > reply.validUntil) {
 						throw new WebRtcException("The counter-offer for " + reply.session
