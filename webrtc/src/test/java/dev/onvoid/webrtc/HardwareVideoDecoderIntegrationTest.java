@@ -51,6 +51,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
@@ -542,21 +543,26 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 	/**
 	 * Sends the recorded VP9 frames through a call whose receiver decodes
-	 * with the given factory, and returns the luma of the last frame.
+	 * with the given factory, and returns the luma of the last frame. Each
+	 * frame goes out once the one before reached the sink: the stream is sent
+	 * once, and the render queue may drop a decoded frame while others wait,
+	 * which no statistic counts.
 	 */
 	private byte[] lastVp9Frame(VideoDecoderFactory decoders, List<ByteBuffer> stream,
 			Consumer<String> expectHardware) throws Exception {
 		final int width = 320;
 		final int height = 180;
 
+		CountDownLatch received = new CountDownLatch(stream.size());
+		AtomicReference<byte[]> last = new AtomicReference<>();
+
 		PeerConnectionFactory factory = PeerConnectionFactory.builder()
 				.setAudioDeviceModule(audioDevModule)
-				.setVideoEncoderFactory(new ReplayEncoderFactory(stream, width, height))
+				.setVideoEncoderFactory(new ReplayEncoderFactory(stream, width, height,
+						() -> stream.size() - (int) received.getCount()))
 				.setVideoDecoderFactory(decoders)
 				.build();
 
-		CountDownLatch received = new CountDownLatch(stream.size());
-		AtomicReference<byte[]> last = new AtomicReference<>();
 		String implementation;
 
 		try (TestMediaCall call = new TestMediaCall(factory, true, false, VP9)) {
@@ -587,7 +593,8 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 			call.awaitConnected();
 			call.startMedia();
 
-			if (!received.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+			// A frame at a time takes longer than the stream's 1.5 seconds.
+			if (!received.await(3 * TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
 				// Tells whether the frames were lost before or after decoding.
 				Map<String, Object> inbound = call.getInboundVideoStats();
 
@@ -662,11 +669,15 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 		private final int height;
 
+		/** How many frames reached the sink. */
+		private final IntSupplier arrived;
 
-		ReplayEncoderFactory(List<ByteBuffer> stream, int width, int height) {
+
+		ReplayEncoderFactory(List<ByteBuffer> stream, int width, int height, IntSupplier arrived) {
 			this.stream = stream;
 			this.width = width;
 			this.height = height;
+			this.arrived = arrived;
 		}
 
 		@Override
@@ -699,7 +710,7 @@ class HardwareVideoDecoderIntegrationTest extends TestBase {
 
 				@Override
 				public VideoCodecStatus encode(VideoFrame frame, EncodeInfo info) {
-					if (next < stream.size()) {
+					if (next < stream.size() && next == arrived.getAsInt()) {
 						ByteBuffer payload = ByteBuffer.allocateDirect(stream.get(next).remaining());
 						payload.put(stream.get(next).duplicate()).flip();
 
