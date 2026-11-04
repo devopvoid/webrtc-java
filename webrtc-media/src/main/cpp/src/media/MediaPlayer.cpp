@@ -601,7 +601,7 @@ namespace ffmpeg
 		loop_offset_us_ = 0;
 		max_source_pts_us_ = position_us;
 
-		pacer_->Flush(position_us);
+		pacer_->Flush(position_us, seek_target_precise_);
 
 		return 0;
 	}

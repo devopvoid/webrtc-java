@@ -540,6 +540,26 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void videoAheadOfAudioKeepsItsPace() throws Exception {
+		// A decoder running on many threads gives out its first picture once
+		// it has been fed as many packets, by which time the audio a second
+		// in has long reached the pacer. That must not make the first second
+		// of video overdue, or it goes out all at once.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// Fourteen frames apart at 15 fps, with room for a slow machine.
+			long spanMs = TimeUnit.NANOSECONDS.toMillis(
+					playback.frameTimes.get(14) - playback.frameTimes.get(0));
+
+			assertTrue(spanMs > 700, "the first 15 frames took " + spanMs + " ms");
+		}
+	}
+
+	@Test
 	void seekCountsFromAudioThatStartsFirst() throws Exception {
 		// The other way around: audio at 5 s, video a second after it.
 		try (Playback playback = new Playback(new MediaReader(
@@ -616,7 +636,7 @@ class MediaPlayerTest {
 
 			assertTrue(waitFor(() -> playback.frames.get() >= 2 * frames, 10_000),
 					"second pass played " + (playback.frames.get() - frames) + " of " + frames);
-			assertTrue(playback.framePositionsUs.get(0) < 1_100_000,
+			assertTrue(playback.framePositionsUs.get(0) < 1_000_000 / 15,
 					"second pass started at " + playback.framePositionsUs.get(0) + " us");
 			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
 					"second pass of audio: " + (playback.chunks.get() - chunks));

@@ -261,11 +261,11 @@ namespace ffmpeg
 		work_.notify_all();
 	}
 
-	void MediaPacer::Flush(int64_t position_us)
+	void MediaPacer::Flush(int64_t position_us, bool exact)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		FlushLocked(position_us);
+		FlushLocked(position_us, exact);
 	}
 
 	void MediaPacer::StartGeneration(int64_t position_us)
@@ -274,7 +274,8 @@ namespace ffmpeg
 
 		++generation_;
 
-		FlushLocked(position_us);
+		// Should the seek fail, playback carries on from where it was.
+		FlushLocked(position_us, false);
 	}
 
 	uint64_t MediaPacer::GetGeneration() const
@@ -284,7 +285,7 @@ namespace ffmpeg
 		return generation_;
 	}
 
-	void MediaPacer::FlushLocked(int64_t position_us)
+	void MediaPacer::FlushLocked(int64_t position_us, bool exact)
 	{
 		video_queue_.clear();
 		audio_queue_.clear();
@@ -300,6 +301,7 @@ namespace ffmpeg
 
 		// The next item delivered starts a new mapping, wherever it comes from.
 		have_base_ = false;
+		exact_start_ = exact;
 
 		video_space_.notify_all();
 		audio_space_.notify_all();
@@ -391,6 +393,15 @@ namespace ffmpeg
 
 				if (!video_queue_.empty() && !audio_queue_.empty()) {
 					first = std::min(first, audio_queue_.front().timestamp_us);
+				}
+
+				// Audio can get here ahead of video that comes before it, as
+				// a decoder on many threads holds on to its first pictures.
+				// Mapped from that audio, those pictures would be overdue,
+				// and go out all at once.
+				if (video_queue_.empty() && exact_start_ && first > position_us_
+						&& first - position_us_ <= kMaxStartGapUs) {
+					first = position_us_;
 				}
 
 				base_us_ = now - first;

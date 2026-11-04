@@ -44,7 +44,9 @@ namespace ffmpeg
 	// is a time on the WebRTC clock. Every item carries that time with it, so
 	// the timeline that reaches the receiver is the source's own and not the
 	// pacing thread's, and audio stays lined up with video however much the
-	// thread is jostled.
+	// thread is jostled. The mapping starts at the position playback starts
+	// from, if audio gets here first, as video that belongs before it may
+	// still be in the decoder.
 	//
 	// Video and audio are paced independently. They go to different sources
 	// and need no ordering between them, and keeping them independent is also
@@ -79,6 +81,14 @@ namespace ffmpeg
 			// keeps video fed; this bounds how much, at ten seconds, for a
 			// source that has no video at all.
 			static constexpr size_t kAudioOverflowCapacity = 1000;
+
+			// How far past the position playback starts from the first audio
+			// may lie for the mapping to start at that position regardless.
+			// It covers what a decoder holds back, which is up to one picture
+			// for each of its threads. Further than that the video would be
+			// here by now, and a source with timestamps that do not count
+			// from its start must not be held up for as long as they say.
+			static constexpr int64_t kMaxStartGapUs = 5000000;
 
 			// The sources may be 0, in which case media of that kind is
 			// dropped rather than delivered.
@@ -123,7 +133,11 @@ namespace ffmpeg
 			// position is where playback is taken to be until an item has been
 			// delivered, in the source: the first item then sets it, wherever
 			// that landed, and starts a new timeline with no loop offset.
-			void Flush(int64_t position_us);
+			//
+			// Exact says that playback really starts at this position, which
+			// a seek to a keyframe does not: there, what is played comes as
+			// it lands, so the first item starts the mapping.
+			void Flush(int64_t position_us, bool exact);
 
 			// Flushes, and starts a new generation, which turns away what is
 			// still being pushed for the one before. This is for a seek that
@@ -192,7 +206,7 @@ namespace ffmpeg
 
 			void Run();
 
-			void FlushLocked(int64_t position_us);
+			void FlushLocked(int64_t position_us, bool exact);
 
 			// Takes in the time of an item about to be delivered, on the
 			// timeline of all passes, and the loop offset of its pass.
@@ -246,6 +260,9 @@ namespace ffmpeg
 			// a time on the WebRTC clock.
 			int64_t base_us_ = 0;
 			bool have_base_ = false;
+
+			// Whether the mapping to come starts at the position.
+			bool exact_start_ = true;
 			int64_t paused_at_us_ = 0;
 
 			// Where playback has got to on the timeline of all passes, the
