@@ -123,6 +123,9 @@ public class MediaRecorder implements AutoCloseable {
 	/** How the recording ended, or null until it was stopped. */
 	private MediaRecorderResult result;
 
+	/** What the native recorder reported last, for the time after it is gone. */
+	private MediaRecorderStats stats = new MediaRecorderStats(new long[1]);
+
 
 	/**
 	 * Creates a recorder writing to the given file, which must not exist yet.
@@ -378,6 +381,23 @@ public class MediaRecorder implements AutoCloseable {
 	}
 
 	/**
+	 * Returns what the recording lost so far, and how full the queue for the
+	 * writer got. It can be asked at any time, and stays the same once the
+	 * recorder is stopped, after {@link #close()} as well.
+	 *
+	 * @return The numbers as of now.
+	 */
+	public MediaRecorderStats getStats() {
+		synchronized (lock) {
+			if (handle != 0) {
+				stats = new MediaRecorderStats(stats(handle));
+			}
+
+			return stats;
+		}
+	}
+
+	/**
 	 * Returns where the recording goes, and once it is stopped, where it is:
 	 * the file given to the constructor, or the temporary file beside it
 	 * if the recording could not take the place of that file, as {@link
@@ -399,8 +419,13 @@ public class MediaRecorder implements AutoCloseable {
 
 		synchronized (lock) {
 			if (handle != 0) {
-				dispose(handle);
-				handle = 0;
+				try {
+					stats = new MediaRecorderStats(stats(handle));
+				}
+				finally {
+					dispose(handle);
+					handle = 0;
+				}
 			}
 		}
 	}
@@ -603,6 +628,8 @@ public class MediaRecorder implements AutoCloseable {
 	private static native void start(long handle);
 
 	private static native int stop(long handle);
+
+	private static native long[] stats(long handle);
 
 	private static native void dispose(long handle);
 

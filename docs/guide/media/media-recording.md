@@ -7,6 +7,7 @@ This guide explains how to record what a peer connection sends or receives into 
 - Choosing the container
 - Following a recording with a listener
 - How tracks are started, timed and left out
+- Measuring what a recording lost
 - Recording an end-to-end encrypted call
 
 `MediaRecorder` writes the encoded frames of each sender or receiver into the file as they are, without decoding or re-encoding them. A recording therefore costs next to no CPU, keeps exactly the quality that went over the network, and needs no codec at all, only the container. The frames are taken in native code, straight from WebRTC, and written by a thread of the recorder's own, so neither Java nor a slow disk ever holds up the call.
@@ -127,7 +128,32 @@ Running out of native memory while writing ends the recording the same way: `onE
 - **The file begins once the tracks are known.** The file header describes every stream, and a stream is only known from its first frames. The file begins once every track has sent some, or once the tracks that have waited three seconds for the rest. A track that sends nothing by then is left out, with a warning.
 - **Tracks share one timeline.** Each track is placed by when its first frame arrived, and follows its own RTP timestamps from there, so its timing is exact. The tracks of one sender line up within the jitter of the network.
 - **One simulcast layer.** A sender with simulcast is recorded at the layer whose frames reach the recorder first.
-- **Nothing is lost to a slow disk, up to a point.** Frames queue up in memory for the writer, up to 64 MB. Beyond that, frames are dropped, and video starts over at the next key frame.
+- **Nothing is lost to a slow disk, up to a point.** Frames queue up in memory for the writer, up to 64 MB. Beyond that, frames are dropped, and video starts over at the next key frame. `getStats()` [tells how much that cost](#measuring-what-was-lost).
+
+## Measuring What Was Lost
+
+A result of `COMPLETE` means that everything the recorder took went into the file. It says nothing about frames it had to drop before that, and a video gap can come from a single one, since video only goes on from the next key frame. `getStats()` tells what happened, per track and in the order the tracks were added. It can be asked at any time, also after `close()`:
+
+```java
+MediaRecorderStats stats = recorder.getStats();
+
+for (MediaRecorderStats.Track track : stats.getTracks()) {
+    if (track.getDroppedFrames() > 0) {
+        System.out.println("Lost " + track.getDroppedFrames() + " frames");
+    }
+}
+
+System.out.println("Queue peak: " + stats.getMaxQueuedBytes() + " bytes");
+```
+
+| Value | Meaning |
+| --- | --- |
+| `getDroppedQueueFull()` | Frames dropped because the writer did not keep up and its queue was full. |
+| `getDroppedAllocationFailed()` | Frames dropped because there was no memory to copy them. |
+| `getDroppedAwaitingKeyFrame()` | Video frames dropped on the way to the next key frame, since nothing could decode them after what was lost before. |
+| `getDroppedFrames()` | All of these together. |
+
+`getMaxQueuedBytes()` is the most that ever waited for the writer, of all tracks together, and shows how close a recording came to the limit of 64 MB. Frames a track was never meant to record do not count, such as those before its first key frame or those of another simulcast layer.
 
 ## Recording an Encrypted Call
 

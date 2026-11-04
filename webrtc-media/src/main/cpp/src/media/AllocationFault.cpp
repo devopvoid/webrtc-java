@@ -35,6 +35,7 @@ namespace
 	std::atomic<bool> fail_option{ false };
 	std::atomic<bool> fail_observer_add{ false };
 	std::atomic<int> observers_left{ 0 };
+	std::atomic<bool> fail_queue_room{ false };
 }
 
 namespace ffmpeg
@@ -71,6 +72,11 @@ namespace ffmpeg
 		fail_observer_add.store(true);
 	}
 
+	void AllocationFault::FailNextQueueRoom()
+	{
+		fail_queue_room.store(true);
+	}
+
 	void AllocationFault::Disarm()
 	{
 		fail_string_copy.store(false);
@@ -79,12 +85,14 @@ namespace ffmpeg
 		fail_writer_allocation.store(false);
 		fail_option.store(false);
 		fail_observer_add.store(false);
+		fail_queue_room.store(false);
 	}
 
 	bool AllocationFault::IsArmed()
 	{
 		return fail_string_copy.load() || fail_allocation.load() || fail_thread_start.load()
-				|| fail_writer_allocation.load() || fail_option.load() || fail_observer_add.load();
+				|| fail_writer_allocation.load() || fail_option.load() || fail_observer_add.load()
+				|| fail_queue_room.load();
 	}
 
 	void AllocationFault::CheckStringCopy()
@@ -135,5 +143,10 @@ namespace ffmpeg
 		}
 
 		return fail_observer_add.exchange(false);
+	}
+
+	bool AllocationFault::CheckQueueRoom()
+	{
+		return fail_queue_room.load() && fail_queue_room.exchange(false);
 	}
 }

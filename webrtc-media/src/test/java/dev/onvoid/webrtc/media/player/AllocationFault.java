@@ -82,6 +82,12 @@ public final class AllocationFault {
 	public static native void failObserverAdd(int afterTracks);
 
 	/**
+	 * Makes a recorder's queue look full for the next frame, which no test can
+	 * fill for real without holding up the writer.
+	 */
+	public static native void failNextQueueRoom();
+
+	/**
 	 * @return True if a fault is armed that has not fired yet.
 	 */
 	public static native boolean isArmed();

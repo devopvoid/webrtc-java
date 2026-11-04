@@ -70,6 +70,26 @@ namespace ffmpeg
 				kFailed
 			};
 
+			// What one track lost, in the order the Java MediaRecorderStats
+			// reads it.
+			struct TrackStats
+			{
+				// Frames the writer's queue had no room for.
+				int64_t dropped_queue_full = 0;
+				// Frames that could not be copied for want of memory.
+				int64_t dropped_allocation_failed = 0;
+				// Video frames dropped on the way to the next key frame.
+				int64_t dropped_awaiting_key_frame = 0;
+			};
+
+			struct Stats
+			{
+				// The most that ever waited for the writer.
+				int64_t max_queued_bytes = 0;
+				// In the order of AddTrack().
+				std::vector<TrackStats> tracks;
+			};
+
 			MediaRecorder(const webrtc_java_api * api, std::string path);
 
 			// Stops the recording if it still runs.
@@ -102,6 +122,9 @@ namespace ffmpeg
 			// more, and returns the same.
 			Result Stop();
 
+			// What was lost so far. Stays available once stopped.
+			Stats GetStats();
+
 		private:
 			// What the observer callback knows about a track. Guarded by
 			// mutex_, since WebRTC calls in on threads of its own.
@@ -127,6 +150,8 @@ namespace ffmpeg
 				int64_t last_key_frame_request_us = 0;
 
 				bool reported_codec_change = false;
+
+				TrackStats stats;
 			};
 
 			// When this returns, no callback runs any more.
@@ -205,6 +230,7 @@ namespace ffmpeg
 			std::vector<std::unique_ptr<Input>> inputs_;
 			std::deque<RecordedFrame> queue_;
 			size_t queued_bytes_ = 0;
+			size_t max_queued_bytes_ = 0;
 			// What the callbacks have to report, which the writer does.
 			std::vector<std::string> pending_warnings_;
 			// Wakes the writer for something other than frames.

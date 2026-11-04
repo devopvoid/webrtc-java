@@ -43,6 +43,8 @@ namespace ffmpeg
 			// Fails attaching a recorder to a track, once, after it has
 			// attached to the given number of tracks.
 			static void FailObserverAdd(int after_tracks);
+			// Makes a recorder's queue look full for the next frame, once.
+			static void FailNextQueueRoom();
 			// Forgets a fault that has not fired.
 			static void Disarm();
 			// Whether a fault is armed that has not fired.
@@ -62,6 +64,9 @@ namespace ffmpeg
 			// Whether a recorder is to fail attaching to its next track, which
 			// disarms the fault.
 			static bool CheckObserverAdd();
+			// Whether a frame is to find the queue full, which disarms the
+			// fault.
+			static bool CheckQueueRoom();
 	};
 }
 

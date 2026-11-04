@@ -763,18 +763,17 @@ class MediaRecorderTest {
 			// The next frame cannot be copied, on a WebRTC thread, where
 			// nothing may be thrown.
 			AllocationFault.failNextAllocation();
-
-			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-
-			while (AllocationFault.isArmed() && System.nanoTime() < deadline) {
-				Thread.sleep(10);
-			}
-
-			assertFalse(AllocationFault.isArmed(), "no frame arrived");
+			awaitFault();
 
 			Thread.sleep(1000);
 
 			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
+
+			MediaRecorderStats.Track track = recorder.getStats().getTracks().get(0);
+
+			assertEquals(1, track.getDroppedAllocationFailed());
+			assertEquals(0, track.getDroppedQueueFull());
 		}
 		finally {
 			AllocationFault.disarm();
@@ -782,6 +781,101 @@ class MediaRecorderTest {
 
 		assertNull(listener.error.get());
 		assertTrue(readInfo(file).hasVideo());
+	}
+
+	@Test
+	void countsVideoLostToFullQueue() throws Exception {
+		Path file = tempDir.resolve("full-queue.mkv");
+		Listener listener = new Listener();
+		MediaRecorderStats stats;
+
+		try (TestCall call = new TestCall(factory)) {
+			MediaRecorder recorder = new MediaRecorder(file);
+
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			// Twice, since the recorder asks for a key frame once a second:
+			// the first time it gets one right away, the second time the video
+			// goes on without one until the second is over.
+			AllocationFault.failNextQueueRoom();
+			awaitFault();
+			AllocationFault.failNextQueueRoom();
+			awaitFault();
+
+			Thread.sleep(1500);
+
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
+
+			stats = recorder.getStats();
+
+			recorder.close();
+
+			// Kept beyond the close.
+			assertEquals(stats.getMaxQueuedBytes(), recorder.getStats().getMaxQueuedBytes());
+			assertEquals(1, recorder.getStats().getTracks().size());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		MediaRecorderStats.Track track = stats.getTracks().get(0);
+
+		assertEquals(2, track.getDroppedQueueFull());
+		assertEquals(0, track.getDroppedAllocationFailed());
+		assertTrue(track.getDroppedAwaitingKeyFrame() > 0, "nothing skipped");
+		assertEquals(2 + track.getDroppedAwaitingKeyFrame(), track.getDroppedFrames());
+		assertTrue(stats.getMaxQueuedBytes() > 0);
+	}
+
+	@Test
+	void countsAudioLostToAllocation() throws Exception {
+		Path file = tempDir.resolve("lost-audio.mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getAudioSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			AllocationFault.failNextAllocation();
+			awaitFault();
+
+			assertTrue(recorder.stop());
+
+			MediaRecorderStats.Track track = recorder.getStats().getTracks().get(0);
+
+			assertEquals(1, track.getDroppedAllocationFailed());
+			assertEquals(1, track.getDroppedFrames());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+	}
+
+	@Test
+	void statsPerTrack() throws Exception {
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(tempDir.resolve("stats.mkv"))) {
+			assertTrue(recorder.getStats().getTracks().isEmpty());
+
+			recorder.addTrack(call.getVideoSender());
+			recorder.addTrack(call.getAudioSender());
+
+			MediaRecorderStats stats = recorder.getStats();
+
+			assertEquals(2, stats.getTracks().size());
+			assertEquals(0, stats.getMaxQueuedBytes());
+			assertEquals(0, stats.getTracks().get(0).getDroppedFrames());
+			assertEquals(0, stats.getTracks().get(1).getDroppedFrames());
+		}
 	}
 
 	@Test
@@ -941,6 +1035,17 @@ class MediaRecorderTest {
 
 		assertErrorStartsWith(listener, error + file.toAbsolutePath());
 		assertTrue(Files.exists(file));
+	}
+
+	/** Waits for a frame to run into the fault that is armed. */
+	private static void awaitFault() throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+
+		while (AllocationFault.isArmed() && System.nanoTime() < deadline) {
+			Thread.sleep(10);
+		}
+
+		assertFalse(AllocationFault.isArmed(), "no frame arrived");
 	}
 
 	private static List<Path> filesIn(Path dir) {

@@ -19,6 +19,7 @@
 #include "media/ErrorText.h"
 #include "media/WriteFault.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <exception>
@@ -271,6 +272,22 @@ namespace ffmpeg
 		return result_;
 	}
 
+	MediaRecorder::Stats MediaRecorder::GetStats()
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		Stats stats;
+
+		stats.max_queued_bytes = static_cast<int64_t>(max_queued_bytes_);
+		stats.tracks.reserve(inputs_.size());
+
+		for (const auto & input : inputs_) {
+			stats.tracks.push_back(input->stats);
+		}
+
+		return stats;
+	}
+
 	void MediaRecorder::RemoveObservers()
 	{
 		for (const auto & input : inputs_) {
@@ -333,6 +350,7 @@ namespace ffmpeg
 				return;
 			}
 			if (video && !frame->key_frame) {
+				input->stats.dropped_awaiting_key_frame++;
 				WantKeyFrameLocked(input);
 				return;
 			}
@@ -356,6 +374,7 @@ namespace ffmpeg
 
 		if (video && input->waiting_for_key_frame) {
 			if (!frame->key_frame) {
+				input->stats.dropped_awaiting_key_frame++;
 				WantKeyFrameLocked(input);
 				return;
 			}
@@ -363,9 +382,11 @@ namespace ffmpeg
 			input->waiting_for_key_frame = false;
 		}
 
-		if (queued_bytes_ + frame->size > kMaxQueuedBytes) {
+		if (queued_bytes_ + frame->size > kMaxQueuedBytes || AllocationFault::CheckQueueRoom()) {
 			// The writer does not keep up. Video goes on from the next key
 			// frame, since everything up to it could not be decoded anyway.
+			input->stats.dropped_queue_full++;
+
 			if (video) {
 				input->waiting_for_key_frame = true;
 				WantKeyFrameLocked(input);
@@ -381,6 +402,8 @@ namespace ffmpeg
 				|| av_new_packet(recorded.packet.get(), static_cast<int>(frame->size)) < 0) {
 			// Dropped like a frame the queue has no room for: video goes on
 			// from the next key frame.
+			input->stats.dropped_allocation_failed++;
+
 			if (video) {
 				input->waiting_for_key_frame = true;
 				WantKeyFrameLocked(input);
@@ -407,20 +430,21 @@ namespace ffmpeg
 
 		input->last_time_us = frame->time_us;
 		queued_bytes_ += frame->size;
+		max_queued_bytes_ = std::max(max_queued_bytes_, queued_bytes_);
 
 		wake_.notify_one();
 	}
 
 	void MediaRecorder::Dropped(Input * input, bool video)
 	{
-		if (!video) {
-			return;
-		}
-
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		input->waiting_for_key_frame = true;
-		WantKeyFrameLocked(input);
+		input->stats.dropped_allocation_failed++;
+
+		if (video) {
+			input->waiting_for_key_frame = true;
+			WantKeyFrameLocked(input);
+		}
 	}
 
 	void MediaRecorder::WantKeyFrameLocked(Input * input)

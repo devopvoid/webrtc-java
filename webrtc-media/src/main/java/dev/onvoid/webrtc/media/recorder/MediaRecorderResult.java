@@ -28,7 +28,9 @@ public enum MediaRecorderResult {
 
 	/**
 	 * Everything the recorder took went into the file, and the file was
-	 * finished and closed without an error.
+	 * finished and closed without an error. Frames it had to drop before
+	 * taking them, e.g. because the writer fell behind, are no error: {@link
+	 * MediaRecorder#getStats()} tells how many there were.
 	 */
 	COMPLETE,
 
