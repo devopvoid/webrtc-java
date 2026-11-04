@@ -177,7 +177,7 @@ namespace ffmpeg
 		// flush after that would throw away what it has decoded at the new
 		// position, and an audio source, decoded seconds ahead, would skip
 		// ahead or end at once.
-		pacer_->StartGeneration(position_us + loop_offset_us_.load());
+		pacer_->StartGeneration(position_us);
 
 		command_.notify_all();
 	}
@@ -252,9 +252,7 @@ namespace ffmpeg
 
 	int64_t MediaPlayer::GetPositionUs() const
 	{
-		const int64_t position = pacer_->GetPositionUs() - loop_offset_us_.load();
-
-		return position > 0 ? position : 0;
+		return std::max<int64_t>(pacer_->GetPositionUs(), 0);
 	}
 
 	int MediaPlayer::GetState() const
@@ -361,7 +359,7 @@ namespace ffmpeg
 					advance = max_source_pts_us_ + 10000;
 				}
 
-				loop_offset_us_.fetch_add(advance);
+				loop_offset_us_ += advance;
 
 				video_decoder_.Flush();
 				audio_decoder_.Flush();
@@ -501,7 +499,7 @@ namespace ffmpeg
 
 			// The frame belongs to the pacer from here on, whether or not it
 			// makes it into the queue.
-			if (!pacer_->PushVideo(frame, timestamp_us + loop_offset_us_.load(), generation_)) {
+			if (!pacer_->PushVideo(frame, timestamp_us, loop_offset_us_, generation_)) {
 				return 0;
 			}
 		}
@@ -529,7 +527,7 @@ namespace ffmpeg
 			}
 
 			if (!pacer_->PushAudio(std::move(chunk), audio_decoder_.GetChannels(),
-					timestamp_us + loop_offset_us_.load(), generation_)) {
+					timestamp_us, loop_offset_us_, generation_)) {
 				return 0;
 			}
 		}
@@ -600,7 +598,7 @@ namespace ffmpeg
 		// A seek starts a timeline of its own: the pacer maps the first item
 		// that arrives onto the clock afresh, so the offset that kept looping
 		// monotonic is no longer needed and would only skew the position.
-		loop_offset_us_.store(0);
+		loop_offset_us_ = 0;
 		max_source_pts_us_ = position_us;
 
 		pacer_->Flush(position_us);

@@ -117,7 +117,9 @@ namespace ffmpeg
 			void Close();
 
 			// Where playback has got to within the current pass, in
-			// microseconds. A looping player starts again from zero.
+			// microseconds. It moves forward only, other than by a seek, and
+			// a looping player starts again from zero once the next pass
+			// reaches delivery.
 			int64_t GetPositionUs() const;
 
 			int GetState() const;
@@ -262,11 +264,13 @@ namespace ffmpeg
 
 			std::atomic<bool> looping_{ false };
 
-			// Added to every presentation time handed to the pacer, so that a
-			// source played again keeps producing times that increase. The
+			// Goes with every presentation time handed to the pacer, so that
+			// a source played again keeps producing times that increase. The
 			// pacer needs that: WebRTC drops a frame whose capture time does
-			// not advance.
-			std::atomic<int64_t> loop_offset_us_{ 0 };
+			// not advance. Runs ahead of what is delivered, by as much as the
+			// decoder does, so only the pacer can tell where playback is.
+			// On the decode thread.
+			int64_t loop_offset_us_ = 0;
 	};
 }
 

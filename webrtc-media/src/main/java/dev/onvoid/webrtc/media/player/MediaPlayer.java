@@ -241,7 +241,9 @@ public class MediaPlayer implements AutoCloseable {
 	/**
 	 * Returns where playback has got to within the current pass, in
 	 * microseconds from the start of the source, as {@link #seek(long)} counts
-	 * them. A looping source starts again from zero.
+	 * them. It moves forward only, whichever of video and audio is ahead,
+	 * other than by a seek. A looping source starts again from zero as the
+	 * next pass begins to play.
 	 *
 	 * @return The position in microseconds.
 	 */

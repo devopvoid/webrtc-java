@@ -340,7 +340,10 @@ class MediaPlayerTest {
 
 			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
 
-			assertEquals(1_000_000, playback.firstFramePositionUs.get());
+			// Audio going out alongside it can be a little ahead of the frame.
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 1_000_000 && first < 1_040_000, "first frame at " + first + " us");
 
 			// 1 s to 2.933 s, and the audio from the first packet the reader
 			// lands on, a few milliseconds after 1 s, uncut: about half a
@@ -440,10 +443,8 @@ class MediaPlayerTest {
 			// The picture at 8 s, and then the next pass from the start.
 			// The late landing, left over from the seek once the source had
 			// started over, used to send the reader back before 7.8 s, so that
-			// the last pictures played again before the next pass. What the
-			// first frame reports depends on whether the decoding thread has
-			// already started over, which it does long before the frame is
-			// due; the frames after it are all from the next pass.
+			// the last pictures played again before the next pass.
+			assertTrue(positions.get(0) > 7_800_000, "not from the position: " + positions);
 			assertTrue(positions.get(1) < 1_000_000, "next pass not from the start: " + positions);
 
 			for (int i = 2; i < positions.size(); i++) {
@@ -615,7 +616,7 @@ class MediaPlayerTest {
 
 			assertTrue(waitFor(() -> playback.frames.get() >= 2 * frames, 10_000),
 					"second pass played " + (playback.frames.get() - frames) + " of " + frames);
-			assertTrue(playback.framePositionsUs.get(0) < 1_000_000 / 15,
+			assertTrue(playback.framePositionsUs.get(0) < 1_100_000,
 					"second pass started at " + playback.framePositionsUs.get(0) + " us");
 			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
 					"second pass of audio: " + (playback.chunks.get() - chunks));
@@ -772,6 +773,71 @@ class MediaPlayerTest {
 
 		assertEquals(0, playback.player.getQueuedVideoBytes());
 		assertEquals(0, playback.player.getPeakQueuedVideoBytes());
+	}
+
+	@Test
+	void lateVideoLeavesThePositionAlone() throws Exception {
+		// Twelve seconds of audio ahead of the video in the file. Only ten go
+		// into the queue, so the video gets its turn once two have played,
+		// and frames that were due at the start are delivered at 2 s.
+		Path mkv = TestMedia.lateVideoMatroska(tempDir, asset(), 12_000);
+
+		try (Playback playback = new Playback(new MediaReader(mkv))) {
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > 0, 10_000), "no video");
+
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first > 1_500_000, "position fell back to " + first + " us");
+		}
+	}
+
+	@Test
+	void positionRestartsWithTheNextPass() throws Exception {
+		try (Playback playback = new Playback()) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() >= EXPECTED_FRAMES + 30, 10_000),
+					"frames: " + playback.frames.get());
+
+			// The decoder starts over about a second ahead of what is played,
+			// which must not show: the position keeps rising up to the end of
+			// the pass, falls back once, and then rises again.
+			List<Long> positions = new ArrayList<>(playback.framePositionsUs);
+			int seam = -1;
+
+			for (int i = 1; i < positions.size(); i++) {
+				if (positions.get(i) < positions.get(i - 1)) {
+					assertEquals(-1, seam, "went back more than once: " + positions);
+
+					seam = i;
+				}
+			}
+
+			assertTrue(seam > 0, "never went back: " + positions);
+			assertTrue(positions.get(seam - 1) > 2_800_000,
+					"pass cut short at frame " + seam + ": " + positions);
+			assertTrue(positions.get(seam) < 200_000,
+					"next pass late at frame " + seam + ": " + positions);
+		}
+	}
+
+	@Test
+	void positionFollowsAFastSeekToItsKeyframe() throws Exception {
+		try (Playback playback = new Playback()) {
+			// The keyframe is at 1 s. The position must not wait at 1.5 s for
+			// playback to catch up with it.
+			playback.player.fastSeek(1_500_000);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > 0, 10_000), "no video");
+
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first < 1_100_000, "first frame at " + first + " us");
+		}
 	}
 
 	@Test

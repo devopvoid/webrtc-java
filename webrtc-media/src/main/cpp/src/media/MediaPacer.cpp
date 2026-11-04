@@ -63,7 +63,8 @@ namespace ffmpeg
 	}
 
 	MediaPacer::VideoItem::VideoItem(VideoItem && other) noexcept
-		: frame(other.frame), timestamp_us(other.timestamp_us), bytes(other.bytes)
+		: frame(other.frame), timestamp_us(other.timestamp_us),
+		  loop_offset_us(other.loop_offset_us), bytes(other.bytes)
 	{
 		other.frame = nullptr;
 	}
@@ -77,6 +78,7 @@ namespace ffmpeg
 
 			frame = other.frame;
 			timestamp_us = other.timestamp_us;
+			loop_offset_us = other.loop_offset_us;
 			bytes = other.bytes;
 			other.frame = nullptr;
 		}
@@ -156,7 +158,8 @@ namespace ffmpeg
 		video_bytes_ = 0;
 	}
 
-	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us, uint64_t generation)
+	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us, int64_t loop_offset_us,
+			uint64_t generation)
 	{
 		const size_t bytes = FrameBytes(frame);
 
@@ -179,7 +182,7 @@ namespace ffmpeg
 			return false;
 		}
 
-		video_queue_.emplace_back(frame, timestamp_us, bytes);
+		video_queue_.emplace_back(frame, timestamp_us + loop_offset_us, loop_offset_us, bytes);
 		video_bytes_ += bytes;
 		peak_video_bytes_ = std::max(peak_video_bytes_, video_bytes_);
 
@@ -189,7 +192,7 @@ namespace ffmpeg
 	}
 
 	bool MediaPacer::PushAudio(std::vector<int16_t> && samples, int channels,
-			int64_t timestamp_us, uint64_t generation)
+			int64_t timestamp_us, int64_t loop_offset_us, uint64_t generation)
 	{
 		std::unique_lock<std::mutex> lock(mutex_);
 
@@ -218,7 +221,8 @@ namespace ffmpeg
 
 		item.samples = std::move(samples);
 		item.channels = channels;
-		item.timestamp_us = timestamp_us;
+		item.timestamp_us = timestamp_us + loop_offset_us;
+		item.loop_offset_us = loop_offset_us;
 
 		audio_queue_.push_back(std::move(item));
 
@@ -286,9 +290,13 @@ namespace ffmpeg
 		audio_queue_.clear();
 		video_bytes_ = 0;
 
-		// Audio only ever moves the position forward, so a position left from
-		// before a seek backwards would hold it there until audio caught up.
+		// Items only ever move the position forward, so a position left from
+		// before a seek backwards would hold it there until they caught up.
+		// Nor can what comes next be held to this one: a seek that is not
+		// precise plays from a keyframe before it.
 		position_us_ = position_us;
+		position_offset_us_ = 0;
+		position_set_ = false;
 
 		// The next item delivered starts a new mapping, wherever it comes from.
 		have_base_ = false;
@@ -312,7 +320,18 @@ namespace ffmpeg
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		return position_us_;
+		return position_us_ - position_offset_us_;
+	}
+
+	void MediaPacer::AdvancePosition(int64_t timestamp_us, int64_t loop_offset_us)
+	{
+		if (position_set_ && timestamp_us <= position_us_) {
+			return;
+		}
+
+		position_us_ = timestamp_us;
+		position_offset_us_ = loop_offset_us;
+		position_set_ = true;
 	}
 
 	size_t MediaPacer::GetQueuedVideoBytes() const
@@ -386,7 +405,7 @@ namespace ffmpeg
 
 					video_queue_.pop_front();
 					video_bytes_ -= item.bytes;
-					position_us_ = item.timestamp_us;
+					AdvancePosition(item.timestamp_us, item.loop_offset_us);
 
 					video_space_.notify_one();
 					// A shorter video queue may be what lets audio past its
@@ -413,7 +432,7 @@ namespace ffmpeg
 					AudioItem item = std::move(audio_queue_.front());
 
 					audio_queue_.pop_front();
-					position_us_ = std::max(position_us_, item.timestamp_us);
+					AdvancePosition(item.timestamp_us, item.loop_offset_us);
 
 					audio_space_.notify_one();
 

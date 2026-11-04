@@ -247,6 +247,45 @@ final class TestMedia {
 	}
 
 	/**
+	 * Copies a Matroska file holding a video and an audio track so that its
+	 * video comes late. The audio is repeated until it runs for the given
+	 * time, and all of it is stored ahead of the video, which keeps its times.
+	 * A player reading this has to play audio to make room for the rest of it
+	 * before it gets to the video, whose first frames are overdue by then.
+	 *
+	 * @param directory Where to write the file.
+	 * @param source    The file to copy.
+	 * @param audioMs   How long the audio is to run.
+	 *
+	 * @return The file written.
+	 */
+	static Path lateVideoMatroska(Path directory, Path source, long audioMs)
+			throws IOException {
+		MatroskaContent content = new MatroskaContent(Files.readAllBytes(source));
+		List<Frame> video = new ArrayList<>();
+		List<Frame> audio = new ArrayList<>();
+
+		for (Frame frame : content.frames) {
+			(frame.track == content.videoTrack ? video : audio).add(frame);
+		}
+
+		// Opus frames of 20 ms, the last of which ends a pass.
+		long pass = audio.get(audio.size() - 1).timeMs + 20;
+		List<Frame> frames = new ArrayList<>();
+
+		for (long start = 0; start < audioMs; start += pass) {
+			for (Frame frame : audio) {
+				frames.add(new Frame(frame.track, start + frame.timeMs, frame.key, frame.data));
+			}
+		}
+
+		frames.addAll(video);
+
+		return Files.write(directory.resolve("late-video.mkv"),
+				matroska(content.tracks, frames, -1));
+	}
+
+	/**
 	 * Writes 44.1 kHz, mono, 16-bit PCM in an FLV file, in tags of 100 ms of a
 	 * constant, non-zero value. FLV has no index, and FFmpeg finds its way
 	 * through one by the entries it has made while reading, so a time before

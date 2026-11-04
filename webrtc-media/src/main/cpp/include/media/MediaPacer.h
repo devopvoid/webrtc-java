@@ -95,8 +95,11 @@ namespace ffmpeg
 			// call more than once.
 			void Stop();
 
-			// Hands over a decoded frame and its presentation time. Ownership
-			// of the frame passes to the pacer whether this succeeds or not.
+			// Hands over a decoded frame and its presentation time, which is
+			// its position in the source. A source played again is pushed
+			// with a loop offset, which goes on top of that to make the times
+			// of all its passes one timeline that only rises. Ownership of
+			// the frame passes to the pacer whether this succeeds or not.
 			//
 			// Blocks while the queue is full, which is the backpressure that
 			// keeps decoding from running ahead of playback. Returns false
@@ -104,11 +107,12 @@ namespace ffmpeg
 			// is no longer the current one: what was decoded for it belongs
 			// to a position that is being left, so it is dropped, and a wait
 			// for room ends there, as nothing else may ever end it.
-			bool PushVideo(AVFrame * frame, int64_t timestamp_us, uint64_t generation);
+			bool PushVideo(AVFrame * frame, int64_t timestamp_us, int64_t loop_offset_us,
+					uint64_t generation);
 
 			// Hands over one 10 ms chunk of interleaved 16-bit PCM.
 			bool PushAudio(std::vector<int16_t> && samples, int channels,
-					int64_t timestamp_us, uint64_t generation);
+					int64_t timestamp_us, int64_t loop_offset_us, uint64_t generation);
 
 			void Pause();
 			void Resume();
@@ -117,7 +121,8 @@ namespace ffmpeg
 			// the next item delivered starts a new one. This is what a seek
 			// needs: what is queued belongs to the position being left. The
 			// position is where playback is taken to be until an item has been
-			// delivered, in the timestamps the items are pushed with.
+			// delivered, in the source: the first item then sets it, wherever
+			// that landed, and starts a new timeline with no loop offset.
 			void Flush(int64_t position_us);
 
 			// Flushes, and starts a new generation, which turns away what is
@@ -137,8 +142,13 @@ namespace ffmpeg
 			// queues are empty and no item is being handed to a source.
 			bool IsDrained() const;
 
-			// The presentation time of the item delivered last, which is where
-			// playback has got to.
+			// Where playback has got to in the source, in the pass that is
+			// being delivered: the furthest item delivered so far. It only
+			// moves forward, as video and audio are delivered independently
+			// and a frame that arrives late is behind what has been heard,
+			// other than when a flush moves it, or a pass of the source ends
+			// and the next one starts. That happens as the next pass reaches
+			// delivery, however far ahead the decoder has started it.
 			int64_t GetPositionUs() const;
 
 			// What the pictures in the video queue take right now, in bytes.
@@ -157,11 +167,12 @@ namespace ffmpeg
 			{
 				AVFrame * frame = nullptr;
 				int64_t timestamp_us = 0;
+				int64_t loop_offset_us = 0;
 				size_t bytes = 0;
 
 				VideoItem() = default;
-				VideoItem(AVFrame * f, int64_t ts, size_t size)
-					: frame(f), timestamp_us(ts), bytes(size) {}
+				VideoItem(AVFrame * f, int64_t ts, int64_t offset, size_t size)
+					: frame(f), timestamp_us(ts), loop_offset_us(offset), bytes(size) {}
 				~VideoItem();
 
 				VideoItem(VideoItem && other) noexcept;
@@ -176,11 +187,16 @@ namespace ffmpeg
 				std::vector<int16_t> samples;
 				int channels = 0;
 				int64_t timestamp_us = 0;
+				int64_t loop_offset_us = 0;
 			};
 
 			void Run();
 
 			void FlushLocked(int64_t position_us);
+
+			// Takes in the time of an item about to be delivered, on the
+			// timeline of all passes, and the loop offset of its pass.
+			void AdvancePosition(int64_t timestamp_us, int64_t loop_offset_us);
 
 			// Whether a picture of the given size fits the video queue. An
 			// empty queue takes anything, as nothing else would ever let a
@@ -226,11 +242,18 @@ namespace ffmpeg
 			// Counts the seeks asked for.
 			uint64_t generation_ = 0;
 
-			// Presentation time plus this is a time on the WebRTC clock.
+			// Presentation time, on the timeline of all passes, plus this is
+			// a time on the WebRTC clock.
 			int64_t base_us_ = 0;
 			bool have_base_ = false;
 			int64_t paused_at_us_ = 0;
+
+			// Where playback has got to on the timeline of all passes, the
+			// loop offset of the pass that is in, and whether an item has set
+			// them since the last flush.
 			int64_t position_us_ = 0;
+			int64_t position_offset_us_ = 0;
+			bool position_set_ = false;
 	};
 }
 
