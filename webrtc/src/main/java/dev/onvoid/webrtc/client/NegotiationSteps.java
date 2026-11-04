@@ -24,6 +24,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import dev.onvoid.webrtc.AddIceCandidateObserver;
@@ -59,8 +60,10 @@ final class NegotiationSteps {
 
 	private final BooleanSupplier ignoringOffer;
 
+	private final Consumer<WebRtcException> candidateRejected;
+
 	/** The remote candidates that came before a remote description. */
-	private final List<HeldCandidate> heldCandidates = new ArrayList<>();
+	private final List<RTCIceCandidate> heldCandidates = new ArrayList<>();
 
 	private final List<CompletableFuture<Void>> gatheringWaiters = new ArrayList<>();
 
@@ -73,15 +76,19 @@ final class NegotiationSteps {
 	 * @param gatheringTimeout how long to wait for gathering to complete.
 	 * @param ignoringOffer    whether the peer ignored a remote offer, whose
 	 *                         candidates then fail to be added, harmlessly.
+	 * @param candidateRejected told of a held candidate WebRTC rejected, whose
+	 *                         operation is over by then.
 	 */
 	NegotiationSteps(SerialExecutor control, ScheduledExecutorService timer, OperationChain chain,
-			Supplier<RTCPeerConnection> connection, Duration gatheringTimeout, BooleanSupplier ignoringOffer) {
+			Supplier<RTCPeerConnection> connection, Duration gatheringTimeout, BooleanSupplier ignoringOffer,
+			Consumer<WebRtcException> candidateRejected) {
 		this.control = control;
 		this.timer = timer;
 		this.chain = chain;
 		this.connection = connection;
 		this.gatheringTimeout = gatheringTimeout;
 		this.ignoringOffer = ignoringOffer;
+		this.candidateRejected = candidateRejected;
 	}
 
 	/**
@@ -140,18 +147,17 @@ final class NegotiationSteps {
 
 	/**
 	 * Adds a remote candidate, or holds it while there is no remote
-	 * description to add it to.
+	 * description to add it to. Holding it finishes the operation at once,
+	 * since the description may be queued right behind it.
 	 */
 	CompletableFuture<Void> addRemoteCandidate(RTCIceCandidate candidate) {
-		CompletableFuture<Void> future = chain.step();
-
 		if (connection.get().getRemoteDescription() == null) {
-			heldCandidates.add(new HeldCandidate(candidate, future));
-		}
-		else {
-			addCandidate(candidate, future);
+			heldCandidates.add(candidate);
+			return CompletableFuture.completedFuture(null);
 		}
 
+		CompletableFuture<Void> future = chain.step();
+		addCandidate(candidate, future);
 		return future;
 	}
 
@@ -160,11 +166,19 @@ final class NegotiationSteps {
 	 * description.
 	 */
 	void releaseHeldCandidates() {
-		List<HeldCandidate> held = new ArrayList<>(heldCandidates);
+		List<RTCIceCandidate> held = new ArrayList<>(heldCandidates);
 		heldCandidates.clear();
 
-		for (HeldCandidate candidate : held) {
-			addCandidate(candidate.candidate, candidate.future);
+		for (RTCIceCandidate candidate : held) {
+			CompletableFuture<Void> added = new CompletableFuture<>();
+
+			added.whenComplete((value, error) -> {
+				if (error != null) {
+					candidateRejected.accept(PeerImpl.asWebRtcException(error, "Adding a remote candidate failed"));
+				}
+			});
+
+			addCandidate(candidate, added);
 		}
 	}
 
@@ -208,8 +222,8 @@ final class NegotiationSteps {
 	}
 
 	/**
-	 * Fails the waiting for gathering and the candidates held, once the peer
-	 * is closing.
+	 * Fails the waiting for gathering and drops the candidates held, once the
+	 * peer is closing.
 	 */
 	void close(PeerClosedException error) {
 		for (CompletableFuture<Void> waiter : gatheringWaiters) {
@@ -217,9 +231,6 @@ final class NegotiationSteps {
 		}
 		gatheringWaiters.clear();
 
-		for (HeldCandidate candidate : heldCandidates) {
-			candidate.future.completeExceptionally(error);
-		}
 		heldCandidates.clear();
 	}
 
@@ -276,20 +287,5 @@ final class NegotiationSteps {
 				control.execute(() -> future.completeExceptionally(new NegotiationException(message + ": " + error)));
 			}
 		};
-	}
-
-
-
-	private static final class HeldCandidate {
-
-		final RTCIceCandidate candidate;
-
-		final CompletableFuture<Void> future;
-
-
-		HeldCandidate(RTCIceCandidate candidate, CompletableFuture<Void> future) {
-			this.candidate = candidate;
-			this.future = future;
-		}
 	}
 }

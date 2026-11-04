@@ -213,7 +213,11 @@ final class PeerImpl implements Peer {
 		this.errorHandlers = new Handlers<>(rtc::reportError);
 		this.chain = new OperationChain(control, rtc.timer, rtc.operationTimeout, name, new ChainHost());
 		this.steps = new NegotiationSteps(control, rtc.timer, chain, () -> connection, options.gatheringTimeout,
-				this::ignoresOffer);
+				this::ignoresOffer, error -> {
+					if (!closed) {
+						deliverError(error);
+					}
+				});
 		this.automatic = new PerfectNegotiation(this, options, chain, steps);
 
 		rtc.track(connected, events);
