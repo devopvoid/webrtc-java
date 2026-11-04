@@ -67,6 +67,27 @@ public final class AllocationFault {
 	public static native void failWriterAllocation(int afterFrames);
 
 	/**
+	 * Fails the next setting of an FFmpeg option that is checked, such as the
+	 * protocols a reader may reach.
+	 */
+	public static native void failNextOption();
+
+	/**
+	 * Makes a recorder fail to attach to a track, as it does when {@code
+	 * encoded_observer_add()} returns null.
+	 *
+	 * @param afterTracks How many tracks it attaches to before the one that
+	 *                    fails.
+	 */
+	public static native void failObserverAdd(int afterTracks);
+
+	/**
+	 * Makes a recorder's queue look full for the next frame, which no test can
+	 * fill for real without holding up the writer.
+	 */
+	public static native void failNextQueueRoom();
+
+	/**
 	 * @return True if a fault is armed that has not fired yet.
 	 */
 	public static native boolean isArmed();

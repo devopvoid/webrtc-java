@@ -32,6 +32,7 @@ namespace ffmpeg
 		public:
 			enum class Call
 			{
+				kOpen,
 				kHeader,
 				kPacket,
 				kTrailer,

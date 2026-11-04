@@ -56,6 +56,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
+	 * Method:    stats
+	 * Signature: (J)[J
+	 */
+	JNIEXPORT jlongArray JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stats
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
 	 * Method:    dispose
 	 * Signature: (J)V
 	 */

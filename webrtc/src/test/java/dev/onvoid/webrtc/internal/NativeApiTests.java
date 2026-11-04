@@ -21,10 +21,18 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.onvoid.webrtc.RTCConfiguration;
+import dev.onvoid.webrtc.RTCPeerConnection;
+import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.SyncClock;
+import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
+
+import java.util.Collections;
 
 import org.junit.jupiter.api.Test;
 
@@ -80,6 +88,46 @@ class NativeApiTests extends TestBase {
 	@Test
 	void handleOfNull() {
 		assertThrows(NullPointerException.class, () -> NativeApi.handleOf(null));
+	}
+
+	@Test
+	void failedObserverAddAttachesNothing() {
+		AudioTrackSource source = factory.createAudioSource(new AudioOptions());
+		AudioTrack track = factory.createAudioTrack("audioTrack", source);
+		RTCPeerConnection connection = factory.createPeerConnection(new RTCConfiguration(), candidate -> { });
+
+		try {
+			RTCRtpSender sender = connection.addTrack(track, Collections.singletonList("stream"));
+			long frames = NativeApi.encodedFramesOf(sender);
+
+			try {
+				AllocationFault.failNextEncodedObserver();
+
+				// An observer attached now could never be removed.
+				assertEquals(0L, AllocationFault.addEncodedObserver(frames));
+				assertEquals(0, AllocationFault.encodedObservers(frames));
+
+				// The handle is still good for another try.
+				long observer = AllocationFault.addEncodedObserver(frames);
+
+				assertNotEquals(0L, observer);
+				assertEquals(1, AllocationFault.encodedObservers(frames));
+
+				AllocationFault.removeEncodedObserver(observer);
+
+				assertEquals(0, AllocationFault.encodedObservers(frames));
+			}
+			finally {
+				NativeApi.releaseEncodedFrames(frames);
+				sender.dispose();
+			}
+		}
+		finally {
+			AllocationFault.disarm();
+			connection.close();
+			track.dispose();
+			source.dispose();
+		}
 	}
 
 	@Test

@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -110,6 +111,35 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stop
 
 	return ffmpeg::CallFromJava<jint>(env, failed, [&]() -> jint {
 		return static_cast<jint>(RecorderOf(handle)->Stop());
+	});
+}
+
+JNIEXPORT jlongArray JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stats
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return ffmpeg::CallFromJava<jlongArray>(env, nullptr, [&]() -> jlongArray {
+		const ffmpeg::MediaRecorder::Stats stats = RecorderOf(handle)->GetStats();
+
+		// In the order MediaRecorderStats reads them.
+		std::vector<jlong> values;
+
+		values.reserve(1 + stats.tracks.size() * 3);
+		values.push_back(stats.max_queued_bytes);
+
+		for (const auto & track : stats.tracks) {
+			values.push_back(track.dropped_queue_full);
+			values.push_back(track.dropped_allocation_failed);
+			values.push_back(track.dropped_awaiting_key_frame);
+		}
+
+		const jsize size = static_cast<jsize>(values.size());
+		jlongArray array = env->NewLongArray(size);
+
+		if (array != nullptr) {
+			env->SetLongArrayRegion(array, 0, size, values.data());
+		}
+
+		return array;
 	});
 }
 

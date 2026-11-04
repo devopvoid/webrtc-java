@@ -3,9 +3,11 @@
 This guide explains how to record what a peer connection sends or receives into a media file with `MediaRecorder`, from the `webrtc-java-media` module. It covers:
 
 - Recording senders and receivers
+- Replacing a file that exists
 - Choosing the container
 - Following a recording with a listener
 - How tracks are started, timed and left out
+- Measuring what a recording lost
 - Recording an end-to-end encrypted call
 
 `MediaRecorder` writes the encoded frames of each sender or receiver into the file as they are, without decoding or re-encoding them. A recording therefore costs next to no CPU, keeps exactly the quality that went over the network, and needs no codec at all, only the container. The frames are taken in native code, straight from WebRTC, and written by a thread of the recorder's own, so neither Java nor a slow disk ever holds up the call.
@@ -30,14 +32,14 @@ try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
 
 A sender's frames are recorded as they leave the encoder, a receiver's as they go to the decoder. Senders and receivers of any number of peer connections can go into one file, e.g. both sides of a call.
 
-`stop()` waits until everything received so far is written and the file is finished and closed, and returns whether the file holds a recording. A recorder that never got any media to write deletes its file rather than leave an unplayable one behind. `close()` stops a recording that still runs.
+`stop()` waits until everything received so far is written and the file is finished and closed, and returns whether the recording was kept. A recorder that never got any media to write deletes what it wrote rather than leave an unplayable file behind. `close()` stops a recording that still runs.
 
 How the recording ended, `getResult()` tells once the recorder is stopped, and keeps telling after `close()`:
 
 | Result | File | Meaning |
 | --- | --- | --- |
 | `COMPLETE` | kept | Everything was written, and the file was finished and closed. |
-| `PARTIAL` | kept | Media went into the file, but writing, finishing or closing it failed later. What made it into the file is kept, since it may still play. |
+| `PARTIAL` | kept | Media went into the file, but writing, finishing or closing it failed later, or it could not [replace an existing file](#replacing-a-file). What made it into the file is kept, since it may still play. |
 | `EMPTY` | deleted | No media arrived before the stop. |
 | `FAILED` | deleted | Writing failed before any media went into the file. |
 
@@ -61,6 +63,20 @@ recorder.addTrack(remoteTrack);          // a RemoteTrack from peer.onTrack
 ```
 
 The peer keeps its native senders and receivers to itself and asks them for key frames on its own thread, so nothing needs to be kept undisposed: removing a sender or closing the peer ends the track in the recording, and `stop()` still finishes the file.
+
+## Replacing a File
+
+A recorder does not touch a file that exists: its constructor throws a `FileAlreadyExistsException`, so a new recording cannot cost an earlier one by accident. To replace the file, ask for it:
+
+```java
+try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"), true)) {
+    // ...
+}
+```
+
+The recording then goes into a temporary file beside it, named `.recording-<id>.mkv`, and the existing file stays untouched until `stop()` has finished the recording. Only then does the recording take its place, in one step, with the permissions of the file it replaces, and a symbolic link stays a link to the new recording. A recording that gets no media, or fails before any went into the file, leaves the existing file as it was.
+
+If the process ends before the stop, the existing file is still there, next to the temporary file with what was recorded so far. If the recording cannot take the place of the existing file when it stops, it stays in the temporary file: `onError` is told, the result is `PARTIAL`, and `getFile()` returns where it is.
 
 ## Containers
 
@@ -112,7 +128,32 @@ Running out of native memory while writing ends the recording the same way: `onE
 - **The file begins once the tracks are known.** The file header describes every stream, and a stream is only known from its first frames. The file begins once every track has sent some, or once the tracks that have waited three seconds for the rest. A track that sends nothing by then is left out, with a warning.
 - **Tracks share one timeline.** Each track is placed by when its first frame arrived, and follows its own RTP timestamps from there, so its timing is exact. The tracks of one sender line up within the jitter of the network.
 - **One simulcast layer.** A sender with simulcast is recorded at the layer whose frames reach the recorder first.
-- **Nothing is lost to a slow disk, up to a point.** Frames queue up in memory for the writer, up to 64 MB. Beyond that, frames are dropped, and video starts over at the next key frame.
+- **Nothing is lost to a slow disk, up to a point.** Frames queue up in memory for the writer, up to 64 MB. Beyond that, frames are dropped, and video starts over at the next key frame. `getStats()` [tells how much that cost](#measuring-what-was-lost).
+
+## Measuring What Was Lost
+
+A result of `COMPLETE` means that everything the recorder took went into the file. It says nothing about frames it had to drop before that, and a video gap can come from a single one, since video only goes on from the next key frame. `getStats()` tells what happened, per track and in the order the tracks were added. It can be asked at any time, also after `close()`:
+
+```java
+MediaRecorderStats stats = recorder.getStats();
+
+for (MediaRecorderStats.Track track : stats.getTracks()) {
+    if (track.getDroppedFrames() > 0) {
+        System.out.println("Lost " + track.getDroppedFrames() + " frames");
+    }
+}
+
+System.out.println("Queue peak: " + stats.getMaxQueuedBytes() + " bytes");
+```
+
+| Value | Meaning |
+| --- | --- |
+| `getDroppedQueueFull()` | Frames dropped because the writer did not keep up and its queue was full. |
+| `getDroppedAllocationFailed()` | Frames dropped because there was no memory to copy them. |
+| `getDroppedAwaitingKeyFrame()` | Video frames dropped on the way to the next key frame, since nothing could decode them after what was lost before. |
+| `getDroppedFrames()` | All of these together. |
+
+`getMaxQueuedBytes()` is the most that ever waited for the writer, of all tracks together, and shows how close a recording came to the limit of 64 MB. Frames a track was never meant to record do not count, such as those before its first key frame or those of another simulcast layer.
 
 ## Recording an Encrypted Call
 

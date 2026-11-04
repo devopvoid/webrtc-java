@@ -19,6 +19,7 @@
 #include "media/ErrorText.h"
 #include "media/WriteFault.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <exception>
@@ -103,7 +104,8 @@ namespace ffmpeg
 		context_->max_interleave_delta = 2000000;
 
 		if (!(context_->oformat->flags & AVFMT_NOFILE)) {
-			result = avio_open(&context_->pb, path_.c_str(), AVIO_FLAG_WRITE);
+			result = WriteFault::Check(WriteFault::Call::kOpen,
+					avio_open(&context_->pb, path_.c_str(), AVIO_FLAG_WRITE));
 
 			if (result < 0) {
 				return result;
@@ -163,33 +165,49 @@ namespace ffmpeg
 			}
 
 			started_ = true;
-			accepting_ = true;
-			start_us_ = api_->now_us();
 		}
 
+		// Everything that can fail comes before the first frame is taken and
+		// before there is a writer, which would finish the file on its way
+		// out, so that taking the observers off again undoes all of it.
 		try {
+			// The inputs do not change once started, so the callbacks may hold
+			// on to them without the lock.
+			for (const auto & input : inputs_) {
+				input->observer = AllocationFault::CheckObserverAdd() ? nullptr
+						: api_->encoded_observer_add(input->frames, &MediaRecorder::OnEncodedFrame, input.get());
+
+				// Given a track and a callback, only memory can be missing.
+				if (input->observer == nullptr) {
+					throw std::bad_alloc();
+				}
+			}
+
 			AllocationFault::CheckThreadStart();
 
 			thread_ = std::thread(&MediaRecorder::Run, this);
 		}
 		catch (...) {
-			// Without a writer the recorder stays as it was before the call:
-			// it may be started again, and stopping only has to release the
-			// frames and close the file.
+			// The recorder stays as it was before the call: it may be started
+			// again, and stopping only has to release the frames and close
+			// the file.
+			RemoveObservers();
+
 			std::lock_guard<std::mutex> lock(mutex_);
 
 			started_ = false;
-			accepting_ = false;
 			throw;
 		}
 
-		// The inputs do not change once started, so the callbacks may hold on
-		// to them without the lock.
-		for (const auto & input : inputs_) {
-			input->observer = api_->encoded_observer_add(input->frames, &MediaRecorder::OnEncodedFrame,
-					input.get());
+		{
+			std::lock_guard<std::mutex> lock(mutex_);
 
-			// The observer keeps what it observes alive on its own.
+			accepting_ = true;
+			start_us_ = api_->now_us();
+		}
+
+		// The observers keep what they observe alive on their own.
+		for (const auto & input : inputs_) {
 			api_->encoded_frames_release(input->frames);
 			input->frames = nullptr;
 		}
@@ -209,11 +227,9 @@ namespace ffmpeg
 
 		// No callback runs once its observer is removed, so after this nothing
 		// comes in any more.
+		RemoveObservers();
+
 		for (const auto & input : inputs_) {
-			if (input->observer != nullptr) {
-				api_->encoded_observer_remove(input->observer);
-				input->observer = nullptr;
-			}
 			if (input->frames != nullptr) {
 				api_->encoded_frames_release(input->frames);
 				input->frames = nullptr;
@@ -254,6 +270,32 @@ namespace ffmpeg
 		result_ = result;
 
 		return result_;
+	}
+
+	MediaRecorder::Stats MediaRecorder::GetStats()
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		Stats stats;
+
+		stats.max_queued_bytes = static_cast<int64_t>(max_queued_bytes_);
+		stats.tracks.reserve(inputs_.size());
+
+		for (const auto & input : inputs_) {
+			stats.tracks.push_back(input->stats);
+		}
+
+		return stats;
+	}
+
+	void MediaRecorder::RemoveObservers()
+	{
+		for (const auto & input : inputs_) {
+			if (input->observer != nullptr) {
+				api_->encoded_observer_remove(input->observer);
+				input->observer = nullptr;
+			}
+		}
 	}
 
 	void MediaRecorder::OnEncodedFrame(void * opaque, const wj_encoded_frame * frame)
@@ -308,6 +350,7 @@ namespace ffmpeg
 				return;
 			}
 			if (video && !frame->key_frame) {
+				input->stats.dropped_awaiting_key_frame++;
 				WantKeyFrameLocked(input);
 				return;
 			}
@@ -331,6 +374,7 @@ namespace ffmpeg
 
 		if (video && input->waiting_for_key_frame) {
 			if (!frame->key_frame) {
+				input->stats.dropped_awaiting_key_frame++;
 				WantKeyFrameLocked(input);
 				return;
 			}
@@ -338,9 +382,11 @@ namespace ffmpeg
 			input->waiting_for_key_frame = false;
 		}
 
-		if (queued_bytes_ + frame->size > kMaxQueuedBytes) {
+		if (queued_bytes_ + frame->size > kMaxQueuedBytes || AllocationFault::CheckQueueRoom()) {
 			// The writer does not keep up. Video goes on from the next key
 			// frame, since everything up to it could not be decoded anyway.
+			input->stats.dropped_queue_full++;
+
 			if (video) {
 				input->waiting_for_key_frame = true;
 				WantKeyFrameLocked(input);
@@ -356,6 +402,8 @@ namespace ffmpeg
 				|| av_new_packet(recorded.packet.get(), static_cast<int>(frame->size)) < 0) {
 			// Dropped like a frame the queue has no room for: video goes on
 			// from the next key frame.
+			input->stats.dropped_allocation_failed++;
+
 			if (video) {
 				input->waiting_for_key_frame = true;
 				WantKeyFrameLocked(input);
@@ -382,20 +430,21 @@ namespace ffmpeg
 
 		input->last_time_us = frame->time_us;
 		queued_bytes_ += frame->size;
+		max_queued_bytes_ = std::max(max_queued_bytes_, queued_bytes_);
 
 		wake_.notify_one();
 	}
 
 	void MediaRecorder::Dropped(Input * input, bool video)
 	{
-		if (!video) {
-			return;
-		}
-
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		input->waiting_for_key_frame = true;
-		WantKeyFrameLocked(input);
+		input->stats.dropped_allocation_failed++;
+
+		if (video) {
+			input->waiting_for_key_frame = true;
+			WantKeyFrameLocked(input);
+		}
 	}
 
 	void MediaRecorder::WantKeyFrameLocked(Input * input)

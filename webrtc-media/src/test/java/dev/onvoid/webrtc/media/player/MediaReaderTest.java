@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.media.player;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -180,6 +181,24 @@ class MediaReaderTest {
 		}
 
 		assertEquals(0, AllocationFault.heldStrings());
+
+		try (MediaReader reader = new MediaReader(asset())) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+	}
+
+	@Test
+	void failedWhitelistRefusesSource() throws Exception {
+		// A source must not open without the limit on what it may reach.
+		AllocationFault.failNextOption();
+
+		try {
+			assertThrows(IOException.class, () -> new MediaReader(asset()));
+			assertFalse(AllocationFault.isArmed());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
 
 		try (MediaReader reader = new MediaReader(asset())) {
 			assertTrue(reader.getInfo().hasVideo());

@@ -73,6 +73,7 @@ namespace jni
 
 			EncodedFrameRouter::Observer * AddObserver(wj_encoded_frame_fn fn, void * opaque);
 			void RemoveObserver(EncodedFrameRouter::Observer * observer);
+			size_t GetObserverCount() const;
 
 			// FrameTransformerInterface implementation.
 			void Transform(std::unique_ptr<webrtc::TransformableFrameInterface> frame) override;

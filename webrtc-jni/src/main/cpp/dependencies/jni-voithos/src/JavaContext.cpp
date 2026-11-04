@@ -7,6 +7,8 @@
 
 #include "JavaContext.h"
 
+#include <new>
+
 namespace jni
 {
 	JavaContext::JavaContext(JavaVM * vm) :
@@ -23,6 +25,12 @@ namespace jni
 	{
 		auto className = JavaClassUtils::toNativeClassName(env, javaRef);
 		NativeRef entry = { JavaGlobalRef<jobject>(env, javaRef.get()), owner, kind, nativeRef };
+
+		// Out of memory, which NewGlobalRef reports by returning null. An
+		// entry without its Java object could never be found again.
+		if (entry.javaRef.get() == nullptr) {
+			throw std::bad_alloc();
+		}
 
 		std::lock_guard<std::mutex> lock(objectMapMutex);
 
