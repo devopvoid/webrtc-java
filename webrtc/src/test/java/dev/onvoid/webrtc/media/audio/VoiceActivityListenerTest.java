@@ -50,6 +50,9 @@ class VoiceActivityListenerTest extends TestBase {
 
 	private final VoiceActivityListener listener = changes::add;
 
+	/** Not a constant, so that halving it happens at run time. */
+	private volatile float smallestNormal = Float.MIN_NORMAL;
+
 	private CustomAudioSource source;
 
 	private AudioTrack track;
@@ -271,6 +274,34 @@ class VoiceActivityListenerTest extends TestBase {
 			process(processing, speech(48000, 1), 48000);
 
 			assertEquals(List.of(true, false), changes);
+		}
+		finally {
+			processed.dispose();
+			module.dispose();
+			processing.dispose();
+		}
+	}
+
+	@Test
+	void listenerKeepsDenormals() {
+		// WebRTC flushes denormals to zero while it processes audio, and the
+		// listener is called from within that. Java must not run that way:
+		// the JVM needs its default floating point state, and on Windows
+		// -Xcheck:jni ends the process on anything else.
+		AudioProcessing processing = new AudioProcessing();
+		HeadlessAudioDeviceModule module = new HeadlessAudioDeviceModule();
+		PeerConnectionFactory processed = new PeerConnectionFactory(module, processing);
+		List<Float> halved = new CopyOnWriteArrayList<>();
+		VoiceActivityListener halving = speaking -> halved.add(smallestNormal / 2);
+
+		try {
+			processed.addVoiceActivityListener(ONE_SEGMENT, halving);
+
+			process(processing, speech(48000, 1), 48000);
+
+			assertEquals(List.of(Float.MIN_NORMAL / 2), halved);
+
+			processed.removeVoiceActivityListener(halving);
 		}
 		finally {
 			processed.dispose();
