@@ -110,6 +110,8 @@ final class PeerImpl implements Peer {
 
 	final SerialExecutor events;
 
+	final DataChannels channels;
+
 	private final PeerOptions options;
 
 	private final Signaling signaling;
@@ -145,21 +147,15 @@ final class PeerImpl implements Peer {
 
 	private final Map<String, RemoteTrackImpl> remoteTrackById = new HashMap<>();
 
-	private final List<DataChannelImpl> channels = new ArrayList<>();
-
 	// Confined to the event executor.
 
 	private PeerState deliveredState = PeerState.NEW;
 
 	private final List<RemoteTrack> deliveredTracks = new ArrayList<>();
 
-	private final List<DataChannel> deliveredChannels = new ArrayList<>();
-
 	private final Handlers<PeerState> stateHandlers;
 
 	private final Handlers<RemoteTrack> trackHandlers;
-
-	private final Handlers<DataChannel> channelHandlers;
 
 	private final Handlers<WebRtcException> errorHandlers;
 
@@ -207,13 +203,13 @@ final class PeerImpl implements Peer {
 				rtc.ownsEventExecutor ? "webrtc-client-events-" + name : null);
 		this.stateHandlers = new Handlers<>(rtc::reportError);
 		this.trackHandlers = new Handlers<>(rtc::reportError);
-		this.channelHandlers = new Handlers<>(rtc::reportError);
 		this.errorHandlers = new Handlers<>(rtc::reportError);
 		this.chain = new OperationChain(control, rtc.timer, rtc.operationTimeout, name, new ChainHost());
 		this.steps = new NegotiationSteps(control, rtc.timer, chain, () -> connection, options.gatheringTimeout,
 				this::ignoresOffer);
 		this.automatic = new PerfectNegotiation(this, options, chain, steps);
 		this.statistics = new StatsSampler(this);
+		this.channels = new DataChannels(this);
 
 		rtc.track(connected, events);
 		rtc.track(closedFuture, events);
@@ -403,47 +399,12 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public DataChannel createChannel(String label, ChannelOptions options) {
-		requireNonNull(label, "label");
-		requireNonNull(options, "options");
-
-		DataChannelImpl channel = new DataChannelImpl(this, label);
-
-		control.execute(() -> {
-			if (closed) {
-				channel.closeFromPeer(new PeerClosedException("The peer " + name + " is closed"));
-				return;
-			}
-
-			try {
-				RTCDataChannel nativeChannel = connection.createDataChannel(label, options.toInit());
-
-				if (nativeChannel == null) {
-					throw new ConfigurationException("WebRTC refused the data channel " + label);
-				}
-
-				channels.add(channel);
-				channel.bind(nativeChannel);
-			}
-			catch (Throwable e) {
-				WebRtcException error = asWebRtcException(e, "Creating the data channel " + label + " failed");
-				channel.closeFromPeer(error);
-				deliverError(error);
-			}
-		});
-
-		return channel;
+		return channels.create(label, options);
 	}
 
 	@Override
 	public Subscription onChannel(Consumer<DataChannel> handler) {
-		requireNonNull(handler, "handler");
-
-		return subscribe(() -> {
-			for (DataChannel channel : new ArrayList<>(deliveredChannels)) {
-				call(handler, channel);
-			}
-			return channelHandlers.add(handler);
-		});
+		return channels.onChannel(handler);
 	}
 
 	@Override
@@ -1135,10 +1096,6 @@ final class PeerImpl implements Peer {
 		senders.remove(sender);
 	}
 
-	void forgetChannel(DataChannelImpl channel) {
-		channels.remove(channel);
-	}
-
 	boolean isClosed() {
 		return closed;
 	}
@@ -1326,26 +1283,6 @@ final class PeerImpl implements Peer {
 		});
 	}
 
-	private void channelOpened(DataChannelImpl channel) {
-		if (closed) {
-			channel.closeFromPeer(closedError());
-			return;
-		}
-
-		channels.add(channel);
-
-		events.execute(() -> {
-			deliveredChannels.add(channel);
-			channelHandlers.accept(channel);
-		});
-	}
-
-	void channelClosed(DataChannelImpl channel) {
-		channels.remove(channel);
-
-		events.execute(() -> deliveredChannels.remove(channel));
-	}
-
 	private void teardown() {
 		if (teardownStarted) {
 			return;
@@ -1360,10 +1297,7 @@ final class PeerImpl implements Peer {
 		automatic.close();
 		steps.close(error);
 
-		for (DataChannelImpl channel : new ArrayList<>(channels)) {
-			channel.closeFromPeer(error);
-		}
-		channels.clear();
+		channels.closeAll(error);
 
 		for (SenderImpl sender : senders) {
 			sender.closeFromPeer();
@@ -1413,7 +1347,7 @@ final class PeerImpl implements Peer {
 				remote.fireEnded();
 			}
 			deliveredTracks.clear();
-			deliveredChannels.clear();
+			channels.clearDelivered();
 
 			deliverState(PeerState.CLOSED);
 
@@ -1421,7 +1355,7 @@ final class PeerImpl implements Peer {
 			closedFuture.complete(null);
 
 			trackHandlers.clear();
-			channelHandlers.clear();
+			channels.clearHandlers();
 			stateHandlers.clear();
 			errorHandlers.clear();
 		}, () -> {
@@ -1538,7 +1472,7 @@ final class PeerImpl implements Peer {
 			// itself only posts as well.
 			DataChannelImpl channel = new DataChannelImpl(PeerImpl.this, dataChannel);
 
-			control.execute(() -> channelOpened(channel));
+			control.execute(() -> channels.opened(channel));
 		}
 	}
 

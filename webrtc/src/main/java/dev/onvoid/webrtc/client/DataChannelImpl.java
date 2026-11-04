@@ -289,7 +289,7 @@ final class DataChannelImpl implements DataChannel {
 
 		nativeBuffered = 0;
 		state = ChannelState.CLOSED;
-		peer.channelClosed(this);
+		peer.channels.closed(this);
 
 		peer.events.execute(() -> deliverState(ChannelState.CLOSED, error),
 				() -> settleOpened(ChannelState.CLOSED, error));
