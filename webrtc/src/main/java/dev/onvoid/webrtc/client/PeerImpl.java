@@ -31,7 +31,6 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -97,9 +96,9 @@ final class PeerImpl implements Peer {
 
 	private final CodecPreferences codecs;
 
-	private final PeerOptions options;
+	private final SignalingLink signaling;
 
-	private final Signaling signaling;
+	private final PeerOptions options;
 
 	/** The stream the tracks added without stream ids share. */
 	private final String defaultStreamId = UUID.randomUUID().toString();
@@ -148,20 +147,11 @@ final class PeerImpl implements Peer {
 	/** Runs once gathering is complete, or null. Called on the control executor. */
 	private volatile Runnable gatheredListener;
 
-	/**
-	 * What {@link Signaling#attach} returned, or null before, and {@link
-	 * #DETACHED} once the peer has let go of the signaling on close.
-	 */
-	private final AtomicReference<Subscription> signalingSubscription = new AtomicReference<>();
-
-	private static final Subscription DETACHED = () -> { };
-
 
 	PeerImpl(WebRtc rtc, PeerOptions options, String name) {
 		this.rtc = rtc;
 		this.options = options;
 		this.name = name;
-		this.signaling = options.signaling;
 		this.control = new SerialExecutor(rtc.controlPool, rtc.controlWork, rtc::reportError, false, null);
 		this.events = new SerialExecutor(rtc.eventExecutor, rtc.eventWork, rtc::reportError, true,
 				rtc.ownsEventExecutor ? "webrtc-client-events-" + name : null);
@@ -175,6 +165,7 @@ final class PeerImpl implements Peer {
 		this.channels = new DataChannels(this);
 		this.tracks = new RemoteTracks(this, options.receiveTransform);
 		this.codecs = new CodecPreferences(this);
+		this.signaling = new SignalingLink(this, options.signaling);
 
 		rtc.track(connected, events);
 		rtc.track(closedFuture, events);
@@ -247,15 +238,7 @@ final class PeerImpl implements Peer {
 			throw new ConfigurationException("Creating " + name + " failed: " + cause.getMessage(), cause);
 		}
 
-		if (signaling != null && !closing.get()) {
-			Subscription subscription = signaling.attach(this::signal);
-
-			if (subscription != null && !signalingSubscription.compareAndSet(null, subscription)) {
-				// Closed while attaching: the close found nothing to let go of
-				// yet, so this lets go of what attach returned.
-				detach(subscription);
-			}
-		}
+		signaling.attach();
 	}
 
 	@Override
@@ -1023,27 +1006,7 @@ final class PeerImpl implements Peer {
 	 * executor.
 	 */
 	void sendLocalDescription() {
-		send(SignalMessage.of(connection.getLocalDescription()));
-	}
-
-	private void send(SignalMessage message) {
-		if (signaling == null) {
-			return;
-		}
-
-		events.execute(() -> {
-			if (signalingSubscription.get() == DETACHED) {
-				// The transport may take another peer by now.
-				return;
-			}
-
-			try {
-				signaling.send(message);
-			}
-			catch (Throwable e) {
-				deliverError(new WebRtcException("The signaling failed to send " + message.type(), e));
-			}
-		});
+		signaling.send(SignalMessage.of(connection.getLocalDescription()));
 	}
 
 	// What WebRTC reports, on the control executor.
@@ -1123,7 +1086,7 @@ final class PeerImpl implements Peer {
 		events.execute(() -> {
 			// Behind the messages queued for sending, so that the transport
 			// hears of none once it was let go of.
-			detachSignaling();
+			signaling.detach();
 
 			tracks.fireEnded(ended);
 			channels.clearDelivered();
@@ -1138,32 +1101,11 @@ final class PeerImpl implements Peer {
 			stateHandlers.clear();
 			errorHandlers.clear();
 		}, () -> {
-			detachSignaling();
+			signaling.detach();
 
 			connected.completeExceptionally(error);
 			closedFuture.complete(null);
 		});
-	}
-
-	/**
-	 * Lets go of the signaling, once: a transport that outlives the peer must
-	 * not keep it, and the runtime with it, reachable.
-	 */
-	private void detachSignaling() {
-		Subscription subscription = signalingSubscription.getAndSet(DETACHED);
-
-		if (subscription != null && subscription != DETACHED) {
-			detach(subscription);
-		}
-	}
-
-	private void detach(Subscription subscription) {
-		try {
-			subscription.close();
-		}
-		catch (Throwable e) {
-			rtc.reportError(new WebRtcException("Detaching " + name + " from its signaling failed", e));
-		}
 	}
 
 	// On the event executor.
@@ -1209,7 +1151,7 @@ final class PeerImpl implements Peer {
 						listener.accept(candidate);
 					}
 
-					send(SignalMessage.of(candidate));
+					signaling.send(SignalMessage.of(candidate));
 				}
 			});
 		}
