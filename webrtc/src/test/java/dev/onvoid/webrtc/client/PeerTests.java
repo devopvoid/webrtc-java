@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.client;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -745,6 +746,107 @@ class PeerTests extends ClientTestBase {
 			assertEquals(1, timer.fire(interval));
 			assertTrue(await(onEvents));
 		}
+	}
+
+	@Test
+	void statsStopOnClose() throws Exception {
+		// The sample after the peer closed cancels its task, unheard.
+		ManualTimer timer = new ManualTimer();
+		Duration interval = Duration.ofSeconds(7);
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.timer(timer)
+				.build()) {
+			Peer peer = runtime.createPeer(manualOptions());
+			AtomicInteger calls = new AtomicInteger();
+
+			peer.onStats(interval, stats -> calls.incrementAndGet());
+			await(peer.closeAsync());
+
+			assertEquals(1, timer.fire(interval));
+			assertEquals(0, timer.scheduled(interval));
+			assertEquals(0, calls.get());
+		}
+	}
+
+	@Test
+	void statsOfClosedPeerFail() throws Exception {
+		Peer peer = rtc.createPeer(manualOptions());
+		await(peer.closeAsync());
+
+		assertInstanceOf(PeerClosedException.class, cause(peer.stats()));
+	}
+
+	@Test
+	void handlersRunOnEventExecutor() throws Exception {
+		// Whichever thread a report comes from, the application hears of it
+		// on the event executor of the peer.
+		Peer[] peers = pair();
+		PeerImpl peer = (PeerImpl) peers[1];
+		CompletableFuture<Boolean> state = new CompletableFuture<>();
+		CompletableFuture<Boolean> channel = new CompletableFuture<>();
+		CompletableFuture<Boolean> track = new CompletableFuture<>();
+		CompletableFuture<Boolean> stats = new CompletableFuture<>();
+
+		peer.onStateChange(value -> state.complete(peer.events.inExecutor()));
+		peer.onChannel(value -> channel.complete(peer.events.inExecutor()));
+		peer.onTrack(value -> track.complete(peer.events.inExecutor()));
+
+		Subscription sampling = peer.onStats(Duration.ofMillis(10), value -> stats.complete(peer.events.inExecutor()));
+
+		peers[0].createChannel("chat");
+		peers[0].addTrack(rtc.media().customAudio("voice"));
+
+		assertTrue(await(state));
+		assertTrue(await(channel));
+		assertTrue(await(track));
+		assertTrue(await(stats));
+
+		sampling.close();
+	}
+
+	@Test
+	void lateHandlerGetsOpenChannels() throws Exception {
+		Peer[] peers = pair();
+		CompletableFuture<DataChannel> first = new CompletableFuture<>();
+		peers[1].onChannel(first::complete);
+
+		DataChannel channel = peers[0].createChannel("chat");
+		DataChannel remote = await(first);
+
+		CompletableFuture<DataChannel> late = new CompletableFuture<>();
+		peers[1].onChannel(late::complete);
+		assertSame(remote, await(late));
+
+		CompletableFuture<Void> closed = whenClosed(remote);
+		channel.close();
+		await(closed);
+
+		// The state is replayed on the same executor, behind the channels.
+		List<DataChannel> afterClose = new CopyOnWriteArrayList<>();
+		CompletableFuture<PeerState> replayed = new CompletableFuture<>();
+		peers[1].onChannel(afterClose::add);
+		peers[1].onStateChange(replayed::complete);
+		await(replayed);
+
+		assertTrue(afterClose.isEmpty(), () -> "Channels: " + afterClose);
+	}
+
+	@Test
+	void lateHandlerGetsTracks() throws Exception {
+		Peer[] peers = pair();
+		CompletableFuture<RemoteTrack> first = new CompletableFuture<>();
+		peers[1].onTrack(first::complete);
+
+		peers[0].addTrack(rtc.media().customAudio("voice"));
+		RemoteTrack track = await(first);
+
+		CompletableFuture<RemoteTrack> late = new CompletableFuture<>();
+		peers[1].onTrack(late::complete);
+
+		assertSame(track, await(late));
 	}
 
 	@Test
