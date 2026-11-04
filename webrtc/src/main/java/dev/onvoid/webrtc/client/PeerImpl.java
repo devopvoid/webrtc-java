@@ -912,6 +912,14 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public CompletableFuture<PeerStats> stats() {
+		return toPublic(readStats());
+	}
+
+	/**
+	 * @return a future with the statistics, which completes on the control
+	 * executor.
+	 */
+	private CompletableFuture<PeerStats> readStats() {
 		CompletableFuture<PeerStats> result = new CompletableFuture<>();
 
 		control.execute(() -> {
@@ -935,7 +943,7 @@ final class PeerImpl implements Peer {
 			}
 		});
 
-		return toPublic(result);
+		return result;
 	}
 
 	@Override
@@ -967,7 +975,9 @@ final class PeerImpl implements Peer {
 				return;
 			}
 
-			stats().whenComplete((stats, error) -> {
+			// Handed over here: a callback on a public future runs on this
+			// thread of the timer if the future is done by then.
+			readStats().whenComplete((stats, error) -> events.execute(() -> {
 				if (!active.get()) {
 					return;
 				}
@@ -977,7 +987,7 @@ final class PeerImpl implements Peer {
 				else if (!(unwrap(error) instanceof PeerClosedException)) {
 					deliverError(asWebRtcException(error, "Reading the statistics failed"));
 				}
-			});
+			}));
 		};
 
 		task.set(rtc.timer.scheduleAtFixedRate(sample, 0, millis, TimeUnit.MILLISECONDS));

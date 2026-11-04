@@ -43,11 +43,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCSessionDescription;
@@ -701,6 +704,46 @@ class PeerTests extends ClientTestBase {
 
 			assertEquals(1, timer.fire(interval));
 			await(later);
+		}
+	}
+
+	@Test
+	void statsHandlerKeepsEventExecutor() throws Exception {
+		// The report of a sample may be read before the timer's thread gets
+		// to wait for it. The control pool holds that thread back behind a
+		// second read, which must not make it the thread of the handler.
+		ManualTimer timer = new ManualTimer();
+		Duration interval = Duration.ofSeconds(7);
+		Thread firing = Thread.currentThread();
+		AtomicReference<Peer> holding = new AtomicReference<>();
+		ExecutorService control = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>()) {
+			@Override
+			public void execute(Runnable task) {
+				super.execute(task);
+
+				Peer held = Thread.currentThread() == firing ? holding.getAndSet(null) : null;
+
+				if (held != null) {
+					held.stats().orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS).join();
+				}
+			}
+		};
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.controlPool(control)
+				.eventExecutor(Runnable::run)
+				.timer(timer)
+				.build()) {
+			PeerImpl peer = (PeerImpl) runtime.createPeer(manualOptions());
+			CompletableFuture<Boolean> onEvents = new CompletableFuture<>();
+
+			peer.onStats(interval, stats -> onEvents.complete(peer.events.inExecutor()));
+			holding.set(peer);
+
+			assertEquals(1, timer.fire(interval));
+			assertTrue(await(onEvents));
 		}
 	}
 
