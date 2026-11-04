@@ -85,6 +85,16 @@ class MediaReaderTest {
 	}
 
 	@Test
+	void durationCountsFromTheFirstFrame(@TempDir Path dir) throws Exception {
+		Path mkv = TestMedia.shiftedMatroska(dir, asset(), 5000, 6000, 9008);
+
+		try (MediaReader reader = new MediaReader(mkv)) {
+			// Video from 5 s and audio up to 9 s on the file's clock.
+			assertEquals(4_008_000, reader.getInfo().getDurationUs(), 50_000);
+		}
+	}
+
+	@Test
 	void readsDuration() throws Exception {
 		try (MediaReader reader = new MediaReader(asset())) {
 			// The asset runs 3.008 seconds. The tolerance is there because the

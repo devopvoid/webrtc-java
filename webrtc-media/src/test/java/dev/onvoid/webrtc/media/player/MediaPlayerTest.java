@@ -703,6 +703,21 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void loopsWithoutAGapWhenTheFileGivesItsEnd() throws Exception {
+		// A Matroska file gives where it ends, 9 s on its clock, which is not
+		// how long it runs, and is not where the next pass goes.
+		Path mkv = TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000, 9008);
+
+		try (Playback playback = new Playback(new MediaReader(mkv))) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > EXPECTED_FRAMES + 15, 7_000),
+					"video frames after a pass and a half: " + playback.frames.get());
+		}
+	}
+
+	@Test
 	void pausedSeekFinishesWithoutPlaying() throws Exception {
 		// A block of 25 s comes out of the decoder in one go, which is more
 		// than the audio queue takes even when a seek has just emptied it.

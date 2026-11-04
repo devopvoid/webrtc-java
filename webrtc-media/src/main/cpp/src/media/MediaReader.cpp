@@ -17,6 +17,7 @@
 #include "media/MediaReader.h"
 
 #include <algorithm>
+#include <cstring>
 #include <mutex>
 
 extern "C" {
@@ -186,7 +187,15 @@ namespace ffmpeg
 
 		// AVFormatContext::duration is already in AV_TIME_BASE units, which
 		// are microseconds.
-		return format_context_->duration;
+		const int64_t duration_us = format_context_->duration;
+
+		// Matroska gives where the file ends on its clock, which libavformat
+		// passes on, and that is only how long it runs if it starts at zero.
+		if (start_time_us_ > 0 && std::strstr(format_context_->iformat->name, "matroska") != nullptr) {
+			return std::max<int64_t>(duration_us - start_time_us_, 0);
+		}
+
+		return duration_us;
 	}
 
 	int64_t MediaReader::GetStartTimeUs() const

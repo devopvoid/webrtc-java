@@ -231,6 +231,24 @@ final class TestMedia {
 	 */
 	static Path shiftedMatroska(Path directory, Path source, long videoStartMs,
 			long audioStartMs) throws IOException {
+		return shiftedMatroska(directory, source, videoStartMs, audioStartMs, -1);
+	}
+
+	/**
+	 * Copies a Matroska file as {@link #shiftedMatroska(Path, Path, long, long)}
+	 * does, and has the copy give a duration, which in Matroska is where the
+	 * file ends, counted from time zero and not from its first frame.
+	 *
+	 * @param directory    Where to write the file.
+	 * @param source       The file to copy.
+	 * @param videoStartMs When the first video frame is to start.
+	 * @param audioStartMs When the first audio frame is to start.
+	 * @param endMs        The duration to give.
+	 *
+	 * @return The file written.
+	 */
+	static Path shiftedMatroska(Path directory, Path source, long videoStartMs,
+			long audioStartMs, long endMs) throws IOException {
 		MatroskaContent content = new MatroskaContent(Files.readAllBytes(source));
 		List<Frame> frames = new ArrayList<>();
 
@@ -243,7 +261,7 @@ final class TestMedia {
 		frames.sort(Comparator.comparingLong(frame -> frame.timeMs));
 
 		return Files.write(directory.resolve("shifted.mkv"),
-				matroska(content.tracks, frames, content.videoTrack));
+				matroska(content.tracks, frames, content.videoTrack, endMs));
 	}
 
 	/**
@@ -282,7 +300,7 @@ final class TestMedia {
 		frames.addAll(video);
 
 		return Files.write(directory.resolve("late-video.mkv"),
-				matroska(content.tracks, frames, -1));
+				matroska(content.tracks, frames, -1, -1));
 	}
 
 	/**
@@ -394,19 +412,25 @@ final class TestMedia {
 			frames.add(new Frame(1, blockTimes[i], true, block.apply(i)));
 		}
 
-		return matroska(track, frames, -1);
+		return matroska(track, frames, -1, -1);
 	}
 
 	/**
 	 * A Matroska file of the given tracks and one frame in each cluster, with
-	 * a cue for every keyframe of the given track, if any. The cues come
-	 * before the clusters, where the demuxer finds them without a seek head.
+	 * a cue for every keyframe of the given track, if any, and a duration, if
+	 * it is not negative. The cues come before the clusters, where the demuxer
+	 * finds them without a seek head.
 	 */
-	private static byte[] matroska(byte[] tracks, List<Frame> frames, int cueTrack) {
+	private static byte[] matroska(byte[] tracks, List<Frame> frames, int cueTrack,
+			long durationMs) {
 		ByteArrayOutputStream head = new ByteArrayOutputStream();
 
 		// Info, with timestamps in milliseconds.
-		writeBytes(head, ebml(0x1549A966, ebmlUInt(0x2AD7B1, 1000000)));
+		byte[] scale = ebmlUInt(0x2AD7B1, 1000000);
+		byte[] duration = durationMs < 0 ? new byte[0]
+				: ebml(0x4489, ByteBuffer.allocate(8).putDouble(durationMs).array());
+
+		writeBytes(head, ebml(0x1549A966, scale, duration));
 		// Tracks.
 		writeBytes(head, ebml(0x1654AE6B, tracks));
 
