@@ -38,19 +38,24 @@ public enum MediaRecorderResult {
 	 * file is kept: it may end before the recording was stopped, lack its
 	 * index, or miss what the system had not yet written when closing it
 	 * failed.
+	 * <p>
+	 * The same goes for a recording that could not take the place of the file
+	 * it was to replace. It stays in the temporary file that {@link
+	 * MediaRecorder#getFile()} then returns.
 	 */
 	PARTIAL,
 
 	/**
 	 * Nothing went wrong, but no media arrived to be written, e.g. because
 	 * the recorder was stopped right after it was started, or never started.
-	 * The file is deleted.
+	 * What it wrote is deleted, and a file it was to replace stays as it was.
 	 */
 	EMPTY,
 
 	/**
 	 * Writing failed before any media went into the file, e.g. writing its
-	 * header. The file is deleted.
+	 * header. What it wrote is deleted, and a file it was to replace stays as
+	 * it was.
 	 */
 	FAILED;
 

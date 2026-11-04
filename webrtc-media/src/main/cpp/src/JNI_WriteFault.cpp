@@ -29,6 +29,12 @@ extern "C" {
 
 using ffmpeg::WriteFault;
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_WriteFault_failOpen
+(JNIEnv * env, jclass caller)
+{
+	WriteFault::Fail(WriteFault::Call::kOpen, AVERROR(EACCES), 0);
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_WriteFault_failHeader
 (JNIEnv * env, jclass caller)
 {

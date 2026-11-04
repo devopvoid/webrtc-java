@@ -155,7 +155,8 @@ public class EncryptedRecordingExample {
      * they decrypted.
      */
     private static void record(Path file, RemoteTrack video, RemoteTrack audio) throws Exception {
-        try (MediaRecorder recorder = new MediaRecorder(file)) {
+        // Replaces what an earlier run recorded, once this one is finished.
+        try (MediaRecorder recorder = new MediaRecorder(file, true)) {
             recorder.setListener(new MediaRecorderListener() {
 
                 @Override

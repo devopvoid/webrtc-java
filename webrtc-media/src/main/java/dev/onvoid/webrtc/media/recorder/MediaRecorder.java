@@ -19,8 +19,10 @@ package dev.onvoid.webrtc.media.recorder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -65,6 +67,10 @@ import dev.onvoid.webrtc.media.player.FFmpeg;
  * }
  * }</pre>
  * <p>
+ * A file that exists is refused unless {@link #MediaRecorder(Path, boolean)}
+ * is asked to replace it, which happens only once the new recording is
+ * finished: a recording that fails or gets no media costs nothing.
+ * <p>
  * How it behaves:
  * <ul>
  * <li>A video track is recorded from its first key frame, and the recorder
@@ -91,7 +97,11 @@ public class MediaRecorder implements AutoCloseable {
 
 	private final Object lock = new Object();
 
-	private final Path file;
+	/** The file being written: the file itself, or one beside it to replace it. */
+	private final Path output;
+
+	/** Where the recording is meant to end up, or stays if it cannot. */
+	private volatile Path file;
 
 	/**
 	 * How to ask each track for a key frame, by track index. Filled before
@@ -115,18 +125,65 @@ public class MediaRecorder implements AutoCloseable {
 
 
 	/**
-	 * Creates a recorder writing to the given file, which is created, or
-	 * emptied if it exists.
+	 * Creates a recorder writing to the given file, which must not exist yet.
 	 *
 	 * @param file Where to record to; its extension picks the container.
 	 *
+	 * @throws java.nio.file.FileAlreadyExistsException If the file exists.
 	 * @throws IOException If the file cannot be written.
 	 */
 	public MediaRecorder(Path file) throws IOException {
+		this(file, false);
+	}
+
+	/**
+	 * Creates a recorder writing to the given file, which may be asked to
+	 * replace a file that exists.
+	 * <p>
+	 * A recorder that replaces a file writes to a temporary file in the same
+	 * directory, with the same extension, and leaves the existing file alone
+	 * until {@link #stop()} has finished the recording: only then does the
+	 * recording take its place, in one step and with its permissions. A
+	 * recording without media leaves the existing file as it was, and so
+	 * does a process that ends before the stop, which leaves the temporary
+	 * file behind as well.
+	 *
+	 * @param file      Where to record to; its extension picks the container.
+	 * @param overwrite Whether to replace the file if it exists.
+	 *
+	 * @throws java.nio.file.FileAlreadyExistsException If the file exists, and
+	 *                                                  is not to be replaced.
+	 * @throws IOException If the file cannot be written, or is a directory.
+	 */
+	public MediaRecorder(Path file, boolean overwrite) throws IOException {
 		Objects.requireNonNull(file, "File is null");
 
-		this.file = file.toAbsolutePath();
-		this.handle = create(this.file.toString(), NativeApi.tableAddress());
+		Path target = file.toAbsolutePath();
+
+		if (overwrite && Files.exists(target)) {
+			if (!Files.isRegularFile(target)) {
+				throw new IOException(target + " is not a file");
+			}
+
+			// A link stays in place, and what it points to is replaced.
+			if (Files.isSymbolicLink(target)) {
+				target = target.toRealPath();
+			}
+		}
+
+		this.file = target;
+		// Created here rather than by the native recorder, which would empty
+		// a file that came into being since the check.
+		this.output = overwrite ? createTemporaryFile(target) : Files.createFile(target);
+
+		try {
+			this.handle = create(output.toString(), NativeApi.tableAddress());
+		}
+		catch (IOException | RuntimeException | Error e) {
+			deleteOutput();
+
+			throw e;
+		}
 	}
 
 	/**
@@ -256,21 +313,22 @@ public class MediaRecorder implements AutoCloseable {
 	/**
 	 * Stops recording and finishes the file, waiting for everything received
 	 * so far to be written. A recorder that never got any media to write
-	 * deletes its file rather than leave an unplayable one behind.
+	 * deletes what it wrote rather than leave an unplayable file behind, and
+	 * a file it was to replace stays as it was.
 	 * <p>
 	 * A file that holds media is kept even when writing, finishing or closing
-	 * it failed, since what made it into the file may still play. Whether it
-	 * is complete, {@link #getResult()} tells.
+	 * it failed, since what made it into the file may still play, and takes
+	 * the place of a file it was to replace. Whether it is complete, {@link
+	 * #getResult()} tells.
 	 * <p>
 	 * Stopping a recorder that is stopped does nothing, and returns the same.
-	 * Stopping one that was never started deletes its file.
+	 * Stopping one that was never started is the same as stopping one that
+	 * got no media.
 	 *
-	 * @return True if the file holds a recording, complete or not, false if it
+	 * @return True if the recording was kept, complete or not, false if it
 	 * was deleted.
 	 */
 	public boolean stop() {
-		boolean recorded;
-
 		synchronized (lock) {
 			if (result != null) {
 				return result.keepsFile();
@@ -282,24 +340,16 @@ public class MediaRecorder implements AutoCloseable {
 			// In the order of the native MediaRecorder::Result.
 			result = MediaRecorderResult.values()[stop(handle)];
 			state = MediaRecorderState.STOPPED;
-			recorded = result.keepsFile();
+
+			finishOutput();
 
 			if (events != null) {
 				// Lets the reports already queued run, then ends the thread.
 				events.shutdown();
 			}
-		}
 
-		if (!recorded) {
-			try {
-				Files.deleteIfExists(file);
-			}
-			catch (IOException e) {
-				// The file stays behind, empty; there is nothing else to do.
-			}
+			return result.keepsFile();
 		}
-
-		return recorded;
 	}
 
 	/**
@@ -328,7 +378,12 @@ public class MediaRecorder implements AutoCloseable {
 	}
 
 	/**
-	 * @return The file this recorder writes to.
+	 * Returns where the recording goes, and once it is stopped, where it is:
+	 * the file given to the constructor, or the temporary file beside it
+	 * if the recording could not take the place of that file, as {@link
+	 * MediaRecorderListener#onError(String)} was told.
+	 *
+	 * @return The file of the recording.
 	 */
 	public Path getFile() {
 		return file;
@@ -347,6 +402,61 @@ public class MediaRecorder implements AutoCloseable {
 				dispose(handle);
 				handle = 0;
 			}
+		}
+	}
+
+	/**
+	 * Creates the file a recording goes into until it replaces the target. It
+	 * has the target's extension, which picks the container.
+	 */
+	private static Path createTemporaryFile(Path target) throws IOException {
+		String name = target.getFileName().toString();
+		int dot = name.lastIndexOf('.');
+		String extension = dot < 0 ? "" : name.substring(dot);
+
+		return Files.createFile(target.resolveSibling(".recording-" + UUID.randomUUID() + extension));
+	}
+
+	/** Called with the lock held, once the native recorder closed the output. */
+	private void finishOutput() {
+		if (!result.keepsFile()) {
+			deleteOutput();
+		}
+		else if (!output.equals(file)) {
+			try {
+				replaceFile();
+			}
+			catch (IOException e) {
+				// The recording is safe where it is, so it stays there.
+				String error = "Replacing " + file + " failed, the recording stays in " + output + ": " + e;
+
+				file = output;
+				result = MediaRecorderResult.PARTIAL;
+
+				onNativeError(error);
+			}
+		}
+	}
+
+	private void replaceFile() throws IOException {
+		if (Files.isRegularFile(file)) {
+			try {
+				Files.setPosixFilePermissions(output, Files.getPosixFilePermissions(file));
+			}
+			catch (UnsupportedOperationException e) {
+				// Not a POSIX file system.
+			}
+		}
+
+		Files.move(output, file, StandardCopyOption.ATOMIC_MOVE);
+	}
+
+	private void deleteOutput() {
+		try {
+			Files.deleteIfExists(output);
+		}
+		catch (IOException e) {
+			// The file stays behind, empty; there is nothing else to do.
 		}
 	}
 

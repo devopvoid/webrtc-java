@@ -43,6 +43,11 @@ final class WriteFault {
 	}
 
 	/**
+	 * Fails the opening of the file, as a file system does that refuses it.
+	 */
+	static native void failOpen();
+
+	/**
 	 * Fails the writing of the file header, before any media is in the file.
 	 */
 	static native void failHeader();

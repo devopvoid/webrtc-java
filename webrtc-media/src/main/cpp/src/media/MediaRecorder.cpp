@@ -103,7 +103,8 @@ namespace ffmpeg
 		context_->max_interleave_delta = 2000000;
 
 		if (!(context_->oformat->flags & AVFMT_NOFILE)) {
-			result = avio_open(&context_->pb, path_.c_str(), AVIO_FLAG_WRITE);
+			result = WriteFault::Check(WriteFault::Call::kOpen,
+					avio_open(&context_->pb, path_.c_str(), AVIO_FLAG_WRITE));
 
 			if (result < 0) {
 				return result;

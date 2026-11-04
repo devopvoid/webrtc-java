@@ -24,6 +24,14 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_WriteFault
+	 * Method:    failOpen
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_WriteFault_failOpen
+	(JNIEnv *, jclass);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_recorder_WriteFault
 	 * Method:    failHeader
 	 * Signature: ()V
 	 */

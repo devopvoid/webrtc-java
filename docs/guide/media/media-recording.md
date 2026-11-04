@@ -3,6 +3,7 @@
 This guide explains how to record what a peer connection sends or receives into a media file with `MediaRecorder`, from the `webrtc-java-media` module. It covers:
 
 - Recording senders and receivers
+- Replacing a file that exists
 - Choosing the container
 - Following a recording with a listener
 - How tracks are started, timed and left out
@@ -30,14 +31,14 @@ try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
 
 A sender's frames are recorded as they leave the encoder, a receiver's as they go to the decoder. Senders and receivers of any number of peer connections can go into one file, e.g. both sides of a call.
 
-`stop()` waits until everything received so far is written and the file is finished and closed, and returns whether the file holds a recording. A recorder that never got any media to write deletes its file rather than leave an unplayable one behind. `close()` stops a recording that still runs.
+`stop()` waits until everything received so far is written and the file is finished and closed, and returns whether the recording was kept. A recorder that never got any media to write deletes what it wrote rather than leave an unplayable file behind. `close()` stops a recording that still runs.
 
 How the recording ended, `getResult()` tells once the recorder is stopped, and keeps telling after `close()`:
 
 | Result | File | Meaning |
 | --- | --- | --- |
 | `COMPLETE` | kept | Everything was written, and the file was finished and closed. |
-| `PARTIAL` | kept | Media went into the file, but writing, finishing or closing it failed later. What made it into the file is kept, since it may still play. |
+| `PARTIAL` | kept | Media went into the file, but writing, finishing or closing it failed later, or it could not [replace an existing file](#replacing-a-file). What made it into the file is kept, since it may still play. |
 | `EMPTY` | deleted | No media arrived before the stop. |
 | `FAILED` | deleted | Writing failed before any media went into the file. |
 
@@ -61,6 +62,20 @@ recorder.addTrack(remoteTrack);          // a RemoteTrack from peer.onTrack
 ```
 
 The peer keeps its native senders and receivers to itself and asks them for key frames on its own thread, so nothing needs to be kept undisposed: removing a sender or closing the peer ends the track in the recording, and `stop()` still finishes the file.
+
+## Replacing a File
+
+A recorder does not touch a file that exists: its constructor throws a `FileAlreadyExistsException`, so a new recording cannot cost an earlier one by accident. To replace the file, ask for it:
+
+```java
+try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"), true)) {
+    // ...
+}
+```
+
+The recording then goes into a temporary file beside it, named `.recording-<id>.mkv`, and the existing file stays untouched until `stop()` has finished the recording. Only then does the recording take its place, in one step, with the permissions of the file it replaces, and a symbolic link stays a link to the new recording. A recording that gets no media, or fails before any went into the file, leaves the existing file as it was.
+
+If the process ends before the stop, the existing file is still there, next to the temporary file with what was recorded so far. If the recording cannot take the place of the existing file when it stops, it stays in the temporary file: `onError` is told, the result is `PARTIAL`, and `getFile()` returns where it is.
 
 ## Containers
 
