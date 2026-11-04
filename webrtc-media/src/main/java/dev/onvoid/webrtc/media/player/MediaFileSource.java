@@ -303,6 +303,30 @@ public class MediaFileSource implements AutoCloseable {
 	}
 
 	/**
+	 * Returns how much memory the decoded pictures waiting to be delivered
+	 * take right now.
+	 *
+	 * @return The size in bytes.
+	 *
+	 * @see MediaPlayer#getQueuedVideoBytes()
+	 */
+	public long getQueuedVideoBytes() {
+		return player.getQueuedVideoBytes();
+	}
+
+	/**
+	 * Returns the most memory the decoded pictures waiting to be delivered
+	 * have taken so far.
+	 *
+	 * @return The size in bytes.
+	 *
+	 * @see MediaPlayer#getPeakQueuedVideoBytes()
+	 */
+	public long getPeakQueuedVideoBytes() {
+		return player.getPeakQueuedVideoBytes();
+	}
+
+	/**
 	 * Returns what the player is currently doing.
 	 *
 	 * @return The player state.

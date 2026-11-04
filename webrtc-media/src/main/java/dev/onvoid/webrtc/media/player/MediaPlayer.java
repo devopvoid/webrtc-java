@@ -252,6 +252,47 @@ public class MediaPlayer implements AutoCloseable {
 	}
 
 	/**
+	 * Returns the most memory that the decoded pictures waiting to be
+	 * delivered may take in one player, in bytes. That holds whatever the
+	 * resolution, so {@code n} players stay within {@code n} times this, on
+	 * top of what the decoders themselves use. A single picture larger than
+	 * this still goes through, on its own.
+	 *
+	 * @return The limit in bytes.
+	 *
+	 * @see #getPeakQueuedVideoBytes()
+	 */
+	public static long getMaxQueuedVideoBytes() {
+		return maxQueuedVideoBytes();
+	}
+
+	/**
+	 * Returns how much memory the decoded pictures waiting to be delivered
+	 * take right now, padding included.
+	 *
+	 * @return The size in bytes, which is 0 once the player is closed.
+	 */
+	public long getQueuedVideoBytes() {
+		synchronized (lock) {
+			return queuedVideoBytes(handle);
+		}
+	}
+
+	/**
+	 * Returns the most memory the decoded pictures waiting to be delivered
+	 * have taken so far. Added up over the players of an application, this is
+	 * what they actually needed, as opposed to what
+	 * {@link #getMaxQueuedVideoBytes()} allows them.
+	 *
+	 * @return The size in bytes, which is 0 once the player is closed.
+	 */
+	public long getPeakQueuedVideoBytes() {
+		synchronized (lock) {
+			return peakQueuedVideoBytes(handle);
+		}
+	}
+
+	/**
 	 * Returns whether the video is being decoded in hardware. That can be
 	 * less than was asked for: the platform may have no hardware decoder for
 	 * the codec, or the hardware may not take the stream, in which case the
@@ -388,6 +429,12 @@ public class MediaPlayer implements AutoCloseable {
 	private static native void setLooping(long handle, boolean looping);
 
 	private static native long position(long handle);
+
+	private static native long queuedVideoBytes(long handle);
+
+	private static native long peakQueuedVideoBytes(long handle);
+
+	private static native long maxQueuedVideoBytes();
 
 	private static native int state(long handle);
 

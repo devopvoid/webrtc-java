@@ -152,6 +152,28 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_position
 	});
 }
 
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_queuedVideoBytes
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		return handle != 0 ? static_cast<jlong>(PlayerOf(handle)->GetQueuedVideoBytes()) : 0;
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_peakQueuedVideoBytes
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		return handle != 0 ? static_cast<jlong>(PlayerOf(handle)->GetPeakQueuedVideoBytes()) : 0;
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_maxQueuedVideoBytes
+(JNIEnv * env, jclass caller)
+{
+	return static_cast<jlong>(ffmpeg::MediaPacer::kVideoByteCapacity);
+}
+
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_hardwareDecoding
 (JNIEnv * env, jclass caller, jlong handle)
 {

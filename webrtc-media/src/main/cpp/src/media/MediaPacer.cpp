@@ -32,6 +32,25 @@ namespace
 
 		av_frame_free(&frame);
 	}
+
+	// What a frame keeps in memory, padding and alignment included, which is
+	// what its buffers hold rather than what its size works out at.
+	size_t FrameBytes(const AVFrame * frame)
+	{
+		size_t bytes = 0;
+
+		for (const AVBufferRef * buffer : frame->buf) {
+			if (buffer != nullptr) {
+				bytes += buffer->size;
+			}
+		}
+
+		for (int i = 0; i < frame->nb_extended_buf; ++i) {
+			bytes += frame->extended_buf[i]->size;
+		}
+
+		return bytes;
+	}
 }
 
 namespace ffmpeg
@@ -44,7 +63,7 @@ namespace ffmpeg
 	}
 
 	MediaPacer::VideoItem::VideoItem(VideoItem && other) noexcept
-		: frame(other.frame), timestamp_us(other.timestamp_us)
+		: frame(other.frame), timestamp_us(other.timestamp_us), bytes(other.bytes)
 	{
 		other.frame = nullptr;
 	}
@@ -58,6 +77,7 @@ namespace ffmpeg
 
 			frame = other.frame;
 			timestamp_us = other.timestamp_us;
+			bytes = other.bytes;
 			other.frame = nullptr;
 		}
 
@@ -133,15 +153,17 @@ namespace ffmpeg
 
 		video_queue_.clear();
 		audio_queue_.clear();
+		video_bytes_ = 0;
 	}
 
 	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us, uint64_t generation)
 	{
+		const size_t bytes = FrameBytes(frame);
+
 		std::unique_lock<std::mutex> lock(mutex_);
 
-		const auto room = [this, generation] {
-			return !running_ || generation != generation_
-					|| video_queue_.size() < kVideoCapacity;
+		const auto room = [this, generation, bytes] {
+			return !running_ || generation != generation_ || HasVideoRoom(bytes);
 		};
 
 		if (!room()) {
@@ -157,7 +179,9 @@ namespace ffmpeg
 			return false;
 		}
 
-		video_queue_.emplace_back(frame, timestamp_us);
+		video_queue_.emplace_back(frame, timestamp_us, bytes);
+		video_bytes_ += bytes;
+		peak_video_bytes_ = std::max(peak_video_bytes_, video_bytes_);
 
 		work_.notify_one();
 
@@ -177,8 +201,7 @@ namespace ffmpeg
 
 			// Full, but blocking now would keep video from being decoded
 			// while it is running short.
-			return audio_queue_.size() < kAudioOverflowCapacity
-					&& video_queue_.size() < kVideoCapacity / 2;
+			return audio_queue_.size() < kAudioOverflowCapacity && IsVideoShort();
 		};
 
 		if (!room()) {
@@ -261,6 +284,7 @@ namespace ffmpeg
 	{
 		video_queue_.clear();
 		audio_queue_.clear();
+		video_bytes_ = 0;
 
 		// Audio only ever moves the position forward, so a position left from
 		// before a seek backwards would hold it there until audio caught up.
@@ -289,6 +313,32 @@ namespace ffmpeg
 		std::lock_guard<std::mutex> lock(mutex_);
 
 		return position_us_;
+	}
+
+	size_t MediaPacer::GetQueuedVideoBytes() const
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return video_bytes_;
+	}
+
+	size_t MediaPacer::GetPeakQueuedVideoBytes() const
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return peak_video_bytes_;
+	}
+
+	bool MediaPacer::HasVideoRoom(size_t bytes) const
+	{
+		return video_queue_.empty() || (video_queue_.size() < kVideoCapacity
+				&& video_bytes_ + bytes <= kVideoByteCapacity);
+	}
+
+	bool MediaPacer::IsVideoShort() const
+	{
+		return video_queue_.size() < kVideoCapacity / 2
+				&& video_bytes_ < kVideoByteCapacity / 2;
 	}
 
 	bool MediaPacer::IsOwnThread() const
@@ -335,6 +385,7 @@ namespace ffmpeg
 					VideoItem item = std::move(video_queue_.front());
 
 					video_queue_.pop_front();
+					video_bytes_ -= item.bytes;
 					position_us_ = item.timestamp_us;
 
 					video_space_.notify_one();

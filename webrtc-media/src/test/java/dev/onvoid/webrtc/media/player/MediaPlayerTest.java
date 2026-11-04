@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.net.URL;
@@ -96,6 +97,12 @@ class MediaPlayerTest {
 	 * two B-frames) from a moving gradient.
 	 */
 	private static final String TS_ASSET = "/media-test-h264.ts";
+
+	/** 3840x2160 H.264, fifteen pictures. */
+	private static final String H264_4K = "/media-test-h264-4k.mkv";
+
+	/** 1920x1080 H.264, fifteen pictures. */
+	private static final String H264_1080P = "/media-test-h264-1080p.mkv";
 
 	/** 3.008 seconds in chunks of 10 ms. */
 	private static final int EXPECTED_CHUNKS = 300;
@@ -700,6 +707,74 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void videoQueueKeepsToItsByteLimit() throws Exception {
+		// Two players, as what counts is what they take side by side. A loop
+		// gives the decoder more to do than the 15 pictures of the asset.
+		long limit = MediaPlayer.getMaxQueuedVideoBytes();
+
+		try (Playback first = new Playback(new MediaReader(resource(H264_4K)));
+				Playback second = new Playback(new MediaReader(resource(H264_4K)))) {
+			first.player.setLooping(true);
+			second.player.setLooping(true);
+
+			first.player.play();
+			second.player.play();
+
+			// A machine that decodes this slower than it plays has nothing
+			// to show here.
+			assumeTrue(waitFor(() -> PlaybackProbe.waitingPushes() == 2, 30_000),
+					"the video queues did not fill up");
+
+			long firstPeak = first.player.getPeakQueuedVideoBytes();
+			long secondPeak = second.player.getPeakQueuedVideoBytes();
+
+			// Sixty pictures would come to over 700 MiB.
+			assertTrue(firstPeak <= limit, "first player took " + firstPeak + " bytes");
+			assertTrue(secondPeak <= limit, "second player took " + secondPeak + " bytes");
+
+			// Full up to within a picture, and what is measured is what is
+			// queued now.
+			long picture = 3840L * 2160 * 3 / 2;
+
+			assertTrue(firstPeak > limit - 2 * picture, "first player took " + firstPeak + " bytes");
+			assertTrue(first.player.getQueuedVideoBytes() <= firstPeak,
+					"queued " + first.player.getQueuedVideoBytes() + " of " + firstPeak);
+		}
+	}
+
+	@Test
+	void videoQueueHoldsSixtyPicturesOf1080p() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(resource(H264_1080P)))) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assumeTrue(waitFor(() -> PlaybackProbe.waitingPushes() > 0, 30_000),
+					"the video queue did not fill up");
+
+			// Not cut short by the limit on bytes.
+			long peak = playback.player.getPeakQueuedVideoBytes();
+			long picture = 1920L * 1080 * 3 / 2;
+
+			assertTrue(peak >= 59 * picture, "took " + peak + " bytes");
+			assertTrue(peak < MediaPlayer.getMaxQueuedVideoBytes(), "took " + peak + " bytes");
+		}
+	}
+
+	@Test
+	void closedPlayerHoldsNoVideo() throws Exception {
+		Playback playback = new Playback();
+
+		playback.player.play();
+
+		assertTrue(waitFor(() -> playback.frames.get() > 0, 10_000), "played nothing");
+
+		playback.close();
+
+		assertEquals(0, playback.player.getQueuedVideoBytes());
+		assertEquals(0, playback.player.getPeakQueuedVideoBytes());
+	}
+
+	@Test
 	void needsAtLeastOneSource() throws Exception {
 		MediaReader reader = new MediaReader(asset());
 
@@ -1235,6 +1310,10 @@ class MediaPlayerTest {
 		}
 
 		return true;
+	}
+
+	private static Path resource(String name) throws Exception {
+		return Paths.get(MediaPlayerTest.class.getResource(name).toURI());
 	}
 
 	private static Path asset() throws Exception {

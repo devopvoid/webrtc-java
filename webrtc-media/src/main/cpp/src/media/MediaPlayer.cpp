@@ -264,6 +264,16 @@ namespace ffmpeg
 		return state_;
 	}
 
+	size_t MediaPlayer::GetQueuedVideoBytes() const
+	{
+		return pacer_->GetQueuedVideoBytes();
+	}
+
+	size_t MediaPlayer::GetPeakQueuedVideoBytes() const
+	{
+		return pacer_->GetPeakQueuedVideoBytes();
+	}
+
 	bool MediaPlayer::IsOwnThread() const
 	{
 		{

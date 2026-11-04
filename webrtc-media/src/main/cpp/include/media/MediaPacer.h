@@ -58,6 +58,13 @@ namespace ffmpeg
 			static constexpr size_t kVideoCapacity = 60;
 			static constexpr size_t kAudioCapacity = 100;
 
+			// What the pictures in the video queue may take, on top of their
+			// number. Sixty pictures in 4K would take over 700 MiB, for each
+			// player. This leaves 1080p its sixty pictures, of about 3 MiB
+			// each, and 4K about twenty, which is still most of a second.
+			// A single picture larger than this goes through on its own.
+			static constexpr size_t kVideoByteCapacity = 256 * 1024 * 1024;
+
 			// How far audio may run past its capacity while video is short.
 			//
 			// One thread decodes both, in the order the container stores
@@ -68,8 +75,9 @@ namespace ffmpeg
 			// then leaves the video queue running dry, and its frames arrive
 			// late and all at once, which WebRTC's encoder answers by dropping
 			// all but the last of each burst. Letting audio grow while video
-			// is below half its capacity is what keeps video fed; this bounds
-			// how much, at ten seconds, for a source that has no video at all.
+			// is below half its capacity, in pictures and in bytes, is what
+			// keeps video fed; this bounds how much, at ten seconds, for a
+			// source that has no video at all.
 			static constexpr size_t kAudioOverflowCapacity = 1000;
 
 			// The sources may be 0, in which case media of that kind is
@@ -133,6 +141,13 @@ namespace ffmpeg
 			// playback has got to.
 			int64_t GetPositionUs() const;
 
+			// What the pictures in the video queue take right now, in bytes.
+			size_t GetQueuedVideoBytes() const;
+
+			// The most they have taken so far. Nothing delivered counts, nor
+			// the pictures the decoder holds on to.
+			size_t GetPeakQueuedVideoBytes() const;
+
 			// True on the pacing thread, which is the one that calls the sinks
 			// of the tracks fed by the sources.
 			bool IsOwnThread() const;
@@ -142,9 +157,11 @@ namespace ffmpeg
 			{
 				AVFrame * frame = nullptr;
 				int64_t timestamp_us = 0;
+				size_t bytes = 0;
 
 				VideoItem() = default;
-				VideoItem(AVFrame * f, int64_t ts) : frame(f), timestamp_us(ts) {}
+				VideoItem(AVFrame * f, int64_t ts, size_t size)
+					: frame(f), timestamp_us(ts), bytes(size) {}
 				~VideoItem();
 
 				VideoItem(VideoItem && other) noexcept;
@@ -164,6 +181,14 @@ namespace ffmpeg
 			void Run();
 
 			void FlushLocked(int64_t position_us);
+
+			// Whether a picture of the given size fits the video queue. An
+			// empty queue takes anything, as nothing else would ever let a
+			// picture larger than the queue through.
+			bool HasVideoRoom(size_t bytes) const;
+
+			// Whether video is below half of what its queue takes.
+			bool IsVideoShort() const;
 
 			// Both run without the lock held: the extension API delivers
 			// synchronously into WebRTC, which must not happen underneath a
@@ -186,6 +211,11 @@ namespace ffmpeg
 
 			std::deque<VideoItem> video_queue_;
 			std::deque<AudioItem> audio_queue_;
+
+			// What the pictures in the video queue take, and the most they
+			// have taken.
+			size_t video_bytes_ = 0;
+			size_t peak_video_bytes_ = 0;
 
 			bool running_ = false;
 			bool paused_ = false;

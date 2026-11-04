@@ -185,6 +185,17 @@ A listener must still return promptly: the calls behind it wait, and so does a `
 Closing the player, or the `MediaFileSource`, from a listener is fine: it takes effect at once, and the native player is released on another thread once the listener has returned. The same holds for a sink of a track made from the player's sources, which the player calls on threads of its own as well.
 :::
 
+## Memory
+
+Decoding runs ahead of playback by up to sixty pictures, and at most by what `MediaPlayer.getMaxQueuedVideoBytes()` reports, which is 256 MiB. That keeps sixty pictures of 1080p, about twenty of 4K, and whatever the resolution, a player does not take more than that for pictures waiting to be delivered. Several players take that much each, on top of what the decoders use themselves.
+
+To see what an application really needs, ask the players that run:
+
+```java
+source.getQueuedVideoBytes();       // what the queued pictures take right now
+source.getPeakQueuedVideoBytes();   // the most they have taken so far
+```
+
 ## Feeding Your Own Media Sources
 
 `MediaFileSource` creates the media sources for you. An application that needs its own — to feed a source it already created, or to send only the video of a file — uses `MediaPlayer` directly:

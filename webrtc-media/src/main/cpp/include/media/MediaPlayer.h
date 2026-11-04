@@ -122,6 +122,11 @@ namespace ffmpeg
 
 			int GetState() const;
 
+			// What the decoded pictures waiting to be delivered take right
+			// now, in bytes, and the most they have taken so far.
+			size_t GetQueuedVideoBytes() const;
+			size_t GetPeakQueuedVideoBytes() const;
+
 			// True on any thread of the player, which are the ones its
 			// observer and the sinks of the tracks it feeds are called on.
 			// Such a thread cannot destroy the player: that waits for the
