@@ -483,6 +483,22 @@ A track may be disposed, and a listener removed, from within one of its listener
 
 `dispose()` and `close()` may be called from any thread and more than once: only the first call frees anything, later ones do nothing. Once an object is disposed, its methods throw an `IllegalStateException` (a closed connection still reports its state). A method that another thread is running at that moment keeps the native object until it returns, and what the dispose frees is freed then.
 
+#### Finding Objects That Were Never Disposed
+
+An object that becomes unreachable without being disposed or closed leaks its native object. To find such objects, start the JVM with `-Dwebrtc.java.leak.detection=true`: each one is then reported, with its class, once the garbage collector finds it unreachable. Add `-Dwebrtc.java.leak.trace=true` to have the report tell where the object was created, at the cost of a stack trace per object.
+
+```shell
+java -Dwebrtc.java.leak.detection=true -Dwebrtc.java.leak.trace=true -jar app.jar
+```
+
+The reports are warnings through `Logging`, which writes nothing unless the application asks for it:
+
+```java
+Logging.logToDebug(Logging.Severity.WARNING);
+```
+
+Only objects that own a native object and have a `dispose()` or `close()` method are watched: not views such as the track of `RTCRtpSender.getTrack()`, which own nothing, and not reference-counted objects such as video frame buffers. The detector only reports; it never frees anything itself, since a native object may still be in use on a WebRTC thread. While it is off, which is the default, nothing is watched.
+
 ## Next Steps
 
 Now that you have a basic understanding of webrtc-java, you can explore more advanced features:

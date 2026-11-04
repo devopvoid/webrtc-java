@@ -119,6 +119,14 @@ T * GetHandle(JNIEnv * env, jobject obj)
 	return GetHandle<T>(env, obj, "nativeHandle");
 }
 
+// Told about every Java object whose "nativeHandle" field SetHandle() sets:
+// bound is whether it is set to a native object or to none. Null, and then
+// not called, unless something listens.
+using NativeHandleHook = void (*)(JNIEnv * env, jobject obj, bool bound);
+
+void SetNativeHandleHook(NativeHandleHook hook);
+NativeHandleHook GetNativeHandleHook();
+
 template<typename T>
 void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t,
 	const char * declaringClass = nullptr)
@@ -133,6 +141,12 @@ void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t,
 	jlong handle = reinterpret_cast<jlong>(t);
 
 	env->SetLongField(obj, field, handle);
+
+	if (NativeHandleHook hook = GetNativeHandleHook()) {
+		if (handleName == "nativeHandle") {
+			hook(env, obj, handle != 0);
+		}
+	}
 }
 
 template<typename T>

@@ -17,6 +17,8 @@
 #include "JavaWrappedException.h"
 
 #include <atomic>
+
+#include <atomic>
 #include <exception>
 #include <ios>
 
@@ -152,6 +154,21 @@ jmethodID GetStaticMethod(JNIEnv * env, jclass cls, const char * name, const cha
 	}
 
 	return method;
+}
+
+namespace
+{
+	std::atomic<NativeHandleHook> nativeHandleHook { nullptr };
+}
+
+void SetNativeHandleHook(NativeHandleHook hook)
+{
+	nativeHandleHook.store(hook, std::memory_order_release);
+}
+
+NativeHandleHook GetNativeHandleHook()
+{
+	return nativeHandleHook.load(std::memory_order_acquire);
 }
 
 jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName,

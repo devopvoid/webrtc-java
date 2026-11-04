@@ -41,6 +41,8 @@ public abstract class NativeObject {
 		catch (Exception e) {
 			throw new RuntimeException("Load library 'webrtc-java' failed", e);
 		}
+
+		LeakDetector.initialize();
 	}
 
 	/**
@@ -50,6 +52,12 @@ public abstract class NativeObject {
 	 */
 	@SuppressWarnings("unused")
 	private long nativeHandle;
+
+	/**
+	 * What the {@link LeakDetector} knows of this object, null unless it is
+	 * on and watches this object.
+	 */
+	volatile LeakDetector.Record leakRecord;
 
 	/** The hash code of {@link #nativeHashCode()}, or 0 until it is asked for. */
 	private volatile int nativeHash;
@@ -117,6 +125,36 @@ public abstract class NativeObject {
 		}
 
 		return hash;
+	}
+
+	/**
+	 * Called by native code once a native object is bound to this one, only
+	 * while the {@link LeakDetector} is on.
+	 */
+	@SuppressWarnings("unused")
+	private void nativeHandleBound() {
+		LeakDetector.Record record = leakRecord;
+
+		if (record == null) {
+			leakRecord = LeakDetector.track(this);
+		}
+		else {
+			// Bound again after it was released.
+			record.released = false;
+		}
+	}
+
+	/**
+	 * Called by native code once this object no longer owns a native object,
+	 * or never did, only while the {@link LeakDetector} is on.
+	 */
+	@SuppressWarnings("unused")
+	private void nativeHandleReleased() {
+		LeakDetector.Record record = leakRecord;
+
+		if (record != null) {
+			record.released = true;
+		}
 	}
 
 }
