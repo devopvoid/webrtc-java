@@ -37,8 +37,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
@@ -143,11 +141,11 @@ final class PeerImpl implements Peer {
 
 	private final PerfectNegotiation automatic;
 
+	private final StatsSampler statistics;
+
 	private final Map<String, RemoteTrackImpl> remoteTrackById = new HashMap<>();
 
 	private final List<DataChannelImpl> channels = new ArrayList<>();
-
-	private final StatsReader statsReader = new StatsReader();
 
 	// Confined to the event executor.
 
@@ -215,6 +213,7 @@ final class PeerImpl implements Peer {
 		this.steps = new NegotiationSteps(control, rtc.timer, chain, () -> connection, options.gatheringTimeout,
 				this::ignoresOffer);
 		this.automatic = new PerfectNegotiation(this, options, chain, steps);
+		this.statistics = new StatsSampler(this);
 
 		rtc.track(connected, events);
 		rtc.track(closedFuture, events);
@@ -912,90 +911,12 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public CompletableFuture<PeerStats> stats() {
-		return toPublic(readStats());
-	}
-
-	/**
-	 * @return a future with the statistics, which completes on the control
-	 * executor.
-	 */
-	private CompletableFuture<PeerStats> readStats() {
-		CompletableFuture<PeerStats> result = new CompletableFuture<>();
-
-		control.execute(() -> {
-			if (closed) {
-				result.completeExceptionally(closedError());
-				return;
-			}
-
-			try {
-				connection.getStats(report -> control.execute(() -> {
-					try {
-						result.complete(statsReader.read(report));
-					}
-					catch (Throwable e) {
-						result.completeExceptionally(e);
-					}
-				}));
-			}
-			catch (Throwable e) {
-				result.completeExceptionally(asWebRtcException(e, "Reading the statistics failed"));
-			}
-		});
-
-		return result;
+		return statistics.read();
 	}
 
 	@Override
 	public Subscription onStats(Duration interval, Consumer<PeerStats> handler) {
-		requireNonNull(interval, "interval");
-		requireNonNull(handler, "handler");
-
-		long millis = interval.toMillis();
-
-		if (millis <= 0) {
-			throw new IllegalArgumentException("The interval must be positive, got " + interval);
-		}
-
-		AtomicBoolean active = new AtomicBoolean(true);
-		AtomicReference<ScheduledFuture<?>> task = new AtomicReference<>();
-
-		Runnable sample = () -> {
-			if (!active.get()) {
-				return;
-			}
-			if (closing.get()) {
-				active.set(false);
-
-				ScheduledFuture<?> scheduled = task.get();
-
-				if (scheduled != null) {
-					scheduled.cancel(false);
-				}
-				return;
-			}
-
-			// Handed over here: a callback on a public future runs on this
-			// thread of the timer if the future is done by then.
-			readStats().whenComplete((stats, error) -> events.execute(() -> {
-				if (!active.get()) {
-					return;
-				}
-				if (error == null) {
-					call(handler, stats);
-				}
-				else if (!(unwrap(error) instanceof PeerClosedException)) {
-					deliverError(asWebRtcException(error, "Reading the statistics failed"));
-				}
-			}));
-		};
-
-		task.set(rtc.timer.scheduleAtFixedRate(sample, 0, millis, TimeUnit.MILLISECONDS));
-
-		return () -> {
-			active.set(false);
-			task.get().cancel(false);
-		};
+		return statistics.subscribe(interval, handler);
 	}
 
 	@Override
