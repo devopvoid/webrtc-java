@@ -15,6 +15,7 @@
  */
 
 #include "JNI_CustomAudioSource.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "JavaUtils.h"
 
@@ -39,31 +40,35 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_init
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_initializeWithClock
 (JNIEnv * env, jobject caller, jobject javaClock)
 {
-    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, javaClock);
-    CHECK_HANDLE(clock);
+	jni::CallFromJava(env, [&]() {
+	    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, javaClock);
+	    CHECK_HANDLE(clock);
 
-    // The source shares the clock, so disposing the Java clock while the
-    // source is still pushed to does not free it.
-    webrtc::scoped_refptr<jni::CustomAudioSource> source = webrtc::make_ref_counted<jni::CustomAudioSource>(*clock);
+	    // The source shares the clock, so disposing the Java clock while the
+	    // source is still pushed to does not free it.
+	    webrtc::scoped_refptr<jni::CustomAudioSource> source = webrtc::make_ref_counted<jni::CustomAudioSource>(*clock);
 
-    SetHandle(env, caller, source.release());
+	    SetHandle(env, caller, source.release());
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::CustomAudioSource * source = jni::TakeHandle<jni::CustomAudioSource>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		jni::CustomAudioSource * source = jni::TakeHandle<jni::CustomAudioSource>(env, caller);
 
-	if (source == nullptr) {
-		return;
-	}
-
-	jni::ReleaseHandle(env, source, [source](bool) {
-		webrtc::RefCountReleaseStatus status = source->Release();
-
-		if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-			RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+		if (source == nullptr) {
+			return;
 		}
+
+		jni::ReleaseHandle(env, source, [source](bool) {
+			webrtc::RefCountReleaseStatus status = source->Release();
+
+			if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+				RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+			}
+		});
 	});
 }
 

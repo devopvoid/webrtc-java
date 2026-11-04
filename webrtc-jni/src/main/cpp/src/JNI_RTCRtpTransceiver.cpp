@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCRtpTransceiver.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/RTCRtpCodecCapability.h"
 #include "JavaEnums.h"
@@ -145,35 +146,41 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCurrentDir
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stop
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
-	CHECK_HANDLE(transceiver);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
+		CHECK_HANDLE(transceiver);
 
-	webrtc::RTCError result = transceiver->StopStandard();
+		webrtc::RTCError result = transceiver->StopStandard();
 
-	if (!result.ok()) {
-		env->Throw(jni::JavaRuntimeException(env, "Stop transceiver failed: %s %s",
-			ToString(result.type()), result.message()));
-	}
+		if (!result.ok()) {
+			env->Throw(jni::JavaRuntimeException(env, "Stop transceiver failed: %s %s",
+				ToString(result.type()), result.message()));
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopImmediately
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
-	CHECK_HANDLE(transceiver);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
+		CHECK_HANDLE(transceiver);
 
-	// Unlike StopStandard, stopped() is true at once, so that an answer
-	// created next rejects the m-line rather than making it inactive.
-	transceiver->StopInternal();
+		// Unlike StopStandard, stopped() is true at once, so that an answer
+		// created next rejects the m-line rather than making it inactive.
+		transceiver->StopInternal();
+	});
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopped
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
-	CHECK_HANDLEV(transceiver, true);
+	return jni::CallFromJava(env, [&]() -> jboolean {
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
+		CHECK_HANDLEV(transceiver, true);
 
-	return static_cast<jboolean>(transceiver->stopped());
+		return static_cast<jboolean>(transceiver->stopped());
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCodecPreferences
@@ -196,39 +203,43 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCodecPrefe
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferences
 (JNIEnv * env, jobject caller, jobject jPreferences)
 {
-	jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
-	CHECK_HANDLE(transceiver);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
+		CHECK_HANDLE(transceiver);
 
-	try {
-		auto ref = jni::JavaLocalRef<jobject>(env, jPreferences);
-		auto preferences = jni::JavaList::toVector(env, ref, &jni::RTCRtpCodecCapability::toNative);
+		try {
+			auto ref = jni::JavaLocalRef<jobject>(env, jPreferences);
+			auto preferences = jni::JavaList::toVector(env, ref, &jni::RTCRtpCodecCapability::toNative);
 
-		webrtc::RTCError result = transceiver->SetCodecPreferences(preferences);
+			webrtc::RTCError result = transceiver->SetCodecPreferences(preferences);
 
-		if (!result.ok()) {
-			env->Throw(jni::JavaError(env, "Set codec preferences failed: %s", jni::RTCErrorToString(result).c_str()));
+			if (!result.ok()) {
+				env->Throw(jni::JavaError(env, "Set codec preferences failed: %s", jni::RTCErrorToString(result).c_str()));
+			}
 		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpTransceiverInterface * transceiver = jni::TakeHandle<webrtc::RtpTransceiverInterface>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::RtpTransceiverInterface * transceiver = jni::TakeHandle<webrtc::RtpTransceiverInterface>(env, caller);
 
-	if (transceiver == nullptr) {
-		return;
-	}
+		if (transceiver == nullptr) {
+			return;
+		}
 
-	// Unlike e.g. MediaStreamTrack, an RTCRtpTransceiver is not exclusively
-	// owned by one Java wrapper: the owning PeerConnection keeps its own
-	// reference, and other Java wrappers may have been obtained via separate
-	// getTransceivers() calls. Dropping our reference here is expected to
-	// leave others around, so it is not reported as an error.
-	jni::ReleaseHandle(env, transceiver, [transceiver](bool) {
-		transceiver->Release();
+		// Unlike e.g. MediaStreamTrack, an RTCRtpTransceiver is not exclusively
+		// owned by one Java wrapper: the owning PeerConnection keeps its own
+		// reference, and other Java wrappers may have been obtained via separate
+		// getTransceivers() calls. Dropping our reference here is expected to
+		// leave others around, so it is not reported as an error.
+		jni::ReleaseHandle(env, transceiver, [transceiver](bool) {
+			transceiver->Release();
+		});
 	});
 }

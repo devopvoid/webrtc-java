@@ -15,6 +15,7 @@
  */
 
 #include "JNI_NativeApi.h"
+#include "JavaBoundary.h"
 
 #include "api/ExtensionApi.h"
 #include "api/EncodedFrameTransformer.h"
@@ -32,33 +33,43 @@ namespace
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_tableAddress
 (JNIEnv * env, jclass caller)
 {
-	return reinterpret_cast<jlong>(jni::GetExtensionApi());
+	return jni::CallFromJava(env, [&]() -> jlong {
+		return reinterpret_cast<jlong>(jni::GetExtensionApi());
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_version
 (JNIEnv * env, jclass caller)
 {
-	return static_cast<jint>(jni::GetExtensionApi()->version);
+	return jni::CallFromJava(env, [&]() -> jint {
+		return static_cast<jint>(jni::GetExtensionApi()->version);
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_senderFrames
 (JNIEnv * env, jclass caller, jlong handle)
 {
-	auto sender = reinterpret_cast<webrtc::RtpSenderInterface *>(handle);
+	return jni::CallFromJava(env, [&]() -> jlong {
+		auto sender = reinterpret_cast<webrtc::RtpSenderInterface *>(handle);
 
-	return sender != nullptr ? Retained(jni::EncodedFrameTransformer::Of(sender)) : 0;
+		return sender != nullptr ? Retained(jni::EncodedFrameTransformer::Of(sender)) : 0;
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_receiverFrames
 (JNIEnv * env, jclass caller, jlong handle)
 {
-	auto receiver = reinterpret_cast<webrtc::RtpReceiverInterface *>(handle);
+	return jni::CallFromJava(env, [&]() -> jlong {
+		auto receiver = reinterpret_cast<webrtc::RtpReceiverInterface *>(handle);
 
-	return receiver != nullptr ? Retained(jni::EncodedFrameTransformer::Of(receiver)) : 0;
+		return receiver != nullptr ? Retained(jni::EncodedFrameTransformer::Of(receiver)) : 0;
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseFrames
 (JNIEnv * env, jclass caller, jlong frames)
 {
-	jni::GetExtensionApi()->encoded_frames_release(reinterpret_cast<void *>(frames));
+	jni::CallFromJava(env, [&]() {
+		jni::GetExtensionApi()->encoded_frames_release(reinterpret_cast<void *>(frames));
+	});
 }

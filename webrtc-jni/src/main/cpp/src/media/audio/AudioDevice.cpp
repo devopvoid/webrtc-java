@@ -18,6 +18,7 @@
 
 #include "JavaClasses.h"
 #include "JavaString.h"
+#include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 #include "JavaEnums.h"
 
@@ -41,6 +42,12 @@ namespace jni
 			jobject obj = env->NewObject(javaClass->cls, javaClass->ctor,
 				JavaString::toJava(env, device->getName()).get(),
 				JavaString::toJava(env, device->getDescriptor()).get());
+
+			// A constructor that threw leaves no object to fill in.
+			if (obj == nullptr) {
+				ExceptionCheck(env);
+				return nullptr;
+			}
 
             auto deviceTransport = JavaEnums::toJava(env, device->getDeviceTransport());
             env->SetObjectField(obj, javaClass->deviceTransport, deviceTransport.get());

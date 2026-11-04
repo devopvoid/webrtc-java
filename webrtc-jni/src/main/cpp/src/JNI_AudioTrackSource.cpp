@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioTrackSource.h"
+#include "JavaBoundary.h"
 #include "JavaUtils.h"
 #include "NativeHandle.h"
 
@@ -25,17 +26,19 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrackSource_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::AudioSourceInterface * source = jni::TakeHandle<webrtc::AudioSourceInterface>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::AudioSourceInterface * source = jni::TakeHandle<webrtc::AudioSourceInterface>(env, caller);
 
-	if (source == nullptr) {
-		return;
-	}
-
-	jni::ReleaseHandle(env, source, [source](bool) {
-		webrtc::RefCountReleaseStatus status = source->Release();
-
-		if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-			RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+		if (source == nullptr) {
+			return;
 		}
+
+		jni::ReleaseHandle(env, source, [source](bool) {
+			webrtc::RefCountReleaseStatus status = source->Release();
+
+			if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+				RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+			}
+		});
 	});
 }

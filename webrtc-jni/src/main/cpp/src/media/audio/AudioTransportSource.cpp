@@ -15,6 +15,7 @@
  */
 
 #include "media/audio/AudioTransportSource.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
 #include "JNI_WebRTC.h"
 
@@ -51,19 +52,37 @@ namespace jni
 		jsize bufferSize = static_cast<jsize>(nSamples * nBytesPerSample);
 
 		if (buffer.get() == nullptr) {
-			jbyteArray dataArray = env->NewByteArray(bufferSize);
+			JavaLocalRef<jbyteArray> dataArray(env, env->NewByteArray(bufferSize));
 
-			buffer = JavaGlobalRef<jbyteArray>(env, dataArray);
+			// The audio device's thread must not see a C++ exception, nor keep
+			// an OutOfMemoryError pending for its next JNI call.
+			if (dataArray.get() == nullptr) {
+				nSamplesOut = 0;
+				ReportPendingException(env);
+				return 0;
+			}
+
+			buffer = JavaGlobalRef<jbyteArray>(env, dataArray.get());
 
 			jsize bufferLength = env->GetArrayLength(buffer);
 
 			if (bufferLength < bufferSize) {
 				buffer = JavaGlobalRef<jbyteArray>(env, nullptr);
+				nSamplesOut = 0;
 				return 0;
 			}
 		}
 
-		nSamplesOut = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample, nChannels, samplesPerSec);
+		jint samples = env->CallIntMethod(source, javaClass->onPlaybackData, buffer.get(), nSamples, nBytesPerSample, nChannels, samplesPerSec);
+
+		// What the Java source threw is reported, and nothing is played.
+		if (env->ExceptionCheck()) {
+			nSamplesOut = 0;
+			ReportPendingException(env);
+			return 0;
+		}
+
+		nSamplesOut = samples > 0 ? static_cast<size_t>(samples) : 0;
 
 		if (nSamplesOut > 0) {
 			env->GetByteArrayRegion(buffer, 0, bufferSize, reinterpret_cast<int8_t *>(audioSamples));

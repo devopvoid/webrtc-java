@@ -15,6 +15,7 @@
  */
 
 #include "JNI_DesktopCapturer.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "JavaArrayList.h"
 #include "JavaError.h"
@@ -28,21 +29,23 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::DesktopCapturer * capturer = jni::TakeHandle<jni::DesktopCapturer>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		jni::DesktopCapturer * capturer = jni::TakeHandle<jni::DesktopCapturer>(env, caller);
 
-	if (capturer == nullptr) {
-		return;
-	}
+		if (capturer == nullptr) {
+			return;
+		}
 
-	auto callback = GetHandle<jni::DesktopCaptureCallback>(env, caller, "callbackHandle");
+		auto callback = GetHandle<jni::DesktopCaptureCallback>(env, caller, "callbackHandle");
 
-	SetHandle<std::nullptr_t>(env, caller, "callbackHandle", nullptr);
+		SetHandle<std::nullptr_t>(env, caller, "callbackHandle", nullptr);
 
-	// A captureFrame() running on another thread, or the one whose callback
-	// disposes the capturer, still uses both.
-	jni::ReleaseHandle(env, capturer, [capturer, callback](bool) {
-		delete capturer;
-		delete callback;
+		// A captureFrame() running on another thread, or the one whose callback
+		// disposes the capturer, still uses both.
+		jni::ReleaseHandle(env, capturer, [capturer, callback](bool) {
+			delete capturer;
+			delete callback;
+		});
 	});
 }
 
@@ -95,54 +98,62 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setFocusSelectedSource
 (JNIEnv * env, jobject caller, jboolean focus)
 {
-	jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
-	CHECK_HANDLE(capturer);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	capturer->setFocusSelectedSource(focus);
+		capturer->setFocusSelectedSource(focus);
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setMaxFrameRate
 (JNIEnv * env, jobject caller, jint maxFrameRate)
 {
-	jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
-	CHECK_HANDLE(capturer);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	capturer->SetMaxFrameRate(maxFrameRate);
+		capturer->SetMaxFrameRate(maxFrameRate);
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_start
 (JNIEnv * env, jobject caller, jobject jcallback)
 {
-	if (jcallback == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "DesktopCaptureCallback is null"));
-		return;
-	}
+	jni::CallFromJava(env, [&]() {
+		if (jcallback == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "DesktopCaptureCallback is null"));
+			return;
+		}
 
-	jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
-	CHECK_HANDLE(capturer);
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	auto callback = new jni::DesktopCaptureCallback(env, jni::JavaGlobalRef<jobject>(env, jcallback));
+		auto callback = new jni::DesktopCaptureCallback(env, jni::JavaGlobalRef<jobject>(env, jcallback));
 
-	try {
-		SetHandle(env, caller, "callbackHandle", callback);
+		try {
+			SetHandle(env, caller, "callbackHandle", callback);
 
-		capturer->Start(callback);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+			capturer->Start(callback);
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_captureFrame
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
-	CHECK_HANDLE(capturer);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	try {
-		capturer->CaptureFrame();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			capturer->CaptureFrame();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }

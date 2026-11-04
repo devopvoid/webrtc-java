@@ -22,6 +22,8 @@ fatal=$(grep -c 'FATAL ERROR in native method' "$log" || true)
 warnings=$(grep -cE 'WARNING in native method|WARNING: JNI local refs' "$log" || true)
 
 summary=$(awk '
+	# The JVM on Windows ends some lines with CRLF.
+	{ sub(/\r$/, "") }
 	function flush() {
 		if (kind != "") {
 			key = kind " | " (frame != "" ? frame : (native ? "<thread without Java frames>" : "<no stack>"))

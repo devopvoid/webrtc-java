@@ -190,14 +190,16 @@ jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName
 
 jfieldID GetFieldID(JNIEnv * env, jobject obj, const std::string & fieldName, const char * type)
 {
-	jclass cls = env->GetObjectClass(obj);
+	// Deleted on return: on a native thread attached for a callback, nothing
+	// else frees local references until the thread detaches.
+	jni::JavaLocalRef<jclass> cls(env, env->GetObjectClass(obj));
 
-	if (cls == nullptr) {
+	if (cls.get() == nullptr) {
 		ExceptionCheck(env);
 		return nullptr;
 	}
 
-	return GetFieldID(env, cls, fieldName, type);
+	return GetFieldID(env, cls.get(), fieldName, type);
 }
 
 jfieldID GetFieldID(JNIEnv * env, jclass cls, const std::string & fieldName, const char * type)

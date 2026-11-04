@@ -15,6 +15,7 @@
  */
 
 #include "JNI_AudioDeviceModuleBase.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "Exception.h"
 #include "JavaArrayList.h"
@@ -71,73 +72,85 @@ namespace
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_initPlayout
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->InitPlayout() != 0) {
-		env->Throw(jni::JavaError(env, "Init playout failed"));
-		return;
-	}
+		if (audioModule->InitPlayout() != 0) {
+			env->Throw(jni::JavaError(env, "Init playout failed"));
+			return;
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_stopPlayout
 (JNIEnv* env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->StopPlayout() != 0) {
-		env->Throw(jni::JavaError(env, "Stop playout failed"));
-		return;
-	}
+		if (audioModule->StopPlayout() != 0) {
+			env->Throw(jni::JavaError(env, "Stop playout failed"));
+			return;
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_startPlayout
 (JNIEnv* env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->StartPlayout() != 0) {
-		env->Throw(jni::JavaError(env, "Start playout failed"));
-		return;
-	}
+		if (audioModule->StartPlayout() != 0) {
+			env->Throw(jni::JavaError(env, "Start playout failed"));
+			return;
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_initRecording
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->InitRecording() != 0) {
-		env->Throw(jni::JavaError(env, "Init recording failed"));
-		return;
-	}
+		if (audioModule->InitRecording() != 0) {
+			env->Throw(jni::JavaError(env, "Init recording failed"));
+			return;
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_stopRecording
 (JNIEnv* env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->StopRecording() != 0) {
-		env->Throw(jni::JavaError(env, "Stop recording failed"));
-		return;
-	}
+		if (audioModule->StopRecording() != 0) {
+			env->Throw(jni::JavaError(env, "Stop recording failed"));
+			return;
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_startRecording
 (JNIEnv* env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->StartRecording() != 0) {
-		env->Throw(jni::JavaError(env, "Start recording failed"));
-		return;
-	}
+		if (audioModule->StartRecording() != 0) {
+			env->Throw(jni::JavaError(env, "Start recording failed"));
+			return;
+		}
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getPlayoutDevices
@@ -279,161 +292,185 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_isSpeakerMuted
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, true);
+	return jni::CallFromJava(env, [&]() -> jboolean {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, true);
 
-	bool mute = true;
+		bool mute = true;
 
-	audioModule->SpeakerMute(&mute);
+		audioModule->SpeakerMute(&mute);
 
-	return mute;
+		return mute;
+	});
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_isMicrophoneMuted
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, true);
+	return jni::CallFromJava(env, [&]() -> jboolean {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, true);
 
-	bool mute = true;
+		bool mute = true;
 
-	audioModule->MicrophoneMute(&mute);
+		audioModule->MicrophoneMute(&mute);
 
-	return mute;
+		return mute;
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getSpeakerVolume
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
 
-	uint32_t volume = 0;
+		uint32_t volume = 0;
 
-	if (audioModule->SpeakerVolume(&volume) != 0) {
-		env->Throw(jni::JavaError(env, "Get speaker volume failed"));
-	}
+		if (audioModule->SpeakerVolume(&volume) != 0) {
+			env->Throw(jni::JavaError(env, "Get speaker volume failed"));
+		}
 
-	return volume;
+		return volume;
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getMaxSpeakerVolume
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
 
-	uint32_t volume = 0;
+		uint32_t volume = 0;
 
-	if (audioModule->MaxSpeakerVolume(&volume) != 0) {
-		env->Throw(jni::JavaError(env, "Get max speaker volume failed"));
-	}
+		if (audioModule->MaxSpeakerVolume(&volume) != 0) {
+			env->Throw(jni::JavaError(env, "Get max speaker volume failed"));
+		}
 
-	return volume;
+		return volume;
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getMinSpeakerVolume
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
 
-	uint32_t volume = 0;
+		uint32_t volume = 0;
 
-	if (audioModule->MinSpeakerVolume(&volume) != 0) {
-		env->Throw(jni::JavaError(env, "Get min speaker volume failed"));
-	}
+		if (audioModule->MinSpeakerVolume(&volume) != 0) {
+			env->Throw(jni::JavaError(env, "Get min speaker volume failed"));
+		}
 
-	return volume;
+		return volume;
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getMicrophoneVolume
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
 
-	uint32_t volume = 0;
+		uint32_t volume = 0;
 
-	if (audioModule->MicrophoneVolume(&volume) != 0) {
-		env->Throw(jni::JavaError(env, "Get microphone volume failed"));
-	}
+		if (audioModule->MicrophoneVolume(&volume) != 0) {
+			env->Throw(jni::JavaError(env, "Get microphone volume failed"));
+		}
 
-	return volume;
+		return volume;
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getMaxMicrophoneVolume
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
 
-	uint32_t volume = 0;
+		uint32_t volume = 0;
 
-	if (audioModule->MaxMicrophoneVolume(&volume) != 0) {
-		env->Throw(jni::JavaError(env, "Get max microphone volume failed"));
-	}
+		if (audioModule->MaxMicrophoneVolume(&volume) != 0) {
+			env->Throw(jni::JavaError(env, "Get max microphone volume failed"));
+		}
 
-	return volume;
+		return volume;
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_getMinMicrophoneVolume
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLEV(audioModule, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLEV(audioModule, 0);
 
-	uint32_t volume = 0;
+		uint32_t volume = 0;
 
-	if (audioModule->MinMicrophoneVolume(&volume) != 0) {
-		env->Throw(jni::JavaError(env, "Get min microphone volume failed"));
-	}
+		if (audioModule->MinMicrophoneVolume(&volume) != 0) {
+			env->Throw(jni::JavaError(env, "Get min microphone volume failed"));
+		}
 
-	return volume;
+		return volume;
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_setSpeakerVolume
 (JNIEnv * env, jobject caller, jint volume)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->SetSpeakerVolume(static_cast<uint32_t>(volume)) != 0) {
-		env->Throw(jni::JavaError(env, "Set speaker volume failed"));
-	}
+		if (audioModule->SetSpeakerVolume(static_cast<uint32_t>(volume)) != 0) {
+			env->Throw(jni::JavaError(env, "Set speaker volume failed"));
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_setSpeakerMute
 (JNIEnv * env, jobject caller, jboolean mute)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->SetSpeakerMute(mute) != 0) {
-		env->Throw(jni::JavaError(env, "Set speaker mute failed"));
-	}
+		if (audioModule->SetSpeakerMute(mute) != 0) {
+			env->Throw(jni::JavaError(env, "Set speaker mute failed"));
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_setMicrophoneVolume
 (JNIEnv * env, jobject caller, jint volume)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->SetMicrophoneVolume(static_cast<uint32_t>(volume)) != 0) {
-		env->Throw(jni::JavaError(env, "Set microphone volume failed"));
-	}
+		if (audioModule->SetMicrophoneVolume(static_cast<uint32_t>(volume)) != 0) {
+			env->Throw(jni::JavaError(env, "Set microphone volume failed"));
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_setMicrophoneMute
 (JNIEnv * env, jobject caller, jboolean mute)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	if (audioModule->SetMicrophoneMute(mute) != 0) {
-		env->Throw(jni::JavaError(env, "Set microphone mute failed"));
-	}
+		if (audioModule->SetMicrophoneMute(mute) != 0) {
+			env->Throw(jni::JavaError(env, "Set microphone mute failed"));
+		}
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_addSinkInternal
@@ -463,16 +500,18 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_removeSinkInternal
 (JNIEnv * env, jobject caller, jlong sinkHandle)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	auto sink = reinterpret_cast<jni::AudioTransportSink *>(sinkHandle);
+		auto sink = reinterpret_cast<jni::AudioTransportSink *>(sinkHandle);
 
-	if (sink != nullptr) {
-		audioModule->RegisterAudioCallback(nullptr);
+		if (sink != nullptr) {
+			audioModule->RegisterAudioCallback(nullptr);
 
-		delete sink;
-	}
+			delete sink;
+		}
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_addSourceInternal
@@ -502,36 +541,40 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_removeSourceInternal
 (JNIEnv * env, jobject caller, jlong sourceHandle)
 {
-	jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
-	CHECK_HANDLE(audioModule);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::AudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
 
-	auto source = reinterpret_cast<jni::AudioTransportSource *>(sourceHandle);
+		auto source = reinterpret_cast<jni::AudioTransportSource *>(sourceHandle);
 
-	if (source != nullptr) {
-		audioModule->RegisterAudioCallback(nullptr);
+		if (source != nullptr) {
+			audioModule->RegisterAudioCallback(nullptr);
 
-		delete source;
-	}
+			delete source;
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioDeviceModuleBase_disposeInternal
 (JNIEnv * env, jobject caller)
 {
-	webrtc::AudioDeviceModule * audioModule = jni::TakeHandle<webrtc::AudioDeviceModule>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::AudioDeviceModule * audioModule = jni::TakeHandle<webrtc::AudioDeviceModule>(env, caller);
 
-	if (audioModule == nullptr) {
-		return;
-	}
-
-	jni::ReleaseHandle(env, audioModule, [audioModule](bool) {
-		if (audioModule->Initialized()) {
-			audioModule->Terminate();
+		if (audioModule == nullptr) {
+			return;
 		}
 
-		webrtc::RefCountReleaseStatus status = audioModule->Release();
+		jni::ReleaseHandle(env, audioModule, [audioModule](bool) {
+			if (audioModule->Initialized()) {
+				audioModule->Terminate();
+			}
 
-		if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-			RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-		}
+			webrtc::RefCountReleaseStatus status = audioModule->Release();
+
+			if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+				RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+			}
+		});
 	});
 }
