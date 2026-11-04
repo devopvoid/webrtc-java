@@ -15,6 +15,7 @@
  */
 
 #include "media/MediaReader.h"
+#include "media/AllocationFault.h"
 
 #include <mutex>
 
@@ -68,10 +69,21 @@ namespace ffmpeg
 
 		AVDictionary * options = nullptr;
 
-		av_dict_set(&options, "protocol_whitelist", kProtocolWhitelist, 0);
+		int result = AllocationFault::CheckOption(
+				av_dict_set(&options, "protocol_whitelist", kProtocolWhitelist, 0));
+
+		if (result < 0) {
+			// Without the whitelist a source could reach any protocol of the
+			// build, so nothing is opened.
+			av_dict_free(&options);
+			avformat_free_context(format_context_);
+			format_context_ = nullptr;
+
+			return result;
+		}
 
 		BeginBlocking();
-		int result = avformat_open_input(&format_context_, url.c_str(), nullptr, &options);
+		result = avformat_open_input(&format_context_, url.c_str(), nullptr, &options);
 		EndBlocking();
 
 		av_dict_free(&options);

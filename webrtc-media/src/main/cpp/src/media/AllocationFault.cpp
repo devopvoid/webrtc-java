@@ -17,8 +17,13 @@
 #include "media/AllocationFault.h"
 
 #include <atomic>
+#include <cerrno>
 #include <new>
 #include <system_error>
+
+extern "C" {
+#include <libavutil/error.h>
+}
 
 namespace
 {
@@ -27,6 +32,7 @@ namespace
 	std::atomic<bool> fail_thread_start{ false };
 	std::atomic<bool> fail_writer_allocation{ false };
 	std::atomic<int> writer_frames_left{ 0 };
+	std::atomic<bool> fail_option{ false };
 }
 
 namespace ffmpeg
@@ -52,18 +58,24 @@ namespace ffmpeg
 		fail_writer_allocation.store(true);
 	}
 
+	void AllocationFault::FailNextOption()
+	{
+		fail_option.store(true);
+	}
+
 	void AllocationFault::Disarm()
 	{
 		fail_string_copy.store(false);
 		fail_allocation.store(false);
 		fail_thread_start.store(false);
 		fail_writer_allocation.store(false);
+		fail_option.store(false);
 	}
 
 	bool AllocationFault::IsArmed()
 	{
 		return fail_string_copy.load() || fail_allocation.load() || fail_thread_start.load()
-				|| fail_writer_allocation.load();
+				|| fail_writer_allocation.load() || fail_option.load();
 	}
 
 	void AllocationFault::CheckStringCopy()
@@ -96,5 +108,14 @@ namespace ffmpeg
 		if (fail_writer_allocation.exchange(false)) {
 			throw std::bad_alloc();
 		}
+	}
+
+	int AllocationFault::CheckOption(int result)
+	{
+		if (fail_option.load() && fail_option.exchange(false)) {
+			return AVERROR(ENOMEM);
+		}
+
+		return result;
 	}
 }

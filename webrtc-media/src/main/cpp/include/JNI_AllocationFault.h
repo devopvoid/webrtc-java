@@ -56,6 +56,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_player_AllocationFault
+	 * Method:    failNextOption
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_failNextOption
+	(JNIEnv *, jclass);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_AllocationFault
 	 * Method:    isArmed
 	 * Signature: ()Z
 	 */

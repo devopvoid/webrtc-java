@@ -67,6 +67,12 @@ public final class AllocationFault {
 	public static native void failWriterAllocation(int afterFrames);
 
 	/**
+	 * Fails the next setting of an FFmpeg option that is checked, such as the
+	 * protocols a reader may reach.
+	 */
+	public static native void failNextOption();
+
+	/**
 	 * @return True if a fault is armed that has not fired yet.
 	 */
 	public static native boolean isArmed();
