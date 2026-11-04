@@ -22,9 +22,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -68,8 +66,6 @@ import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.media.MediaStream;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
-import dev.onvoid.webrtc.media.audio.AudioTrack;
-import dev.onvoid.webrtc.media.video.VideoTrack;
 
 /**
  * The {@link Peer} of a {@link WebRtc} runtime.
@@ -112,6 +108,8 @@ final class PeerImpl implements Peer {
 
 	final DataChannels channels;
 
+	private final RemoteTracks tracks;
+
 	private final PeerOptions options;
 
 	private final Signaling signaling;
@@ -124,8 +122,6 @@ final class PeerImpl implements Peer {
 	private final CompletableFuture<Void> closedInternal = new CompletableFuture<>();
 
 	private final CopyOnWriteArrayList<SenderImpl> senders = new CopyOnWriteArrayList<>();
-
-	private final CopyOnWriteArrayList<RemoteTrackImpl> remoteTracks = new CopyOnWriteArrayList<>();
 
 	private volatile PeerState state = PeerState.NEW;
 
@@ -145,17 +141,11 @@ final class PeerImpl implements Peer {
 
 	private final StatsSampler statistics;
 
-	private final Map<String, RemoteTrackImpl> remoteTrackById = new HashMap<>();
-
 	// Confined to the event executor.
 
 	private PeerState deliveredState = PeerState.NEW;
 
-	private final List<RemoteTrack> deliveredTracks = new ArrayList<>();
-
 	private final Handlers<PeerState> stateHandlers;
-
-	private final Handlers<RemoteTrack> trackHandlers;
 
 	private final Handlers<WebRtcException> errorHandlers;
 
@@ -164,13 +154,6 @@ final class PeerImpl implements Peer {
 	private final ClientFuture<Void> closedFuture = new ClientFuture<>();
 
 	private final NegotiatorImpl negotiator = new NegotiatorImpl();
-
-	/**
-	 * The kinds of media whose tracks this peer drops, those it declined when
-	 * it answered an offer that replaced its own. Only on the control
-	 * executor.
-	 */
-	private final Set<MediaKind> declinedKinds = EnumSet.noneOf(MediaKind.class);
 
 	/**
 	 * The codecs each kind of media is negotiated with, in order, for the
@@ -202,7 +185,6 @@ final class PeerImpl implements Peer {
 		this.events = new SerialExecutor(rtc.eventExecutor, rtc.eventWork, rtc::reportError, true,
 				rtc.ownsEventExecutor ? "webrtc-client-events-" + name : null);
 		this.stateHandlers = new Handlers<>(rtc::reportError);
-		this.trackHandlers = new Handlers<>(rtc::reportError);
 		this.errorHandlers = new Handlers<>(rtc::reportError);
 		this.chain = new OperationChain(control, rtc.timer, rtc.operationTimeout, name, new ChainHost());
 		this.steps = new NegotiationSteps(control, rtc.timer, chain, () -> connection, options.gatheringTimeout,
@@ -210,6 +192,7 @@ final class PeerImpl implements Peer {
 		this.automatic = new PerfectNegotiation(this, options, chain, steps);
 		this.statistics = new StatsSampler(this);
 		this.channels = new DataChannels(this);
+		this.tracks = new RemoteTracks(this, options.receiveTransform);
 
 		rtc.track(connected, events);
 		rtc.track(closedFuture, events);
@@ -377,19 +360,12 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public Subscription onTrack(Consumer<RemoteTrack> handler) {
-		requireNonNull(handler, "handler");
-
-		return subscribe(() -> {
-			for (RemoteTrack track : new ArrayList<>(deliveredTracks)) {
-				call(handler, track);
-			}
-			return trackHandlers.add(handler);
-		});
+		return tracks.onTrack(handler);
 	}
 
 	@Override
 	public List<RemoteTrack> remoteTracks() {
-		return Collections.unmodifiableList(new ArrayList<RemoteTrack>(remoteTracks));
+		return tracks.current();
 	}
 
 	@Override
@@ -786,7 +762,7 @@ final class PeerImpl implements Peer {
 			// m-lines that are then rejected.
 			for (MediaKind kind : MediaKind.values()) {
 				if (!options.receive.contains(kind)) {
-					declinedKinds.add(kind);
+					tracks.decline(kind);
 				}
 			}
 
@@ -1205,84 +1181,6 @@ final class PeerImpl implements Peer {
 		}
 	}
 
-	private void trackAdded(RTCRtpReceiver receiver, MediaStream[] streams) {
-		List<String> streamIds = new ArrayList<>();
-
-		for (MediaStream stream : streams) {
-			streamIds.add(stream.id());
-			stream.dispose();
-		}
-
-		if (closed) {
-			receiver.dispose();
-			return;
-		}
-
-		MediaStreamTrack track = receiver.getTrack();
-		String id = track.getId();
-
-		if (declinedKinds.contains(track instanceof VideoTrack ? MediaKind.VIDEO : MediaKind.AUDIO)) {
-			// Of an m-line this peer rejected, when it answered an offer that
-			// replaced its own.
-			track.dispose();
-			receiver.dispose();
-			return;
-		}
-		if (remoteTrackById.containsKey(id)) {
-			// Renegotiation reported a track that is already known.
-			track.dispose();
-			receiver.dispose();
-			return;
-		}
-
-		if (options.receiveTransform != null) {
-			String owner = "the track " + id + " of " + name;
-
-			try {
-				// Before the application hears of the track, and so before
-				// its first frame arrives.
-				receiver.setTransform(guard(options.receiveTransform, owner));
-			}
-			catch (Throwable e) {
-				deliverError(asWebRtcException(e, "Setting the receive transform of " + owner + " failed"));
-			}
-		}
-
-		RemoteTrackImpl remote = track instanceof VideoTrack
-				? new RemoteVideoImpl(this, receiver, (VideoTrack) track, id, streamIds)
-				: new RemoteAudioImpl(this, receiver, (AudioTrack) track, id, streamIds);
-
-		remoteTrackById.put(id, remote);
-		remoteTracks.add(remote);
-
-		events.execute(() -> {
-			deliveredTracks.add(remote);
-			trackHandlers.accept(remote);
-		});
-	}
-
-	private void trackRemoved(RTCRtpReceiver receiver) {
-		MediaStreamTrack track = receiver.getTrack();
-		String id = track.getId();
-
-		track.dispose();
-		receiver.dispose();
-
-		RemoteTrackImpl remote = remoteTrackById.remove(id);
-
-		if (remote == null || closed) {
-			return;
-		}
-
-		remoteTracks.remove(remote);
-		remote.end();
-
-		events.execute(() -> {
-			deliveredTracks.remove(remote);
-			remote.fireEnded();
-		});
-	}
-
 	private void teardown() {
 		if (teardownStarted) {
 			return;
@@ -1304,13 +1202,7 @@ final class PeerImpl implements Peer {
 		}
 		senders.clear();
 
-		List<RemoteTrackImpl> ended = new ArrayList<>(remoteTracks);
-
-		for (RemoteTrackImpl remote : ended) {
-			remote.end();
-		}
-		remoteTracks.clear();
-		remoteTrackById.clear();
+		List<RemoteTrackImpl> ended = tracks.endAll();
 
 		try {
 			if (connection != null) {
@@ -1343,10 +1235,7 @@ final class PeerImpl implements Peer {
 			// hears of none once it was let go of.
 			detachSignaling();
 
-			for (RemoteTrackImpl remote : ended) {
-				remote.fireEnded();
-			}
-			deliveredTracks.clear();
+			tracks.fireEnded(ended);
 			channels.clearDelivered();
 
 			deliverState(PeerState.CLOSED);
@@ -1354,7 +1243,7 @@ final class PeerImpl implements Peer {
 			connected.completeExceptionally(error);
 			closedFuture.complete(null);
 
-			trackHandlers.clear();
+			tracks.clearHandlers();
 			channels.clearHandlers();
 			stateHandlers.clear();
 			errorHandlers.clear();
@@ -1458,12 +1347,12 @@ final class PeerImpl implements Peer {
 
 		@Override
 		public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
-			control.execute(() -> trackAdded(receiver, mediaStreams));
+			control.execute(() -> tracks.added(receiver, mediaStreams));
 		}
 
 		@Override
 		public void onRemoveTrack(RTCRtpReceiver receiver) {
-			control.execute(() -> trackRemoved(receiver));
+			control.execute(() -> tracks.removed(receiver));
 		}
 
 		@Override
