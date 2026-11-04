@@ -62,7 +62,7 @@ class NegotiationTimeoutTests extends ClientTestBase {
 			CompletableFuture<UnaryOperator<String>> late = new CompletableFuture<>();
 			AtomicBoolean firstSent = new AtomicBoolean();
 			AtomicBoolean applied = new AtomicBoolean();
-			CompletableFuture<Void> first = peer.restartIce(offer -> {
+			CompletableFuture<Void> first = peer.manual.restartIce(offer -> {
 				firstSent.set(true);
 				return late;
 			});
@@ -70,7 +70,7 @@ class NegotiationTimeoutTests extends ClientTestBase {
 
 			CompletableFuture<UnaryOperator<String>> answer = new CompletableFuture<>();
 			AtomicBoolean nextSent = new AtomicBoolean();
-			CompletableFuture<Void> next = peer.restartIce(offer -> {
+			CompletableFuture<Void> next = peer.manual.restartIce(offer -> {
 				nextSent.set(true);
 				return answer;
 			});

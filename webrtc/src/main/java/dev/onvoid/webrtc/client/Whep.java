@@ -342,7 +342,7 @@ public final class Whep {
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {
-				return HttpSession.start(rtc, peer, endpoint, credentials, limit, peer.preferCodecs(names), gathering,
+				return HttpSession.start(rtc, peer, endpoint, credentials, limit, peer.manual.preferCodecs(names), gathering,
 						PROTOCOL, Session::new);
 			}
 			catch (RuntimeException | Error e) {

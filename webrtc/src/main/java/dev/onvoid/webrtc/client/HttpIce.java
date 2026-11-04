@@ -177,7 +177,7 @@ final class HttpIce {
 
 		Restart restart = new Restart();
 
-		return peer.restartIce(offer -> {
+		return peer.manual.restartIce(offer -> {
 			HttpCall request;
 			Fragment fragment = Fragment.of(offer.sdp);
 
