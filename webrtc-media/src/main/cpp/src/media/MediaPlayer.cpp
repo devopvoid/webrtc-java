@@ -17,6 +17,7 @@
 #include "media/MediaPlayer.h"
 #include "media/AllocationFault.h"
 #include "media/ErrorText.h"
+#include "media/PlaybackProbe.h"
 
 #include <algorithm>
 #include <chrono>
@@ -167,15 +168,16 @@ namespace ffmpeg
 		ended_ = false;
 
 		// The decode thread may be held up by a full queue, and it cannot act
-		// on the request until it gets out of that. Dropping what is queued
-		// both frees it and throws away what belongs to the old position; the
-		// thread flushes again once the seek has actually happened.
+		// on the request until it gets out of that. A new generation frees it
+		// and throws away what belongs to the old position, what is queued as
+		// well as what it still has to push; it flushes again once the seek
+		// has actually happened.
 		//
 		// Under the lock, as the thread takes the request only under it: a
 		// flush after that would throw away what it has decoded at the new
 		// position, and an audio source, decoded seconds ahead, would skip
 		// ahead or end at once.
-		pacer_->Flush(position_us + loop_offset_us_.load());
+		pacer_->StartGeneration(position_us + loop_offset_us_.load());
 
 		command_.notify_all();
 	}
@@ -308,6 +310,10 @@ namespace ffmpeg
 					seek_to = seek_position_us_;
 					seek_precise = seek_precise_;
 					do_seek = true;
+
+					// Under the lock, so that a seek coming in after this one
+					// turns away what is decoded for it.
+					generation_ = pacer_->GetGeneration();
 				}
 			}
 
@@ -485,7 +491,7 @@ namespace ffmpeg
 
 			// The frame belongs to the pacer from here on, whether or not it
 			// makes it into the queue.
-			if (!pacer_->PushVideo(frame, timestamp_us + loop_offset_us_.load())) {
+			if (!pacer_->PushVideo(frame, timestamp_us + loop_offset_us_.load(), generation_)) {
 				return 0;
 			}
 		}
@@ -513,7 +519,7 @@ namespace ffmpeg
 			}
 
 			if (!pacer_->PushAudio(std::move(chunk), audio_decoder_.GetChannels(),
-					timestamp_us + loop_offset_us_.load())) {
+					timestamp_us + loop_offset_us_.load(), generation_)) {
 				return 0;
 			}
 		}
@@ -530,6 +536,8 @@ namespace ffmpeg
 		if (result < 0) {
 			ReportError("Seeking failed", result);
 		}
+
+		PlaybackProbe::NoteSeek();
 	}
 
 	bool MediaPlayer::SeekFurtherBack()

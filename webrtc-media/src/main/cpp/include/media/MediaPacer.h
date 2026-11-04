@@ -92,12 +92,15 @@ namespace ffmpeg
 			//
 			// Blocks while the queue is full, which is the backpressure that
 			// keeps decoding from running ahead of playback. Returns false
-			// once the pacer has been stopped.
-			bool PushVideo(AVFrame * frame, int64_t timestamp_us);
+			// once the pacer has been stopped, or once the generation given
+			// is no longer the current one: what was decoded for it belongs
+			// to a position that is being left, so it is dropped, and a wait
+			// for room ends there, as nothing else may ever end it.
+			bool PushVideo(AVFrame * frame, int64_t timestamp_us, uint64_t generation);
 
 			// Hands over one 10 ms chunk of interleaved 16-bit PCM.
 			bool PushAudio(std::vector<int16_t> && samples, int channels,
-					int64_t timestamp_us);
+					int64_t timestamp_us, uint64_t generation);
 
 			void Pause();
 			void Resume();
@@ -108,6 +111,19 @@ namespace ffmpeg
 			// position is where playback is taken to be until an item has been
 			// delivered, in the timestamps the items are pushed with.
 			void Flush(int64_t position_us);
+
+			// Flushes, and starts a new generation, which turns away what is
+			// still being pushed for the one before. This is for a seek that
+			// has been asked for, by a thread other than the one pushing,
+			// which may have more on its way than the queue can take. With
+			// playback paused nothing would ever make room for that, and the
+			// thread would never get round to the seek.
+			void StartGeneration(int64_t position_us);
+
+			// The generation pushes have to name to be taken. The thread
+			// pushing reads this when it starts on a seek, so that everything
+			// it pushes from there on was decoded for that seek.
+			uint64_t GetGeneration() const;
 
 			// True once everything handed over has been delivered: the
 			// queues are empty and no item is being handed to a source.
@@ -147,6 +163,8 @@ namespace ffmpeg
 
 			void Run();
 
+			void FlushLocked(int64_t position_us);
+
 			// Both run without the lock held: the extension API delivers
 			// synchronously into WebRTC, which must not happen underneath a
 			// lock of ours. The time on the WebRTC clock is worked out by the
@@ -174,6 +192,9 @@ namespace ffmpeg
 
 			// Items taken from a queue whose delivery has not returned yet.
 			int delivering_ = 0;
+
+			// Counts the seeks asked for.
+			uint64_t generation_ = 0;
 
 			// Presentation time plus this is a time on the WebRTC clock.
 			int64_t base_us_ = 0;

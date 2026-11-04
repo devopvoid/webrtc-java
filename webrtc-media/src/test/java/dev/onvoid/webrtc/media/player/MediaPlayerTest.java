@@ -675,6 +675,31 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void pausedSeekFinishesWithoutPlaying() throws Exception {
+		// A block of 25 s comes out of the decoder in one go, which is more
+		// than the audio queue takes even when a seek has just emptied it.
+		// While paused, nothing makes room in it again.
+		Path mkv = TestMedia.longPcmBlockMatroska(tempDir, (short) 1000, 25);
+
+		try (Playback playback = new Playback(new MediaReader(mkv))) {
+			playback.player.play();
+
+			assertTrue(waitFor(() -> PlaybackProbe.waitingPushes() > 0, 10_000),
+					"the audio queue did not fill up");
+
+			playback.player.pause();
+
+			long seeks = PlaybackProbe.seeks();
+
+			playback.player.seek(0);
+
+			assertTrue(waitFor(() -> PlaybackProbe.seeks() > seeks, 3_000),
+					"the seek was not carried out, with "
+							+ PlaybackProbe.waitingPushes() + " push waiting");
+		}
+	}
+
+	@Test
 	void needsAtLeastOneSource() throws Exception {
 		MediaReader reader = new MediaReader(asset());
 

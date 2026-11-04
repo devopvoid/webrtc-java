@@ -173,18 +173,46 @@ final class TestMedia {
 	 */
 	static Path pcmMatroska(Path directory, short value, long... blockTimes)
 			throws IOException {
-		byte[] block = new byte[FLAC_BLOCK_SIZE * 2];
+		byte[] block = pcmBlock(value, FLAC_BLOCK_SIZE);
+
+		return Files.write(directory.resolve("pcm.mkv"),
+				matroska(pcmTrack(), blockTimes, n -> block));
+	}
+
+	/**
+	 * Writes 48 kHz, mono, 16-bit PCM in a Matroska file, all of it in a
+	 * single block of a constant, non-zero value. A decoder gives all of a
+	 * block out in one go, so a long one is more audio at once than a queue
+	 * of a player can take.
+	 *
+	 * @param directory Where to write the file.
+	 * @param value     The value of every sample.
+	 * @param seconds   How long the block is.
+	 *
+	 * @return The file written.
+	 */
+	static Path longPcmBlockMatroska(Path directory, short value, int seconds)
+			throws IOException {
+		byte[] block = pcmBlock(value, seconds * FLAC_SAMPLE_RATE);
+
+		return Files.write(directory.resolve("long-block.mkv"),
+				matroska(pcmTrack(), new long[] { 0 }, n -> block));
+	}
+
+	private static byte[] pcmBlock(short value, int samples) {
+		byte[] block = new byte[samples * 2];
 
 		for (int i = 0; i < block.length; i += 2) {
 			block[i] = (byte) value;
 			block[i + 1] = (byte) (value >> 8);
 		}
 
-		byte[] track = trackEntry("A_PCM/INT/LIT", null, 1,
-				ebmlUInt(0x6264, 16));	// BitDepth
+		return block;
+	}
 
-		return Files.write(directory.resolve("pcm.mkv"),
-				matroska(track, blockTimes, n -> block));
+	private static byte[] pcmTrack() {
+		return trackEntry("A_PCM/INT/LIT", null, 1,
+				ebmlUInt(0x6264, 16));	// BitDepth
 	}
 
 	/**

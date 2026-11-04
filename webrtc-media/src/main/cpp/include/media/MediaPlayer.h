@@ -234,6 +234,10 @@ namespace ffmpeg
 			static constexpr int64_t kFirstSeekBackUs = 1000000;
 			static constexpr int64_t kMaxSeekBackUs = 64000000;
 
+			// The generation of the pacer that the decode thread pushes for,
+			// the one of the seek it took last. On the decode thread.
+			uint64_t generation_ = 0;
+
 			// The seek being carried out, on the decode thread: its position,
 			// whether it is precise, how far before it the reader was last
 			// sent, and where to.

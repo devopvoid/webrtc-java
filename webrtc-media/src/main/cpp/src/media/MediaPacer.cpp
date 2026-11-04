@@ -16,6 +16,7 @@
 
 #include "media/MediaPacer.h"
 #include "media/AudioDecoder.h"
+#include "media/PlaybackProbe.h"
 
 #include <algorithm>
 #include <limits>
@@ -134,15 +135,22 @@ namespace ffmpeg
 		audio_queue_.clear();
 	}
 
-	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us)
+	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us, uint64_t generation)
 	{
 		std::unique_lock<std::mutex> lock(mutex_);
 
-		video_space_.wait(lock, [this] {
-			return !running_ || video_queue_.size() < kVideoCapacity;
-		});
+		const auto room = [this, generation] {
+			return !running_ || generation != generation_
+					|| video_queue_.size() < kVideoCapacity;
+		};
 
-		if (!running_) {
+		if (!room()) {
+			PlaybackProbe::WaitingPush waiting;
+
+			video_space_.wait(lock, room);
+		}
+
+		if (!running_ || generation != generation_) {
 			// The frame became ours on the way in, so it is ours to drop.
 			av_frame_free(&frame);
 
@@ -157,12 +165,13 @@ namespace ffmpeg
 	}
 
 	bool MediaPacer::PushAudio(std::vector<int16_t> && samples, int channels,
-			int64_t timestamp_us)
+			int64_t timestamp_us, uint64_t generation)
 	{
 		std::unique_lock<std::mutex> lock(mutex_);
 
-		audio_space_.wait(lock, [this] {
-			if (!running_ || audio_queue_.size() < kAudioCapacity) {
+		const auto room = [this, generation] {
+			if (!running_ || generation != generation_
+					|| audio_queue_.size() < kAudioCapacity) {
 				return true;
 			}
 
@@ -170,9 +179,15 @@ namespace ffmpeg
 			// while it is running short.
 			return audio_queue_.size() < kAudioOverflowCapacity
 					&& video_queue_.size() < kVideoCapacity / 2;
-		});
+		};
 
-		if (!running_) {
+		if (!room()) {
+			PlaybackProbe::WaitingPush waiting;
+
+			audio_space_.wait(lock, room);
+		}
+
+		if (!running_ || generation != generation_) {
 			return false;
 		}
 
@@ -223,6 +238,27 @@ namespace ffmpeg
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
+		FlushLocked(position_us);
+	}
+
+	void MediaPacer::StartGeneration(int64_t position_us)
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		++generation_;
+
+		FlushLocked(position_us);
+	}
+
+	uint64_t MediaPacer::GetGeneration() const
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return generation_;
+	}
+
+	void MediaPacer::FlushLocked(int64_t position_us)
+	{
 		video_queue_.clear();
 		audio_queue_.clear();
 
