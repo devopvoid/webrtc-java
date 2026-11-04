@@ -74,11 +74,12 @@ public interface Negotiator {
 
 	/**
 	 * Adds a remote candidate. One that arrives before the remote description
-	 * is held until the description is applied.
+	 * is held until the description is applied, and the steps behind it go
+	 * on. If WebRTC then rejects it, the error handlers of the peer hear of it.
 	 *
 	 * @param candidate the remote candidate.
 	 *
-	 * @return a future that completes once the candidate is added.
+	 * @return a future that completes once the candidate is added or held.
 	 */
 	CompletableFuture<Void> addCandidate(RTCIceCandidate candidate);
 

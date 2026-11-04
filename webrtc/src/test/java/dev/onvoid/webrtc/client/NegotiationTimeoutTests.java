@@ -24,15 +24,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
+import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.RTCSignalingState;
 
@@ -41,6 +45,10 @@ import org.junit.jupiter.api.Test;
 class NegotiationTimeoutTests extends ClientTestBase {
 
 	private static final Duration OPERATION_TIMEOUT = Duration.ofSeconds(37);
+
+	private static final String CANDIDATE_ADDRESS = "203.0.113.7";
+
+	private static final String CANDIDATE = "candidate:1 1 udp 2122260223 " + CANDIDATE_ADDRESS + " 49203 typ host";
 
 	@Test
 	void lateRestartAnswerDiscarded() throws Exception {
@@ -162,6 +170,94 @@ class NegotiationTimeoutTests extends ClientTestBase {
 		}
 	}
 
+	@Test
+	void candidateBeforeOffer() throws Exception {
+		ManualExecutor control = new ManualExecutor();
+		ManualExecutor events = new ManualExecutor();
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = runtime(control, events, timer);
+		try {
+			RemoteSignaling signaling = new RemoteSignaling();
+			// Nothing to receive, so that it makes no offer of its own to collide.
+			PeerImpl peer = (PeerImpl) drive(CompletableFuture.supplyAsync(() -> client.createPeer(
+					PeerOptions.builder().signaling(signaling).build())), control, events);
+
+			// The timeout never fires here, so only the candidate letting the
+			// chain go on can bring the offer to its answer.
+			signaling.inbound.accept(SignalMessage.of(new RTCIceCandidate("0", 0, CANDIDATE)));
+			signaling.inbound.accept(SignalMessage.of(remoteOffer()));
+			control.runUntil(() -> {
+				events.runAll();
+				return signaling.sent.stream().anyMatch(message -> message.type() == SignalMessage.Type.ANSWER);
+			}, TIMEOUT_SECONDS);
+
+			assertTrue(remoteSdp(peer, control, events).contains(CANDIDATE_ADDRESS));
+			assertEquals(0, timer.scheduled(OPERATION_TIMEOUT));
+		}
+		finally {
+			close(client, control, events);
+		}
+	}
+
+	@Test
+	void manualCandidateBeforeOffer() throws Exception {
+		ManualExecutor control = new ManualExecutor();
+		ManualExecutor events = new ManualExecutor();
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = runtime(control, events, timer);
+		try {
+			PeerImpl peer = manualPeer(client, control, events);
+
+			// Done once held, so a caller may wait for it before it answers.
+			drive(peer.negotiator().addCandidate(new RTCIceCandidate("0", 0, CANDIDATE)), control, events);
+			drive(peer.negotiator().answer(remoteOffer()), control, events);
+
+			assertTrue(remoteSdp(peer, control, events).contains(CANDIDATE_ADDRESS));
+			assertEquals(0, timer.scheduled(OPERATION_TIMEOUT));
+		}
+		finally {
+			close(client, control, events);
+		}
+	}
+
+	@Test
+	void rejectedHeldCandidateReported() throws Exception {
+		ManualExecutor control = new ManualExecutor();
+		ManualExecutor events = new ManualExecutor();
+		WebRtc client = runtime(control, events, new ManualTimer());
+		try {
+			PeerImpl peer = manualPeer(client, control, events);
+
+			// The offer has no m-line of this mid.
+			drive(peer.negotiator().addCandidate(new RTCIceCandidate("9", 9, CANDIDATE)), control, events);
+			drive(peer.negotiator().answer(remoteOffer()), control, events);
+
+			control.runUntil(() -> {
+				events.runAll();
+				return !errors.isEmpty();
+			}, TIMEOUT_SECONDS);
+
+			assertInstanceOf(NegotiationException.class, errors.remove(0));
+		}
+		finally {
+			close(client, control, events);
+		}
+	}
+
+	private PeerImpl manualPeer(WebRtc client, ManualExecutor control, ManualExecutor events) throws Exception {
+		return (PeerImpl) drive(CompletableFuture.supplyAsync(() -> client.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL).receive(MediaKind.AUDIO).build())), control, events);
+	}
+
+	private RTCSessionDescription remoteOffer() throws Exception {
+		return await(rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL)
+				.receive(MediaKind.AUDIO).build()).negotiator().createOffer());
+	}
+
+	private static String remoteSdp(PeerImpl peer, ManualExecutor control, ManualExecutor events) throws Exception {
+		return drive(peer.withNative(connection -> connection.getRemoteDescription().sdp), control, events);
+	}
+
 	private WebRtc runtime(ManualExecutor control, ManualExecutor events, ManualTimer timer) {
 		return WebRtc.builder().audio(AudioMode.HEADLESS).controlPool(control).eventExecutor(events)
 				.timer(timer).operationTimeout(OPERATION_TIMEOUT).errorHandler(errors::add).build();
@@ -198,5 +294,27 @@ class NegotiationTimeoutTests extends ClientTestBase {
 
 	private static void close(WebRtc client, ManualExecutor control, ManualExecutor events) throws Exception {
 		drive(client.closeAsync(), control, events);
+	}
+
+
+
+	/** The signaling of a peer, with the test as the remote side. */
+	private static final class RemoteSignaling implements Signaling {
+
+		final List<SignalMessage> sent = new CopyOnWriteArrayList<>();
+
+		volatile Consumer<SignalMessage> inbound;
+
+
+		@Override
+		public void send(SignalMessage message) {
+			sent.add(message);
+		}
+
+		@Override
+		public Subscription attach(Consumer<SignalMessage> inbound) {
+			this.inbound = inbound;
+			return () -> { };
+		}
 	}
 }

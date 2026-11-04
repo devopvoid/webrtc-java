@@ -807,7 +807,7 @@ viewer.negotiator().createOffer(Gathering.COMPLETE)
 | `createOffer()`, `createOffer(Gathering)` | Creates the local offer and applies it. |
 | `answer(offer)`, `answer(offer, Gathering)` | Applies the remote offer, then creates the answer and applies it. |
 | `applyAnswer(answer)` | Applies the remote answer to the local offer. |
-| `addCandidate(candidate)` | Adds a remote candidate, or holds it until there is a remote description to add it to. |
+| `addCandidate(candidate)` | Adds a remote candidate, or holds it until there is a remote description to add it to. The future completes once the candidate is added or held; a held candidate that WebRTC rejects later reaches the error handler. |
 
 A manual peer with a `Signaling` still sends its local candidates through it. `peer.negotiator()` throws an `IllegalStateException` on a peer that negotiates automatically.
 
