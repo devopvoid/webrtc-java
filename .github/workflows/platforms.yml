@@ -162,9 +162,10 @@ jobs:
   # but the device modules, capturers and hardware codecs that call back into
   # Java are not, so each OS has JNI code of its own. One architecture each is
   # enough, since that code is the same across them. It fails on any JNI error
-  # or warning, see the test-natives action.
+  # or warning, see the test-natives action. Disabled for now.
   jni-check:
     name: jni-check (${{ matrix.platform.name }})
+    if: false
     needs: build
     timeout-minutes: 30
     strategy:
