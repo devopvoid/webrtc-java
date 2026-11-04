@@ -17,6 +17,8 @@
 #ifndef JNI_WEBRTC_API_REGISTERED_OBSERVERS_H_
 #define JNI_WEBRTC_API_REGISTERED_OBSERVERS_H_
 
+#include <functional>
+
 namespace jni
 {
 	// Which native observer is registered on a WebRTC object that has room for
@@ -40,6 +42,24 @@ namespace jni
 		// Forgets the observer if it is the one registered on the owner, and
 		// returns whether it was. Only then is it to be unregistered.
 		bool Remove(const void * owner, const void * observer);
+
+		// How an ObserverSlot tells WebRTC: registering records the observer
+		// here first, removing tells WebRTC only while the observer removed is
+		// still the registered one.
+		template <typename T>
+		std::function<void(T *, T *)> Apply(const void * owner, std::function<void(T *)> registerObserver,
+			std::function<void()> unregisterObserver)
+		{
+			return [owner, registerObserver, unregisterObserver](T * previous, T * target) {
+				if (target != nullptr) {
+					Set(owner, target);
+					registerObserver(target);
+				}
+				else if (Remove(owner, previous)) {
+					unregisterObserver();
+				}
+			};
+		}
 	}
 }
 

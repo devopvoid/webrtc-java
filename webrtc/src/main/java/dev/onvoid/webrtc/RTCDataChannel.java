@@ -49,6 +49,12 @@ public class RTCDataChannel extends DisposableNativeObject {
 	/**
 	 * Register an observer to receive events from this RTCDataChannel. The
 	 * observer will replace the previously registered observer.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The new data channel observer.
 	 */

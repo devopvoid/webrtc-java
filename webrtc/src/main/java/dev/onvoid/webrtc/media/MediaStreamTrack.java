@@ -108,6 +108,11 @@ public abstract class MediaStreamTrack extends DisposableNativeObject {
 	 * only detaches this object; the track and the listeners registered on it
 	 * are left as they are. A view is valid for as long as its owner keeps
 	 * the track.
+	 * <p>
+	 * It may be called from a listener of this track. The listeners that the
+	 * notification has not reached yet are then not called, and the track and
+	 * its listeners are freed once the notification is over. The same holds
+	 * for removing a listener from within a listener.
 	 */
 	@Override
 	public native void dispose();

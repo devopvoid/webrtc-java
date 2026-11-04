@@ -16,6 +16,7 @@
 
 #include "JNI_RTCDtmfSender.h"
 #include "NativeHandle.h"
+#include "api/ObserverSlot.h"
 #include "api/RegisteredObservers.h"
 #include "api/RTCDtmfSenderObserver.h"
 #include "JavaString.h"
@@ -25,19 +26,19 @@
 
 namespace
 {
-	// Unregisters and frees the observer registered through the Java object.
-	// WebRTC is told only while that observer is still the registered one:
-	// another Java object for the same DTMF sender may have registered its
-	// own since, which stays.
-	void UnregisterOwnObserver(JNIEnv * env, jobject caller, webrtc::DtmfSenderInterface * sender)
+	using DtmfSenderObserverSlot = jni::ObserverSlot<jni::RTCDtmfSenderObserver>;
+
+	// Registering replaces whatever observer the DTMF sender had, also one
+	// registered through another Java object. It runs on the signaling thread,
+	// which is also the thread that calls the observer, so the ones replaced
+	// are out of use once it returns. WebRTC is told of a removal only while
+	// the observer removed is still the registered one: another Java object
+	// for the same DTMF sender may have registered its own since, which stays.
+	DtmfSenderObserverSlot::Apply ApplyTo(webrtc::DtmfSenderInterface * sender)
 	{
-		auto observer = GetHandle<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
-
-		if (jni::RegisteredObservers::Remove(sender, observer)) {
-			sender->UnregisterObserver();
-		}
-
-		ClearNativeObserver<jni::RTCDtmfSenderObserver>(env, caller, "observerHandle");
+		return jni::RegisteredObservers::Apply<jni::RTCDtmfSenderObserver>(sender,
+			[sender](jni::RTCDtmfSenderObserver * observer) { sender->RegisterObserver(observer); },
+			[sender]() { sender->UnregisterObserver(); });
 	}
 }
 
@@ -109,15 +110,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 
 		auto observer = new jni::RTCDtmfSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
 
-		// Registering replaces whatever observer the DTMF sender had, also one
-		// registered through another Java object. It runs on the signaling
-		// thread, which is also the thread that calls the observer, so the one
-		// registered through this object before is out of use once it returns.
-		jni::RegisteredObservers::Set(sender, observer);
-
-		sender->RegisterObserver(observer);
-
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
+		DtmfSenderObserverSlot::Set(env, caller, "observerHandle", observer, ApplyTo(sender));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -127,10 +120,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
-	CHECK_HANDLE(sender);
+	try {
+		jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
+		CHECK_HANDLE(sender);
 
-	UnregisterOwnObserver(env, caller, sender);
+		DtmfSenderObserverSlot::Set(env, caller, "observerHandle", nullptr, ApplyTo(sender));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_dispose
@@ -142,13 +140,17 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_dispose
 		return;
 	}
 
-	// WebRTC must let go of an observer registered through this object before
-	// it is deleted.
-	UnregisterOwnObserver(env, caller, sender);
+	auto slot = DtmfSenderObserverSlot::Take(env, caller, "observerHandle");
 
-	// The RTCRtpSender and other Java objects keep their own references, so
-	// this one need not be the last.
-	jni::ReleaseHandle(env, sender, [sender](bool) {
+	// Runs once no other thread registers through this object any more. WebRTC
+	// must let go of an observer registered through this object before it is
+	// deleted with the slot. The RTCRtpSender and other Java objects keep their
+	// own references, so this one need not be the last.
+	jni::ReleaseHandle(env, sender, [sender, slot](bool) {
+		if (slot && jni::RegisteredObservers::Remove(sender, slot->applied())) {
+			sender->UnregisterObserver();
+		}
+
 		sender->Release();
 	});
 }

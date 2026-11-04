@@ -479,6 +479,8 @@ peerConnection.close();
 factory.dispose();
 ```
 
+A track may be disposed, and a listener removed, from within one of its listeners: the listeners the notification has not reached yet are then not called, and what goes is freed once the notification is over. An observer registered on one thread while the object is disposed on another is freed once and never left registered. A factory disposed while a closed connection is still being freed is released once that connection is.
+
 `dispose()` and `close()` may be called from any thread and more than once: only the first call frees anything, later ones do nothing. Once an object is disposed, its methods throw an `IllegalStateException` (a closed connection still reports its state). A method that another thread is running at that moment keeps the native object until it returns, and what the dispose frees is freed then.
 
 ## Next Steps

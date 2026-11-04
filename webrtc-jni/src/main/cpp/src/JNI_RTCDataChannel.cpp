@@ -24,12 +24,31 @@
 #include "JavaRuntimeException.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
+#include "api/ObserverSlot.h"
 
 #include "api/data_channel_interface.h"
 #include "rtc_base/logging.h"
 
 #include <initializer_list>
 #include <memory>
+
+namespace
+{
+	using DataChannelObserverSlot = jni::ObserverSlot<jni::RTCDataChannelObserver>;
+
+	// A channel has room for one observer, which must be unregistered before
+	// another one is registered.
+	DataChannelObserverSlot::Apply ApplyTo(webrtc::DataChannelInterface * channel)
+	{
+		return [channel](jni::RTCDataChannelObserver *, jni::RTCDataChannelObserver * target) {
+			channel->UnregisterObserver();
+
+			if (target != nullptr) {
+				channel->RegisterObserver(target);
+			}
+		};
+	}
+}
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
@@ -38,14 +57,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
 		CHECK_HANDLE(channel);
 
-		// Unregister and free a previously registered observer before replacing
-		// it, otherwise it would leak along with its JNI global reference.
-		channel->UnregisterObserver();
-
 		auto observer = new jni::RTCDataChannelObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
 
-		channel->RegisterObserver(observer);
+		DataChannelObserverSlot::Set(env, caller, "observerHandle", observer, ApplyTo(channel));
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -55,12 +69,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_unregisterObserver
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
-	CHECK_HANDLE(channel);
+	try {
+		jni::NativeLease<webrtc::DataChannelInterface> channel(env, caller);
+		CHECK_HANDLE(channel);
 
-	channel->UnregisterObserver();
-
-	ClearNativeObserver<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
+		DataChannelObserverSlot::Set(env, caller, "observerHandle", nullptr, ApplyTo(channel));
+	}
+	catch (...) {
+		ThrowCxxJavaException(env);
+	}
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_getLabel
@@ -216,11 +233,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_dispose
 		return;
 	}
 
-	channel->UnregisterObserver();
+	auto slot = DataChannelObserverSlot::Take(env, caller, "observerHandle");
 
-	ClearNativeObserver<jni::RTCDataChannelObserver>(env, caller, "observerHandle");
+	// Runs once no other thread registers through this object any more, so
+	// the observer it frees is the one the channel has, if any.
+	jni::ReleaseHandle(env, channel, [channel, slot](bool deferred) {
+		if (slot) {
+			channel->UnregisterObserver();
+		}
 
-	jni::ReleaseHandle(env, channel, [channel](bool deferred) {
 		if (channel->Release() != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
 			jni::NativeHandle::ReportNotDeleted(deferred);
 		}

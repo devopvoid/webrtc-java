@@ -42,9 +42,14 @@ namespace jni
 		// given back with Unuse().
 		jlong Use(JNIEnv * env, jobject object);
 
-		// Ends a use begun with Use(), and runs the releases that waited for it
-		// if it was the last.
+		// Ends a use begun with Use() or Pin(), and runs the releases that
+		// waited for it if it was the last.
 		void Unuse(JNIEnv * env, jlong handle) noexcept;
+
+		// Marks a handle in use once more, for work that outlives the call
+		// using it, which is to end that use with Unuse() when it is done. Only
+		// for a handle the calling thread uses, e.g. through a NativeLease.
+		void Pin(jlong handle);
 
 		// Unbinds the handle of a NativeObject and returns it. Returns 0 when
 		// the object is null or another thread has taken the handle before.

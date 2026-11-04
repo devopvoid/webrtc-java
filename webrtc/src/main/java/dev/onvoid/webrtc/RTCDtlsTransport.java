@@ -84,6 +84,12 @@ public class RTCDtlsTransport extends DisposableNativeObject {
 	 * A transport has one observer, also when several RTCDtlsTransport
 	 * instances stand for it: registering through one replaces the observer
 	 * registered through another.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The new DTLS transport observer.
 	 */

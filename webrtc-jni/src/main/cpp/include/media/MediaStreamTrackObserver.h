@@ -23,6 +23,8 @@
 #include "api/media_stream_interface.h"
 
 #include <jni.h>
+#include <atomic>
+#include <functional>
 #include <memory>
 
 namespace jni
@@ -40,6 +42,22 @@ namespace jni
 
 			// ObserverInterface implementation.
 			void OnChanged() override;
+
+			// Keeps this observer from calling its listener from now on, also
+			// when WebRTC still calls it in the notification under way.
+			void detach();
+
+			// Whether this thread is in a listener's callback. WebRTC goes on
+			// calling the other observers of the track afterwards, from a copy
+			// of its list, so none of them, nor the track, may be freed before
+			// the notification is over.
+			static bool InCallback();
+
+			// Runs the work right away, or, in a listener's callback, once the
+			// notification under way on this thread is over: after the task the
+			// WebRTC thread runs, or, on a thread that is none, after the
+			// outermost callback.
+			static void AfterNotification(std::function<void()> work);
 
 		private:
 			class JavaMediaStreamTrackListenerClass : public JavaClass
@@ -60,6 +78,7 @@ namespace jni
 			const std::shared_ptr<JavaMediaStreamTrackListenerClass> javaClass;
 			webrtc::MediaStreamTrackInterface::TrackState trackState;
 			bool trackEnabled;
+			std::atomic<bool> detached { false };
 	};
 }
 
