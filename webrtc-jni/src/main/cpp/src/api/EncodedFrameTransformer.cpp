@@ -176,6 +176,11 @@ namespace jni
 		router->RemoveObserver(observer);
 	}
 
+	size_t EncodedFrameTransformer::GetObserverCount() const
+	{
+		return router->GetObserverCount();
+	}
+
 	void EncodedFrameTransformer::Transform(std::unique_ptr<webrtc::TransformableFrameInterface> frame)
 	{
 		if (!frame) {

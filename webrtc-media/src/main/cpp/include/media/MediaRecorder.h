@@ -91,8 +91,9 @@ namespace ffmpeg
 			// Start().
 			int AddTrack(void * frames);
 
-			// Attaches to every track and starts writing. A writer thread that
-			// cannot be started throws, and leaves the recorder unstarted.
+			// Attaches to every track and starts writing. A track that cannot
+			// be attached to, or a writer thread that cannot be started, throws
+			// and leaves the recorder unstarted, as it was before.
 			void Start();
 
 			// Detaches from every track, writes out what is queued, finishes
@@ -127,6 +128,9 @@ namespace ffmpeg
 
 				bool reported_codec_change = false;
 			};
+
+			// When this returns, no callback runs any more.
+			void RemoveObservers();
 
 			static void OnEncodedFrame(void * opaque, const wj_encoded_frame * frame);
 

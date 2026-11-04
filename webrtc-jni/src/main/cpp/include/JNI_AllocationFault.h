@@ -32,6 +32,38 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
+	 * Method:    failNextEncodedObserver
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_failNextEncodedObserver
+	(JNIEnv *, jclass);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
+	 * Method:    addEncodedObserver
+	 * Signature: (J)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_addEncodedObserver
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
+	 * Method:    removeEncodedObserver
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_removeEncodedObserver
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
+	 * Method:    encodedObservers
+	 * Signature: (J)I
+	 */
+	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_encodedObservers
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
 	 * Method:    disarm
 	 * Signature: ()V
 	 */

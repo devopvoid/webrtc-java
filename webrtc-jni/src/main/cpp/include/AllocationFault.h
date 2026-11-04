@@ -30,10 +30,15 @@ namespace jni
 			// Fails the next registration of a track listener, once, after the
 			// track got its observer and before the observer has an owner.
 			static void FailNextListener();
+			// Fails the next encoded_observer_add() of the extension API, once,
+			// as an allocation for its handle does.
+			static void FailNextEncodedObserver();
 			// Forgets a fault that has not fired.
 			static void Disarm();
 			// Throws std::bad_alloc if a fault is armed, and disarms it.
 			static void CheckListener();
+			// The same for an encoded observer.
+			static void CheckEncodedObserver();
 	};
 }
 

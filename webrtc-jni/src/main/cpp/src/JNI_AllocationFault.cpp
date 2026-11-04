@@ -17,6 +17,16 @@
 #include "JNI_AllocationFault.h"
 #include "AllocationFault.h"
 
+#include "api/EncodedFrameTransformer.h"
+#include "api/ExtensionApi.h"
+
+namespace
+{
+	void IgnoreFrame(void * opaque, const wj_encoded_frame * frame)
+	{
+	}
+}
+
 // The Java class this belongs to exists in the tests only, so that nothing but
 // them can make an allocation fail.
 
@@ -24,6 +34,30 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_failNextL
 (JNIEnv * env, jclass caller)
 {
 	jni::AllocationFault::FailNextListener();
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_failNextEncodedObserver
+(JNIEnv * env, jclass caller)
+{
+	jni::AllocationFault::FailNextEncodedObserver();
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_addEncodedObserver
+(JNIEnv * env, jclass caller, jlong frames)
+{
+	return reinterpret_cast<jlong>(jni::GetExtensionApi()->encoded_observer_add(reinterpret_cast<void *>(frames), &IgnoreFrame, nullptr));
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_removeEncodedObserver
+(JNIEnv * env, jclass caller, jlong observer)
+{
+	jni::GetExtensionApi()->encoded_observer_remove(reinterpret_cast<void *>(observer));
+}
+
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_encodedObservers
+(JNIEnv * env, jclass caller, jlong frames)
+{
+	return static_cast<jint>(reinterpret_cast<jni::EncodedFrameTransformer *>(frames)->GetObserverCount());
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_disarm

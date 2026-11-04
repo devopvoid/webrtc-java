@@ -40,6 +40,9 @@ namespace ffmpeg
 			static void FailWriterAllocation(int after_frames);
 			// Fails the next setting of an FFmpeg option that is checked, once.
 			static void FailNextOption();
+			// Fails attaching a recorder to a track, once, after it has
+			// attached to the given number of tracks.
+			static void FailObserverAdd(int after_tracks);
 			// Forgets a fault that has not fired.
 			static void Disarm();
 			// Whether a fault is armed that has not fired.
@@ -56,6 +59,9 @@ namespace ffmpeg
 			// Returns the result of setting an option, or the error of a heap
 			// that ran out if a fault is armed, which disarms it.
 			static int CheckOption(int result);
+			// Whether a recorder is to fail attaching to its next track, which
+			// disarms the fault.
+			static bool CheckObserverAdd();
 	};
 }
 

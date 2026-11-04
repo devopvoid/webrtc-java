@@ -216,7 +216,8 @@ public class MediaRecorder implements AutoCloseable {
 	}
 
 	/**
-	 * Starts recording the tracks added so far.
+	 * Starts recording the tracks added so far. If that fails, the recorder
+	 * is as it was before and may be started again.
 	 *
 	 * @throws IllegalStateException If the recorder has no tracks, or was
 	 *                               started or closed before.
@@ -239,8 +240,9 @@ public class MediaRecorder implements AutoCloseable {
 				start(handle);
 			}
 			catch (RuntimeException | Error e) {
-				// The native recorder could not start its writer, and is as
-				// it was: still idle, and closing it deletes its file.
+				// The native recorder could not attach to every track or start
+				// its writer, and undid what it had done: it is still idle,
+				// may be started again, and closing it deletes its file.
 				events.shutdown();
 				events = null;
 

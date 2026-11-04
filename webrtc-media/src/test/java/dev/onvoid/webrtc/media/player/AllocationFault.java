@@ -73,6 +73,15 @@ public final class AllocationFault {
 	public static native void failNextOption();
 
 	/**
+	 * Makes a recorder fail to attach to a track, as it does when {@code
+	 * encoded_observer_add()} returns null.
+	 *
+	 * @param afterTracks How many tracks it attaches to before the one that
+	 *                    fails.
+	 */
+	public static native void failObserverAdd(int afterTracks);
+
+	/**
 	 * @return True if a fault is armed that has not fired yet.
 	 */
 	public static native boolean isArmed();

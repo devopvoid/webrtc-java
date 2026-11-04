@@ -17,6 +17,8 @@
 #include "api/ExtensionApi.h"
 #include "api/EncodedFrameTransformer.h"
 
+#include "AllocationFault.h"
+
 #include "media/audio/CustomAudioSource.h"
 #include "media/video/CustomVideoSource.h"
 
@@ -26,6 +28,7 @@
 #include "rtc_base/time_utils.h"
 
 #include <cstddef>
+#include <memory>
 
 namespace jni
 {
@@ -201,12 +204,24 @@ namespace jni
 				return nullptr;
 			}
 
-			webrtc::scoped_refptr<EncodedFrameTransformer> transformer(
-					static_cast<EncodedFrameTransformer *>(frames));
+			// Nothing may be thrown through the C interface.
+			try {
+				AllocationFault::CheckEncodedObserver();
 
-			EncodedFrameRouter::Observer * observer = transformer->AddObserver(fn, opaque);
+				// The handle first: an observer without one could never be
+				// removed, and would go on being called.
+				auto handle = std::make_unique<EncodedObserver>(EncodedObserver{
+					webrtc::scoped_refptr<EncodedFrameTransformer>(static_cast<EncodedFrameTransformer *>(frames)),
+					nullptr
+				});
 
-			return new EncodedObserver{ std::move(transformer), observer };
+				handle->observer = handle->transformer->AddObserver(fn, opaque);
+
+				return handle.release();
+			}
+			catch (...) {
+				return nullptr;
+			}
 		}
 
 		void ApiEncodedObserverRemove(void * observer)

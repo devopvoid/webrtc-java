@@ -408,6 +408,77 @@ class MediaRecorderTest {
 	}
 
 	@Test
+	void failedAttachLeavesRecorderIdle() throws Exception {
+		Path file = tempDir.resolve("failed-attach.mkv");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.addTrack(call.getAudioSender());
+
+			// The second track fails, with the first one attached.
+			AllocationFault.failObserverAdd(1);
+
+			assertThrows(OutOfMemoryError.class, recorder::start);
+			assertFalse(AllocationFault.isArmed());
+			assertEquals(MediaRecorderState.IDLE, recorder.getState());
+			assertNull(recorder.getResult());
+
+			// Nothing was left half started, so it starts on a second try,
+			// with both tracks.
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			Thread.sleep(1000);
+
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertNull(listener.error.get());
+		assertTrue(listener.warnings.isEmpty(), listener.warnings.toString());
+
+		MediaInfo info = readInfo(file);
+
+		assertTrue(info.hasVideo());
+		assertTrue(info.hasAudio());
+	}
+
+	@Test
+	void closeAfterFailedAttach() throws Exception {
+		Path file = tempDir.resolve("closed-after-failed-attach.mkv");
+
+		try (TestCall call = new TestCall(factory)) {
+			MediaRecorder recorder = new MediaRecorder(file);
+
+			recorder.addTrack(call.getVideoSender());
+			recorder.addTrack(call.getAudioSender());
+
+			AllocationFault.failObserverAdd(1);
+
+			assertThrows(OutOfMemoryError.class, recorder::start);
+
+			recorder.close();
+
+			assertEquals(MediaRecorderResult.EMPTY, recorder.getResult());
+			assertFalse(Files.exists(file));
+
+			// The call goes on: an observer left on the first track would
+			// call into the recorder freed by now.
+			Thread.sleep(500);
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+	}
+
+	@Test
 	void dropsFrameThatCannotBeQueued() throws Exception {
 		Path file = tempDir.resolve("dropped-frame.mkv");
 		Listener listener = new Listener();

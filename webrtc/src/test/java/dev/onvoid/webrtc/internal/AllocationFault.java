@@ -38,6 +38,36 @@ public final class AllocationFault {
 	public static native void failNextListener();
 
 	/**
+	 * Fails the next {@code encoded_observer_add()} of the extension API, as
+	 * an allocation for the handle it returns does.
+	 */
+	public static native void failNextEncodedObserver();
+
+	/**
+	 * Calls {@code encoded_observer_add()} of the extension API, with an
+	 * observer that ignores its frames.
+	 *
+	 * @param frames A handle from {@link NativeApi#encodedFramesOf}.
+	 *
+	 * @return The observer, or {@code 0} if it could not be attached.
+	 */
+	static native long addEncodedObserver(long frames);
+
+	/**
+	 * Calls {@code encoded_observer_remove()} of the extension API.
+	 *
+	 * @param observer The observer from {@link #addEncodedObserver(long)}.
+	 */
+	static native void removeEncodedObserver(long observer);
+
+	/**
+	 * @param frames A handle from {@link NativeApi#encodedFramesOf}.
+	 *
+	 * @return How many observers are attached to what the handle stands for.
+	 */
+	static native int encodedObservers(long frames);
+
+	/**
 	 * Forgets a fault that has not fired.
 	 */
 	public static native void disarm();

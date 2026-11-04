@@ -81,6 +81,7 @@ namespace jni
 			// When this returns, the observer is not running and never runs
 			// again.
 			void RemoveObserver(Observer * observer);
+			size_t GetObserverCount() const;
 
 			// Shows the frame to every observer.
 			void Observe(const webrtc::TransformableFrameInterface & frame);

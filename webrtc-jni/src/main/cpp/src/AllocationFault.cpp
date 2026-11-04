@@ -22,6 +22,7 @@
 namespace
 {
 	std::atomic<bool> fail_listener{ false };
+	std::atomic<bool> fail_encoded_observer{ false };
 }
 
 namespace jni
@@ -31,14 +32,27 @@ namespace jni
 		fail_listener.store(true);
 	}
 
+	void AllocationFault::FailNextEncodedObserver()
+	{
+		fail_encoded_observer.store(true);
+	}
+
 	void AllocationFault::Disarm()
 	{
 		fail_listener.store(false);
+		fail_encoded_observer.store(false);
 	}
 
 	void AllocationFault::CheckListener()
 	{
 		if (fail_listener.load() && fail_listener.exchange(false)) {
+			throw std::bad_alloc();
+		}
+	}
+
+	void AllocationFault::CheckEncodedObserver()
+	{
+		if (fail_encoded_observer.load() && fail_encoded_observer.exchange(false)) {
 			throw std::bad_alloc();
 		}
 	}

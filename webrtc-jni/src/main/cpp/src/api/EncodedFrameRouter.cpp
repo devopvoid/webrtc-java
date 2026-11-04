@@ -136,6 +136,11 @@ namespace jni
 		observerCount.store(observers.size(), std::memory_order_release);
 	}
 
+	size_t EncodedFrameRouter::GetObserverCount() const
+	{
+		return observerCount.load(std::memory_order_acquire);
+	}
+
 	void EncodedFrameRouter::Observe(const webrtc::TransformableFrameInterface & frame)
 	{
 		if (observerCount.load(std::memory_order_acquire) == 0) {

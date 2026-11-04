@@ -33,6 +33,8 @@ namespace
 	std::atomic<bool> fail_writer_allocation{ false };
 	std::atomic<int> writer_frames_left{ 0 };
 	std::atomic<bool> fail_option{ false };
+	std::atomic<bool> fail_observer_add{ false };
+	std::atomic<int> observers_left{ 0 };
 }
 
 namespace ffmpeg
@@ -63,6 +65,12 @@ namespace ffmpeg
 		fail_option.store(true);
 	}
 
+	void AllocationFault::FailObserverAdd(int after_tracks)
+	{
+		observers_left.store(after_tracks);
+		fail_observer_add.store(true);
+	}
+
 	void AllocationFault::Disarm()
 	{
 		fail_string_copy.store(false);
@@ -70,12 +78,13 @@ namespace ffmpeg
 		fail_thread_start.store(false);
 		fail_writer_allocation.store(false);
 		fail_option.store(false);
+		fail_observer_add.store(false);
 	}
 
 	bool AllocationFault::IsArmed()
 	{
 		return fail_string_copy.load() || fail_allocation.load() || fail_thread_start.load()
-				|| fail_writer_allocation.load() || fail_option.load();
+				|| fail_writer_allocation.load() || fail_option.load() || fail_observer_add.load();
 	}
 
 	void AllocationFault::CheckStringCopy()
@@ -117,5 +126,14 @@ namespace ffmpeg
 		}
 
 		return result;
+	}
+
+	bool AllocationFault::CheckObserverAdd()
+	{
+		if (!fail_observer_add.load() || observers_left.fetch_sub(1) > 0) {
+			return false;
+		}
+
+		return fail_observer_add.exchange(false);
 	}
 }

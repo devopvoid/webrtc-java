@@ -284,7 +284,8 @@ struct webrtc_java_api {
 	 * @param opaque Passed to "fn" unchanged.
 	 *
 	 * @return The observer, for encoded_observer_remove(), or null if a
-	 *         handle or the function was null.
+	 *         handle or the function was null, or memory ran out. Nothing is
+	 *         attached then, and the handle stays valid.
 	 */
 	void * (*encoded_observer_add)(void * frames, wj_encoded_frame_fn fn, void * opaque);
 
