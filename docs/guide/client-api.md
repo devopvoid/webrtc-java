@@ -478,7 +478,7 @@ audioSender.sendTones("1234#");                                       // 100 ms 
 audioSender.sendTones("*99,1", Duration.ofMillis(200), Duration.ofMillis(100));
 ```
 
-The characters 0 to 9, A to D, `#` and `*` are tones, and a comma is a pause of 2 seconds. Tones still queued from an earlier call are replaced, and that call's future is cancelled. A video sender, or one whose remote peer accepts no telephone events, fails the future with an `IllegalStateException`. The [DTMF Sender](/guide/audio/dtmf-sender) guide has the details.
+The characters 0 to 9, A to D, `#` and `*` are tones, and a comma is a pause of 2 seconds. Tones still queued from an earlier call are replaced, and that call's future is cancelled. A video sender, or one whose remote peer accepts no telephone events, fails the future with an `IllegalStateException`. So do tones WebRTC stops sending midway, for example because the sender was paused with `configure`, a few seconds after their planned end. The [DTMF Sender](/guide/audio/dtmf-sender) guide has the details.
 
 ### Switching Cameras
 

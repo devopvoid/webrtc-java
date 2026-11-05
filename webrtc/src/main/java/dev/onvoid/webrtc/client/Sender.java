@@ -102,7 +102,9 @@ public interface Sender {
 	 *
 	 * @return a future that completes once the tones have been sent. It fails
 	 * with an {@link IllegalStateException} if the sender cannot send tones,
-	 * because it sends video or the remote peer does not accept them.
+	 * because it sends video or the remote peer does not accept them, and a
+	 * few seconds after their planned end if WebRTC stopped sending them
+	 * midway.
 	 */
 	CompletableFuture<Void> sendTones(String tones, Duration duration, Duration gap);
 
