@@ -558,6 +558,8 @@ namespace ffmpeg
 			return 0;
 		}
 
+		const VideoSize size = GetSquarePixelSize(stream_, decoded_);
+
 		if (hardware_frame) {
 			// The picture is in the memory of the hardware decoder. Bring it
 			// into system memory, as NV12, and convert it like any other
@@ -588,12 +590,13 @@ namespace ffmpeg
 					transfer_height_ = frames->height;
 				}
 
-				result = ConvertToI420(transferred_, frame);
+				// The transferred frame has the pixels and nothing else.
+				result = ConvertToI420(transferred_, decoded_, size, frame);
 			}
 
 			av_frame_unref(decoded_);
 		}
-		else if (IsI420(decoded_->format)) {
+		else if (IsI420(decoded_->format) && size.width == decoded_->width && size.height == decoded_->height) {
 			// Hand over a reference to the decoded picture rather than a copy
 			// of it. The caller drops that reference once WebRTC is done.
 			AVFrame * reference = av_frame_alloc();
@@ -618,7 +621,7 @@ namespace ffmpeg
 			result = 0;
 		}
 		else {
-			result = ConvertToI420(decoded_, frame);
+			result = ConvertToI420(decoded_, decoded_, size, frame);
 
 			av_frame_unref(decoded_);
 		}
@@ -777,12 +780,12 @@ namespace ffmpeg
 		return hardware_.load();
 	}
 
-	int VideoDecoder::ConvertToI420(const AVFrame * source, AVFrame ** result)
+	int VideoDecoder::ConvertToI420(const AVFrame * source, const AVFrame * picture, VideoSize size, AVFrame ** result)
 	{
 		sws_context_ = sws_getCachedContext(sws_context_,
 				source->width, source->height,
 				static_cast<AVPixelFormat>(source->format),
-				source->width, source->height, AV_PIX_FMT_YUV420P,
+				size.width, size.height, AV_PIX_FMT_YUV420P,
 				SWS_BILINEAR, nullptr, nullptr, nullptr);
 
 		if (sws_context_ == nullptr) {
@@ -791,7 +794,7 @@ namespace ffmpeg
 
 		AVFrame * converted = nullptr;
 
-		int error = AllocateI420(source->width, source->height, &converted);
+		int error = AllocateI420(size.width, size.height, &converted);
 
 		if (error < 0) {
 			return error;
@@ -804,6 +807,20 @@ namespace ffmpeg
 			av_frame_free(&converted);
 
 			return error;
+		}
+
+		// The rotation goes on with the frame, as it does on a decoded picture
+		// that is handed on as it is.
+		const AVFrameSideData * matrix = av_frame_get_side_data(picture, AV_FRAME_DATA_DISPLAYMATRIX);
+
+		if (matrix != nullptr) {
+			error = av_frame_side_data_clone(&converted->side_data, &converted->nb_side_data, matrix, 0);
+
+			if (error < 0) {
+				av_frame_free(&converted);
+
+				return error;
+			}
 		}
 
 		*result = converted;

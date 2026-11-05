@@ -17,6 +17,7 @@
 #include "media/MediaPacer.h"
 #include "media/AudioDecoder.h"
 #include "media/PlaybackProbe.h"
+#include "media/VideoGeometry.h"
 
 #include <algorithm>
 #include <limits>
@@ -495,7 +496,7 @@ namespace ffmpeg
 		pushed.stride_y = frame->linesize[0];
 		pushed.stride_u = frame->linesize[1];
 		pushed.stride_v = frame->linesize[2];
-		pushed.rotation = 0;
+		pushed.rotation = GetFrameRotation(frame);
 		pushed.timestamp_us = mapped_us;
 		pushed.release = ReleaseVideoFrame;
 		pushed.opaque = frame;

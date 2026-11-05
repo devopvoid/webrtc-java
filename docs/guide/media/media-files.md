@@ -121,6 +121,8 @@ try (MediaReader reader = new MediaReader(Path.of("movie.mp4"))) {
 }
 ```
 
+The width and height are those of the video as it is shown, which can differ from what the file stores. A phone stores a portrait video sideways with a rotation next to it: its frames keep the stored size and carry the rotation in `VideoFrame.rotation`, which the video views and the receiving peers apply, and `MediaInfo` reports the upright size. A video of pixels that are not square, such as 720x576 PAL with 16:15 pixels, is scaled to square ones while it plays, to 768x576 in that case, because WebRTC has no way to describe them. One side grows so that no detail is lost, at the price of one copy of each picture. Only quarter turns are applied: a video that is to be shown mirrored, or turned by another angle, plays as it is stored. So does one whose pixels are said to be more than four times as wide as high, or the other way round.
+
 A `MediaFileSource` already has this, so there is no need to open the file twice:
 
 ```java
