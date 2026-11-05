@@ -139,6 +139,38 @@ class LocalAudioTests extends ClientTestBase {
 	}
 
 	@Test
+	void closingTrackDropsQueuedChange() throws Exception {
+		// A change still waiting for its event thread when the track closes
+		// stays unheard, as after closing the subscription.
+		ManualExecutor control = new ManualExecutor();
+		ManualExecutor events = new ManualExecutor();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.controlPool(control)
+				.eventExecutor(events)
+				.build();
+		BlockingQueue<Boolean> changes = new LinkedBlockingQueue<>();
+
+		try {
+			CustomAudio audio = runtime.media().customAudio("audio");
+
+			audio.onVoiceActivity(ONE_SEGMENT, changes::add);
+			audio.push(speech(48000, 1), PcmFormat.of(48000, 1));
+			events.awaitQueued(10);
+
+			audio.close();
+			control.runAll();
+			events.runAll();
+
+			assertTrue(changes.isEmpty());
+		}
+		finally {
+			HttpSessionTests.closeStepping(runtime, control);
+		}
+	}
+
+	@Test
 	void rejectsNull() {
 		CustomAudio audio = rtc.media().customAudio("audio");
 

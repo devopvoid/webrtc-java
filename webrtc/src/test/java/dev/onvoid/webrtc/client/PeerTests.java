@@ -772,6 +772,31 @@ class PeerTests extends ClientTestBase {
 	}
 
 	@Test
+	void statsStopBeforeTaskKnown() throws Exception {
+		// The first sample is due at once, so it may find the peer closed
+		// before the task it has to cancel is known.
+		ManualTimer timer = new ManualTimer();
+		Duration interval = Duration.ofSeconds(7);
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.timer(timer)
+				.build()) {
+			Peer peer = runtime.createPeer(manualOptions());
+			AtomicInteger calls = new AtomicInteger();
+
+			await(peer.closeAsync());
+
+			timer.eagerPeriodic();
+			peer.onStats(interval, stats -> calls.incrementAndGet());
+
+			assertEquals(0, timer.scheduled(interval));
+			assertEquals(0, calls.get());
+		}
+	}
+
+	@Test
 	void statsOfClosedPeerFail() throws Exception {
 		Peer peer = rtc.createPeer(manualOptions());
 		await(peer.closeAsync());

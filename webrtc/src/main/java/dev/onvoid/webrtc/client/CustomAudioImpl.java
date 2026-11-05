@@ -192,6 +192,8 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 				ticker = null;
 			}
 		}
+
+		super.beforeRelease();
 	}
 
 	/** Queues what is left of the previous format, filled with silence. */

@@ -68,6 +68,9 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 
 	private boolean scheduled;
 
+	/** Counts the calls of clear(), to tell the frames that came before one. */
+	private long generation;
+
 	// Confined to the JavaFX Application Thread.
 
 	private Pixels shown;
@@ -99,6 +102,13 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 		VideoFrameBuffer buffer = frame.buffer;
 		int width = buffer.getWidth();
 		int height = buffer.getHeight();
+		long started;
+
+		// Before the wait for convertLock, as the frame came before any clear()
+		// that happens during it.
+		synchronized (lock) {
+			started = generation;
+		}
 
 		synchronized (convertLock) {
 			Pixels target = back;
@@ -120,6 +130,10 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 			target.rotation = frame.rotation;
 
 			synchronized (lock) {
+				if (started != generation) {
+					return;
+				}
+
 				back = ready;
 				ready = target;
 
@@ -135,11 +149,12 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	}
 
 	/**
-	 * Removes the picture, leaving the background. Called on the JavaFX
-	 * Application Thread.
+	 * Removes the picture, leaving the background, and drops the frames still
+	 * being converted. Called on the JavaFX Application Thread.
 	 */
 	public void clear() {
 		synchronized (lock) {
+			generation++;
 			ready = null;
 			back = null;
 		}
