@@ -136,7 +136,15 @@ final class StatsSampler {
 			}));
 		};
 
-		task.set(peer.rtc.timer.scheduleAtFixedRate(sample, 0, millis, TimeUnit.MILLISECONDS));
+		ScheduledFuture<?> scheduled = peer.rtc.timer.scheduleAtFixedRate(sample, 0, millis, TimeUnit.MILLISECONDS);
+
+		task.set(scheduled);
+
+		// The first sample is due at once, and may have found the peer closing
+		// before it could see the task.
+		if (!active.get()) {
+			scheduled.cancel(false);
+		}
 
 		return () -> {
 			active.set(false);

@@ -44,6 +44,17 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 
 	private boolean shutdown;
 
+	private boolean eagerPeriodic;
+
+
+	/**
+	 * Has every periodic task scheduled from now on run once before its
+	 * schedule call returns, as a timer thread may, when its first run is due
+	 * at once.
+	 */
+	synchronized void eagerPeriodic() {
+		eagerPeriodic = true;
+	}
 
 	/**
 	 * Fires every task scheduled with the delay that has not been cancelled.
@@ -101,7 +112,17 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 
 	@Override
 	public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
-		return add(new Task<>(Executors.callable(command, null), unit.toMillis(period), true));
+		Task<?> task = add(new Task<>(Executors.callable(command, null), unit.toMillis(period), true));
+
+		synchronized (this) {
+			if (!eagerPeriodic) {
+				return task;
+			}
+		}
+
+		task.fire();
+
+		return task;
 	}
 
 	@Override
