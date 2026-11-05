@@ -362,7 +362,7 @@ Rules that keep this correct:
 - The pixels of a captured frame may be shared with the source. Write changes into a new buffer, as above, instead of into the captured one.
 - `onFrameCaptured()` runs on the capture thread and holds up capturing while it runs. An exception it throws goes to that thread's uncaught exception handler, and the frame is dropped.
 
-`setVideoProcessor(null)` removes the processor. A `CustomVideoSource` does not take a processor: change the frames before pushing them.
+`setVideoProcessor(null)` removes the processor. Neither that nor `dispose()` waits for a frame the processor is delivering at that moment, which may still reach the tracks; what it delivers later is dropped. A `CustomVideoSource` does not take a processor: change the frames before pushing them.
 
 ## Best Practices
 
