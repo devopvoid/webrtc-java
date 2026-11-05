@@ -48,6 +48,7 @@ import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
+import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -301,6 +302,17 @@ class MediaTests extends ClientTestBase {
 		finally {
 			runtime.close();
 		}
+	}
+
+	@Test
+	void screenFrameRateOutOfRangeRejected() {
+		ScreenOptions.Builder options = ScreenOptions.screen(new DesktopSource("screen", 0));
+
+		assertThrows(IllegalArgumentException.class, () -> options.frameRate(0));
+		assertThrows(IllegalArgumentException.class, () -> options.frameRate(1001));
+		assertThrows(IllegalArgumentException.class, () -> options.frameRate(65536));
+
+		assertEquals(1000, options.frameRate(1000).build().frameRate);
 	}
 
 	@Test

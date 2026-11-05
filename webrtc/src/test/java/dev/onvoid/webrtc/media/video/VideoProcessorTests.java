@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.media.video;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -96,6 +97,93 @@ class VideoProcessorTests extends TestBase {
 		finally {
 			frame.release();
 		}
+	}
+
+	@Test
+	void detachDuringDeliveryDoesNotDeadlock() throws Exception {
+		VideoDesktopSource source = new VideoDesktopSource();
+		TestProcessor processor = new TestProcessor();
+
+		source.setVideoProcessor(processor);
+
+		VideoTrack track = factory.createVideoTrack("desktop", source);
+		VideoFrame frame = new VideoFrame(NativeI420Buffer.allocate(64, 48), 0);
+
+		CountDownLatch delivering = new CountDownLatch(1);
+		CountDownLatch monitorHeld = new CountDownLatch(1);
+
+		// A callback of the delivery that needs the monitor of the source,
+		// while the thread holding it detaches the sink of the delivery.
+		VideoTrackSink trackSink = received -> {
+			received.release();
+			delivering.countDown();
+			await(monitorHeld);
+			source.setVideoProcessor(null);
+		};
+
+		track.addSink(trackSink);
+
+		Thread deliverer = startThread(() -> processor.sink.onVideoFrame(frame));
+
+		await(delivering);
+
+		Thread detacher = startThread(() -> {
+			synchronized (source) {
+				monitorHeld.countDown();
+				source.detachVideoProcessor();
+			}
+		});
+
+		assertEnds(detacher);
+		assertEnds(deliverer);
+
+		track.removeSink(trackSink);
+		track.dispose();
+		source.dispose();
+		frame.release();
+	}
+
+	@Test
+	void disposeDoesNotWaitForDelivery() throws Exception {
+		VideoDesktopSource source = new VideoDesktopSource();
+		TestProcessor processor = new TestProcessor();
+
+		source.setVideoProcessor(processor);
+
+		VideoTrack track = factory.createVideoTrack("desktop", source);
+		VideoFrame frame = new VideoFrame(NativeI420Buffer.allocate(64, 48), 0);
+
+		AtomicInteger received = new AtomicInteger();
+		CountDownLatch delivering = new CountDownLatch(1);
+		CountDownLatch proceed = new CountDownLatch(1);
+
+		VideoTrackSink trackSink = delivered -> {
+			delivered.release();
+			received.incrementAndGet();
+			delivering.countDown();
+			await(proceed);
+		};
+
+		track.addSink(trackSink);
+
+		Thread deliverer = startThread(() -> processor.sink.onVideoFrame(frame));
+
+		await(delivering);
+
+		// The running delivery keeps the native source, and finishes.
+		assertEnds(startThread(source::dispose));
+		assertTrue(deliverer.isAlive(), "The delivery ended before it was let go");
+
+		proceed.countDown();
+		assertEnds(deliverer);
+
+		// A delivery that starts now is dropped.
+		processor.sink.onVideoFrame(frame);
+		assertEquals(1, received.get());
+
+		track.removeSink(trackSink);
+		track.dispose();
+		frame.release();
 	}
 
 	@Test
@@ -276,6 +364,30 @@ class VideoProcessorTests extends TestBase {
 			track.removeSink(trackSink);
 			track.dispose();
 			source.dispose();
+		}
+	}
+
+	private static Thread startThread(Runnable task) {
+		Thread thread = new Thread(task);
+
+		thread.setDaemon(true);
+		thread.start();
+
+		return thread;
+	}
+
+	private static void assertEnds(Thread thread) throws InterruptedException {
+		thread.join(TimeUnit.SECONDS.toMillis(10));
+
+		assertFalse(thread.isAlive(), "The thread is stuck");
+	}
+
+	private static void await(CountDownLatch latch) {
+		try {
+			assertTrue(latch.await(10, TimeUnit.SECONDS));
+		}
+		catch (InterruptedException e) {
+			throw new IllegalStateException(e);
 		}
 	}
 

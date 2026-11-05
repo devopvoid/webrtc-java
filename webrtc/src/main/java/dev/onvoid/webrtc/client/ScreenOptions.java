@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
+import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 
 /**
@@ -87,13 +88,15 @@ public final class ScreenOptions {
 		}
 
 		/**
-		 * @param frameRate the frames per second to capture.
+		 * @param frameRate the frames per second to capture, 1 to {@value
+		 *                  VideoDesktopSource#MAX_FRAME_RATE}.
 		 *
 		 * @return this builder.
 		 */
 		public Builder frameRate(int frameRate) {
-			if (frameRate <= 0) {
-				throw new IllegalArgumentException("The frame rate must be positive, got " + frameRate);
+			if (frameRate < 1 || frameRate > VideoDesktopSource.MAX_FRAME_RATE) {
+				throw new IllegalArgumentException("The frame rate must be between 1 and "
+						+ VideoDesktopSource.MAX_FRAME_RATE + ", got " + frameRate);
 			}
 
 			this.frameRate = frameRate;
@@ -101,7 +104,8 @@ public final class ScreenOptions {
 		}
 
 		/**
-		 * Scales captured frames down to fit, keeping their aspect ratio.
+		 * Scales captured frames down to fit both limits, keeping their aspect
+		 * ratio.
 		 *
 		 * @param width  the largest width, in pixels.
 		 * @param height the largest height, in pixels.

@@ -31,6 +31,8 @@
 #include "JavaString.h"
 #include "JavaUtils.h"
 
+#include <thread>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_setVideoCaptureDevice
 (JNIEnv * env, jobject caller, jobject device)
 {
@@ -148,11 +150,22 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDeviceSource_disp
 		videoSource->SetVideoProcessor(env, nullptr);
 		SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr);
 
-		jni::ReleaseHandle(env, videoSource, [videoSource](bool) {
-			webrtc::RefCountReleaseStatus status = videoSource->Release();
+		jni::ReleaseHandle(env, videoSource, [videoSource](bool deferred) {
+			auto release = [videoSource]() {
+				webrtc::RefCountReleaseStatus status = videoSource->Release();
 
-			if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-				RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+				if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+					RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+				}
+			};
+
+			// The last call may be a processed frame on the capture thread,
+			// which the destructor of the source stops and cannot join itself.
+			if (deferred) {
+				std::thread(release).detach();
+			}
+			else {
+				release();
 			}
 		});
 	});

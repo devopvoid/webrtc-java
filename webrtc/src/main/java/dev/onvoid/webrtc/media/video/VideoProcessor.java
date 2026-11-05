@@ -48,7 +48,8 @@ public interface VideoProcessor {
 	 * Gives the processor the sink to deliver processed frames to. Called by
 	 * {@link VideoTrackSource#setVideoProcessor} before the first frame
 	 * arrives. The sink does nothing once the processor is replaced or the
-	 * source is disposed.
+	 * source is disposed. A frame being delivered at that moment may still
+	 * reach the tracks, as neither waits for the sink.
 	 *
 	 * @param sink The sink that passes frames on to the source's tracks.
 	 */

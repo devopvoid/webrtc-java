@@ -42,6 +42,10 @@ public class VideoTrackSource extends MediaSource {
 	 * they reach its tracks, replacing any processor set before. {@code null}
 	 * removes the processor, so frames go to the tracks unchanged.
 	 * <p>
+	 * This does not wait for a frame the previous processor is delivering at
+	 * that moment, which may still reach the tracks. What it delivers later
+	 * is dropped.
+	 * <p>
 	 * Camera and desktop sources support a processor. A {@link
 	 * CustomVideoSource} does not: process the frames before pushing them.
 	 *
@@ -66,7 +70,8 @@ public class VideoTrackSource extends MediaSource {
 
 		setVideoProcessorNative(processor);
 
-		// Frames the previous processor delivers from now on are dropped.
+		// Frames the previous processor delivers from now on are dropped, a
+		// delivery already running may finish.
 		if (processorSink != null) {
 			processorSink.detach();
 		}
@@ -76,9 +81,10 @@ public class VideoTrackSource extends MediaSource {
 
 	/**
 	 * Detaches the sink of the current processor, so that it drops frames
-	 * delivered while and after this source is disposed. Called by the
-	 * sources that support a processor before they dispose of their native
-	 * source, which removes the processor.
+	 * delivered from now on. A delivery already running either finishes
+	 * before the native source is disposed or is dropped by the native call.
+	 * Called by the sources that support a processor before they dispose of
+	 * their native source, which removes the processor.
 	 */
 	synchronized void detachVideoProcessor() {
 		if (processorSink != null) {

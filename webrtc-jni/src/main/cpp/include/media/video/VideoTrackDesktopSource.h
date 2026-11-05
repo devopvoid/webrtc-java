@@ -24,6 +24,8 @@
 
 #include "media/video/VideoProcessorHost.h"
 
+#include <atomic>
+
 namespace jni
 {
 	class VideoTrackDesktopSource : public webrtc::AdaptedVideoTrackSource, public webrtc::DesktopCapturer::Callback, public VideoProcessorHost
@@ -59,7 +61,7 @@ namespace jni
 
         private:
             uint16_t frameRate;
-            bool isCapturing;
+            std::atomic<bool> isCapturing;
             bool focusSelectedSource;
 
             webrtc::DesktopSize maxFrameSize;

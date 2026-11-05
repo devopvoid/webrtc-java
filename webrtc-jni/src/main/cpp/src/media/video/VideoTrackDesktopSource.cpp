@@ -32,6 +32,9 @@
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
 #include "modules/desktop_capture/mouse_cursor_monitor.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace jni
 {
 	VideoTrackDesktopSource::VideoTrackDesktopSource() :
@@ -199,20 +202,14 @@ namespace jni
 
 		if (conversionResult >= 0) {
 			if (!maxFrameSize.is_empty()) {
-				// Adapt frame size to contraints.
-				int max_width = maxFrameSize.width();
-				int max_height = maxFrameSize.height();
+				// One factor for both limits: the frame fits both and keeps its
+				// aspect ratio. A very narrow limit must not round a side to 0.
+				const double scale = std::min({ 1.0,
+					maxFrameSize.width() / static_cast<double>(adapted_width),
+					maxFrameSize.height() / static_cast<double>(adapted_height) });
 
-				if (adapted_width > max_width) {
-					double scale = max_width / (double)adapted_width;
-					adapted_width = max_width;
-					adapted_height = (int)(adapted_height * scale);
-				}
-				else if (adapted_height > max_height) {
-					double scale = max_height / (double)adapted_height;
-					adapted_width = (int)(adapted_width * scale);
-					adapted_height = max_height;
-				}
+				adapted_width = std::max(1, static_cast<int>(std::lround(adapted_width * scale)));
+				adapted_height = std::max(1, static_cast<int>(std::lround(adapted_height * scale)));
 			}
 
 			if (adapted_width != width || adapted_height != height) {
