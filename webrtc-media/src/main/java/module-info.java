@@ -5,7 +5,7 @@
  */
 module webrtc.java.media {
 
-	requires webrtc.java;
+	requires transitive webrtc.java;
 
 	exports dev.onvoid.webrtc.media.player;
 	exports dev.onvoid.webrtc.media.recorder;
