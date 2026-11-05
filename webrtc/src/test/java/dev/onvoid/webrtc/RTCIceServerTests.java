@@ -19,6 +19,8 @@ package dev.onvoid.webrtc;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 
 class RTCIceServerTests {
@@ -28,7 +30,7 @@ class RTCIceServerTests {
 		RTCIceServer server = new RTCIceServer();
 		server.urls.add("turn:127.0.0.1:3478");
 		server.username = "user";
-		server.password = "s3cr3t-t0k3n";
+		server.password = UUID.randomUUID().toString();
 
 		String text = server.toString();
 
