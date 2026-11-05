@@ -83,10 +83,13 @@ public class RTCDtmfSender extends DisposableNativeObject {
 	 * <p>
 	 * The duration parameter indicates the duration in milliseconds to use for each
 	 * character passed in the tones parameter. The duration cannot be more than 6000 
-	 * milliseconds or less than 70 milliseconds. The default duration is 100 milliseconds.
+	 * milliseconds or less than 40 milliseconds. The default duration is 100 milliseconds.
 	 * <p>
 	 * The interToneGap parameter indicates the gap between tones in milliseconds.
-	 * The interToneGap cannot be less than 50 milliseconds. The default value is 50 milliseconds.
+	 * The interToneGap cannot be less than 30 milliseconds. The default value is 50 milliseconds.
+	 * <p>
+	 * If the duration or the interToneGap is outside these limits, this method has
+	 * no effect and returns false.
 	 *
 	 * @param tones        String containing the DTMF tones to be transmitted.
 	 *                     Valid characters are 0-9, A-D, #, *, and , (comma).
@@ -117,7 +120,7 @@ public class RTCDtmfSender extends DisposableNativeObject {
 	 * future calls to {@link #insertDtmf}. The duration is the length of time, in milliseconds, 
 	 * that each DTMF tone is played.
 	 * <p>
-	 * The default value is 100 milliseconds. Valid values are between 70 and 6000 milliseconds.
+	 * The default value is 100 milliseconds. Valid values are between 40 and 6000 milliseconds.
 	 *
 	 * @return The duration in milliseconds for each tone.
 	 */
@@ -130,7 +133,7 @@ public class RTCDtmfSender extends DisposableNativeObject {
 	 * future calls to {@link #insertDtmf}. The interToneGap is the length of time, in milliseconds,
 	 * between the end of one DTMF tone and the start of the next.
 	 * <p>
-	 * The default value is 50 milliseconds. Valid values must be at least 50 milliseconds but should
+	 * The default value is 50 milliseconds. Valid values must be at least 30 milliseconds but should
 	 * be as short as possible.
 	 *
 	 * @return The gap between tones in milliseconds.

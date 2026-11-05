@@ -215,6 +215,24 @@ class RTCDtmfSenderTests extends TestBase {
     }
 
     @Test
+    void insertDtmfLimits() {
+        assertTrue(dtmfSender.insertDtmf("1", 40, 30));
+        assertEquals(40, dtmfSender.duration());
+        assertEquals(30, dtmfSender.interToneGap());
+
+        assertTrue(dtmfSender.insertDtmf("1", 6000, 30));
+        assertEquals(6000, dtmfSender.duration());
+
+        assertFalse(dtmfSender.insertDtmf("1", 39, 30));
+        assertFalse(dtmfSender.insertDtmf("1", 6001, 30));
+        assertFalse(dtmfSender.insertDtmf("1", 100, 29));
+
+        // A rejected call leaves the values of the last accepted one.
+        assertEquals(6000, dtmfSender.duration());
+        assertEquals(30, dtmfSender.interToneGap());
+    }
+
+    @Test
     void getTones() throws InterruptedException {
         insertTones(Arrays.asList("1", "2", "3"), 100, 70);
     }
