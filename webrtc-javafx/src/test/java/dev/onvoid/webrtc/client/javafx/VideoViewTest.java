@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -41,8 +42,10 @@ import dev.onvoid.webrtc.client.PeerOptions;
 import dev.onvoid.webrtc.client.Signaling;
 import dev.onvoid.webrtc.client.SignalingPair;
 import dev.onvoid.webrtc.client.WebRtc;
+import dev.onvoid.webrtc.media.video.I420Buffer;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
+import dev.onvoid.webrtc.media.video.VideoFrameBuffer;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -112,6 +115,72 @@ class VideoViewTest {
 			return null;
 		});
 		assertNull(onFx(view::snapshot));
+	}
+
+	@Test
+	void clearDropsFrameInConversion() throws Exception {
+		VideoView view = onFx(VideoView::new);
+		CountDownLatch converting = new CountDownLatch(1);
+		CountDownLatch cleared = new CountDownLatch(1);
+		VideoFrame held = frame(64, 48, 128, 128);
+		VideoFrameBuffer buffer = new VideoFrameBuffer() {
+
+			@Override
+			public int getWidth() {
+				return held.buffer.getWidth();
+			}
+
+			@Override
+			public int getHeight() {
+				return held.buffer.getHeight();
+			}
+
+			@Override
+			public I420Buffer toI420() {
+				converting.countDown();
+
+				try {
+					cleared.await();
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+
+				return held.buffer.toI420();
+			}
+
+			@Override
+			public VideoFrameBuffer cropAndScale(int cropX, int cropY, int cropWidth, int cropHeight,
+					int scaleWidth, int scaleHeight) {
+				throw new UnsupportedOperationException();
+			}
+
+			@Override
+			public void retain() {
+			}
+
+			@Override
+			public void release() {
+			}
+		};
+		Thread delivery = new Thread(() -> view.accept(new VideoFrame(buffer, 0)));
+
+		delivery.start();
+		assertTrue(converting.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+
+		onFx(() -> {
+			view.clear();
+			return null;
+		});
+		cleared.countDown();
+		delivery.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
+
+		// Runs after whatever the conversion handed to the JavaFX thread.
+		assertNull(onFx(view::snapshot));
+
+		// The next frame shows as usual.
+		view.accept(frame(32, 24, 128, 128));
+		assertEquals(32, (int) presented(view).getWidth());
 	}
 
 	@Test
