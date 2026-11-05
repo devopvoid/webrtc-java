@@ -36,15 +36,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 			return;
 		}
 
-		auto callback = GetHandle<jni::DesktopCaptureCallback>(env, caller, "callbackHandle");
-
-		SetHandle<std::nullptr_t>(env, caller, "callbackHandle", nullptr);
-
 		// A captureFrame() running on another thread, or the one whose callback
-		// disposes the capturer, still uses both.
-		jni::ReleaseHandle(env, capturer, [capturer, callback](bool) {
+		// disposes the capturer, still uses it.
+		jni::ReleaseHandle(env, capturer, [capturer](bool) {
 			delete capturer;
-			delete callback;
 		});
 	});
 }
@@ -129,15 +124,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
 		CHECK_HANDLE(capturer);
 
-		auto callback = new jni::DesktopCaptureCallback(env, jni::JavaGlobalRef<jobject>(env, jcallback));
+		auto callback = std::make_unique<jni::DesktopCaptureCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
 
-		try {
-			SetHandle(env, caller, "callbackHandle", callback);
-
-			capturer->Start(callback);
-		}
-		catch (...) {
-			ThrowCxxJavaException(env);
+		if (!capturer->Start(std::move(callback))) {
+			ThrowJavaException(env, "java/lang/IllegalStateException", "Capture has been started already");
 		}
 	});
 }
@@ -149,11 +139,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
 		CHECK_HANDLE(capturer);
 
-		try {
-			capturer->CaptureFrame();
-		}
-		catch (...) {
-			ThrowCxxJavaException(env);
+		if (!capturer->CaptureFrame()) {
+			ThrowJavaException(env, "java/lang/IllegalStateException", "Capture has not been started");
 		}
 	});
 }

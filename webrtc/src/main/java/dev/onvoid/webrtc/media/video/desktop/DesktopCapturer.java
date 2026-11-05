@@ -70,14 +70,6 @@ public abstract class DesktopCapturer extends DisposableNativeObject {
 	}
 
 
-	/**
-	 * The DesktopCapturer doesn't take ownership of the callback. When the
-	 * DesktopCapturer is disposed, the callback will be disposed using this
-	 * handle.
-	 */
-	private long callbackHandle;
-
-
 	@Override
 	public native void dispose();
 
@@ -110,15 +102,22 @@ public abstract class DesktopCapturer extends DisposableNativeObject {
 	public native void setMaxFrameRate(int maxFrameRate);
 
 	/**
-	 * Starts the desktop capture process with the provided callback.
+	 * Starts the desktop capture process with the provided callback. A capturer
+	 * can be started once and keeps its callback until it is disposed.
 	 *
 	 * @param callback The callback that receives capture events and frames.
+	 *
+	 * @throws IllegalStateException If the capturer has been started before.
 	 */
 	public native void start(DesktopCaptureCallback callback);
 
 	/**
 	 * Captures a single frame manually.
 	 * The capture result will be delivered via the callback provided in {@link #start}.
+	 * Where the platform offers no capture backend, for example on Linux without
+	 * a display, the result is {@link Result#ERROR_PERMANENT}.
+	 *
+	 * @throws IllegalStateException If the capturer has not been started.
 	 */
 	public native void captureFrame();
 

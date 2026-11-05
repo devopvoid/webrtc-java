@@ -458,6 +458,22 @@ class VideoCodecFactoryTests extends TestBase {
 		assertEquals(7, (int) image.getQp());
 	}
 
+	@Test
+	void encodedImageRotationIsNormalized() {
+		assertEquals(270, encodedImageRotatedBy(-90));
+		assertEquals(0, encodedImageRotatedBy(360));
+		assertEquals(90, encodedImageRotatedBy(450));
+		assertEquals(180, encodedImageRotatedBy(180));
+	}
+
+	private static int encodedImageRotatedBy(int rotation) {
+		return EncodedImage.builder()
+				.setBuffer(ByteBuffer.allocate(1))
+				.setRotation(rotation)
+				.build()
+				.getRotation();
+	}
+
 	private void assertFramesReceived(PeerConnectionFactory built, String codec) throws Exception {
 		CountDownLatch received = new CountDownLatch(10);
 
