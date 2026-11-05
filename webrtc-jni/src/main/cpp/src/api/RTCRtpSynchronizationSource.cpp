@@ -16,7 +16,6 @@
 
 #include "api/RTCRtpSynchronizationSource.h"
 #include "api/RTCRtpContributingSource.h"
-#include "JavaObject.h"
 #include "JavaRef.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
@@ -31,7 +30,7 @@ namespace jni
 
 			jlong timestamp = static_cast<jlong>(source.timestamp().us());
 			jlong sourceId = static_cast<jlong>(source.source_id());
-			jdouble audioLevel = static_cast<jdouble>(source.audio_level().value_or(0));
+			jdouble audioLevel = RTCRtpContributingSource::toLinearAudioLevel(source.audio_level());
 			jlong rtpTimestamp = static_cast<jlong>(source.rtp_timestamp());
 			jboolean voiceActivityFlag = false;
 
@@ -41,32 +40,11 @@ namespace jni
 			return JavaLocalRef<jobject>(env, object);
 		}
 
-		webrtc::RtpSource toNative(JNIEnv * env, const JavaRef<jobject> & source)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpSynchronizationSourceClass>(env);
-			const auto parentClass = JavaClasses::get<RTCRtpContributingSource::JavaRTCRtpContributingSourceClass>(env);
-
-			JavaObject obj(env, source);
-
-			webrtc::RtpSource::Extensions extensions;
-			extensions.audio_level = static_cast<uint8_t>(obj.getDouble(parentClass->audioLevel));
-
-			return webrtc::RtpSource(
-				webrtc::Timestamp::Micros(static_cast<int64_t>(obj.getLong(parentClass->timestamp))),
-				static_cast<uint32_t>(obj.getLong(parentClass->sourceId)),
-				webrtc::RtpSourceType::SSRC,
-				static_cast<uint32_t>(obj.getLong(parentClass->rtpTimestamp)),
-				extensions
-			);
-		}
-
 		JavaRTCRtpSynchronizationSourceClass::JavaRTCRtpSynchronizationSourceClass(JNIEnv * env)
 		{
 			cls = FindClass(env, PKG"RTCRtpSynchronizationSource");
 
 			ctor = GetMethod(env, cls, "<init>", "(JJDJZ)V");
-
-			voiceActivityFlag = GetFieldID(env, cls, "voiceActivityFlag", "Z");
 		}
 	}
 }

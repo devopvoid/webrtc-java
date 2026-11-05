@@ -41,6 +41,8 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
  */
 public class RTCEncodedAudioFrameInjector extends DisposableNativeObject {
 
+	private static final int[] NO_SOURCES = new int[0];
+
 	/*
 	 * The native observer set through this object, owned by it and freed when
 	 * disposed.
@@ -87,6 +89,19 @@ public class RTCEncodedAudioFrameInjector extends DisposableNativeObject {
 	 */
 	public void injectFrame(ByteBuffer data, int payloadType, long rtpTimestamp, Integer audioLevel,
 			Long captureTimeMs) {
+		injectFrame(data, payloadType, rtpTimestamp, audioLevel, captureTimeMs, NO_SOURCES);
+	}
+
+	/**
+	 * Sends an encoded frame like {@link #injectFrame(ByteBuffer, int, long,
+	 * Integer, Long)}, naming the sources mixed into it. Nothing but a test can
+	 * produce a received CSRC without this.
+	 *
+	 * @param contributingSources The CSRCs of the frame, at most 15, as
+	 *                            unsigned 32-bit values.
+	 */
+	void injectFrame(ByteBuffer data, int payloadType, long rtpTimestamp, Integer audioLevel,
+			Long captureTimeMs, int[] contributingSources) {
 		Objects.requireNonNull(data, "data");
 
 		if (payloadType < 0 || payloadType > 127) {
@@ -104,11 +119,11 @@ public class RTCEncodedAudioFrameInjector extends DisposableNativeObject {
 
 		if (data.isDirect()) {
 			injectDirectBuffer(data, data.position(), data.remaining(), payloadType, rtpTimestamp,
-					level, audioLevel != null, captureTime, captureTimeMs != null);
+					level, audioLevel != null, captureTime, captureTimeMs != null, contributingSources);
 		}
 		else {
 			injectByteArray(RTCDataChannel.copyWindow(data), payloadType, rtpTimestamp,
-					level, audioLevel != null, captureTime, captureTimeMs != null);
+					level, audioLevel != null, captureTime, captureTimeMs != null, contributingSources);
 		}
 	}
 
@@ -121,9 +136,11 @@ public class RTCEncodedAudioFrameInjector extends DisposableNativeObject {
 	public native void dispose();
 
 	private native void injectDirectBuffer(ByteBuffer data, int position, int length, int payloadType,
-			long rtpTimestamp, int audioLevel, boolean hasAudioLevel, long captureTimeMs, boolean hasCaptureTime);
+			long rtpTimestamp, int audioLevel, boolean hasAudioLevel, long captureTimeMs, boolean hasCaptureTime,
+			int[] contributingSources);
 
 	private native void injectByteArray(byte[] data, int payloadType, long rtpTimestamp,
-			int audioLevel, boolean hasAudioLevel, long captureTimeMs, boolean hasCaptureTime);
+			int audioLevel, boolean hasAudioLevel, long captureTimeMs, boolean hasCaptureTime,
+			int[] contributingSources);
 
 }

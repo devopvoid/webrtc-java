@@ -81,7 +81,7 @@ namespace
 	// size, whatever the stream says.
 	AVRational GetPixelAspect(const AVStream * stream, const AVFrame * frame)
 	{
-		if (IsNonSquare(stream->sample_aspect_ratio)) {
+		if (stream != nullptr && IsNonSquare(stream->sample_aspect_ratio)) {
 			return stream->sample_aspect_ratio;
 		}
 

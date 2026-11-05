@@ -119,6 +119,13 @@ namespace ffmpeg
 			bool IsHardware() const;
 
 		private:
+			friend struct ColorProbe;
+
+			void ResolveColor(AVFrame * frame) const;
+
+			// Resolves color properties and retains I420 of square pixels, or
+			// converts anything else.
+			int MakeI420(AVFrame * source, AVFrame ** frame);
 			// How many packets are kept, until the hardware has produced a
 			// frame, to be decoded again in software if it fails by then.
 			static constexpr size_t kMaxKeptPackets = 32;
@@ -174,11 +181,10 @@ namespace ffmpeg
 			void DropKeptPackets();
 			void DropPending();
 
-			// Converts the pixels of a frame to I420, at the given size. The
-			// returned frame is a new reference the caller owns, with the
-			// display matrix of the decoded picture, which is the source
-			// itself unless that was brought back from the hardware.
-			int ConvertToI420(const AVFrame * source, const AVFrame * picture, VideoSize size, AVFrame ** result);
+			// Converts a decoded frame to I420, at the given size. The returned
+			// frame is a new reference the caller owns, with the properties and
+			// the side data of the source, the display matrix among them.
+			int ConvertToI420(const AVFrame * source, VideoSize size, AVFrame ** result);
 
 			// A new I420 frame of the given size, whose buffer comes from a
 			// pool, so that the picture lands in memory that is already

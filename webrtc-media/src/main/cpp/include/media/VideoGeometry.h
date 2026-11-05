@@ -41,7 +41,8 @@ namespace ffmpeg
 	// which is all WebRTC knows. It is the size of the picture itself if its
 	// pixels are square. Otherwise one side grows, so that no detail is lost,
 	// to an even number of pixels. A ratio beyond 4:1 is taken for a broken
-	// one and ignored, as it would only make for a huge picture.
+	// one and ignored, as it would only make for a huge picture. Without a
+	// stream, the frame is all there is to go by.
 	VideoSize GetSquarePixelSize(const AVStream * stream, const AVFrame * frame);
 
 	// The size of the video of a stream as it is shown, with square pixels

@@ -77,6 +77,9 @@ class RTCRtpReceiverSourceTests extends TestBase {
 			assertTrue(changed.await(TIMEOUT_SECONDS, TimeUnit.SECONDS), "no source change reported");
 			assertTrue(ssrcChanged.get(), "the first packet did not change the SSRC");
 
+			// Video has no audio level, which must not read as full volume.
+			assertEquals(0.0, receiver.getSynchronizationSources().get(0).audioLevel);
+
 			receiver.setObserver(null);
 			receiver.dispose();
 		}
