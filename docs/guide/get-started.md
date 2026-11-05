@@ -483,6 +483,16 @@ A track may be disposed, and a listener removed, from within one of its listener
 
 `dispose()` and `close()` may be called from any thread and more than once: only the first call frees anything, later ones do nothing. Once an object is disposed, its methods throw an `IllegalStateException` (a closed connection still reports its state). A method that another thread is running at that moment keeps the native object until it returns, and what the dispose frees is freed then.
 
+Apart from the media sources, which only have `dispose()`, objects with a `dispose()` method also have a `close()` that does the same. A try-with-resources statement therefore releases them, also when an exception leaves the block:
+
+```java
+try (AudioConverter converter = new AudioConverter(48000, 1, 16000, 1)) {
+    converter.convert(input, output);
+}
+```
+
+`RTCDataChannel` is the exception: its `close()` closes the channel, which then still has to be disposed.
+
 #### Finding Objects That Were Never Disposed
 
 An object that becomes unreachable without being disposed or closed leaks its native object. To find such objects, start the JVM with `-Dwebrtc.java.leak.detection=true`: each one is then reported, with its class, once the garbage collector finds it unreachable. Add `-Dwebrtc.java.leak.trace=true` to have the report tell where the object was created, at the cost of a stack trace per object.

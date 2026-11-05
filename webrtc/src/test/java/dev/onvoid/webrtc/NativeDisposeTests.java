@@ -19,10 +19,12 @@ package dev.onvoid.webrtc;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.onvoid.webrtc.media.MediaStreamTrackMuteListener;
+import dev.onvoid.webrtc.media.SyncClock;
 import dev.onvoid.webrtc.media.audio.AudioConverter;
 import dev.onvoid.webrtc.media.audio.AudioOptions;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
@@ -30,6 +32,7 @@ import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioLayer;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
+import dev.onvoid.webrtc.media.video.VideoCapture;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
 import java.util.AbstractList;
@@ -120,6 +123,63 @@ class NativeDisposeTests extends TestBase {
 		assertDisposed("VideoTrack is disposed", track::getId);
 		assertDisposed("CustomVideoSource is disposed", source::getState);
 		assertDisposed("AudioConverter is disposed", () -> converter.convert(new byte[960], new byte[960]));
+	}
+
+	@Test
+	void tryWithResourcesDisposes() {
+		AudioConverter converter = new AudioConverter(48000, 1, 48000, 1);
+		SyncClock clock = new SyncClock();
+		VideoCapture capture = new VideoCapture();
+
+		try (converter; clock; capture) {
+			assertNotNull(converter);
+		}
+
+		assertDisposed("AudioConverter is disposed", () -> converter.convert(new byte[960], new byte[960]));
+		assertDisposed("SyncClock is disposed", clock::getTimestampUs);
+		assertDisposed("VideoCapture is disposed", capture::start);
+	}
+
+	@Test
+	void tryWithResourcesDisposesOnException() {
+		SyncClock clock = new SyncClock();
+		RuntimeException failure = new RuntimeException();
+
+		RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
+			try (clock) {
+				throw failure;
+			}
+		});
+
+		assertSame(failure, thrown);
+		assertEquals(0, thrown.getSuppressed().length);
+		assertDisposed("SyncClock is disposed", clock::getTimestampUs);
+	}
+
+	@Test
+	void closeAfterDisposeDoesNothing() {
+		SyncClock clock = new SyncClock();
+
+		clock.dispose();
+
+		assertDoesNotThrow(clock::close);
+	}
+
+	@Test
+	void closeKeepsDataChannel() {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		RTCDataChannel channel = peerConnection.createDataChannel("data", new RTCDataChannelInit());
+
+		// Closes the channel only, the native object stays until it is disposed.
+		channel.close();
+
+		assertEquals("data", channel.getLabel());
+
+		channel.dispose();
+
+		assertDisposed("RTCDataChannel is disposed", channel::getLabel);
+
+		peerConnection.close();
 	}
 
 	@Test

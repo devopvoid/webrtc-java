@@ -296,6 +296,8 @@ dataChannel.close();
 dataChannel.dispose();
 ```
 
+Unlike other disposable objects, a data channel is not disposed by `close()`, which only closes the channel. A try-with-resources statement therefore does not release it: call `dispose()` yourself.
+
 ## Best Practices
 
 1. **Error Handling**: Always wrap `send` calls in try-catch blocks as they can throw exceptions if the buffer is full or the channel is not in the `OPEN` state.

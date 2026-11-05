@@ -16,8 +16,8 @@
 
 package dev.onvoid.webrtc.media;
 
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.internal.NativeLoader;
-import dev.onvoid.webrtc.internal.NativeObject;
 
 /**
  * Synchronized Clock for A/V timing. Provides timing functionality for
@@ -25,7 +25,7 @@ import dev.onvoid.webrtc.internal.NativeObject;
  *
  * @author Alex Andres
  */
-public class SyncClock extends NativeObject {
+public class SyncClock extends DisposableNativeObject {
 
     static {
         try {
@@ -97,6 +97,7 @@ public class SyncClock extends NativeObject {
      * so the clock may be disposed while such a source is still in use: the
      * source keeps the native clock until it is disposed itself.
      */
+    @Override
     public native void dispose();
 
     /**
