@@ -16,8 +16,8 @@ Key methods (inherited from `DesktopCapturer`):
 - `void selectSource(DesktopSource source)` – choose the screen to capture
 - `void setFocusSelectedSource(boolean focus)` – try to focus the selected source during capture
 - `void setMaxFrameRate(int maxFrameRate)` – cap the capture FPS
-- `void start(DesktopCaptureCallback callback)` – begin capturing; frames are delivered via callback
-- `void captureFrame()` – request a single frame (manual capture)
+- `void start(DesktopCaptureCallback callback)` – begin capturing; frames are delivered via callback. A capturer can be started once, a second call throws `IllegalStateException`
+- `void captureFrame()` – request a single frame (manual capture) after `start`; without a capture backend, as on Linux without a display, the callback gets `ERROR_PERMANENT`
 - `void dispose()` – release resources
 
 ## Typical usage: enumerate screens
