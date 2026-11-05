@@ -29,23 +29,21 @@ import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 
 /**
  * An audio track fed with audio the application pushes. Pushed audio is cut
- * into 10 ms chunks, of which one is due every 10 ms. The runtime's audio
- * pacer only counts what is due, for all tracks, and a thread of the audio
- * sender hands it to the source. At most one does so at a time for each track,
- * as {@link CustomAudioSource} requires, so that a slow push holds up this
- * track alone.
+ * into 10 ms chunks, which the runtime's audio pacer hands to the source one
+ * every 10 ms. Its thread is the only one that pushes into the source, as
+ * {@link CustomAudioSource} requires, and it runs no timeouts, which a slow
+ * push would hold up.
  */
 final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 
 	private static final long TICK_NANOS = TimeUnit.MILLISECONDS.toNanos(10);
 
 	/**
-	 * How late a tick may run and still send. Ticks keep coming at a fixed
-	 * rate, so after a stall of the pacer or of this track's sending the
-	 * missed ones run back to back: those up to this late are made up for, so
-	 * that a short stall keeps the pace, and the earlier ones are skipped, so
-	 * that a long one does not burst out all the audio of the pause at once.
-	 * Skipped ticks leave the queue as it is.
+	 * How late a tick may run and still send. The pacer runs at a fixed rate,
+	 * so after a stall it runs the missed ticks back to back: those up to this
+	 * late are made up for, so that a short stall keeps the pace, and the
+	 * earlier ones are skipped, so that a long one does not burst out all the
+	 * audio of the pause at once. Skipped ticks leave the queue as it is.
 	 */
 	private static final long MAX_LATE_NANOS = TimeUnit.MILLISECONDS.toNanos(50);
 
@@ -56,7 +54,7 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 
 	private final CustomAudioSource source;
 
-	// Confined to the sending turn, once the ticker is scheduled.
+	// Confined to the pacer, once the ticker is scheduled.
 
 	/** When the first tick was due. */
 	private long start;
@@ -81,12 +79,6 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 	private ScheduledFuture<?> ticker;
 
 	private boolean stopped;
-
-	/** The ticks the pacer counted that no sending turn has taken yet. */
-	private long dueTicks;
-
-	/** True while a sending turn runs or waits for its thread. */
-	private boolean sending;
 
 
 	CustomAudioImpl(LocalMediaImpl media, AudioTrack track, CustomAudioSource source) {
@@ -235,51 +227,13 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 		}
 	}
 
-	/**
-	 * Counts a tick, on the pacer, which never waits for the source: a turn
-	 * that is busy takes the tick along, however long it takes.
-	 */
 	private void tick() {
-		synchronized (queue) {
-			dueTicks++;
+		long late = rtc.clock.getAsLong() - (start + ticks++ * TICK_NANOS);
 
-			if (sending) {
-				return;
-			}
-
-			sending = true;
+		if (late > MAX_LATE_NANOS) {
+			return;
 		}
 
-		rtc.audioSender.execute(this::send);
-	}
-
-	/** A sending turn: runs the ticks due, until none is left. */
-	private void send() {
-		while (takeTick()) {
-			long late = rtc.clock.getAsLong() - (start + ticks++ * TICK_NANOS);
-
-			if (late <= MAX_LATE_NANOS) {
-				sendChunk();
-			}
-		}
-	}
-
-	/**
-	 * @return true when a tick was due, false when the turn is over.
-	 */
-	private boolean takeTick() {
-		synchronized (queue) {
-			if (dueTicks == 0) {
-				sending = false;
-				return false;
-			}
-
-			dueTicks--;
-			return true;
-		}
-	}
-
-	private void sendChunk() {
 		Chunk chunk;
 
 		synchronized (queue) {
