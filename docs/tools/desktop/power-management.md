@@ -12,8 +12,8 @@ API: `dev.onvoid.webrtc.media.video.desktop.PowerManagement`
 - **Responsibility**: You must explicitly disable the assertion when you are done.
 
 Key methods:
-- `void enableUserActivity()` – Declare the user as active; prevents idle sleep.
-- `void disableUserActivity()` – Revoke the assertion; system idle behavior resumes normally.
+- `void enableUserActivity()` – Declare the user as active; prevents idle sleep. Enabling an instance repeatedly counts once.
+- `void disableUserActivity()` – End the request of this instance; system idle behavior resumes normally once no other instance has an active request.
 
 ## Typical usage
 
@@ -38,13 +38,14 @@ finally {
 
 ## Integration tips
 
-- Lifetime management: Keep the `PowerManagement` instance for as long as you need the assertion. It's safe to call `enableUserActivity()` once at the start and `disableUserActivity()` once at the end.
+- Lifetime management: Keep the `PowerManagement` instance for as long as you need the assertion. Each instance is one independent request, so disabling another instance does not end it.
+- Multiple users: Give each component its own instance. The system may idle to sleep again only after the last enabled instance of the process is disabled, on whichever thread.
 - Fail‑safe: If your workflow can terminate unexpectedly, ensure `disableUserActivity()` is called (e.g., in `finally` blocks, shutdown hooks, or close handlers).
 - Minimal footprint: Only enable while strictly necessary. Do not keep the assertion enabled longer than needed.
 
 ## Platform notes
 
-- **Windows**: Uses native Windows power APIs to request that the display remain on while enabled.
+- **Windows**: Uses Windows power requests to keep the display on while enabled.
 - **Linux** (Freedesktop environments): Uses DBus screensaver inhibition (e.g., org.freedesktop.ScreenSaver) where available.
 - **macOS**: Uses macOS power management assertions to prevent display sleep while enabled.
 

@@ -32,6 +32,10 @@ namespace jni
 
 		void LinuxPowerManagement::enableUserActivity()
 		{
+			if (inhibited) {
+				return;
+			}
+
 			if (!DBusLoader::instance().load()) {
 				RTC_LOG(LS_WARNING) << "[PowerManagement] libdbus not found on system";
 				return;
@@ -84,6 +88,7 @@ namespace jni
 			DBusMessageIter reply_iter;
 			dbus.dbus_message_iter_init(reply, &reply_iter);
 			dbus.dbus_message_iter_get_basic(&reply_iter, &dbusCookie);
+			inhibited = true;
 
 			RTC_LOG(LS_INFO) << "[PowerManagement] Acquired screensaver inhibition cookie";
 
@@ -93,6 +98,10 @@ namespace jni
 
 		void LinuxPowerManagement::disableUserActivity()
         {
+			if (!inhibited) {
+				return;
+			}
+
 			if (!DBusLoader::instance().load()) {
 				RTC_LOG(LS_WARNING) << "[PowerManagement] libdbus not found on system";
 				return;
@@ -133,6 +142,8 @@ namespace jni
 				dbus.dbus_connection_unref(dbusConnection);
 				return;
 			}
+
+			inhibited = false;
 
 			RTC_LOG(LS_INFO) << "[PowerManagement] Released screensaver inhibition cookie";
 

@@ -19,6 +19,8 @@
 
 #include "media/video/desktop/PowerManagement.h"
 
+#include <windows.h>
+
 namespace jni
 {
 	namespace avdev
@@ -31,6 +33,11 @@ namespace jni
 
 				void enableUserActivity();
 				void disableUserActivity();
+
+			private:
+				// Unlike SetThreadExecutionState, not tied to the calling thread: the last
+				// release may come from another thread and the enabling thread may exit.
+				HANDLE powerRequest = nullptr;
 		};
 	}
 }
