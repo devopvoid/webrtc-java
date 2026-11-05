@@ -115,6 +115,12 @@ namespace ffmpeg
 			bool IsHardware() const;
 
 		private:
+			friend struct ColorProbe;
+
+			void ResolveColor(AVFrame * frame) const;
+
+			// Resolves color properties and retains I420 or converts other formats.
+			int MakeI420(AVFrame * source, AVFrame ** frame);
 			// How many packets are kept, until the hardware has produced a
 			// frame, to be decoded again in software if it fails by then.
 			static constexpr size_t kMaxKeptPackets = 32;

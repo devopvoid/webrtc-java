@@ -504,7 +504,14 @@ namespace ffmpeg
 		// the push succeeds or fails, so this item must not free it as well.
 		item.frame = nullptr;
 
-		api_->video_source_push(video_source_, &pushed);
+		const wj_color_space color = {
+			static_cast<uint8_t>(frame->color_primaries),
+			static_cast<uint8_t>(frame->color_trc),
+			static_cast<uint8_t>(frame->colorspace),
+			static_cast<uint8_t>(frame->color_range)
+		};
+
+		api_->video_source_push_color(video_source_, &pushed, &color);
 	}
 
 	void MediaPacer::DeliverAudio(const AudioItem & item, int64_t mapped_us)

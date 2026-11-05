@@ -588,37 +588,20 @@ namespace ffmpeg
 					transfer_height_ = frames->height;
 				}
 
-				result = ConvertToI420(transferred_, frame);
+				// Readback transfers pixels, not AVFrame properties. Copy the
+				// color description explicitly on every picture, including reuse.
+				av_frame_side_data_free(&transferred_->side_data, &transferred_->nb_side_data);
+				av_dict_free(&transferred_->metadata);
+				result = av_frame_copy_props(transferred_, decoded_);
+				if (result >= 0) {
+					result = MakeI420(transferred_, frame);
+				}
 			}
 
 			av_frame_unref(decoded_);
-		}
-		else if (IsI420(decoded_->format)) {
-			// Hand over a reference to the decoded picture rather than a copy
-			// of it. The caller drops that reference once WebRTC is done.
-			AVFrame * reference = av_frame_alloc();
-
-			if (reference == nullptr) {
-				av_frame_unref(decoded_);
-
-				return AVERROR(ENOMEM);
-			}
-
-			result = av_frame_ref(reference, decoded_);
-
-			av_frame_unref(decoded_);
-
-			if (result < 0) {
-				av_frame_free(&reference);
-
-				return result;
-			}
-
-			*frame = reference;
-			result = 0;
 		}
 		else {
-			result = ConvertToI420(decoded_, frame);
+			result = MakeI420(decoded_, frame);
 
 			av_frame_unref(decoded_);
 		}
@@ -777,16 +760,85 @@ namespace ffmpeg
 		return hardware_.load();
 	}
 
+	int VideoDecoder::MakeI420(AVFrame * source, AVFrame ** frame)
+	{
+		ResolveColor(source);
+
+		if (IsI420(source->format)) {
+			// Hand over a reference to the decoded picture rather than a copy
+			// of it. The caller drops that reference once WebRTC is done.
+			AVFrame * reference = av_frame_alloc();
+
+			if (reference == nullptr) {
+				return AVERROR(ENOMEM);
+			}
+
+			int result = av_frame_ref(reference, source);
+
+			if (result < 0) {
+				av_frame_free(&reference);
+
+				return result;
+			}
+
+			*frame = reference;
+			return 0;
+		}
+
+		return ConvertToI420(source, frame);
+	}
+
+	void VideoDecoder::ResolveColor(AVFrame * frame) const
+	{
+		const AVCodecParameters * parameters = stream_ != nullptr ? stream_->codecpar : nullptr;
+		const AVPixFmtDescriptor * descriptor = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(frame->format));
+		const bool rgb = descriptor != nullptr && (descriptor->flags & AV_PIX_FMT_FLAG_RGB);
+		const bool jpeg = frame->format == AV_PIX_FMT_YUVJ420P
+				|| frame->format == AV_PIX_FMT_YUVJ422P || frame->format == AV_PIX_FMT_YUVJ444P
+				|| frame->format == AV_PIX_FMT_YUVJ440P || frame->format == AV_PIX_FMT_YUVJ411P;
+
+		if (frame->colorspace == AVCOL_SPC_UNSPECIFIED) {
+			frame->colorspace = parameters != nullptr ? parameters->color_space : AVCOL_SPC_UNSPECIFIED;
+		}
+		if (rgb) {
+			frame->colorspace = AVCOL_SPC_RGB;
+		}
+		else if (frame->colorspace == AVCOL_SPC_UNSPECIFIED) {
+			// Match the historical swscale default; do not guess from resolution.
+			frame->colorspace = AVCOL_SPC_SMPTE170M;
+		}
+		if (frame->color_range == AVCOL_RANGE_UNSPECIFIED) {
+			frame->color_range = parameters != nullptr ? parameters->color_range : AVCOL_RANGE_UNSPECIFIED;
+		}
+		if (rgb || jpeg) {
+			frame->color_range = AVCOL_RANGE_JPEG;
+		}
+		else if (frame->color_range == AVCOL_RANGE_UNSPECIFIED) {
+			frame->color_range = AVCOL_RANGE_MPEG;
+		}
+		if (parameters != nullptr) {
+			if (frame->color_primaries == AVCOL_PRI_UNSPECIFIED) {
+				frame->color_primaries = parameters->color_primaries;
+			}
+			if (frame->color_trc == AVCOL_TRC_UNSPECIFIED) {
+				frame->color_trc = parameters->color_trc;
+			}
+		}
+	}
+
 	int VideoDecoder::ConvertToI420(const AVFrame * source, AVFrame ** result)
 	{
-		sws_context_ = sws_getCachedContext(sws_context_,
-				source->width, source->height,
-				static_cast<AVPixelFormat>(source->format),
-				source->width, source->height, AV_PIX_FMT_YUV420P,
-				SWS_BILINEAR, nullptr, nullptr, nullptr);
+		// Dynamic swscale reads matrix/range from the frames and rebuilds its
+		// graph when they change, even if dimensions and pixel format do not.
+		if (sws_context_ == nullptr) {
+			sws_context_ = sws_alloc_context();
+			if (sws_context_ != nullptr) {
+				sws_context_->flags = SWS_BILINEAR;
+			}
+		}
 
 		if (sws_context_ == nullptr) {
-			return AVERROR(EINVAL);
+			return AVERROR(ENOMEM);
 		}
 
 		AVFrame * converted = nullptr;
@@ -797,8 +849,17 @@ namespace ffmpeg
 			return error;
 		}
 
-		error = sws_scale(sws_context_, source->data, source->linesize, 0,
-				source->height, converted->data, converted->linesize);
+		// Keep side data too: swscale uses HDR luminance metadata, so losing
+		// it on the destination could request an unintended brightness change.
+		error = av_frame_copy_props(converted, source);
+		if (error < 0) {
+			av_frame_free(&converted);
+			return error;
+		}
+		converted->colorspace = source->colorspace == AVCOL_SPC_RGB
+				? AVCOL_SPC_SMPTE170M : source->colorspace;
+
+		error = sws_scale_frame(sws_context_, converted, source);
 
 		if (error < 0) {
 			av_frame_free(&converted);
