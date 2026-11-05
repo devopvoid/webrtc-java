@@ -124,7 +124,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
 		CHECK_HANDLE(capturer);
 
-		auto callback = std::make_unique<jni::DesktopCaptureCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback));
+		auto callback = std::make_unique<jni::DesktopCaptureCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback), capturer->isWindowCapturer());
 
 		if (!capturer->Start(std::move(callback))) {
 			ThrowJavaException(env, "java/lang/IllegalStateException", "Capture has been started already");

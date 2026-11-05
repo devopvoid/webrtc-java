@@ -56,6 +56,7 @@ namespace jni
 			bool FocusOnSelectedSource();
 			void setFocusSelectedSource(bool focus);
 			bool IsOccluded(const webrtc::DesktopVector & pos);
+			bool isWindowCapturer() const;
 
 		protected:
 			std::mutex startMutex;
@@ -66,6 +67,8 @@ namespace jni
 			std::unique_ptr<webrtc::DesktopCapturer> capturer;
 
 			bool focusSelectedSource;
+
+			const bool windowCapturer;
 
 #if defined(WEBRTC_WIN)
 		private:

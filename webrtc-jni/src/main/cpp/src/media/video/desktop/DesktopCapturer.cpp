@@ -25,7 +25,8 @@
 namespace jni
 {
 	DesktopCapturer::DesktopCapturer(bool screenCapturer) :
-		focusSelectedSource(false)
+		focusSelectedSource(false),
+		windowCapturer(!screenCapturer)
 	{
 		auto options = webrtc::DesktopCaptureOptions::CreateDefault();
 		// Enable desktop effects.
@@ -166,5 +167,10 @@ namespace jni
 	{
 		if (!capturer) return false;
 		return capturer->IsOccluded(pos);
+	}
+
+	bool DesktopCapturer::isWindowCapturer() const
+	{
+		return windowCapturer;
 	}
 }

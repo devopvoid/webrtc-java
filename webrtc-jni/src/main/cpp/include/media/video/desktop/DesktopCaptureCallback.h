@@ -31,7 +31,7 @@ namespace jni
 	class DesktopCaptureCallback : public webrtc::DesktopCapturer::Callback
 	{
 		public:
-			DesktopCaptureCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback);
+			DesktopCaptureCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback, bool windowSource);
 			~DesktopCaptureCallback() override = default;
 
 			// DesktopCapturer::Callback implementation.
@@ -48,6 +48,8 @@ namespace jni
 
 		private:
 			JavaGlobalRef<jobject> callback;
+
+			const bool windowSource;
 
 			const std::shared_ptr<JavaDesktopCaptureCallbackClass> javaClass;
 			const std::shared_ptr<JavaVideoFrameClass> javaFrameClass;
