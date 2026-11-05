@@ -16,6 +16,9 @@
 
 package dev.onvoid.webrtc.client;
 
+import static dev.onvoid.webrtc.client.HttpCallTests.SECRET;
+import static dev.onvoid.webrtc.client.HttpCallTests.assertHidesSecret;
+import static dev.onvoid.webrtc.client.HttpCallTests.withSecret;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -52,6 +55,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
@@ -1545,6 +1549,157 @@ class HttpSessionTests extends ClientTestBase {
 			assertTrue(failed.getCause().getMessage().contains("larger than"), failed.getCause().getMessage());
 			// The resource was named before the answer was refused.
 			endpoint.awaitRequest("DELETE /live/session/1", TIMEOUT_SECONDS);
+		}
+	}
+
+	@Test
+	void invalidEndpointHidesSecrets() {
+		URI endpoint = URI.create("http://media.example/" + SECRET + "?key=" + SECRET);
+
+		assertHidesSecret(assertThrows(IllegalArgumentException.class, () -> Whip.to(endpoint)));
+		assertHidesSecret(assertThrows(IllegalArgumentException.class, () -> Whep.from(endpoint)));
+	}
+
+	@Test
+	void refusedSetupHidesSecrets() throws Exception {
+		// None of these leaves a session to delete.
+		List<Consumer<TestHttpEndpoint>> failures = Arrays.asList(
+				endpoint -> endpoint.answerStatus = 403,
+				endpoint -> endpoint.location = null,
+				endpoint -> endpoint.location = "/not valid?key=" + SECRET,
+				endpoint -> endpoint.location = "http://media.example/" + SECRET,
+				endpoint -> endpoint.location = "mailto:" + SECRET + "@example.com");
+
+		for (Consumer<TestHttpEndpoint> failure : failures) {
+			try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+				failure.accept(endpoint);
+				assertHidesSecret(assertThrows(ExecutionException.class,
+						() -> await(Whep.from(withSecret(endpoint.uri())).play(rtc))));
+			}
+		}
+	}
+
+	@Test
+	void unusableAnswerHidesSecrets() throws Exception {
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerContentType = "text/plain";
+			endpoint.location = "/live/session/" + SECRET;
+			assertHidesSecret(assertThrows(ExecutionException.class,
+					() -> await(Whep.from(withSecret(endpoint.uri())).play(rtc))));
+			endpoint.awaitRequest("DELETE /live/session/" + SECRET, TIMEOUT_SECONDS);
+		}
+	}
+
+	@Test
+	void unreachableEndpointHidesSecrets() {
+		// The port is not served, and the host is one the client takes no request to.
+		for (String authority : Arrays.asList("127.0.0.1:1", "under_score.invalid")) {
+			URI endpoint = withSecret(URI.create("https://" + authority + "/live/endpoint"));
+
+			assertHidesSecret(assertThrows(ExecutionException.class, () -> await(Whep.from(endpoint).play(rtc))));
+			assertHidesSecret(assertThrows(ExecutionException.class, () -> await(Whep.from(endpoint).detect(rtc))));
+		}
+	}
+
+	@Test
+	void setupTimeoutHidesSecrets() throws Exception {
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "", 201)) {
+			endpoint.stallAnswers();
+
+			URI secret = withSecret(endpoint.uri());
+			CompletableFuture<Whep.Session> session = Whep.from(secret).timeout(SESSION_TIMEOUT).play(client);
+
+			endpoint.awaitRequest(request -> request.toString().startsWith("POST"), "the offer", TIMEOUT_SECONDS);
+			assertEquals(1, timer.fire(SESSION_TIMEOUT));
+			assertHidesSecret(assertThrows(ExecutionException.class, () -> await(session)));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void failedDeleteHidesSecrets() throws Exception {
+		CompletableFuture<Throwable> error = new CompletableFuture<>();
+		WebRtc client = clientRuntime(builder -> builder.errorHandler(error::complete));
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.deleteStatus = 500;
+			endpoint.location = "/live/session/" + SECRET;
+
+			Whep.Session session = await(Whep.from(withSecret(endpoint.uri())).play(client));
+
+			assertHidesSecret(assertThrows(ExecutionException.class, () -> await(session.closeAsync())));
+			assertHidesSecret(await(error));
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void failedCandidatesHideSecrets() throws Exception {
+		CompletableFuture<Throwable> error = new CompletableFuture<>();
+		WebRtc client = clientRuntime(builder -> builder.errorHandler(error::complete));
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.patchStatus = 412;
+			endpoint.location = "/live/session/" + SECRET;
+
+			Whep.Session session = await(Whep.from(withSecret(endpoint.uri())).play(client));
+
+			assertHidesSecret(await(error));
+			await(session.closeAsync());
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void failedRestartHidesSecrets() throws Exception {
+		CompletableFuture<Throwable> error = new CompletableFuture<>();
+		WebRtc client = clientRuntime(builder -> builder.errorHandler(error::complete));
+
+		try (TestHttpEndpoint endpoint = restartingEndpoint(new ArrayList<>())) {
+			endpoint.iceRestartStatus = 500;
+			endpoint.location = "/live/session/" + SECRET;
+
+			Whep.Session session = await(Whep.from(withSecret(endpoint.uri())).play(client));
+
+			assertHidesSecret(assertThrows(ExecutionException.class, () -> await(session.restartIce())));
+
+			// One the session makes itself is reported.
+			session.ice().stateChanged(PeerState.FAILED);
+			assertHidesSecret(await(error));
+			await(session.closeAsync());
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
+	void refusedIceServerHidesPassword() throws Exception {
+		CompletableFuture<Throwable> error = new CompletableFuture<>();
+		WebRtc client = clientRuntime(builder -> builder.errorHandler(error::complete));
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerHeaders = "Link: <turn:>; rel=\"ice-server\"; username=\"user\"; credential=\""
+					+ SECRET + "\"\r\n";
+
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(client));
+			ConfigurationException refused = assertInstanceOf(ConfigurationException.class, await(error));
+
+			assertTrue(refused.getMessage().contains("turn:"), refused.getMessage());
+			assertHidesSecret(refused);
+			await(session.closeAsync());
+		}
+		finally {
+			client.close();
 		}
 	}
 

@@ -16,6 +16,7 @@
 
 package dev.onvoid.webrtc.client;
 
+import static dev.onvoid.webrtc.client.HttpCall.redacted;
 import static java.util.Objects.requireNonNull;
 
 import java.net.URI;
@@ -292,18 +293,18 @@ abstract class HttpSession implements AutoCloseable {
 			// as the timeout again.
 			peer.close();
 			result.completeExceptionally(PeerImpl.asWebRtcException(error,
-					"The session with " + endpoint + " could not be set up"));
+					"The session with " + redacted(endpoint) + " could not be set up"));
 
 			discard(rtc, resource.getAndSet(null), authorization, timeout);
 		};
 
 		ScheduledFuture<?> deadline = rtc.timer.schedule(() -> fail.accept(new WebRtcException(
-				"The session with " + endpoint + " was not connected within " + timeout)),
+				"The session with " + redacted(endpoint) + " was not connected within " + timeout)),
 				Timeouts.toMillis(timeout), TimeUnit.MILLISECONDS);
 
 		abandoned.thenRun(() -> {
 			deadline.cancel(false);
-			fail.accept(new CancellationException("The session with " + endpoint + " was abandoned"));
+			fail.accept(new CancellationException("The session with " + redacted(endpoint) + " was abandoned"));
 		});
 
 		CompletableFuture<RTCSessionDescription> initial = prepared.thenCompose(ready -> gathering == Gathering.COMPLETE
@@ -385,12 +386,12 @@ abstract class HttpSession implements AutoCloseable {
 				throw (WebRtcException) error;
 			}
 			if (error != null) {
-				throw new WebRtcException("Sending the offer to " + endpoint + " failed: " + error.getMessage(),
+				throw new WebRtcException("Sending the offer to " + redacted(endpoint) + " failed: " + error.getMessage(),
 						error);
 			}
 			if (response.status == 201) {
 				if (resource.get() == null) {
-					throw new WebRtcException("The endpoint " + endpoint + " answered without a session Location");
+					throw new WebRtcException("The endpoint " + redacted(endpoint) + " answered without a session Location");
 				}
 				requireContentType(response, "application/sdp");
 				return new Reply(response.body, false, null, 0, response, protocol);
@@ -399,7 +400,7 @@ abstract class HttpSession implements AutoCloseable {
 				URI session = resourceOf(response.uri, response.header("Location"));
 
 				if (session == null) {
-					throw new WebRtcException("The endpoint " + endpoint
+					throw new WebRtcException("The endpoint " + redacted(endpoint)
 							+ " countered the offer without naming the session");
 				}
 
@@ -408,7 +409,7 @@ abstract class HttpSession implements AutoCloseable {
 						protocol);
 			}
 
-			throw response.error("The endpoint " + endpoint + " answered the offer with " + response.describe());
+			throw response.error("The endpoint " + redacted(endpoint) + " answered the offer with " + response.describe());
 		});
 	}
 
@@ -426,7 +427,7 @@ abstract class HttpSession implements AutoCloseable {
 		return peer.manual.answerInstead(new RTCSessionDescription(RTCSdpType.OFFER, reply.sdp), Gathering.COMPLETE)
 				.thenCompose(answer -> {
 					if (System.currentTimeMillis() > reply.validUntil) {
-						throw new WebRtcException("The counter-offer for " + reply.session
+						throw new WebRtcException("The counter-offer for " + redacted(reply.session)
 								+ " expired before it was answered");
 					}
 
@@ -446,12 +447,12 @@ abstract class HttpSession implements AutoCloseable {
 							withRtcpMuxOnly(answer.sdp).getBytes(StandardCharsets.UTF_8), 0,
 							head -> { }).handle((response, error) -> {
 								if (error != null) {
-									throw new WebRtcException("Sending the answer to " + reply.session + " failed: "
+									throw new WebRtcException("Sending the answer to " + redacted(reply.session) + " failed: "
 											+ error.getMessage(), error);
 								}
 								if (response.status / 100 != 2) {
 									throw response.error("The endpoint answered the answer for "
-											+ reply.session + " with " + response.describe());
+											+ redacted(reply.session) + " with " + response.describe());
 								}
 
 								ice.attach(reply.session, response.header("ETag"), answer.sdp);
@@ -610,14 +611,14 @@ abstract class HttpSession implements AutoCloseable {
 					Throwable failure = error;
 
 					if (failure == null && response.status / 100 != 2) {
-						failure = response.error("The endpoint answered the deletion of " + resource
+						failure = response.error("The endpoint answered the deletion of " + redacted(resource)
 								+ " with " + response.describe());
 					}
 					if (failure == null) {
 						return null;
 					}
 
-					WebRtcException reported = new WebRtcException("Deleting the session " + resource + " failed",
+					WebRtcException reported = new WebRtcException("Deleting the session " + redacted(resource) + " failed",
 							failure);
 					rtc.reportError(reported);
 					return reported;
@@ -659,7 +660,7 @@ abstract class HttpSession implements AutoCloseable {
 		CompletableFuture<HttpCall.Response> response = request.send(null, null, 0, head -> { })
 				.handle((value, error) -> {
 					if (error != null) {
-						throw new WebRtcException("Asking " + endpoint + " with HEAD failed: " + error.getMessage(),
+						throw new WebRtcException("Asking " + redacted(endpoint) + " with HEAD failed: " + error.getMessage(),
 								error);
 					}
 
@@ -688,7 +689,7 @@ abstract class HttpSession implements AutoCloseable {
 			return null;
 		}
 
-		WebRtcException error = new WebRtcException("The session " + resource
+		WebRtcException error = new WebRtcException("The session " + redacted(resource)
 				+ " was left on the server, since the runtime is closed");
 		rtc.reportError(error);
 		return error;
@@ -710,19 +711,23 @@ abstract class HttpSession implements AutoCloseable {
 			resource = endpoint.resolve(location.trim());
 		}
 		catch (IllegalArgumentException e) {
-			throw new WebRtcException("The endpoint " + endpoint + " named an invalid resource: " + location, e);
+			// Without the exception, which quotes the Location.
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named an invalid resource");
 		}
 
 		String scheme = resource.getScheme();
 
 		if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
-			throw new WebRtcException("The endpoint " + endpoint + " named a resource that is not http: " + resource);
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named a resource that is not http: "
+					+ redacted(resource));
 		}
 		if ("https".equalsIgnoreCase(endpoint.getScheme()) && !"https".equalsIgnoreCase(scheme)) {
-			throw new WebRtcException("The endpoint " + endpoint + " named a resource without TLS: " + resource);
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named a resource without TLS: "
+					+ redacted(resource));
 		}
 		if (!"https".equalsIgnoreCase(scheme) && !HttpCall.isLoopback(resource.getHost())) {
-			throw new WebRtcException("The endpoint " + endpoint + " named a resource without TLS: " + resource);
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named a resource without TLS: "
+					+ redacted(resource));
 		}
 
 		return resource;
@@ -782,7 +787,7 @@ abstract class HttpSession implements AutoCloseable {
 	static void requireContentType(HttpCall.Response response, String expected) {
 		String type = response.header("Content-Type");
 		if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase(expected)) {
-			throw new WebRtcException("The session " + response.uri + " answered with Content-Type "
+			throw new WebRtcException("The session " + redacted(response.uri) + " answered with Content-Type "
 					+ type + "; expected " + expected);
 		}
 	}
@@ -888,7 +893,7 @@ abstract class HttpSession implements AutoCloseable {
 
 		if (!"https".equalsIgnoreCase(scheme) && !local) {
 			throw new IllegalArgumentException("The endpoint must be an https URL, or an http one on this machine, "
-					+ "such as http://localhost, got " + endpoint);
+					+ "such as http://localhost, got " + redacted(endpoint));
 		}
 
 		return endpoint;

@@ -110,11 +110,15 @@ public class RTCIceServer {
 				Objects.equals(username, other.username);
 	}
 
+	/**
+	 * Describes the server for logs and messages, so without the password,
+	 * and without {@link #hashCode()}, which is computed from it.
+	 */
 	@Override
 	public String toString() {
 		return String.format("%s@%d [urls=%s, username=%s, password=%s, tlsCertPolicy=%s, hostname=%s, tlsAlpnProtocols=%s, tlsEllipticCurves=%s]",
-						RTCIceServer.class.getSimpleName(), hashCode(),
-						urls, username, password, tlsCertPolicy, hostname,
+						RTCIceServer.class.getSimpleName(), System.identityHashCode(this),
+						urls, username, password != null ? "***" : null, tlsCertPolicy, hostname,
 						tlsAlpnProtocols, tlsEllipticCurves);
 	}
 }

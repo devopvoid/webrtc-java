@@ -276,7 +276,7 @@ final class HttpCall {
 	void abort() {
 		IOException reason = remainingNanos() <= 0
 				? timedOut()
-				: new IOException("The request to " + uri + " was aborted");
+				: new IOException("The request to " + redacted(uri) + " was aborted");
 		CompletableFuture<?> exchange;
 		Body body;
 		Future<?> retry;
@@ -337,8 +337,9 @@ final class HttpCall {
 			request = builder.build();
 		}
 		catch (IllegalArgumentException e) {
-			result.completeExceptionally(new IOException("The request to " + target + " is invalid: "
-					+ e.getMessage(), e));
+			// Without the message or the exception itself, which quote the URL
+			// or the value of a header field, such as the Authorization.
+			result.completeExceptionally(new IOException("The request to " + redacted(target) + " is invalid"));
 			return;
 		}
 
@@ -374,7 +375,7 @@ final class HttpCall {
 				return;
 			}
 			if (redirects == MAX_REDIRECTS) {
-				result.completeExceptionally(new IOException("The request to " + uri
+				result.completeExceptionally(new IOException("The request to " + redacted(uri)
 						+ " was redirected more than " + MAX_REDIRECTS + " times"));
 				return;
 			}
@@ -407,7 +408,7 @@ final class HttpCall {
 
 		synchronized (this) {
 			if (aborted) {
-				body.stop(new IOException("The request to " + uri + " was aborted"));
+				body.stop(new IOException("The request to " + redacted(uri) + " was aborted"));
 				return body;
 			}
 
@@ -505,19 +506,19 @@ final class HttpCall {
 			target = from.resolve(location.trim());
 		}
 		catch (IllegalArgumentException e) {
-			throw new IOException("The server redirected to an invalid URL: " + location);
+			throw new IOException("The server redirected to an invalid URL");
 		}
 
 		String scheme = target.getScheme();
 
 		if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
-			throw new IOException("The server redirected to a URL that is not http: " + target);
+			throw new IOException("The server redirected to a URL that is not http: " + redacted(target));
 		}
 		if ("https".equalsIgnoreCase(from.getScheme()) && !"https".equalsIgnoreCase(scheme)) {
-			throw new IOException("The server redirected to a URL without TLS: " + target);
+			throw new IOException("The server redirected to a URL without TLS: " + redacted(target));
 		}
 		if (!"https".equalsIgnoreCase(scheme) && !isLoopback(target.getHost())) {
-			throw new IOException("The server redirected to a URL without TLS: " + target);
+			throw new IOException("The server redirected to a URL without TLS: " + redacted(target));
 		}
 
 		return target;
@@ -557,12 +558,36 @@ final class HttpCall {
 		}
 	}
 
+	/**
+	 * Names a URL in a message, by its scheme, host and port only, since what
+	 * a message says ends up in logs. The rest of a URL may be a secret, and
+	 * not only its user info and query: Cloudflare Stream, for one, has the
+	 * key to publish with as a segment of the path.
+	 *
+	 * @param uri the URL.
+	 *
+	 * @return the URL without what may be a secret, such as {@code
+	 * https://example.com:8443}.
+	 */
+	static String redacted(URI uri) {
+		String scheme = uri.getScheme() != null ? uri.getScheme() + ":" : "";
+		String authority = uri.getRawAuthority();
+
+		if (authority == null) {
+			return scheme.isEmpty() ? "a URL without a scheme" : scheme;
+		}
+
+		// The raw authority, since a host that is not a valid one, as with an
+		// underscore, leaves getHost() and getUserInfo() null.
+		return scheme + "//" + authority.substring(authority.lastIndexOf('@') + 1);
+	}
+
 	private long remainingNanos() {
 		return limit - (System.nanoTime() - start);
 	}
 
 	private HttpTimeoutException timedOut() {
-		return new HttpTimeoutException("The request to " + uri + " did not complete within " + timeout);
+		return new HttpTimeoutException("The request to " + redacted(uri) + " did not complete within " + timeout);
 	}
 
 	private static Throwable unwrap(Throwable error) {
