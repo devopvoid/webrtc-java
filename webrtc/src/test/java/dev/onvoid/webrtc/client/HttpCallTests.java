@@ -17,12 +17,15 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 import java.net.Proxy;
@@ -67,6 +70,9 @@ class HttpCallTests {
 	private static final Duration TIMEOUT = Duration.ofSeconds(25);
 
 	private static final String ANSWER = "v=0\r\n" + String.join("", Collections.nCopies(2000, "a=x\r\n"));
+
+	/** Stands for the stream key or signature of a URL, which no failure may show. */
+	static final String SECRET = "s3cr3t-t0k3n";
 
 
 	@Test
@@ -226,6 +232,88 @@ class HttpCallTests {
 	}
 
 	@Test
+	void urlsRedacted() {
+		assertEquals("https://example.com", HttpCall.redacted(URI.create("https://example.com")));
+		assertEquals("https://example.com:8443",
+				HttpCall.redacted(URI.create("https://user:pass@example.com:8443/key/whip?token=x#y")));
+		assertEquals("http://[::1]:8080", HttpCall.redacted(URI.create("http://[::1]:8080/key")));
+		// A host that java.net.URI cannot read, which leaves only the authority.
+		assertEquals("https://under_score.example:8443",
+				HttpCall.redacted(URI.create("https://user:pass@under_score.example:8443/key")));
+		assertEquals("mailto:", HttpCall.redacted(URI.create("mailto:key@example.com")));
+		assertEquals("a URL without a scheme", HttpCall.redacted(URI.create("key/whip?token=x")));
+	}
+
+	@Test
+	void invalidRequestHidesSecrets() {
+		// The client's own messages quote the URL and the header field.
+		HttpClient client = HttpCall.newClient(false);
+		URI unsupported = URI.create("https://under_score.invalid/" + SECRET + "?key=" + SECRET);
+		URI valid = URI.create("https://example.invalid/");
+
+		for (HttpCall call : Arrays.asList(post(client, unsupported),
+				new HttpCall(client, valid, "POST", "Bearer " + SECRET + "\r\nX: y", TIMEOUT))) {
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(call.send("application/sdp", new byte[1], 1024, head -> { })));
+
+			assertTrue(failed.getCause().getMessage().contains("is invalid"), failed.getCause().getMessage());
+			assertHidesSecret(failed);
+		}
+	}
+
+	@Test
+	void failedRedirectHidesSecrets() throws Exception {
+		List<String> locations = Arrays.asList("/not valid?key=" + SECRET, "http://media.example/" + SECRET,
+				"mailto:" + SECRET + "@example.com");
+
+		for (String location : locations) {
+			try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> ANSWER, 201)) {
+				endpoint.redirectAnswers(307, location);
+
+				HttpCall call = post(HttpCall.newClient(false), withSecret(endpoint.uri())).followRedirects();
+
+				assertHidesSecret(assertThrows(ExecutionException.class,
+						() -> await(call.send("application/sdp", new byte[1], 1024, head -> { }))));
+			}
+		}
+	}
+
+	@Test
+	void abortHidesSecrets() throws Exception {
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "v=0 and the rest", 201)) {
+			endpoint.stallBodies();
+
+			CountDownLatch head = new CountDownLatch(1);
+			HttpCall call = post(HttpCall.newClient(false), withSecret(endpoint.uri()));
+			CompletableFuture<HttpCall.Response> response = call.send("application/sdp", new byte[] { 'o' }, 1024,
+					received -> head.countDown());
+
+			assertTrue(head.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+			call.abort();
+
+			ExecutionException failed = assertThrows(ExecutionException.class, () -> await(response));
+
+			assertTrue(failed.getCause().getMessage().contains("aborted"), failed.getCause().getMessage());
+			assertHidesSecret(failed);
+		}
+	}
+
+	@Test
+	void timeoutHidesSecrets() throws Exception {
+		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> "v=0 and the rest", 201)) {
+			endpoint.stallBodies();
+
+			HttpCall call = new HttpCall(HttpCall.newClient(false), withSecret(endpoint.uri()), "POST", null,
+					Duration.ofMillis(200));
+			ExecutionException failed = assertThrows(ExecutionException.class,
+					() -> await(call.send("application/sdp", new byte[] { 'o' }, 1024, head -> { })));
+
+			assertInstanceOf(HttpTimeoutException.class, failed.getCause());
+			assertHidesSecret(failed);
+		}
+	}
+
+	@Test
 	void proxyForwardsRequest() throws Exception {
 		try (TestHttpEndpoint endpoint = new TestHttpEndpoint(offer -> ANSWER, 201);
 				TestHttpProxy proxy = new TestHttpProxy()) {
@@ -341,6 +429,26 @@ class HttpCallTests {
 		assertEquals(-1, HttpCall.retryDelayMillis("soon", now));
 		assertEquals(-1, HttpCall.retryDelayMillis("", now));
 		assertEquals(-1, HttpCall.retryDelayMillis(null, now));
+	}
+
+	/**
+	 * @return the URL with {@link #SECRET} in each of its parts that may hold one.
+	 */
+	static URI withSecret(URI uri) {
+		return URI.create(uri.getScheme() + "://user:" + SECRET + "@" + uri.getRawAuthority() + uri.getRawPath()
+				+ "/" + SECRET + "?key=" + SECRET + "#" + SECRET);
+	}
+
+	/**
+	 * Checks all that a log of the failure shows: the messages of its whole
+	 * chain of causes, and what was suppressed along the way.
+	 */
+	static void assertHidesSecret(Throwable failure) {
+		StringWriter log = new StringWriter();
+
+		failure.printStackTrace(new PrintWriter(log, true));
+
+		assertFalse(log.toString().contains(SECRET), log::toString);
 	}
 
 	private static HttpCall post(HttpClient client, URI uri) {
