@@ -31,10 +31,10 @@ public class MediaInfo {
 	/** How long the source runs in microseconds, or 0 if it is not known. */
 	private final long durationUs;
 
-	/** The width of the video in pixels, or 0 if there is no video. */
+	/** The width of the video as it is shown, or 0 if there is no video. */
 	private final int videoWidth;
 
-	/** The height of the video in pixels, or 0 if there is no video. */
+	/** The height of the video as it is shown, or 0 if there is no video. */
 	private final int videoHeight;
 
 	/** The frame rate of the video, or 0 if there is no video. */
@@ -99,7 +99,9 @@ public class MediaInfo {
 	}
 
 	/**
-	 * Returns the width of the video in pixels.
+	 * Returns the width of the video as it is shown, in square pixels and
+	 * turned upright. A video stored sideways reports its stored height here,
+	 * while its frames keep their stored size and carry the rotation.
 	 *
 	 * @return The width, or {@code 0} if there is no video.
 	 */
@@ -108,7 +110,9 @@ public class MediaInfo {
 	}
 
 	/**
-	 * Returns the height of the video in pixels.
+	 * Returns the height of the video as it is shown, in square pixels and
+	 * turned upright. A video stored sideways reports its stored width here,
+	 * while its frames keep their stored size and carry the rotation.
 	 *
 	 * @return The height, or {@code 0} if there is no video.
 	 */

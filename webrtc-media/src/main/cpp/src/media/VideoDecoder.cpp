@@ -764,7 +764,9 @@ namespace ffmpeg
 	{
 		ResolveColor(source);
 
-		if (IsI420(source->format)) {
+		const VideoSize size = GetSquarePixelSize(stream_, source);
+
+		if (IsI420(source->format) && size.width == source->width && size.height == source->height) {
 			// Hand over a reference to the decoded picture rather than a copy
 			// of it. The caller drops that reference once WebRTC is done.
 			AVFrame * reference = av_frame_alloc();
@@ -785,7 +787,7 @@ namespace ffmpeg
 			return 0;
 		}
 
-		return ConvertToI420(source, frame);
+		return ConvertToI420(source, size, frame);
 	}
 
 	void VideoDecoder::ResolveColor(AVFrame * frame) const
@@ -826,7 +828,7 @@ namespace ffmpeg
 		}
 	}
 
-	int VideoDecoder::ConvertToI420(const AVFrame * source, AVFrame ** result)
+	int VideoDecoder::ConvertToI420(const AVFrame * source, VideoSize size, AVFrame ** result)
 	{
 		// Dynamic swscale reads matrix/range from the frames and rebuilds its
 		// graph when they change, even if dimensions and pixel format do not.
@@ -843,7 +845,7 @@ namespace ffmpeg
 
 		AVFrame * converted = nullptr;
 
-		int error = AllocateI420(source->width, source->height, &converted);
+		int error = AllocateI420(size.width, size.height, &converted);
 
 		if (error < 0) {
 			return error;

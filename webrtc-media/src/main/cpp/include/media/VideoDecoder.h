@@ -17,6 +17,8 @@
 #ifndef WEBRTC_JAVA_MEDIA_VIDEO_DECODER_H_
 #define WEBRTC_JAVA_MEDIA_VIDEO_DECODER_H_
 
+#include "media/VideoGeometry.h"
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -37,7 +39,9 @@ namespace ffmpeg
 	// already, and such a frame is handed on untouched, so the decoded picture
 	// reaches the encoder without a single copy. Anything else is converted
 	// with swscale first, which costs one copy and is the price of the format
-	// rather than of this design.
+	// rather than of this design. So is a picture of pixels that are not
+	// square, which WebRTC has no way to describe, and which is scaled to
+	// square ones on the way. A frame keeps the display matrix of its picture.
 	//
 	// Asked to, it decodes H.264, HEVC, VP9 and AV1 on the media engine or GPU
 	// instead.
@@ -119,7 +123,8 @@ namespace ffmpeg
 
 			void ResolveColor(AVFrame * frame) const;
 
-			// Resolves color properties and retains I420 or converts other formats.
+			// Resolves color properties and retains I420 of square pixels, or
+			// converts anything else.
 			int MakeI420(AVFrame * source, AVFrame ** frame);
 			// How many packets are kept, until the hardware has produced a
 			// frame, to be decoded again in software if it fails by then.
@@ -176,9 +181,10 @@ namespace ffmpeg
 			void DropKeptPackets();
 			void DropPending();
 
-			// Converts a decoded frame to I420. The returned frame is a new
-			// reference the caller owns.
-			int ConvertToI420(const AVFrame * source, AVFrame ** result);
+			// Converts a decoded frame to I420, at the given size. The returned
+			// frame is a new reference the caller owns, with the properties and
+			// the side data of the source, the display matrix among them.
+			int ConvertToI420(const AVFrame * source, VideoSize size, AVFrame ** result);
 
 			// A new I420 frame of the given size, whose buffer comes from a
 			// pool, so that the picture lands in memory that is already

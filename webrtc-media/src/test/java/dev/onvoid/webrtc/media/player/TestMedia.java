@@ -265,6 +265,105 @@ final class TestMedia {
 	}
 
 	/**
+	 * Copies a Matroska file and has the copy say that its video is shown
+	 * turned clockwise by the given angle, which is what makes FFmpeg give it
+	 * a display matrix.
+	 *
+	 * @param directory Where to write the file.
+	 * @param source    The file to copy.
+	 * @param degrees   The clockwise angle.
+	 *
+	 * @return The file written.
+	 */
+	static Path rotatedMatroska(Path directory, Path source, double degrees)
+			throws IOException {
+		return videoSettingsMatroska(directory, source, projection(0, -degrees));
+	}
+
+	/**
+	 * Copies a Matroska file and has the copy say that its video is shown
+	 * mirrored from left to right.
+	 *
+	 * @param directory Where to write the file.
+	 * @param source    The file to copy.
+	 *
+	 * @return The file written.
+	 */
+	static Path mirroredMatroska(Path directory, Path source) throws IOException {
+		return videoSettingsMatroska(directory, source, projection(180, 0));
+	}
+
+	/**
+	 * Copies a Matroska file and has the copy give a display size, from which
+	 * the shape of a pixel follows: the display width over the display height,
+	 * against the width over the height of the picture.
+	 *
+	 * @param directory Where to write the file.
+	 * @param source    The file to copy.
+	 * @param width     The display width.
+	 * @param height    The display height.
+	 *
+	 * @return The file written.
+	 */
+	static Path displaySizeMatroska(Path directory, Path source, int width, int height)
+			throws IOException {
+		ByteArrayOutputStream settings = new ByteArrayOutputStream();
+
+		writeBytes(settings, ebmlUInt(0x54B0, width));
+		writeBytes(settings, ebmlUInt(0x54BA, height));
+
+		return videoSettingsMatroska(directory, source, settings.toByteArray());
+	}
+
+	/**
+	 * Copies a Matroska file of JFIF pictures, as MJPEG holds them, with the
+	 * given pixel density in each of them. That makes the shape of a pixel
+	 * something only the decoder knows, and the frames that come out of it.
+	 *
+	 * @param directory Where to write the file.
+	 * @param source    The file to copy.
+	 * @param x         The horizontal density.
+	 * @param y         The vertical density.
+	 *
+	 * @return The file written.
+	 */
+	static Path pixelDensityMatroska(Path directory, Path source, int x, int y)
+			throws IOException {
+		MatroskaContent content = new MatroskaContent(Files.readAllBytes(source));
+
+		for (Frame frame : content.frames) {
+			if (frame.track == content.videoTrack) {
+				// The start of the picture, the marker of its APP0 segment and
+				// the length of that, its name, a version and the unit.
+				ByteBuffer.wrap(frame.data, 14, 4).putShort((short) x).putShort((short) y);
+			}
+		}
+
+		return Files.write(directory.resolve("density.mkv"),
+				matroska(content.tracks, content.frames, content.videoTrack, -1));
+	}
+
+	/**
+	 * Copies a Matroska file with further elements in the settings of its
+	 * video track.
+	 */
+	private static Path videoSettingsMatroska(Path directory, Path source, byte[] settings)
+			throws IOException {
+		MatroskaContent content = new MatroskaContent(Files.readAllBytes(source));
+
+		return Files.write(directory.resolve("video-settings.mkv"),
+				matroska(content.tracksWith(settings), content.frames, content.videoTrack, -1));
+	}
+
+	/** The Projection of a flat picture, in the angles Matroska gives it. */
+	private static byte[] projection(double yaw, double roll) {
+		return ebml(0x7670,
+				ebmlUInt(0x7671, 0),				// ProjectionType, rectangular
+				ebml(0x7673, ByteBuffer.allocate(8).putDouble(yaw).array()),
+				ebml(0x7675, ByteBuffer.allocate(8).putDouble(roll).array()));
+	}
+
+	/**
 	 * Copies a Matroska file holding a video and an audio track so that its
 	 * video comes late. The audio is repeated until it runs for the given
 	 * time, and all of it is stored ahead of the video, which keeps its times.
@@ -740,6 +839,7 @@ final class TestMedia {
 		int videoTrack;
 
 		private final ByteBuffer data;
+		private int tracksStart;
 		private long clusterTime;
 		private long trackNumber;
 
@@ -766,6 +866,7 @@ final class TestMedia {
 						break;
 					case 0x1654AE6B:	// Tracks
 						tracks = Arrays.copyOfRange(data.array(), start, stop);
+						tracksStart = start;
 						read(stop);
 						break;
 					case 0xD7:			// TrackNumber
@@ -789,6 +890,39 @@ final class TestMedia {
 
 				data.position(stop);
 			}
+		}
+
+		/** The tracks, with the given elements added to the video settings. */
+		byte[] tracksWith(byte[] settings) {
+			data.position(tracksStart);
+
+			return copyWith(tracksStart + tracks.length, settings);
+		}
+
+		private byte[] copyWith(int end, byte[] settings) {
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+			while (data.position() < end) {
+				int element = data.position();
+				int id = readId();
+				long size = readSize();
+				int start = data.position();
+				int stop = (int) (start + size);
+
+				if (id == 0xAE) {			// TrackEntry
+					writeBytes(out, ebml(id, copyWith(stop, settings)));
+				}
+				else if (id == 0xE0) {		// Video
+					writeBytes(out, ebml(id, Arrays.copyOfRange(data.array(), start, stop), settings));
+				}
+				else {
+					out.write(data.array(), element, stop - element);
+				}
+
+				data.position(stop);
+			}
+
+			return out.toByteArray();
 		}
 
 		private void readBlock(int end, boolean simple) {

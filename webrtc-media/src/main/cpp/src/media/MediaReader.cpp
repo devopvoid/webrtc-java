@@ -16,6 +16,7 @@
 
 #include "media/MediaReader.h"
 #include "media/AllocationFault.h"
+#include "media/VideoGeometry.h"
 
 #include <algorithm>
 #include <cstring>
@@ -224,14 +225,14 @@ namespace ffmpeg
 	{
 		const AVStream * stream = GetVideoStream();
 
-		return stream != nullptr ? stream->codecpar->width : 0;
+		return stream != nullptr ? GetDisplaySize(stream).width : 0;
 	}
 
 	int MediaReader::GetVideoHeight() const
 	{
 		const AVStream * stream = GetVideoStream();
 
-		return stream != nullptr ? stream->codecpar->height : 0;
+		return stream != nullptr ? GetDisplaySize(stream).height : 0;
 	}
 
 	double MediaReader::GetFrameRate() const
