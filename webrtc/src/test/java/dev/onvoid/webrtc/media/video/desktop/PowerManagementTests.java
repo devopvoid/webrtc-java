@@ -21,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import dev.onvoid.webrtc.TestBase;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,6 +48,16 @@ class PowerManagementTests extends TestBase {
 			powerManagement.disableUserActivity();
 			powerManagement.disableUserActivity();
 		});
+	}
+
+	@Test
+	void disableOnOtherThread() throws Exception {
+		PowerManagement powerManagement = new PowerManagement();
+
+		// Neither call may depend on the thread of the other one.
+		CompletableFuture.runAsync(powerManagement::enableUserActivity)
+				.thenRunAsync(powerManagement::disableUserActivity)
+				.get(10, TimeUnit.SECONDS);
 	}
 
 	@Test

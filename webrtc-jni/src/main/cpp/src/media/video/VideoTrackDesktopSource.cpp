@@ -15,6 +15,7 @@
  */
 
 #include "media/video/VideoTrackDesktopSource.h"
+#include "media/video/desktop/WindowFrameCrop.h"
 #include "Exception.h"
 
 #include "api/video/i420_buffer.h"
@@ -170,17 +171,8 @@ namespace jni
 		}
 
 #if defined(WEBRTC_WIN)
-		// Crop black window borders.
-		bool fullscreen = frame->stride() == (frame->size().width() * webrtc::DesktopFrame::kBytesPerPixel);
-
-		if (!fullscreen) {
-			const webrtc::DesktopVector& top_left = frame->top_left();
-			const int32_t border = GetSystemMetrics(SM_CXPADDEDBORDER);
-
-			crop_x = border;
-			crop_y = top_left.y() < 0 ? -top_left.y() : 0;
-			crop_w = width - crop_x * 2;
-			crop_h = height - (crop_y + border);
+		if (sourceIsWindow) {
+			CropWindowBorder(*frame, GetSystemMetrics(SM_CXPADDEDBORDER), &crop_x, &crop_y, &crop_w, &crop_h);
 		}
 #endif
 
@@ -199,8 +191,8 @@ namespace jni
 			// output. Passing buffer->height() (== crop_h) here made libyuv's internal
 			// bounds check (crop_y + crop_height <= src_height) fail with -1 whenever
 			// crop_y > 0 — i.e. for every maximized window, whose frame sits at
-			// top_left().y() == -border. Screen frames never hit this branch (exact stride,
-			// fullscreen == true), which is why only window capture appeared broken.
+			// top_left().y() == -border. Screen frames are not cropped, which is why only
+			// window capture appeared broken.
 			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, height, crop_w, crop_h,
 			libyuv::kRotate0,
 			libyuv::FOURCC_ARGB);
