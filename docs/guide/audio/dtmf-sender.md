@@ -86,8 +86,8 @@ Unrecognized characters are ignored.
 ### Duration and Inter-Tone Gap Constraints
 
 The duration and inter-tone gap parameters have the following constraints:
-- Duration must be between 70ms and 6000ms (default: 100ms)
-- Inter-tone gap must be at least 50ms (default: 50ms)
+- Duration must be between 40ms and 6000ms (default: 100ms)
+- Inter-tone gap must be at least 30ms (default: 50ms)
 
 If these constraints are not met, the `insertDtmf` method will return `false`.
 

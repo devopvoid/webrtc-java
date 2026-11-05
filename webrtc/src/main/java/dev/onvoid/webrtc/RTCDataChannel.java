@@ -165,7 +165,13 @@ public class RTCDataChannel extends DisposableNativeObject {
 	/**
 	 * Closes this RTCDataChannel. It may be called regardless of whether the
 	 * RTCDataChannel was created by this peer or the remote peer.
+	 * <p>
+	 * This does not dispose the channel, unlike the close method of other
+	 * disposable objects: its observer still hears of the state change, and
+	 * its state can still be read. Neither does a try-with-resources statement
+	 * then, so {@link #dispose()} remains to be called.
 	 */
+	@Override
 	public native void close();
 
 	@Override
