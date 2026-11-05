@@ -40,18 +40,37 @@ final class ManualExecutor extends AbstractExecutorService {
 
 	private int running;
 
+	private boolean inline;
+
+
+	/**
+	 * @return an executor that runs each task at once, on the thread that
+	 * hands it over.
+	 */
+	static ManualExecutor inline() {
+		ManualExecutor executor = new ManualExecutor();
+		executor.inline = true;
+
+		return executor;
+	}
 
 	@Override
-	public synchronized void execute(Runnable task) {
-		if (shutdown) {
-			throw new RejectedExecutionException("Shut down");
-		}
-		if (rejecting) {
-			throw new RejectedExecutionException("Rejecting");
+	public void execute(Runnable task) {
+		synchronized (this) {
+			if (shutdown) {
+				throw new RejectedExecutionException("Shut down");
+			}
+			if (rejecting) {
+				throw new RejectedExecutionException("Rejecting");
+			}
+			if (!inline) {
+				queue.add(task);
+				notifyAll();
+				return;
+			}
 		}
 
-		queue.add(task);
-		notifyAll();
+		task.run();
 	}
 
 	/**

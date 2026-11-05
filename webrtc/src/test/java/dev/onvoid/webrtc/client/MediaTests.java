@@ -97,6 +97,7 @@ class MediaTests extends ClientTestBase {
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)
 				.audioPacer(pacer)
+				.audioSender(ManualExecutor.inline())
 				.build();
 		List<byte[]> sent = new ArrayList<>();
 
@@ -139,6 +140,7 @@ class MediaTests extends ClientTestBase {
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)
 				.audioPacer(pacer)
+				.audioSender(ManualExecutor.inline())
 				.clock(now::get)
 				.build();
 		List<byte[]> sent = new ArrayList<>();
@@ -182,6 +184,7 @@ class MediaTests extends ClientTestBase {
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)
 				.audioPacer(pacer)
+				.audioSender(ManualExecutor.inline())
 				.build();
 
 		try {
@@ -207,6 +210,7 @@ class MediaTests extends ClientTestBase {
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)
 				.audioPacer(pacer)
+				.audioSender(ManualExecutor.inline())
 				.build();
 		List<byte[]> sent = new ArrayList<>();
 
@@ -259,6 +263,7 @@ class MediaTests extends ClientTestBase {
 				.audio(AudioMode.HEADLESS)
 				.errorHandler(errors::add)
 				.audioPacer(pacer)
+				.audioSender(ManualExecutor.inline())
 				.build();
 		List<byte[]> sent = new ArrayList<>();
 
@@ -309,6 +314,77 @@ class MediaTests extends ClientTestBase {
 
 		assertThrows(IllegalArgumentException.class,
 				() -> voice.queueLimit(Duration.ofMillis(9), AudioOverflow.REJECT));
+	}
+
+	@Test
+	void slowPushLeavesOtherTracksFree() throws Exception {
+		// One track hangs in WebRTC. The pacer keeps its time, the other track
+		// goes on sending, and the hung one gets no second hand-over: it
+		// catches up on what is still due once it is back.
+		ManualTimer pacer = new ManualTimer();
+		ManualExecutor sender = new ManualExecutor();
+		AtomicLong now = new AtomicLong();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.audioSender(sender)
+				.clock(now::get)
+				.build();
+		CountDownLatch pushing = new CountDownLatch(1);
+		CountDownLatch unblock = new CountDownLatch(1);
+		AtomicInteger slowSent = new AtomicInteger();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl slow = recordingAudio(runtime, data -> {
+				slowSent.incrementAndGet();
+				pushing.countDown();
+
+				try {
+					// Bounded, so that a push on the pacer fails the test.
+					unblock.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			});
+			CustomAudioImpl other = recordingAudio(runtime, sent::add);
+			Duration tick = Duration.ofMillis(10);
+			PcmFormat format = PcmFormat.of(8000, 1);
+
+			slow.push(new byte[480], format);
+			other.push(new byte[480], format);
+
+			pacer.fire(tick);
+			assertEquals(2, sender.queued());
+
+			// The slow track ticked first, so its hand-over is the oldest.
+			Thread hung = new Thread(sender::runNext);
+			hung.start();
+			assertTrue(pushing.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+
+			sender.runAll();
+			assertEquals(1, sent.size());
+
+			now.addAndGet(tick.toNanos());
+			pacer.fire(tick);
+
+			assertEquals(1, sender.queued());
+			sender.runAll();
+			assertEquals(2, sent.size());
+			assertEquals(1, slowSent.get());
+
+			unblock.countDown();
+			hung.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
+
+			assertEquals(2, slowSent.get());
+			assertEquals(10, slow.queuedMillis());
+		}
+		finally {
+			unblock.countDown();
+			runtime.close();
+		}
 	}
 
 	@Test

@@ -106,10 +106,17 @@ public final class WebRtc implements AutoCloseable {
 	final ScheduledExecutorService timer;
 
 	/**
-	 * The one thread that sends pushed audio, apart from the timer: a slow
-	 * push must not delay the timeouts.
+	 * The one thread that keeps the time of pushed audio for all tracks. It
+	 * only counts the chunks due, and hands them to the {@link #audioSender}.
 	 */
 	final ScheduledExecutorService audioPacer;
+
+	/**
+	 * The threads that hand pushed audio to WebRTC, at most one for each track
+	 * at a time: a slow hand-over delays its own track, not the pacer, the
+	 * other tracks or the timeouts.
+	 */
+	final ExecutorService audioSender;
 
 	/** The time in nanoseconds, as {@link System#nanoTime()}. */
 	final LongSupplier clock;
@@ -193,6 +200,8 @@ public final class WebRtc implements AutoCloseable {
 				: scheduler("webrtc-client-timer-" + runtime + "-");
 		this.audioPacer = builder.audioPacer != null ? builder.audioPacer
 				: scheduler("webrtc-client-audio-" + runtime + "-");
+		this.audioSender = builder.audioSender != null ? builder.audioSender
+				: Executors.newCachedThreadPool(threads("webrtc-client-audio-send-" + runtime + "-"));
 		this.clock = builder.clock;
 
 		if (builder.eventExecutor != null) {
@@ -599,6 +608,7 @@ public final class WebRtc implements AutoCloseable {
 		framePool.shutdown();
 		timer.shutdownNow();
 		audioPacer.shutdownNow();
+		audioSender.shutdown();
 		stopHttp();
 
 		if (ownsEventExecutor) {
@@ -740,6 +750,8 @@ public final class WebRtc implements AutoCloseable {
 		private ScheduledExecutorService timer;
 
 		private ScheduledExecutorService audioPacer;
+
+		private ExecutorService audioSender;
 
 		private LongSupplier clock = System::nanoTime;
 
@@ -943,11 +955,21 @@ public final class WebRtc implements AutoCloseable {
 		}
 
 		/**
-		 * Replaces the thread that sends pushed audio, so that tests decide
+		 * Replaces the thread that paces pushed audio, so that tests decide
 		 * when each chunk is due. The runtime shuts it down when it closes.
 		 */
 		Builder audioPacer(ScheduledExecutorService pacer) {
 			this.audioPacer = requireNonNull(pacer, "pacer");
+			return this;
+		}
+
+		/**
+		 * Replaces the threads that hand pushed audio to WebRTC, so that tests
+		 * decide when each hand-over runs. The runtime shuts them down when
+		 * it closes.
+		 */
+		Builder audioSender(ExecutorService sender) {
+			this.audioSender = requireNonNull(sender, "sender");
 			return this;
 		}
 
