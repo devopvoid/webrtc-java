@@ -422,7 +422,7 @@ final class LocalMediaImpl implements LocalMedia {
 		camera.source.dispose();
 	}
 
-	private static VideoCaptureCapability nearest(List<VideoCaptureCapability> capabilities,
+	static VideoCaptureCapability nearest(List<VideoCaptureCapability> capabilities,
 			CameraOptions options) {
 		if (capabilities == null || capabilities.isEmpty()) {
 			return null;
@@ -435,11 +435,11 @@ final class LocalMediaImpl implements LocalMedia {
 			long score = 0;
 
 			if (options.width > 0) {
-				score += 1000L * (Math.abs(capability.width - options.width)
-						+ Math.abs(capability.height - options.height));
+				score += 1000L * (Math.abs((long) capability.width - options.width)
+						+ Math.abs((long) capability.height - options.height));
 			}
 			if (options.frameRate > 0) {
-				score += Math.abs(capability.frameRate - options.frameRate);
+				score += Math.abs((long) capability.frameRate - options.frameRate);
 			}
 			if (score < bestScore) {
 				best = capability;

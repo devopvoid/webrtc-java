@@ -145,8 +145,19 @@ public final class VideoCodecInfo {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(name.toUpperCase(java.util.Locale.ROOT), parameters,
+		return Objects.hash(foldedNameHash(), parameters,
 				Arrays.hashCode(scalabilityModes));
+	}
+
+	/*
+	 * Folds each character as equalsIgnoreCase does. Casing the whole name
+	 * would not match it, not even with Locale.ROOT: "k" and the Kelvin sign
+	 * are equal, but keep different upper cases.
+	 */
+	private int foldedNameHash() {
+		return Arrays.hashCode(name.codePoints()
+				.map(c -> Character.toLowerCase(Character.toUpperCase(c)))
+				.toArray());
 	}
 
 	@Override

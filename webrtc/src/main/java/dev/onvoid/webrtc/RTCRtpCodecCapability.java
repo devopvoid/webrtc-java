@@ -21,6 +21,7 @@ import dev.onvoid.webrtc.media.MediaType;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -154,7 +155,7 @@ public class RTCRtpCodecCapability {
 	 * @return The codec MIME type.
 	 */
 	public String getMimeType() {
-		return mediaType.toString().toLowerCase() + "/" + name;
+		return mediaType.toString().toLowerCase(Locale.ROOT) + "/" + name;
 	}
 
 	@Override
