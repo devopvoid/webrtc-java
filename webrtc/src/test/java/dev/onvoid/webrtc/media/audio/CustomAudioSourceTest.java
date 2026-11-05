@@ -76,9 +76,9 @@ class CustomAudioSourceTest extends TestBase {
         byte[] data = new byte[480 * 2 * 2];
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> customAudioSource.pushAudio(data, 16, 48000, 2, 481));
+                () -> customAudioSource.pushAudio(new byte[data.length - 1], 16, 48000, 2, 480));
 
-        assertTrue(e.getMessage().contains("1924"), e.getMessage());
+        assertTrue(e.getMessage().contains("1920"), e.getMessage());
 
         // Exactly the required size is fine, and so is a longer array.
         customAudioSource.pushAudio(data, 16, 48000, 2, 480);
@@ -89,19 +89,63 @@ class CustomAudioSourceTest extends TestBase {
     void pushAudioRejectsChunkLargerThanWebRtcTakes() {
         // WebRTC copies a chunk into a fixed-size frame and aborts the process
         // when it does not fit, so an oversized chunk must not reach it.
-        int frames = CustomAudioSource.MAX_SAMPLES_PER_PUSH / 2 + 1;
-        byte[] data = new byte[frames * 2 * 2];
+        byte[] data = new byte[1920 * 6 * 2];
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> customAudioSource.pushAudio(data, 16, 48000, 2, frames));
+                () -> customAudioSource.pushAudio(data, 16, 192000, 6, 1920));
 
         assertTrue(e.getMessage().contains(String.valueOf(
                 CustomAudioSource.MAX_SAMPLES_PER_PUSH)), e.getMessage());
 
-        // The largest chunk that still fits is accepted.
-        int maxFrames = CustomAudioSource.MAX_SAMPLES_PER_PUSH / 2;
+        // The largest chunks that still fit are accepted.
+        customAudioSource.pushAudio(data, 16, 192000, 4, 1920);
+        customAudioSource.pushAudio(data, 16, 96000, 8, 960);
+    }
 
-        customAudioSource.pushAudio(new byte[maxFrames * 2 * 2], 16, 48000, 2, maxFrames);
+    @Test
+    void pushAudioRejectsChunkOtherThan10Ms() {
+        // A sender drops such a chunk on another thread, so the push would
+        // appear to succeed while nothing is sent.
+        byte[] data = new byte[960 * 2 * 2];
+
+        for (int frames : new int[] { 240, 479, 481, 960 }) {
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                    () -> customAudioSource.pushAudio(data, 16, 48000, 2, frames));
+
+            assertTrue(e.getMessage().contains("480 frames"), e.getMessage());
+        }
+    }
+
+    @Test
+    void pushAudioRejectsChannelCountWebRtcCannotSend() {
+        byte[] data = new byte[80 * 24 * 2];
+
+        // Dropped by the encoder, and from 17 channels on the process aborts.
+        for (int channels : new int[] { 3, 5, 7, 9, 10, 17, 24 }) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> customAudioSource.pushAudio(data, 16, 8000, channels, 80));
+        }
+
+        for (int channels : new int[] { 1, 2, 4, 6, 8 }) {
+            customAudioSource.pushAudio(data, 16, 8000, channels, 80);
+        }
+    }
+
+    @Test
+    void pushAudioRejectsSampleRateWebRtcCannotSend() {
+        byte[] data = new byte[2000 * 2];
+
+        // Too low a rate aborts the process in the resampler, and the encoder
+        // drops too high a one.
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 16, 1000, 1, 10));
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 16, 7900, 1, 79));
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 16, 192100, 1, 1921));
+
+        customAudioSource.pushAudio(data, 16, CustomAudioSource.MIN_SAMPLE_RATE, 1, 80);
+        customAudioSource.pushAudio(data, 16, CustomAudioSource.MAX_SAMPLE_RATE, 1, 1920);
     }
 
     @Test
@@ -196,8 +240,8 @@ class CustomAudioSourceTest extends TestBase {
 
     @Test
     void pushAudioWithDifferentFormats() {
-        // Every rate and channel count is passed through unchanged. Only 16-bit
-        // samples are accepted, since that is what WebRTC reads.
+        // Every accepted rate and channel count is passed through unchanged.
+        // Only 16-bit samples are accepted, since that is what WebRTC reads.
         testAudioFormat(16, 8000, 1, 80);    // 8kHz, mono, 10ms
         testAudioFormat(16, 16000, 1, 160);  // 16kHz, mono, 10ms
         testAudioFormat(16, 44100, 2, 441);  // 44.1kHz, stereo, 10ms
