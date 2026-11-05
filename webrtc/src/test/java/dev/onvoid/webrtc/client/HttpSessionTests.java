@@ -1683,6 +1683,27 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void refusedIceServerHidesPassword() throws Exception {
+		CompletableFuture<Throwable> error = new CompletableFuture<>();
+		WebRtc client = clientRuntime(builder -> builder.errorHandler(error::complete));
+
+		try (TestHttpEndpoint endpoint = sendingEndpoint()) {
+			endpoint.answerHeaders = "Link: <turn:>; rel=\"ice-server\"; username=\"user\"; credential=\""
+					+ SECRET + "\"\r\n";
+
+			Whep.Session session = await(Whep.from(endpoint.uri()).play(client));
+			ConfigurationException refused = assertInstanceOf(ConfigurationException.class, await(error));
+
+			assertTrue(refused.getMessage().contains("turn:"), refused.getMessage());
+			assertHidesSecret(refused);
+			await(session.closeAsync());
+		}
+		finally {
+			client.close();
+		}
+	}
+
+	@Test
 	void failedDeleteReported() throws Exception {
 		try (TestHttpEndpoint endpoint = receivingEndpoint()) {
 			endpoint.deleteStatus = 500;
