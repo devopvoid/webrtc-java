@@ -148,6 +148,16 @@ videoSource.stop();
 videoSource.dispose();
 ```
 
+### Handling Capture Failures
+
+`start()` returns before capturing begins. If capturing cannot begin, because no capture backend is available or the selected source does not exist, the source ends and its tracks with it. Create the track and add the listener before calling `start()`, as a listener added later misses this:
+
+```java
+videoTrack.addTrackEndedListener(track -> {
+    // No frames will arrive from this source.
+});
+```
+
 ### Processing Frames
 
 A `VideoDesktopSource` can pass its frames through a `VideoProcessor` before they reach its tracks, for example to blank out a part of the screen. It works as for a camera; see [Changing Frames Before They Are Sent](/guide/video/camera-capture#changing-frames-before-they-are-sent).

@@ -179,9 +179,10 @@ namespace jni
 		}
 #endif
 
-		if (!buffer || buffer->width() != crop_w || buffer->height() != crop_h) {
-			buffer = webrtc::I420Buffer::Create(crop_w, crop_h);
-		}
+		// Sinks and video processors may keep a frame beyond this call. The pool
+		// writes only to buffers nothing else references, so that a kept frame
+		// keeps its pixels. It has no size limit and never returns null.
+		webrtc::scoped_refptr<webrtc::I420Buffer> buffer = bufferPool.CreateI420Buffer(crop_w, crop_h);
 
 		const int conversionResult = libyuv::ConvertToI420(
 			frame->data(),
@@ -297,6 +298,15 @@ namespace jni
 				: webrtc::DesktopCapturer::CreateScreenCapturer(options);
 		}
 
+		if (!inner) {
+			RTC_LOG(LS_ERROR) << "VideoTrackDesktopSource: No desktop capture backend available. "
+				"Possible causes: no display, missing X11 extensions, a Wayland session "
+				"without PipeWire support, or snap confinement.";
+
+			terminate();
+			return;
+		}
+
 		std::unique_ptr<webrtc::DesktopCapturer> capturer;
 		capturer.reset(new webrtc::DesktopAndCursorComposer(std::move(inner), options));
 
@@ -340,5 +350,9 @@ namespace jni
 		}
 
 		capturer.reset();
+
+		// Frees what a burst of kept frames left behind. Buffers still in use
+		// stay with their frames.
+		bufferPool.Release();
 	}
 }
