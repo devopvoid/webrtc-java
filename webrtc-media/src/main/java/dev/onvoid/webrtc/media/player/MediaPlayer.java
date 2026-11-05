@@ -194,6 +194,10 @@ public class MediaPlayer implements AutoCloseable {
 	 * yet delivered is dropped. Video is decoded from the keyframe at or
 	 * before the position, and what comes before the position is dropped, so
 	 * the further the keyframes are apart, the longer this takes.
+	 * <p>
+	 * Positions count from the start of the source, which is its first video
+	 * or audio frame, whichever comes first, whatever time the container gives
+	 * that frame. A stream that starts after the other one keeps that distance.
 	 *
 	 * @param positionUs The position in microseconds from the start.
 	 *
@@ -236,13 +240,57 @@ public class MediaPlayer implements AutoCloseable {
 
 	/**
 	 * Returns where playback has got to within the current pass, in
-	 * microseconds. A looping source starts again from zero.
+	 * microseconds from the start of the source, as {@link #seek(long)} counts
+	 * them. It moves forward only, whichever of video and audio is ahead,
+	 * other than by a seek. A looping source starts again from zero as the
+	 * next pass begins to play.
 	 *
 	 * @return The position in microseconds.
 	 */
 	public long getPositionUs() {
 		synchronized (lock) {
 			return position(handle);
+		}
+	}
+
+	/**
+	 * Returns the most memory that the decoded pictures waiting to be
+	 * delivered may take in one player, in bytes. That holds whatever the
+	 * resolution, so {@code n} players stay within {@code n} times this, on
+	 * top of what the decoders themselves use. A single picture larger than
+	 * this still goes through, on its own.
+	 *
+	 * @return The limit in bytes.
+	 *
+	 * @see #getPeakQueuedVideoBytes()
+	 */
+	public static long getMaxQueuedVideoBytes() {
+		return maxQueuedVideoBytes();
+	}
+
+	/**
+	 * Returns how much memory the decoded pictures waiting to be delivered
+	 * take right now, padding included.
+	 *
+	 * @return The size in bytes, which is 0 once the player is closed.
+	 */
+	public long getQueuedVideoBytes() {
+		synchronized (lock) {
+			return queuedVideoBytes(handle);
+		}
+	}
+
+	/**
+	 * Returns the most memory the decoded pictures waiting to be delivered
+	 * have taken so far. Added up over the players of an application, this is
+	 * what they actually needed, as opposed to what
+	 * {@link #getMaxQueuedVideoBytes()} allows them.
+	 *
+	 * @return The size in bytes, which is 0 once the player is closed.
+	 */
+	public long getPeakQueuedVideoBytes() {
+		synchronized (lock) {
+			return peakQueuedVideoBytes(handle);
 		}
 	}
 
@@ -383,6 +431,12 @@ public class MediaPlayer implements AutoCloseable {
 	private static native void setLooping(long handle, boolean looping);
 
 	private static native long position(long handle);
+
+	private static native long queuedVideoBytes(long handle);
+
+	private static native long peakQueuedVideoBytes(long handle);
+
+	private static native long maxQueuedVideoBytes();
 
 	private static native int state(long handle);
 

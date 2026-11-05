@@ -71,6 +71,17 @@ namespace ffmpeg
 			// container does not say, as is the case for a live stream.
 			int64_t GetDurationUs() const;
 
+			// Where the source starts on the container's clock, in
+			// microseconds: the first frame of the video and audio stream
+			// picked, whichever comes first, which is 0 when the container
+			// does not say. A file cut out of a longer one, or an MPEG-TS
+			// capture, can start well past 0.
+			//
+			// Every position is counted from here, for both streams, which
+			// is what keeps a stream that starts after the other one apart
+			// from the source starting late.
+			int64_t GetStartTimeUs() const;
+
 			bool HasVideo() const;
 			int GetVideoWidth() const;
 			int GetVideoHeight() const;
@@ -104,11 +115,21 @@ namespace ffmpeg
 			int ReadPacket(AVPacket * packet);
 
 			// Moves to the keyframe at or before the given position, in
-			// microseconds from the start. The decoders have to be flushed
-			// afterwards, since what they hold belongs to the old position.
+			// microseconds from GetStartTimeUs. The decoders have to be
+			// flushed afterwards, since what they hold belongs to the old
+			// position.
 			int Seek(int64_t position_us);
 
 		private:
+			// Works out what GetStartTimeUs reports, once the streams to
+			// play have been picked.
+			int64_t FindStartTimeUs() const;
+
+			// Seeks to the given time on the container's clock, by the given
+			// stream, or by the one libavformat picks if that is null.
+			// Returns what libavformat does, yet to be translated.
+			int SeekStream(const AVStream * stream, int64_t time_us, int flags);
+
 			// Polled by libavformat while it blocks. Returning non-zero
 			// makes the blocking call fail with AVERROR_EXIT.
 			static int OnInterrupt(void * opaque);
@@ -124,6 +145,7 @@ namespace ffmpeg
 			AVFormatContext * format_context_ = nullptr;
 			int video_stream_index_ = -1;
 			int audio_stream_index_ = -1;
+			int64_t start_time_us_ = 0;
 
 			const int64_t timeout_us_;
 

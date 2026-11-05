@@ -94,6 +94,30 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_dispose
 	(JNIEnv *, jclass, jlong);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
+	 * Method:    queuedVideoBytes
+	 * Signature: (J)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_queuedVideoBytes
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
+	 * Method:    peakQueuedVideoBytes
+	 * Signature: (J)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_peakQueuedVideoBytes
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_MediaPlayer
+	 * Method:    maxQueuedVideoBytes
+	 * Signature: ()J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_maxQueuedVideoBytes
+	(JNIEnv *, jclass);
+
 #ifdef __cplusplus
 }
 #endif

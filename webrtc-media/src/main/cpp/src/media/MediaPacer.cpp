@@ -16,6 +16,7 @@
 
 #include "media/MediaPacer.h"
 #include "media/AudioDecoder.h"
+#include "media/PlaybackProbe.h"
 
 #include <algorithm>
 #include <limits>
@@ -31,6 +32,25 @@ namespace
 
 		av_frame_free(&frame);
 	}
+
+	// What a frame keeps in memory, padding and alignment included, which is
+	// what its buffers hold rather than what its size works out at.
+	size_t FrameBytes(const AVFrame * frame)
+	{
+		size_t bytes = 0;
+
+		for (const AVBufferRef * buffer : frame->buf) {
+			if (buffer != nullptr) {
+				bytes += buffer->size;
+			}
+		}
+
+		for (int i = 0; i < frame->nb_extended_buf; ++i) {
+			bytes += frame->extended_buf[i]->size;
+		}
+
+		return bytes;
+	}
 }
 
 namespace ffmpeg
@@ -43,7 +63,8 @@ namespace ffmpeg
 	}
 
 	MediaPacer::VideoItem::VideoItem(VideoItem && other) noexcept
-		: frame(other.frame), timestamp_us(other.timestamp_us)
+		: frame(other.frame), timestamp_us(other.timestamp_us),
+		  loop_offset_us(other.loop_offset_us), bytes(other.bytes)
 	{
 		other.frame = nullptr;
 	}
@@ -57,6 +78,8 @@ namespace ffmpeg
 
 			frame = other.frame;
 			timestamp_us = other.timestamp_us;
+			loop_offset_us = other.loop_offset_us;
+			bytes = other.bytes;
 			other.frame = nullptr;
 		}
 
@@ -132,24 +155,36 @@ namespace ffmpeg
 
 		video_queue_.clear();
 		audio_queue_.clear();
+		video_bytes_ = 0;
 	}
 
-	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us)
+	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us, int64_t loop_offset_us,
+			uint64_t generation)
 	{
+		const size_t bytes = FrameBytes(frame);
+
 		std::unique_lock<std::mutex> lock(mutex_);
 
-		video_space_.wait(lock, [this] {
-			return !running_ || video_queue_.size() < kVideoCapacity;
-		});
+		const auto room = [this, generation, bytes] {
+			return !running_ || generation != generation_ || HasVideoRoom(bytes);
+		};
 
-		if (!running_) {
+		if (!room()) {
+			PlaybackProbe::WaitingPush waiting;
+
+			video_space_.wait(lock, room);
+		}
+
+		if (!running_ || generation != generation_) {
 			// The frame became ours on the way in, so it is ours to drop.
 			av_frame_free(&frame);
 
 			return false;
 		}
 
-		video_queue_.emplace_back(frame, timestamp_us);
+		video_queue_.emplace_back(frame, timestamp_us + loop_offset_us, loop_offset_us, bytes);
+		video_bytes_ += bytes;
+		peak_video_bytes_ = std::max(peak_video_bytes_, video_bytes_);
 
 		work_.notify_one();
 
@@ -157,22 +192,28 @@ namespace ffmpeg
 	}
 
 	bool MediaPacer::PushAudio(std::vector<int16_t> && samples, int channels,
-			int64_t timestamp_us)
+			int64_t timestamp_us, int64_t loop_offset_us, uint64_t generation)
 	{
 		std::unique_lock<std::mutex> lock(mutex_);
 
-		audio_space_.wait(lock, [this] {
-			if (!running_ || audio_queue_.size() < kAudioCapacity) {
+		const auto room = [this, generation] {
+			if (!running_ || generation != generation_
+					|| audio_queue_.size() < kAudioCapacity) {
 				return true;
 			}
 
 			// Full, but blocking now would keep video from being decoded
 			// while it is running short.
-			return audio_queue_.size() < kAudioOverflowCapacity
-					&& video_queue_.size() < kVideoCapacity / 2;
-		});
+			return audio_queue_.size() < kAudioOverflowCapacity && IsVideoShort();
+		};
 
-		if (!running_) {
+		if (!room()) {
+			PlaybackProbe::WaitingPush waiting;
+
+			audio_space_.wait(lock, room);
+		}
+
+		if (!running_ || generation != generation_) {
 			return false;
 		}
 
@@ -180,7 +221,8 @@ namespace ffmpeg
 
 		item.samples = std::move(samples);
 		item.channels = channels;
-		item.timestamp_us = timestamp_us;
+		item.timestamp_us = timestamp_us + loop_offset_us;
+		item.loop_offset_us = loop_offset_us;
 
 		audio_queue_.push_back(std::move(item));
 
@@ -219,19 +261,47 @@ namespace ffmpeg
 		work_.notify_all();
 	}
 
-	void MediaPacer::Flush(int64_t position_us)
+	void MediaPacer::Flush(int64_t position_us, bool exact)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
+		FlushLocked(position_us, exact);
+	}
+
+	void MediaPacer::StartGeneration(int64_t position_us)
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		++generation_;
+
+		// Should the seek fail, playback carries on from where it was.
+		FlushLocked(position_us, false);
+	}
+
+	uint64_t MediaPacer::GetGeneration() const
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return generation_;
+	}
+
+	void MediaPacer::FlushLocked(int64_t position_us, bool exact)
+	{
 		video_queue_.clear();
 		audio_queue_.clear();
+		video_bytes_ = 0;
 
-		// Audio only ever moves the position forward, so a position left from
-		// before a seek backwards would hold it there until audio caught up.
+		// Items only ever move the position forward, so a position left from
+		// before a seek backwards would hold it there until they caught up.
+		// Nor can what comes next be held to this one: a seek that is not
+		// precise plays from a keyframe before it.
 		position_us_ = position_us;
+		position_offset_us_ = 0;
+		position_set_ = false;
 
 		// The next item delivered starts a new mapping, wherever it comes from.
 		have_base_ = false;
+		exact_start_ = exact;
 
 		video_space_.notify_all();
 		audio_space_.notify_all();
@@ -252,7 +322,44 @@ namespace ffmpeg
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		return position_us_;
+		return position_us_ - position_offset_us_;
+	}
+
+	void MediaPacer::AdvancePosition(int64_t timestamp_us, int64_t loop_offset_us)
+	{
+		if (position_set_ && timestamp_us <= position_us_) {
+			return;
+		}
+
+		position_us_ = timestamp_us;
+		position_offset_us_ = loop_offset_us;
+		position_set_ = true;
+	}
+
+	size_t MediaPacer::GetQueuedVideoBytes() const
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return video_bytes_;
+	}
+
+	size_t MediaPacer::GetPeakQueuedVideoBytes() const
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		return peak_video_bytes_;
+	}
+
+	bool MediaPacer::HasVideoRoom(size_t bytes) const
+	{
+		return video_queue_.empty() || (video_queue_.size() < kVideoCapacity
+				&& video_bytes_ + bytes <= kVideoByteCapacity);
+	}
+
+	bool MediaPacer::IsVideoShort() const
+	{
+		return video_queue_.size() < kVideoCapacity / 2
+				&& video_bytes_ < kVideoByteCapacity / 2;
 	}
 
 	bool MediaPacer::IsOwnThread() const
@@ -288,6 +395,15 @@ namespace ffmpeg
 					first = std::min(first, audio_queue_.front().timestamp_us);
 				}
 
+				// Audio can get here ahead of video that comes before it, as
+				// a decoder on many threads holds on to its first pictures.
+				// Mapped from that audio, those pictures would be overdue,
+				// and go out all at once.
+				if (video_queue_.empty() && exact_start_ && first > position_us_
+						&& first - position_us_ <= kMaxStartGapUs) {
+					first = position_us_;
+				}
+
 				base_us_ = now - first;
 				have_base_ = true;
 			}
@@ -299,7 +415,8 @@ namespace ffmpeg
 					VideoItem item = std::move(video_queue_.front());
 
 					video_queue_.pop_front();
-					position_us_ = item.timestamp_us;
+					video_bytes_ -= item.bytes;
+					AdvancePosition(item.timestamp_us, item.loop_offset_us);
 
 					video_space_.notify_one();
 					// A shorter video queue may be what lets audio past its
@@ -326,7 +443,7 @@ namespace ffmpeg
 					AudioItem item = std::move(audio_queue_.front());
 
 					audio_queue_.pop_front();
-					position_us_ = std::max(position_us_, item.timestamp_us);
+					AdvancePosition(item.timestamp_us, item.loop_offset_us);
 
 					audio_space_.notify_one();
 

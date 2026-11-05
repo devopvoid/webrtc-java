@@ -32,7 +32,7 @@ namespace ffmpeg
 		Close();
 	}
 
-	int AudioDecoder::Open(const AVStream * stream)
+	int AudioDecoder::Open(const AVStream * stream, int64_t start_time_us)
 	{
 		Close();
 
@@ -95,6 +95,7 @@ namespace ffmpeg
 		}
 
 		time_base_ = stream->time_base;
+		start_time_us_ = start_time_us;
 
 		return 0;
 	}
@@ -118,6 +119,7 @@ namespace ffmpeg
 		pending_.clear();
 
 		time_base_ = { 0, 1 };
+		start_time_us_ = 0;
 		channels_ = 0;
 		next_timestamp_us_ = 0;
 		have_timestamp_ = false;
@@ -241,7 +243,7 @@ namespace ffmpeg
 
 		if (!have_timestamp_) {
 			int64_t start_us = pts != AV_NOPTS_VALUE
-					? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) : 0;
+					? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) - start_time_us_ : 0;
 
 			// A frame without a timestamp cannot be placed against the
 			// position, and is taken to start there.
@@ -265,8 +267,8 @@ namespace ffmpeg
 			have_timestamp_ = true;
 		}
 		else if (pts != AV_NOPTS_VALUE) {
-			int result = FollowTimestamp(av_rescale_q(pts, time_base_, AV_TIME_BASE_Q),
-					&skip);
+			int result = FollowTimestamp(
+					av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) - start_time_us_, &skip);
 
 			if (result < 0) {
 				return result;

@@ -44,7 +44,9 @@ namespace ffmpeg
 	// is a time on the WebRTC clock. Every item carries that time with it, so
 	// the timeline that reaches the receiver is the source's own and not the
 	// pacing thread's, and audio stays lined up with video however much the
-	// thread is jostled.
+	// thread is jostled. The mapping starts at the position playback starts
+	// from, if audio gets here first, as video that belongs before it may
+	// still be in the decoder.
 	//
 	// Video and audio are paced independently. They go to different sources
 	// and need no ordering between them, and keeping them independent is also
@@ -58,6 +60,13 @@ namespace ffmpeg
 			static constexpr size_t kVideoCapacity = 60;
 			static constexpr size_t kAudioCapacity = 100;
 
+			// What the pictures in the video queue may take, on top of their
+			// number. Sixty pictures in 4K would take over 700 MiB, for each
+			// player. This leaves 1080p its sixty pictures, of about 3 MiB
+			// each, and 4K about twenty, which is still most of a second.
+			// A single picture larger than this goes through on its own.
+			static constexpr size_t kVideoByteCapacity = 256 * 1024 * 1024;
+
 			// How far audio may run past its capacity while video is short.
 			//
 			// One thread decodes both, in the order the container stores
@@ -68,9 +77,18 @@ namespace ffmpeg
 			// then leaves the video queue running dry, and its frames arrive
 			// late and all at once, which WebRTC's encoder answers by dropping
 			// all but the last of each burst. Letting audio grow while video
-			// is below half its capacity is what keeps video fed; this bounds
-			// how much, at ten seconds, for a source that has no video at all.
+			// is below half its capacity, in pictures and in bytes, is what
+			// keeps video fed; this bounds how much, at ten seconds, for a
+			// source that has no video at all.
 			static constexpr size_t kAudioOverflowCapacity = 1000;
+
+			// How far past the position playback starts from the first audio
+			// may lie for the mapping to start at that position regardless.
+			// It covers what a decoder holds back, which is up to one picture
+			// for each of its threads. Further than that the video would be
+			// here by now, and a source with timestamps that do not count
+			// from its start must not be held up for as long as they say.
+			static constexpr int64_t kMaxStartGapUs = 5000000;
 
 			// The sources may be 0, in which case media of that kind is
 			// dropped rather than delivered.
@@ -87,17 +105,24 @@ namespace ffmpeg
 			// call more than once.
 			void Stop();
 
-			// Hands over a decoded frame and its presentation time. Ownership
-			// of the frame passes to the pacer whether this succeeds or not.
+			// Hands over a decoded frame and its presentation time, which is
+			// its position in the source. A source played again is pushed
+			// with a loop offset, which goes on top of that to make the times
+			// of all its passes one timeline that only rises. Ownership of
+			// the frame passes to the pacer whether this succeeds or not.
 			//
 			// Blocks while the queue is full, which is the backpressure that
 			// keeps decoding from running ahead of playback. Returns false
-			// once the pacer has been stopped.
-			bool PushVideo(AVFrame * frame, int64_t timestamp_us);
+			// once the pacer has been stopped, or once the generation given
+			// is no longer the current one: what was decoded for it belongs
+			// to a position that is being left, so it is dropped, and a wait
+			// for room ends there, as nothing else may ever end it.
+			bool PushVideo(AVFrame * frame, int64_t timestamp_us, int64_t loop_offset_us,
+					uint64_t generation);
 
 			// Hands over one 10 ms chunk of interleaved 16-bit PCM.
 			bool PushAudio(std::vector<int16_t> && samples, int channels,
-					int64_t timestamp_us);
+					int64_t timestamp_us, int64_t loop_offset_us, uint64_t generation);
 
 			void Pause();
 			void Resume();
@@ -106,16 +131,46 @@ namespace ffmpeg
 			// the next item delivered starts a new one. This is what a seek
 			// needs: what is queued belongs to the position being left. The
 			// position is where playback is taken to be until an item has been
-			// delivered, in the timestamps the items are pushed with.
-			void Flush(int64_t position_us);
+			// delivered, in the source: the first item then sets it, wherever
+			// that landed, and starts a new timeline with no loop offset.
+			//
+			// Exact says that playback really starts at this position, which
+			// a seek to a keyframe does not: there, what is played comes as
+			// it lands, so the first item starts the mapping.
+			void Flush(int64_t position_us, bool exact);
+
+			// Flushes, and starts a new generation, which turns away what is
+			// still being pushed for the one before. This is for a seek that
+			// has been asked for, by a thread other than the one pushing,
+			// which may have more on its way than the queue can take. With
+			// playback paused nothing would ever make room for that, and the
+			// thread would never get round to the seek.
+			void StartGeneration(int64_t position_us);
+
+			// The generation pushes have to name to be taken. The thread
+			// pushing reads this when it starts on a seek, so that everything
+			// it pushes from there on was decoded for that seek.
+			uint64_t GetGeneration() const;
 
 			// True once everything handed over has been delivered: the
 			// queues are empty and no item is being handed to a source.
 			bool IsDrained() const;
 
-			// The presentation time of the item delivered last, which is where
-			// playback has got to.
+			// Where playback has got to in the source, in the pass that is
+			// being delivered: the furthest item delivered so far. It only
+			// moves forward, as video and audio are delivered independently
+			// and a frame that arrives late is behind what has been heard,
+			// other than when a flush moves it, or a pass of the source ends
+			// and the next one starts. That happens as the next pass reaches
+			// delivery, however far ahead the decoder has started it.
 			int64_t GetPositionUs() const;
+
+			// What the pictures in the video queue take right now, in bytes.
+			size_t GetQueuedVideoBytes() const;
+
+			// The most they have taken so far. Nothing delivered counts, nor
+			// the pictures the decoder holds on to.
+			size_t GetPeakQueuedVideoBytes() const;
 
 			// True on the pacing thread, which is the one that calls the sinks
 			// of the tracks fed by the sources.
@@ -126,9 +181,12 @@ namespace ffmpeg
 			{
 				AVFrame * frame = nullptr;
 				int64_t timestamp_us = 0;
+				int64_t loop_offset_us = 0;
+				size_t bytes = 0;
 
 				VideoItem() = default;
-				VideoItem(AVFrame * f, int64_t ts) : frame(f), timestamp_us(ts) {}
+				VideoItem(AVFrame * f, int64_t ts, int64_t offset, size_t size)
+					: frame(f), timestamp_us(ts), loop_offset_us(offset), bytes(size) {}
 				~VideoItem();
 
 				VideoItem(VideoItem && other) noexcept;
@@ -143,9 +201,24 @@ namespace ffmpeg
 				std::vector<int16_t> samples;
 				int channels = 0;
 				int64_t timestamp_us = 0;
+				int64_t loop_offset_us = 0;
 			};
 
 			void Run();
+
+			void FlushLocked(int64_t position_us, bool exact);
+
+			// Takes in the time of an item about to be delivered, on the
+			// timeline of all passes, and the loop offset of its pass.
+			void AdvancePosition(int64_t timestamp_us, int64_t loop_offset_us);
+
+			// Whether a picture of the given size fits the video queue. An
+			// empty queue takes anything, as nothing else would ever let a
+			// picture larger than the queue through.
+			bool HasVideoRoom(size_t bytes) const;
+
+			// Whether video is below half of what its queue takes.
+			bool IsVideoShort() const;
 
 			// Both run without the lock held: the extension API delivers
 			// synchronously into WebRTC, which must not happen underneath a
@@ -169,17 +242,35 @@ namespace ffmpeg
 			std::deque<VideoItem> video_queue_;
 			std::deque<AudioItem> audio_queue_;
 
+			// What the pictures in the video queue take, and the most they
+			// have taken.
+			size_t video_bytes_ = 0;
+			size_t peak_video_bytes_ = 0;
+
 			bool running_ = false;
 			bool paused_ = false;
 
 			// Items taken from a queue whose delivery has not returned yet.
 			int delivering_ = 0;
 
-			// Presentation time plus this is a time on the WebRTC clock.
+			// Counts the seeks asked for.
+			uint64_t generation_ = 0;
+
+			// Presentation time, on the timeline of all passes, plus this is
+			// a time on the WebRTC clock.
 			int64_t base_us_ = 0;
 			bool have_base_ = false;
+
+			// Whether the mapping to come starts at the position.
+			bool exact_start_ = true;
 			int64_t paused_at_us_ = 0;
+
+			// Where playback has got to on the timeline of all passes, the
+			// loop offset of the pass that is in, and whether an item has set
+			// them since the last flush.
 			int64_t position_us_ = 0;
+			int64_t position_offset_us_ = 0;
+			bool position_set_ = false;
 	};
 }
 

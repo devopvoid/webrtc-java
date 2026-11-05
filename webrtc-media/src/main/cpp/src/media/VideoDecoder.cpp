@@ -114,7 +114,7 @@ namespace ffmpeg
 		Close();
 	}
 
-	int VideoDecoder::Open(const AVStream * stream, bool hardware)
+	int VideoDecoder::Open(const AVStream * stream, bool hardware, int64_t start_time_us)
 	{
 		Close();
 
@@ -168,6 +168,7 @@ namespace ffmpeg
 		}
 
 		time_base_ = stream->time_base;
+		start_time_us_ = start_time_us;
 
 		// A decoder that is set up for hardware is on probation until it has
 		// produced its first frame.
@@ -343,6 +344,7 @@ namespace ffmpeg
 		skipped_ = 0;
 		discarding_ = false;
 		time_base_ = { 0, 1 };
+		start_time_us_ = 0;
 	}
 
 	void VideoDecoder::Flush()
@@ -539,7 +541,7 @@ namespace ffmpeg
 				? decoded_->best_effort_timestamp : decoded_->pts;
 
 		*timestamp_us = pts != AV_NOPTS_VALUE
-				? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) : 0;
+				? av_rescale_q(pts, time_base_, AV_TIME_BASE_Q) - start_time_us_ : 0;
 
 		const bool hardware_frame = hardware_format_ != AV_PIX_FMT_NONE && decoded_->format == hardware_format_;
 

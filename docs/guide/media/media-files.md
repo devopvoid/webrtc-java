@@ -145,6 +145,8 @@ source.getState();              // IDLE, PLAYING, PAUSED, ENDED or CLOSED
 
 Looping keeps the timing across the seam, so a looping file works as a stand-in for a camera that never stops. A looping source never reports an end of stream.
 
+Positions count from the start of the source, which is its first video or audio frame, whichever comes first. The times a container gives its frames do not have to begin at zero: a file cut out of a longer recording or an MPEG-TS capture may start at any time, and `seek(2_000_000)` still means two seconds into it. Video and audio share that start, so a stream that begins after the other one keeps that distance.
+
 A seek starts playback at the position asked for. The decoder has to go back to the keyframe at or before it to produce a picture at all, so the frames from there up to the position are decoded and dropped, and the audio is cut at it. How long a seek takes therefore depends on how often the media was encoded with keyframes, not on how long the media is: MKV and MP4 have an index that takes the reader straight to that keyframe. MPEG-TS has none, and a search for the position by its timestamps can land past the keyframe before it. The player then searches again further back, a second before the position, then two, four and so on, so that the seek still starts at the position.
 
 `fastSeek` moves to that keyframe and plays from there, without decoding up to the position, so it takes no longer however far the keyframes are apart. That suits a slider being dragged, as browsers' `fastSeek()` does: fast seeks while it moves, and a `seek` once it is let go. In a container without an index, such as MPEG-TS, the keyframe can be the one after the position.
@@ -182,6 +184,17 @@ A listener must still return promptly: the calls behind it wait, and so does a `
 
 Closing the player, or the `MediaFileSource`, from a listener is fine: it takes effect at once, and the native player is released on another thread once the listener has returned. The same holds for a sink of a track made from the player's sources, which the player calls on threads of its own as well.
 :::
+
+## Memory
+
+Decoding runs ahead of playback by up to sixty pictures, and at most by what `MediaPlayer.getMaxQueuedVideoBytes()` reports, which is 256 MiB. That keeps sixty pictures of 1080p, about twenty of 4K, and whatever the resolution, a player does not take more than that for pictures waiting to be delivered. Several players take that much each, on top of what the decoders use themselves.
+
+To see what an application really needs, ask the players that run:
+
+```java
+source.getQueuedVideoBytes();       // what the queued pictures take right now
+source.getPeakQueuedVideoBytes();   // the most they have taken so far
+```
 
 ## Feeding Your Own Media Sources
 
