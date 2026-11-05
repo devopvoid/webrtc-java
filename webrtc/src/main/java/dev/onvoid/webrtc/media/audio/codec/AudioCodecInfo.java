@@ -16,6 +16,7 @@
 
 package dev.onvoid.webrtc.media.audio.codec;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -104,7 +105,18 @@ public final class AudioCodecInfo {
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(name.toLowerCase(), clockRate, channels, parameters);
+		return Objects.hash(foldedNameHash(), clockRate, channels, parameters);
+	}
+
+	/*
+	 * Folds each character as equalsIgnoreCase does. Casing the whole name
+	 * would not match it, not even with Locale.ROOT: "I" and the dotless i are
+	 * equal, but keep different lower cases.
+	 */
+	private int foldedNameHash() {
+		return Arrays.hashCode(name.codePoints()
+				.map(c -> Character.toLowerCase(Character.toUpperCase(c)))
+				.toArray());
 	}
 
 	@Override
