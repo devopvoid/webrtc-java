@@ -130,6 +130,18 @@ struct wj_i420_frame {
 };
 
 /**
+ * Color description using ITU-T H.273 identifiers for primaries, transfer and
+ * matrix (2 means unspecified). Range: 0 unspecified, 1 limited, 2 full.
+ * Unknown identifiers are treated as unspecified by the receiving library.
+ */
+struct wj_color_space {
+	uint8_t primaries;
+	uint8_t transfer;
+	uint8_t matrix;
+	uint8_t range;
+};
+
+/**
  * One chunk of decoded audio: interleaved signed 16-bit PCM in host byte
  * order, exactly 10 ms long, which is the only chunk length WebRTC accepts.
  *
@@ -303,6 +315,16 @@ struct webrtc_java_api {
 	 * handle must not be used afterwards.
 	 */
 	void (*encoded_frames_release)(void * frames);
+
+	/**
+	 * Like video_source_push, with a color description for the I420 pixels.
+	 * A null color description has the same behavior as video_source_push.
+	 * Ownership and error handling are identical. Appended in interface v1;
+	 * callers must check size before accessing this member.
+	 */
+	int (*video_source_push_color)(void * source, const struct wj_i420_frame * frame,
+			const struct wj_color_space * color);
+
 };
 
 #ifdef __cplusplus

@@ -71,7 +71,7 @@ namespace jni
 			return error;
 		}
 
-		int ApiVideoSourcePush(void * source, const wj_i420_frame * frame)
+		int ApiVideoSourcePushColor(void * source, const wj_i420_frame * frame, const wj_color_space * color)
 		{
 			if (frame == nullptr) {
 				return WEBRTC_JAVA_ERR_HANDLE;
@@ -112,9 +112,19 @@ namespace jni
 						}
 					});
 
+			webrtc::ColorSpace colorSpace;
+
+			if (color != nullptr) {
+				colorSpace.set_primaries_from_uint8(color->primaries);
+				colorSpace.set_transfer_from_uint8(color->transfer);
+				colorSpace.set_matrix_from_uint8(color->matrix);
+				colorSpace.set_range_from_uint8(color->range);
+			}
+
 			webrtc::VideoFrame videoFrame = webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(buffer)
 					.set_rotation(rotation)
+					.set_color_space(color != nullptr ? &colorSpace : nullptr)
 					.build();
 
 			CustomVideoSource * videoSource = static_cast<CustomVideoSource *>(source);
@@ -127,6 +137,11 @@ namespace jni
 			}
 
 			return WEBRTC_JAVA_OK;
+		}
+
+		int ApiVideoSourcePush(void * source, const wj_i420_frame * frame)
+		{
+			return ApiVideoSourcePushColor(source, frame, nullptr);
 		}
 
 		int ApiAudioSourcePush(void * source, const wj_audio_chunk * chunk)
@@ -256,7 +271,8 @@ namespace jni
 			&ApiAudioSourceRelease,
 			&ApiEncodedObserverAdd,
 			&ApiEncodedObserverRemove,
-			&ApiEncodedFramesRelease
+			&ApiEncodedFramesRelease,
+			&ApiVideoSourcePushColor
 		};
 	}
 
