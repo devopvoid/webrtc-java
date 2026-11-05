@@ -701,9 +701,19 @@ public final class WebRtc implements AutoCloseable {
 		};
 	}
 
-	private static void uncaught(Throwable error) {
+	/**
+	 * Hands the error to the uncaught exception handler of this thread. This
+	 * never throws, so that the thread can go on with the work it still has.
+	 */
+	static void uncaught(Throwable error) {
 		Thread thread = Thread.currentThread();
-		thread.getUncaughtExceptionHandler().uncaughtException(thread, error);
+
+		try {
+			thread.getUncaughtExceptionHandler().uncaughtException(thread, error);
+		}
+		catch (Throwable ignored) {
+			// There is no one left to tell, and the JVM ignores it just the same.
+		}
 	}
 
 

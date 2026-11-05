@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Consumer;
 
 /**
@@ -30,7 +29,8 @@ import java.util.function.Consumer;
  * as if on a thread of their own.
  * <p>
  * A task that throws does not stop the ones after it; its exception goes to
- * the error handler.
+ * the error handler. An error handler that throws stops nothing either, and
+ * however a turn ends, the tasks left get the next one.
  * <p>
  * Each turn on the executor runs at most {@link #BATCH_SIZE} tasks and ends
  * once it has run for {@link #TURN_NANOS}, after which the executor queues
@@ -38,10 +38,11 @@ import java.util.function.Consumer;
  * threads and a FIFO queue thus serves every executor in turn, however slow
  * the tasks of some of them are, and it holds at most one turn of each.
  * <p>
- * When the executor rejects the tasks, they are dropped, and those submitted
- * with a fallback have it run instead, on the thread that found them
- * rejected. A rejection by an executor that was not shut down goes to the
- * error handler as well, since it loses work the application expects.
+ * When the executor rejects the tasks, or fails in any other way to take
+ * them, they are dropped, and those submitted with a fallback have it run
+ * instead, on the thread that found them rejected. A rejection by an executor
+ * that was not shut down goes to the error handler as well, since it loses
+ * work the application expects.
  */
 final class SerialExecutor implements Executor {
 
@@ -155,7 +156,9 @@ final class SerialExecutor implements Executor {
 		try {
 			executor.execute(this::drain);
 		}
-		catch (RejectedExecutionException e) {
+		catch (Throwable e) {
+			// Not only a rejection: an executor of the application may throw
+			// anything, and the tasks would wait for a turn that never comes.
 			List<Task> dropped;
 
 			synchronized (tasks) {
@@ -169,7 +172,7 @@ final class SerialExecutor implements Executor {
 			// and then nothing is lost that it does not fail itself.
 			if (!(executor instanceof ExecutorService && ((ExecutorService) executor).isShutdown())) {
 				workload.dropped(dropped.size());
-				errorHandler.accept(new WebRtcException("The executor rejected " + dropped.size()
+				report(new WebRtcException("The executor rejected " + dropped.size()
 						+ " tasks, which were dropped", e));
 			}
 
@@ -180,7 +183,7 @@ final class SerialExecutor implements Executor {
 						task.dropped.run();
 					}
 					catch (Throwable error) {
-						errorHandler.accept(error);
+						report(error);
 					}
 				}
 			}
@@ -190,64 +193,87 @@ final class SerialExecutor implements Executor {
 	private void drain() {
 		Thread thread = Thread.currentThread();
 		String previousName = null;
-
-		if (threadName != null) {
-			previousName = thread.getName();
-			thread.setName(threadName);
-		}
-		if (eventThread) {
-			EVENT_DEPTH.get()[0]++;
-		}
-
-		runner = thread;
-
 		boolean more = true;
-		long start = workload.now();
 
 		try {
-			for (int i = 0; i < BATCH_SIZE && (i == 0 || workload.now() - start < TURN_NANOS); i++) {
-				Task task;
+			if (threadName != null) {
+				previousName = thread.getName();
+				thread.setName(threadName);
+			}
+			if (eventThread) {
+				EVENT_DEPTH.get()[0]++;
+			}
 
-				synchronized (tasks) {
-					task = tasks.poll();
+			runner = thread;
 
-					if (task == null) {
-						scheduled = false;
-						more = false;
-						break;
+			try {
+				long start = workload.now();
+
+				for (int i = 0; i < BATCH_SIZE && (i == 0 || workload.now() - start < TURN_NANOS); i++) {
+					Task task;
+
+					synchronized (tasks) {
+						task = tasks.poll();
+
+						if (task == null) {
+							scheduled = false;
+							more = false;
+							break;
+						}
+						if (tasks.isEmpty()) {
+							workload.idle(backlog);
+						}
 					}
-					if (tasks.isEmpty()) {
-						workload.idle(backlog);
-					}
-				}
 
-				workload.started();
+					run(task);
+				}
+			}
+			finally {
+				runner = null;
 
-				try {
-					task.task.run();
+				if (eventThread) {
+					EVENT_DEPTH.get()[0]--;
 				}
-				catch (Throwable e) {
-					errorHandler.accept(e);
-				}
-				finally {
-					workload.finished();
+				if (previousName != null) {
+					thread.setName(previousName);
 				}
 			}
 		}
-		finally {
-			runner = null;
-
-			if (eventThread) {
-				EVENT_DEPTH.get()[0]--;
-			}
-			if (previousName != null) {
-				thread.setName(previousName);
-			}
+		catch (Throwable e) {
+			// Still scheduled, so without a next turn nothing would start one.
+			report(e);
 		}
 
 		if (more) {
 			// Give the other executors of the pool a turn.
 			schedule();
+		}
+	}
+
+	private void run(Task task) {
+		workload.started();
+
+		try {
+			task.task.run();
+		}
+		catch (Throwable e) {
+			report(e);
+		}
+		finally {
+			workload.finished();
+		}
+	}
+
+	/**
+	 * Hands the error to the error handler. This never throws, since the tasks
+	 * left and the fallbacks still have to run.
+	 */
+	private void report(Throwable error) {
+		try {
+			errorHandler.accept(error);
+		}
+		catch (Throwable e) {
+			WebRtc.uncaught(e);
 		}
 	}
 
