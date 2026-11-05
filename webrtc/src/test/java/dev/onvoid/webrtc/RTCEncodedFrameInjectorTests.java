@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import dev.onvoid.webrtc.media.MediaType;
+import dev.onvoid.webrtc.media.audio.HeadlessAudioDeviceModule;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.VideoTrackSink;
 
@@ -48,6 +49,9 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 class RTCEncodedFrameInjectorTests extends TestBase {
 
 	private static final long TIMEOUT_SECONDS = 10;
+
+	// Above the signed range, as CSRCs are unsigned.
+	private static final int CSRC = 0xCAFE0001;
 
 
 	@Test
@@ -132,15 +136,7 @@ class RTCEncodedFrameInjectorTests extends TestBase {
 
 			negotiate(caller, callee);
 
-			int payloadType = -1;
-
-			for (RTCRtpCodecParameters codec : sender.getParameters().codecs) {
-				if ("opus".equalsIgnoreCase(codec.codecName)) {
-					payloadType = codec.payloadType;
-				}
-			}
-
-			assertTrue(payloadType >= 0, "opus was not negotiated");
+			int payloadType = getOpusPayloadType(sender);
 
 			RTCRtpReceiver receiver = getReceiver(callee);
 			receiver.setTransform(frame -> {
@@ -180,6 +176,55 @@ class RTCEncodedFrameInjectorTests extends TestBase {
 		finally {
 			caller.close();
 			callee.close();
+		}
+	}
+
+	@Test
+	void injectedAudioReportsSources() throws Exception {
+		List<CapturedFrame> frames = captureAudioFrames(50);
+
+		// A receiver learns its audio sources as playout pulls the audio, which
+		// the dummy module of the other tests does not do.
+		HeadlessAudioDeviceModule audioModule = new HeadlessAudioDeviceModule();
+		PeerConnectionFactory headlessFactory = new PeerConnectionFactory(audioModule);
+
+		audioModule.initPlayout();
+		audioModule.startPlayout();
+
+		try {
+			TestPeerConnection caller = new TestPeerConnection(factory);
+			TestPeerConnection callee = new TestPeerConnection(headlessFactory);
+
+			try {
+				RTCRtpTransceiver transceiver = addSendOnlyTransceiver(caller, MediaType.AUDIO, "opus");
+				RTCRtpSender sender = transceiver.getSender();
+				RTCEncodedAudioFrameInjector injector = sender.createEncodedAudioFrameInjector(null);
+
+				negotiate(caller, callee);
+
+				int payloadType = getOpusPayloadType(sender);
+				RTCRtpReceiver receiver = getReceiver(callee);
+
+				// The levels the WebRTC specification converts to 10^(-level / 20),
+				// with 127 standing for silence.
+				long rtpTimestamp = injectUntilLevel(injector, payloadType, receiver, frames, 0, 0, 1.0);
+				rtpTimestamp = injectUntilLevel(injector, payloadType, receiver, frames, rtpTimestamp, 20, 0.1);
+				injectUntilLevel(injector, payloadType, receiver, frames, rtpTimestamp, 127, 0.0);
+
+				receiver.dispose();
+				injector.dispose();
+				sender.dispose();
+				transceiver.dispose();
+			}
+			finally {
+				caller.close();
+				callee.close();
+			}
+		}
+		finally {
+			audioModule.stopPlayout();
+			headlessFactory.dispose();
+			audioModule.dispose();
 		}
 	}
 
@@ -291,6 +336,67 @@ class RTCEncodedFrameInjectorTests extends TestBase {
 		transceiver.setCodecPreferences(codecs);
 
 		return transceiver;
+	}
+
+	private static int getOpusPayloadType(RTCRtpSender sender) {
+		for (RTCRtpCodecParameters codec : sender.getParameters().codecs) {
+			if ("opus".equalsIgnoreCase(codec.codecName)) {
+				return codec.payloadType;
+			}
+		}
+
+		throw new AssertionError("opus was not negotiated");
+	}
+
+	/**
+	 * Injects frames of the given RTP audio level and a contributing source,
+	 * until the receiver reports the expected linear level for both the
+	 * contributing and the synchronization source.
+	 *
+	 * @return The RTP timestamp to go on with.
+	 */
+	private static long injectUntilLevel(RTCEncodedAudioFrameInjector injector, int payloadType,
+			RTCRtpReceiver receiver, List<CapturedFrame> frames, long rtpTimestamp, int rtpLevel,
+			double expected) throws Exception {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+		List<RTCRtpContributingSource> contributing = List.of();
+		List<RTCRtpSynchronizationSource> synchronization = List.of();
+
+		while (System.nanoTime() < deadline) {
+			for (CapturedFrame frame : frames) {
+				injector.injectFrame(ByteBuffer.wrap(frame.data), payloadType, rtpTimestamp, rtpLevel, null,
+						new int[] { CSRC });
+				// Opus frames of 20 ms on its 48 kHz clock.
+				rtpTimestamp += 960;
+				Thread.sleep(20);
+
+				contributing = receiver.getContributingSources();
+				synchronization = receiver.getSynchronizationSources();
+
+				if (hasLevel(contributing, expected) && hasLevel(synchronization, expected)) {
+					assertEquals(1, contributing.size());
+					assertEquals(Integer.toUnsignedLong(CSRC), contributing.get(0).sourceId);
+					return rtpTimestamp;
+				}
+			}
+		}
+
+		throw new AssertionError("RTP level " + rtpLevel + " was not reported as " + expected
+				+ ": CSRC " + levels(contributing) + ", SSRC " + levels(synchronization));
+	}
+
+	private static boolean hasLevel(List<? extends RTCRtpContributingSource> sources, double expected) {
+		return !sources.isEmpty() && Math.abs(sources.get(0).audioLevel - expected) < 1e-9;
+	}
+
+	private static List<Double> levels(List<? extends RTCRtpContributingSource> sources) {
+		List<Double> levels = new ArrayList<>();
+
+		for (RTCRtpContributingSource source : sources) {
+			levels.add(source.audioLevel);
+		}
+
+		return levels;
 	}
 
 	private static void negotiate(TestPeerConnection caller, TestPeerConnection callee) throws Exception {

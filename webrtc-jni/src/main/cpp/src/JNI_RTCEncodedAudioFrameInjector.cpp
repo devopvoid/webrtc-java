@@ -27,10 +27,21 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <vector>
+
+static std::vector<uint32_t> toCsrcs(JNIEnv * env, jintArray jSources)
+{
+	std::vector<jint> sources(static_cast<size_t>(env->GetArrayLength(jSources)));
+
+	env->GetIntArrayRegion(jSources, 0, static_cast<jsize>(sources.size()), sources.data());
+
+	return std::vector<uint32_t>(sources.begin(), sources.end());
+}
 
 static void injectFrame(webrtc::EncodedAudioFrameInjectorInterface * injector,
 	std::span<const uint8_t> data, jint payloadType, jlong rtpTimestamp,
-	jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime)
+	jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime,
+	const std::vector<uint32_t> & csrcs)
 {
 	std::optional<uint8_t> level;
 	std::optional<uint64_t> captureTime;
@@ -47,14 +58,15 @@ static void injectFrame(webrtc::EncodedAudioFrameInjectorInterface * injector,
 	auto frame = webrtc::CreateOutgoingAudioFrame(
 		webrtc::TransformableAudioFrameInterface::FrameType::kAudioFrameSpeech,
 		webrtc::PayloadType(payloadType), static_cast<uint32_t>(rtpTimestamp), data.data(), data.size(),
-		captureTime, 0, {}, "", std::nullopt, level);
+		captureTime, 0, csrcs, "", std::nullopt, level);
 
 	injector->InjectFrame(std::move(frame));
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injectDirectBuffer
 (JNIEnv * env, jobject caller, jobject jBuffer, jint position, jint length, jint payloadType,
-	jlong rtpTimestamp, jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime)
+	jlong rtpTimestamp, jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime,
+	jintArray jContributingSources)
 {
 	jni::CallFromJava(env, [&]() {
 		jni::NativeLease<webrtc::EncodedAudioFrameInjectorInterface> injector(env, caller);
@@ -75,9 +87,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injec
 				return;
 			}
 
+			const std::vector<uint32_t> csrcs = toCsrcs(env, jContributingSources);
+
+			if (env->ExceptionCheck()) {
+				return;
+			}
+
 			// The frame copies the data, so the caller may reuse the buffer.
 			injectFrame(injector, std::span<const uint8_t>(address + position, static_cast<size_t>(length)),
-				payloadType, rtpTimestamp, audioLevel, hasAudioLevel, captureTimeMs, hasCaptureTime);
+				payloadType, rtpTimestamp, audioLevel, hasAudioLevel, captureTimeMs, hasCaptureTime, csrcs);
 		}
 		catch (...) {
 			ThrowCxxJavaException(env);
@@ -87,13 +105,20 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injec
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injectByteArray
 (JNIEnv * env, jobject caller, jbyteArray jData, jint payloadType, jlong rtpTimestamp,
-	jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime)
+	jint audioLevel, jboolean hasAudioLevel, jlong captureTimeMs, jboolean hasCaptureTime,
+	jintArray jContributingSources)
 {
 	jni::CallFromJava(env, [&]() {
 		jni::NativeLease<webrtc::EncodedAudioFrameInjectorInterface> injector(env, caller);
 		CHECK_HANDLE(injector);
 
 		try {
+			const std::vector<uint32_t> csrcs = toCsrcs(env, jContributingSources);
+
+			if (env->ExceptionCheck()) {
+				return;
+			}
+
 			auto releaseArray = [env, jData](jbyte * bytes) {
 				env->ReleaseByteArrayElements(jData, bytes, JNI_ABORT);
 			};
@@ -106,7 +131,8 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injec
 			auto data = std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(bytes.get()),
 				static_cast<size_t>(env->GetArrayLength(jData)));
 
-			injectFrame(injector, data, payloadType, rtpTimestamp, audioLevel, hasAudioLevel, captureTimeMs, hasCaptureTime);
+			injectFrame(injector, data, payloadType, rtpTimestamp, audioLevel, hasAudioLevel, captureTimeMs,
+				hasCaptureTime, csrcs);
 		}
 		catch (...) {
 			ThrowCxxJavaException(env);
