@@ -142,6 +142,38 @@ class MediaReaderTest {
 	}
 
 	@Test
+	void errorsExposeOnlyNetworkOrigin() {
+		String[][] sources = {
+				{ "rtsp://user:pass@camera/live?token=secret", "rtsp://camera" },
+				{ "rtsp://camera:8554/path-key?token=secret#fragment-key", "rtsp://camera:8554" },
+				{ "rtsp://user:pass@camera:8554", "rtsp://camera:8554" },
+				{ "rtsp://camera?token=secret", "rtsp://camera" },
+				{ "rtsp://camera#fragment-key", "rtsp://camera" },
+				{ "rtsp://camera/path@secret", "rtsp://camera" },
+				{ "rtsp://user:pass@[::1]:8554/path-key?token=secret", "rtsp://[::1]:8554" },
+				{ "rtsp://camera:8554", "rtsp://camera:8554" },
+				{ "rtsp:///path-key?token=secret", "rtsp://" }
+		};
+
+		for (String[] source : sources) {
+			// Fail before FFmpeg opens the URL: these invented addresses must
+			// never require a camera, a DNS lookup or a network timeout.
+			AllocationFault.failNextOption();
+
+			try {
+				IOException e = assertThrows(IOException.class, () -> new MediaReader(source[0]));
+
+				assertFalse(AllocationFault.isArmed());
+				assertTrue(e.getMessage().startsWith("Opening '" + source[1] + "' failed: "),
+						e.getMessage());
+			}
+			finally {
+				AllocationFault.disarm();
+			}
+		}
+	}
+
+	@Test
 	void opensPathBeyondBasicPlane(@TempDir Path dir) throws Exception {
 		// FFmpeg takes UTF-8, which is not the modified UTF-8 of JNI for
 		// characters beyond the Basic Multilingual Plane.

@@ -142,15 +142,20 @@ class RtspStreamTest {
 	@Test
 	void errorHidesCredentials() throws Exception {
 		try (TestRtspServer server = new TestRtspServer(TestRtspServer.Behavior.SILENT, 0)) {
-			String url = server.url().replace("rtsp://", "rtsp://admin:s3cret@");
+			String url = server.url().replace("rtsp://", "rtsp://admin:s3cret@")
+					+ "/path-key?token=query-key#fragment-key";
 
 			IOException e = assertThrows(IOException.class,
 					() -> new MediaReader(url, Duration.ofMillis(300)));
 
-			// Messages end up in logs; the password must not.
+			// Messages end up in logs; only the network origin may remain.
 			assertFalse(e.getMessage().contains("s3cret"), e.getMessage());
 			assertFalse(e.getMessage().contains("admin"), e.getMessage());
-			assertTrue(e.getMessage().contains("127.0.0.1:" + server.port() + "/stream"),
+			assertFalse(e.getMessage().contains("/stream"), e.getMessage());
+			assertFalse(e.getMessage().contains("path-key"), e.getMessage());
+			assertFalse(e.getMessage().contains("query-key"), e.getMessage());
+			assertFalse(e.getMessage().contains("fragment-key"), e.getMessage());
+			assertTrue(e.getMessage().startsWith("Opening 'rtsp://127.0.0.1:" + server.port() + "' failed: "),
 					e.getMessage());
 		}
 	}

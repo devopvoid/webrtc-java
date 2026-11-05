@@ -28,10 +28,10 @@ extern "C" {
 
 namespace
 {
-	// The source as it may be shown: a URL loses the user name and password
-	// it carries in front of its host, since error messages end up in logs.
-	// Anything that is not a URL with credentials is returned as it is.
-	std::string WithoutCredentials(const std::string & source)
+	// Error messages end up in logs. URLs expose only their scheme, host
+	// and port: credentials can also be carried in paths, queries or fragments.
+	// Local paths without a URL scheme remain useful for diagnosing file errors.
+	std::string SourceForError(const std::string & source)
 	{
 		const size_t scheme_end = source.find("://");
 
@@ -41,14 +41,12 @@ namespace
 
 		const size_t authority_start = scheme_end + 3;
 		const size_t authority_end = source.find_first_of("/?#", authority_start);
-		const size_t at = source.rfind('@', authority_end == std::string::npos
-				? std::string::npos : authority_end - 1);
+		const std::string authority = source.substr(authority_start,
+				authority_end == std::string::npos ? std::string::npos : authority_end - authority_start);
+		const size_t at = authority.rfind('@');
 
-		if (at == std::string::npos || at < authority_start) {
-			return source;
-		}
-
-		return source.substr(0, authority_start) + source.substr(at + 1);
+		return source.substr(0, authority_start)
+				+ (at == std::string::npos ? authority : authority.substr(at + 1));
 	}
 
 	ffmpeg::MediaReader * ReaderOf(JNIEnv * env, jlong handle)
@@ -99,7 +97,7 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
 		if (result < 0) {
 			reader.reset();
 
-			ffmpeg::ThrowIOException(env, "Opening '" + WithoutCredentials(url) + "' failed: " + ffmpeg::ErrorText(result));
+			ffmpeg::ThrowIOException(env, "Opening '" + SourceForError(url) + "' failed: " + ffmpeg::ErrorText(result));
 
 			return 0;
 		}
