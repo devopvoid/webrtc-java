@@ -201,14 +201,15 @@ class AudioDataAccessTests extends TestBase {
 	}
 
 	/**
-	 * Pushes 16-bit stereo audio at 48 kHz whose every byte is {@code value}.
+	 * Pushes 10 ms of 16-bit stereo audio whose every byte is {@code value},
+	 * at the sample rate that makes that the given number of frames.
 	 */
 	private void push(int value, int frames) {
 		byte[] data = new byte[frames * 2 * 2];
 
 		Arrays.fill(data, (byte) value);
 
-		source.pushAudio(data, 16, 48000, 2, frames);
+		source.pushAudio(data, 16, frames * 100, 2, frames);
 	}
 
 	private static void assertFilled(byte[] data, int value, int frames) {

@@ -344,12 +344,22 @@ class MediaTests extends ClientTestBase {
 
 	@Test
 	void oversizedFormatRejected() {
-		// 10 ms of these hold 30720 samples, more than WebRTC takes at once.
-		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(384000, 8));
+		// 10 ms of these hold 15360 samples, more than WebRTC takes at once.
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(192000, 8));
 
-		// The largest that fit, 7680 and 3840 samples.
-		PcmFormat.of(384000, 2);
-		PcmFormat.of(48000, 8);
+		// The largest that fit, 7680 samples each.
+		PcmFormat.of(192000, 4);
+		PcmFormat.of(96000, 8);
+	}
+
+	@Test
+	void unsendableFormatRejected() {
+		// The encoder drops these, so a track would stay silent without a word.
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(48000, 3));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(48000, 5));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(48000, 7));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(192100, 2));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(384000, 2));
 	}
 
 	@Test
