@@ -16,6 +16,9 @@
 
 package dev.onvoid.webrtc.media.video;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -33,6 +36,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -42,6 +47,67 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 class VideoDesktopSourceTests extends TestBase {
 
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+
+	@Test
+	void frameRateOutOfRangeRejected() {
+		VideoDesktopSource source = new VideoDesktopSource();
+
+		try {
+			// 65536 would reach the capture thread as 0, -1 as 65535.
+			for (int frameRate : new int[] { Integer.MIN_VALUE, -1, 0, 1001, 65536, Integer.MAX_VALUE }) {
+				assertThrows(IllegalArgumentException.class, () -> source.setFrameRate(frameRate));
+			}
+
+			assertDoesNotThrow(() -> source.setFrameRate(1));
+			assertDoesNotThrow(() -> source.setFrameRate(VideoDesktopSource.MAX_FRAME_RATE));
+		}
+		finally {
+			source.dispose();
+		}
+	}
+
+	@Test
+	void maxFrameSizeHoldsBothLimits() throws Exception {
+		// The portal would wait for the user to pick a source.
+		assumeFalse("wayland".equalsIgnoreCase(System.getenv("XDG_SESSION_TYPE")), "Wayland");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		DesktopSource screen = firstScreen();
+
+		VideoDesktopSource source = new VideoDesktopSource();
+		source.setSourceId(screen.id, false);
+		// On any common screen, fitting the width leaves the height too large.
+		source.setMaxFrameSize(320, 60);
+
+		VideoTrack track = factory.createVideoTrack("screen", source);
+
+		CompletableFuture<int[]> size = new CompletableFuture<>();
+
+		VideoTrackSink sink = frame -> {
+			size.complete(new int[] { frame.buffer.getWidth(), frame.buffer.getHeight() });
+			frame.release();
+		};
+
+		int[] first;
+
+		try {
+			track.addSink(sink);
+			source.start();
+
+			first = size.completeOnTimeout(null, 10, TimeUnit.SECONDS).join();
+		}
+		finally {
+			source.stop();
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+		}
+
+		assumeTrue(first != null, "The screen delivered no frames");
+
+		assertEquals(60, first[1]);
+		assertTrue(first[0] <= 320, "Width " + first[0] + " exceeds the limit");
+	}
 
 	@Test
 	void screenFramesFollowScreen() throws Exception {

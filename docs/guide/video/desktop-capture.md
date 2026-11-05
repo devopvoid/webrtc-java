@@ -53,10 +53,11 @@ import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 VideoDesktopSource videoSource = new VideoDesktopSource();
 
 // Configure the desktop video source
-// Set frame rate (e.g., 30 fps)
+// Set frame rate (e.g., 30 fps), from 1 to VideoDesktopSource.MAX_FRAME_RATE
 videoSource.setFrameRate(30);
 
-// Set maximum frame size (e.g., 1920x1080)
+// Set maximum frame size (e.g., 1920x1080). Frames are scaled down to fit
+// both limits and keep their aspect ratio.
 videoSource.setMaxFrameSize(1920, 1080);
 
 // Select a specific source to capture

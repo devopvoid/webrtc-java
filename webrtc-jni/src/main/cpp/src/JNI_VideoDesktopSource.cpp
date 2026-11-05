@@ -37,7 +37,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_set
 	});
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRate
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRateInternal
 (JNIEnv * env, jobject caller, jint frameRate)
 {
 	jni::CallFromJava(env, [&]() {

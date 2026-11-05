@@ -17,10 +17,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
-	 * Method:    setFrameRate
+	 * Method:    setFrameRateInternal
 	 * Signature: (I)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRate
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRateInternal
 	(JNIEnv*, jobject, jint);
 
 	/*

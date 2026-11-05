@@ -18,6 +18,13 @@ package dev.onvoid.webrtc.media.video;
 
 public class VideoDesktopSource extends VideoTrackSource {
 
+	/**
+	 * The highest frame rate. The capture thread paces itself in whole
+	 * milliseconds, so anything higher would make it spin without a pause.
+	 */
+	public static final int MAX_FRAME_RATE = 1000;
+
+
 	public VideoDesktopSource() {
 		super();
 
@@ -26,8 +33,29 @@ public class VideoDesktopSource extends VideoTrackSource {
 
 	public native void setSourceId(long sourceId, boolean isWindow);
 
-	public native void setFrameRate(int frameRate);
+	/**
+	 * Sets the frames per second to capture, read when the capture starts.
+	 *
+	 * @param frameRate The frame rate, 1 to {@value #MAX_FRAME_RATE}.
+	 *
+	 * @throws IllegalArgumentException If the frame rate is out of range.
+	 */
+	public void setFrameRate(int frameRate) {
+		if (frameRate < 1 || frameRate > MAX_FRAME_RATE) {
+			throw new IllegalArgumentException(
+					"The frame rate must be between 1 and " + MAX_FRAME_RATE + ", got " + frameRate);
+		}
 
+		setFrameRateInternal(frameRate);
+	}
+
+	/**
+	 * Scales captured frames down to fit both limits, keeping their aspect
+	 * ratio.
+	 *
+	 * @param width  The largest width, in pixels.
+	 * @param height The largest height, in pixels.
+	 */
 	public native void setMaxFrameSize(int width, int height);
 
 	public native void start();
@@ -40,6 +68,8 @@ public class VideoDesktopSource extends VideoTrackSource {
 	}
 
 	private native void initialize();
+
+	private native void setFrameRateInternal(int frameRate);
 
 	private native void disposeInternal();
 
