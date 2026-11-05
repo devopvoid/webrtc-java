@@ -35,7 +35,9 @@ namespace jni
 				void disableUserActivity();
 
 			private:
+				// Any value is a valid cookie, so it cannot tell whether one is held.
 				uint32_t dbusCookie = 0;
+				bool inhibited = false;
 
 				// KDE >= 4 and GNOME >= 3.10
 				const char * BUS_SERVICE_NAME = "org.freedesktop.ScreenSaver";
