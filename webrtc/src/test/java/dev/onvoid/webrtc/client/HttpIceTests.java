@@ -82,6 +82,26 @@ class HttpIceTests {
 	}
 
 	@Test
+	void quotedSpacesKept() {
+		List<RTCIceServer> servers = HttpIce.iceServers(Arrays.asList(
+				"<turn:turn.example.net>; rel=\"ice-server\"; username=\"\\ alice\\\t\"; credential=\" secret \""));
+
+		assertEquals(1, servers.size(), () -> "Servers: " + servers);
+		assertEquals(" alice\t", servers.get(0).username);
+		assertEquals(" secret ", servers.get(0).password);
+	}
+
+	@Test
+	void tabsAroundValuesSkipped() {
+		List<RTCIceServer> servers = HttpIce.iceServers(Arrays.asList(
+				"<turn:turn.example.net>;\trel=\t\"ice-server\"\t;\tusername=\t\"alice\"\t;\tcredential \t= \tpw\t ; x=y"));
+
+		assertEquals(1, servers.size(), () -> "Servers: " + servers);
+		assertEquals("alice", servers.get(0).username);
+		assertEquals("pw", servers.get(0).password);
+	}
+
+	@Test
 	void fragmentOfOffer() {
 		// The m-line that tags the BUNDLE group stands for all, as RFC 9725
 		// asks with max-bundle.

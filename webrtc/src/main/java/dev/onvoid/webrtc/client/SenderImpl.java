@@ -22,6 +22,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCDtmfSender;
@@ -41,11 +43,24 @@ import dev.onvoid.webrtc.internal.NativeApi;
  */
 final class SenderImpl implements Sender {
 
+	/** How much later than planned the end of tones may come. */
+	static final Duration TONE_GRACE = Duration.ofSeconds(5);
+
+	/** The pause of a comma, WebRTC's default. */
+	private static final long COMMA_MILLIS = 2000;
+
 	private final PeerImpl peer;
 
 	private final MediaKind kind;
 
 	private volatile LocalTrackImpl track;
+
+	/**
+	 * Identifies the tones WebRTC plays, written on the control executor. A
+	 * tone event takes it on WebRTC's thread, when it happens, so that it
+	 * still names its tones after later ones started.
+	 */
+	private volatile long toneRun;
 
 	// Confined to the peer's control executor.
 
@@ -61,6 +76,9 @@ final class SenderImpl implements Sender {
 
 	/** Completes once the tones sent last have been played. */
 	private CompletableFuture<Void> pendingTones;
+
+	/** Ends the pending tones should WebRTC never report their end. */
+	private ScheduledFuture<?> tonesDeadline;
 
 	// Confined to the peer's event executor.
 
@@ -268,16 +286,22 @@ final class SenderImpl implements Sender {
 					throw new IllegalStateException("WebRTC refused the tones \"" + tones + "\"");
 				}
 
-				if (pendingTones != null) {
-					pendingTones.completeExceptionally(new CancellationException("Replaced by later tones"));
-				}
+				// Set only now: the tones before play until this call stops
+				// them, and the first of these takes at least a millisecond.
+				long run = toneRun + 1;
+				toneRun = run;
 
-				if (hasTone(tones)) {
+				finishTones(new CancellationException("Replaced by later tones"));
+
+				long playMillis = playMillis(tones, durationMs, gapMs);
+
+				if (playMillis > 0) {
+					tonesDeadline = peer.rtc.timer.schedule(() -> peer.control.execute(() -> tonesOverdue(run)),
+							playMillis + TONE_GRACE.toMillis(), TimeUnit.MILLISECONDS);
 					pendingTones = sent;
 				}
 				else {
 					// Nothing to play, so no event would complete the future.
-					pendingTones = null;
 					sent.complete(null);
 				}
 			}
@@ -408,11 +432,7 @@ final class SenderImpl implements Sender {
 			dtmf.dispose();
 			dtmf = null;
 		}
-		if (pendingTones != null) {
-			pendingTones.completeExceptionally(peer.isClosed()
-					? peer.closedError() : new IllegalStateException("The sender was removed"));
-			pendingTones = null;
-		}
+		finishTones(peer.isClosed() ? peer.closedError() : new IllegalStateException("The sender was removed"));
 
 		if (sender != null) {
 			sender.dispose();
@@ -439,19 +459,67 @@ final class SenderImpl implements Sender {
 	}
 
 	/** Called on a WebRTC thread, so it only posts. */
-	private void toneChanged(String tone) {
+	void toneChanged(String tone) {
 		String current = tone == null ? "" : tone;
+		long run = toneRun;
 
 		peer.control.execute(() -> {
-			// The handlers hear of the tone before the future of the tones
-			// completes, which also goes through the event executor.
-			peer.events.execute(() -> toneHandlers.accept(current));
-
-			if (current.isEmpty() && pendingTones != null) {
-				pendingTones.complete(null);
-				pendingTones = null;
+			if (!current.isEmpty()) {
+				peer.events.execute(() -> toneHandlers.accept(current));
 			}
+			else if (run == toneRun) {
+				tonesEnded();
+			}
+			// The end of tones replaced meanwhile says nothing of the new
+			// ones. Replaced a moment earlier, they would have had no end.
 		});
+	}
+
+	private void tonesEnded() {
+		// The handlers hear of the end before the future of the tones
+		// completes, which also goes through the event executor.
+		peer.events.execute(() -> toneHandlers.accept(""));
+		finishTones(null);
+	}
+
+	/**
+	 * WebRTC gives up without an event when it can no longer send a tone,
+	 * which it then keeps in its queue. With an empty queue only the event is
+	 * missing.
+	 */
+	private void tonesOverdue(long run) {
+		if (run != toneRun || pendingTones == null) {
+			return;
+		}
+
+		if (dtmf.tones().isEmpty()) {
+			tonesEnded();
+		}
+		else {
+			finishTones(new IllegalStateException("WebRTC could no longer send the tones"));
+		}
+	}
+
+	/**
+	 * Settles the pending tones, if any.
+	 *
+	 * @param error why they failed, or null if they have been sent.
+	 */
+	private void finishTones(Throwable error) {
+		if (pendingTones == null) {
+			return;
+		}
+
+		tonesDeadline.cancel(false);
+
+		if (error != null) {
+			pendingTones.completeExceptionally(error);
+		}
+		else {
+			pendingTones.complete(null);
+		}
+
+		pendingTones = null;
 	}
 
 	private void checkUsable() {
@@ -466,14 +534,24 @@ final class SenderImpl implements Sender {
 		}
 	}
 
-	private static boolean hasTone(String tones) {
+	/**
+	 * @return how long WebRTC takes for the tones, 0 if they hold none.
+	 */
+	private static long playMillis(String tones, long durationMs, long gapMs) {
+		long millis = 0;
+
 		for (int i = 0; i < tones.length(); i++) {
-			if ("0123456789ABCDabcd#*,".indexOf(tones.charAt(i)) >= 0) {
-				return true;
+			char tone = tones.charAt(i);
+
+			if (tone == ',') {
+				millis += COMMA_MILLIS;
+			}
+			else if ("0123456789ABCDabcd#*".indexOf(tone) >= 0) {
+				millis += durationMs + gapMs;
 			}
 		}
 
-		return false;
+		return millis;
 	}
 
 	private CompletableFuture<Void> run(Runnable operation) {

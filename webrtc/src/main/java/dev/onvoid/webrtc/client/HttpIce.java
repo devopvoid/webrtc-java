@@ -596,7 +596,7 @@ final class HttpIce {
 			if (i < field.length() && field.charAt(i) == '=') {
 				i++;
 
-				while (i < field.length() && field.charAt(i) == ' ') {
+				while (i < field.length() && " \t".indexOf(field.charAt(i)) >= 0) {
 					i++;
 				}
 
@@ -614,14 +614,15 @@ final class HttpIce {
 					}
 
 					i++;
+					value = text.toString();
 				}
 				else {
 					while (i < field.length() && ";,".indexOf(field.charAt(i)) < 0) {
 						text.append(field.charAt(i++));
 					}
-				}
 
-				value = text.toString().trim();
+					value = text.toString().trim();
+				}
 			}
 
 			parameters.putIfAbsent(name, value);
