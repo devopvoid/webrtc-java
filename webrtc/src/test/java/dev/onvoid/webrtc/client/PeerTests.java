@@ -709,6 +709,43 @@ class PeerTests extends ClientTestBase {
 	}
 
 	@Test
+	void failingUncaughtHandlerKeepsEvents() {
+		// Without an error handler, what a handler throws reaches the uncaught
+		// exception handler of the thread, which here throws as well. The
+		// events after it still come.
+		ManualExecutor pool = new ManualExecutor();
+		List<String> ran = new ArrayList<>();
+		Thread thread = Thread.currentThread();
+		Thread.UncaughtExceptionHandler previous = thread.getUncaughtExceptionHandler();
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.eventExecutor(pool)
+				.build()) {
+			SerialExecutor events = new SerialExecutor(runtime.eventExecutor, runtime.eventWork,
+					runtime::reportError, true, null);
+
+			thread.setUncaughtExceptionHandler((failed, error) -> {
+				throw new IllegalStateException("Uncaught exception handler failed");
+			});
+
+			events.execute(() -> {
+				throw new IllegalStateException("Handler failed");
+			});
+			events.execute(() -> ran.add("next"));
+			pool.runAll();
+
+			events.execute(() -> ran.add("later"));
+			pool.runAll();
+
+			assertEquals(Arrays.asList("next", "later"), ran);
+		}
+		finally {
+			thread.setUncaughtExceptionHandler(previous);
+		}
+	}
+
+	@Test
 	void statsHandlerKeepsEventExecutor() throws Exception {
 		// The report of a sample may be read before the timer's thread gets
 		// to wait for it. The control pool holds that thread back behind a

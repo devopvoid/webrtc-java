@@ -237,6 +237,115 @@ class SerialExecutorTests {
 	}
 
 	@Test
+	void throwingHandlerKeepsTasks() {
+		List<String> ran = new ArrayList<>();
+		IllegalStateException failure = new IllegalStateException("handler failed");
+		SerialExecutor failing = new SerialExecutor(pool, work, error -> {
+			throw failure;
+		}, false, null);
+
+		List<Throwable> uncaught = whileUncaughtHandlerThrows(() -> {
+			failing.execute(() -> {
+				throw new IllegalStateException("task failed");
+			});
+			failing.execute(() -> ran.add("next"));
+			pool.runAll();
+
+			// Still able to start a turn of its own.
+			failing.execute(() -> ran.add("later"));
+			pool.runAll();
+		});
+
+		assertEquals(Arrays.asList("next", "later"), ran);
+		assertEquals(Collections.singletonList(failure), uncaught);
+		assertEquals(0, work.snapshot().queued());
+		assertEquals(0, work.snapshot().active());
+	}
+
+	@Test
+	void throwingHandlerKeepsFallbacks() {
+		List<Integer> dropped = new ArrayList<>();
+		SerialExecutor failing = new SerialExecutor(pool, work, error -> {
+			throw new IllegalStateException("handler failed");
+		}, false, null);
+
+		whileUncaughtHandlerThrows(() -> {
+			for (int i = 0; i < SerialExecutor.BATCH_SIZE; i++) {
+				failing.execute(() -> { });
+			}
+			failing.execute(() -> { }, () -> {
+				dropped.add(1);
+				throw new IllegalStateException("fallback failed");
+			});
+			failing.execute(() -> { }, () -> dropped.add(2));
+
+			pool.rejecting(true);
+			pool.runNext();
+		});
+
+		// The futures these complete must not stay open.
+		assertEquals(Arrays.asList(1, 2), dropped);
+	}
+
+	@Test
+	void abortedTurnSchedulesNext() {
+		List<String> ran = new ArrayList<>();
+		IllegalStateException failure = new IllegalStateException("clock failed");
+		boolean[] clockFails = new boolean[1];
+		Workload workload = new Workload(() -> {
+			if (clockFails[0]) {
+				throw failure;
+			}
+			return 0;
+		});
+		SerialExecutor aborted = new SerialExecutor(pool, workload, errors::add, false, null);
+
+		aborted.execute(() -> {
+			ran.add("first");
+			clockFails[0] = true;
+		});
+		aborted.execute(() -> ran.add("second"));
+		pool.runNext();
+
+		assertEquals(Collections.singletonList("first"), ran);
+		assertEquals(Collections.singletonList(failure), errors);
+		assertEquals(1, pool.queued());
+
+		clockFails[0] = false;
+		pool.runAll();
+
+		assertEquals(Arrays.asList("first", "second"), ran);
+	}
+
+	@Test
+	void failingExecutorRunsFallback() {
+		List<String> ran = new ArrayList<>();
+		IllegalStateException failure = new IllegalStateException("Toolkit gone");
+		boolean[] executorFails = { true };
+		SerialExecutor failing = new SerialExecutor(task -> {
+			if (executorFails[0]) {
+				throw failure;
+			}
+			pool.execute(task);
+		}, work, errors::add, false, null);
+
+		failing.execute(() -> ran.add("task"), () -> ran.add("fallback"));
+
+		assertEquals(Collections.singletonList("fallback"), ran);
+		assertEquals(1, errors.size(), () -> "Errors: " + errors);
+		assertSame(failure, errors.get(0).getCause());
+		assertEquals(1, work.snapshot().dropped());
+		assertEquals(0, work.snapshot().queued());
+
+		// The next task tries the executor again.
+		executorFails[0] = false;
+		failing.execute(() -> ran.add("later"));
+		pool.runAll();
+
+		assertEquals(Arrays.asList("fallback", "later"), ran);
+	}
+
+	@Test
 	void eventThreadMarked() {
 		SerialExecutor events = new SerialExecutor(pool, errors::add, true, "events-test");
 		List<Object> seen = new ArrayList<>();
@@ -255,6 +364,32 @@ class SerialExecutorTests {
 		assertFalse(events.inExecutor());
 		assertEquals(name, Thread.currentThread().getName());
 		assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+	}
+
+	/**
+	 * Runs the action while the uncaught exception handler of this thread
+	 * throws, as the handler of an application may.
+	 *
+	 * @return what the handler received.
+	 */
+	private static List<Throwable> whileUncaughtHandlerThrows(Runnable action) {
+		List<Throwable> uncaught = new ArrayList<>();
+		Thread thread = Thread.currentThread();
+		Thread.UncaughtExceptionHandler previous = thread.getUncaughtExceptionHandler();
+
+		thread.setUncaughtExceptionHandler((failed, error) -> {
+			uncaught.add(error);
+			throw new IllegalStateException("uncaught exception handler failed");
+		});
+
+		try {
+			action.run();
+		}
+		finally {
+			thread.setUncaughtExceptionHandler(previous);
+		}
+
+		return uncaught;
 	}
 
 	private static List<Integer> range(int from, int to) {
