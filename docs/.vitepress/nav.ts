@@ -4,7 +4,7 @@ import { PROJECT_VARS } from './versions'
 
 export const navbar: DefaultTheme.NavItem[] = [
 	{
-		text: 'Guide',
+		text: 'Docs',
 		link: '/guide/',
 	},
 	{
@@ -14,6 +14,10 @@ export const navbar: DefaultTheme.NavItem[] = [
 	{
 		text: 'Tools',
 		link: '/tools',
+	},
+	{
+		text: 'Client API Design',
+		link: '/guide/client-api-design',
 	},
 	{
 		text: IS_NEXT ? PROJECT_VARS.VERSION_SNAPSHOT : PROJECT_VARS.VERSION,
