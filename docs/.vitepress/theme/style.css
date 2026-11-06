@@ -35,9 +35,6 @@
   width:25px;
   height:25px
 }
-.VPNavBar {
-  border-bottom:1px solid var(--vp-c-divider)
-}
 .VPDoc h1 {
   letter-spacing:-1.3px
 }
