@@ -92,6 +92,53 @@ class VideoViewTests {
 	}
 
 	@Test
+	void conversionLeavesEdtFree() throws Exception {
+		VideoView view = new VideoView();
+		view.setSize(64, 48);
+		VideoFrame initial = frame(64, 48, 128, 128);
+		VideoFrame held = frame(64, 48, 16, 235);
+		java.util.concurrent.CountDownLatch converting = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.CountDownLatch resume = new java.util.concurrent.CountDownLatch(1);
+		java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+		try {
+			view.accept(initial);
+			dev.onvoid.webrtc.media.video.VideoFrameBuffer blocked =
+					(dev.onvoid.webrtc.media.video.VideoFrameBuffer) java.lang.reflect.Proxy.newProxyInstance(
+							getClass().getClassLoader(),
+							new Class<?>[] { dev.onvoid.webrtc.media.video.VideoFrameBuffer.class },
+							(proxy, method, args) -> {
+								if (method.getName().equals("toI420")) {
+									converting.countDown();
+									assertTrue(resume.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+								}
+								return method.invoke(held.buffer, args);
+							});
+			java.util.concurrent.Future<?> delivery = executor.submit(() -> view.accept(new VideoFrame(blocked, 0)));
+			assertTrue(converting.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+			java.util.concurrent.FutureTask<Void> painting = new java.util.concurrent.FutureTask<>(() -> {
+				assertGray(new Color(paint(view).getRGB(32, 24)));
+				view.clear();
+				assertNull(view.snapshot());
+				return null;
+			});
+			javax.swing.SwingUtilities.invokeLater(painting);
+			painting.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			resume.countDown();
+			delivery.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			assertNull(view.snapshot());
+			view.accept(initial);
+			assertNotNull(view.snapshot());
+		}
+		finally {
+			resume.countDown();
+			executor.shutdownNow();
+			executor.awaitTermination(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			initial.release();
+			held.release();
+		}
+	}
+
+	@Test
 	void keepsAspectRatio() {
 		VideoView view = new VideoView();
 		view.setSize(200, 100);

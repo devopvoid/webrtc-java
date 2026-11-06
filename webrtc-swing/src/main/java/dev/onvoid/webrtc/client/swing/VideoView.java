@@ -49,7 +49,10 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 
 	private static final long serialVersionUID = 1L;
 
-	/** Guards the images and the pixel buffer. */
+	/** Serializes conversion; never acquired by the event dispatch thread. */
+	private final Object convertLock = new Object();
+
+	/** Guards the displayed image and its hand-over. */
 	private final Object lock = new Object();
 
 	/** The picture shown. */
@@ -59,6 +62,8 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 	private transient BufferedImage back;
 
 	private transient ByteBuffer pixels;
+
+	private long generation;
 
 	private int rotation;
 
@@ -87,7 +92,12 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 		int width = buffer.getWidth();
 		int height = buffer.getHeight();
 
+		long started;
 		synchronized (lock) {
+			started = generation;
+		}
+
+		synchronized (convertLock) {
 			if (back == null || back.getWidth() != width || back.getHeight() != height) {
 				back = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 			}
@@ -107,23 +117,28 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 				throw new IllegalStateException("The frame could not be converted", e);
 			}
 
-			BufferedImage shown = front;
-			front = back;
-			back = shown;
-			rotation = frame.rotation;
+			synchronized (lock) {
+				if (started != generation) {
+					return;
+				}
+				BufferedImage shown = front;
+				front = back;
+				back = shown;
+				rotation = frame.rotation;
+			}
 		}
 
 		repaint();
 	}
 
 	/**
-	 * Removes the picture, leaving the background.
+	 * Removes the picture, leaving the background, and drops frames already
+	 * waiting for or undergoing conversion.
 	 */
 	public void clear() {
 		synchronized (lock) {
+			generation++;
 			front = null;
-			back = null;
-			pixels = null;
 		}
 
 		repaint();
