@@ -20,8 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -100,7 +106,7 @@ class VideoViewTest {
 
 	@Test
 	void showsFrame() throws Exception {
-		VideoView view = onFx(VideoView::new);
+		VideoView view = onFx(() -> new VideoView(320 * 240));
 		assertNull(onFx(view::snapshot));
 
 		view.accept(frame(64, 48, 128, 128));
@@ -119,7 +125,7 @@ class VideoViewTest {
 
 	@Test
 	void clearDropsFrameInConversion() throws Exception {
-		VideoView view = onFx(VideoView::new);
+		VideoView view = onFx(() -> new VideoView(320 * 240));
 		CountDownLatch converting = new CountDownLatch(1);
 		CountDownLatch cleared = new CountDownLatch(1);
 		VideoFrame held = frame(64, 48, 128, 128);
@@ -184,6 +190,60 @@ class VideoViewTest {
 	}
 
 	@Test
+	void rejectsInvalidSizes() throws Exception {
+		assertThrows(IllegalArgumentException.class, () -> new VideoView(0));
+		assertThrows(IllegalArgumentException.class,
+				() -> new VideoView(VideoView.MAX_PIXELS + 1));
+		VideoView view = onFx(() -> new VideoView(64 * 48));
+		for (int[] size : new int[][] { { 0, 1 }, { -1, -1 }, { 65, 48 },
+				{ 65536, 65536 }, { Integer.MAX_VALUE, Integer.MAX_VALUE } }) {
+			VideoFrameBuffer invalid = (VideoFrameBuffer) Proxy.newProxyInstance(
+					getClass().getClassLoader(), new Class<?>[] { VideoFrameBuffer.class },
+					(proxy, method, args) -> {
+						if (method.getName().equals("getWidth")) return size[0];
+						if (method.getName().equals("getHeight")) return size[1];
+						throw new AssertionError("Invalid frame reached conversion");
+					});
+			assertThrows(IllegalArgumentException.class,
+					() -> view.accept(new VideoFrame(invalid, 0)));
+		}
+	}
+
+	@Test
+	void reusesBuffersAcrossSizes() throws Exception {
+		VideoView view = onFx(() -> new VideoView(64 * 48));
+		Set<ByteBuffer> storage = Collections.newSetFromMap(new IdentityHashMap<>());
+		Field field = VideoView.class.getDeclaredField("buffers");
+		field.setAccessible(true);
+		for (int i = 0; i < 12; i++) {
+			int width = i % 2 == 0 ? 64 : 32;
+			VideoFrame frame = frame(width, 48, 128, 128);
+			try {
+				view.accept(frame);
+				Image snapshot = onFx(view::snapshot);
+				assertEquals(width, (int) snapshot.getWidth());
+				assertGray(snapshot.getPixelReader().getColor(0, 0));
+				for (Object slot : (Object[]) field.get(view)) {
+					if (slot != null) {
+						Field data = slot.getClass().getDeclaredField("data");
+						data.setAccessible(true);
+						storage.add((ByteBuffer) data.get(slot));
+					}
+				}
+				if (i >= 6) onFx(() -> { view.clear(); return null; });
+			}
+			finally {
+				frame.release();
+			}
+		}
+		assertTrue(storage.size() <= 3);
+		for (ByteBuffer data : storage) {
+			assertTrue(data.isDirect());
+			assertEquals(64 * 48 * 4, data.capacity());
+		}
+	}
+
+	@Test
 	void keepsAspectRatio() throws Exception {
 		VideoView view = sized(200, 100);
 		view.accept(frame(64, 48, 128, 128));
@@ -234,7 +294,7 @@ class VideoViewTest {
 		Peer caller = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
 		Peer callee = rtc.createPeer(PeerOptions.builder().signaling(link.second()).polite(true).build());
 		CustomVideo video = rtc.media().customVideo("video");
-		VideoView view = onFx(VideoView::new);
+		VideoView view = onFx(() -> new VideoView(320 * 240));
 
 		callee.onTrack(track -> track.asVideo().onFrame(view));
 		caller.addTrack(video);
@@ -260,7 +320,7 @@ class VideoViewTest {
 
 	private VideoView sized(int width, int height) throws Exception {
 		return onFx(() -> {
-			VideoView view = new VideoView();
+			VideoView view = new VideoView(320 * 240);
 			new Scene(view, width, height);
 			view.resize(width, height);
 			view.layout();

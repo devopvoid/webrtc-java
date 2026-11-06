@@ -318,6 +318,18 @@ frame.add(remoteView, BorderLayout.CENTER);
 
 `snapshot()` returns a copy of the picture shown, for saving a still or for tests.
 
+Both views reject nonpositive dimensions and frames above `VideoView.MAX_PIXELS`
+(3840 × 2160 pixels) with `IllegalArgumentException`. Use `new VideoView(maxPixels)`
+to choose a smaller limit, for example `new VideoView(1280 * 720)` for a preview.
+Conversion buffers reserve their configured maximum capacity on first use and stay
+available across resolution changes and `clear()`. They are freed when the view
+becomes unreachable. Swing uses one direct buffer; JavaFX uses up to three.
+Including displayed images and a replacement image during a resize, live pixel
+storage is at most `maxPixels * 16L` bytes for Swing and `maxPixels * 20L` for
+JavaFX (about 127 MiB and 159 MiB at the default limit). Input frames, snapshots,
+toolkit rendering resources, and discarded heap images awaiting collection are
+additional. Set a smaller limit when displaying several videos.
+
 For JavaFX, the `webrtc-java-javafx` module has a `VideoView` node in `dev.onvoid.webrtc.client.javafx` that works the same way. It needs Java 11 and the JavaFX your application already uses:
 
 ```xml
@@ -638,6 +650,7 @@ peer.onChannel(channel -> {                  // channels the remote peer opens
     }
 });
 ```
+
 
 - A channel may be used right away: messages sent before it opens are held until it does.
 - Messages that arrive while a channel has no `onMessage` handler are kept for the next one, so none are lost while a handler is being set up.

@@ -49,6 +49,11 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 
 	private static final long serialVersionUID = 1L;
 
+	/** Default and maximum permitted number of pixels per frame (3840 by 2160). */
+	public static final int MAX_PIXELS = 3840 * 2160;
+
+	private final int maxPixels;
+
 	/** Serializes conversion; never acquired by the event dispatch thread. */
 	private final Object convertLock = new Object();
 
@@ -75,6 +80,27 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 	 * 360 pixels.
 	 */
 	public VideoView() {
+		this(MAX_PIXELS);
+	}
+
+	/**
+	 * Creates a view with a limit on frame size. Conversion buffers reserve
+	 * {@code maxPixels * 4} bytes each on first use and are reused across size
+	 * changes and clear(). They are released with the view, not by clear().
+	 * One direct buffer and at most three live image arrays (including a
+	 * replacement during a resize) require at most {@code maxPixels * 16L}
+	 * bytes of pixel storage.
+	 * This excludes input frames, snapshots, toolkit rendering resources and
+	 * unreachable images awaiting garbage collection.
+	 *
+	 * @param maxPixels maximum frame pixel count, from 1 to {@link #MAX_PIXELS}.
+	 * @throws IllegalArgumentException if the limit is outside this range.
+	 */
+	public VideoView(int maxPixels) {
+		if (maxPixels <= 0 || maxPixels > MAX_PIXELS) {
+			throw new IllegalArgumentException("Invalid pixel limit: " + maxPixels);
+		}
+		this.maxPixels = maxPixels;
 		setBackground(Color.BLACK);
 		setOpaque(true);
 		setPreferredSize(new Dimension(640, 360));
@@ -85,12 +111,19 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 	 * frame is not released, which its subscription does.
 	 *
 	 * @param frame the frame to show.
+	 * @throws IllegalArgumentException if dimensions are nonpositive or the
+	 * frame exceeds this view's pixel limit.
 	 */
 	@Override
 	public void accept(VideoFrame frame) {
 		VideoFrameBuffer buffer = frame.buffer;
 		int width = buffer.getWidth();
 		int height = buffer.getHeight();
+		long pixelCount = (long) width * height;
+		if (width <= 0 || height <= 0 || pixelCount > maxPixels) {
+			throw new IllegalArgumentException("Frame dimensions exceed the pixel limit: " + width + "x" + height);
+		}
+		int byteCount = (int) (pixelCount * 4L);
 
 		long started;
 		synchronized (lock) {
@@ -101,14 +134,15 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 			if (back == null || back.getWidth() != width || back.getHeight() != height) {
 				back = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 			}
-			if (pixels == null || pixels.capacity() != width * height * 4) {
-				pixels = ByteBuffer.allocateDirect(width * height * 4).order(ByteOrder.LITTLE_ENDIAN);
+			if (pixels == null) {
+				pixels = ByteBuffer.allocateDirect((int) (maxPixels * 4L)).order(ByteOrder.LITTLE_ENDIAN);
 			}
 
 			try {
 				// libyuv's ARGB is B, G, R, A in memory, which read as
 				// little-endian ints is what TYPE_INT_RGB holds.
 				pixels.clear();
+				pixels.limit(byteCount);
 				VideoBufferConverter.convertFromI420(buffer, pixels, FourCC.ARGB);
 				pixels.rewind();
 				pixels.asIntBuffer().get(((DataBufferInt) back.getRaster().getDataBuffer()).getData());

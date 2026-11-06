@@ -21,10 +21,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import javax.swing.SwingUtilities;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -41,6 +52,7 @@ import dev.onvoid.webrtc.client.SignalingPair;
 import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
+import dev.onvoid.webrtc.media.video.VideoFrameBuffer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +88,7 @@ class VideoViewTests {
 
 	@Test
 	void showsFrame() {
-		VideoView view = new VideoView();
+		VideoView view = new VideoView(320 * 240);
 		assertNull(view.snapshot());
 
 		view.accept(frame(64, 48, 128, 128));
@@ -93,19 +105,19 @@ class VideoViewTests {
 
 	@Test
 	void conversionLeavesEdtFree() throws Exception {
-		VideoView view = new VideoView();
+		VideoView view = new VideoView(320 * 240);
 		view.setSize(64, 48);
 		VideoFrame initial = frame(64, 48, 128, 128);
 		VideoFrame held = frame(64, 48, 16, 235);
-		java.util.concurrent.CountDownLatch converting = new java.util.concurrent.CountDownLatch(1);
-		java.util.concurrent.CountDownLatch resume = new java.util.concurrent.CountDownLatch(1);
-		java.util.concurrent.ExecutorService executor = Executors.newSingleThreadExecutor();
+		CountDownLatch converting = new CountDownLatch(1);
+		CountDownLatch resume = new CountDownLatch(1);
+		ExecutorService executor = Executors.newSingleThreadExecutor();
 		try {
 			view.accept(initial);
-			dev.onvoid.webrtc.media.video.VideoFrameBuffer blocked =
-					(dev.onvoid.webrtc.media.video.VideoFrameBuffer) java.lang.reflect.Proxy.newProxyInstance(
+			VideoFrameBuffer blocked =
+					(VideoFrameBuffer) Proxy.newProxyInstance(
 							getClass().getClassLoader(),
-							new Class<?>[] { dev.onvoid.webrtc.media.video.VideoFrameBuffer.class },
+							new Class<?>[] { VideoFrameBuffer.class },
 							(proxy, method, args) -> {
 								if (method.getName().equals("toI420")) {
 									converting.countDown();
@@ -113,15 +125,15 @@ class VideoViewTests {
 								}
 								return method.invoke(held.buffer, args);
 							});
-			java.util.concurrent.Future<?> delivery = executor.submit(() -> view.accept(new VideoFrame(blocked, 0)));
+			Future<?> delivery = executor.submit(() -> view.accept(new VideoFrame(blocked, 0)));
 			assertTrue(converting.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
-			java.util.concurrent.FutureTask<Void> painting = new java.util.concurrent.FutureTask<>(() -> {
+			FutureTask<Void> painting = new FutureTask<>(() -> {
 				assertGray(new Color(paint(view).getRGB(32, 24)));
 				view.clear();
 				assertNull(view.snapshot());
 				return null;
 			});
-			javax.swing.SwingUtilities.invokeLater(painting);
+			SwingUtilities.invokeLater(painting);
 			painting.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 			resume.countDown();
 			delivery.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -139,8 +151,55 @@ class VideoViewTests {
 	}
 
 	@Test
+	void rejectsInvalidSizes() throws Exception {
+		assertThrows(IllegalArgumentException.class, () -> new VideoView(0));
+		assertThrows(IllegalArgumentException.class,
+				() -> new VideoView(VideoView.MAX_PIXELS + 1));
+		VideoView view = new VideoView(64 * 48);
+		for (int[] size : new int[][] { { 0, 1 }, { -1, -1 }, { 65, 48 },
+				{ 65536, 65536 }, { Integer.MAX_VALUE, Integer.MAX_VALUE } }) {
+			VideoFrameBuffer invalid = (VideoFrameBuffer) Proxy.newProxyInstance(
+					getClass().getClassLoader(), new Class<?>[] { VideoFrameBuffer.class },
+					(proxy, method, args) -> {
+						if (method.getName().equals("getWidth")) return size[0];
+						if (method.getName().equals("getHeight")) return size[1];
+						throw new AssertionError("Invalid frame reached conversion");
+					});
+			assertThrows(IllegalArgumentException.class,
+					() -> view.accept(new VideoFrame(invalid, 0)));
+		}
+	}
+
+	@Test
+	void reusesBuffersAcrossSizes() throws Exception {
+		VideoView view = new VideoView(64 * 48);
+		Set<ByteBuffer> storage = Collections.newSetFromMap(new IdentityHashMap<>());
+		Field field = VideoView.class.getDeclaredField("pixels");
+		field.setAccessible(true);
+		for (int i = 0; i < 12; i++) {
+			int width = i % 2 == 0 ? 64 : 32;
+			VideoFrame frame = frame(width, 48, 128, 128);
+			try {
+				view.accept(frame);
+				assertEquals(width, view.snapshot().getWidth());
+				assertGray(new Color(view.snapshot().getRGB(0, 0)));
+				storage.add((ByteBuffer) field.get(view));
+				if (i >= 6) view.clear();
+			}
+			finally {
+				frame.release();
+			}
+		}
+		assertTrue(storage.size() <= 1);
+		for (ByteBuffer data : storage) {
+			assertTrue(data.isDirect());
+			assertEquals(64 * 48 * 4, data.capacity());
+		}
+	}
+
+	@Test
 	void keepsAspectRatio() {
-		VideoView view = new VideoView();
+		VideoView view = new VideoView(320 * 240);
 		view.setSize(200, 100);
 		view.accept(frame(64, 48, 128, 128));
 
@@ -152,7 +211,7 @@ class VideoViewTests {
 
 	@Test
 	void mirrors() {
-		VideoView view = new VideoView();
+		VideoView view = new VideoView(320 * 240);
 		view.setSize(64, 48);
 		view.accept(frame(64, 48, 16, 235));
 
@@ -171,7 +230,7 @@ class VideoViewTests {
 		assertArrayEquals(rotated(90), rotated(450));
 
 		// Sideways, a 4:3 picture in a 4:3 view leaves bars on the sides.
-		VideoView view = new VideoView();
+		VideoView view = new VideoView(320 * 240);
 		view.setSize(64, 48);
 		view.accept(frame(64, 48, 128, 128, -90));
 
@@ -184,7 +243,7 @@ class VideoViewTests {
 	void showsRemoteVideo() throws Exception {
 		Peer[] peers = pair();
 		CustomVideo video = rtc.media().customVideo("video");
-		VideoView view = new VideoView();
+		VideoView view = new VideoView(320 * 240);
 
 		peers[1].onTrack(track -> track.asVideo().onFrame(view));
 		peers[0].addTrack(video);
@@ -230,7 +289,7 @@ class VideoViewTests {
 
 	/** The pixels a 64x48 view paints of a 64x48 two-tone frame with the given rotation. */
 	private static int[] rotated(int rotation) {
-		VideoView view = new VideoView();
+		VideoView view = new VideoView(320 * 240);
 		view.setSize(64, 48);
 		view.accept(frame(64, 48, 16, 235, rotation));
 
