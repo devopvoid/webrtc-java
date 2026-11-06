@@ -14,6 +14,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'What is webrtc-java?', link: '/introduction' },
 				{ text: 'Getting Started', link: '/get-started' },
 				{ text: 'Client API', link: '/client-api' },
+				{ text: 'Client API Design', link: '/client-api-design' },
 			],
 		},
 		{

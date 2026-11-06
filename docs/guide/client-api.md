@@ -36,7 +36,7 @@ What the client API takes care of:
 - **Lifetime**: everything belongs to the runtime that created it and is closed with it. Senders, receivers and transceivers stay inside the library.
 - **Futures**: operations return `CompletableFuture`s that fail with typed exceptions, instead of taking observers.
 
-The client API is plain Java on top of the classes the other guides describe, and it does not replace them. Its peers, tracks and channels are the same native objects, and [Using the Low-Level API](#using-the-low-level-api) shows how to reach them for anything it does not cover.
+The client API is plain Java on top of the classes the other guides describe, and it does not replace them. Its peers, tracks and channels are the same native objects, and [Using the Low-Level API](#using-the-low-level-api) shows how to reach them for anything it does not cover. [Client API Design](/guide/client-api-design) explains the decisions behind it.
 
 ## The Runtime
 

@@ -1,8 +1,9 @@
-# webrtc-java Client API
+# Client API Design
 
-Status: implemented and released with v1.0.0; all three [phases](#phases) are done. This page holds
-the design and the reasons for it. The Javadoc is the reference and `docs/guide/client-api.md` the
-usage guide. [Implementation](#implementation) tells how it is built and what is still open.
+This page explains why the client API looks the way it does: the decisions behind it, its threading
+model and what it guarantees. To use the API, start with the [Client API](/guide/client-api) guide;
+the Javadoc is the reference. [Implementation](#implementation) tells how it is built and what is
+still open.
 
 A high-level layer over the existing JNI API. It owns every native object, gives application code
 one thread per peer, negotiates on its own, and returns futures instead of nested observers. The
@@ -11,12 +12,12 @@ low-level API stays as it is.
 - Package `dev.onvoid.webrtc.client`, in the existing `webrtc-java` jar, exported by the
   `webrtc.java` module.
 - Java 11, like the rest of the module: no records, no sealed types.
-- Plain Java over the existing classes. The first phase needed no native or JNI changes; later
-  features brought a few, such as native voice activity detection.
+- Plain Java over the existing classes, with a few native additions such as voice activity
+  detection.
 
 ## Decisions
 
-These were open questions in the mockup. Each went with its recommendation.
+The questions that shaped the API, and how they were decided.
 
 | Question | Decision | Consequence |
 |---|---|---|
@@ -131,25 +132,7 @@ and the library never runs application code on a thread WebRTC needs. A second s
 peer, *control*, is the only place that calls the native connection. WebRTC's callbacks post to it,
 and it hands on to the event executor what the application should hear.
 
-```mermaid
-sequenceDiagram
-    participant App as Your thread
-    participant Ctl as Peer control executor
-    participant RTC as WebRTC threads
-    participant Ev as Peer event executor
-    participant H as Your handlers
-    App->>Ctl: peer.addTrack(camera), returns at once
-    Ctl->>RTC: addTrack (proxy call, may block Ctl)
-    RTC--)Ctl: onRenegotiationNeeded (copied, posted)
-    Ctl->>RTC: setLocalDescription() (perfect negotiation)
-    RTC--)Ctl: local offer set, onIceCandidate ...
-    Ctl--)Ev: offer, candidates
-    Ev->>H: Signaling.send(offer), Signaling.send(candidate)
-    RTC--)Ctl: onConnectionChange(CONNECTED)
-    Ctl--)Ev: state change
-    Ev->>H: onStateChange(CONNECTED), whenConnected() completes
-    H->>Ctl: peer.close() from a handler, fine
-```
+<ThreadingDiagram />
 
 > **Invariant the implementation must keep:** nothing the library runs on a WebRTC thread ever
 > waits for a Java thread. Native observers copy their arguments, post them, and return, and neither
@@ -898,7 +881,7 @@ try (WebRtc rtc = WebRtc.builder().audio(AudioMode.HEADLESS).build()) {
 }
 ```
 
-## How it maps onto today's classes
+## How it maps onto the core API
 
 Anything the client API doesn't cover stays reachable through `withNative` and
 `configureFactory`.
@@ -916,19 +899,6 @@ Anything the client API doesn't cover stays reachable through `withNative` and
 | `PeerStats` | `getStats(RTCStatsCollectorCallback)`, `RTCStatsReport` |
 | `Whip`, `Whep` | a peer with `Negotiation.MANUAL`, `java.net.http.HttpClient` |
 | `transform` on senders and tracks | `RTCEncodedFrameTransformer` |
-
-## Phases
-
-All three are done.
-
-1. **Core:** `WebRtc`, `Peer` and the threading model; signaling, JSON and loopback; automatic and
-   manual negotiation; local media, devices and remote tracks; data channels, errors and stats.
-2. **Helpers:** `Whip.to(...).publish(rtc)` and `Whep.from(...).play(rtc)`; `VideoView` for Swing and
-   JavaFX; media files through `LocalMedia.videoTrack` and `audioTrack`; recording senders and remote
-   tracks with `MediaRecorder`.
-3. **Adoption:** every example but `CodecListExample`, which shows the factory's codecs, runs on the
-   client API. The get-started guide starts with it, and the docs name it the place to start. The
-   low-level guides stay for the advanced topics.
 
 ## Implementation
 
@@ -962,13 +932,6 @@ How the threading model is built:
 - `CustomAudio` is cut into 10 ms chunks and pushed from the runtime's audio pacer, every 10 ms.
 - An impolite peer that ignored an offer reports the two-impolite-peers collision after 5 seconds
   without an answer.
-
-Each guarantee has tests, among them `PeerTests`, `MediaTests`, `RuntimeCloseTests`,
-`SerialExecutorTests`, `OperationChainTests`, `NegotiationTimeoutTests` and, for WHIP and WHEP,
-`HttpSessionTests`, `HttpCallTests` and `HttpIceTests`. Tests of interleavings don't sleep: they run
-on `ManualExecutor` and `ManualTimer`. `CameraIntegrationTest` needs a real camera and skips without
-one. Every test built on `ClientTestBase` also fails if anything reached the runtime's error handler,
-including while it closed.
 
 ### Open gaps
 
