@@ -651,6 +651,12 @@ peer.onChannel(channel -> {                  // channels the remote peer opens
 });
 ```
 
+`Message.toString()` reports only the message type and byte length. Access content
+explicitly with `text()` or `bytes()`. For diagnostics, `message.preview(64)` inspects
+at most 64 payload bytes and escapes control characters. Binary previews use hex.
+Use `message.preview(64, prefix -> redact(prefix))` to apply your own masking before
+escaping; the masking function must handle secrets truncated at the prefix boundary.
+The preview marks truncated content and also limits the masking function's output.
 
 - A channel may be used right away: messages sent before it opens are held until it does.
 - Messages that arrive while a channel has no `onMessage` handler are kept for the next one, so none are lost while a handler is being set up.
