@@ -4,7 +4,7 @@
 
 	<groupId>dev.onvoid.webrtc</groupId>
 	<artifactId>webrtc-java-parent</artifactId>
-	<version>0.21.0-SNAPSHOT</version>
+	<version>1.0.0</version>
 	<packaging>pom</packaging>
 
 	<name>webrtc-java-parent</name>
@@ -40,7 +40,7 @@
 		<connection>scm:git:git://github.com/devopvoid/webrtc-java.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/devopvoid/webrtc-java.git</developerConnection>
 		<url>https://github.com/devopvoid/webrtc-java/tree/main</url>
-		<tag>HEAD</tag>
+		<tag>v1.0.0</tag>
 	</scm>
 
 	<properties>
@@ -49,7 +49,7 @@
 		     same sources build into the same jars. release:prepare sets it to
 		     the time of the release commit and again for the next development
 		     version; snapshots keep the time of the last release. -->
-		<project.build.outputTimestamp>2026-10-16T19:14:36Z</project.build.outputTimestamp>
+		<project.build.outputTimestamp>2026-11-06T02:27:27Z</project.build.outputTimestamp>
 	</properties>
 
 	<modules>
