@@ -215,11 +215,11 @@ peer.whenClosed().thenRun(() -> System.out.println("Closed"));
 
 ## Threads
 
-Every method of the client API may be called from any thread, including from inside a handler. None of them waits for a WebRTC thread: methods that change a peer return at once and take effect in the order they were called.
+Every method of the client API may be called from any thread, including from inside a handler. Methods that change a peer return at once and take effect in the order they were called.
 
 | Code | Runs on | May it block? |
 |---|---|---|
-| Your calls into the API | your thread | They don't block. The exceptions are `WebRtc.createPeer`, which waits briefly for the connection, and `WebRtc.close()`, which waits up to the close timeout. |
+| Your calls into the API | your thread | They don't block, with these exceptions. `WebRtc.createPeer`, the `LocalMedia` methods that make a track and `LocalTrack.setEnabled` wait briefly for WebRTC. `camera()` and `screen()` also open their capture on your thread, which can take longer, so a UI thread should leave them to another thread. The first `media.devices()`, `screens()` and `windows()` ask the system on your thread. `WebRtc.close()` waits up to the close timeout. |
 | Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
 | `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
 | [Encoded transforms](#encoded-transforms) | a thread of each sender and receiver | Better not. A slow transform delays only its own frames, and one that falls several seconds behind has frames dropped. |
@@ -496,7 +496,7 @@ The new camera keeps the resolution and frame rate of the old one, as far as it 
 
 ### Devices
 
-`media.devices()` returns the cameras, microphones and speakers. The first call reads them from the system; after that, the lists are snapshots kept current in the background, so reading them is cheap on any thread. `screens()` and `windows()` ask the system on each call. A kind of device the system cannot list, such as audio devices on a machine without an audio system, comes back as an empty list; a query that fails otherwise throws a `MediaException`, so an empty list means there are no such devices.
+`media.devices()` returns the cameras, microphones and speakers. The first call reads them from the system; after that, the lists are snapshots kept current in the background, so reading them is cheap on any thread. Where the system reports no device changes, as on a Linux machine without PulseAudio, they are read on each call instead. `screens()` and `windows()` ask the system on each call. A kind of device the system cannot list, such as audio devices on a machine without an audio system, comes back as an empty list; a query that fails otherwise throws a `MediaException`, so an empty list means there are no such devices.
 
 ```java
 Devices devices = media.devices();
@@ -507,6 +507,8 @@ devices.useSpeaker(devices.speakers().get(0));
 ```
 
 `useMicrophone` and `useSpeaker` switch devices also for tracks that are sent or played now. A device that was disconnected since the list was read fails the returned future, and the device in use stays as it was. On Linux, where WebRTC's audio device module cannot tell devices apart, the default device is used whichever is given.
+
+A track does not end by itself when its device is disconnected or a captured window closes. `LocalTrack.onEnded` follows only from closing the track, or from a camera switch that can open neither camera. `onChange` tells of a device that went away; closing the track, or switching a camera to another device, is up to you. Nothing tells of a captured window that closes.
 
 ## Receiving Media
 

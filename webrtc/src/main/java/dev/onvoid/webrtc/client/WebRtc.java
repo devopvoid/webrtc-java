@@ -74,8 +74,11 @@ import dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory;
  * }
  * }</pre>
  * <h2>Threads</h2>
- * Every method of this API may be called from any thread, and none waits for a
- * WebRTC thread. The library never runs application code on a thread WebRTC
+ * Every method of this API may be called from any thread. Methods that change
+ * a peer return at once. {@link #createPeer}, the methods of {@link LocalMedia}
+ * that make a track and {@link LocalTrack#setEnabled(boolean)} wait briefly
+ * for a WebRTC thread, and {@link #close()} waits for everything to close.
+ * The library never runs application code on a thread WebRTC
  * needs: what WebRTC reports is copied and queued, then handed to the
  * application on the event thread of the peer it belongs to. The handlers of
  * one peer run one at a time and in order; those of different peers may run

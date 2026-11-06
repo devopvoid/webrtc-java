@@ -41,7 +41,7 @@ public interface LocalTrack extends AutoCloseable {
 
 	/**
 	 * Mutes or unmutes the track. A muted track sends black frames or silence,
-	 * while its capture stays open.
+	 * while its capture stays open. Waits briefly for a WebRTC thread.
 	 *
 	 * @param enabled false to mute.
 	 */
@@ -50,6 +50,12 @@ public interface LocalTrack extends AutoCloseable {
 	/**
 	 * Calls the handler once the track ended and its native track is
 	 * released. A handler added after that is called at once.
+	 * <p>
+	 * A track ends when it is closed, by the application or with its runtime,
+	 * or when a camera switch can open neither camera. It does not end by
+	 * itself when its device is disconnected or a captured window closes:
+	 * {@link Devices#onChange(java.util.function.Consumer)} tells of a device
+	 * that went away, and closing the track is up to the application.
 	 *
 	 * @param handler called on an event thread of the runtime, where waiting
 	 *                for a future of this API that is not done throws a
