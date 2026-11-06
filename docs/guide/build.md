@@ -117,9 +117,10 @@ caches, so a native rebuild also includes the updated patches.
 ## Release workflow
 
 Maintainers start **Prepare release** (`release.yml`) from `main`, providing the
-next development version, such as `0.16.0-SNAPSHOT`. Preparation commits the
-changelog and version changes and atomically pushes `main` and the release tag.
-It then dispatches **Publish release** (`release-publish.yml`) on that tag using
+next development version, such as `0.16.0-SNAPSHOT`, and optionally the version
+to release, such as `0.15.0`. Without one, the release takes the root pom's
+version without `-SNAPSHOT`. Preparation commits the changelog and version
+changes and atomically pushes `main` and the release tag. It then dispatches **Publish release** (`release-publish.yml`) on that tag using
 `GITHUB_TOKEN` with `actions: write`; no additional token is needed. A push made
 with `GITHUB_TOKEN` does not trigger a tag push workflow on its own.
 
