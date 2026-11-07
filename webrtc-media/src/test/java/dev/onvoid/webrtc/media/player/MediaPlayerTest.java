@@ -682,18 +682,34 @@ class MediaPlayerTest {
 	void positionCountsFromTheFirstFrame() throws Exception {
 		try (Playback playback = new Playback(new MediaReader(
 				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
-			playback.player.play();
+			AtomicLong firstDeliveredFramePositionUs = new AtomicLong(-1);
+			AudioTrackSink afterVideo = (data, bits, rate, ch, count) -> {
+				// Both sinks run on the pacer thread. An audio callback after
+				// a video callback sees the completed video push, whereas the
+				// video callback itself still sees the last accepted audio.
+				if (playback.frames.get() > 0) {
+					firstDeliveredFramePositionUs.compareAndSet(-1, playback.player.getPositionUs());
+				}
+			};
+			playback.audioTrack.addSink(afterVideo);
 
-			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+			try {
+				playback.player.play();
 
-			// Video starts a second after the source does.
-			long first = playback.firstFramePositionUs.get();
+				assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
 
-			assertTrue(Math.abs(first - 1_000_000) < 20_000, "first frame at " + first + " us");
+				// Video starts a second after the source does. Read its
+				// position only once delivery has returned successfully.
+				assertEquals(1_000_000, firstDeliveredFramePositionUs.get(),
+						"position after the first video delivery");
 
-			long end = playback.player.getPositionUs();
+				long end = playback.player.getPositionUs();
 
-			assertTrue(end > 3_900_000 && end < 4_100_000, "ended at " + end + " us");
+				assertTrue(end > 3_900_000 && end < 4_100_000, "ended at " + end + " us");
+			}
+			finally {
+				playback.audioTrack.removeSink(afterVideo);
+			}
 		}
 	}
 
@@ -1706,8 +1722,8 @@ class MediaPlayerTest {
 		final List<Integer> silentChunks = Collections.synchronizedList(new ArrayList<>());
 
 		private final VideoTrackSink videoSink = frame -> {
-			// The pacer delivers on its own thread, having just moved the
-			// position to the frame's presentation time.
+			// This callback runs inside the push. The position still belongs
+			// to the last successful delivery until this push returns.
 			long positionUs = Playback.this.player.getPositionUs();
 
 			if (firstFramePositionUs.get() < 0) {
