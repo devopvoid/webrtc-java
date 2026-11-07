@@ -37,6 +37,9 @@ public final class AllocationFault {
 	 */
 	public static native void failNextListener();
 
+	/** Fails the next acquisition of a native handle lease. */
+	public static native void failNextNativeLease();
+
 	/**
 	 * Fails the next {@code encoded_observer_add()} of the extension API, as
 	 * an allocation for the handle it returns does.

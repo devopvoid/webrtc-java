@@ -27,6 +27,14 @@ env:
   WEBRTC_INSTALL_FOLDER: webrtc/build
 
 jobs:
+  jni-boundaries:
+    name: Check JNI exception boundaries
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - run: python3 .github/scripts/check-jni-boundaries.py
+
   build:
     name: build (${{ matrix.platform.name }})
     strategy:

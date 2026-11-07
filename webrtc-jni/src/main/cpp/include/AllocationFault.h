@@ -23,7 +23,7 @@ namespace jni
 	// code around it does when memory runs out, which it does not on demand.
 	//
 	// Only the tests arm it, through JNI_AllocationFault. A check that is not
-	// armed pays a single atomic load.
+	// armed pays a single flag load.
 	class AllocationFault
 	{
 		public:
@@ -33,6 +33,9 @@ namespace jni
 			// Fails the next encoded_observer_add() of the extension API, once,
 			// as an allocation for its handle does.
 			static void FailNextEncodedObserver();
+			// Fails the next handle lease, as inserting its map entry can.
+			static void FailNextNativeLease();
+			static void CheckNativeLease();
 			// Forgets a fault that has not fired.
 			static void Disarm();
 			// Throws std::bad_alloc if a fault is armed, and disarms it.

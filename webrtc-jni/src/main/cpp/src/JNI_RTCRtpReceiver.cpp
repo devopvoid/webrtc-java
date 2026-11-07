@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCRtpReceiver.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/ObserverSlot.h"
 #include "api/RegisteredObservers.h"
@@ -38,13 +39,15 @@
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getTrack
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
-	CHECK_HANDLEV(receiver, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
+		CHECK_HANDLEV(receiver, nullptr);
 
-	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = receiver->track();
+		webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = receiver->track();
 
-	// The receiver keeps the track; the Java object is only a view of it.
-	return jni::MediaStreamTrackView::create(env, track.get()).release();
+		// The receiver keeps the track; the Java object is only a view of it.
+		return jni::MediaStreamTrackView::create(env, track.get()).release();
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getTransport
@@ -134,49 +137,53 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getSynchronizati
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_setTransform
 (JNIEnv * env, jobject caller, jobject jTransformer)
 {
-	jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
-	CHECK_HANDLE(receiver);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
+		CHECK_HANDLE(receiver);
 
-	try {
-		// Clearing a transform that was never set installs nothing.
-		auto transformer = jTransformer != nullptr
-			? jni::EncodedFrameTransformer::Of(receiver)
-			: jni::EncodedFrameTransformer::Find(receiver);
+		try {
+			// Clearing a transform that was never set installs nothing.
+			auto transformer = jTransformer != nullptr
+				? jni::EncodedFrameTransformer::Of(receiver)
+				: jni::EncodedFrameTransformer::Find(receiver);
 
-		if (transformer) {
-			transformer->SetTransformer(env, jTransformer);
+			if (transformer) {
+				transformer->SetTransformer(env, jTransformer);
+			}
 		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_requestKeyFrame
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
-	CHECK_HANDLE(receiver);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
+		CHECK_HANDLE(receiver);
 
-	if (receiver->media_type() != webrtc::MediaType::VIDEO) {
-		return;
-	}
+		if (receiver->media_type() != webrtc::MediaType::VIDEO) {
+			return;
+		}
 
-	// A receiver has no way of its own to ask for a key frame, but the
-	// source of its track does: it is what the decoder feeds, and the one
-	// thing WebRTC lets ask the remote sender for a key frame on demand.
-	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = receiver->track();
+		// A receiver has no way of its own to ask for a key frame, but the
+		// source of its track does: it is what the decoder feeds, and the one
+		// thing WebRTC lets ask the remote sender for a key frame on demand.
+		webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = receiver->track();
 
-	if (track == nullptr) {
-		return;
-	}
+		if (track == nullptr) {
+			return;
+		}
 
-	auto videoTrack = static_cast<webrtc::VideoTrackInterface *>(track.get());
-	webrtc::VideoTrackSourceInterface * source = videoTrack->GetSource();
+		auto videoTrack = static_cast<webrtc::VideoTrackInterface *>(track.get());
+		webrtc::VideoTrackSourceInterface * source = videoTrack->GetSource();
 
-	if (source != nullptr) {
-		source->GenerateKeyFrame();
-	}
+		if (source != nullptr) {
+			source->GenerateKeyFrame();
+		}
+	});
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getId
@@ -214,48 +221,52 @@ namespace
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_setObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
-	CHECK_HANDLE(receiver);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
+		CHECK_HANDLE(receiver);
 
-	try {
-		jni::RTCRtpReceiverObserver * observer = nullptr;
+		try {
+			jni::RTCRtpReceiverObserver * observer = nullptr;
 
-		if (jObserver != nullptr) {
-			observer = new jni::RTCRtpReceiverObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+			if (jObserver != nullptr) {
+				observer = new jni::RTCRtpReceiverObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+			}
+
+			RTCRtpReceiverObserverSlot::Set(env, caller, "observerHandle", observer, ApplyTo(receiver));
 		}
-
-		RTCRtpReceiverObserverSlot::Set(env, caller, "observerHandle", observer, ApplyTo(receiver));
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpReceiverInterface * receiver = jni::TakeHandle<webrtc::RtpReceiverInterface>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::RtpReceiverInterface * receiver = jni::TakeHandle<webrtc::RtpReceiverInterface>(env, caller);
 
-	if (receiver == nullptr) {
-		return;
-	}
-
-	auto slot = RTCRtpReceiverObserverSlot::Take(env, caller, "observerHandle");
-
-	// Unlike e.g. MediaStreamTrack, an RTCRtpReceiver is not exclusively
-	// owned by one Java wrapper: the owning RtpTransceiver keeps its own
-	// reference, and other Java wrappers may have been obtained via separate
-	// getReceivers()/getReceiver() calls. Dropping our reference here is
-	// expected to leave others around, so it is not reported as an error.
-	//
-	// Runs once no other thread sets an observer through this object any more.
-	// WebRTC must let go of an observer set through this object before it is
-	// deleted with the slot. One that another Java object has set since stays.
-	jni::ReleaseHandle(env, receiver, [receiver, slot](bool) {
-		if (slot && jni::RegisteredObservers::Remove(receiver, slot->applied())) {
-			receiver->SetObserver(nullptr);
+		if (receiver == nullptr) {
+			return;
 		}
 
-		receiver->Release();
+		auto slot = RTCRtpReceiverObserverSlot::Take(env, caller, "observerHandle");
+
+		// Unlike e.g. MediaStreamTrack, an RTCRtpReceiver is not exclusively
+		// owned by one Java wrapper: the owning RtpTransceiver keeps its own
+		// reference, and other Java wrappers may have been obtained via separate
+		// getReceivers()/getReceiver() calls. Dropping our reference here is
+		// expected to leave others around, so it is not reported as an error.
+		//
+		// Runs once no other thread sets an observer through this object any more.
+		// WebRTC must let go of an observer set through this object before it is
+		// deleted with the slot. One that another Java object has set since stays.
+		jni::ReleaseHandle(env, receiver, [receiver, slot](bool) {
+			if (slot && jni::RegisteredObservers::Remove(receiver, slot->applied())) {
+				receiver->SetObserver(nullptr);
+			}
+
+			receiver->Release();
+		});
 	});
 }

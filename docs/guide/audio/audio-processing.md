@@ -61,6 +61,8 @@ With this approach, the WebRTC framework automatically applies the audio process
 
 For more control, you can manually process audio streams:
 
+Sample rates in `AudioProcessingStreamConfig` must be positive and divisible by 100 so each 10 ms frame contains a whole number of samples. `AudioConverter` and `AudioResampler` require rates from 100 to 384000 Hz, also divisible by 100; for example, 44100 Hz is accepted and 48099 Hz is rejected.
+
 ```java
 import dev.onvoid.webrtc.media.audio.AudioProcessing;
 import dev.onvoid.webrtc.media.audio.AudioProcessingConfig;

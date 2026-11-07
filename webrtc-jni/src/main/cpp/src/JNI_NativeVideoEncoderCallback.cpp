@@ -15,20 +15,23 @@
  */
 
 #include "JNI_NativeVideoEncoderCallback.h"
+#include "JavaBoundary.h"
 #include "media/video/codec/VideoEncoderWrapper.h"
 #include "JavaUtils.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_codec_NativeVideoEncoderCallback_onEncodedFrame
 (JNIEnv * env, jclass caller, jlong handle, jobject image)
 {
-	// The Java callback holds its lock and has checked the handle, so the
-	// wrapper cannot be released meanwhile.
-	auto encoder = reinterpret_cast<jni::VideoEncoderWrapper *>(handle);
+	jni::CallFromJava(env, [&]() {
+		// The Java callback holds its lock and has checked the handle, so the
+		// wrapper cannot be released meanwhile.
+		auto encoder = reinterpret_cast<jni::VideoEncoderWrapper *>(handle);
 
-	try {
-		encoder->OnEncodedFrame(env, image);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			encoder->OnEncodedFrame(env, image);
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }

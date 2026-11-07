@@ -15,6 +15,7 @@
  */
 
 #include "JNI_BuiltinAudioDecoderFactory.h"
+#include "JavaBoundary.h"
 #include "media/audio/codec/AudioCodecInfo.h"
 #include "JavaUtils.h"
 
@@ -23,14 +24,16 @@
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_audio_codec_BuiltinAudioDecoderFactory_getBuiltinCodecs
 (JNIEnv * env, jclass caller)
 {
-	try {
-		auto factory = webrtc::CreateBuiltinAudioDecoderFactory();
+	return jni::CallFromJava(env, [&]() -> jobjectArray {
+		try {
+			auto factory = webrtc::CreateBuiltinAudioDecoderFactory();
 
-		return jni::AudioCodecInfo::toJavaArray(env, factory->GetSupportedDecoders()).release();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+			return jni::AudioCodecInfo::toJavaArray(env, factory->GetSupportedDecoders()).release();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-	return nullptr;
+		return nullptr;
+	});
 }

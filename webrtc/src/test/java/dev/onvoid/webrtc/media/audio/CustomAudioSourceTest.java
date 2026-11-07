@@ -46,6 +46,15 @@ class CustomAudioSourceTest extends TestBase {
     }
 
     @Test
+    void rejectsFractionalFrames() {
+        byte[] data = new byte[480 * 2];
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 16, 48099, 1, 480));
+        assertThrows(IllegalArgumentException.class,
+                () -> customAudioSource.pushAudio(data, 16, 48099, 1, 480, 1000L));
+    }
+
+    @Test
     void pushAudioRejectsBadArguments() {
         byte[] data = new byte[480 * 2 * 2];
 

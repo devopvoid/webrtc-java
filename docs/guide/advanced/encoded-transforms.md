@@ -71,7 +71,7 @@ receiver.setTransform(frame -> {
 });
 ```
 
-`setData` takes a `ByteBuffer` (its remaining bytes) or a `byte[]`, and the new payload may be larger or smaller than the old one. The payload is only copied into Java when `getData()` is called, so a transform that looks at the metadata alone costs no copy at all.
+`setData` takes a `ByteBuffer` (its remaining bytes) or a `byte[]`, and the new payload may be larger or smaller than the old one. The payload is only copied into Java when `getData()` is called, so a transform that looks at the metadata alone costs no copy at all. Each transform thread reuses at most 256 KiB of direct scratch memory. Larger payloads use a temporary buffer sized to the frame, released for garbage collection when the transform returns. Workloads with frequent larger frames therefore allocate a buffer for each of them.
 
 A frame, and the buffer `getData()` returned, is valid only while `transform` runs and only on its thread. The buffer's memory is reused for the next frame, so copy what you need to keep. Reading or changing a frame after the transform returned throws an `IllegalStateException`; its metadata stays readable.
 

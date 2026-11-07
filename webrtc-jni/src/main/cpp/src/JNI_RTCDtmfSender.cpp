@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCDtmfSender.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/ObserverSlot.h"
 #include "api/RegisteredObservers.h"
@@ -45,10 +46,12 @@ namespace
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_canInsertDtmf
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
-	CHECK_HANDLEV(sender, false);
+	return jni::CallFromJava(env, [&]() -> jboolean {
+		jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
+		CHECK_HANDLEV(sender, false);
 
-	return static_cast<jboolean>(sender->CanInsertDtmf());
+		return static_cast<jboolean>(sender->CanInsertDtmf());
+	});
 }
 
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_insertDtmf
@@ -86,19 +89,23 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_tones
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_duration
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
-	CHECK_HANDLEV(sender, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
+		CHECK_HANDLEV(sender, 0);
 
-	return static_cast<jint>(sender->duration());
+		return static_cast<jint>(sender->duration());
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_interToneGap
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
-	CHECK_HANDLEV(sender, 0);
+	return jni::CallFromJava(env, [&]() -> jint {
+		jni::NativeLease<webrtc::DtmfSenderInterface> sender(env, caller);
+		CHECK_HANDLEV(sender, 0);
 
-	return static_cast<jint>(sender->inter_tone_gap());
+		return static_cast<jint>(sender->inter_tone_gap());
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_registerObserver
@@ -134,23 +141,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_unregisterObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtmfSender_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtmfSenderInterface * sender = jni::TakeHandle<webrtc::DtmfSenderInterface>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::DtmfSenderInterface * sender = jni::TakeHandle<webrtc::DtmfSenderInterface>(env, caller);
 
-	if (sender == nullptr) {
-		return;
-	}
-
-	auto slot = DtmfSenderObserverSlot::Take(env, caller, "observerHandle");
-
-	// Runs once no other thread registers through this object any more. WebRTC
-	// must let go of an observer registered through this object before it is
-	// deleted with the slot. The RTCRtpSender and other Java objects keep their
-	// own references, so this one need not be the last.
-	jni::ReleaseHandle(env, sender, [sender, slot](bool) {
-		if (slot && jni::RegisteredObservers::Remove(sender, slot->applied())) {
-			sender->UnregisterObserver();
+		if (sender == nullptr) {
+			return;
 		}
 
-		sender->Release();
+		auto slot = DtmfSenderObserverSlot::Take(env, caller, "observerHandle");
+
+		// Runs once no other thread registers through this object any more. WebRTC
+		// must let go of an observer registered through this object before it is
+		// deleted with the slot. The RTCRtpSender and other Java objects keep their
+		// own references, so this one need not be the last.
+		jni::ReleaseHandle(env, sender, [sender, slot](bool) {
+			if (slot && jni::RegisteredObservers::Remove(sender, slot->applied())) {
+				sender->UnregisterObserver();
+			}
+
+			sender->Release();
+		});
 	});
 }

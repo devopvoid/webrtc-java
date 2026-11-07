@@ -40,14 +40,16 @@ import java.util.Objects;
 public abstract class RTCEncodedFrame {
 
 	/**
-	 * Where the payload is copied to. There is one per transform thread, which
-	 * grows to the largest frame seen and is reused for every frame after, so
-	 * reading the payload allocates nothing.
+	 * Where the payload is copied to. Each transform thread reuses a bounded
+	 * buffer. Larger frames get a temporary buffer, retained only by that frame.
 	 */
 	private static final ThreadLocal<ByteBuffer> SCRATCH = new ThreadLocal<>();
 
 	/** The smallest scratch buffer, enough for any audio frame. */
 	private static final int MIN_SCRATCH_CAPACITY = 4096;
+
+	/** Maximum direct memory retained per transform thread (256 KiB). */
+	private static final int MAX_SCRATCH_CAPACITY = 256 * 1024;
 
 	private final Thread owner;
 
@@ -310,6 +312,10 @@ public abstract class RTCEncodedFrame {
 	}
 
 	private static ByteBuffer scratch(int size) {
+		if (size > MAX_SCRATCH_CAPACITY) {
+			return ByteBuffer.allocateDirect(size);
+		}
+
 		ByteBuffer scratch = SCRATCH.get();
 
 		if (scratch == null || scratch.capacity() < size) {
@@ -319,7 +325,7 @@ public abstract class RTCEncodedFrame {
 				capacity = Math.max(capacity, scratch.capacity());
 			}
 			while (capacity < size) {
-				capacity = capacity > Integer.MAX_VALUE / 2 ? Integer.MAX_VALUE : capacity * 2;
+				capacity *= 2;
 			}
 
 			scratch = ByteBuffer.allocateDirect(capacity);

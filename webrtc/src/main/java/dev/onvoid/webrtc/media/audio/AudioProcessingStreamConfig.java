@@ -23,7 +23,16 @@ public class AudioProcessingStreamConfig {
 	public final int channels;
 
 
+	/**
+	 * @param sampleRate the sample rate in Hz, positive and divisible by 100
+	 *                   so a 10 ms frame has an integral sample count.
+	 * @param channels the number of channels.
+	 * @throws IllegalArgumentException if the sample rate cannot represent 10 ms.
+	 */
 	public AudioProcessingStreamConfig(int sampleRate, int channels) {
+		if (sampleRate <= 0 || sampleRate % 100 != 0) {
+			throw new IllegalArgumentException("Sample rate must be positive and divisible by 100, got " + sampleRate);
+		}
 		this.sampleRate = sampleRate;
 		this.channels = channels;
 	}

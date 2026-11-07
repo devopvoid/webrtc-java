@@ -15,34 +15,39 @@
  */
 
 #include "JNI_PowerManagement.h"
+#include "JavaBoundary.h"
 #include "WebRTCContext.h"
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_enableUserActivityInternal
 (JNIEnv * env, jobject caller)
 {
-    jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+	jni::CallFromJava(env, [&]() {
+	    jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 
-	try {
-		context->getPowerManagement()->enableUserActivity();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			context->getPowerManagement()->enableUserActivity();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-	fflush(NULL);
+		fflush(NULL);
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_disableUserActivityInternal
 (JNIEnv * env, jobject caller)
 {
-    jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
+	jni::CallFromJava(env, [&]() {
+	    jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 
-	try {
-		context->getPowerManagement()->disableUserActivity();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			context->getPowerManagement()->disableUserActivity();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-	fflush(NULL);
+		fflush(NULL);
+	});
 }

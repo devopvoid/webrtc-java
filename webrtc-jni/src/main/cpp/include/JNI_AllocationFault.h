@@ -27,6 +27,9 @@ extern "C" {
 	 * Method:    failNextListener
 	 * Signature: ()V
 	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_failNextNativeLease
+	(JNIEnv *, jclass);
+
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_failNextListener
 	(JNIEnv *, jclass);
 

@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCDtlsTransport.h"
+#include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/ObserverSlot.h"
 #include "api/RegisteredObservers.h"
@@ -139,24 +140,26 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserve
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::DtlsTransportInterface * transport = jni::TakeHandle<webrtc::DtlsTransportInterface>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::DtlsTransportInterface * transport = jni::TakeHandle<webrtc::DtlsTransportInterface>(env, caller);
 
-	if (transport == nullptr) {
-		return;
-	}
-
-	auto slot = DtlsTransportObserverSlot::Take(env, caller, "observerHandle");
-
-	// Runs once no other thread registers through this object any more. WebRTC
-	// must let go of an observer registered through this object before it is
-	// deleted with the slot. The connection, its senders and receivers, and
-	// other Java objects keep their own references, so this one need not be
-	// the last.
-	jni::ReleaseHandle(env, transport, [transport, slot](bool) {
-		if (slot && jni::RegisteredObservers::Remove(transport, slot->applied())) {
-			transport->UnregisterObserver();
+		if (transport == nullptr) {
+			return;
 		}
 
-		transport->Release();
+		auto slot = DtlsTransportObserverSlot::Take(env, caller, "observerHandle");
+
+		// Runs once no other thread registers through this object any more. WebRTC
+		// must let go of an observer registered through this object before it is
+		// deleted with the slot. The connection, its senders and receivers, and
+		// other Java objects keep their own references, so this one need not be
+		// the last.
+		jni::ReleaseHandle(env, transport, [transport, slot](bool) {
+			if (slot && jni::RegisteredObservers::Remove(transport, slot->applied())) {
+				transport->UnregisterObserver();
+			}
+
+			transport->Release();
+		});
 	});
 }

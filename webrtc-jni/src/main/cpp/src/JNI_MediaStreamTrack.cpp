@@ -15,6 +15,7 @@
  */
 
 #include "JNI_MediaStreamTrack.h"
+#include "JavaBoundary.h"
 #include "AllocationFault.h"
 #include "NativeHandle.h"
 #include "JavaContext.h"
@@ -65,55 +66,57 @@ namespace
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::MediaStreamTrackInterface * track = jni::TakeHandle<webrtc::MediaStreamTrackInterface>(env, caller);
+	jni::CallFromJava(env, [&]() {
+		webrtc::MediaStreamTrackInterface * track = jni::TakeHandle<webrtc::MediaStreamTrackInterface>(env, caller);
 
-	if (track == nullptr) {
-		return;
-	}
+		if (track == nullptr) {
+			return;
+		}
 
-	// A view holds no reference to the track and does not own its listeners:
-	// the track lives on with whatever owns it, so only this object detaches.
-	if (jni::MediaStreamTrackView::isView(env, caller)) {
-		return;
-	}
+		// A view holds no reference to the track and does not own its listeners:
+		// the track lives on with whatever owns it, so only this object detaches.
+		if (jni::MediaStreamTrackView::isView(env, caller)) {
+			return;
+		}
 
-	// Disposed from a listener of this track, or of another track the same
-	// notification reaches: WebRTC goes on calling the observers of the track
-	// from a copy of their list, and they use the track. Both are freed once
-	// the notification is over.
-	bool inCallback = jni::MediaStreamTrackObserver::InCallback();
-	webrtc::Thread * callbackThread = inCallback ? webrtc::Thread::Current() : nullptr;
+		// Disposed from a listener of this track, or of another track the same
+		// notification reaches: WebRTC goes on calling the observers of the track
+		// from a copy of their list, and they use the track. Both are freed once
+		// the notification is over.
+		bool inCallback = jni::MediaStreamTrackObserver::InCallback();
+		webrtc::Thread * callbackThread = inCallback ? webrtc::Thread::Current() : nullptr;
 
-	// Listeners still registered are taken off the track before it goes. Their
-	// entries are keyed by this track's address, which a later track can be
-	// given, and an observer left registered would be freed with its entry
-	// while the track (if something else still holds it) can still call it.
-	auto observers = javaContext->removeNativeRefs<jni::MediaStreamTrackObserver>(track);
+		// Listeners still registered are taken off the track before it goes. Their
+		// entries are keyed by this track's address, which a later track can be
+		// given, and an observer left registered would be freed with its entry
+		// while the track (if something else still holds it) can still call it.
+		auto observers = javaContext->removeNativeRefs<jni::MediaStreamTrackObserver>(track);
 
-	for (const auto & observer : observers) {
-		observer->detach();
-		track->UnregisterObserver(observer.get());
-	}
+		for (const auto & observer : observers) {
+			observer->detach();
+			track->UnregisterObserver(observer.get());
+		}
 
-	jni::ReleaseHandle(env, track, [track, observers, inCallback, callbackThread](bool deferred) {
-		// The observers go with the last copy of this.
-		auto release = [track, observers, report = deferred || inCallback]() {
-			if (track->Release() != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-				jni::NativeHandle::ReportNotDeleted(report);
+		jni::ReleaseHandle(env, track, [track, observers, inCallback, callbackThread](bool deferred) {
+			// The observers go with the last copy of this.
+			auto release = [track, observers, report = deferred || inCallback]() {
+				if (track->Release() != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+					jni::NativeHandle::ReportNotDeleted(report);
+				}
+			};
+
+			if (callbackThread != nullptr) {
+				// Also when a method of another thread held the track until now:
+				// the notification may still be under way on the callback's thread.
+				callbackThread->PostTask(std::move(release));
 			}
-		};
-
-		if (callbackThread != nullptr) {
-			// Also when a method of another thread held the track until now:
-			// the notification may still be under way on the callback's thread.
-			callbackThread->PostTask(std::move(release));
-		}
-		else if (inCallback && !deferred) {
-			jni::MediaStreamTrackObserver::AfterNotification(std::move(release));
-		}
-		else {
-			release();
-		}
+			else if (inCallback && !deferred) {
+				jni::MediaStreamTrackObserver::AfterNotification(std::move(release));
+			}
+			else {
+				release();
+			}
+		});
 	});
 }
 
@@ -150,19 +153,23 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getId
 JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_isEnabled
 (JNIEnv * env, jobject caller)
 {
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
-	CHECK_HANDLEV(track, false);
+	return jni::CallFromJava(env, [&]() -> jboolean {
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
+		CHECK_HANDLEV(track, false);
 
-	return static_cast<jboolean>(track->enabled());
+		return static_cast<jboolean>(track->enabled());
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_setEnabled
 (JNIEnv * env, jobject caller, jboolean enabled)
 {
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
-	CHECK_HANDLE(track);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
 
-	track->set_enabled(static_cast<bool>(enabled));
+		track->set_enabled(static_cast<bool>(enabled));
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getState
@@ -183,73 +190,81 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_getState
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addEndedEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
-	CHECK_HANDLE(track);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
 
-	try {
-		AddListener(env, track, jListener, jni::MediaStreamTrackEvent::ended);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			AddListener(env, track, jListener, jni::MediaStreamTrackEvent::ended);
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeEndedEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
-	CHECK_HANDLE(track);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
 
-	try {
-		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener), track, static_cast<int>(jni::MediaStreamTrackEvent::ended));
+		try {
+			auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener), track, static_cast<int>(jni::MediaStreamTrackEvent::ended));
 
-		if (observerPtr) {
-			observerPtr->detach();
-			track->UnregisterObserver(observerPtr.get());
+			if (observerPtr) {
+				observerPtr->detach();
+				track->UnregisterObserver(observerPtr.get());
 
-			// Removed in a callback, maybe its own: freed once the notification
-			// is over.
-			jni::MediaStreamTrackObserver::AfterNotification([observerPtr]() {});
+				// Removed in a callback, maybe its own: freed once the notification
+				// is over.
+				jni::MediaStreamTrackObserver::AfterNotification([observerPtr]() {});
+			}
 		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_addMuteEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
-	CHECK_HANDLE(track);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
 
-	try {
-		AddListener(env, track, jListener, jni::MediaStreamTrackEvent::mute);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			AddListener(env, track, jListener, jni::MediaStreamTrackEvent::mute);
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaStreamTrack_removeMuteEventListener
 (JNIEnv * env, jobject caller, jobject jListener)
 {
-	jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
-	CHECK_HANDLE(track);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
 
-	try {
-		auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener), track, static_cast<int>(jni::MediaStreamTrackEvent::mute));
+		try {
+			auto observerPtr = javaContext->removeNativeRef<jni::MediaStreamTrackObserver>(env, jni::JavaLocalRef<jobject>(env, jListener), track, static_cast<int>(jni::MediaStreamTrackEvent::mute));
 
-		if (observerPtr) {
-			observerPtr->detach();
-			track->UnregisterObserver(observerPtr.get());
+			if (observerPtr) {
+				observerPtr->detach();
+				track->UnregisterObserver(observerPtr.get());
 
-			// Removed in a callback, maybe its own: freed once the notification
-			// is over.
-			jni::MediaStreamTrackObserver::AfterNotification([observerPtr]() {});
+				// Removed in a callback, maybe its own: freed once the notification
+				// is over.
+				jni::MediaStreamTrackObserver::AfterNotification([observerPtr]() {});
+			}
 		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }

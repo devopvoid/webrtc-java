@@ -15,6 +15,7 @@
  */
 
 #include "JNI_NativeVideoDecoderCallback.h"
+#include "JavaBoundary.h"
 #include "media/video/codec/VideoDecoderWrapper.h"
 #include "JavaUtils.h"
 
@@ -23,24 +24,26 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_codec_NativeVideoDecoderCallback_onDecodedFrame
 (JNIEnv * env, jclass caller, jlong handle, jobject frame, jint decodeTimeMs, jint qp)
 {
-	// The Java callback holds its lock and has checked the handle, so the
-	// wrapper cannot be released meanwhile.
-	auto decoder = reinterpret_cast<jni::VideoDecoderWrapper *>(handle);
+	jni::CallFromJava(env, [&]() {
+		// The Java callback holds its lock and has checked the handle, so the
+		// wrapper cannot be released meanwhile.
+		auto decoder = reinterpret_cast<jni::VideoDecoderWrapper *>(handle);
 
-	std::optional<int32_t> decodeTime;
-	std::optional<uint8_t> frameQp;
+		std::optional<int32_t> decodeTime;
+		std::optional<uint8_t> frameQp;
 
-	if (decodeTimeMs >= 0) {
-		decodeTime = static_cast<int32_t>(decodeTimeMs);
-	}
-	if (qp >= 0 && qp <= 255) {
-		frameQp = static_cast<uint8_t>(qp);
-	}
+		if (decodeTimeMs >= 0) {
+			decodeTime = static_cast<int32_t>(decodeTimeMs);
+		}
+		if (qp >= 0 && qp <= 255) {
+			frameQp = static_cast<uint8_t>(qp);
+		}
 
-	try {
-		decoder->OnDecodedFrame(env, frame, decodeTime, frameQp);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			decoder->OnDecodedFrame(env, frame, decodeTime, frameQp);
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }

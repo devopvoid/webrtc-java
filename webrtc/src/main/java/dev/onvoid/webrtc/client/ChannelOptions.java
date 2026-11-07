@@ -102,13 +102,13 @@ public final class ChannelOptions {
 		 * Makes the channel unreliable: a message is sent at most this many
 		 * more times. Excludes {@link #maxPacketLifeTime(Duration)}.
 		 *
-		 * @param retransmits 0 or more.
+		 * @param retransmits 0 to 65535.
 		 *
 		 * @return this builder.
 		 */
 		public Builder maxRetransmits(int retransmits) {
-			if (retransmits < 0) {
-				throw new IllegalArgumentException("Retransmits must be 0 or more, got " + retransmits);
+			if (retransmits < 0 || retransmits > 65535) {
+				throw new IllegalArgumentException("Retransmits must be between 0 and 65535, got " + retransmits);
 			}
 
 			this.maxRetransmits = retransmits;
@@ -119,18 +119,18 @@ public final class ChannelOptions {
 		 * Makes the channel unreliable: a message is retransmitted only for
 		 * this long. Excludes {@link #maxRetransmits(int)}.
 		 *
-		 * @param lifeTime how long a message may be retransmitted.
+		 * @param lifeTime how long a message may be retransmitted, from zero to
+		 *                 65535 milliseconds. Positive fractions of a millisecond
+		 *                 are rounded down (so a sub-millisecond duration is zero).
 		 *
 		 * @return this builder.
 		 */
 		public Builder maxPacketLifeTime(Duration lifeTime) {
-			long millis = lifeTime.toMillis();
-
-			if (millis < 0 || millis > Integer.MAX_VALUE) {
+			if (lifeTime.isNegative() || lifeTime.compareTo(Duration.ofMillis(65535)) > 0) {
 				throw new IllegalArgumentException("Invalid packet life time " + lifeTime);
 			}
 
-			this.maxPacketLifeTime = (int) millis;
+			this.maxPacketLifeTime = (int) lifeTime.toMillis();
 			return this;
 		}
 

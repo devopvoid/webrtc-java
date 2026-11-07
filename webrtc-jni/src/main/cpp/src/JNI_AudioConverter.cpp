@@ -93,19 +93,21 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_dispose
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioConverter_initialize
 (JNIEnv * env, jobject caller, jint srcSampleRate, jint srcChannels, jint dstSampleRate, jint dstChannels)
 {
-	// 10 ms frames
-	size_t srcFrames = webrtc::AudioProcessing::GetFrameSize(srcSampleRate);
-	size_t dstFrames = webrtc::AudioProcessing::GetFrameSize(dstSampleRate);
+	jni::CallFromJava(env, [&]() {
+		// 10 ms frames
+		size_t srcFrames = webrtc::AudioProcessing::GetFrameSize(srcSampleRate);
+		size_t dstFrames = webrtc::AudioProcessing::GetFrameSize(dstSampleRate);
 
-	try {
-		jni::AudioConverter * converter = jni::AudioConverter::create(srcFrames, srcChannels, dstFrames, dstChannels).release();
+		try {
+			jni::AudioConverter * converter = jni::AudioConverter::create(srcFrames, srcChannels, dstFrames, dstChannels).release();
 
-		SetHandle(env, caller, converter);
-	}
-	catch (const std::invalid_argument & e) {
-		ThrowJavaException(env, "java/lang/IllegalArgumentException", e.what());
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+			SetHandle(env, caller, converter);
+		}
+		catch (const std::invalid_argument & e) {
+			ThrowJavaException(env, "java/lang/IllegalArgumentException", e.what());
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }

@@ -21,6 +21,8 @@
 
 namespace
 {
+	// A lease failure belongs to the Java thread that armed it.
+	thread_local bool fail_native_lease = false;
 	std::atomic<bool> fail_listener{ false };
 	std::atomic<bool> fail_encoded_observer{ false };
 }
@@ -37,8 +39,22 @@ namespace jni
 		fail_encoded_observer.store(true);
 	}
 
+	void AllocationFault::FailNextNativeLease()
+	{
+		fail_native_lease = true;
+	}
+
+	void AllocationFault::CheckNativeLease()
+	{
+		if (fail_native_lease) {
+			fail_native_lease = false;
+			throw std::bad_alloc();
+		}
+	}
+
 	void AllocationFault::Disarm()
 	{
+		fail_native_lease = false;
 		fail_listener.store(false);
 		fail_encoded_observer.store(false);
 	}
