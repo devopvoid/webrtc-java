@@ -90,13 +90,13 @@ public final class Encoding {
 		}
 
 		/**
-		 * @param framesPerSecond the highest frame rate of a video track.
+		 * @param framesPerSecond the finite, positive highest frame rate of a video track.
 		 *
 		 * @return this builder.
 		 */
 		public Builder maxFrameRate(double framesPerSecond) {
-			if (framesPerSecond <= 0) {
-				throw new IllegalArgumentException("The frame rate must be positive, got " + framesPerSecond);
+			if (!Double.isFinite(framesPerSecond) || framesPerSecond <= 0) {
+				throw new IllegalArgumentException("The frame rate must be finite and positive, got " + framesPerSecond);
 			}
 
 			this.maxFrameRate = framesPerSecond;
@@ -105,13 +105,13 @@ public final class Encoding {
 
 		/**
 		 * @param factor how much smaller than captured a video track is sent,
-		 *               1 or more.
+		 *               finite and 1 or more.
 		 *
 		 * @return this builder.
 		 */
 		public Builder scaleDownBy(double factor) {
-			if (factor < 1) {
-				throw new IllegalArgumentException("The factor must be 1 or more, got " + factor);
+			if (!Double.isFinite(factor) || factor < 1) {
+				throw new IllegalArgumentException("The factor must be finite and 1 or more, got " + factor);
 			}
 
 			this.scaleDownBy = factor;

@@ -25,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import dev.onvoid.webrtc.media.AudioBackendUnavailableException;
 import dev.onvoid.webrtc.media.Device;
 import dev.onvoid.webrtc.media.DeviceChangeListener;
 import dev.onvoid.webrtc.media.MediaDevices;
@@ -45,9 +46,8 @@ import dev.onvoid.webrtc.media.video.desktop.WindowCapturer;
  * reports no changes, as a Linux machine without PulseAudio, the lists are
  * read on each call instead.
  * <p>
- * A list the platform cannot read is empty: a machine without an audio system
- * has no microphones to offer. A query that fails otherwise throws a {@link
- * MediaException} when the list is read, and errors of the JVM pass through.
+ * A query that fails, including an unavailable audio backend, throws a
+ * {@link MediaException} when the list is read. Errors of the JVM pass through.
  */
 final class DevicesImpl implements Devices {
 
@@ -278,16 +278,6 @@ final class DevicesImpl implements Devices {
 		}
 	}
 
-	/**
-	 * Tells whether a query failed in the platform, which the native layer
-	 * reports as a plain {@code Error} with the message of the C++ exception,
-	 * as when there is no audio system. Its subclasses are errors of the JVM,
-	 * such as an {@code OutOfMemoryError} or an {@code UnsatisfiedLinkError}.
-	 */
-	static boolean platformFailure(Throwable e) {
-		return e.getClass() == Error.class;
-	}
-
 	/** Called on a thread of the system, so it only posts. */
 	private void changed() {
 		media.executor.execute(() -> {
@@ -315,10 +305,6 @@ final class DevicesImpl implements Devices {
 					: new Snapshot<>(Collections.unmodifiableList(new ArrayList<>(devices)), kind, null);
 		}
 		catch (Throwable e) {
-			if (platformFailure(e)) {
-				// No device of the kind, such as without an audio system.
-				return Snapshot.empty();
-			}
 			if (e instanceof Error) {
 				throw (Error) e;
 			}
@@ -333,7 +319,7 @@ final class DevicesImpl implements Devices {
 			return true;
 		}
 		catch (Throwable e) {
-			if (platformFailure(e)) {
+			if (e instanceof AudioBackendUnavailableException) {
 				// The system reports no changes, as Linux without PulseAudio.
 				return false;
 			}

@@ -32,6 +32,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 
 import dev.onvoid.webrtc.media.DeviceChangeListener;
+import dev.onvoid.webrtc.media.AudioBackendUnavailableException;
+import dev.onvoid.webrtc.media.DeviceException;
 import dev.onvoid.webrtc.media.audio.AudioDevice;
 import dev.onvoid.webrtc.media.video.VideoDevice;
 
@@ -81,20 +83,21 @@ class DevicesTests extends ClientTestBase {
 	}
 
 	@Test
-	void platformFailureIsEmpty() {
+	void unavailableBackendThrows() {
 		// What the native layer throws without an audio system.
 		TestSource source = new TestSource();
-		source.microphoneFailure = new Error("PulseAudio: Library not found on system.");
+		source.microphoneFailure = new AudioBackendUnavailableException("PulseAudio: Library not found on system.");
 
 		DevicesImpl devices = devices(source);
 
-		assertEquals(Collections.emptyList(), devices.microphones());
+		assertSame(source.microphoneFailure,
+				assertThrows(MediaException.class, devices::microphones).getCause());
 	}
 
 	@Test
 	void failedQueryThrows() {
 		TestSource source = new TestSource();
-		source.cameraFailure = new IllegalStateException("enumeration failed");
+		source.cameraFailure = new DeviceException("enumeration failed");
 
 		DevicesImpl devices = devices(source);
 
@@ -108,11 +111,19 @@ class DevicesTests extends ClientTestBase {
 
 	@Test
 	void jvmErrorPassesThrough() {
-		// The first read fails, after the listener was registered.
 		TestSource source = new TestSource();
 		source.cameraFailure = new OutOfMemoryError("test");
+		assertSame(source.cameraFailure, assertThrows(OutOfMemoryError.class, () -> devices(source)));
+		assertTrue(source.listeners.isEmpty());
+	}
 
-		OutOfMemoryError e = assertThrows(OutOfMemoryError.class, () -> devices(source));
+	@Test
+	void plainErrorPassesThrough() {
+		// The first read fails, after the listener was registered.
+		TestSource source = new TestSource();
+		source.cameraFailure = new Error("unexpected native failure");
+
+		Error e = assertThrows(Error.class, () -> devices(source));
 
 		assertSame(source.cameraFailure, e);
 		assertTrue(source.listeners.isEmpty());
@@ -121,7 +132,7 @@ class DevicesTests extends ClientTestBase {
 	@Test
 	void jvmErrorPassesThroughUnwatched() {
 		TestSource source = new TestSource();
-		source.watchFailure = new Error("PulseAudio: Could not connect to the context");
+		source.watchFailure = new AudioBackendUnavailableException("PulseAudio: Could not connect to the context");
 		source.cameraFailure = new UnsatisfiedLinkError("getVideoCaptureDevices");
 
 		DevicesImpl devices = devices(source);
@@ -133,7 +144,7 @@ class DevicesTests extends ClientTestBase {
 	void unwatchedReadsEachCall() {
 		// The system reports no changes, as Linux without PulseAudio.
 		TestSource source = new TestSource();
-		source.watchFailure = new Error("PulseAudio: Library not found on system.");
+		source.watchFailure = new AudioBackendUnavailableException("PulseAudio: Library not found on system.");
 
 		DevicesImpl devices = devices(source);
 		source.cameras.add(camera("Plugged"));

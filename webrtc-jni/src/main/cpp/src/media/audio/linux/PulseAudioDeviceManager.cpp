@@ -17,6 +17,7 @@
 #include "media/audio/linux/PulseAudioDeviceManager.h"
 #include "media/audio/linux/PulseAudioLoader.h"
 #include "Exception.h"
+#include "media/AudioBackendUnavailableException.h"
 
 namespace jni
 {
@@ -26,7 +27,7 @@ namespace jni
 		{
             // Try to load PulseAudio symbols dynamically
             if (!PulseAudioLoader::instance().load()) {
-                throw Exception("PulseAudio: Library not found on system.");
+                throw AudioBackendUnavailableException("PulseAudio: Library not found on system.");
             }
 
             // Use the loader instance for function calls
@@ -48,7 +49,7 @@ namespace jni
 			context = pa.pa_context_new(mainloopApi, "MediaDevices");
 
 			if (!context) {
-				pa.pa_threaded_mainloop_free(mainloop);
+				dispose();
 
 				throw Exception("PulseAudio: Could not create context");
 			}
@@ -59,18 +60,19 @@ namespace jni
 			pa.pa_threaded_mainloop_lock(mainloop);
 
 			if (pa.pa_context_connect(context, nullptr, PA_CONTEXT_NOFLAGS, nullptr) < 0) {
-				pa.pa_context_unref(context);
-				pa.pa_threaded_mainloop_free(mainloop);
+				pa.pa_threaded_mainloop_unlock(mainloop);
+				dispose();
 
-				throw Exception("PulseAudio: Could not connect to the context");
+				throw AudioBackendUnavailableException("PulseAudio: Could not connect to the context");
 			}
 
 			while (true) {
 				pa_context_state_t contextState = pa.pa_context_get_state(context);
 
 				if (contextState == PA_CONTEXT_FAILED || contextState == PA_CONTEXT_TERMINATED) {
+					pa.pa_threaded_mainloop_unlock(mainloop);
 					dispose();
-					return;
+					throw AudioBackendUnavailableException("PulseAudio: Context connection failed");
 				}
 				if (contextState == PA_CONTEXT_READY) {
 					break;
@@ -87,6 +89,7 @@ namespace jni
 			pa.pa_threaded_mainloop_unlock(mainloop);
 
 			if (!op) {
+				dispose();
 				throw Exception("PulseAudio: Failed to subscribe context");
 			}
 			pa.pa_operation_unref(op);
@@ -114,6 +117,7 @@ namespace jni
 				context = nullptr;
 			}
 
+			pa.pa_threaded_mainloop_unlock(mainloop);
 			pa.pa_threaded_mainloop_stop(mainloop);
 			pa.pa_threaded_mainloop_free(mainloop);
 
