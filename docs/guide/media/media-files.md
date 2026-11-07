@@ -174,10 +174,12 @@ source.setListener(new MediaPlayerListener() {
 
     @Override
     public void onError(String message) {
-        System.out.println("Playback failed: " + message);
+        System.out.println("Playback error: " + message);
     }
 });
 ```
+
+Output failures are reported through `onError`. A single rejected video frame or audio chunk is dropped without advancing the position for that item; playback continues. These reports are limited to one per second for video and one for audio. Ten consecutive failed deliveries of either kind stop playback in `PAUSED` and produce a final error report. An unexpected C++ exception on the decoder thread also stops playback in `PAUSED`. After either terminal failure, `play()` and `seek()` have no effect: close the player and create a new one to retry.
 
 ::: warning
 Every call arrives on the player's own event thread, never on the thread that called `play()`, `pause()` or `close()`, and never on the one decoding the media. The calls come one at a time, in the order the player went through what they report, so a listener needs no locking of its own against itself. A command returns without waiting for its state change to be reported, so `getState()` can already read a later state than the call in progress reports. `close()` returns once the listener has been told of everything, `CLOSED` last.

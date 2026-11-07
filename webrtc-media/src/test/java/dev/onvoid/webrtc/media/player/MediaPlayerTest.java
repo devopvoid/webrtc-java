@@ -519,10 +519,14 @@ class MediaPlayerTest {
 			// The late landing, left over from the seek once the source had
 			// started over, used to send the reader back before 7.8 s, so that
 			// the last pictures played again before the next pass.
-			assertTrue(positions.get(0) > 7_800_000, "not from the position: " + positions);
-			assertTrue(positions.get(1) < 1_000_000, "next pass not from the start: " + positions);
+			// A sink runs inside the push, before its result is known. The
+			// position it sees belongs to the last successful delivery: first
+			// the seek target, then the picture at 8 s, then the next pass.
+			assertEquals(7_800_000L, positions.get(0));
+			assertTrue(positions.get(1) > 7_800_000, "not from the position: " + positions);
+			assertTrue(positions.get(2) < 1_000_000, "next pass not from the start: " + positions);
 
-			for (int i = 2; i < positions.size(); i++) {
+			for (int i = 3; i < positions.size(); i++) {
 				assertTrue(positions.get(i) > positions.get(i - 1),
 						"position went back at frame " + i + ": " + positions);
 			}
@@ -678,18 +682,34 @@ class MediaPlayerTest {
 	void positionCountsFromTheFirstFrame() throws Exception {
 		try (Playback playback = new Playback(new MediaReader(
 				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
-			playback.player.play();
+			AtomicLong firstDeliveredFramePositionUs = new AtomicLong(-1);
+			AudioTrackSink afterVideo = (data, bits, rate, ch, count) -> {
+				// Both sinks run on the pacer thread. An audio callback after
+				// a video callback sees the completed video push, whereas the
+				// video callback itself still sees the last accepted audio.
+				if (playback.frames.get() > 0) {
+					firstDeliveredFramePositionUs.compareAndSet(-1, playback.player.getPositionUs());
+				}
+			};
+			playback.audioTrack.addSink(afterVideo);
 
-			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+			try {
+				playback.player.play();
 
-			// Video starts a second after the source does.
-			long first = playback.firstFramePositionUs.get();
+				assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
 
-			assertTrue(Math.abs(first - 1_000_000) < 20_000, "first frame at " + first + " us");
+				// Video starts a second after the source does. Read its
+				// position only once delivery has returned successfully.
+				assertEquals(1_000_000, firstDeliveredFramePositionUs.get(),
+						"position after the first video delivery");
 
-			long end = playback.player.getPositionUs();
+				long end = playback.player.getPositionUs();
 
-			assertTrue(end > 3_900_000 && end < 4_100_000, "ended at " + end + " us");
+				assertTrue(end > 3_900_000 && end < 4_100_000, "ended at " + end + " us");
+			}
+			finally {
+				playback.audioTrack.removeSink(afterVideo);
+			}
 		}
 	}
 
@@ -1702,8 +1722,8 @@ class MediaPlayerTest {
 		final List<Integer> silentChunks = Collections.synchronizedList(new ArrayList<>());
 
 		private final VideoTrackSink videoSink = frame -> {
-			// The pacer delivers on its own thread, having just moved the
-			// position to the frame's presentation time.
+			// This callback runs inside the push. The position still belongs
+			// to the last successful delivery until this push returns.
 			long positionUs = Playback.this.player.getPositionUs();
 
 			if (firstFramePositionUs.get() < 0) {

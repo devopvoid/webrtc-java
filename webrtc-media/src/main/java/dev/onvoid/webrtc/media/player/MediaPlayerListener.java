@@ -56,12 +56,20 @@ public interface MediaPlayerListener {
 	}
 
 	/**
-	 * Playback stopped because something went wrong. The player is left
+	 * A decoding or output error occurred. A dropped output item is reported
+	 * at most once per second per media kind, while playback continues. Its
+	 * position does not advance for that item.
+	 * <p>
+	 * A recoverable decoding error leaves the player
 	 * {@link MediaPlayerState#PAUSED} where it failed: playing again carries
 	 * on past what failed, and a seek moves away from it, though a source
 	 * that cannot be read at all fails again.
+	 * <p>
+	 * An unexpected decoder-thread exception or ten consecutive output
+	 * failures of either media kind stops playback permanently in PAUSED.
+	 * Close the player and create a new one to try again.
 	 *
-	 * @param message What went wrong, as FFmpeg described it.
+	 * @param message What went wrong.
 	 */
 	default void onError(String message) {
 	}

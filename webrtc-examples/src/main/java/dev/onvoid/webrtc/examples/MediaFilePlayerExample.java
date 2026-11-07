@@ -588,8 +588,11 @@ public class MediaFilePlayerExample {
 
                 @Override
                 public void onError(String message) {
-                    LOG.warning("Playback failed: " + message);
-                    stopIfCurrent();
+                    LOG.warning("Playback error: " + message);
+                    // A rejected output item does not stop playback.
+                    if (source.getState() == MediaPlayerState.PAUSED) {
+                        stopIfCurrent();
+                    }
                 }
             });
 

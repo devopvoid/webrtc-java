@@ -150,8 +150,11 @@ public class MediaFileExample {
 
                     @Override
                     public void onError(String message) {
-                        System.out.println("Playback failed: " + message);
-                        finished.countDown();
+                        System.out.println("Playback error: " + message);
+                        // A rejected output item is reported while playback continues.
+                        if (source.getState() == MediaPlayerState.PAUSED) {
+                            finished.countDown();
+                        }
                     }
                 });
 

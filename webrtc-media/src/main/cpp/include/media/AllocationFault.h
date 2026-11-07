@@ -47,6 +47,11 @@ namespace ffmpeg
 			static void FailNextQueueRoom();
 			// Forgets a fault that has not fired.
 			static void Disarm();
+			static void FailDecoderAllocation();
+			static void CheckDecoderAllocation();
+			// Rejects the next count output items; negative means indefinitely.
+			static void FailOutput(bool video, int count);
+			static bool CheckOutputFailure(bool video);
 			// Whether a fault is armed that has not fired.
 			static bool IsArmed();
 			// Throws std::bad_alloc if a fault is armed, and disarms it.

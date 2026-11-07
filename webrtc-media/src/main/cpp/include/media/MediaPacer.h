@@ -22,6 +22,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -99,7 +100,11 @@ namespace ffmpeg
 			MediaPacer(const MediaPacer &) = delete;
 			MediaPacer & operator=(const MediaPacer &) = delete;
 
+			// Set before Start; called without the pacer lock.
+			void SetErrorHandler(std::function<void(const char *, int, bool)> handler);
 			void Start();
+			// Stops accepting and delivering items, without joining this thread.
+			void Cancel();
 
 			// Stops the thread and drops whatever is still queued. Safe to
 			// call more than once.
@@ -225,8 +230,19 @@ namespace ffmpeg
 			// lock of ours. The time on the WebRTC clock is worked out by the
 			// caller while it still holds the lock and passed in, so that
 			// neither of these reads the mapping unguarded.
-			void DeliverVideo(VideoItem item, int64_t mapped_us);
-			void DeliverAudio(const AudioItem & item, int64_t mapped_us);
+			int DeliverVideo(VideoItem item, int64_t mapped_us);
+			int DeliverAudio(const AudioItem & item, int64_t mapped_us);
+
+			struct OutputStatus
+			{
+				int consecutive_failures = 0;
+				bool reported = false;
+				int64_t last_report_us = 0;
+			};
+			void CheckOutput(OutputStatus & status, const char * media, int result);
+			OutputStatus video_output_;
+			OutputStatus audio_output_;
+			std::function<void(const char *, int, bool)> error_handler_;
 
 			const webrtc_java_api * api_;
 			void * video_source_;
