@@ -15,6 +15,7 @@
  */
 
 #include "JNI_LeakDetector.h"
+#include "JavaBoundary.h"
 #include "JNI_WebRTC.h"
 #include "LeakDetection.h"
 #include "JavaUtils.h"
@@ -81,41 +82,43 @@ namespace jni
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_LeakDetector_enableNative
 (JNIEnv * env, jclass)
 {
-	if (enabled.load()) {
-		return;
-	}
+	jni::CallFromJava(env, [&]() {
+		if (enabled.load()) {
+			return;
+		}
 
-	jclass cls = env->FindClass(PKG_INTERNAL "NativeObject");
+		jclass cls = env->FindClass(PKG_INTERNAL "NativeObject");
 
-	if (cls == nullptr) {
-		return;
-	}
+		if (cls == nullptr) {
+			return;
+		}
 
-	jmethodID bound = env->GetMethodID(cls, "nativeHandleBound", "()V");
+		jmethodID bound = env->GetMethodID(cls, "nativeHandleBound", "()V");
 
-	if (bound == nullptr) {
+		if (bound == nullptr) {
+			env->DeleteLocalRef(cls);
+			return;
+		}
+
+		jmethodID released = env->GetMethodID(cls, "nativeHandleReleased", "()V");
+
+		if (released == nullptr) {
+			env->DeleteLocalRef(cls);
+			return;
+		}
+
+		nativeObjectClass = static_cast<jclass>(env->NewGlobalRef(cls));
 		env->DeleteLocalRef(cls);
-		return;
-	}
 
-	jmethodID released = env->GetMethodID(cls, "nativeHandleReleased", "()V");
+		if (nativeObjectClass == nullptr) {
+			return;
+		}
 
-	if (released == nullptr) {
-		env->DeleteLocalRef(cls);
-		return;
-	}
+		boundMethod = bound;
+		releasedMethod = released;
 
-	nativeObjectClass = static_cast<jclass>(env->NewGlobalRef(cls));
-	env->DeleteLocalRef(cls);
+		enabled.store(true, std::memory_order_release);
 
-	if (nativeObjectClass == nullptr) {
-		return;
-	}
-
-	boundMethod = bound;
-	releasedMethod = released;
-
-	enabled.store(true, std::memory_order_release);
-
-	SetNativeHandleHook(&OnNativeHandleSet);
+		SetNativeHandleHook(&OnNativeHandleSet);
+	});
 }

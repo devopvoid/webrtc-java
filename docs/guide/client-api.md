@@ -684,6 +684,8 @@ DataChannel positions = peer.createChannel("positions", ChannelOptions.builder()
         .build());
 ```
 
+`maxRetransmits(int)` accepts 0 to 65535 retransmissions. `maxPacketLifeTime(Duration)` accepts nonnegative durations up to 65535 milliseconds; positive fractions of a millisecond are rounded down, so a duration below one millisecond becomes zero. The two limits exclude each other. Values outside these ranges are rejected before native processing.
+
 `negotiatedId(int)` creates a channel both peers set up themselves with the same id, without announcing it; such a channel never shows up in `onChannel`. The [Data Channels](/guide/data/data-channels) guide explains the options in detail.
 
 ## WHIP and WHEP

@@ -105,7 +105,7 @@ public class CustomAudioSource extends AudioTrackSource {
 	 *                        from {@value #MIN_SAMPLE_RATE} to {@value #MAX_SAMPLE_RATE}.
 	 * @param channels        The number of audio channels: 1, 2, 4, 6 or 8.
 	 * @param frameCount      The number of frames in the provided audio data,
-	 *                        which must be {@code sampleRate / 100}. A frame
+	 *                        which must be {@code sampleRate / 100} with a rate divisible by 100. A frame
 	 *                        holds one sample for each channel, so 10 ms at
 	 *                        48 kHz is 480 frames whatever the channel count.
 	 *
@@ -141,7 +141,7 @@ public class CustomAudioSource extends AudioTrackSource {
 	 *                        from {@value #MIN_SAMPLE_RATE} to {@value #MAX_SAMPLE_RATE}.
 	 * @param channels        The number of audio channels: 1, 2, 4, 6 or 8.
 	 * @param frameCount      The number of frames in the provided audio data,
-	 *                        which must be {@code sampleRate / 100}.
+	 *                        which must be {@code sampleRate / 100} with a rate divisible by 100.
 	 * @param timestampUs     The capture time of the chunk, on the clock of
 	 *                        {@link dev.onvoid.webrtc.media.SyncClock#currentTimeUs()}.
 	 *
@@ -187,9 +187,9 @@ public class CustomAudioSource extends AudioTrackSource {
 					"Audio must be %d-bit PCM, got %d bits per sample",
 					BITS_PER_SAMPLE, bits_per_sample));
 		}
-		if (sampleRate < MIN_SAMPLE_RATE || sampleRate > MAX_SAMPLE_RATE) {
+		if (sampleRate < MIN_SAMPLE_RATE || sampleRate > MAX_SAMPLE_RATE || sampleRate % 100 != 0) {
 			throw new IllegalArgumentException(String.format(
-					"Sample rate must be between %d and %d Hz, got %d",
+					"Sample rate must be between %d and %d Hz and divisible by 100, got %d",
 					MIN_SAMPLE_RATE, MAX_SAMPLE_RATE, sampleRate));
 		}
 		if (channels != 1 && (channels <= 0 || channels > MAX_CHANNELS || channels % 2 != 0)) {

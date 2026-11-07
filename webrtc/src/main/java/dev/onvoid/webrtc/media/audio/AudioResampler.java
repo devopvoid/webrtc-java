@@ -58,8 +58,8 @@ public class AudioResampler extends DisposableNativeObject {
 	 * Creates a new {@code AudioResampler} with specified sampling frequency
 	 * parameters.
 	 *
-	 * @param sourceSampleRate The sampling frequency of the input signal.
-	 * @param targetSampleRate The sampling frequency of the output signal.
+	 * @param sourceSampleRate The sampling frequency of the input signal, divisible by 100.
+	 * @param targetSampleRate The sampling frequency of the output signal, divisible by 100.
 	 * @param channels         The number of audio channels to resample.
 	 */
 	public AudioResampler(int sourceSampleRate, int targetSampleRate, int channels) {
@@ -116,13 +116,18 @@ public class AudioResampler extends DisposableNativeObject {
 										byte[] samplesOut, int dstSamplesPerChannel, int channels);
 
 	/**
-	 * Returns the number of samples a buffer needs to hold for ~10ms of a single audio channel at a given sample rate.
+	 * Returns the number of samples a buffer needs to hold for exactly 10 ms of a single audio channel at a given sample rate.
 	 *
-	 * @param sampleRate The sample rate.
+	 * @param sampleRate The sample rate, 100 to 384000 Hz and divisible by 100.
+	 *
+	 * @throws IllegalArgumentException if the rate is outside this range or not divisible by 100.
 	 *
 	 * @return The number of samples per channel.
 	 */
 	public static int getSamplesPerChannel(int sampleRate) {
+		if (sampleRate < 100 || sampleRate > MAX_SAMPLES_PER_CHANNEL * 100 || sampleRate % 100 != 0) {
+			throw new IllegalArgumentException("Sample rate must be between 100 and 384000 Hz and divisible by 100, got " + sampleRate);
+		}
 		return sampleRate / 100;
 	}
 

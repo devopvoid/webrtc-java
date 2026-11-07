@@ -52,7 +52,7 @@ public class AudioConverter extends DisposableNativeObject {
 	 * @param dstChannels   The number of audio channels of the output signal.
 	 *
 	 * @throws IllegalArgumentException if a sampling frequency is not between
-	 *                                  100 Hz and 384 kHz, or a channel count
+	 *                                  100 Hz and 384 kHz or not divisible by 100, or a channel count
 	 *                                  not between 1 and 8.
 	 */
 	public AudioConverter(int srcSampleRate, int srcChannels, int dstSampleRate,
@@ -120,9 +120,9 @@ public class AudioConverter extends DisposableNativeObject {
 	private native void convertInternal(byte[] src, int nSrcSamples, byte[] dst, int nDstSamples);
 
 	private static void checkSampleRate(int sampleRate, String name) {
-		if (sampleRate < 100 || sampleRate > MAX_SAMPLE_RATE) {
+		if (sampleRate < 100 || sampleRate > MAX_SAMPLE_RATE || sampleRate % 100 != 0) {
 			throw new IllegalArgumentException("Invalid " + name + " sampling frequency: "
-					+ sampleRate + ", must be between 100 and " + MAX_SAMPLE_RATE);
+					+ sampleRate + ", must be between 100 and " + MAX_SAMPLE_RATE + " and divisible by 100");
 		}
 	}
 

@@ -86,7 +86,7 @@ The call checks its arguments and throws `IllegalArgumentException` rather than 
 - Samples must be **16-bit** signed PCM in the platform byte order, with the channels interleaved.
 - The array must hold at least `frameCount * channels * 2` bytes. A longer array is fine; only that many bytes are read.
 - One call carries one chunk of exactly **10 ms**, so `frameCount` must be `sampleRate / 100`. Split audio of any other length, such as 20 ms buffers, into 10 ms chunks first, or let the [client API](/guide/client-api) do it.
-- The sample rate must lie between 8000 and 192000 Hz, and the channel count must be 1, 2, 4, 6 or 8.
+- The sample rate must lie between 8000 and 192000 Hz and be divisible by 100, and the channel count must be 1, 2, 4, 6 or 8.
 - A chunk may hold at most `CustomAudioSource.MAX_SAMPLES_PER_PUSH` samples counting every channel, which rules out the highest rates with many channels: 96 kHz with 8 channels or 192 kHz with 4 is the limit.
 - `frameCount` counts frames, not samples and not bytes. A frame holds one sample per channel, so 10 ms at 48 kHz is 480 frames whether it is mono or stereo.
 

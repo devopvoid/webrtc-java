@@ -15,6 +15,7 @@
  */
 
 #include "NativeHandle.h"
+#include "AllocationFault.h"
 #include "JavaClassLoader.h"
 #include "JavaRef.h"
 #include "JavaUtils.h"
@@ -140,6 +141,7 @@ namespace jni
 				return 0;
 			}
 
+			AllocationFault::CheckNativeLease();
 			stripe.entries[handle].uses++;
 
 			return handle;
@@ -205,6 +207,7 @@ namespace jni
 			std::lock_guard<std::mutex> lock(stripe.mutex);
 
 			// The caller's own use keeps the entry.
+			AllocationFault::CheckNativeLease();
 			stripe.entries[handle].uses++;
 		}
 
