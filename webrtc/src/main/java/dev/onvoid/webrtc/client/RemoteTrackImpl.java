@@ -55,6 +55,8 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 
 	private volatile boolean ended;
 
+	private Throwable releaseFailure;
+
 	// Confined to the peer's event executor.
 
 	private boolean endDelivered;
@@ -218,22 +220,21 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 	}
 
 	/** Detaches everything from the native track, on the control executor. */
-	void end() {
+	Throwable end() {
 		if (ended) {
-			return;
+			return releaseFailure;
 		}
 
 		ended = true;
-		detachSinks();
-
-		try {
-			track.removeTrackMuteListener(muteListener);
-			track.dispose();
-			receiver.dispose();
+		Throwable failure = LocalTrackImpl.attempt(null, this::detachSinks);
+		failure = LocalTrackImpl.attempt(failure, () -> track.removeTrackMuteListener(muteListener));
+		failure = LocalTrackImpl.attempt(failure, track::dispose);
+		failure = LocalTrackImpl.attempt(failure, receiver::dispose);
+		if (failure != null) {
+			releaseFailure = new WebRtcException("Releasing " + this + " failed", failure);
+			peer.rtc.reportError(releaseFailure);
 		}
-		catch (Throwable e) {
-			peer.rtc.reportError(e);
-		}
+		return releaseFailure;
 	}
 
 	/** Called once, on the control executor, while the native track exists. */

@@ -95,11 +95,14 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 
 	@Override
 	void detachSinks() {
+		Throwable failure = null;
 		for (AudioDispatcher dispatcher : dispatchers) {
-			track.removeSink(dispatcher);
-			dispatcher.close();
+			failure = LocalTrackImpl.attempt(failure, () -> track.removeSink(dispatcher));
+			failure = LocalTrackImpl.attempt(failure, dispatcher::close);
 		}
-
+		if (failure != null) {
+			throw new WebRtcException("Removing track sinks failed", failure);
+		}
 		dispatchers.clear();
 	}
 }

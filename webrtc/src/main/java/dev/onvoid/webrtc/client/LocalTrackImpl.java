@@ -66,7 +66,7 @@ abstract class LocalTrackImpl implements LocalTrack {
 	/** A sender registers once, however often it is given this track. */
 	private final Set<SenderImpl> senders = new LinkedHashSet<>();
 
-	private final List<Runnable> endedHandlers = new ArrayList<>();
+	private final List<EndedHandler> endedHandlers = new ArrayList<>();
 
 	private boolean ended;
 
@@ -114,11 +114,12 @@ abstract class LocalTrackImpl implements LocalTrack {
 
 		synchronized (this) {
 			if (!endFired) {
-				endedHandlers.add(handler);
+				EndedHandler entry = new EndedHandler(handler);
+				endedHandlers.add(entry);
 
 				return () -> {
 					synchronized (LocalTrackImpl.this) {
-						endedHandlers.remove(handler);
+						endedHandlers.remove(entry);
 					}
 				};
 			}
@@ -228,7 +229,6 @@ abstract class LocalTrackImpl implements LocalTrack {
 
 			ended = true;
 			using = new ArrayList<>(senders);
-			senders.clear();
 		}
 
 		List<CompletableFuture<Void>> detached = new ArrayList<>();
@@ -238,7 +238,10 @@ abstract class LocalTrackImpl implements LocalTrack {
 		}
 
 		CompletableFuture.allOf(detached.toArray(new CompletableFuture[0]))
-				.whenComplete((ignored, error) -> media.executor.execute(this::release));
+				.whenComplete((ignored, error) -> {
+					Runnable finish = () -> release(error);
+					media.executor.execute(finish, () -> finishRelease(new PeerClosedException("The runtime is closed")));
+				});
 
 		return closedInternal;
 	}
@@ -250,7 +253,14 @@ abstract class LocalTrackImpl implements LocalTrack {
 	void beforeRelease() {
 	}
 
-	private void release() {
+	private void release(Throwable detachFailure) {
+		// A sender may still use the track and its source. Keep both alive
+		// until the runtime can account for the failed close.
+		if (detachFailure != null) {
+			finishRelease(detachFailure);
+			return;
+		}
+
 		MediaStreamTrack last;
 		Runnable lastRelease;
 
@@ -265,17 +275,20 @@ abstract class LocalTrackImpl implements LocalTrack {
 		failure = attempt(failure, last::dispose);
 		failure = attempt(failure, lastRelease);
 
+		finishRelease(failure);
+	}
+
+	private void finishRelease(Throwable failure) {
 		if (failure == null) {
 			media.forget(this);
 		}
 		else {
-			// Kept among the tracks, so that the runtime, which closes them
-			// again, sees what was left and leaves the factory undisposed.
+			// Retained so runtime shutdown sees the failure and keeps the factory.
 			failure = new WebRtcException("Releasing " + this + " failed", failure);
 			rtc.reportError(failure);
 		}
 
-		List<Runnable> handlers;
+		List<EndedHandler> handlers;
 
 		synchronized (this) {
 			endFired = true;
@@ -287,9 +300,9 @@ abstract class LocalTrackImpl implements LocalTrack {
 		// complete after the handlers ran, and the runtime cannot stop the
 		// event executor in between.
 		media.events.execute(() -> {
-			for (Runnable handler : handlers) {
+			for (EndedHandler handler : handlers) {
 				try {
-					handler.run();
+					handler.handler.run();
 				}
 				catch (Throwable e) {
 					rtc.reportError(e);
@@ -319,12 +332,25 @@ abstract class LocalTrackImpl implements LocalTrack {
 				return e;
 			}
 
-			failure.addSuppressed(e);
+			if (failure != e) {
+				failure.addSuppressed(e);
+			}
 		}
 
 		return failure;
 	}
 
+
+
+	private static final class EndedHandler {
+
+		final Runnable handler;
+
+
+		EndedHandler(Runnable handler) {
+			this.handler = handler;
+		}
+	}
 
 
 	/** What {@link #replaceNative} replaced. */
