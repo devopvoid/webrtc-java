@@ -1032,6 +1032,32 @@ class HttpSessionTests extends ClientTestBase {
 	}
 
 	@Test
+	void recoveryPolicyRetriesHttpFailures() throws Exception {
+		ManualTimer timer = new ManualTimer();
+		WebRtc client = clientRuntime(builder -> builder.timer(timer));
+		CompletableFuture<RecoveryEvent> retry = new CompletableFuture<>();
+		CompletableFuture<RecoveryEvent> exhausted = new CompletableFuture<>();
+		RecoveryPolicy policy = RecoveryPolicy.builder().maxAttempts(2).onEvent(event -> {
+			if (event.state() == RecoveryEvent.State.RETRYING) retry.complete(event);
+			if (event.state() == RecoveryEvent.State.EXHAUSTED) exhausted.complete(event);
+		}).build();
+		try (TestHttpEndpoint endpoint = restartingEndpoint(new ArrayList<>())) {
+			endpoint.iceRestartStatus = 500;
+			Whep.Session session = await(Whep.from(endpoint.uri()).timeout(SESSION_TIMEOUT).recovery(policy).play(client));
+			PeerImpl peer = (PeerImpl) session.peer();
+			peer.control.execute(() -> peer.connectionChanged(dev.onvoid.webrtc.RTCPeerConnectionState.FAILED));
+			assertEquals(1, await(retry).attempt());
+			await(peer.withNative(c -> null)); // Retry has been scheduled on control.
+			assertEquals(1, timer.fire(Duration.ofSeconds(1)));
+			assertEquals(2, await(exhausted).attempt());
+			assertEquals(2, endpoint.requests.stream().filter(r -> "*".equals(r.ifMatch)).count());
+			assertEquals(PeerState.FAILED, peer.state());
+			await(session.closeAsync());
+		}
+		finally { client.close(); }
+	}
+
+	@Test
 	void failedConnectionRestartsIce() throws Exception {
 		List<String> fragments = new CopyOnWriteArrayList<>();
 

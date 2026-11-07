@@ -181,9 +181,10 @@ abstract class HttpSession implements AutoCloseable {
 	/**
 	 * Restarts ICE, as after the network changed: the peer gathers new
 	 * candidates, and only the ICE information goes to the session, by PATCH,
-	 * as WHIP and WHEP do; the media go on as negotiated. The session restarts
-	 * ICE by itself too, when the connection fails or stays disconnected for
-	 * two seconds, up to three times in a row without success.
+	 * as WHIP and WHEP do; the media go on as negotiated. By default, the session
+	 * restarts ICE by itself too, when the connection fails or stays disconnected
+	 * for two seconds, up to three times in a row without success. The session
+	 * builder's recovery option replaces that rule with a {@link RecoveryPolicy}.
 	 *
 	 * @return a future that completes once the new ICE information of both
 	 * sides is applied, or fails, among others when the session takes no ICE
@@ -225,10 +226,11 @@ abstract class HttpSession implements AutoCloseable {
 	 */
 	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
 			String authorization, Duration timeout, CompletableFuture<?> prepared, Gathering gathering,
-			Protocol protocol, Factory<S> factory) {
+			Protocol protocol, RecoveryPolicy recovery, Factory<S> factory) {
 		CompletableFuture<Void> abandoned = new CompletableFuture<>();
 		AtomicReference<Map<String, URI>> extensions = new AtomicReference<>(Map.of());
 		HttpIce ice = new HttpIce(rtc, rtc.httpClient(authorization != null), peer, authorization, timeout);
+		ice.recovery(recovery);
 		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, authorization, timeout, prepared,
 				gathering, protocol, ice, extensions, abandoned)
 				.thenApply(resource -> factory.create(rtc, peer, resource, extensions.get(), authorization, timeout,

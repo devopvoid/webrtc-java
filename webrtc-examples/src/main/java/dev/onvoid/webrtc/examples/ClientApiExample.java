@@ -32,6 +32,7 @@ import dev.onvoid.webrtc.client.DataChannel;
 import dev.onvoid.webrtc.client.PcmFormat;
 import dev.onvoid.webrtc.client.Peer;
 import dev.onvoid.webrtc.client.PeerOptions;
+import dev.onvoid.webrtc.client.RecoveryPolicy;
 import dev.onvoid.webrtc.client.SignalMessage;
 import dev.onvoid.webrtc.client.VideoStats;
 import dev.onvoid.webrtc.client.WebRtc;
@@ -84,6 +85,9 @@ public class ClientApiExample {
             // A real application sends it through its WebSocket instead.
             Peer caller = rtc.createPeer(PeerOptions.builder()
                     .name("caller")
+                    .recovery(RecoveryPolicy.builder()
+                            .onEvent(event -> System.out.println("Caller recovery: " + event.state()))
+                            .build())
                     .signaling(message -> transmit("caller", calleeRef.get(), message.toJson()))
                     .build());
             Peer callee = rtc.createPeer(PeerOptions.builder()

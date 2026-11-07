@@ -143,6 +143,8 @@ public final class Whip {
 
 		private Gathering gathering = Gathering.TRICKLE;
 
+		private RecoveryPolicy recovery;
+
 		private Duration timeout = Duration.ofSeconds(15);
 
 
@@ -322,6 +324,15 @@ public final class Whip {
 		}
 
 		/**
+		 * Overrides the built-in ICE restart rule with a configurable policy.
+		 * Recovery uses PATCH on this session; it never creates a new session.
+		 */
+		public Builder recovery(RecoveryPolicy policy) {
+			this.recovery = requireNonNull(policy, "policy");
+			return this;
+		}
+
+		/**
 		 * @param timeout how long the session may take to be connected, and its
 		 *                deletion to be answered; 15 seconds by default.
 		 *
@@ -422,7 +433,7 @@ public final class Whip {
 
 				CompletableFuture<Void> prepared = CompletableFuture.allOf(video, peer.manual.preferCodecs(names));
 
-				return HttpSession.start(rtc, peer, endpoint, credentials, limit, prepared, gathering, PROTOCOL,
+				return HttpSession.start(rtc, peer, endpoint, credentials, limit, prepared, gathering, PROTOCOL, recovery,
 						Session::new);
 			}
 			catch (RuntimeException | Error e) {

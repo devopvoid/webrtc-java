@@ -137,6 +137,8 @@ public final class Whep {
 
 		private Gathering gathering = Gathering.TRICKLE;
 
+		private RecoveryPolicy recovery;
+
 		private Duration timeout = Duration.ofSeconds(15);
 
 
@@ -268,6 +270,15 @@ public final class Whep {
 		}
 
 		/**
+		 * Overrides the built-in ICE restart rule with a configurable policy.
+		 * Recovery uses PATCH on this session; it never creates a new session.
+		 */
+		public Builder recovery(RecoveryPolicy policy) {
+			this.recovery = requireNonNull(policy, "policy");
+			return this;
+		}
+
+		/**
 		 * @param timeout how long the session may take to be connected, and its
 		 *                deletion to be answered; 15 seconds by default.
 		 *
@@ -343,7 +354,7 @@ public final class Whep {
 
 			try {
 				return HttpSession.start(rtc, peer, endpoint, credentials, limit, peer.manual.preferCodecs(names), gathering,
-						PROTOCOL, Session::new);
+						PROTOCOL, recovery, Session::new);
 			}
 			catch (RuntimeException | Error e) {
 				// Until the session has it, no one else would close the peer.
