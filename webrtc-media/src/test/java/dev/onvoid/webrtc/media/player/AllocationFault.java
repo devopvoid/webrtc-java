@@ -108,6 +108,12 @@ public final class AllocationFault {
 	 */
 	public static native void disarm();
 
+	/** Throws on the decoder thread with a live packet. */
+	static native void failDecoderAllocation();
+
+	/** Rejects count output items; negative means indefinitely. */
+	static native void failOutput(boolean video, int count);
+
 	/**
 	 * Returns how many Java strings the native library holds the characters
 	 * of right now, which is 0 whenever no entry point is running.

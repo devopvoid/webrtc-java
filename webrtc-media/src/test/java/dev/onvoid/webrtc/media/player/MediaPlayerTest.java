@@ -519,10 +519,14 @@ class MediaPlayerTest {
 			// The late landing, left over from the seek once the source had
 			// started over, used to send the reader back before 7.8 s, so that
 			// the last pictures played again before the next pass.
-			assertTrue(positions.get(0) > 7_800_000, "not from the position: " + positions);
-			assertTrue(positions.get(1) < 1_000_000, "next pass not from the start: " + positions);
+			// A sink runs inside the push, before its result is known. The
+			// position it sees belongs to the last successful delivery: first
+			// the seek target, then the picture at 8 s, then the next pass.
+			assertEquals(7_800_000L, positions.get(0));
+			assertTrue(positions.get(1) > 7_800_000, "not from the position: " + positions);
+			assertTrue(positions.get(2) < 1_000_000, "next pass not from the start: " + positions);
 
-			for (int i = 2; i < positions.size(); i++) {
+			for (int i = 3; i < positions.size(); i++) {
 				assertTrue(positions.get(i) > positions.get(i - 1),
 						"position went back at frame " + i + ": " + positions);
 			}

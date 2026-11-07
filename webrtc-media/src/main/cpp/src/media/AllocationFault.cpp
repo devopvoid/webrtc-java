@@ -27,6 +27,9 @@ extern "C" {
 
 namespace
 {
+	std::atomic<bool> fail_decoder_allocation{ false };
+	std::atomic<int> video_failures{ 0 };
+	std::atomic<int> audio_failures{ 0 };
 	std::atomic<bool> fail_string_copy{ false };
 	std::atomic<bool> fail_allocation{ false };
 	std::atomic<bool> fail_thread_start{ false };
@@ -77,8 +80,38 @@ namespace ffmpeg
 		fail_queue_room.store(true);
 	}
 
+	void AllocationFault::FailDecoderAllocation()
+	{
+		fail_decoder_allocation.store(true);
+	}
+
+	void AllocationFault::CheckDecoderAllocation()
+	{
+		if (fail_decoder_allocation.exchange(false)) {
+			throw std::bad_alloc();
+		}
+	}
+
+	void AllocationFault::FailOutput(bool video, int count)
+	{
+		(video ? video_failures : audio_failures).store(count);
+	}
+
+	bool AllocationFault::CheckOutputFailure(bool video)
+	{
+		auto & remaining = video ? video_failures : audio_failures;
+		const int count = remaining.load();
+		if (count > 0) {
+			remaining.fetch_sub(1);
+		}
+		return count != 0;
+	}
+
 	void AllocationFault::Disarm()
 	{
+		fail_decoder_allocation.store(false);
+		video_failures.store(0);
+		audio_failures.store(0);
 		fail_string_copy.store(false);
 		fail_allocation.store(false);
 		fail_thread_start.store(false);
@@ -90,7 +123,8 @@ namespace ffmpeg
 
 	bool AllocationFault::IsArmed()
 	{
-		return fail_string_copy.load() || fail_allocation.load() || fail_thread_start.load()
+		return fail_decoder_allocation.load() || video_failures.load() != 0
+				|| audio_failures.load() != 0 || fail_string_copy.load() || fail_allocation.load() || fail_thread_start.load()
 				|| fail_writer_allocation.load() || fail_option.load() || fail_observer_add.load()
 				|| fail_queue_room.load();
 	}

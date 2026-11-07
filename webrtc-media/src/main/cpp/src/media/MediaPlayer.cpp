@@ -36,6 +36,9 @@ namespace ffmpeg
 		  api_(api)
 	{
 		pacer_ = std::make_unique<MediaPacer>(api, video_source, audio_source);
+		pacer_->SetErrorHandler([this](const char * media, int error, bool fatal) {
+			OutputError(media, error, fatal);
+		});
 	}
 
 	MediaPlayer::~MediaPlayer()
@@ -114,7 +117,7 @@ namespace ffmpeg
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		if (closing_ || playing_) {
+		if (closing_ || failed_ || playing_) {
 			return;
 		}
 
@@ -159,7 +162,7 @@ namespace ffmpeg
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		if (closing_) {
+		if (closing_ || failed_) {
 			return;
 		}
 
@@ -288,12 +291,23 @@ namespace ffmpeg
 		return pacer_->IsOwnThread();
 	}
 
-	void MediaPlayer::Run()
+	void MediaPlayer::Run() noexcept
 	{
-		AVPacket * packet = av_packet_alloc();
+		try {
+			Decode();
+		}
+		catch (...) {
+			Abort("Decoder thread failed");
+		}
+	}
+
+	void MediaPlayer::Decode()
+	{
+		auto release = [](AVPacket * packet) { av_packet_free(&packet); };
+		std::unique_ptr<AVPacket, decltype(release)> packet(av_packet_alloc(), release);
 
 		if (packet == nullptr) {
-			ReportError("Allocating a packet failed", AVERROR(ENOMEM));
+			Abort("Allocating a packet failed");
 
 			return;
 		}
@@ -309,12 +323,12 @@ namespace ffmpeg
 				PlaybackProbe::BeginCommandWait();
 
 				command_.wait(lock, [this] {
-					return closing_ || seek_pending_ || (playing_ && !ended_);
+					return closing_ || failed_ || seek_pending_ || (playing_ && !ended_);
 				});
 
 				PlaybackProbe::EndCommandWait();
 
-				if (closing_) {
+				if (closing_ || failed_) {
 					break;
 				}
 
@@ -338,7 +352,7 @@ namespace ffmpeg
 
 			bool end_of_stream = false;
 
-			if (!PumpOnce(packet, &end_of_stream)) {
+			if (!PumpOnce(packet.get(), &end_of_stream)) {
 				// Playback has stopped and been reported. The thread stays,
 				// so that playing again carries on past what failed, and a
 				// seek can move away from it.
@@ -382,7 +396,7 @@ namespace ffmpeg
 			for (;;) {
 				std::unique_lock<std::mutex> lock(mutex_);
 
-				if (closing_ || seek_pending_ || pacer_->IsDrained()) {
+				if (closing_ || failed_ || seek_pending_ || pacer_->IsDrained()) {
 					break;
 				}
 
@@ -392,7 +406,7 @@ namespace ffmpeg
 			{
 				std::lock_guard<std::mutex> lock(mutex_);
 
-				if (closing_) {
+				if (closing_ || failed_) {
 					break;
 				}
 
@@ -411,8 +425,6 @@ namespace ffmpeg
 				playing_ = false;
 			}
 		}
-
-		av_packet_free(&packet);
 	}
 
 	bool MediaPlayer::PumpOnce(AVPacket * packet, bool * end_of_stream)
@@ -429,6 +441,8 @@ namespace ffmpeg
 
 			return false;
 		}
+
+		AllocationFault::CheckDecoderAllocation();
 
 		const int index = packet->stream_index;
 		bool video = has_video_ && index == reader_->GetVideoStreamIndex();
@@ -510,10 +524,12 @@ namespace ffmpeg
 				return result;
 			}
 
+			auto release = [](AVFrame * value) { av_frame_free(&value); };
+			std::unique_ptr<AVFrame, decltype(release)> owned(frame, release);
+
 			if (!at_end && video_decoder_.LandedPastPosition() && SeekFurtherBack()) {
 				// From a later keyframe than the one the seek needs; decoding
 				// starts again from an earlier one.
-				av_frame_free(&frame);
 
 				return 0;
 			}
@@ -524,7 +540,7 @@ namespace ffmpeg
 
 			// The frame belongs to the pacer from here on, whether or not it
 			// makes it into the queue.
-			if (!pacer_->PushVideo(frame, timestamp_us, loop_offset_us_, generation_)) {
+			if (!pacer_->PushVideo(owned.release(), timestamp_us, loop_offset_us_, generation_)) {
 				return 0;
 			}
 		}
@@ -675,8 +691,23 @@ namespace ffmpeg
 				std::unique_lock<std::mutex> lock(mutex_);
 
 				event_posted_.wait(lock, [this] {
-					return !events_.empty() || events_stopping_;
+					return !events_.empty() || failure_pending_ != nullptr || events_stopping_;
 				});
+
+				if (events_.empty() && failure_pending_ != nullptr) {
+					const char * message = failure_pending_;
+					failure_pending_ = nullptr;
+					lock.unlock();
+					if (observer != nullptr) {
+						try {
+							observer->OnStateChanged(kPaused);
+							observer->OnError(message);
+						}
+						catch (...) {
+						}
+					}
+					continue;
+				}
 
 				if (events_.empty()) {
 					// Stopping, with everything queued before delivered.
@@ -725,6 +756,43 @@ namespace ffmpeg
 		}
 	}
 
+	void MediaPlayer::Abort(const char * message) noexcept
+	{
+		// No string or event allocation: this also handles an exhausted heap.
+		std::lock_guard<std::mutex> lock(mutex_);
+		if (closing_ || failed_) {
+			return;
+		}
+		failed_ = true;
+		playing_ = false;
+		state_ = kPaused;
+		failure_pending_ = message;
+		reader_->Interrupt();
+		pacer_->Cancel();
+		command_.notify_all();
+		event_posted_.notify_one();
+	}
+
+	void MediaPlayer::OutputError(const char * media, int error, bool fatal) noexcept
+	{
+		if (fatal) {
+			Abort(media[0] == 'V' ? "Persistent video output failure"
+					: "Persistent audio output failure");
+			return;
+		}
+		try {
+			std::lock_guard<std::mutex> lock(mutex_);
+			if (!closing_ && !failed_) {
+				AllocationFault::CheckAllocation();
+				PostLocked(Event::kError, kIdle, std::string(media)
+						+ " output dropped: " + std::to_string(error));
+			}
+		}
+		catch (...) {
+			Abort("Reporting output failure failed");
+		}
+	}
+
 	void MediaPlayer::ReportError(const std::string & message, int error)
 	{
 		std::string text = message + ": " + ErrorText(error);
@@ -734,7 +802,7 @@ namespace ffmpeg
 		// A player being closed fails whatever it was waiting on on purpose,
 		// since closing interrupts the reader. That is not an error of the
 		// source, and nobody should hear of it.
-		if (closing_) {
+		if (closing_ || failed_) {
 			return;
 		}
 

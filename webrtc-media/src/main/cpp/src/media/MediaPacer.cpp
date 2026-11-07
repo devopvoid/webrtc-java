@@ -16,6 +16,7 @@
 
 #include "media/MediaPacer.h"
 #include "media/AudioDecoder.h"
+#include "media/AllocationFault.h"
 #include "media/PlaybackProbe.h"
 #include "media/VideoGeometry.h"
 
@@ -118,6 +119,23 @@ namespace ffmpeg
 		}
 	}
 
+	void MediaPacer::SetErrorHandler(std::function<void(const char *, int, bool)> handler)
+	{
+		error_handler_ = std::move(handler);
+	}
+
+	void MediaPacer::Cancel()
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		running_ = false;
+		video_queue_.clear();
+		audio_queue_.clear();
+		video_bytes_ = 0;
+		work_.notify_all();
+		video_space_.notify_all();
+		audio_space_.notify_all();
+	}
+
 	void MediaPacer::Start()
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -162,7 +180,8 @@ namespace ffmpeg
 	bool MediaPacer::PushVideo(AVFrame * frame, int64_t timestamp_us, int64_t loop_offset_us,
 			uint64_t generation)
 	{
-		const size_t bytes = FrameBytes(frame);
+		VideoItem owned(frame, timestamp_us + loop_offset_us, loop_offset_us, FrameBytes(frame));
+		const size_t bytes = owned.bytes;
 
 		std::unique_lock<std::mutex> lock(mutex_);
 
@@ -178,12 +197,10 @@ namespace ffmpeg
 
 		if (!running_ || generation != generation_) {
 			// The frame became ours on the way in, so it is ours to drop.
-			av_frame_free(&frame);
-
 			return false;
 		}
 
-		video_queue_.emplace_back(frame, timestamp_us + loop_offset_us, loop_offset_us, bytes);
+		video_queue_.push_back(std::move(owned));
 		video_bytes_ += bytes;
 		peak_video_bytes_ = std::max(peak_video_bytes_, video_bytes_);
 
@@ -417,7 +434,6 @@ namespace ffmpeg
 
 					video_queue_.pop_front();
 					video_bytes_ -= item.bytes;
-					AdvancePosition(item.timestamp_us, item.loop_offset_us);
 
 					video_space_.notify_one();
 					// A shorter video queue may be what lets audio past its
@@ -425,9 +441,16 @@ namespace ffmpeg
 					audio_space_.notify_one();
 
 					++delivering_;
+					const auto delivery_generation = generation_;
 					lock.unlock();
-					DeliverVideo(std::move(item), due);
+					const auto timestamp = item.timestamp_us;
+					const auto offset = item.loop_offset_us;
+					const int result = DeliverVideo(std::move(item), due);
+					CheckOutput(video_output_, "Video", result);
 					lock.lock();
+					if (running_ && result >= 0 && delivery_generation == generation_) {
+						AdvancePosition(timestamp, offset);
+					}
 					--delivering_;
 
 					delivered = true;
@@ -437,21 +460,25 @@ namespace ffmpeg
 				}
 			}
 
-			if (!audio_queue_.empty()) {
+			if (running_ && !paused_ && !audio_queue_.empty()) {
 				const int64_t due = audio_queue_.front().timestamp_us + base_us_;
 
 				if (due <= now) {
 					AudioItem item = std::move(audio_queue_.front());
 
 					audio_queue_.pop_front();
-					AdvancePosition(item.timestamp_us, item.loop_offset_us);
 
 					audio_space_.notify_one();
 
 					++delivering_;
+					const auto delivery_generation = generation_;
 					lock.unlock();
-					DeliverAudio(item, due);
+					const int result = DeliverAudio(item, due);
+					CheckOutput(audio_output_, "Audio", result);
 					lock.lock();
+					if (running_ && result >= 0 && delivery_generation == generation_) {
+						AdvancePosition(item.timestamp_us, item.loop_offset_us);
+					}
 					--delivering_;
 
 					delivered = true;
@@ -476,14 +503,33 @@ namespace ffmpeg
 		}
 	}
 
-	void MediaPacer::DeliverVideo(VideoItem item, int64_t mapped_us)
+	void MediaPacer::CheckOutput(OutputStatus & status, const char * media, int result)
+	{
+		if (result >= 0) {
+			status.consecutive_failures = 0;
+			return;
+		}
+		const bool fatal = ++status.consecutive_failures >= 10;
+		const int64_t now = api_->now_us();
+		// At most one dropped-item report per second and media kind. The
+		// terminal report is always delivered, even within that interval.
+		if (fatal || !status.reported || now - status.last_report_us >= 1000000) {
+			status.reported = true;
+			status.last_report_us = now;
+			if (error_handler_) {
+				error_handler_(media, result, fatal);
+			}
+		}
+	}
+
+	int MediaPacer::DeliverVideo(VideoItem item, int64_t mapped_us)
 	{
 		AVFrame * frame = item.frame;
 
 		if (video_source_ == nullptr || frame == nullptr) {
 			// Nothing to deliver to; the item frees the frame as it goes out
 			// of scope.
-			return;
+			return 0;
 		}
 
 		wj_i420_frame pushed = {};
@@ -512,13 +558,19 @@ namespace ffmpeg
 			static_cast<uint8_t>(frame->color_range)
 		};
 
-		api_->video_source_push_color(video_source_, &pushed, &color);
+		// Tests reject a frame through the real API, including its release
+		// callback on failure, rather than bypassing ownership transfer.
+		if (AllocationFault::CheckOutputFailure(true)) {
+			pushed.width = 0;
+		}
+
+		return api_->video_source_push_color(video_source_, &pushed, &color);
 	}
 
-	void MediaPacer::DeliverAudio(const AudioItem & item, int64_t mapped_us)
+	int MediaPacer::DeliverAudio(const AudioItem & item, int64_t mapped_us)
 	{
 		if (audio_source_ == nullptr || item.samples.empty()) {
-			return;
+			return 0;
 		}
 
 		wj_audio_chunk chunk = {};
@@ -531,6 +583,10 @@ namespace ffmpeg
 
 		// The samples are copied during the call, so the item may go away as
 		// soon as this returns.
-		api_->audio_source_push(audio_source_, &chunk);
+		if (AllocationFault::CheckOutputFailure(false)) {
+			chunk.channels = 0;
+		}
+
+		return api_->audio_source_push(audio_source_, &chunk);
 	}
 }

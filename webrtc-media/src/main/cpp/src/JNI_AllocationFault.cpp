@@ -110,3 +110,15 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_heldS
 {
 	return ffmpeg::JavaStringChars::Held();
 }
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_failDecoderAllocation
+(JNIEnv *, jclass)
+{
+	ffmpeg::AllocationFault::FailDecoderAllocation();
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_AllocationFault_failOutput
+(JNIEnv *, jclass, jboolean video, jint count)
+{
+	ffmpeg::AllocationFault::FailOutput(video == JNI_TRUE, count);
+}

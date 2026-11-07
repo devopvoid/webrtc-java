@@ -152,7 +152,10 @@ namespace ffmpeg
 				std::string message;
 			};
 
-			void Run();
+			void Run() noexcept;
+			void Decode();
+			void Abort(const char * message) noexcept;
+			void OutputError(const char * media, int error, bool fatal) noexcept;
 
 			// The event thread: hands what is queued to the observer, one
 			// report after the other, until the player closes.
@@ -230,6 +233,9 @@ namespace ffmpeg
 
 			std::unique_ptr<MediaPlayerObserver> observer_;
 			bool running_ = false;
+			bool failed_ = false;
+			// Allocation-free fallback, delivered after already queued events.
+			const char * failure_pending_ = nullptr;
 			bool playing_ = false;
 			bool closing_ = false;
 			int state_ = kIdle;
