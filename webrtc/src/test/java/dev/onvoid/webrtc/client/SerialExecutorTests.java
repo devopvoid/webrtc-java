@@ -27,7 +27,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -343,6 +346,74 @@ class SerialExecutorTests {
 		pool.runAll();
 
 		assertEquals(Arrays.asList("fallback", "later"), ran);
+	}
+
+	@Test
+	void idleCleanupCannotClearNextThreadsMarker() throws Exception {
+		CountDownLatch cleaning = new CountDownLatch(1);
+		CountDownLatch finishCleanup = new CountDownLatch(1);
+		CountDownLatch secondStarted = new CountDownLatch(1);
+		CountDownLatch checkMarker = new CountDownLatch(1);
+		AtomicBoolean holdCleanup = new AtomicBoolean(true);
+		AtomicBoolean marked = new AtomicBoolean();
+		ThreadLocal<Boolean> running = new ThreadLocal<Boolean>() {
+			@Override
+			public void remove() {
+				if (holdCleanup.compareAndSet(true, false)) {
+					// The queue is idle and another thread may start its turn,
+					// but this turn has not yet cleared its executor marker.
+					cleaning.countDown();
+					awaitLatch(finishCleanup);
+				}
+				super.remove();
+			}
+		};
+		SerialExecutor events = new SerialExecutor(pool, work, errors::add, true, null, running);
+		Thread first = new Thread(pool::runNext, "first-turn");
+		Thread second = new Thread(pool::runNext, "second-turn");
+
+		try {
+			events.execute(() -> assertTrue(events.inExecutor()));
+			first.start();
+			awaitLatch(cleaning);
+
+			events.execute(() -> {
+				secondStarted.countDown();
+				awaitLatch(checkMarker);
+				marked.set(events.inExecutor());
+				assertTrue(SerialExecutor.onEventThread());
+			});
+			second.start();
+			awaitLatch(secondStarted);
+
+			// Complete A's cleanup while B is still inside its event task.
+			finishCleanup.countDown();
+			first.join(5000);
+			assertFalse(first.isAlive());
+			checkMarker.countDown();
+			second.join(5000);
+			assertFalse(second.isAlive());
+
+			assertTrue(marked.get());
+			assertFalse(events.inExecutor());
+			assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+		}
+		finally {
+			finishCleanup.countDown();
+			checkMarker.countDown();
+			first.join(5000);
+			second.join(5000);
+		}
+	}
+
+	private static void awaitLatch(CountDownLatch latch) {
+		try {
+			assertTrue(latch.await(5, TimeUnit.SECONDS), "Timed out waiting for the other turn");
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new AssertionError(e);
+		}
 	}
 
 	@Test

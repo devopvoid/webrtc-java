@@ -17,6 +17,8 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -34,7 +36,11 @@ import java.util.function.BooleanSupplier;
 
 import dev.onvoid.webrtc.RTCEncodedFrame;
 import dev.onvoid.webrtc.RTCEncodedVideoFrame;
+import dev.onvoid.webrtc.RTCRtpTransceiver;
+import dev.onvoid.webrtc.RTCRtpTransceiverInit;
 import dev.onvoid.webrtc.RTCStats;
+import dev.onvoid.webrtc.media.MediaStream;
+import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.RTCStatsType;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
@@ -65,6 +71,48 @@ class TransformTests extends ClientTestBase {
 	void stopFeeder() throws InterruptedException {
 		feeder.shutdownNow();
 		feeder.awaitTermination(5, TimeUnit.SECONDS);
+	}
+
+	@Test
+	void failedReceiveTransformStopsPathWithoutPublishingTrack() throws Exception {
+		PeerImpl peer = (PeerImpl) rtc.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL).build());
+		IllegalStateException failure = new IllegalStateException("Cannot install decryption");
+		CompletableFuture<WebRtcException> reported = new CompletableFuture<>();
+		AtomicInteger published = new AtomicInteger();
+		RemoteTracks tracks = new RemoteTracks(peer, frame -> { }, (receiver, transform) -> {
+			throw failure;
+		});
+		peer.onError(reported::complete);
+		tracks.onTrack(track -> published.incrementAndGet());
+
+		await(peer.withNative(connection -> {
+			RTCRtpTransceiver failed = connection.addTransceiver(MediaType.VIDEO, new RTCRtpTransceiverInit());
+			RTCRtpTransceiver unaffected = connection.addTransceiver(MediaType.AUDIO, new RTCRtpTransceiverInit());
+
+			try {
+				assertFalse(failed.stopped());
+				tracks.added(failed.getReceiver(), new MediaStream[0]);
+
+				// Releasing the receiver wrapper alone leaves this false and
+				// lets the native receiver keep processing untransformed media.
+				assertTrue(failed.stopped());
+				assertFalse(unaffected.stopped());
+				assertTrue(tracks.current().isEmpty());
+			}
+			finally {
+				failed.dispose();
+				unaffected.dispose();
+			}
+			return null;
+		}));
+
+		assertSame(failure, await(reported).getCause());
+		// A late subscriber must not replay the rejected track either.
+		tracks.onTrack(track -> published.incrementAndGet());
+		await(peer.withNative(connection -> null));
+		assertEquals(0, published.get());
+		assertFalse(peer.isClosed());
 	}
 
 	@Test

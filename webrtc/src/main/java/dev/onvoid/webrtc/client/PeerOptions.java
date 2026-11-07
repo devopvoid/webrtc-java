@@ -342,7 +342,9 @@ public final class PeerOptions {
 		 * end-to-end encryption needs. It is set on each receiver before
 		 * {@link Peer#onTrack} hands its track out, so it is in place before
 		 * the first frame arrives. {@link RemoteTrack#transform} replaces it
-		 * for one track.
+		 * for one track. If installation fails, the transceiver is stopped,
+		 * the track is not published, and the failure reaches {@code onError}.
+		 * If the receive path cannot be stopped, the peer closes.
 		 * <p>
 		 * The transform runs on a thread of each receiver, not on the peer's
 		 * event thread; see {@link RTCEncodedFrameTransformer}. A frame it
