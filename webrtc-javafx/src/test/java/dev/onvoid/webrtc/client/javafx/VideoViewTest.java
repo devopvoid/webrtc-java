@@ -269,11 +269,100 @@ class VideoViewTest {
 				frame.release();
 			}
 		}
-		assertTrue(storage.size() <= 3);
+		assertTrue(storage.size() <= 2);
 		for (ByteBuffer data : storage) {
 			assertTrue(data.isDirect());
 			assertEquals(64 * 48 * 4, data.capacity());
 		}
+	}
+
+	@Test
+	void replacesWaitingFrame() throws Exception {
+		VideoView view = onFx(VideoView::new);
+		CountDownLatch blocked = new CountDownLatch(1);
+		CountDownLatch unblock = new CountDownLatch(1);
+		CompletableFuture<Void> ui = new CompletableFuture<>();
+		Platform.runLater(() -> {
+			blocked.countDown();
+			try {
+				assertTrue(unblock.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+				ui.complete(null);
+			}
+			catch (Throwable e) {
+				ui.completeExceptionally(e);
+			}
+		});
+		try {
+			assertTrue(blocked.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+			for (int width : new int[] { 64, 32, 64, 32 }) {
+				VideoFrame frame = frame(width, 48, 128, 128);
+				try {
+					view.accept(frame);
+				}
+				finally {
+					frame.release();
+				}
+			}
+		}
+		finally {
+			unblock.countDown();
+		}
+		ui.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		assertEquals(32, (int) onFx(view::snapshot).getWidth());
+		Field reading = VideoView.class.getDeclaredField("reading");
+		reading.setAccessible(true);
+		assertNull(reading.get(view), "The copied buffer must be released");
+		Field buffers = VideoView.class.getDeclaredField("buffers");
+		buffers.setAccessible(true);
+		assertEquals(2, ((Object[]) buffers.get(view)).length);
+	}
+
+	@Test
+	void withdrawsFrameBeforeConversion() throws Exception {
+		VideoView view = onFx(VideoView::new);
+		VideoFrame first = frame(64, 48, 128, 128);
+		VideoFrame latest = frame(32, 24, 16, 16);
+		CountDownLatch converting = new CountDownLatch(1);
+		CountDownLatch finish = new CountDownLatch(1);
+		VideoFrameBuffer buffer = (VideoFrameBuffer) Proxy.newProxyInstance(
+				getClass().getClassLoader(), new Class<?>[] { VideoFrameBuffer.class },
+				(proxy, method, args) -> {
+					if (method.getName().equals("toI420")) {
+						converting.countDown();
+						assertTrue(finish.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+					}
+					return method.invoke(latest.buffer, args);
+				});
+		CompletableFuture<Void> delivered = new CompletableFuture<>();
+		Thread delivery = new Thread(() -> {
+			try {
+				view.accept(new VideoFrame(buffer, 0));
+				delivered.complete(null);
+			}
+			catch (Throwable e) {
+				delivered.completeExceptionally(e);
+			}
+		});
+		try {
+			// Queue presentation, then reclaim its buffer before JavaFX can read it.
+			onFx(() -> {
+				view.accept(first);
+				delivery.start();
+				assertTrue(converting.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+				return null;
+			});
+			assertNull(onFx(view::snapshot), "No partially converted frame may be copied");
+		}
+		finally {
+			finish.countDown();
+			delivery.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
+			first.release();
+			latest.release();
+		}
+		delivered.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		Image snapshot = onFx(view::snapshot);
+		assertEquals(32, (int) snapshot.getWidth());
+		assertTrue(snapshot.getPixelReader().getColor(0, 0).getBrightness() < 0.1);
 	}
 
 	@Test

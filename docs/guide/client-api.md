@@ -322,7 +322,9 @@ Both views support resolutions such as 8K without a fixed pixel limit. They reje
 nonpositive dimensions and frames whose four-byte pixel data cannot fit in a Java
 buffer, using overflow-safe arithmetic. Conversion buffers allocate on demand,
 grow geometrically when necessary, and retain their capacity across smaller frames
-and `clear()`. Swing reuses one direct buffer; JavaFX reuses up to three. Buffer
+and `clear()`. Swing reuses one direct buffer; JavaFX reuses up to two.
+JavaFX reserves a buffer only while copying it into the displayed image; a waiting
+frame may be replaced by a newer frame to avoid building a queue. Buffer
 memory is released when the view becomes unreachable. Memory usage follows the
 largest frames received and includes displayed images, conversion buffers, and
 replacement allocations awaiting garbage collection. Snapshots, input frames and

@@ -61,11 +61,11 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	/** Guards the hand-over between the converting thread and the JavaFX thread. */
 	private final Object lock = new Object();
 
-	// Three reusable buffers: the converting thread fills a free slot, hands it over as
-	// ready, and the JavaFX thread paints from shown. None is written while
-	// another thread reads it.
+	// Two reusable buffers: only the one JavaFX is copying is reserved. A waiting
+	// frame may be reclaimed for conversion, so the newest frame wins without
+	// blocking either thread during conversion or copying.
 
-	private final Pixels[] buffers = new Pixels[3];
+	private final Pixels[] buffers = new Pixels[2];
 
 	private Pixels ready;
 
@@ -74,8 +74,8 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	/** Counts the calls of clear(), to tell the frames that came before one. */
 	private long generation;
 
-	// Set under lock; its pixels are read only on the JavaFX Application Thread.
-	private Pixels shown;
+	// Reserved under lock only while JavaFX copies pixels into the image.
+	private Pixels reading;
 
 	// Confined to the JavaFX Application Thread.
 
@@ -118,12 +118,15 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 		}
 
 		synchronized (convertLock) {
-			// Only this thread chooses/writes a slot; presentation may read the
-			// other two. Allocate outside the hand-over lock.
+			// Only this thread chooses/writes a slot. Never overwrite a buffer
+			// JavaFX is copying; withdraw a waiting frame before reusing it.
 			int slot = 0;
 			synchronized (lock) {
-				while (buffers[slot] != null && (buffers[slot] == ready || buffers[slot] == shown)) {
+				while (buffers[slot] != null && buffers[slot] == reading) {
 					slot++;
+				}
+				if (buffers[slot] == ready) {
+					ready = null;
 				}
 			}
 			Pixels target = buffers[slot];
@@ -184,7 +187,6 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 		synchronized (lock) {
 			generation++;
 			ready = null;
-			shown = null;
 		}
 
 		image = null;
@@ -251,17 +253,24 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 				return;
 			}
 
-			ready = shown;
-			shown = next;
+			ready = null;
+			reading = next;
 		}
 
-		if (image == null || image.getWidth() != next.width || image.getHeight() != next.height) {
-			image = new WritableImage(next.width, next.height);
-		}
+		try {
+			if (image == null || image.getWidth() != next.width || image.getHeight() != next.height) {
+				image = new WritableImage(next.width, next.height);
+			}
 
-		image.getPixelWriter().setPixels(0, 0, next.width, next.height,
-				PixelFormat.getByteBgraPreInstance(), next.data, next.width * 4);
-		rotation = next.rotation;
+			image.getPixelWriter().setPixels(0, 0, next.width, next.height,
+					PixelFormat.getByteBgraPreInstance(), next.data, next.width * 4);
+			rotation = next.rotation;
+		}
+		finally {
+			synchronized (lock) {
+				reading = null;
+			}
+		}
 
 		draw();
 	}
