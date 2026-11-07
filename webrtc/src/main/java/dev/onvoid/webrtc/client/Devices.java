@@ -28,10 +28,8 @@ import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
  * The media devices of the system. The lists are snapshots, kept current in
  * the background, so reading them is cheap on any thread. Where the system
  * reports no device changes, as a Linux machine without PulseAudio, they are
- * read on each call. A kind of device the system cannot list, such as audio
- * devices without an audio system, comes back as an empty list. A query that
- * fails otherwise throws a {@link MediaException}, so that an empty list means
- * that there are no such devices.
+ * read on each call. A query that fails, including an unavailable audio backend,
+ * throws a {@link MediaException}; an empty list means there are no such devices.
  */
 public interface Devices {
 
