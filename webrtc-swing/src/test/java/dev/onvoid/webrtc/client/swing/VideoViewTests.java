@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.awt.Color;
@@ -88,7 +89,7 @@ class VideoViewTests {
 
 	@Test
 	void showsFrame() {
-		VideoView view = new VideoView(320 * 240);
+		VideoView view = new VideoView();
 		assertNull(view.snapshot());
 
 		view.accept(frame(64, 48, 128, 128));
@@ -105,7 +106,7 @@ class VideoViewTests {
 
 	@Test
 	void conversionLeavesEdtFree() throws Exception {
-		VideoView view = new VideoView(320 * 240);
+		VideoView view = new VideoView();
 		view.setSize(64, 48);
 		VideoFrame initial = frame(64, 48, 128, 128);
 		VideoFrame held = frame(64, 48, 16, 235);
@@ -152,11 +153,9 @@ class VideoViewTests {
 
 	@Test
 	void rejectsInvalidSizes() throws Exception {
-		assertThrows(IllegalArgumentException.class, () -> new VideoView(0));
-		assertThrows(IllegalArgumentException.class,
-				() -> new VideoView(VideoView.MAX_PIXELS + 1));
-		VideoView view = new VideoView(64 * 48);
-		for (int[] size : new int[][] { { 0, 1 }, { -1, -1 }, { 65, 48 },
+		VideoView view = new VideoView();
+		for (int[] size : new int[][] { { 0, 1 }, { 1, 0 }, { -1, -1 }, { 1, -1 }, { -1, 1 },
+				{ Integer.MAX_VALUE / 4 + 1, 1 },
 				{ 65536, 65536 }, { Integer.MAX_VALUE, Integer.MAX_VALUE } }) {
 			VideoFrameBuffer invalid = (VideoFrameBuffer) Proxy.newProxyInstance(
 					getClass().getClassLoader(), new Class<?>[] { VideoFrameBuffer.class },
@@ -171,13 +170,44 @@ class VideoViewTests {
 	}
 
 	@Test
+	void supports8kDimensions() {
+		assertEquals(7680 * 4320 * 4, VideoView.frameBytes(7680, 4320));
+		assertEquals((Integer.MAX_VALUE / 4) * 4, VideoView.frameBytes(Integer.MAX_VALUE / 4, 1));
+	}
+
+	@Test
+	void growsBuffersOnDemand() throws Exception {
+		VideoView view = new VideoView();
+		Field field = VideoView.class.getDeclaredField("pixels");
+		field.setAccessible(true);
+		ByteBuffer previous = null;
+		for (int width : new int[] { 32, 64, 32, 64 }) {
+			VideoFrame frame = frame(width, 48, 128, 128);
+			try {
+				view.accept(frame);
+				assertEquals(width, view.snapshot().getWidth());
+				ByteBuffer current = (ByteBuffer) field.get(view);
+				view.clear();
+				if (previous != null && previous.capacity() >= width * 48 * 4) {
+					assertSame(previous, current);
+				}
+				assertEquals(previous == null ? 32 * 48 * 4 : 64 * 48 * 4, current.capacity());
+				previous = current;
+			}
+			finally {
+				frame.release();
+			}
+		}
+	}
+
+	@Test
 	void reusesBuffersAcrossSizes() throws Exception {
-		VideoView view = new VideoView(64 * 48);
+		VideoView view = new VideoView();
 		Set<ByteBuffer> storage = Collections.newSetFromMap(new IdentityHashMap<>());
 		Field field = VideoView.class.getDeclaredField("pixels");
 		field.setAccessible(true);
 		for (int i = 0; i < 12; i++) {
-			int width = i % 2 == 0 ? 64 : 32;
+			int width = i < 3 || i % 2 == 0 ? 64 : 32;
 			VideoFrame frame = frame(width, 48, 128, 128);
 			try {
 				view.accept(frame);
@@ -199,7 +229,7 @@ class VideoViewTests {
 
 	@Test
 	void keepsAspectRatio() {
-		VideoView view = new VideoView(320 * 240);
+		VideoView view = new VideoView();
 		view.setSize(200, 100);
 		view.accept(frame(64, 48, 128, 128));
 
@@ -211,7 +241,7 @@ class VideoViewTests {
 
 	@Test
 	void mirrors() {
-		VideoView view = new VideoView(320 * 240);
+		VideoView view = new VideoView();
 		view.setSize(64, 48);
 		view.accept(frame(64, 48, 16, 235));
 
@@ -230,7 +260,7 @@ class VideoViewTests {
 		assertArrayEquals(rotated(90), rotated(450));
 
 		// Sideways, a 4:3 picture in a 4:3 view leaves bars on the sides.
-		VideoView view = new VideoView(320 * 240);
+		VideoView view = new VideoView();
 		view.setSize(64, 48);
 		view.accept(frame(64, 48, 128, 128, -90));
 
@@ -243,7 +273,7 @@ class VideoViewTests {
 	void showsRemoteVideo() throws Exception {
 		Peer[] peers = pair();
 		CustomVideo video = rtc.media().customVideo("video");
-		VideoView view = new VideoView(320 * 240);
+		VideoView view = new VideoView();
 
 		peers[1].onTrack(track -> track.asVideo().onFrame(view));
 		peers[0].addTrack(video);
@@ -289,7 +319,7 @@ class VideoViewTests {
 
 	/** The pixels a 64x48 view paints of a 64x48 two-tone frame with the given rotation. */
 	private static int[] rotated(int rotation) {
-		VideoView view = new VideoView(320 * 240);
+		VideoView view = new VideoView();
 		view.setSize(64, 48);
 		view.accept(frame(64, 48, 16, 235, rotation));
 

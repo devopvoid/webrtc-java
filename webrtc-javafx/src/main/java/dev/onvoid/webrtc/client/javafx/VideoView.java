@@ -45,15 +45,13 @@ import dev.onvoid.webrtc.media.video.VideoFrameBuffer;
  * Application Thread only paints, at most once per pulse however many frames
  * arrive. The picture keeps its aspect ratio and its rotation, on a black
  * background, and can be mirrored for a local camera preview.
+ * Conversion buffers grow on demand and are reused across resolution changes
+ * and clear(). Their retained capacity follows the largest frames received;
+ * buffer memory is released when the view becomes unreachable.
  */
 public class VideoView extends Region implements Consumer<VideoFrame> {
 
 	private final Canvas canvas = new Canvas();
-
-	/** Default and maximum permitted number of pixels per frame (3840 by 2160). */
-	public static final int MAX_PIXELS = 3840 * 2160;
-
-	private final int maxPixels;
 
 	private final BooleanProperty mirrored = new SimpleBooleanProperty(this, "mirrored");
 
@@ -90,27 +88,6 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	 * Creates a view with a preferred size of 640 by 360 pixels.
 	 */
 	public VideoView() {
-		this(MAX_PIXELS);
-	}
-
-	/**
-	 * Creates a view with a limit on frame size. Conversion buffers reserve
-	 * {@code maxPixels * 4} bytes each on first use and are reused across size
-	 * changes and clear(). They are released with the view, not by clear().
-	 * At most three direct buffers and two live JavaFX images (including a
-	 * replacement during a resize) require at most {@code maxPixels * 20L}
-	 * bytes of pixel storage.
-	 * This excludes input frames, snapshots, toolkit rendering resources and
-	 * unreachable images awaiting garbage collection.
-	 *
-	 * @param maxPixels maximum frame pixel count, from 1 to {@link #MAX_PIXELS}.
-	 * @throws IllegalArgumentException if the limit is outside this range.
-	 */
-	public VideoView(int maxPixels) {
-		if (maxPixels <= 0 || maxPixels > MAX_PIXELS) {
-			throw new IllegalArgumentException("Invalid pixel limit: " + maxPixels);
-		}
-		this.maxPixels = maxPixels;
 		getChildren().add(canvas);
 		setPrefSize(640, 360);
 		setMinSize(0, 0);
@@ -124,18 +101,14 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	 *
 	 * @param frame the frame to show.
 	 * @throws IllegalArgumentException if dimensions are nonpositive or the
-	 * frame exceeds this view's pixel limit.
+	 * frame cannot be represented by a Java pixel buffer.
 	 */
 	@Override
 	public void accept(VideoFrame frame) {
 		VideoFrameBuffer buffer = frame.buffer;
 		int width = buffer.getWidth();
 		int height = buffer.getHeight();
-		long pixelCount = (long) width * height;
-		if (width <= 0 || height <= 0 || pixelCount > maxPixels) {
-			throw new IllegalArgumentException("Frame dimensions exceed the pixel limit: " + width + "x" + height);
-		}
-		int byteCount = (int) (pixelCount * 4L);
+		int byteCount = frameBytes(width, height);
 		long started;
 
 		// Before the wait for convertLock, as the frame came before any clear()
@@ -154,8 +127,10 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 				}
 			}
 			Pixels target = buffers[slot];
-			if (target == null) {
-				target = new Pixels((int) (maxPixels * 4L));
+			if (target == null || target.data.capacity() < byteCount) {
+				long previous = target == null ? 0 : target.data.capacity();
+				int capacity = (int) Math.min(Integer.MAX_VALUE, Math.max(byteCount, previous * 2L));
+				target = new Pixels(capacity);
 				buffers[slot] = target;
 			}
 			target.width = width;
@@ -190,6 +165,15 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 		}
 
 		Platform.runLater(this::present);
+	}
+
+	/** ByteBuffer capacities and image array lengths must fit in an int. */
+	static int frameBytes(int width, int height) {
+		long pixels = (long) width * height;
+		if (width <= 0 || height <= 0 || pixels > Integer.MAX_VALUE / 4) {
+			throw new IllegalArgumentException("Invalid or unrepresentable frame dimensions: " + width + "x" + height);
+		}
+		return (int) (pixels * 4L);
 	}
 
 	/**

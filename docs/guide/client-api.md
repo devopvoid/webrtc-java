@@ -318,17 +318,15 @@ frame.add(remoteView, BorderLayout.CENTER);
 
 `snapshot()` returns a copy of the picture shown, for saving a still or for tests.
 
-Both views reject nonpositive dimensions and frames above `VideoView.MAX_PIXELS`
-(3840 × 2160 pixels) with `IllegalArgumentException`. Use `new VideoView(maxPixels)`
-to choose a smaller limit, for example `new VideoView(1280 * 720)` for a preview.
-Conversion buffers reserve their configured maximum capacity on first use and stay
-available across resolution changes and `clear()`. They are freed when the view
-becomes unreachable. Swing uses one direct buffer; JavaFX uses up to three.
-Including displayed images and a replacement image during a resize, live pixel
-storage is at most `maxPixels * 16L` bytes for Swing and `maxPixels * 20L` for
-JavaFX (about 127 MiB and 159 MiB at the default limit). Input frames, snapshots,
-toolkit rendering resources, and discarded heap images awaiting collection are
-additional. Set a smaller limit when displaying several videos.
+Both views support resolutions such as 8K without a fixed pixel limit. They reject
+nonpositive dimensions and frames whose four-byte pixel data cannot fit in a Java
+buffer, using overflow-safe arithmetic. Conversion buffers allocate on demand,
+grow geometrically when necessary, and retain their capacity across smaller frames
+and `clear()`. Swing reuses one direct buffer; JavaFX reuses up to three. Buffer
+memory is released when the view becomes unreachable. Memory usage follows the
+largest frames received and includes displayed images, conversion buffers, and
+replacement allocations awaiting garbage collection. Snapshots, input frames and
+toolkit rendering resources use additional memory.
 
 For JavaFX, the `webrtc-java-javafx` module has a `VideoView` node in `dev.onvoid.webrtc.client.javafx` that works the same way. It needs Java 11 and the JavaFX your application already uses:
 
