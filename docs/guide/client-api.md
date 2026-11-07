@@ -508,7 +508,7 @@ The new camera keeps the resolution and frame rate of the old one, as far as it 
 
 ### Devices
 
-`media.devices()` returns the cameras, microphones and speakers. The first call reads them from the system; after that, the lists are snapshots kept current in the background, so reading them is cheap on any thread. Where the system reports no device changes, as on a Linux machine without PulseAudio, they are read on each call instead. `screens()` and `windows()` ask the system on each call. A kind of device the system cannot list, such as audio devices on a machine without an audio system, comes back as an empty list; a query that fails otherwise throws a `MediaException`, so an empty list means there are no such devices.
+`media.devices()` returns the cameras, microphones and speakers. The first call reads them from the system; after that, the lists are snapshots kept current in the background, so reading them is cheap on any thread. Where the system reports no device changes, as on a Linux machine without PulseAudio, they are read on each call instead. `screens()` and `windows()` ask the system on each call. A query that fails, including an unavailable audio backend, throws a `MediaException`, so an empty list means there are no such devices. Its cause is an `AudioBackendUnavailableException` when the audio backend is missing or unreachable, or a `DeviceException` for other native device failures.
 
 ```java
 Devices devices = media.devices();

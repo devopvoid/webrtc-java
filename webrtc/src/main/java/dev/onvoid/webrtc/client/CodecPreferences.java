@@ -81,20 +81,24 @@ final class CodecPreferences {
 			return;
 		}
 
-		for (RTCRtpTransceiver transceiver : peer.connection().getTransceivers()) {
-			try {
+		apply(peer.connection().getTransceivers(), codecs);
+	}
+
+	/** Takes ownership of every wrapper, including those not reached on failure. */
+	static void apply(RTCRtpTransceiver[] transceivers, Map<MediaKind, List<RTCRtpCodecCapability>> codecs) {
+		try {
+			for (RTCRtpTransceiver transceiver : transceivers) {
 				if (transceiver.stopped()) {
 					continue;
 				}
 
-				RTCRtpReceiver receiver = transceiver.getReceiver();
-				MediaStreamTrack track = receiver.getTrack();
-				MediaKind kind = MediaStreamTrack.AUDIO_TRACK_KIND.equals(track.getKind())
-						? MediaKind.AUDIO
-						: MediaKind.VIDEO;
-
-				track.dispose();
-				receiver.dispose();
+				MediaKind kind;
+				try (RTCRtpReceiver receiver = transceiver.getReceiver();
+						MediaStreamTrack track = receiver.getTrack()) {
+					kind = MediaStreamTrack.AUDIO_TRACK_KIND.equals(track.getKind())
+							? MediaKind.AUDIO
+							: MediaKind.VIDEO;
+				}
 
 				List<RTCRtpCodecCapability> preferred = codecs.get(kind);
 
@@ -102,7 +106,9 @@ final class CodecPreferences {
 					transceiver.setCodecPreferences(preferred);
 				}
 			}
-			finally {
+		}
+		finally {
+			for (RTCRtpTransceiver transceiver : transceivers) {
 				transceiver.dispose();
 			}
 		}
