@@ -93,6 +93,7 @@ public class MediaPlayer implements AutoCloseable {
 	 *
 	 * @throws IOException              if the source cannot be decoded.
 	 * @throws IllegalArgumentException if both sources are {@code null}.
+	 * @throws IllegalStateException    if a supplied source has been disposed.
 	 */
 	public MediaPlayer(MediaReader reader, CustomVideoSource videoSource,
 			CustomAudioSource audioSource) throws IOException {
@@ -130,6 +131,7 @@ public class MediaPlayer implements AutoCloseable {
 	 *                                  including HEVC on a machine without a
 	 *                                  hardware decoder for it.
 	 * @throws IllegalArgumentException if both sources are {@code null}.
+	 * @throws IllegalStateException    if a supplied source has been disposed.
 	 */
 	public MediaPlayer(MediaReader reader, CustomVideoSource videoSource,
 			CustomAudioSource audioSource, boolean hardwareDecoding) throws IOException {
@@ -139,24 +141,32 @@ public class MediaPlayer implements AutoCloseable {
 			throw new IllegalArgumentException("A player needs at least one media source");
 		}
 
-		// Before the reader is taken over: should these fail, such as when the
-		// library of the sources cannot be loaded, the caller still has the
-		// reader to close.
 		long tableAddress = NativeApi.tableAddress();
-		long videoSourceHandle = videoSource != null ? NativeApi.handleOf(videoSource) : 0;
-		long audioSourceHandle = audioSource != null ? NativeApi.handleOf(audioSource) : 0;
+		long videoSourceHandle = NativeApi.retainVideoSource(videoSource);
 
-		// Taking the reader over rather than sharing it: the native player
-		// owns it from here, and a Java reader that still held the same
-		// pointer would release it a second time.
-		long readerHandle = reader.detach();
+		try {
+			long audioSourceHandle = NativeApi.retainAudioSource(audioSource);
 
-		if (readerHandle == 0) {
-			throw new IOException("The reader is closed");
+			try {
+				// Both sources are validated and retained before the reader is
+				// taken over. Their Java wrappers may now be disposed without
+				// freeing the handles passed to the native pacer.
+				long readerHandle = reader.detach();
+
+				if (readerHandle == 0) {
+					throw new IOException("The reader is closed");
+				}
+
+				handle = create(readerHandle, tableAddress, videoSourceHandle, audioSourceHandle,
+						hardwareDecoding);
+			}
+			finally {
+				NativeApi.releaseAudioSource(audioSourceHandle);
+			}
 		}
-
-		handle = create(readerHandle, tableAddress, videoSourceHandle, audioSourceHandle,
-				hardwareDecoding);
+		finally {
+			NativeApi.releaseVideoSource(videoSourceHandle);
+		}
 	}
 
 	/**

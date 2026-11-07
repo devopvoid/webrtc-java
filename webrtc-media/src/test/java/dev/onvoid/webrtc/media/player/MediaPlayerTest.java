@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -957,6 +958,73 @@ class MediaPlayerTest {
 				() -> new MediaPlayer(reader, null, null));
 
 		reader.close();
+	}
+
+	@Test
+	void rejectsDisposedSources() throws Exception {
+		for (boolean disposedVideo : new boolean[] { true, false }) {
+			for (boolean otherSource : new boolean[] { true, false }) {
+				try (Sources sources = new Sources(); MediaReader reader = new MediaReader(asset())) {
+					if (disposedVideo) {
+						sources.video.dispose();
+					}
+					else {
+						sources.audio.dispose();
+					}
+					CustomVideoSource video = disposedVideo || otherSource ? sources.video : null;
+					CustomAudioSource audio = !disposedVideo || otherSource ? sources.audio : null;
+					assertThrows(IllegalStateException.class, () -> new MediaPlayer(reader, video, audio));
+					// Rejection must leave the reader with its caller, ready to use.
+					assertNotNull(reader.getInfo());
+					try (MediaPlayer player = new MediaPlayer(reader,
+							disposedVideo ? null : sources.video, disposedVideo ? sources.audio : null)) {
+						assertEquals(MediaPlayerState.IDLE, player.getState());
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	void sourcesSurviveConstructorHandoff() throws Exception {
+		try (Sources sources = new Sources()) {
+			// The transfer of the reader is between source acquisition in Java
+			// and the pacer's AddRef. Force disposal on another thread in that gap.
+			try (MediaReader reader = new MediaReader(asset()) {
+				@Override
+				synchronized long detach() {
+					try {
+						CompletableFuture.runAsync(() -> {
+							sources.video.dispose();
+							sources.audio.dispose();
+						}).get(5, TimeUnit.SECONDS);
+					}
+					catch (Exception e) {
+						throw new AssertionError("Disposal during source handoff failed", e);
+					}
+					return super.detach();
+				}
+			}; MediaPlayer player = new MediaPlayer(reader, sources.video, sources.audio)) {
+				CountDownLatch finished = new CountDownLatch(1);
+				AtomicReference<String> error = new AtomicReference<>();
+				player.setListener(new MediaPlayerListener() {
+					@Override
+					public void onEndOfStream() {
+						finished.countDown();
+					}
+
+					@Override
+					public void onError(String message) {
+						error.set(message);
+						finished.countDown();
+					}
+				});
+				player.play();
+				assertTrue(finished.await(15, TimeUnit.SECONDS), "no end of stream");
+				assertEquals(null, error.get());
+				assertEquals(MediaPlayerState.ENDED, player.getState());
+			}
+		}
 	}
 
 	@Test

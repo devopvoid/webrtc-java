@@ -91,6 +91,38 @@ class NativeApiTests extends TestBase {
 	}
 
 	@Test
+	void retainedSourcesOutliveWrappers() {
+		CustomVideoSource video = new CustomVideoSource();
+		CustomAudioSource audio = new CustomAudioSource();
+		long videoHandle = NativeApi.retainVideoSource(video);
+		long audioHandle = NativeApi.retainAudioSource(audio);
+
+		try {
+			assertNotEquals(0L, videoHandle);
+			assertNotEquals(0L, audioHandle);
+			video.dispose();
+			audio.dispose();
+			assertThrows(IllegalStateException.class, () -> NativeApi.retainVideoSource(video));
+			assertThrows(IllegalStateException.class, () -> NativeApi.retainAudioSource(audio));
+		}
+		finally {
+			video.dispose();
+			audio.dispose();
+			// These references must still be valid after the wrappers released theirs.
+			NativeApi.releaseVideoSource(videoHandle);
+			NativeApi.releaseAudioSource(audioHandle);
+		}
+	}
+
+	@Test
+	void absentSourcesNeedNoReference() {
+		assertEquals(0L, NativeApi.retainVideoSource(null));
+		assertEquals(0L, NativeApi.retainAudioSource(null));
+		NativeApi.releaseVideoSource(0);
+		NativeApi.releaseAudioSource(0);
+	}
+
+	@Test
 	void failedObserverAddAttachesNothing() {
 		AudioTrackSource source = factory.createAudioSource(new AudioOptions());
 		AudioTrack track = factory.createAudioTrack("audioTrack", source);

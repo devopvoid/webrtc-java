@@ -62,6 +62,38 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseFrames
 	(JNIEnv *, jclass, jlong);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_NativeApi
+	 * Method:    retainVideoSource
+	 * Signature: (Ldev/onvoid/webrtc/media/video/CustomVideoSource;)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_retainVideoSource
+	(JNIEnv *, jclass, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_NativeApi
+	 * Method:    releaseVideoSource
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseVideoSource
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_NativeApi
+	 * Method:    retainAudioSource
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/CustomAudioSource;)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_retainAudioSource
+	(JNIEnv *, jclass, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_NativeApi
+	 * Method:    releaseAudioSource
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseAudioSource
+	(JNIEnv *, jclass, jlong);
+
 #ifdef __cplusplus
 }
 #endif

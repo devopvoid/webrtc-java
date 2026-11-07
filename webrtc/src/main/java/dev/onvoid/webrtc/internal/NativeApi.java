@@ -20,6 +20,8 @@ import java.util.Objects;
 
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpSender;
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
 
 /**
  * The entry point a native extension library uses to reach this library's
@@ -28,17 +30,18 @@ import dev.onvoid.webrtc.RTCRtpSender;
  * An extension gets two addresses from here and passes both to its own native
  * code: {@link #tableAddress()}, which is a {@code struct webrtc_java_api} of
  * function pointers declared in {@code webrtc_java_api.h}, and
- * {@link #handleOf(NativeObject)}, which is the native object behind a
- * {@code CustomVideoSource} or {@code CustomAudioSource}. The extension then
- * pushes decoded media straight into that source.
+ * {@link #retainVideoSource(CustomVideoSource)} or
+ * {@link #retainAudioSource(CustomAudioSource)}, which keeps the native source
+ * alive even if its Java wrapper is disposed. The extension then pushes decoded
+ * media straight into that source and releases the reference when done.
  * <p>
  * Neither native library links against the other, which is what makes this
  * work at all: {@link NativeLoader} extracts the library to a temporary file
  * with a generated name, so there is nothing an extension could link to.
  * <p>
  * This is not API for applications. It has no use outside a native extension,
- * and an address used after the source it belongs to was disposed crashes the
- * process.
+ * and using a raw, unretained address after its source was disposed can crash
+ * the process.
  *
  * @author Alex Andres
  */
@@ -68,6 +71,44 @@ public final class NativeApi {
 	public static native long tableAddress();
 
 	/**
+	 * Acquires a reference to a video source while protecting its native
+	 * handle against concurrent disposal. The reference remains valid after
+	 * disposal of the Java source and must be released with
+	 * {@link #releaseVideoSource(long)} or the table's video_source_release().
+	 *
+	 * @param source The source, or {@code null} for none.
+	 * @return A retained native handle, or {@code 0} for {@code null}.
+	 * @throws IllegalStateException If the source has been disposed.
+	 */
+	public static native long retainVideoSource(CustomVideoSource source);
+
+	/**
+	 * Acquires a reference to an audio source while protecting its native
+	 * handle against concurrent disposal. The reference remains valid after
+	 * disposal of the Java source and must be released with
+	 * {@link #releaseAudioSource(long)} or the table's audio_source_release().
+	 *
+	 * @param source The source, or {@code null} for none.
+	 * @return A retained native handle, or {@code 0} for {@code null}.
+	 * @throws IllegalStateException If the source has been disposed.
+	 */
+	public static native long retainAudioSource(CustomAudioSource source);
+
+	/**
+	 * Releases a reference acquired with {@link #retainVideoSource(CustomVideoSource)}.
+	 *
+	 * @param source The retained handle, or {@code 0}, which is ignored.
+	 */
+	public static native void releaseVideoSource(long source);
+
+	/**
+	 * Releases a reference acquired with {@link #retainAudioSource(CustomAudioSource)}.
+	 *
+	 * @param source The retained handle, or {@code 0}, which is ignored.
+	 */
+	public static native void releaseAudioSource(long source);
+
+	/**
 	 * Returns the interface version of the function table. An extension built
 	 * against a different version must not use the table.
 	 *
@@ -77,7 +118,10 @@ public final class NativeApi {
 
 	/**
 	 * Returns the address of the native object bound to the given Java object,
-	 * so that a native extension can act on it directly.
+	 * so that a native extension can act on it directly. This does not retain
+	 * the object or protect it from concurrent disposal. Use
+	 * {@link #retainVideoSource(CustomVideoSource)} or
+	 * {@link #retainAudioSource(CustomAudioSource)} to hand a source to an extension.
 	 *
 	 * @param object The object whose native counterpart is wanted.
 	 *

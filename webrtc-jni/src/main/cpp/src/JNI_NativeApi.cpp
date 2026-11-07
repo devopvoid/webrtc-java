@@ -16,6 +16,9 @@
 
 #include "JNI_NativeApi.h"
 #include "JavaBoundary.h"
+#include "NativeHandle.h"
+#include "media/audio/CustomAudioSource.h"
+#include "media/video/CustomVideoSource.h"
 
 #include "api/ExtensionApi.h"
 #include "api/EncodedFrameTransformer.h"
@@ -35,6 +38,57 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_tableAddress
 {
 	return jni::CallFromJava(env, [&]() -> jlong {
 		return reinterpret_cast<jlong>(jni::GetExtensionApi());
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_retainVideoSource
+(JNIEnv * env, jclass caller, jobject javaSource)
+{
+	return jni::CallFromJava(env, [&]() -> jlong {
+		if (javaSource == nullptr) {
+			return 0;
+		}
+
+		jni::NativeLease<jni::CustomVideoSource> source(env, javaSource);
+		CHECK_HANDLEV(source, 0);
+
+		// AddRef while the lease still defers any concurrent dispose.
+		source->AddRef();
+
+		return reinterpret_cast<jlong>(source.get());
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_retainAudioSource
+(JNIEnv * env, jclass caller, jobject javaSource)
+{
+	return jni::CallFromJava(env, [&]() -> jlong {
+		if (javaSource == nullptr) {
+			return 0;
+		}
+
+		jni::NativeLease<jni::CustomAudioSource> source(env, javaSource);
+		CHECK_HANDLEV(source, 0);
+
+		source->AddRef();
+
+		return reinterpret_cast<jlong>(source.get());
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseVideoSource
+(JNIEnv * env, jclass caller, jlong source)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::GetExtensionApi()->video_source_release(reinterpret_cast<void *>(source));
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseAudioSource
+(JNIEnv * env, jclass caller, jlong source)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::GetExtensionApi()->audio_source_release(reinterpret_cast<void *>(source));
 	});
 }
 
