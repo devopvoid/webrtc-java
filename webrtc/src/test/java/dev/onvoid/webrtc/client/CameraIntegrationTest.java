@@ -37,10 +37,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import dev.onvoid.webrtc.media.video.VideoDevice;
 
 import org.junit.jupiter.api.Test;
+import org.opentest4j.TestAbortedException;
 
 /**
- * Captures real cameras, so it skips on machines without one, as CI runners
- * are.
+ * Captures real cameras, so it skips on machines without one or without
+ * the optional camera backend libraries, as CI runners are.
  */
 class CameraIntegrationTest extends ClientTestBase {
 
@@ -248,9 +249,29 @@ class CameraIntegrationTest extends ClientTestBase {
 	}
 
 	private List<VideoDevice> cameras(int needed) {
-		List<VideoDevice> cameras = rtc.media().devices().cameras();
+		List<VideoDevice> cameras;
+
+		try {
+			cameras = rtc.media().devices().cameras();
+		}
+		catch (MediaException e) {
+			// The ARM32 CI lane deliberately runs without optional libudev.
+			// Other device failures must still fail these tests.
+			if (missingUdev(e)) {
+				// Watching can report the same missing backend to the error handler.
+				errors.removeIf(CameraIntegrationTest::missingUdev);
+				throw new TestAbortedException("Camera backend needs libudev", e);
+			}
+			throw e;
+		}
 		assumeTrue(cameras.size() >= needed, "Needs " + needed + " camera(s), found " + cameras.size());
 		return cameras;
+	}
+
+	private static boolean missingUdev(Throwable failure) {
+		return failure instanceof MediaException
+				&& failure.getCause() instanceof RuntimeException
+				&& "V4l2: libudev not found on system.".equals(failure.getCause().getMessage());
 	}
 
 	private static void waitFor(java.util.function.BooleanSupplier condition, String what) throws InterruptedException {
