@@ -18,6 +18,10 @@
 #include "JavaArrayList.h"
 #include "JavaContext.h"
 #include "JavaError.h"
+#include "JavaUtils.h"
+#include "Exception.h"
+#include "media/AudioBackendUnavailableException.h"
+#include <new>
 #include "media/DeviceChangeListener.h"
 #include "media/audio/AudioDevice.h"
 #include "media/audio/AudioDeviceManager.h"
@@ -40,6 +44,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_addDeviceChange
 
 		javaContext->addNativeRef(env, jni::JavaLocalRef<jobject>(env, jListener), listenerPtr);
 	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
+	}
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
@@ -54,6 +67,15 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_removeDeviceCha
 	try {
 		context->getAudioDeviceManager()->detachHotplugListener(listener);
 		context->getVideoDeviceManager()->detachHotplugListener(listener);
+	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -73,6 +95,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAu
 		}
 
 		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
+	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -94,6 +125,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getDefaultAu
 		}
 
 		return jni::AudioDevice::toJavaAudioDevice(env, device).release();
+	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -118,6 +158,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioRend
 
 		return deviceList.listObject().release();
 	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
+	}
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
@@ -141,6 +190,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getAudioCapt
 
 		return deviceList.listObject().release();
 	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
+	}
 	catch (...) {
 		ThrowCxxJavaException(env);
 	}
@@ -163,6 +221,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCapt
 		}
 
 		return deviceList.listObject().release();
+	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -192,6 +259,15 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_getVideoCapt
 		}
 
 		return capabilityList.listObject().release();
+	}
+	catch (const jni::AudioBackendUnavailableException & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/AudioBackendUnavailableException", e.what());
+	}
+	catch (const std::bad_alloc &) {
+		ThrowJavaException(env, "java/lang/OutOfMemoryError", "Allocating native device resources failed");
+	}
+	catch (const jni::Exception & e) {
+		ThrowJavaException(env, "dev/onvoid/webrtc/media/DeviceException", e.what());
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
