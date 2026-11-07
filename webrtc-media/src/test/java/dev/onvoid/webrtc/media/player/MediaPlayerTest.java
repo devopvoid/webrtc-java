@@ -129,6 +129,80 @@ class MediaPlayerTest {
 	}
 
 	@Test
+	void retriesUnacceptedPacketsAndDrainRequests() throws Exception {
+		for (boolean video : new boolean[] { true, false }) {
+			for (int mode : new int[] { 1, 4 }) {
+				DecoderFault.arm(video, mode);
+				try (Playback playback = new Playback()) {
+					playback.player.play();
+					assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+					assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+					assertEquals(1, DecoderFault.retries(), "unaccepted input was lost");
+					assertTrue(Math.abs(playback.frames.get() - EXPECTED_FRAMES) <= 1);
+					assertTrue(Math.abs(playback.chunks.get() - EXPECTED_CHUNKS) <= 2);
+				}
+				finally {
+					DecoderFault.disarm();
+				}
+			}
+		}
+	}
+
+	@Test
+	void drainFailuresPauseWithoutEndingOrLooping() throws Exception {
+		for (boolean video : new boolean[] { true, false }) {
+			for (int mode : new int[] { 2, 3 }) {
+				for (boolean looping : new boolean[] { false, true }) {
+					DecoderFault.arm(video, mode);
+					try (Playback playback = new Playback()) {
+						CountDownLatch failed = new CountDownLatch(1);
+						AtomicInteger ends = new AtomicInteger();
+						AtomicInteger errors = new AtomicInteger();
+						playback.player.setListener(new MediaPlayerListener() {
+							@Override
+							public void onError(String message) {
+								errors.incrementAndGet();
+								failed.countDown();
+							}
+
+							@Override
+							public void onEndOfStream() {
+								ends.incrementAndGet();
+							}
+						});
+						playback.player.setLooping(looping);
+						playback.player.play();
+						assertTrue(failed.await(15, TimeUnit.SECONDS), "no drain error");
+						assertEquals(MediaPlayerState.PAUSED, playback.player.getState());
+						assertTrue(waitFor(() -> PlaybackProbe.waitingPlayers() == 1, 5000),
+								"decode thread stuck waiting for the paused pacer at EOF");
+						assertEquals(0, ends.get());
+						// Resuming after a drain error must finish this pass, without
+						// having rewound and decoded a second one while paused.
+						playback.player.setLooping(false);
+						playback.player.play();
+						assertTrue(waitFor(() -> ends.get() == 1, 10000), "no end after resume");
+						assertTrue(playback.frames.get() <= EXPECTED_FRAMES);
+						assertEquals(1, errors.get());
+						playback.player.close();
+						assertEquals(1, errors.get());
+						assertEquals(1, ends.get());
+					}
+					finally {
+						DecoderFault.disarm();
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	void nativeObserverStartsAndStopsExactlyOnce() throws Exception {
+		assertTrue(DecoderFault.observerLifecycle(asset().toString(),
+				dev.onvoid.webrtc.internal.NativeApi.tableAddress()));
+	}
+
+	@Test
 	void playsToEnd() throws Exception {
 		try (Playback playback = new Playback()) {
 			playback.player.play();

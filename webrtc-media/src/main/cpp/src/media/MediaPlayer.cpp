@@ -16,6 +16,7 @@
 
 #include "media/MediaPlayer.h"
 #include "media/AllocationFault.h"
+#include "media/DecoderFault.h"
 #include "media/ErrorText.h"
 #include "media/PlaybackProbe.h"
 
@@ -305,9 +306,13 @@ namespace ffmpeg
 			{
 				std::unique_lock<std::mutex> lock(mutex_);
 
+				PlaybackProbe::BeginCommandWait();
+
 				command_.wait(lock, [this] {
 					return closing_ || seek_pending_ || (playing_ && !ended_);
 				});
+
+				PlaybackProbe::EndCommandWait();
 
 				if (closing_) {
 					break;
@@ -346,7 +351,9 @@ namespace ffmpeg
 
 			// Whatever the decoders still hold belongs to this pass, so it
 			// goes out before anything is rewound.
-			DrainDecoders();
+			if (!DrainDecoders()) {
+				continue;
+			}
 
 			// A source that cannot be rewound, such as a live stream that has
 			// ended, cannot start over either, and ends as if not looping.
@@ -427,45 +434,59 @@ namespace ffmpeg
 		bool video = has_video_ && index == reader_->GetVideoStreamIndex();
 		bool audio = has_audio_ && index == reader_->GetAudioStreamIndex();
 
-		if (video) {
-			result = video_decoder_.SendPacket(packet);
-		}
-		else if (audio) {
-			result = audio_decoder_.SendPacket(packet);
-		}
-		else {
-			// A stream this player does not play, such as a subtitle track.
-			result = 0;
+		bool decoded = true;
+
+		if (video || audio) {
+			decoded = SendToDecoder(video, packet, false);
 		}
 
+		// The decoder either accepted it or playback failed; EAGAIN alone
+		// never releases the packet.
 		av_packet_unref(packet);
 
-		if (result < 0 && result != AVERROR(EAGAIN)) {
-			ReportError("Decoding failed", result);
+		return decoded;
+	}
 
+	bool MediaPlayer::SendToDecoder(bool video, const AVPacket * packet, bool at_end)
+	{
+		for (;;) {
+			int result = DecoderFault::SendError(video, packet);
+
+			if (result == 0) {
+				result = video ? video_decoder_.SendPacket(packet) : audio_decoder_.SendPacket(packet);
+			}
+
+			// EOF means this decoder already accepted a drain request.
+			if (result < 0 && result != AVERROR(EAGAIN)
+					&& !(at_end && result == AVERROR_EOF)) {
+				ReportError("Decoding failed", result);
+
+				return false;
+			}
+
+			// Do not seek backwards while making room for an unaccepted
+			// packet: that would flush the decoder before its retry.
+			int decoded = video ? DecodeVideo(at_end || result == AVERROR(EAGAIN)) : DecodeAudio();
+
+			if (decoded < 0) {
+				return false;
+			}
+			if (result != AVERROR(EAGAIN)) {
+				return true;
+			}
+		}
+	}
+
+	bool MediaPlayer::DrainDecoders()
+	{
+		if (has_video_ && !SendToDecoder(true, nullptr, true)) {
+			return false;
+		}
+		if (has_audio_ && !SendToDecoder(false, nullptr, true)) {
 			return false;
 		}
 
-		if (video) {
-			return DecodeVideo(false) >= 0;
-		}
-		if (audio) {
-			return DecodeAudio() >= 0;
-		}
-
 		return true;
-	}
-
-	void MediaPlayer::DrainDecoders()
-	{
-		if (has_video_) {
-			video_decoder_.SendPacket(nullptr);
-			DecodeVideo(true);
-		}
-		if (has_audio_) {
-			audio_decoder_.SendPacket(nullptr);
-			DecodeAudio();
-		}
 	}
 
 	int MediaPlayer::DecodeVideo(bool at_end)
@@ -474,7 +495,11 @@ namespace ffmpeg
 			AVFrame * frame = nullptr;
 			int64_t timestamp_us = 0;
 
-			int result = video_decoder_.ReceiveFrame(&frame, &timestamp_us);
+			int result = DecoderFault::ReceiveError(true);
+
+			if (result == 0) {
+				result = video_decoder_.ReceiveFrame(&frame, &timestamp_us);
+			}
 
 			if (result == AVERROR(EAGAIN) || result == AVERROR_EOF) {
 				return 0;
@@ -511,7 +536,11 @@ namespace ffmpeg
 			std::vector<int16_t> chunk;
 			int64_t timestamp_us = 0;
 
-			int result = audio_decoder_.ReceiveChunk(chunk, &timestamp_us);
+			int result = DecoderFault::ReceiveError(false);
+
+			if (result == 0) {
+				result = audio_decoder_.ReceiveChunk(chunk, &timestamp_us);
+			}
 
 			if (result == AVERROR(EAGAIN) || result == AVERROR_EOF) {
 				return 0;
@@ -671,10 +700,6 @@ namespace ffmpeg
 				Deliver(*observer, Event{ Event::kState, kClosed, std::string() });
 			}
 
-			observer->OnThreadStop();
-		}
-
-		if (observer != nullptr) {
 			observer->OnThreadStop();
 		}
 	}

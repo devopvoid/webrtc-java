@@ -168,8 +168,12 @@ namespace ffmpeg
 			bool PumpOnce(AVPacket * packet, bool * end_of_stream);
 
 			// Pushes everything the decoders still hold, which is what the end
-			// of a stream and a loop both need.
-			void DrainDecoders();
+			// of a stream and a loop both need. Returns false on a reported error.
+			bool DrainDecoders();
+
+			// Keeps an unaccepted packet alive while output is received, then
+			// retries it. A null packet drains the selected decoder.
+			bool SendToDecoder(bool video, const AVPacket * packet, bool at_end);
 
 			// Takes the decoded video and hands it to the pacer. At the end
 			// of the stream a seek that landed too late is not retried: the
