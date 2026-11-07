@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -126,6 +127,80 @@ class MediaPlayerTest {
 	void disposeFactory() {
 		factory.dispose();
 		audioModule.dispose();
+	}
+
+	@Test
+	void retriesUnacceptedPacketsAndDrainRequests() throws Exception {
+		for (boolean video : new boolean[] { true, false }) {
+			for (int mode : new int[] { 1, 4 }) {
+				DecoderFault.arm(video, mode);
+				try (Playback playback = new Playback()) {
+					playback.player.play();
+					assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+					assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+					assertEquals(1, DecoderFault.retries(), "unaccepted input was lost");
+					assertTrue(Math.abs(playback.frames.get() - EXPECTED_FRAMES) <= 1);
+					assertTrue(Math.abs(playback.chunks.get() - EXPECTED_CHUNKS) <= 2);
+				}
+				finally {
+					DecoderFault.disarm();
+				}
+			}
+		}
+	}
+
+	@Test
+	void drainFailuresPauseWithoutEndingOrLooping() throws Exception {
+		for (boolean video : new boolean[] { true, false }) {
+			for (int mode : new int[] { 2, 3 }) {
+				for (boolean looping : new boolean[] { false, true }) {
+					DecoderFault.arm(video, mode);
+					try (Playback playback = new Playback()) {
+						CountDownLatch failed = new CountDownLatch(1);
+						AtomicInteger ends = new AtomicInteger();
+						AtomicInteger errors = new AtomicInteger();
+						playback.player.setListener(new MediaPlayerListener() {
+							@Override
+							public void onError(String message) {
+								errors.incrementAndGet();
+								failed.countDown();
+							}
+
+							@Override
+							public void onEndOfStream() {
+								ends.incrementAndGet();
+							}
+						});
+						playback.player.setLooping(looping);
+						playback.player.play();
+						assertTrue(failed.await(15, TimeUnit.SECONDS), "no drain error");
+						assertEquals(MediaPlayerState.PAUSED, playback.player.getState());
+						assertTrue(waitFor(() -> PlaybackProbe.waitingPlayers() == 1, 5000),
+								"decode thread stuck waiting for the paused pacer at EOF");
+						assertEquals(0, ends.get());
+						// Resuming after a drain error must finish this pass, without
+						// having rewound and decoded a second one while paused.
+						playback.player.setLooping(false);
+						playback.player.play();
+						assertTrue(waitFor(() -> ends.get() == 1, 10000), "no end after resume");
+						assertTrue(playback.frames.get() <= EXPECTED_FRAMES);
+						assertEquals(1, errors.get());
+						playback.player.close();
+						assertEquals(1, errors.get());
+						assertEquals(1, ends.get());
+					}
+					finally {
+						DecoderFault.disarm();
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	void nativeObserverStartsAndStopsExactlyOnce() throws Exception {
+		assertTrue(DecoderFault.observerLifecycle(asset().toString(),
+				dev.onvoid.webrtc.internal.NativeApi.tableAddress()));
 	}
 
 	@Test
@@ -883,6 +958,73 @@ class MediaPlayerTest {
 				() -> new MediaPlayer(reader, null, null));
 
 		reader.close();
+	}
+
+	@Test
+	void rejectsDisposedSources() throws Exception {
+		for (boolean disposedVideo : new boolean[] { true, false }) {
+			for (boolean otherSource : new boolean[] { true, false }) {
+				try (Sources sources = new Sources(); MediaReader reader = new MediaReader(asset())) {
+					if (disposedVideo) {
+						sources.video.dispose();
+					}
+					else {
+						sources.audio.dispose();
+					}
+					CustomVideoSource video = disposedVideo || otherSource ? sources.video : null;
+					CustomAudioSource audio = !disposedVideo || otherSource ? sources.audio : null;
+					assertThrows(IllegalStateException.class, () -> new MediaPlayer(reader, video, audio));
+					// Rejection must leave the reader with its caller, ready to use.
+					assertNotNull(reader.getInfo());
+					try (MediaPlayer player = new MediaPlayer(reader,
+							disposedVideo ? null : sources.video, disposedVideo ? sources.audio : null)) {
+						assertEquals(MediaPlayerState.IDLE, player.getState());
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	void sourcesSurviveConstructorHandoff() throws Exception {
+		try (Sources sources = new Sources()) {
+			// The transfer of the reader is between source acquisition in Java
+			// and the pacer's AddRef. Force disposal on another thread in that gap.
+			try (MediaReader reader = new MediaReader(asset()) {
+				@Override
+				synchronized long detach() {
+					try {
+						CompletableFuture.runAsync(() -> {
+							sources.video.dispose();
+							sources.audio.dispose();
+						}).get(5, TimeUnit.SECONDS);
+					}
+					catch (Exception e) {
+						throw new AssertionError("Disposal during source handoff failed", e);
+					}
+					return super.detach();
+				}
+			}; MediaPlayer player = new MediaPlayer(reader, sources.video, sources.audio)) {
+				CountDownLatch finished = new CountDownLatch(1);
+				AtomicReference<String> error = new AtomicReference<>();
+				player.setListener(new MediaPlayerListener() {
+					@Override
+					public void onEndOfStream() {
+						finished.countDown();
+					}
+
+					@Override
+					public void onError(String message) {
+						error.set(message);
+						finished.countDown();
+					}
+				});
+				player.play();
+				assertTrue(finished.await(15, TimeUnit.SECONDS), "no end of stream");
+				assertEquals(null, error.get());
+				assertEquals(MediaPlayerState.ENDED, player.getState());
+			}
+		}
 	}
 
 	@Test

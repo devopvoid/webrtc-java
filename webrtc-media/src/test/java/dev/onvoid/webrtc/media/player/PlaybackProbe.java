@@ -47,4 +47,6 @@ final class PlaybackProbe {
 	 */
 	static native int waitingPushes();
 
+	static native int waitingPlayers();
+
 }

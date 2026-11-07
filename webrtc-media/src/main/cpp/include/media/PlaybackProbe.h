@@ -26,7 +26,7 @@ namespace ffmpeg
 	// once, and a thread held up by a full queue looks like one that is done.
 	//
 	// Only the tests read it, through JNI_PlaybackProbe, and it costs a player
-	// a single atomic update per seek and per wait for room in a queue. The
+	// an atomic update per seek, command wait and wait for room in a queue. The
 	// counts are those of all players, which tests one at a time can tell
 	// apart.
 	class PlaybackProbe
@@ -52,6 +52,12 @@ namespace ffmpeg
 
 			// How many pushes are waiting for room in a queue right now.
 			static int WaitingPushes();
+
+			// Counts decode threads waiting for a playback command, rather
+			// than stuck in decoding or waiting for the pacer at EOF.
+			static void BeginCommandWait();
+			static void EndCommandWait();
+			static int WaitingPlayers();
 	};
 }
 

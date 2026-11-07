@@ -31,3 +31,9 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_PlaybackProbe_waiting
 {
 	return static_cast<jint>(ffmpeg::PlaybackProbe::WaitingPushes());
 }
+
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_PlaybackProbe_waitingPlayers
+(JNIEnv * env, jclass caller)
+{
+	return static_cast<jint>(ffmpeg::PlaybackProbe::WaitingPlayers());
+}

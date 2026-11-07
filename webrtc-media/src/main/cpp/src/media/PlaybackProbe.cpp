@@ -22,10 +22,26 @@ namespace
 {
 	std::atomic<int64_t> seeks{ 0 };
 	std::atomic<int> waiting_pushes{ 0 };
+	std::atomic<int> waiting_players{ 0 };
 }
 
 namespace ffmpeg
 {
+	void PlaybackProbe::BeginCommandWait()
+	{
+		waiting_players.fetch_add(1);
+	}
+
+	void PlaybackProbe::EndCommandWait()
+	{
+		waiting_players.fetch_sub(1);
+	}
+
+	int PlaybackProbe::WaitingPlayers()
+	{
+		return waiting_players.load();
+	}
+
 	void PlaybackProbe::NoteSeek()
 	{
 		seeks.fetch_add(1);

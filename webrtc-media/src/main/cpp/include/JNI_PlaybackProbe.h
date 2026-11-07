@@ -38,6 +38,14 @@ extern "C" {
 	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_PlaybackProbe_waitingPushes
 	(JNIEnv *, jclass);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_media_player_PlaybackProbe
+	 * Method:    waitingPlayers
+	 * Signature: ()I
+	 */
+	JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_PlaybackProbe_waitingPlayers
+	(JNIEnv *, jclass);
+
 #ifdef __cplusplus
 }
 #endif

@@ -31,8 +31,9 @@
  *
  *   1. Java side: dev.onvoid.webrtc.internal.NativeApi.tableAddress() returns
  *      the address of a "struct webrtc_java_api" owned by this library, and
- *      NativeApi.handleOf(source) returns the native handle of a
- *      CustomVideoSource or CustomAudioSource.
+ *      NativeApi.retainVideoSource(source) or retainAudioSource(source)
+ *      returns a retained handle of a CustomVideoSource or CustomAudioSource.
+ *      Release that reference with the matching source_release() when done.
  *   2. The extension receives both as jlong values and casts them back.
  *
  * There is no link-time dependency between the two native libraries, so the
