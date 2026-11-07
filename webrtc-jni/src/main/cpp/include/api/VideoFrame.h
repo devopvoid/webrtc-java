@@ -48,6 +48,13 @@ namespace jni
 
 	namespace I420Buffer
 	{
+		// Checks a plane's dimensions, stride and direct-buffer capacity before
+		// native code reads or writes it. The last row needs only width bytes.
+		// Position and limit are ignored, as in I420Buffer's Java contract.
+		// Writable destinations must not be read-only. Throws on invalid input.
+		void CheckPlane(JNIEnv * env, const char * name, jobject data, jint stride,
+			jint width, jint height, bool writable = false);
+
 		// Wraps the pixels of the buffer in a NativeI420Buffer without
 		// copying them. With readOnly its planes are read-only byte buffers,
 		// for pixels that others share.
