@@ -44,12 +44,18 @@ import dev.onvoid.webrtc.media.video.VideoFrameBuffer;
  * Frames are converted on the thread that delivers them, so the event dispatch
  * thread only paints. The picture keeps its aspect ratio and its rotation, with
  * the component's background around it.
+ * Conversion buffers grow on demand and are reused across resolution changes
+ * and clear(). Their retained capacity follows the largest frames received;
+ * buffer memory is released when the view becomes unreachable.
  */
 public class VideoView extends JComponent implements Consumer<VideoFrame> {
 
 	private static final long serialVersionUID = 1L;
 
-	/** Guards the images and the pixel buffer. */
+	/** Serializes conversion; never acquired by the event dispatch thread. */
+	private final Object convertLock = new Object();
+
+	/** Guards the displayed image and its hand-over. */
 	private final Object lock = new Object();
 
 	/** The picture shown. */
@@ -59,6 +65,8 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 	private transient BufferedImage back;
 
 	private transient ByteBuffer pixels;
+
+	private long generation;
 
 	private int rotation;
 
@@ -80,25 +88,36 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 	 * frame is not released, which its subscription does.
 	 *
 	 * @param frame the frame to show.
+	 * @throws IllegalArgumentException if dimensions are nonpositive or the
+	 * frame cannot be represented by a Java pixel buffer.
 	 */
 	@Override
 	public void accept(VideoFrame frame) {
 		VideoFrameBuffer buffer = frame.buffer;
 		int width = buffer.getWidth();
 		int height = buffer.getHeight();
+		int byteCount = frameBytes(width, height);
 
+		long started;
 		synchronized (lock) {
+			started = generation;
+		}
+
+		synchronized (convertLock) {
 			if (back == null || back.getWidth() != width || back.getHeight() != height) {
 				back = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
 			}
-			if (pixels == null || pixels.capacity() != width * height * 4) {
-				pixels = ByteBuffer.allocateDirect(width * height * 4).order(ByteOrder.LITTLE_ENDIAN);
+			if (pixels == null || pixels.capacity() < byteCount) {
+				long previous = pixels == null ? 0 : pixels.capacity();
+				int capacity = (int) Math.min(Integer.MAX_VALUE, Math.max(byteCount, previous * 2L));
+				pixels = ByteBuffer.allocateDirect(capacity).order(ByteOrder.LITTLE_ENDIAN);
 			}
 
 			try {
 				// libyuv's ARGB is B, G, R, A in memory, which read as
 				// little-endian ints is what TYPE_INT_RGB holds.
 				pixels.clear();
+				pixels.limit(byteCount);
 				VideoBufferConverter.convertFromI420(buffer, pixels, FourCC.ARGB);
 				pixels.rewind();
 				pixels.asIntBuffer().get(((DataBufferInt) back.getRaster().getDataBuffer()).getData());
@@ -107,23 +126,37 @@ public class VideoView extends JComponent implements Consumer<VideoFrame> {
 				throw new IllegalStateException("The frame could not be converted", e);
 			}
 
-			BufferedImage shown = front;
-			front = back;
-			back = shown;
-			rotation = frame.rotation;
+			synchronized (lock) {
+				if (started != generation) {
+					return;
+				}
+				BufferedImage shown = front;
+				front = back;
+				back = shown;
+				rotation = frame.rotation;
+			}
 		}
 
 		repaint();
 	}
 
+	/** ByteBuffer capacities and image array lengths must fit in an int. */
+	static int frameBytes(int width, int height) {
+		long pixels = (long) width * height;
+		if (width <= 0 || height <= 0 || pixels > Integer.MAX_VALUE / 4) {
+			throw new IllegalArgumentException("Invalid or unrepresentable frame dimensions: " + width + "x" + height);
+		}
+		return (int) (pixels * 4L);
+	}
+
 	/**
-	 * Removes the picture, leaving the background.
+	 * Removes the picture, leaving the background, and drops frames already
+	 * waiting for or undergoing conversion.
 	 */
 	public void clear() {
 		synchronized (lock) {
+			generation++;
 			front = null;
-			back = null;
-			pixels = null;
 		}
 
 		repaint();

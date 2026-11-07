@@ -45,6 +45,9 @@ import dev.onvoid.webrtc.media.video.VideoFrameBuffer;
  * Application Thread only paints, at most once per pulse however many frames
  * arrive. The picture keeps its aspect ratio and its rotation, on a black
  * background, and can be mirrored for a local camera preview.
+ * Conversion buffers grow on demand and are reused across resolution changes
+ * and clear(). Their retained capacity follows the largest frames received;
+ * buffer memory is released when the view becomes unreachable.
  */
 public class VideoView extends Region implements Consumer<VideoFrame> {
 
@@ -58,11 +61,11 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	/** Guards the hand-over between the converting thread and the JavaFX thread. */
 	private final Object lock = new Object();
 
-	// Three buffers: the converting thread fills back, hands it over as
-	// ready, and the JavaFX thread paints from shown. None is written while
-	// another thread reads it.
+	// Two reusable buffers: only the one JavaFX is copying is reserved. A waiting
+	// frame may be reclaimed for conversion, so the newest frame wins without
+	// blocking either thread during conversion or copying.
 
-	private Pixels back;
+	private final Pixels[] buffers = new Pixels[2];
 
 	private Pixels ready;
 
@@ -71,9 +74,10 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	/** Counts the calls of clear(), to tell the frames that came before one. */
 	private long generation;
 
-	// Confined to the JavaFX Application Thread.
+	// Reserved under lock only while JavaFX copies pixels into the image.
+	private Pixels reading;
 
-	private Pixels shown;
+	// Confined to the JavaFX Application Thread.
 
 	private WritableImage image;
 
@@ -96,12 +100,15 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 	 * frame is not released, which its subscription does.
 	 *
 	 * @param frame the frame to show.
+	 * @throws IllegalArgumentException if dimensions are nonpositive or the
+	 * frame cannot be represented by a Java pixel buffer.
 	 */
 	@Override
 	public void accept(VideoFrame frame) {
 		VideoFrameBuffer buffer = frame.buffer;
 		int width = buffer.getWidth();
 		int height = buffer.getHeight();
+		int byteCount = frameBytes(width, height);
 		long started;
 
 		// Before the wait for convertLock, as the frame came before any clear()
@@ -111,15 +118,31 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 		}
 
 		synchronized (convertLock) {
-			Pixels target = back;
-
-			if (target == null || !target.fits(width, height)) {
-				target = new Pixels(width, height);
+			// Only this thread chooses/writes a slot. Never overwrite a buffer
+			// JavaFX is copying; withdraw a waiting frame before reusing it.
+			int slot = 0;
+			synchronized (lock) {
+				while (buffers[slot] != null && buffers[slot] == reading) {
+					slot++;
+				}
+				if (buffers[slot] == ready) {
+					ready = null;
+				}
 			}
+			Pixels target = buffers[slot];
+			if (target == null || target.data.capacity() < byteCount) {
+				long previous = target == null ? 0 : target.data.capacity();
+				int capacity = (int) Math.min(Integer.MAX_VALUE, Math.max(byteCount, previous * 2L));
+				target = new Pixels(capacity);
+				buffers[slot] = target;
+			}
+			target.width = width;
+			target.height = height;
 
 			try {
 				// libyuv's ARGB is B, G, R, A in memory, which is JavaFX's BGRA.
 				target.data.clear();
+				target.data.limit(byteCount);
 				VideoBufferConverter.convertFromI420(buffer, target.data, FourCC.ARGB);
 				target.data.rewind();
 			}
@@ -134,7 +157,6 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 					return;
 				}
 
-				back = ready;
 				ready = target;
 
 				if (scheduled) {
@@ -148,6 +170,15 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 		Platform.runLater(this::present);
 	}
 
+	/** ByteBuffer capacities and image array lengths must fit in an int. */
+	static int frameBytes(int width, int height) {
+		long pixels = (long) width * height;
+		if (width <= 0 || height <= 0 || pixels > Integer.MAX_VALUE / 4) {
+			throw new IllegalArgumentException("Invalid or unrepresentable frame dimensions: " + width + "x" + height);
+		}
+		return (int) (pixels * 4L);
+	}
+
 	/**
 	 * Removes the picture, leaving the background, and drops the frames still
 	 * being converted. Called on the JavaFX Application Thread.
@@ -156,10 +187,8 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 		synchronized (lock) {
 			generation++;
 			ready = null;
-			back = null;
 		}
 
-		shown = null;
 		image = null;
 		draw();
 	}
@@ -224,17 +253,24 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 				return;
 			}
 
-			ready = shown;
-			shown = next;
+			ready = null;
+			reading = next;
 		}
 
-		if (image == null || image.getWidth() != next.width || image.getHeight() != next.height) {
-			image = new WritableImage(next.width, next.height);
-		}
+		try {
+			if (image == null || image.getWidth() != next.width || image.getHeight() != next.height) {
+				image = new WritableImage(next.width, next.height);
+			}
 
-		image.getPixelWriter().setPixels(0, 0, next.width, next.height,
-				PixelFormat.getByteBgraPreInstance(), next.data, next.width * 4);
-		rotation = next.rotation;
+			image.getPixelWriter().setPixels(0, 0, next.width, next.height,
+					PixelFormat.getByteBgraPreInstance(), next.data, next.width * 4);
+			rotation = next.rotation;
+		}
+		finally {
+			synchronized (lock) {
+				reading = null;
+			}
+		}
 
 		draw();
 	}
@@ -270,23 +306,18 @@ public class VideoView extends Region implements Consumer<VideoFrame> {
 
 	private static final class Pixels {
 
-		final int width;
+		int width;
 
-		final int height;
+		int height;
 
 		final ByteBuffer data;
 
 		int rotation;
 
 
-		Pixels(int width, int height) {
-			this.width = width;
-			this.height = height;
-			this.data = ByteBuffer.allocateDirect(width * height * 4).order(ByteOrder.LITTLE_ENDIAN);
+		Pixels(int capacity) {
+			this.data = ByteBuffer.allocateDirect(capacity).order(ByteOrder.LITTLE_ENDIAN);
 		}
 
-		boolean fits(int otherWidth, int otherHeight) {
-			return width == otherWidth && height == otherHeight;
-		}
 	}
 }

@@ -20,8 +20,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -100,7 +107,7 @@ class VideoViewTest {
 
 	@Test
 	void showsFrame() throws Exception {
-		VideoView view = onFx(VideoView::new);
+		VideoView view = onFx(() -> new VideoView());
 		assertNull(onFx(view::snapshot));
 
 		view.accept(frame(64, 48, 128, 128));
@@ -119,7 +126,7 @@ class VideoViewTest {
 
 	@Test
 	void clearDropsFrameInConversion() throws Exception {
-		VideoView view = onFx(VideoView::new);
+		VideoView view = onFx(() -> new VideoView());
 		CountDownLatch converting = new CountDownLatch(1);
 		CountDownLatch cleared = new CountDownLatch(1);
 		VideoFrame held = frame(64, 48, 128, 128);
@@ -184,6 +191,181 @@ class VideoViewTest {
 	}
 
 	@Test
+	void rejectsInvalidSizes() throws Exception {
+		VideoView view = onFx(() -> new VideoView());
+		for (int[] size : new int[][] { { 0, 1 }, { 1, 0 }, { -1, -1 }, { 1, -1 }, { -1, 1 },
+				{ Integer.MAX_VALUE / 4 + 1, 1 },
+				{ 65536, 65536 }, { Integer.MAX_VALUE, Integer.MAX_VALUE } }) {
+			VideoFrameBuffer invalid = (VideoFrameBuffer) Proxy.newProxyInstance(
+					getClass().getClassLoader(), new Class<?>[] { VideoFrameBuffer.class },
+					(proxy, method, args) -> {
+						if (method.getName().equals("getWidth")) return size[0];
+						if (method.getName().equals("getHeight")) return size[1];
+						throw new AssertionError("Invalid frame reached conversion");
+					});
+			assertThrows(IllegalArgumentException.class,
+					() -> view.accept(new VideoFrame(invalid, 0)));
+		}
+	}
+
+	@Test
+	void supports8kDimensions() {
+		assertEquals(7680 * 4320 * 4, VideoView.frameBytes(7680, 4320));
+		assertEquals((Integer.MAX_VALUE / 4) * 4, VideoView.frameBytes(Integer.MAX_VALUE / 4, 1));
+	}
+
+	@Test
+	void growsBuffersOnDemand() throws Exception {
+		VideoView view = onFx(VideoView::new);
+		Field field = VideoView.class.getDeclaredField("buffers");
+		field.setAccessible(true);
+		ByteBuffer previous = null;
+		for (int width : new int[] { 32, 64, 32, 64 }) {
+			VideoFrame frame = frame(width, 48, 128, 128);
+			try {
+				view.accept(frame);
+				assertEquals(width, (int) onFx(view::snapshot).getWidth());
+				Object slot = ((Object[]) field.get(view))[0];
+				Field data = slot.getClass().getDeclaredField("data");
+				data.setAccessible(true);
+				ByteBuffer current = (ByteBuffer) data.get(slot);
+				onFx(() -> { view.clear(); return null; });
+				if (previous != null && previous.capacity() >= width * 48 * 4) {
+					assertSame(previous, current);
+				}
+				assertEquals(previous == null ? 32 * 48 * 4 : 64 * 48 * 4, current.capacity());
+				previous = current;
+			}
+			finally {
+				frame.release();
+			}
+		}
+	}
+
+	@Test
+	void reusesBuffersAcrossSizes() throws Exception {
+		VideoView view = onFx(() -> new VideoView());
+		Set<ByteBuffer> storage = Collections.newSetFromMap(new IdentityHashMap<>());
+		Field field = VideoView.class.getDeclaredField("buffers");
+		field.setAccessible(true);
+		for (int i = 0; i < 12; i++) {
+			int width = i < 3 || i % 2 == 0 ? 64 : 32;
+			VideoFrame frame = frame(width, 48, 128, 128);
+			try {
+				view.accept(frame);
+				Image snapshot = onFx(view::snapshot);
+				assertEquals(width, (int) snapshot.getWidth());
+				assertGray(snapshot.getPixelReader().getColor(0, 0));
+				for (Object slot : (Object[]) field.get(view)) {
+					if (slot != null) {
+						Field data = slot.getClass().getDeclaredField("data");
+						data.setAccessible(true);
+						storage.add((ByteBuffer) data.get(slot));
+					}
+				}
+				if (i >= 6) onFx(() -> { view.clear(); return null; });
+			}
+			finally {
+				frame.release();
+			}
+		}
+		assertTrue(storage.size() <= 2);
+		for (ByteBuffer data : storage) {
+			assertTrue(data.isDirect());
+			assertEquals(64 * 48 * 4, data.capacity());
+		}
+	}
+
+	@Test
+	void replacesWaitingFrame() throws Exception {
+		VideoView view = onFx(VideoView::new);
+		CountDownLatch blocked = new CountDownLatch(1);
+		CountDownLatch unblock = new CountDownLatch(1);
+		CompletableFuture<Void> ui = new CompletableFuture<>();
+		Platform.runLater(() -> {
+			blocked.countDown();
+			try {
+				assertTrue(unblock.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+				ui.complete(null);
+			}
+			catch (Throwable e) {
+				ui.completeExceptionally(e);
+			}
+		});
+		try {
+			assertTrue(blocked.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+			for (int width : new int[] { 64, 32, 64, 32 }) {
+				VideoFrame frame = frame(width, 48, 128, 128);
+				try {
+					view.accept(frame);
+				}
+				finally {
+					frame.release();
+				}
+			}
+		}
+		finally {
+			unblock.countDown();
+		}
+		ui.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		assertEquals(32, (int) onFx(view::snapshot).getWidth());
+		Field reading = VideoView.class.getDeclaredField("reading");
+		reading.setAccessible(true);
+		assertNull(reading.get(view), "The copied buffer must be released");
+		Field buffers = VideoView.class.getDeclaredField("buffers");
+		buffers.setAccessible(true);
+		assertEquals(2, ((Object[]) buffers.get(view)).length);
+	}
+
+	@Test
+	void withdrawsFrameBeforeConversion() throws Exception {
+		VideoView view = onFx(VideoView::new);
+		VideoFrame first = frame(64, 48, 128, 128);
+		VideoFrame latest = frame(32, 24, 16, 16);
+		CountDownLatch converting = new CountDownLatch(1);
+		CountDownLatch finish = new CountDownLatch(1);
+		VideoFrameBuffer buffer = (VideoFrameBuffer) Proxy.newProxyInstance(
+				getClass().getClassLoader(), new Class<?>[] { VideoFrameBuffer.class },
+				(proxy, method, args) -> {
+					if (method.getName().equals("toI420")) {
+						converting.countDown();
+						assertTrue(finish.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+					}
+					return method.invoke(latest.buffer, args);
+				});
+		CompletableFuture<Void> delivered = new CompletableFuture<>();
+		Thread delivery = new Thread(() -> {
+			try {
+				view.accept(new VideoFrame(buffer, 0));
+				delivered.complete(null);
+			}
+			catch (Throwable e) {
+				delivered.completeExceptionally(e);
+			}
+		});
+		try {
+			// Queue presentation, then reclaim its buffer before JavaFX can read it.
+			onFx(() -> {
+				view.accept(first);
+				delivery.start();
+				assertTrue(converting.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+				return null;
+			});
+			assertNull(onFx(view::snapshot), "No partially converted frame may be copied");
+		}
+		finally {
+			finish.countDown();
+			delivery.join(TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
+			first.release();
+			latest.release();
+		}
+		delivered.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		Image snapshot = onFx(view::snapshot);
+		assertEquals(32, (int) snapshot.getWidth());
+		assertTrue(snapshot.getPixelReader().getColor(0, 0).getBrightness() < 0.1);
+	}
+
+	@Test
 	void keepsAspectRatio() throws Exception {
 		VideoView view = sized(200, 100);
 		view.accept(frame(64, 48, 128, 128));
@@ -234,7 +416,7 @@ class VideoViewTest {
 		Peer caller = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
 		Peer callee = rtc.createPeer(PeerOptions.builder().signaling(link.second()).polite(true).build());
 		CustomVideo video = rtc.media().customVideo("video");
-		VideoView view = onFx(VideoView::new);
+		VideoView view = onFx(() -> new VideoView());
 
 		callee.onTrack(track -> track.asVideo().onFrame(view));
 		caller.addTrack(video);

@@ -318,6 +318,18 @@ frame.add(remoteView, BorderLayout.CENTER);
 
 `snapshot()` returns a copy of the picture shown, for saving a still or for tests.
 
+Both views support resolutions such as 8K without a fixed pixel limit. They reject
+nonpositive dimensions and frames whose four-byte pixel data cannot fit in a Java
+buffer, using overflow-safe arithmetic. Conversion buffers allocate on demand,
+grow geometrically when necessary, and retain their capacity across smaller frames
+and `clear()`. Swing reuses one direct buffer; JavaFX reuses up to two.
+JavaFX reserves a buffer only while copying it into the displayed image; a waiting
+frame may be replaced by a newer frame to avoid building a queue. Buffer
+memory is released when the view becomes unreachable. Memory usage follows the
+largest frames received and includes displayed images, conversion buffers, and
+replacement allocations awaiting garbage collection. Snapshots, input frames and
+toolkit rendering resources use additional memory.
+
 For JavaFX, the `webrtc-java-javafx` module has a `VideoView` node in `dev.onvoid.webrtc.client.javafx` that works the same way. It needs Java 11 and the JavaFX your application already uses:
 
 ```xml
@@ -638,6 +650,13 @@ peer.onChannel(channel -> {                  // channels the remote peer opens
     }
 });
 ```
+
+`Message.toString()` reports only the message type and byte length. Access content
+explicitly with `text()` or `bytes()`. For diagnostics, `message.preview(64)` inspects
+at most 64 payload bytes and escapes control characters. Binary previews use hex.
+Use `message.preview(64, prefix -> redact(prefix))` to apply your own masking before
+escaping; the masking function must handle secrets truncated at the prefix boundary.
+The preview marks truncated content and also limits the masking function's output.
 
 - A channel may be used right away: messages sent before it opens are held until it does.
 - Messages that arrive while a channel has no `onMessage` handler are kept for the next one, so none are lost while a handler is being set up.
