@@ -614,7 +614,7 @@ Peer peer = rtc.createPeer(PeerOptions.builder()
         .build());
 ```
 
-The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives. The builders of [WHIP and WHEP](#whip-and-whep) take them too, `Whip`'s as `sendTransform(...)`, `Whep`'s as `receiveTransform(...)`.
+The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives. If installing the receive transform fails, the peer stops that track's transceiver and reports the failure through `onError`; the track is neither listed in `remoteTracks()` nor delivered through `onTrack`. If the receive path cannot be stopped, the peer closes. The builders of [WHIP and WHEP](#whip-and-whep) take them too, `Whip`'s as `sendTransform(...)`, `Whep`'s as `receiveTransform(...)`.
 
 A single sender or remote track takes a transform of its own, in place of the peer's, and `null` removes it:
 

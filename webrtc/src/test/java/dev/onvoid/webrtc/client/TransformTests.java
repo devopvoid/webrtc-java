@@ -17,11 +17,14 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -31,10 +34,15 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
+import java.util.function.UnaryOperator;
 
 import dev.onvoid.webrtc.RTCEncodedFrame;
 import dev.onvoid.webrtc.RTCEncodedVideoFrame;
+import dev.onvoid.webrtc.RTCRtpTransceiver;
+import dev.onvoid.webrtc.RTCRtpTransceiverInit;
 import dev.onvoid.webrtc.RTCStats;
+import dev.onvoid.webrtc.media.MediaStream;
+import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.RTCStatsType;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
@@ -68,10 +76,52 @@ class TransformTests extends ClientTestBase {
 	}
 
 	@Test
+	void failedReceiveTransformStopsPathWithoutPublishingTrack() throws Exception {
+		PeerImpl peer = (PeerImpl) rtc.createPeer(PeerOptions.builder()
+				.negotiation(Negotiation.MANUAL).build());
+		IllegalStateException failure = new IllegalStateException("Cannot install decryption");
+		CompletableFuture<WebRtcException> reported = new CompletableFuture<>();
+		AtomicInteger published = new AtomicInteger();
+		RemoteTracks tracks = new RemoteTracks(peer, frame -> { }, (receiver, transform) -> {
+			throw failure;
+		});
+		peer.onError(reported::complete);
+		tracks.onTrack(track -> published.incrementAndGet());
+
+		await(peer.withNative(connection -> {
+			RTCRtpTransceiver failed = connection.addTransceiver(MediaType.VIDEO, new RTCRtpTransceiverInit());
+			RTCRtpTransceiver unaffected = connection.addTransceiver(MediaType.AUDIO, new RTCRtpTransceiverInit());
+
+			try {
+				assertFalse(failed.stopped());
+				tracks.added(failed.getReceiver(), new MediaStream[0]);
+
+				// Releasing the receiver wrapper alone leaves this false and
+				// lets the native receiver keep processing untransformed media.
+				assertTrue(failed.stopped());
+				assertFalse(unaffected.stopped());
+				assertTrue(tracks.current().isEmpty());
+			}
+			finally {
+				failed.dispose();
+				unaffected.dispose();
+			}
+			return null;
+		}));
+
+		assertSame(failure, await(reported).getCause());
+		// A late subscriber must not replay the rejected track either.
+		tracks.onTrack(track -> published.incrementAndGet());
+		await(peer.withNative(connection -> null));
+		assertEquals(0, published.get());
+		assertFalse(peer.isClosed());
+	}
+
+	@Test
 	void peerTransformsEveryFrame() throws Exception {
 		AtomicInteger marked = new AtomicInteger();
 		AtomicInteger unmarked = new AtomicInteger();
-		Peer[] peers = pair(options -> options
+		Peer[] peers = videoPair(options -> options
 				.sendTransform(TransformTests::mark)
 				.receiveTransform(frame -> (unmark(frame) ? marked : unmarked).incrementAndGet()));
 		CustomVideo video = rtc.media().customVideo("video");
@@ -100,7 +150,7 @@ class TransformTests extends ClientTestBase {
 	void senderAndTrackTransformsReplacePeers() throws Exception {
 		AtomicInteger byPeer = new AtomicInteger();
 		AtomicInteger byTrack = new AtomicInteger();
-		Peer[] peers = pair(options -> options
+		Peer[] peers = videoPair(options -> options
 				.sendTransform(TransformTests::mark)
 				.receiveTransform(frame -> {
 					unmark(frame);
@@ -129,7 +179,7 @@ class TransformTests extends ClientTestBase {
 
 	@Test
 	void trackTransformWithoutPeerTransform() throws Exception {
-		Peer[] peers = pair();
+		Peer[] peers = videoPair();
 		CustomVideo video = rtc.media().customVideo("video");
 		AtomicInteger seen = new AtomicInteger();
 		CompletableFuture<CompletableFuture<Void>> set = new CompletableFuture<>();
@@ -148,7 +198,7 @@ class TransformTests extends ClientTestBase {
 	@Test
 	void throwingTransformDropsFrames() throws Exception {
 		AtomicInteger thrown = new AtomicInteger();
-		Peer[] peers = pair(options -> options.receiveTransform(frame -> {
+		Peer[] peers = videoPair(options -> options.receiveTransform(frame -> {
 			thrown.incrementAndGet();
 			throw new IllegalStateException("No key");
 		}));
@@ -172,7 +222,7 @@ class TransformTests extends ClientTestBase {
 	void keyFramesOnRequest() throws Exception {
 		AtomicInteger frames = new AtomicInteger();
 		AtomicInteger keyFrames = new AtomicInteger();
-		Peer[] peers = pair(options -> options.sendTransform(frame -> {
+		Peer[] peers = videoPair(options -> options.sendTransform(frame -> {
 			frames.incrementAndGet();
 
 			if (((RTCEncodedVideoFrame) frame).isKeyFrame()) {
@@ -210,7 +260,7 @@ class TransformTests extends ClientTestBase {
 
 		await(unnegotiated.generateKeyFrame());
 
-		Peer[] peers = pair();
+		Peer[] peers = videoPair();
 		CompletableFuture<RemoteTrack> received = new CompletableFuture<>();
 		CompletableFuture<Void> ended = new CompletableFuture<>();
 
@@ -230,7 +280,7 @@ class TransformTests extends ClientTestBase {
 
 	@Test
 	void transformOfRemovedSenderFails() throws Exception {
-		Peer[] peers = pair();
+		Peer[] peers = videoPair();
 		Sender sender = peers[0].addTrack(rtc.media().customVideo("video"));
 
 		await(sender.remove());
@@ -240,7 +290,7 @@ class TransformTests extends ClientTestBase {
 
 	@Test
 	void transformOfEndedTrackFails() throws Exception {
-		Peer[] peers = pair();
+		Peer[] peers = videoPair();
 		CompletableFuture<RemoteTrack> received = new CompletableFuture<>();
 		CompletableFuture<Void> ended = new CompletableFuture<>();
 
@@ -259,7 +309,7 @@ class TransformTests extends ClientTestBase {
 
 	@Test
 	void transformAfterPeerClosedFails() throws Exception {
-		Peer[] peers = pair();
+		Peer[] peers = videoPair();
 		CompletableFuture<RemoteTrack> received = new CompletableFuture<>();
 
 		peers[1].onTrack(received::complete);
@@ -313,6 +363,23 @@ class TransformTests extends ClientTestBase {
 		return true;
 	}
 
+	private Peer[] videoPair() throws Exception {
+		return videoPair(UnaryOperator.identity());
+	}
+
+	private Peer[] videoPair(UnaryOperator<PeerOptions.Builder> options) throws Exception {
+		Peer[] peers = pair(options);
+
+		// As in TestMediaCall, use the same software codec on every platform.
+		// macOS otherwise prefers H.264 through VideoToolbox; these tests
+		// exercise transforms and key-frame requests, not hardware encoding.
+		for (Peer peer : peers) {
+			await(((PeerImpl) peer).manual.preferCodecs(Collections.singletonMap(
+					MediaKind.VIDEO, Collections.singletonList("VP8"))));
+		}
+		return peers;
+	}
+
 	private void feedVideo(CustomVideo video) {
 		AtomicInteger shade = new AtomicInteger();
 
@@ -325,10 +392,25 @@ class TransformTests extends ClientTestBase {
 				y.put(i, (byte) (i + offset));
 			}
 
+			// Initialize chroma too, so encoded input never depends on the
+			// contents of newly allocated native memory.
+			fillChroma(buffer.getDataU());
+			fillChroma(buffer.getDataV());
+
 			VideoFrame frame = new VideoFrame(buffer, System.nanoTime());
-			video.push(frame);
-			frame.release();
+			try {
+				video.push(frame);
+			}
+			finally {
+				frame.release();
+			}
 		}, 0, 33, TimeUnit.MILLISECONDS);
+	}
+
+	private static void fillChroma(ByteBuffer plane) {
+		while (plane.hasRemaining()) {
+			plane.put((byte) 128);
+		}
 	}
 
 	private static long framesDecoded(Peer peer) throws Exception {

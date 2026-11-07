@@ -77,7 +77,7 @@ final class SerialExecutor implements Executor {
 
 	private boolean scheduled;
 
-	private volatile Thread runner;
+	private final ThreadLocal<Boolean> running;
 
 
 	/**
@@ -99,6 +99,13 @@ final class SerialExecutor implements Executor {
 	 */
 	SerialExecutor(Executor executor, Workload workload, Consumer<Throwable> errorHandler,
 			boolean eventThread, String threadName) {
+		this(executor, workload, errorHandler, eventThread, threadName, new ThreadLocal<>());
+	}
+
+	/** Allows a test to hold a turn in its thread-local cleanup while the next starts. */
+	SerialExecutor(Executor executor, Workload workload, Consumer<Throwable> errorHandler,
+			boolean eventThread, String threadName, ThreadLocal<Boolean> running) {
+		this.running = running;
 		this.executor = executor;
 		this.workload = workload;
 		this.errorHandler = errorHandler;
@@ -149,7 +156,7 @@ final class SerialExecutor implements Executor {
 	 * @return true when the calling thread is running a task of this executor.
 	 */
 	boolean inExecutor() {
-		return runner == Thread.currentThread();
+		return Boolean.TRUE.equals(running.get());
 	}
 
 	private void schedule() {
@@ -204,7 +211,8 @@ final class SerialExecutor implements Executor {
 				EVENT_DEPTH.get()[0]++;
 			}
 
-			runner = thread;
+			Boolean previous = running.get();
+			running.set(true);
 
 			try {
 				long start = workload.now();
@@ -229,7 +237,14 @@ final class SerialExecutor implements Executor {
 				}
 			}
 			finally {
-				runner = null;
+				// A previous turn may still be cleaning up after the next
+				// started on another thread. Its marker belongs to this thread only.
+				if (previous == null) {
+					running.remove();
+				}
+				else {
+					running.set(previous);
+				}
 
 				if (eventThread) {
 					EVENT_DEPTH.get()[0]--;
