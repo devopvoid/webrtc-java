@@ -34,6 +34,13 @@ import dev.onvoid.webrtc.media.FourCC;
  * {@code 2 * ((width + 1) / 2)}. Conversions in both directions use this
  * layout, and fail when the buffer is smaller than the frame.
  *
+ * I420 planes must be non-null direct buffers, with positive dimensions,
+ * strides at least as large as their plane widths, and capacity for every
+ * pixel through the last row. The last row needs no trailing padding.
+ * Destination planes must also be writable. Invalid planes cause a
+ * {@link RuntimeException} before any destination pixels are written.
+ * Plane positions and limits are ignored, as specified by {@link I420Buffer}.
+ *
  * @author Alex Andres
  */
 public final class VideoBufferConverter {

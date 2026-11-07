@@ -18,12 +18,24 @@ package dev.onvoid.webrtc.media.video;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Planar I420 pixels with positive dimensions and direct Y, U and V buffers.
+ * Each stride must be at least its plane's width. A plane must hold
+ * {@code stride * (rows - 1L) + columns} bytes: padding after the last row is
+ * not required. Chroma columns and rows are the frame dimensions rounded up
+ * to half size. Plane position and limit are ignored; use a slice to expose
+ * only the memory belonging to the plane.
+ * <p>
+ * Read-only planes can be used as sources. Operations that write pixels,
+ * such as {@link VideoBufferConverter#convertToI420(byte[], I420Buffer,
+ * dev.onvoid.webrtc.media.FourCC)}, require writable destination planes.
+ */
 public interface I420Buffer extends VideoFrameBuffer {
 
 	/**
 	 * Returns a direct ByteBuffer containing Y-plane data. The buffer capacity is
-	 * at least getStrideY() * getHeight() bytes. The position of the returned
-	 * buffer is ignored and must be 0. Callers may mutate the ByteBuffer (eg.
+	 * at least {@code getStrideY() * (getHeight() - 1L) + getWidth()} bytes.
+	 * The position of the returned buffer is ignored and must be 0. Callers may mutate the ByteBuffer (eg.
 	 * through relative-read operations), so implementations must return a new
 	 * ByteBuffer or slice for each call.
 	 */
@@ -31,8 +43,8 @@ public interface I420Buffer extends VideoFrameBuffer {
 
 	/**
 	 * Returns a direct ByteBuffer containing U-plane data. The buffer capacity is
-	 * at least getStrideU() * ((getHeight() + 1) / 2) bytes. The position of the
-	 * returned buffer is ignored and must be 0. Callers may mutate the ByteBuffer
+	 * large enough for every chroma row, without requiring trailing padding.
+	 * The position of the returned buffer is ignored and must be 0. Callers may mutate the ByteBuffer
 	 * (eg. through relative-read operations), so implementations must return a new
 	 * ByteBuffer or slice for each call.
 	 */
@@ -40,8 +52,8 @@ public interface I420Buffer extends VideoFrameBuffer {
 
 	/**
 	 * Returns a direct ByteBuffer containing V-plane data. The buffer capacity is
-	 * at least getStrideV() * ((getHeight() + 1) / 2) bytes. The position of the
-	 * returned buffer is ignored and must be 0. Callers may mutate the ByteBuffer
+	 * large enough for every chroma row, without requiring trailing padding.
+	 * The position of the returned buffer is ignored and must be 0. Callers may mutate the ByteBuffer
 	 * (eg. through relative-read operations), so implementations must return a new
 	 * ByteBuffer or slice for each call.
 	 */

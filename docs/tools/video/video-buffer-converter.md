@@ -137,7 +137,9 @@ public void onImage(BufferedImage image) {
 ## Error handling and edge cases
 - All methods throw `NullPointerException` if src/dst is null; ensure proper checks.
 - `ByteBuffer` destinations must be writable (not read-only) for `convertFromI420`.
-- A `ByteBuffer` is read or written between its position and its limit only, also when it is a slice or a view of a larger buffer. The window must hold the whole frame; the position and limit stay as they are.
+- A packed `ByteBuffer` is read or written between its position and its limit only, also when it is a slice or a view of a larger buffer. The window must hold the whole frame; the position and limit stay as they are.
+- I420 frames need positive dimensions. Every Y/U/V plane must be a non-null direct buffer with stride at least its plane width and capacity of at least `stride * (rows - 1L) + columns` bytes. Chroma dimensions round up to half the frame dimensions. The last row needs no trailing padding.
+- I420 plane positions and limits are ignored; return a slice with the appropriate capacity to restrict a plane's memory. Read-only planes are accepted as sources, but all three destination planes must be writable. Invalid planes cause a `RuntimeException` before conversion writes any pixels.
 - Ensure the correct FourCC is used for the actual memory layout you pass/expect.
 - Beware of frame rotation metadata; conversions do not rotate pixels. Handle `VideoFrame.rotation` separately if your renderer requires upright images.
 
