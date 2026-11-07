@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -106,7 +107,7 @@ class VideoViewTest {
 
 	@Test
 	void showsFrame() throws Exception {
-		VideoView view = onFx(() -> new VideoView(320 * 240));
+		VideoView view = onFx(() -> new VideoView());
 		assertNull(onFx(view::snapshot));
 
 		view.accept(frame(64, 48, 128, 128));
@@ -125,7 +126,7 @@ class VideoViewTest {
 
 	@Test
 	void clearDropsFrameInConversion() throws Exception {
-		VideoView view = onFx(() -> new VideoView(320 * 240));
+		VideoView view = onFx(() -> new VideoView());
 		CountDownLatch converting = new CountDownLatch(1);
 		CountDownLatch cleared = new CountDownLatch(1);
 		VideoFrame held = frame(64, 48, 128, 128);
@@ -191,11 +192,9 @@ class VideoViewTest {
 
 	@Test
 	void rejectsInvalidSizes() throws Exception {
-		assertThrows(IllegalArgumentException.class, () -> new VideoView(0));
-		assertThrows(IllegalArgumentException.class,
-				() -> new VideoView(VideoView.MAX_PIXELS + 1));
-		VideoView view = onFx(() -> new VideoView(64 * 48));
-		for (int[] size : new int[][] { { 0, 1 }, { -1, -1 }, { 65, 48 },
+		VideoView view = onFx(() -> new VideoView());
+		for (int[] size : new int[][] { { 0, 1 }, { 1, 0 }, { -1, -1 }, { 1, -1 }, { -1, 1 },
+				{ Integer.MAX_VALUE / 4 + 1, 1 },
 				{ 65536, 65536 }, { Integer.MAX_VALUE, Integer.MAX_VALUE } }) {
 			VideoFrameBuffer invalid = (VideoFrameBuffer) Proxy.newProxyInstance(
 					getClass().getClassLoader(), new Class<?>[] { VideoFrameBuffer.class },
@@ -210,13 +209,47 @@ class VideoViewTest {
 	}
 
 	@Test
+	void supports8kDimensions() {
+		assertEquals(7680 * 4320 * 4, VideoView.frameBytes(7680, 4320));
+		assertEquals((Integer.MAX_VALUE / 4) * 4, VideoView.frameBytes(Integer.MAX_VALUE / 4, 1));
+	}
+
+	@Test
+	void growsBuffersOnDemand() throws Exception {
+		VideoView view = onFx(VideoView::new);
+		Field field = VideoView.class.getDeclaredField("buffers");
+		field.setAccessible(true);
+		ByteBuffer previous = null;
+		for (int width : new int[] { 32, 64, 32, 64 }) {
+			VideoFrame frame = frame(width, 48, 128, 128);
+			try {
+				view.accept(frame);
+				assertEquals(width, (int) onFx(view::snapshot).getWidth());
+				Object slot = ((Object[]) field.get(view))[0];
+				Field data = slot.getClass().getDeclaredField("data");
+				data.setAccessible(true);
+				ByteBuffer current = (ByteBuffer) data.get(slot);
+				onFx(() -> { view.clear(); return null; });
+				if (previous != null && previous.capacity() >= width * 48 * 4) {
+					assertSame(previous, current);
+				}
+				assertEquals(previous == null ? 32 * 48 * 4 : 64 * 48 * 4, current.capacity());
+				previous = current;
+			}
+			finally {
+				frame.release();
+			}
+		}
+	}
+
+	@Test
 	void reusesBuffersAcrossSizes() throws Exception {
-		VideoView view = onFx(() -> new VideoView(64 * 48));
+		VideoView view = onFx(() -> new VideoView());
 		Set<ByteBuffer> storage = Collections.newSetFromMap(new IdentityHashMap<>());
 		Field field = VideoView.class.getDeclaredField("buffers");
 		field.setAccessible(true);
 		for (int i = 0; i < 12; i++) {
-			int width = i % 2 == 0 ? 64 : 32;
+			int width = i < 3 || i % 2 == 0 ? 64 : 32;
 			VideoFrame frame = frame(width, 48, 128, 128);
 			try {
 				view.accept(frame);
@@ -294,7 +327,7 @@ class VideoViewTest {
 		Peer caller = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
 		Peer callee = rtc.createPeer(PeerOptions.builder().signaling(link.second()).polite(true).build());
 		CustomVideo video = rtc.media().customVideo("video");
-		VideoView view = onFx(() -> new VideoView(320 * 240));
+		VideoView view = onFx(() -> new VideoView());
 
 		callee.onTrack(track -> track.asVideo().onFrame(view));
 		caller.addTrack(video);
@@ -320,7 +353,7 @@ class VideoViewTest {
 
 	private VideoView sized(int width, int height) throws Exception {
 		return onFx(() -> {
-			VideoView view = new VideoView(320 * 240);
+			VideoView view = new VideoView();
 			new Scene(view, width, height);
 			view.resize(width, height);
 			view.layout();
