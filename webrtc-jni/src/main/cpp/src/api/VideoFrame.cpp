@@ -31,6 +31,19 @@ namespace jni
 {
 	namespace
 	{
+		class JavaByteBufferClass : public JavaClass
+		{
+			public:
+				explicit JavaByteBufferClass(JNIEnv * env)
+				{
+					cls = FindClass(env, "java/nio/ByteBuffer");
+					isReadOnly = GetMethod(env, cls, "isReadOnly", "()Z");
+				}
+
+				jclass cls;
+				jmethodID isReadOnly;
+		};
+
 		// A direct buffer over a plane, or throws: the allocation may fail, with or without an exception pending.
 		JavaLocalRef<jobject> NewPlane(JNIEnv * env, const char * name, const uint8_t * data, jlong size)
 		{
@@ -55,24 +68,6 @@ namespace jni
 			return view;
 		}
 
-		// Throws unless the plane holds every byte a copy reads: the last row ends at the width.
-		void CheckPlane(JNIEnv * env, const char * name, const JavaRef<jobject> & data, jint stride, jint width, jint height)
-		{
-			if (stride < width) {
-				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
-					JavaRuntimeException(env, "Stride %d of the %s plane is less than its width %d", stride, name, width)));
-			}
-
-			// Neither factor exceeds an int, so the product cannot overflow.
-			const int64_t required = static_cast<int64_t>(stride) * (height - 1) + width;
-			const jlong capacity = env->GetDirectBufferCapacity(data);
-
-			if (capacity < required) {
-				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
-					JavaRuntimeException(env, "The %s plane holds %lld bytes, but a %dx%d plane with stride %d needs %lld",
-						name, static_cast<long long>(capacity), width, height, stride, static_cast<long long>(required))));
-			}
-		}
 	}
 
 	namespace VideoFrame
@@ -203,9 +198,9 @@ namespace jni
 					JavaRuntimeException(env, "Buffer size %dx%d is too large", width, height)));
 			}
 
-			CheckPlane(env, "Y", dataY, strideY, width, height);
-			CheckPlane(env, "U", dataU, strideU, chromaWidth, chromaHeight);
-			CheckPlane(env, "V", dataV, strideV, chromaWidth, chromaHeight);
+			I420Buffer::CheckPlane(env, "Y", dataY, strideY, width, height);
+			I420Buffer::CheckPlane(env, "U", dataU, strideU, chromaWidth, chromaHeight);
+			I420Buffer::CheckPlane(env, "V", dataV, strideV, chromaWidth, chromaHeight);
 
 			return webrtc::I420Buffer::Copy(width, height, y, strideY, u, strideU, v, strideV);
 		}
@@ -213,6 +208,43 @@ namespace jni
 
 	namespace I420Buffer
 	{
+		void CheckPlane(JNIEnv * env, const char * name, jobject data, jint stride,
+			jint width, jint height, bool writable)
+		{
+			if (width <= 0 || height <= 0 || stride < width) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "Invalid %s plane dimensions %dx%d or stride %d", name, width, height, stride)));
+			}
+			if (data == nullptr) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The %s plane is null", name)));
+			}
+
+			const jlong capacity = env->GetDirectBufferCapacity(data);
+			if (capacity < 0 || env->GetDirectBufferAddress(data) == nullptr) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The %s plane must be a direct buffer", name)));
+			}
+
+			// Each factor is an int; the product and sum fit in 64 bits.
+			const int64_t required = static_cast<int64_t>(stride) * (height - 1) + width;
+			if (capacity < required) {
+				throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+					JavaRuntimeException(env, "The %s plane holds %lld bytes, but a %dx%d plane with stride %d needs %lld",
+						name, static_cast<long long>(capacity), width, height, stride, static_cast<long long>(required))));
+			}
+
+			if (writable) {
+				const auto javaClass = JavaClasses::get<JavaByteBufferClass>(env);
+				const jboolean readOnly = env->CallBooleanMethod(data, javaClass->isReadOnly);
+				ExceptionCheck(env);
+				if (readOnly) {
+					throw JavaWrappedException(JavaLocalRef<jthrowable>(env,
+						JavaRuntimeException(env, "The %s destination plane is read-only", name)));
+				}
+			}
+		}
+
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::scoped_refptr<webrtc::I420BufferInterface> & buffer,
 			bool readOnly)
 		{
