@@ -352,15 +352,15 @@ final class SenderImpl implements Sender {
 				}
 			}
 			catch (Throwable e) {
-				peer.rtc.reportError(e);
+				done.completeExceptionally(e);
+				return;
 			}
-			finally {
-				if (track == closedTrack) {
-					track = null;
-				}
-				done.complete(null);
+			if (track == closedTrack) {
+				track = null;
+				closedTrack.unregister(this);
 			}
-		});
+			done.complete(null);
+		}, () -> done.completeExceptionally(new PeerClosedException("The runtime is closed")));
 
 		return done;
 	}

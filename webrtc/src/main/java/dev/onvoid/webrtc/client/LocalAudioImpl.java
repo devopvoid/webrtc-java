@@ -84,8 +84,9 @@ class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 
 			synchronized (LocalAudioImpl.this) {
 				// Once the track ended, the release removes what is left.
-				if (isLive() && listeners.remove(listener)) {
+				if (isLive() && listeners.contains(listener)) {
 					detach(listener);
+					listeners.remove(listener);
 				}
 			}
 		};
@@ -97,16 +98,24 @@ class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 
 		synchronized (this) {
 			attached = new ArrayList<>(listeners);
-			listeners.clear();
 		}
 
+		Throwable failure = null;
 		for (VoiceActivity listener : attached) {
 			listener.closed = true;
-			detach(listener);
+			failure = attempt(failure, () -> {
+				detach(listener);
+				synchronized (this) {
+					listeners.remove(listener);
+				}
+			});
+		}
+		if (failure != null) {
+			throw new WebRtcException("Removing voice activity listeners failed", failure);
 		}
 	}
 
-	private void detach(VoiceActivity listener) {
+	void detach(VoiceActivityListener listener) {
 		if (microphone) {
 			rtc.factory.removeVoiceActivityListener(listener);
 		}

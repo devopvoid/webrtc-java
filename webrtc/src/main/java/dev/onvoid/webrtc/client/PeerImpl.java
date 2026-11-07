@@ -747,7 +747,9 @@ final class PeerImpl implements Peer {
 		}
 
 		state = PeerState.CLOSED;
-		rtc.removePeer(this);
+		if (tracks.releaseFailure() == null) {
+			rtc.removePeer(this);
+		}
 
 		// Finished only once the tasks queued before the connection closed
 		// have run: a callback of WebRTC may have queued one behind this
@@ -761,7 +763,8 @@ final class PeerImpl implements Peer {
 	}
 
 	private void finishTeardown(List<RemoteTrackImpl> ended, PeerClosedException error) {
-		closedInternal.complete(null);
+		Throwable failure = tracks.releaseFailure();
+		complete(closedInternal, null, failure);
 
 		events.execute(() -> {
 			// Behind the messages queued for sending, so that the transport
@@ -774,7 +777,7 @@ final class PeerImpl implements Peer {
 			deliverState(PeerState.CLOSED);
 
 			connected.completeExceptionally(error);
-			closedFuture.complete(null);
+			complete(closedFuture, null, failure);
 
 			tracks.clearHandlers();
 			channels.clearHandlers();
@@ -784,7 +787,7 @@ final class PeerImpl implements Peer {
 			signaling.detach();
 
 			connected.completeExceptionally(error);
-			closedFuture.complete(null);
+			complete(closedFuture, null, failure);
 		});
 	}
 

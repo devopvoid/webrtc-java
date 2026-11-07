@@ -223,7 +223,7 @@ Every method of the client API may be called from any thread, including from ins
 | Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
 | `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
 | [Encoded transforms](#encoded-transforms) | a thread of each sender and receiver | Better not. A slow transform delays only its own frames, and one that falls several seconds behind has frames dropped. |
-| `LocalTrack.onEnded` and `Devices.onChange` handlers, callbacks of the futures of local tracks and devices | the event thread of the runtime's local media | Yes, but that delays the other events of local media. They must not wait for a future of this API either. A track is released before its `onEnded` handlers run, so they never hold up a release. |
+| `LocalTrack.onEnded` and `Devices.onChange` handlers, callbacks of the futures of local tracks and devices | the event thread of the runtime's local media | Yes, but that delays the other events of local media. They must not wait for a future of this API either. A track's release attempt finishes before its `onEnded` handlers run, so they never hold up a release. |
 | WebRTC's own callbacks | WebRTC's threads | Not your code. The library only copies what they report and queues it. |
 
 The handlers of one peer never run at the same time, and they run in the order of the events. The handlers of different peers may run at the same time. With the default executor, the event thread is named after its peer, such as `webrtc-client-events-alice`, which shows up in thread dumps.
@@ -876,7 +876,7 @@ You close what you created, and closing an owner closes what it owns:
 
 `WebRtc.close()` is the one close that waits, for up to the close timeout, which makes it fit for try-with-resources. Once it returns, every peer's `state()` is `CLOSED`; the `whenClosed` futures and `CLOSED` events follow on the peers' event threads, since waiting for them could never end when `close()` is called on an event thread.
 
-When a peer or track does not close within the close timeout, or a track or its source could not be released, the runtime leaves its factory undisposed rather than free what WebRTC's threads may still use. A track's `closeAsync()` fails in that case too. `WebRtc.closeAsync()` then fails with a `WebRtcException` naming the cause, and the error handler hears of it as well, which is how `close()` reports it.
+When a peer or track does not close within the close timeout, or a track or its source could not be released, the runtime leaves its factory undisposed rather than free what WebRTC's threads may still use. If a sender cannot detach a closing local track, the track and its source stay alive and the track's `closeAsync()` fails. Remote track cleanup attempts each independent step even after a failure; a failure also makes the peer's `closeAsync()` and `whenClosed()` fail and remains visible to runtime shutdown after the track was removed. `WebRtc.closeAsync()` then fails with a `WebRtcException` naming the cause, and the error handler hears of it as well, which is how `close()` reports it.
 
 ## Errors
 

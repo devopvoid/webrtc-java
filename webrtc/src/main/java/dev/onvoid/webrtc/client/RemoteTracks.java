@@ -56,6 +56,11 @@ final class RemoteTracks {
 
 	private final Map<String, RemoteTrackImpl> byId = new HashMap<>();
 
+	/** Failed releases stay owned by the peer, including after removal. */
+	private final List<RemoteTrackImpl> failed = new ArrayList<>();
+
+	private Throwable releaseFailure;
+
 	/**
 	 * The kinds of media whose tracks this peer drops, those it declined when
 	 * it answered an offer that replaced its own.
@@ -177,7 +182,7 @@ final class RemoteTracks {
 		}
 
 		tracks.remove(remote);
-		remote.end();
+		end(remote);
 
 		peer.events.execute(() -> {
 			delivered.remove(remote);
@@ -195,12 +200,29 @@ final class RemoteTracks {
 		List<RemoteTrackImpl> ended = new ArrayList<>(tracks);
 
 		for (RemoteTrackImpl remote : ended) {
-			remote.end();
+			end(remote);
 		}
 		tracks.clear();
 		byId.clear();
 
 		return ended;
+	}
+
+	Throwable releaseFailure() {
+		return releaseFailure;
+	}
+
+	private void end(RemoteTrackImpl remote) {
+		Throwable error = remote.end();
+		if (error != null) {
+			failed.add(remote);
+			if (releaseFailure == null) {
+				releaseFailure = error;
+			}
+			else if (releaseFailure != error) {
+				releaseFailure.addSuppressed(error);
+			}
+		}
 	}
 
 	/**

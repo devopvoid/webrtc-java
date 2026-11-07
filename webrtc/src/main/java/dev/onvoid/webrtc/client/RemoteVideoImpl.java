@@ -89,11 +89,14 @@ final class RemoteVideoImpl extends RemoteTrackImpl implements RemoteVideo {
 
 	@Override
 	void detachSinks() {
+		Throwable failure = null;
 		for (FrameDispatcher dispatcher : dispatchers) {
-			track.removeSink(dispatcher);
-			dispatcher.close();
+			failure = LocalTrackImpl.attempt(failure, () -> track.removeSink(dispatcher));
+			failure = LocalTrackImpl.attempt(failure, dispatcher::close);
 		}
-
+		if (failure != null) {
+			throw new WebRtcException("Removing track sinks failed", failure);
+		}
 		dispatchers.clear();
 	}
 }
