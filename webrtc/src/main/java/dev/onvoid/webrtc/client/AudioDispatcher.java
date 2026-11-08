@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.client;
 
 import java.time.Duration;
 import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicLong;
 
 import dev.onvoid.webrtc.internal.Timeouts;
 import dev.onvoid.webrtc.media.audio.AudioTrackSink;
@@ -28,6 +29,12 @@ import dev.onvoid.webrtc.media.audio.AudioTrackSink;
  * oldest are dropped.
  */
 final class AudioDispatcher extends Dispatcher<AudioChunk> implements AudioTrackSink {
+
+	private final AtomicLong pcmCallbacks = new AtomicLong();
+
+	long pcmCallbacks() {
+		return pcmCallbacks.get();
+	}
 
 	/**
 	 * @param buffer how much audio may wait for the handler.
@@ -41,6 +48,12 @@ final class AudioDispatcher extends Dispatcher<AudioChunk> implements AudioTrack
 	public void onData(byte[] data, int bitsPerSample, int sampleRate, int channels, int frames) {
 		if (bitsPerSample != 16) {
 			return;
+		}
+
+		if (frames > 0) {
+
+			pcmCallbacks.incrementAndGet();
+
 		}
 
 		// The track reuses the array for the next chunk.

@@ -69,7 +69,7 @@ final class StatsSampler {
 			try {
 				peer.connection().getStats(report -> peer.control.execute(() -> {
 					try {
-						result.complete(reader.read(report));
+						result.complete(reader.read(report, peer.pcmObservations()));
 					}
 					catch (Throwable e) {
 						result.completeExceptionally(e);

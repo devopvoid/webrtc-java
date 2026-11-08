@@ -17,7 +17,9 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -76,7 +78,16 @@ class MediaTests extends ClientTestBase {
 		CustomAudio voice = rtc.media().customAudio("voice");
 		CompletableFuture<AudioChunk> heard = new CompletableFuture<>();
 
-		peers[1].onTrack(track -> track.asAudio().onAudio(heard::complete));
+		peers[1].onTrack(track -> track.asAudio().onAudio(chunk -> {
+            // The playout clock can deliver silence before any RTP arrives.
+            // A non-silent chunk confirms that the pushed tone was decoded.
+            for (byte sample : chunk.samples()) {
+                if (sample != 0) {
+                    heard.complete(chunk);
+                    break;
+                }
+            }
+        }));
 		peers[0].addTrack(voice);
 
 		// One second in one go; the track sends it in 10 ms chunks.
@@ -87,6 +98,13 @@ class MediaTests extends ClientTestBase {
 
 		assertTrue(chunk.frames() > 0);
 		assertEquals(chunk.frames() * chunk.channels() * 2, chunk.samples().length);
+		PeerStats received = await(peers[1].stats());
+		assertEquals(1, received.inboundAudio().size(), () -> received.report().toString());
+		AudioStats audioStats = received.inboundAudio().get(0);
+		assertNotNull(audioStats.pcmCallbacks());
+		assertTrue(audioStats.pcmCallbacks() > 0);
+		assertNotNull(audioStats.codec());
+		assertFalse(received.diagnostics().conditions().contains(QualityCondition.AUDIO_PACKETS_WITHOUT_PCM));
 	}
 
 	@Test

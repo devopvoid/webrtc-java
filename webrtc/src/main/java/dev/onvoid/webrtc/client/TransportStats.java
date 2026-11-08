@@ -25,6 +25,8 @@ import java.time.Duration;
  */
 public final class TransportStats {
 
+	private final boolean relayed;
+
 	private final String id;
 
 	private final String selectedCandidatePairId;
@@ -39,7 +41,8 @@ public final class TransportStats {
 
 
 	TransportStats(String id, String selectedCandidatePairId, String candidateType,
-			Duration roundTripTime, long bytesSent, long bytesReceived) {
+			Duration roundTripTime, long bytesSent, long bytesReceived, boolean relayed) {
+		this.relayed = relayed;
 		this.id = id;
 		this.selectedCandidatePairId = selectedCandidatePairId;
 		this.candidateType = candidateType;
@@ -91,6 +94,11 @@ public final class TransportStats {
 	 */
 	public long bytesReceived() {
 		return bytesReceived;
+	}
+
+	/** @return whether either selected candidate is a TURN relay. */
+	public boolean relayed() {
+		return relayed;
 	}
 
 	@Override

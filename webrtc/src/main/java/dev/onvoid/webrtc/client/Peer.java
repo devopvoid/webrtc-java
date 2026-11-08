@@ -16,9 +16,12 @@
 
 package dev.onvoid.webrtc.client;
 
+import static java.util.Objects.requireNonNull;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -175,6 +178,28 @@ public interface Peer extends AutoCloseable {
 	 * @return the subscription that stops the calls.
 	 */
 	Subscription onStats(Duration interval, Consumer<PeerStats> handler);
+
+	/**
+	 * Samples statistics and reports the initial diagnosis and subsequent changes
+	 * to its state or causes, on the event executor. Closing the subscription
+	 * stops sampling. Uses the same per-peer history as stats() and onStats().
+	 * @param interval statistics sampling interval; one second is recommended.
+	 * @param handler receives explainable diagnosis transitions, including recovery.
+	 * @return the subscription.
+	 */
+	default Subscription onDiagnostics(Duration interval, Consumer<PeerDiagnostics> handler) {
+		requireNonNull(handler, "handler");
+		AtomicReference<PeerDiagnostics> previous =
+				new AtomicReference<>();
+		return onStats(interval, stats -> {
+			PeerDiagnostics diagnosis = stats.diagnostics();
+			PeerDiagnostics before = previous.getAndSet(diagnosis);
+			if (before == null || before.state() != diagnosis.state()
+					|| !before.conditions().equals(diagnosis.conditions())) {
+				handler.accept(diagnosis);
+			}
+		});
+	}
 
 	/**
 	 * Gathers new ICE candidates and renegotiates, to recover a failed

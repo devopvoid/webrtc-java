@@ -93,6 +93,20 @@ final class RemoteTracks {
 		return Collections.unmodifiableList(new ArrayList<RemoteTrack>(tracks));
 	}
 
+	/** Snapshot only existing application sinks; diagnostics never enables PCM delivery. */
+	Map<String, long[]> pcmObservations() {
+		Map<String, long[]> result = new HashMap<>();
+		for (RemoteTrackImpl track : tracks) {
+			if (track instanceof RemoteAudioImpl) {
+				long[] observation = ((RemoteAudioImpl) track).pcmObservation();
+				if (observation != null) {
+					result.put(track.id(), observation);
+				}
+			}
+		}
+		return result;
+	}
+
 	Subscription onTrack(Consumer<RemoteTrack> handler) {
 		requireNonNull(handler, "handler");
 

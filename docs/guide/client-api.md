@@ -931,9 +931,81 @@ peer.onStats(Duration.ofSeconds(1), stats -> System.out.printf(
 | `packetLoss()` | The share of received packets lost so far, 0 to 1. After a long session it barely moves. |
 | `recentPacketLoss()` | The share of packets lost of those expected since the previous sample, 0 to 1, and 0 if none were expected; -1 for the first sample and after the clock went back. A stream that came up or whose counters started again counts all it has. |
 | `outboundVideo()`, `inboundVideo()` | Codec, resolution and frame rate of each video stream, and what limits a sent one. |
-| `report()` | The whole `RTCStatsReport`. |
+| `inboundAudio()`, `outboundAudio()` | Audio streams ordered by statistics id: codec, jitter, concealment counters, audio level and sample counters. Unavailable fields are null; received PCM callbacks are observed only while an `onAudio` sink is attached. |
+| `diagnostics()` | The current state and confirmed `QualityCondition` causes. |
+| `diagnosticReport()` | A JSON snapshot with allowlisted diagnostics, media measurements, codec names, OS/architecture, Java version, library version and processor count. |
+| `report()` | The whole `RTCStatsReport`, including potentially sensitive connection information. |
 
 A peer bundles its media on one transport by default. When the remote side refuses to bundle, each m-line has a transport of its own. `transport()` is then the one with a candidate pair in use that carried the most bytes, sent and received, and of transports that carried as many, the one with the lowest id. Read `transports()` to watch each connection by itself.
+
+### Diagnosis and quality events
+
+```java
+Subscription diagnosis = peer.onDiagnostics(Duration.ofSeconds(1), status -> {
+    System.out.println(status.state());
+    status.conditions().forEach(cause -> System.out.println(cause.reason()));
+});
+
+// Export on demand, for example from a support button. File I/O belongs on
+// an application worker, outside the peer's event executor.
+peer.stats().thenAccept(stats -> supportExecutor.execute(() -> {
+    try {
+        Files.write(Paths.get("diagnostics.json"),
+                stats.diagnosticReport().getBytes(StandardCharsets.UTF_8));
+    }
+    catch (IOException error) {
+        error.printStackTrace();
+    }
+}));
+```
+
+The export example uses `java.nio.file.Files`, `java.nio.file.Paths`,
+`java.nio.charset.StandardCharsets` and `java.io.IOException`; `supportExecutor`
+is an application-owned executor.
+
+`onDiagnostics` emits the initial diagnosis and then only changes to its state or
+causes, including recovery. Handlers run on the peer's event executor; closing the
+subscription stops sampling. All `stats`, `onStats` and `onDiagnostics` calls share
+one history per peer. A captured `PeerStats` and its diagnosis stay immutable.
+
+There is no combined score. `OBSERVING` means there is no continuous measurement
+interval yet (including after a clock rollback or a gap longer than five seconds).
+`HEALTHY` means no supported problem has been confirmed; it is not a guarantee
+that all media paths work. `DEGRADED` includes the following confirmed causes:
+
+| Condition | Evidence |
+|---|---|
+| `VIDEO_CPU_LIMITED` | The same outgoing video RTP stream consistently reports `qualityLimitationReason=cpu`. |
+| `HIGH_PACKET_LOSS` | Recent inbound packet loss is at least 5%; recovery needs at most 2%. Values between those thresholds retain the current state and restart the confirmation window. |
+| `AUDIO_PACKETS_WITHOUT_PCM` | The same received audio RTP stream gains packets while no PCM callbacks reach its attached `onAudio` sinks. This observes sink ingress, before application queues and handlers; it does not diagnose speakers or slow application handlers. |
+
+Each problem and its recovery need at least three distinct measurements spanning
+at least three seconds. Polling once a second is recommended; cached reports do
+not advance the window. A missing stream or required measurement, a changed sink
+set, or a reset audio counter discards that stream's evidence instead of guessing.
+Sampling gaps longer than five seconds and backwards timestamps discard temporal
+evidence. Diagnostics do not add audio sinks: without an application subscription,
+PCM availability is unknown. Silence (audio level zero) alone is not a fault.
+
+`TURN_IN_USE` is immediate information when either selected candidate on any
+transport is a relay. It does not make a peer degraded. `TransportStats.relayed()`
+also exposes this fact, while `candidateType()` continues to describe the local
+candidate.
+
+`AudioStats.jitter()` is a `Duration`, `audioLevel()` is linear (0 to 1), and
+`concealedSamples()`, `concealmentEvents()` and `totalSamplesReceived()` are
+cumulative counters. Outbound level is read from the media source when available;
+receive-only measurements on outbound audio remain null. `pcmCallbacks()` counts
+sink callbacks across subscriptions, so multiple subscriptions can count the same
+audio more than once.
+
+The JSON export includes the confirmation policy and cause explanations. It uses
+schema version 1 and an explicit allowlist, including a
+bounded set of codec MIME names; unknown names become `other`. It excludes raw
+statistics, track/stream/transport/candidate identifiers, addresses, ports, URLs,
+ICE credentials, SDP, certificates and codec parameters. Missing measurements
+become JSON null. The raw `report()` and its string representation are not
+sanitized diagnostic exports.
 
 ## Closing
 

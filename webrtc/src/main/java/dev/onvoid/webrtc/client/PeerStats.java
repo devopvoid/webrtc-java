@@ -57,12 +57,19 @@ public final class PeerStats {
 
 	private final RTCStatsReport report;
 
+	private final List<AudioStats> inboundAudio;
+	private final List<AudioStats> outboundAudio;
+	private final PeerDiagnostics diagnostics;
+
 
 	PeerStats(Instant timestamp, TransportStats transport, List<TransportStats> transports,
-			long bytesSent, long bytesReceived, long outgoingBitrate,
-			long incomingBitrate, double packetLoss, double recentPacketLoss,
-			List<VideoStats> outboundVideo, List<VideoStats> inboundVideo,
-			RTCStatsReport report) {
+			long bytesSent, long bytesReceived, long outgoingBitrate, long incomingBitrate,
+			double packetLoss, double recentPacketLoss, List<VideoStats> outboundVideo,
+			List<VideoStats> inboundVideo, RTCStatsReport report, List<AudioStats> inboundAudio,
+			List<AudioStats> outboundAudio, PeerDiagnostics diagnostics) {
+		this.inboundAudio = inboundAudio;
+		this.outboundAudio = outboundAudio;
+		this.diagnostics = diagnostics;
 		this.timestamp = timestamp;
 		this.transport = transport;
 		this.transports = transports;
@@ -191,6 +198,30 @@ public final class PeerStats {
 	 */
 	public RTCStatsReport report() {
 		return report;
+	}
+
+	/** @return immutable statistics of received audio streams, ordered by statistics id. */
+	public List<AudioStats> inboundAudio() {
+		return inboundAudio;
+	}
+
+	/** @return immutable statistics of sent audio streams, ordered by statistics id. */
+	public List<AudioStats> outboundAudio() {
+		return outboundAudio;
+	}
+
+	/** @return the diagnosis maintained across samples of this peer. */
+	public PeerDiagnostics diagnostics() {
+		return diagnostics;
+	}
+
+	/**
+	 * Exports a JSON snapshot using an allowlist. Raw stats, identifiers, addresses,
+	 * ports, URLs, credentials, SDP, certificates and codec parameters are excluded.
+	 * @return the diagnostic report, suitable for writing to a UTF-8 file.
+	 */
+	public String diagnosticReport() {
+		return DiagnosticExport.json(this);
 	}
 
 	@Override
