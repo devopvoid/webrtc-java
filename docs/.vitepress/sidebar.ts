@@ -54,6 +54,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			collapsed: false,
 			items: [
 				{ text: 'Data Channels', link: '/data/data-channels' },
+				{ text: 'File Transfer', link: '/data/file-transfer' },
 			],
 		},
 		{
