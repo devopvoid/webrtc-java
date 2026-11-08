@@ -19,6 +19,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 - **[WHIP and WHEP](https://jrtc.dev/guide/client-api#whip-and-whep)** - Publish to and play from streaming servers
 - **[Peer connections](https://jrtc.dev/guide/networking/peer-connection-config)** - The full native API, modeled on the W3C JavaScript API
 - **[Data channels](https://jrtc.dev/guide/data/data-channels)** - Reliable or unreliable peer-to-peer messaging
+- **[File transfer](https://jrtc.dev/guide/data/file-transfer)** - Send files over a data channel with progress, a checksum confirmed by the receiver and resume after a reconnect
 - **[Statistics](https://jrtc.dev/guide/monitoring/rtc-stats)** - Detailed metrics on connection quality
 
 **Audio and video**

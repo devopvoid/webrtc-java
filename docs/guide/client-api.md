@@ -768,6 +768,8 @@ DataChannel positions = peer.createChannel("positions", ChannelOptions.builder()
 
 `negotiatedId(int)` creates a channel both peers set up themselves with the same id, without announcing it; such a channel never shows up in `onChannel`. The [Data Channels](/guide/data/data-channels) guide explains the options in detail.
 
+A completed `send` future means the data was handed to the transport, not that the remote application processed it. To send files, use `FileTransfers` from `dev.onvoid.webrtc.client.transfer`, which adds the receiver's own confirmations, a SHA-256 checksum, progress, cancelling and resume. See the [File Transfer](/guide/data/file-transfer) guide.
+
 ## WHIP and WHEP
 
 Media servers and streaming services take streams with the WebRTC HTTP Ingestion Protocol ([WHIP](https://www.rfc-editor.org/rfc/rfc9725)) and hand them out with its egress counterpart, WHEP. Both exchange one offer and one answer over HTTP. `Whip` publishes tracks, and `Whep` receives a stream:

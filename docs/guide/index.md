@@ -27,6 +27,7 @@ This section provides detailed guides for various features of the webrtc-java li
 ## Data Communication
 
 - [Data Channels](/guide/data/data-channels) - Sending and receiving arbitrary data between peers
+- [File Transfer](/guide/data/file-transfer) - Sending files with progress, confirmation, checksum and resume
 
 ## Networking and ICE
 
