@@ -18,6 +18,7 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.onvoid.webrtc.media.audio.AudioOptions;
@@ -25,6 +26,8 @@ import dev.onvoid.webrtc.media.audio.AudioTrack;
 import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 import dev.onvoid.webrtc.media.audio.AudioTrackSource;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.audio.SystemAudioSource;
+import dev.onvoid.webrtc.media.audio.TestSystemAudioSources;
 import dev.onvoid.webrtc.media.audio.ToneAudioDeviceModule;
 
 import org.junit.jupiter.api.Test;
@@ -146,45 +149,78 @@ class DeviceAudioSendTests extends TestBase {
 
 			// The callee's transceivers follow the order of the offer: the
 			// microphone first, then the pushed silence.
-			RTCRtpReceiver[] receivers = call.getReceivers();
-			AudioTrack microphone = (AudioTrack) receivers[0].getTrack();
-			AudioTrack pushed = (AudioTrack) receivers[1].getTrack();
+			assertOnlyFirstAudible(call.getReceivers());
+		}
+	}
 
-			CountDownLatch microphoneAudible = new CountDownLatch(5);
-			CountDownLatch pushedReceived = new CountDownLatch(50);
-			AtomicBoolean pushedAudible = new AtomicBoolean();
-
-			AudioTrackSink microphoneSink = (data, bits, rate, channels, frames) -> {
-				if (isAudible(data, bits, channels, frames)) {
-					microphoneAudible.countDown();
-				}
-			};
-			// Recorded audio fed into the pushed track's sender as well would
-			// make the silence audible.
-			AudioTrackSink pushedSink = (data, bits, rate, channels, frames) -> {
-				if (isAudible(data, bits, channels, frames)) {
-					pushedAudible.set(true);
-				}
-				pushedReceived.countDown();
-			};
-
-			microphone.addSink(microphoneSink);
-			pushed.addSink(pushedSink);
+	@Test
+	void microphoneAndSystemAudioOnOnePeer() throws Exception {
+		try (DeviceCall call = new DeviceCall(new AudioOptions());
+			 SystemAudioSource systemAudio = TestSystemAudioSources.silent()) {
+			AudioTrack systemTrack = call.factory.createAudioTrack("system", systemAudio);
+			RTCRtpSender systemSender = call.caller.getPeerConnection().addTrack(systemTrack,
+					Collections.singletonList("stream"));
 
 			try {
-				assertTrue(microphoneAudible.await(TIMEOUT_SECONDS, TimeUnit.SECONDS),
-						"No recorded audio at the callee");
-				assertTrue(pushedReceived.await(TIMEOUT_SECONDS, TimeUnit.SECONDS),
-						"No pushed audio at the callee");
-				assertFalse(pushedAudible.get(), "Recorded audio reached the pushed track");
+				call.connect();
+				systemAudio.start();
+
+				// The microphone first, then the silent system output.
+				assertOnlyFirstAudible(call.getReceivers());
+				assertNull(systemAudio.getFailure());
 			}
 			finally {
-				microphone.removeSink(microphoneSink);
-				pushed.removeSink(pushedSink);
+				systemAudio.stop();
+				systemSender.dispose();
 
-				for (RTCRtpReceiver receiver : receivers) {
-					receiver.dispose();
-				}
+				// The connection holds the track until it is closed.
+				call.caller.close();
+				systemTrack.dispose();
+			}
+		}
+	}
+
+	/**
+	 * Checks that the first of two received tracks carries the recorded tone
+	 * and the second only silence, which recorded audio fed into the second
+	 * track's sender as well would make audible. Disposes the receivers.
+	 */
+	private static void assertOnlyFirstAudible(RTCRtpReceiver[] receivers) throws InterruptedException {
+		AudioTrack microphone = (AudioTrack) receivers[0].getTrack();
+		AudioTrack silent = (AudioTrack) receivers[1].getTrack();
+
+		CountDownLatch microphoneAudible = new CountDownLatch(5);
+		CountDownLatch silentReceived = new CountDownLatch(50);
+		AtomicBoolean silentAudible = new AtomicBoolean();
+
+		AudioTrackSink microphoneSink = (data, bits, rate, channels, frames) -> {
+			if (isAudible(data, bits, channels, frames)) {
+				microphoneAudible.countDown();
+			}
+		};
+		AudioTrackSink silentSink = (data, bits, rate, channels, frames) -> {
+			if (isAudible(data, bits, channels, frames)) {
+				silentAudible.set(true);
+			}
+			silentReceived.countDown();
+		};
+
+		microphone.addSink(microphoneSink);
+		silent.addSink(silentSink);
+
+		try {
+			assertTrue(microphoneAudible.await(TIMEOUT_SECONDS, TimeUnit.SECONDS),
+					"No recorded audio at the callee");
+			assertTrue(silentReceived.await(TIMEOUT_SECONDS, TimeUnit.SECONDS),
+					"No audio of the second track at the callee");
+			assertFalse(silentAudible.get(), "Recorded audio reached the second track");
+		}
+		finally {
+			microphone.removeSink(microphoneSink);
+			silent.removeSink(silentSink);
+
+			for (RTCRtpReceiver receiver : receivers) {
+				receiver.dispose();
 			}
 		}
 	}

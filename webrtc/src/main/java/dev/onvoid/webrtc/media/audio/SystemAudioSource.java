@@ -27,8 +27,8 @@ import java.util.function.Supplier;
 /**
  * Captures the system output as a separate audio track source, at 48 kHz
  * stereo. Use it with {@code PeerConnectionFactory.createAudioTrack}, alongside
- * a screen video track. A separate microphone track must also use pushed audio;
- * do not combine this with the factory's device-captured audio sources.
+ * a screen video track, and beside a microphone track of the same factory, if
+ * any: each sender gets the audio of its own track.
  * <p>
  * Windows uses WASAPI loopback of the default multimedia output; Linux uses the
  * default output's PulseAudio monitor (also available with pipewire-pulse).

@@ -85,17 +85,20 @@ screen capture, output-device, and receiver latency.
 
 ## Microphone and feedback
 
-A factory that sends pushed audio cannot also send its own device-captured audio
-from `factory.createAudioSource(...)`. The existing factory guard applies to
-`SystemAudioSource` too. For a microphone alongside system audio on the same
-connection, capture the microphone independently (for example with
-`AudioRecorder`) and feed a **separate** `CustomAudioSource`, so both tracks use
-pushed audio. Respect that source's 16-bit PCM and 10 ms chunk requirements. Stop
-the recorder before disposing its custom source. Alternatively, use separate
-factories and connections for device-captured microphone and system audio.
+Send the microphone as a second track of the same factory and connection. Each
+sender gets the audio of its own track, so neither track hears the other:
 
-No microphone mixing or echo cancellation is added here. Keep microphone and
-system audio on separate tracks, and use headphones to prevent acoustic feedback.
+```java
+AudioTrackSource microphone = factory.createAudioSource(new AudioOptions());
+AudioTrack microphoneTrack = factory.createAudioTrack("microphone", microphone);
+peerConnection.addTrack(microphoneTrack, Collections.singletonList("presentation"));
+```
+
+The microphone track gets the factory's echo cancellation, noise suppression and
+gain control as its `AudioOptions` ask for; the system audio track gets none, and
+the two are not mixed. Echo cancellation removes what this application plays, not
+what other applications play, so system audio that reaches the microphone through
+the speakers is sent twice: use headphones to prevent that.
 On Windows and Linux, route received call audio to another output or to a virtual
 output that is not monitored. Headphones alone do not prevent a loopback source
 from capturing remote audio played on the monitored output. On macOS this process's
