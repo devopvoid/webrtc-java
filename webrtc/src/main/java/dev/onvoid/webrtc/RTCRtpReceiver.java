@@ -136,12 +136,20 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	 * The transform belongs to the native receiver, so it is shared by every
 	 * RTCRtpReceiver instance standing for it, and it stays in place when
 	 * this instance is disposed.
+	 * <p>
+	 * A transform whose {@link
+	 * RTCEncodedFrameTransformer#allowsPlaintextObservers()} is false keeps
+	 * every observer of the encoded frames, such as a recorder, from seeing
+	 * any frame for as long as it is set.
 	 *
 	 * @param transformer The transform, or {@code null} to remove it.
 	 *
 	 * @see RTCEncodedFrameTransformer
 	 */
-	public native void setTransform(RTCEncodedFrameTransformer transformer);
+	public void setTransform(RTCEncodedFrameTransformer transformer) {
+		// Asked once, so that the native side need not call into Java.
+		applyTransform(transformer, transformer != null && !transformer.allowsPlaintextObservers());
+	}
 
 	/**
 	 * Asks the remote sender for a video key frame, e.g. so that a recording
@@ -189,5 +197,7 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	public int hashCode() {
 		return nativeHashCode();
 	}
+
+	private native void applyTransform(RTCEncodedFrameTransformer transformer, boolean sealed);
 
 }

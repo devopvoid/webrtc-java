@@ -78,6 +78,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			items: [
 				{ text: 'Field Trials', link: '/advanced/field-trials' },
 				{ text: 'Encoded Transforms', link: '/advanced/encoded-transforms' },
+				{ text: 'End-to-End Encryption', link: '/advanced/end-to-end-encryption' },
 				{ text: 'Video Codecs', link: '/advanced/video-codecs' },
 				{ text: 'Audio Codecs', link: '/advanced/audio-codecs' },
 			],

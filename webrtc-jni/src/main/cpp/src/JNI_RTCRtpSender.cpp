@@ -170,8 +170,8 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setTransform
-(JNIEnv * env, jobject caller, jobject jTransformer)
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_applyTransform
+(JNIEnv * env, jobject caller, jobject jTransformer, jboolean sealed)
 {
 	jni::CallFromJava(env, [&]() {
 		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
@@ -184,7 +184,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setTransform
 				: jni::EncodedFrameTransformer::Find(sender);
 
 			if (transformer) {
-				transformer->SetTransformer(env, jTransformer);
+				transformer->SetTransformer(env, jTransformer, sealed == JNI_TRUE);
 			}
 		}
 		catch (...) {

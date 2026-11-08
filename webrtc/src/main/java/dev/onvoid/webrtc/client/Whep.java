@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
+import dev.onvoid.webrtc.e2ee.KeyProvider;
 import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
@@ -302,6 +303,20 @@ public final class Whep {
 		 */
 		public Builder receiveTransform(RTCEncodedFrameTransformer transform) {
 			options.receiveTransform(transform);
+			return this;
+		}
+
+		/**
+		 * Decrypts every frame received end to end with the keys of the given
+		 * provider, which the media server forwards without being able to read.
+		 * See {@link PeerOptions.Builder#e2ee}.
+		 *
+		 * @param keys the keys of the call.
+		 *
+		 * @return this builder.
+		 */
+		public Builder e2ee(KeyProvider keys) {
+			options.e2ee(keys);
 			return this;
 		}
 

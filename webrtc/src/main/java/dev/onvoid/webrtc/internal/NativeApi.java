@@ -186,6 +186,24 @@ public final class NativeApi {
 		}
 	}
 
+	/**
+	 * Says whether the transform set on the sender or receiver of a handle
+	 * keeps its frames from observers, as an end-to-end encryption transform
+	 * does unless told otherwise: observers attached to the handle see no
+	 * frame for as long as it is set.
+	 *
+	 * @param frames The handle from {@code encodedFramesOf()}, not released.
+	 *
+	 * @return True if the frames are kept from observers.
+	 *
+	 * @see dev.onvoid.webrtc.RTCEncodedFrameTransformer#allowsPlaintextObservers()
+	 */
+	public static boolean isSealed(long frames) {
+		return frames != 0 && framesSealed(frames);
+	}
+
+	private static native boolean framesSealed(long frames);
+
 	private static native long senderFrames(long senderHandle);
 
 	private static native long receiverFrames(long receiverHandle);

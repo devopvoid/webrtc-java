@@ -7,7 +7,7 @@ This guide explains how to read and change the encoded frames of a call as they 
 - Dropping frames
 - What each frame tells about itself
 - Asking for key frames
-- End-to-end encryption as a worked example
+- What end-to-end encryption needs of a transform
 - Threading and performance
 - Sending frames that are already encoded through an injector
 
@@ -105,10 +105,12 @@ Both do nothing for audio, and `generateKeyFrame()` nothing before the connectio
 
 ## End-to-End Encryption
 
-A complete example with AES-GCM, on the transforms of the client API's peer options, is in [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java). Two points matter for any encrypting transform:
+[End-to-End Encryption](/guide/advanced/end-to-end-encryption) builds on these transforms: a `KeyProvider` makes the encryptors and decryptors, in the SFrame format of RFC 9605, and takes care of the keys of every participant, key rotation, replay protection and frames that fail. Use it rather than a transform of your own, which would have to settle all of that, and a frame format browsers can implement too. Two points matter for any encrypting transform that is written anyway:
 
-- **Keep the codec header in the clear.** The packetizer and depacketizer read the start of each frame: a VP8 receiver finds key frames and the frame size in the first bytes. Browsers leave 10 bytes of a VP8 key frame, 3 of a VP8 delta frame and 1 of an Opus frame unencrypted, and authenticate them as associated data instead. H.264 is split at its NAL unit start codes before it is sent, so encrypting it whole breaks the packetizer; prefer VP8, VP9 or AV1 for encrypted calls, or leave the NAL unit headers in the clear.
-- **Make each frame self-contained.** Frames are lost, so each needs what it takes to be decrypted, such as its IV, and a receiver must drop a frame that fails to authenticate rather than pass it on.
+- **Keep the codec header in the clear.** The packetizer and depacketizer read the start of some frames: a VP8 receiver finds key frames and the frame size in the first bytes, and the AV1 packetizer splits frames into their OBUs. Browsers leave 10 bytes of a VP8 key frame, 3 of a VP8 delta frame and 1 of an Opus frame unencrypted, and authenticate them as associated data instead. H.264 is split at its NAL unit start codes before it is sent, so encrypting it whole breaks the packetizer.
+- **Make each frame self-contained.** Frames are lost, so each needs what it takes to be decrypted, such as its nonce, and a receiver must drop a frame that fails to authenticate rather than pass it on.
+
+A transform that protects what passes through it can keep observers of the encoded frames, such as a [`MediaRecorder`](/guide/media/media-recording), from seeing it in the clear by returning false from `allowsPlaintextObservers()`.
 
 ## Threading and Performance
 

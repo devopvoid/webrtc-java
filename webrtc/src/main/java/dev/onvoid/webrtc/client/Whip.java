@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
+import dev.onvoid.webrtc.e2ee.KeyProvider;
 import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.internal.Timeouts;
 
@@ -356,6 +357,20 @@ public final class Whip {
 		 */
 		public Builder sendTransform(RTCEncodedFrameTransformer transform) {
 			options.sendTransform(transform);
+			return this;
+		}
+
+		/**
+		 * Encrypts every frame sent end to end with the keys of the given
+		 * provider, which the media server forwards without being able to read.
+		 * See {@link PeerOptions.Builder#e2ee}.
+		 *
+		 * @param keys the keys of the call.
+		 *
+		 * @return this builder.
+		 */
+		public Builder e2ee(KeyProvider keys) {
+			options.e2ee(keys);
 			return this;
 		}
 

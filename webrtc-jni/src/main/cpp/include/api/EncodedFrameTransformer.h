@@ -69,7 +69,13 @@ namespace jni
 			// transform starts the worker it runs on, and from then on every
 			// frame passes through that worker, transform or not, so that
 			// frames never overtake each other when the transform changes.
-			void SetTransformer(JNIEnv * env, jobject transformer);
+			//
+			// A sealed transform keeps the frames from every observer for as
+			// long as it is set, since they would see what it protects.
+			void SetTransformer(JNIEnv * env, jobject transformer, bool sealed);
+
+			// Whether the transform that is set keeps frames from observers.
+			bool IsSealed() const;
 
 			EncodedFrameRouter::Observer * AddObserver(wj_encoded_frame_fn fn, void * opaque);
 			void RemoveObserver(EncodedFrameRouter::Observer * observer);

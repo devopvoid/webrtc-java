@@ -66,4 +66,23 @@ public interface RTCEncodedFrameTransformer {
 	 */
 	void transform(RTCEncodedFrame frame);
 
+	/**
+	 * Says whether observers of the encoded frames, such as a {@code
+	 * MediaRecorder}, may see the frames this transform protects. They watch
+	 * a sender's frames before the transform and a receiver's after it, so
+	 * with an encryption transform they see the media in the clear.
+	 * <p>
+	 * A transform that returns false keeps every observer of its sender or
+	 * receiver from seeing any frame, for as long as it is set, and a
+	 * recorder refuses to record them. The method is asked once, when the
+	 * transform is set.
+	 *
+	 * @return True by default; false to keep the plaintext from observers.
+	 *
+	 * @see dev.onvoid.webrtc.e2ee.KeyProvider.Builder#allowPlaintextRecording(boolean)
+	 */
+	default boolean allowsPlaintextObservers() {
+		return true;
+	}
+
 }

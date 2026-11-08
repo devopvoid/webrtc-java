@@ -19,24 +19,14 @@ package dev.onvoid.webrtc.examples;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 
-import dev.onvoid.webrtc.RTCEncodedFrame;
-import dev.onvoid.webrtc.RTCEncodedVideoFrame;
 import dev.onvoid.webrtc.client.AudioMode;
 import dev.onvoid.webrtc.client.CustomAudio;
 import dev.onvoid.webrtc.client.CustomVideo;
@@ -47,6 +37,7 @@ import dev.onvoid.webrtc.client.RemoteTrack;
 import dev.onvoid.webrtc.client.Signaling;
 import dev.onvoid.webrtc.client.SignalingPair;
 import dev.onvoid.webrtc.client.WebRtc;
+import dev.onvoid.webrtc.e2ee.KeyProvider;
 import dev.onvoid.webrtc.media.recorder.MediaRecorder;
 import dev.onvoid.webrtc.media.recorder.MediaRecorderListener;
 import dev.onvoid.webrtc.media.recorder.MediaRecorderResult;
@@ -59,13 +50,12 @@ import dev.onvoid.webrtc.media.video.VideoFrame;
  * <p>
  * This example shows how to:
  * <ul>
- *   <li>Encrypt every encoded audio and video frame with AES-GCM in the send
- *       transform of the peer options, and decrypt it in the receive
- *       transform, so that whatever relays the media (an SFU, a TURN server)
- *       never sees it in the clear</li>
- *   <li>Keep the first bytes of each frame in the clear, where the RTP
- *       packetizer and depacketizer read the codec header, and authenticate
- *       them instead</li>
+ *   <li>Encrypt every encoded audio and video frame end to end in the SFrame
+ *       format, with a {@link KeyProvider} in the peer options, so that
+ *       whatever relays the media (an SFU, a TURN server) never sees it in
+ *       the clear</li>
+ *   <li>Allow the receiving side to record what it decrypted, which a key
+ *       provider refuses by default</li>
  *   <li>Record the decrypted media of the remote tracks with a
  *       {@link MediaRecorder}, without decoding or re-encoding it</li>
  * </ul>
@@ -74,9 +64,9 @@ import dev.onvoid.webrtc.media.video.VideoFrame;
  * on each receiver before its track is handed out, so no frame leaves
  * unencrypted and none reaches the decoder still encrypted.
  * <p>
- * Both peers live in this application and the key is simply shared between
- * them; a real application exchanges it over its signaling channel, or better
- * derives it with a key agreement such as MLS.
+ * Both peers live in this application and hand each other their keys
+ * directly; a real application exchanges them over a channel the media
+ * servers cannot read, or derives them with a key agreement such as MLS.
  * <p>
  * Run it with an optional output file, whose extension picks the container:
  * <pre>
@@ -100,7 +90,11 @@ public class EncryptedRecordingExample {
     public static void main(String[] args) throws Exception {
         Path file = Paths.get(args.length > 0 ? args[0] : "encrypted-call.mkv");
 
-        FrameCipher cipher = new FrameCipher(newKey());
+        // Each participant encrypts with a key of its own. The callee records
+        // what it decrypts, which its key provider has to allow.
+        KeyProvider callerKeys = KeyProvider.builder(1).build();
+        KeyProvider calleeKeys = KeyProvider.builder(2).allowPlaintextRecording(true).build();
+        exchangeKeys(callerKeys, calleeKeys);
 
         // A headless runtime sends pushed audio and needs no microphone or speakers.
         try (WebRtc rtc = WebRtc.builder().audio(AudioMode.HEADLESS).build()) {
@@ -110,15 +104,13 @@ public class EncryptedRecordingExample {
             Peer caller = rtc.createPeer(PeerOptions.builder()
                     .name("caller")
                     .signaling(link.first())
-                    .sendTransform(cipher::encrypt)
-                    .receiveTransform(cipher::decrypt)
+                    .e2ee(callerKeys)
                     .build());
             Peer callee = rtc.createPeer(PeerOptions.builder()
                     .name("callee")
                     .polite(true)
                     .signaling(link.second())
-                    .sendTransform(cipher::encrypt)
-                    .receiveTransform(cipher::decrypt)
+                    .e2ee(calleeKeys)
                     .build());
 
             CompletableFuture<RemoteTrack> remoteVideo = new CompletableFuture<>();
@@ -143,8 +135,7 @@ public class EncryptedRecordingExample {
             finally {
                 feeder.shutdownNow();
 
-                LOG.info(String.format("Encrypted %d frames, decrypted %d, rejected %d",
-                        cipher.encrypted.get(), cipher.decrypted.get(), cipher.rejected.get()));
+                LOG.info("Caller: " + callerKeys.getStats() + ", callee: " + calleeKeys.getStats());
             }
         }
         // The runtime closed the peers, the tracks and the factory.
@@ -188,11 +179,19 @@ public class EncryptedRecordingExample {
         }
     }
 
-    private static SecretKey newKey() {
-        byte[] key = new byte[16];
-        new SecureRandom().nextBytes(key);
+    /**
+     * Hands each participant's key to the other. Both live in this
+     * application; a real one sends them over a channel the media servers
+     * cannot read, such as an MLS group.
+     */
+    private static void exchangeKeys(KeyProvider caller, KeyProvider callee) {
+        byte[] callerKey = caller.generateKey();
+        byte[] calleeKey = callee.generateKey();
 
-        return new SecretKeySpec(key, "AES");
+        caller.setEncryptionKey(0, callerKey);
+        callee.setEncryptionKey(0, calleeKey);
+        caller.setDecryptionKey(callee.getParticipant(), 0, calleeKey);
+        callee.setDecryptionKey(caller.getParticipant(), 0, callerKey);
     }
 
     /**
@@ -237,130 +236,5 @@ public class EncryptedRecordingExample {
         }
 
         return pcm;
-    }
-
-
-
-    /**
-     * AES-GCM over the payload of each frame. An encrypted frame is laid out
-     * as the clear header, the ciphertext with its tag, then the 12-byte IV.
-     * One instance serves every sender and receiver, each of which runs its
-     * transform on a thread of its own, so each call makes its own Cipher
-     * rather than share one.
-     */
-    private static class FrameCipher {
-
-        private static final int IV_SIZE = 12;
-        private static final int TAG_BITS = 128;
-
-        private final SecretKey key;
-        private final SecureRandom random = new SecureRandom();
-
-        // Counted from the threads of every sender and receiver.
-        final AtomicLong encrypted = new AtomicLong();
-        final AtomicLong decrypted = new AtomicLong();
-        final AtomicLong rejected = new AtomicLong();
-
-
-        FrameCipher(SecretKey key) {
-            this.key = key;
-        }
-
-        void encrypt(RTCEncodedFrame frame) {
-            ByteBuffer data = frame.getData();
-            int clear = clearBytes(frame, data.remaining());
-
-            byte[] iv = new byte[IV_SIZE];
-            random.nextBytes(iv);
-
-            try {
-                Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
-
-                ByteBuffer header = data.duplicate();
-                header.limit(clear);
-                cipher.updateAAD(header);
-
-                ByteBuffer out = ByteBuffer.allocate(clear + cipher.getOutputSize(data.remaining() - clear) + IV_SIZE);
-                ByteBuffer headerCopy = data.duplicate();
-                headerCopy.limit(clear);
-                out.put(headerCopy);
-
-                data.position(clear);
-                cipher.doFinal(data, out);
-                out.put(iv);
-                out.flip();
-
-                frame.setData(out);
-                encrypted.incrementAndGet();
-            }
-            catch (GeneralSecurityException e) {
-                // Never send a frame that failed to encrypt.
-                frame.drop();
-                LOG.log(Level.WARNING, "Encrypting a frame failed", e);
-            }
-        }
-
-        void decrypt(RTCEncodedFrame frame) {
-            ByteBuffer data = frame.getData();
-            int size = data.remaining();
-            int clear = clearBytes(frame, size);
-
-            if (size < clear + TAG_BITS / 8 + IV_SIZE) {
-                frame.drop();
-                rejected.incrementAndGet();
-                return;
-            }
-
-            byte[] iv = new byte[IV_SIZE];
-            data.position(size - IV_SIZE);
-            data.get(iv);
-
-            try {
-                Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-                cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, iv));
-
-                ByteBuffer header = data.duplicate();
-                header.position(0);
-                header.limit(clear);
-                cipher.updateAAD(header);
-
-                ByteBuffer out = ByteBuffer.allocate(size);
-                ByteBuffer headerCopy = data.duplicate();
-                headerCopy.position(0);
-                headerCopy.limit(clear);
-                out.put(headerCopy);
-
-                ByteBuffer body = data.duplicate();
-                body.position(clear);
-                body.limit(size - IV_SIZE);
-                cipher.doFinal(body, out);
-                out.flip();
-
-                frame.setData(out);
-                decrypted.incrementAndGet();
-            }
-            catch (GeneralSecurityException e) {
-                // A frame that does not authenticate was tampered with, or
-                // encrypted with another key: it must not reach the decoder.
-                frame.drop();
-                rejected.incrementAndGet();
-            }
-        }
-
-        /**
-         * The bytes left in the clear: the VP8 payload header, which the
-         * receiver's depacketizer reads to find key frames and the frame
-         * size (10 bytes on a key frame, 3 otherwise), and the Opus TOC byte.
-         */
-        private static int clearBytes(RTCEncodedFrame frame, int size) {
-            int clear = 1;
-
-            if (frame instanceof RTCEncodedVideoFrame video) {
-                clear = video.isKeyFrame() ? 10 : 3;
-            }
-
-            return Math.min(clear, size);
-        }
     }
 }

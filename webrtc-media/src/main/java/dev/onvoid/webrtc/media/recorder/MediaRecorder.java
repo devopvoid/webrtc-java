@@ -84,7 +84,14 @@ import dev.onvoid.webrtc.media.player.FFmpeg;
  * <li>A sender with simulcast is recorded at one of its layers.</li>
  * <li>A sender's frames are recorded before an {@link
  * dev.onvoid.webrtc.RTCEncodedFrameTransformer} runs on them, a receiver's
- * after, so an end-to-end encrypted call is recorded in the clear.</li>
+ * after, so an end-to-end encrypted call is recorded in the clear. Whether
+ * that may happen is the transform's decision: one whose {@link
+ * dev.onvoid.webrtc.RTCEncodedFrameTransformer#allowsPlaintextObservers()}
+ * says no, as the transforms of a {@link dev.onvoid.webrtc.e2ee.KeyProvider}
+ * do unless it {@link
+ * dev.onvoid.webrtc.e2ee.KeyProvider.Builder#allowPlaintextRecording(boolean)
+ * allows recording}, is refused by {@code addTrack}. Set on a track that is
+ * being recorded, it keeps the recorder from any further frame of it.</li>
  * </ul>
  *
  * @author Alex Andres
@@ -204,7 +211,9 @@ public class MediaRecorder implements AutoCloseable {
 	 *
 	 * @param sender The sender to record.
 	 *
-	 * @throws IllegalStateException    If the recorder was started or closed.
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the sender's transform does not
+	 *                                  allow recording.
 	 * @throws IllegalArgumentException If the sender was disposed.
 	 */
 	public void addTrack(RTCRtpSender sender) {
@@ -222,7 +231,9 @@ public class MediaRecorder implements AutoCloseable {
 	 *
 	 * @param receiver The receiver to record.
 	 *
-	 * @throws IllegalStateException    If the recorder was started or closed.
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the receiver's transform does not
+	 *                                  allow recording.
 	 * @throws IllegalArgumentException If the receiver was disposed.
 	 */
 	public void addTrack(RTCRtpReceiver receiver) {
@@ -243,7 +254,9 @@ public class MediaRecorder implements AutoCloseable {
 	 *
 	 * @param sender The sender to record.
 	 *
-	 * @throws IllegalStateException    If the recorder was started or closed.
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the sender's transform does not
+	 *                                  allow recording.
 	 * @throws IllegalArgumentException If the sender was removed, or its peer
 	 *                                  closed.
 	 */
@@ -263,7 +276,9 @@ public class MediaRecorder implements AutoCloseable {
 	 *
 	 * @param track The remote track to record.
 	 *
-	 * @throws IllegalStateException    If the recorder was started or closed.
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the track's transform does not
+	 *                                  allow recording.
 	 * @throws IllegalArgumentException If the track ended.
 	 */
 	public void addTrack(RemoteTrack track) {
@@ -526,6 +541,12 @@ public class MediaRecorder implements AutoCloseable {
 	private void addTrack(long frames, Runnable keyFrameRequest) {
 		if (frames == 0) {
 			throw new IllegalArgumentException("The sender or receiver was disposed");
+		}
+		if (NativeApi.isSealed(frames)) {
+			NativeApi.releaseEncodedFrames(frames);
+
+			throw new IllegalStateException("The track is end-to-end encrypted, and its transform "
+					+ "does not allow recording the decrypted media");
 		}
 
 		// The native recorder takes over the reference the handle carries.

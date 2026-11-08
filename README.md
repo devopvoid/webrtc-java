@@ -33,7 +33,8 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 
 - **[Hardware codecs](https://jrtc.dev/guide/advanced/video-codecs#hardware-encoding)** - H.264, H.265, VP9 and AV1 on the GPU with NVENC/NVDEC, Media Foundation, VA-API and VideoToolbox, falling back to software
 - **[Custom codecs](https://jrtc.dev/guide/advanced/video-codecs#adding-a-codec)** - Plug in video encoders and decoders written in Java, or limit the codecs a factory offers
-- **[End-to-end encryption](https://jrtc.dev/guide/advanced/encoded-transforms)** - Read, change or drop encoded audio and video frames, like insertable streams in the browser
+- **[End-to-end encryption](https://jrtc.dev/guide/advanced/end-to-end-encryption)** - SFrame (RFC 9605) with key management, key rotation and replay protection, interoperable with browsers
+- **[Encoded transforms](https://jrtc.dev/guide/advanced/encoded-transforms)** - Read, change or drop encoded audio and video frames, like insertable streams in the browser
 - **[Pre-encoded media](https://jrtc.dev/guide/advanced/encoded-transforms#injecting-encoded-frames)** - Send a camera's H.264 stream or a recording without re-encoding it
 
 **Optional modules**
