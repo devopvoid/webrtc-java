@@ -30,12 +30,14 @@ import dev.onvoid.webrtc.RTCRtpCapabilities;
 import dev.onvoid.webrtc.RTCRtpCodecCapability;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
+import dev.onvoid.webrtc.e2ee.KeyProvider;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
 
 /**
  * The codecs a peer negotiates, for the kinds of media a session named codecs
- * of. Confined to the control executor.
+ * of, and for video always if the peer encrypts end to end, which only some
+ * codecs can be. Confined to the control executor.
  */
 final class CodecPreferences {
 
@@ -48,12 +50,16 @@ final class CodecPreferences {
 
 	private final PeerImpl peer;
 
+	/** Whether the peer encrypts end to end, and so negotiates only video it can encrypt. */
+	private final boolean encrypted;
+
 	/** The codecs each kind of media is negotiated with, in order. */
 	private final Map<MediaKind, List<RTCRtpCodecCapability>> codecs = new EnumMap<>(MediaKind.class);
 
 
-	CodecPreferences(PeerImpl peer) {
+	CodecPreferences(PeerImpl peer, boolean encrypted) {
 		this.peer = peer;
+		this.encrypted = encrypted;
 	}
 
 	/**
@@ -67,21 +73,60 @@ final class CodecPreferences {
 	 */
 	void prefer(Map<MediaKind, List<String>> names) {
 		for (Map.Entry<MediaKind, List<String>> entry : names.entrySet()) {
-			codecs.put(entry.getKey(), named(entry.getKey(), entry.getValue()));
+			MediaKind kind = entry.getKey();
+			List<RTCRtpCodecCapability> named = named(kind, entry.getValue());
+
+			if (encrypted && kind == MediaKind.VIDEO) {
+				named = encryptable(named);
+
+				if (named.stream().allMatch(CodecPreferences::isCompanion)) {
+					throw new ConfigurationException("End-to-end encryption covers VP8, VP9 and AV1 video, not "
+							+ entry.getValue() + ", for " + peer.name);
+				}
+			}
+
+			codecs.put(kind, named);
 		}
 
 		apply();
 	}
 
 	/**
-	 * Sets the preferred codecs on every transceiver that has not stopped.
+	 * Sets the preferred codecs on every transceiver that has not stopped:
+	 * those named, and with end-to-end encryption the video codecs it covers,
+	 * in WebRTC's order, unless video codecs were named.
 	 */
 	void apply() {
-		if (codecs.isEmpty()) {
+		Map<MediaKind, List<RTCRtpCodecCapability>> preferred = codecs;
+
+		if (encrypted && !codecs.containsKey(MediaKind.VIDEO)) {
+			preferred = new EnumMap<>(MediaKind.class);
+			preferred.putAll(codecs);
+			preferred.put(MediaKind.VIDEO, encryptable(new ArrayList<>(available(MediaKind.VIDEO).values())));
+		}
+
+		if (preferred.isEmpty()) {
 			return;
 		}
 
-		apply(peer.connection().getTransceivers(), codecs);
+		apply(peer.connection().getTransceivers(), preferred);
+	}
+
+	/** The codecs of a list that end-to-end encryption covers, with their companions. */
+	private static List<RTCRtpCodecCapability> encryptable(List<RTCRtpCodecCapability> codecs) {
+		List<RTCRtpCodecCapability> encryptable = new ArrayList<>();
+
+		for (RTCRtpCodecCapability codec : codecs) {
+			if (isCompanion(codec) || KeyProvider.supportsCodec(codec.getMimeType())) {
+				encryptable.add(codec);
+			}
+		}
+
+		return encryptable;
+	}
+
+	private static boolean isCompanion(RTCRtpCodecCapability codec) {
+		return COMPANION_CODECS.contains(codec.getName().toLowerCase(Locale.ROOT));
 	}
 
 	/** Takes ownership of every wrapper, including those not reached on failure. */
@@ -121,19 +166,7 @@ final class CodecPreferences {
 	 * @throws ConfigurationException if WebRTC has no codec of a name.
 	 */
 	private List<RTCRtpCodecCapability> named(MediaKind kind, List<String> names) {
-		MediaType type = kind == MediaKind.AUDIO ? MediaType.AUDIO : MediaType.VIDEO;
-		// Those WebRTC sends and receives, each once. WebRTC tells codecs
-		// apart as this key does, not by their scalability modes, in which
-		// the two lists differ; one codec twice would be offered twice.
-		Map<List<Object>, RTCRtpCodecCapability> available = new LinkedHashMap<>();
-
-		for (RTCRtpCapabilities capabilities : List.of(peer.rtc.factory.getRtpSenderCapabilities(type),
-				peer.rtc.factory.getRtpReceiverCapabilities(type))) {
-			for (RTCRtpCodecCapability codec : capabilities.getCodecs()) {
-				available.putIfAbsent(Arrays.asList(codec.getMimeType().toLowerCase(Locale.ROOT),
-						codec.getClockRate(), codec.getSDPFmtp()), codec);
-			}
-		}
+		Map<List<Object>, RTCRtpCodecCapability> available = available(kind);
 
 		List<RTCRtpCodecCapability> named = new ArrayList<>();
 
@@ -164,5 +197,25 @@ final class CodecPreferences {
 		}
 
 		return named;
+	}
+
+	/**
+	 * The codecs of a kind WebRTC sends and receives, each once. WebRTC tells
+	 * codecs apart as the key does, not by their scalability modes, in which
+	 * the two lists differ; one codec twice would be offered twice.
+	 */
+	private Map<List<Object>, RTCRtpCodecCapability> available(MediaKind kind) {
+		MediaType type = kind == MediaKind.AUDIO ? MediaType.AUDIO : MediaType.VIDEO;
+		Map<List<Object>, RTCRtpCodecCapability> available = new LinkedHashMap<>();
+
+		for (RTCRtpCapabilities capabilities : List.of(peer.rtc.factory.getRtpSenderCapabilities(type),
+				peer.rtc.factory.getRtpReceiverCapabilities(type))) {
+			for (RTCRtpCodecCapability codec : capabilities.getCodecs()) {
+				available.putIfAbsent(Arrays.asList(codec.getMimeType().toLowerCase(Locale.ROOT),
+						codec.getClockRate(), codec.getSDPFmtp()), codec);
+			}
+		}
+
+		return available;
 	}
 }

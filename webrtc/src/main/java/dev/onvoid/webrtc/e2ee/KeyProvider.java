@@ -142,6 +142,21 @@ public final class KeyProvider {
 	}
 
 	/**
+	 * Says whether frames of a codec can be encrypted: those of VP8, VP9, AV1
+	 * and every audio codec. H.264 and H.265 cannot, since their packetizers
+	 * split frames at start codes that a ciphertext would contain anywhere,
+	 * so an encrypted call has to negotiate them away, e.g. with {@code
+	 * RTCRtpTransceiver.setCodecPreferences}.
+	 *
+	 * @param mimeType The codec as a MIME type, e.g. {@code video/VP8}.
+	 *
+	 * @return True if its frames can be encrypted.
+	 */
+	public static boolean supportsCodec(String mimeType) {
+		return FrameFormat.Codec.of(mimeType) != null;
+	}
+
+	/**
 	 * Makes a new random key, as long as the cipher suite's hash output. A
 	 * key is meant for one call: never use it again with another key
 	 * provider, since the counters of a new provider start over.

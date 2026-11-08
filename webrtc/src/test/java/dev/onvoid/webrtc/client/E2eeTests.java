@@ -18,12 +18,14 @@ package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -32,7 +34,9 @@ import java.util.function.BooleanSupplier;
 
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.e2ee.CryptoFailure;
+import dev.onvoid.webrtc.e2ee.CryptoStats;
 import dev.onvoid.webrtc.e2ee.KeyProvider;
+import dev.onvoid.webrtc.media.MediaType;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
@@ -80,7 +84,9 @@ class E2eeTests extends ClientTestBase {
 
 		assertTrue(callerKeys.getStats().getEncryptedFrames() > 0);
 		assertTrue(calleeKeys.getStats().getDecryptedFrames() >= 10);
-		assertEquals(0, calleeKeys.getStats().getDroppedFrames());
+		// Every frame dropped was a replay, if any: see E2eeCallTests.
+		CryptoStats stats = calleeKeys.getStats();
+		assertEquals(0, stats.getDroppedFrames() - stats.getDroppedFrames(CryptoFailure.REPLAY), stats::toString);
 	}
 
 	@Test
@@ -109,6 +115,46 @@ class E2eeTests extends ClientTestBase {
 	}
 
 	@Test
+	void offersOnlyEncryptableVideo() throws Exception {
+		Peer encrypted = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL)
+				.e2ee(KeyProvider.builder(CALLER).build()).build());
+		Peer plain = rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+
+		encrypted.addTrack(rtc.media().customVideo("encrypted"));
+		encrypted.addTrack(rtc.media().customAudio("encrypted-audio"));
+		plain.addTrack(rtc.media().customVideo("plain"));
+
+		String encryptedOffer = await(encrypted.negotiator().createOffer()).sdp;
+		String plainOffer = await(plain.negotiator().createOffer()).sdp;
+
+		assertTrue(encryptedOffer.contains(" VP8/90000"), encryptedOffer);
+		assertFalse(encryptedOffer.contains(" H264/90000"), encryptedOffer);
+		assertFalse(encryptedOffer.contains(" H265/90000"), encryptedOffer);
+		// Audio is left as it is.
+		assertTrue(encryptedOffer.contains(" opus/48000"), encryptedOffer);
+
+		// The plain peer offers what the encrypted one leaves out.
+		assertTrue(plainOffer.contains(" VP8/90000"), plainOffer);
+
+		if (hasH264()) {
+			assertTrue(plainOffer.contains(" H264/90000"), plainOffer);
+		}
+	}
+
+	@Test
+	void unencryptableCodecsAreRefused() {
+		PeerImpl peer = (PeerImpl) rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL)
+				.e2ee(KeyProvider.builder(CALLER).build()).build());
+
+		assumeTrue(hasH264(), "WebRTC has no H.264 here");
+
+		ExecutionException e = assertThrows(ExecutionException.class, () -> await(peer.manual.preferCodecs(
+				Collections.singletonMap(MediaKind.VIDEO, Collections.singletonList("H264")))));
+
+		assertInstanceOf(ConfigurationException.class, e.getCause());
+	}
+
+	@Test
 	void e2eeTakesNoOtherTransform() {
 		KeyProvider keys = KeyProvider.builder(CALLER).build();
 
@@ -130,6 +176,11 @@ class E2eeTests extends ClientTestBase {
 		assertFalse(peer.guard(sealed.createDecryptor(), "a track").allowsPlaintextObservers());
 		assertTrue(peer.guard(open.createEncryptor(), "a sender").allowsPlaintextObservers());
 		assertTrue(peer.guard(plain, "a sender").allowsPlaintextObservers());
+	}
+
+	private boolean hasH264() {
+		return rtc.factory.getRtpSenderCapabilities(MediaType.VIDEO).getCodecs().stream()
+				.anyMatch(codec -> "H264".equalsIgnoreCase(codec.getName()));
 	}
 
 	static void exchangeKeys(KeyProvider caller, KeyProvider callee) {
@@ -157,16 +208,10 @@ class E2eeTests extends ClientTestBase {
 				.e2ee(calleeKeys)
 				.build());
 
-		Peer[] peers = { caller, callee };
-
-		// A codec the frame format covers on every platform: macOS would
-		// otherwise prefer H.264, which end-to-end encryption refuses.
-		for (Peer peer : peers) {
-			await(((PeerImpl) peer).manual.preferCodecs(Collections.singletonMap(
-					MediaKind.VIDEO, Collections.singletonList("VP8"))));
-		}
-
-		return peers;
+		// No codec preferences: the peers negotiate a codec end-to-end
+		// encryption covers by themselves, also on macOS, which would
+		// otherwise prefer H.264.
+		return new Peer[] { caller, callee };
 	}
 
 	private void feedVideo(CustomVideo video) {

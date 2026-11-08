@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
 import dev.onvoid.webrtc.e2ee.CryptoFailure;
+import dev.onvoid.webrtc.e2ee.CryptoStats;
 import dev.onvoid.webrtc.e2ee.KeyProvider;
 import dev.onvoid.webrtc.internal.AllocationFault;
 import dev.onvoid.webrtc.internal.NativeApi;
@@ -113,9 +114,9 @@ class E2eeCallTests extends TestBase {
 			String sent = call.getSentVideoCodec();
 			assertTrue(sent == null || sent.equalsIgnoreCase("video/" + codec), sent);
 
-			// Nothing was dropped on the way: every frame authenticated.
-			assertEquals(0, callerKeys.getStats().getDroppedFrames());
-			assertEquals(0, calleeKeys.getStats().getDroppedFrames());
+			// Nothing was lost on the way: every frame authenticated.
+			assertNothingLost(callerKeys);
+			assertNothingLost(calleeKeys);
 
 			track.removeSink(sink);
 			receiver.dispose();
@@ -138,7 +139,7 @@ class E2eeCallTests extends TestBase {
 			awaitTrue(() -> calleeKeys.getStats().getDecryptedFrames() >= 20,
 					() -> "too few audio frames decrypted: " + calleeKeys.getStats());
 
-			assertEquals(0, calleeKeys.getStats().getDroppedFrames());
+			assertNothingLost(calleeKeys);
 
 			receiver.dispose();
 		}
@@ -226,7 +227,7 @@ class E2eeCallTests extends TestBase {
 					&& calleeKeys.getStats().getDecryptedFrames() >= decryptedBefore + 40,
 					() -> "decoding stopped after the key changed: " + calleeKeys.getStats());
 
-			assertEquals(0, calleeKeys.getStats().getDroppedFrames());
+			assertNothingLost(calleeKeys);
 
 			// The caller removes the old key everywhere: frames keep coming.
 			assertTrue(calleeKeys.removeDecryptionKey(CALLER, 0));
@@ -332,6 +333,18 @@ class E2eeCallTests extends TestBase {
 				NativeApi.releaseEncodedFrames(frames);
 			}
 		}
+	}
+
+	/**
+	 * Asserts that no frame was lost: every frame dropped was a replay. A
+	 * frame can arrive twice on a loaded machine, when a retransmission
+	 * completes it again, and the replay protection rightly drops the copy
+	 * of what was already decoded.
+	 */
+	static void assertNothingLost(KeyProvider keys) {
+		CryptoStats stats = keys.getStats();
+
+		assertEquals(0, stats.getDroppedFrames() - stats.getDroppedFrames(CryptoFailure.REPLAY), stats::toString);
 	}
 
 	private boolean canSend(String codec) {

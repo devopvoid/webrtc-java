@@ -396,8 +396,9 @@ public final class PeerOptions {
 		 * reported to the provider's {@link
 		 * dev.onvoid.webrtc.e2ee.CryptoListener}, not to {@code onError}.
 		 * <p>
-		 * Video has to be sent in VP8, VP9 or AV1: H.264 and H.265 frames are
-		 * dropped, see {@link dev.onvoid.webrtc.e2ee.CryptoFailure#UNSUPPORTED_CODEC}.
+		 * The peer negotiates only the video codecs that can be encrypted, VP8,
+		 * VP9 and AV1, since H.264 and H.265 frames would be dropped, see {@link
+		 * dev.onvoid.webrtc.e2ee.CryptoFailure#UNSUPPORTED_CODEC}.
 		 * {@link Sender#transform} and {@link RemoteTrack#transform} still
 		 * replace the transform of one sender or track. A {@code MediaRecorder}
 		 * refuses the senders and tracks unless the provider {@link

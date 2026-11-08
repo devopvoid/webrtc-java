@@ -62,6 +62,9 @@ final class NegotiationSteps {
 
 	private final Consumer<WebRtcException> candidateRejected;
 
+	/** Readies the transceivers before WebRTC writes an offer or answer. */
+	private final Runnable beforeDescription;
+
 	/** The remote candidates that came before a remote description. */
 	private final List<RTCIceCandidate> heldCandidates = new ArrayList<>();
 
@@ -78,10 +81,12 @@ final class NegotiationSteps {
 	 *                         candidates then fail to be added, harmlessly.
 	 * @param candidateRejected told of a held candidate WebRTC rejected, whose
 	 *                         operation is over by then.
+	 * @param beforeDescription runs before every offer or answer is made, to
+	 *                         set the codecs of the transceivers there are.
 	 */
 	NegotiationSteps(SerialExecutor control, ScheduledExecutorService timer, OperationChain chain,
 			Supplier<RTCPeerConnection> connection, Duration gatheringTimeout, BooleanSupplier ignoringOffer,
-			Consumer<WebRtcException> candidateRejected) {
+			Consumer<WebRtcException> candidateRejected, Runnable beforeDescription) {
 		this.control = control;
 		this.timer = timer;
 		this.chain = chain;
@@ -89,6 +94,7 @@ final class NegotiationSteps {
 		this.gatheringTimeout = gatheringTimeout;
 		this.ignoringOffer = ignoringOffer;
 		this.candidateRejected = candidateRejected;
+		this.beforeDescription = beforeDescription;
 	}
 
 	/**
@@ -96,6 +102,12 @@ final class NegotiationSteps {
 	 * or an answer.
 	 */
 	CompletableFuture<Void> setLocal() {
+		CompletableFuture<Void> ready = ready();
+
+		if (ready != null) {
+			return ready;
+		}
+
 		CompletableFuture<Void> future = chain.step();
 		connection.get().setLocalDescription(descriptionObserver(future, "Applying the local description failed"));
 		return future;
@@ -116,15 +128,43 @@ final class NegotiationSteps {
 	}
 
 	CompletableFuture<RTCSessionDescription> createOffer() {
+		CompletableFuture<RTCSessionDescription> ready = ready();
+
+		if (ready != null) {
+			return ready;
+		}
+
 		CompletableFuture<RTCSessionDescription> future = chain.step();
 		connection.get().createOffer(new RTCOfferOptions(), createObserver(future, "Creating the offer failed"));
 		return future;
 	}
 
 	CompletableFuture<RTCSessionDescription> createAnswer() {
+		CompletableFuture<RTCSessionDescription> ready = ready();
+
+		if (ready != null) {
+			return ready;
+		}
+
 		CompletableFuture<RTCSessionDescription> future = chain.step();
 		connection.get().createAnswer(new RTCAnswerOptions(), createObserver(future, "Creating the answer failed"));
 		return future;
+	}
+
+	/**
+	 * Readies the transceivers for the description WebRTC is about to write.
+	 *
+	 * @return null if that worked, or a failed future to return instead.
+	 */
+	private <T> CompletableFuture<T> ready() {
+		try {
+			beforeDescription.run();
+
+			return null;
+		}
+		catch (RuntimeException e) {
+			return CompletableFuture.failedFuture(e);
+		}
 	}
 
 	/**

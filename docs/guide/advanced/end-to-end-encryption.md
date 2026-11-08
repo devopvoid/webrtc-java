@@ -130,7 +130,10 @@ The frame format covers VP8, VP9, AV1 and every audio codec. WebRTC's packetizer
 - **AV1** is split into OBUs by its packetizer, so the encrypted frame travels as a single OBU: a sequence header for a key frame, which is how the receiver recognizes one, and a frame OBU otherwise.
 - **VP9** and other audio codecs are encrypted whole.
 
-H.264 and H.265 frames are split at their start codes before they are sent, which a ciphertext would contain anywhere, so they are dropped with `UNSUPPORTED_CODEC`. Prefer VP8, VP9 or AV1 for encrypted calls with `setCodecPreferences` on the transceivers, or with `videoCodecs("VP8", "VP9", "AV1")` of the [WHIP and WHEP](/guide/client-api#whip-and-whep) builders. This matters on macOS in particular, where WebRTC prefers H.264 through VideoToolbox.
+H.264 and H.265 frames are split at their start codes before they are sent, which a ciphertext would contain anywhere, so they are dropped with `UNSUPPORTED_CODEC`. A call has to negotiate them away, which matters on macOS in particular, where WebRTC prefers H.264 through VideoToolbox:
+
+- A peer of the client API with `e2ee(keys)` does so by itself: it offers and answers only VP8, VP9 and AV1 video, in WebRTC's order. `videoCodecs(...)` of the [WHIP and WHEP](/guide/client-api#whip-and-whep) builders still picks among them, and fails the session with a `ConfigurationException` if it names none of them.
+- Without the client API, call `setCodecPreferences` on each video transceiver with the codecs for which `KeyProvider.supportsCodec(codec.getMimeType())` is true, keeping `rtx`, `red` and `ulpfec`.
 
 ## Recording
 

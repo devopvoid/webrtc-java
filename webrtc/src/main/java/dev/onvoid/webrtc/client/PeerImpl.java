@@ -162,17 +162,19 @@ final class PeerImpl implements Peer {
 		this.stateHandlers = new Handlers<>(rtc::reportError);
 		this.errorHandlers = new Handlers<>(rtc::reportError);
 		this.chain = new OperationChain(control, rtc.timer, rtc.operationTimeout, name, new ChainHost());
+		CodecPreferences codecs = new CodecPreferences(this, options.e2ee != null);
+
 		this.steps = new NegotiationSteps(control, rtc.timer, chain, () -> connection, options.gatheringTimeout,
 				this::ignoresOffer, error -> {
 					if (!closed) {
 						deliverError(error);
 					}
-				});
+				}, codecs::apply);
 		this.automatic = new PerfectNegotiation(this, options, chain, steps);
 		this.statistics = new StatsSampler(this);
 		this.channels = new DataChannels(this);
 		this.tracks = new RemoteTracks(this, receiveTransforms(options));
-		this.manual = new ManualNegotiation(this, options, chain, steps, tracks, new CodecPreferences(this));
+		this.manual = new ManualNegotiation(this, options, chain, steps, tracks, codecs);
 		this.signaling = new SignalingLink(this, options.signaling);
 
 		rtc.track(connected, events);
