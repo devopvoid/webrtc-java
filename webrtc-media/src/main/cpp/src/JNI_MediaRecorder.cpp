@@ -32,41 +32,48 @@ namespace
 	{
 		return reinterpret_cast<ffmpeg::MediaRecorder *>(handle);
 	}
-}
 
-JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_create
-(JNIEnv * env, jobject caller, jstring jPath, jlong tableAddress)
-{
-	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+	// The table of the webrtc-java API, or null with an IOException thrown.
+	const webrtc_java_api * ApiOf(JNIEnv * env, jlong tableAddress)
+	{
 		const webrtc_java_api * api = reinterpret_cast<const webrtc_java_api *>(tableAddress);
 		std::string apiError = ffmpeg::CheckApi(api);
 
 		if (!apiError.empty()) {
 			ffmpeg::ThrowIOException(env, apiError);
 
-			return 0;
+			return nullptr;
 		}
 
-		std::string path;
+		return api;
+	}
 
-		{
-			ffmpeg::JavaStringChars chars(env, jPath);
+	// Copies a Java string as UTF-8. Returns false with an exception
+	// pending if it cannot.
+	bool CopyString(JNIEnv * env, jstring string, std::string * utf8)
+	{
+		ffmpeg::JavaStringChars chars(env, string);
 
-			if (chars.get() == nullptr) {
-				return 0;
-			}
-
-			path = chars.utf8();
+		if (chars.get() == nullptr) {
+			return false;
 		}
 
-		auto recorder = std::make_unique<ffmpeg::MediaRecorder>(api, path);
+		*utf8 = chars.utf8();
 
+		return true;
+	}
+
+	// Opens the recorder and gives it the Java recorder to report to, or
+	// throws, naming what it was to record to.
+	jlong Finish(JNIEnv * env, jobject caller, std::unique_ptr<ffmpeg::MediaRecorder> recorder,
+			const std::string & target)
+	{
 		int result = recorder->Open();
 
 		if (result < 0) {
 			recorder.reset();
 
-			ffmpeg::ThrowIOException(env, "Opening " + path + " for recording failed: " + ffmpeg::ErrorText(result));
+			ffmpeg::ThrowIOException(env, "Opening " + target + " for recording failed: " + ffmpeg::ErrorText(result));
 
 			return 0;
 		}
@@ -74,6 +81,67 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_crea
 		recorder->SetObserver(std::make_unique<ffmpeg::JavaRecorderObserver>(env, caller));
 
 		return reinterpret_cast<jlong>(recorder.release());
+	}
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_create
+(JNIEnv * env, jobject caller, jstring jPath, jlong tableAddress)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		const webrtc_java_api * api = ApiOf(env, tableAddress);
+		std::string path;
+
+		if (api == nullptr || !CopyString(env, jPath, &path)) {
+			return 0;
+		}
+
+		return Finish(env, caller, std::make_unique<ffmpeg::MediaRecorder>(api, path), path);
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_createSegments
+(JNIEnv * env, jobject caller, jstring jPrefix, jstring jSuffix, jint width, jlong firstIndex,
+	jlong maxDurationUs, jlong maxBytes, jlong tableAddress)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		const webrtc_java_api * api = ApiOf(env, tableAddress);
+
+		if (api == nullptr) {
+			return 0;
+		}
+
+		ffmpeg::MediaRecorder::SegmentConfig segments;
+
+		if (!CopyString(env, jPrefix, &segments.prefix) || !CopyString(env, jSuffix, &segments.suffix)) {
+			return 0;
+		}
+
+		segments.width = static_cast<int>(width);
+		segments.first_index = static_cast<int64_t>(firstIndex);
+		segments.max_duration_us = static_cast<int64_t>(maxDurationUs);
+		segments.max_bytes = static_cast<int64_t>(maxBytes);
+
+		const std::string target = segments.prefix + "*" + segments.suffix;
+
+		return Finish(env, caller, std::make_unique<ffmpeg::MediaRecorder>(api, std::move(segments)), target);
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_createReplay
+(JNIEnv * env, jobject caller, jlong windowUs, jlong maxBytes, jlong tableAddress)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		const webrtc_java_api * api = ApiOf(env, tableAddress);
+
+		if (api == nullptr) {
+			return 0;
+		}
+
+		ffmpeg::MediaRecorder::ReplayConfig replay;
+		replay.window_us = static_cast<int64_t>(windowUs);
+		replay.max_bytes = static_cast<int64_t>(maxBytes);
+
+		return Finish(env, caller, std::make_unique<ffmpeg::MediaRecorder>(api, replay), "a replay buffer");
 	});
 }
 
@@ -140,6 +208,24 @@ JNIEXPORT jlongArray JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder
 		}
 
 		return array;
+	});
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_saveReplay
+(JNIEnv * env, jclass caller, jlong handle, jint id, jstring jPath)
+{
+	if (handle == 0) {
+		return JNI_FALSE;
+	}
+
+	return ffmpeg::CallFromJava<jboolean>(env, JNI_FALSE, [&]() -> jboolean {
+		std::string path;
+
+		if (!CopyString(env, jPath, &path)) {
+			return JNI_FALSE;
+		}
+
+		return RecorderOf(handle)->SaveReplay(static_cast<int>(id), std::move(path)) ? JNI_TRUE : JNI_FALSE;
 	});
 }
 

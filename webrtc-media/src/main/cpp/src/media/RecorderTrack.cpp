@@ -263,6 +263,16 @@ namespace ffmpeg
 		return media_type_ == AVMEDIA_TYPE_VIDEO;
 	}
 
+	int RecorderTrack::GetClockRate() const
+	{
+		return clock_rate_;
+	}
+
+	const std::string & RecorderTrack::GetMimeType() const
+	{
+		return mime_type_;
+	}
+
 	RecorderTrack::Status RecorderTrack::Probe(const RecordedFrame & frame,
 			const AVOutputFormat * format, std::string * message)
 	{
@@ -280,17 +290,17 @@ namespace ffmpeg
 
 				return status_;
 			}
-			if (!CanHold(format, codec->codec_id)) {
-				*message = "Track " + std::to_string(index_) + " is " + frame.mime_type
-						+ ", which a " + format->name + " file cannot hold; Matroska (.mkv) holds every codec WebRTC sends";
+
+			mime_type_ = frame.mime_type;
+			media_type_ = codec->media_type;
+			codec_id_ = codec->codec_id;
+			clock_rate_ = codec->clock_rate;
+
+			if (format != nullptr && !CanBeHeldBy(format, message)) {
 				status_ = Status::kUnsupported;
 
 				return status_;
 			}
-
-			media_type_ = codec->media_type;
-			codec_id_ = codec->codec_id;
-			clock_rate_ = codec->clock_rate;
 		}
 
 		bool described = media_type_ == AVMEDIA_TYPE_VIDEO
@@ -304,7 +314,36 @@ namespace ffmpeg
 		return status_;
 	}
 
-	int RecorderTrack::CreateStream(AVFormatContext * context)
+	bool RecorderTrack::CanBeHeldBy(const AVOutputFormat * format, std::string * message) const
+	{
+		if (CanHold(format, codec_id_)) {
+			return true;
+		}
+
+		*message = "Track " + std::to_string(index_) + " is " + mime_type_
+				+ ", which a " + format->name + " file cannot hold; Matroska (.mkv) holds every codec WebRTC sends";
+
+		return false;
+	}
+
+	void RecorderTrack::Reset()
+	{
+		status_ = Status::kPending;
+		media_type_ = AVMEDIA_TYPE_UNKNOWN;
+		codec_id_ = AV_CODEC_ID_NONE;
+		clock_rate_ = 0;
+		width_ = 0;
+		height_ = 0;
+		channels_ = 0;
+		extradata_.clear();
+		mime_type_.clear();
+
+		// The new codec may have a clock of its own, so the track is placed
+		// on the timeline anew.
+		anchored_ = false;
+	}
+
+	int RecorderTrack::CreateStream(AVFormatContext * context, AVStream ** created) const
 	{
 		AVStream * stream = avformat_new_stream(context, nullptr);
 
@@ -337,24 +376,16 @@ namespace ffmpeg
 			par->extradata_size = static_cast<int>(extradata_.size());
 		}
 
-		// A hint; the muxer picks the time base it stores, which Stamp()
+		// A hint; the muxer picks the time base it stores, which the output
 		// converts to.
 		stream->time_base = AVRational{ 1, clock_rate_ };
-		stream_ = stream;
+		*created = stream;
 
 		return 0;
 	}
 
-	AVStream * RecorderTrack::GetStream() const
+	void RecorderTrack::Timestamp(RecordedFrame & frame, int64_t start_us)
 	{
-		return stream_;
-	}
-
-	AVPacket * RecorderTrack::Stamp(RecordedFrame & frame, int64_t start_us)
-	{
-		AVPacket * packet = frame.packet.get();
-		const AVRational track_time_base{ 1, clock_rate_ };
-
 		// Where the clock puts the frame, which is what a track starts from,
 		// and what it falls back on if its RTP timestamps stop making sense.
 		int64_t clock_pts = av_rescale(frame.time_us - start_us, clock_rate_, 1000000);
@@ -381,26 +412,8 @@ namespace ffmpeg
 			pts = clock_pts;
 		}
 
-		// Every container wants increasing timestamps, and some want them
-		// strictly increasing even where frames share an RTP timestamp.
-		int64_t stream_pts = av_rescale_q(std::max<int64_t>(pts, 0), track_time_base, stream_->time_base);
-
-		if (stream_pts <= last_pts_) {
-			stream_pts = last_pts_ + 1;
-		}
-
-		last_pts_ = stream_pts;
-
-		packet->pts = stream_pts;
-		packet->dts = stream_pts;
-		packet->stream_index = stream_->index;
-		packet->time_base = stream_->time_base;
-
-		if (frame.key_frame || media_type_ == AVMEDIA_TYPE_AUDIO) {
-			packet->flags |= AV_PKT_FLAG_KEY;
-		}
-
-		return packet;
+		frame.pts = pts;
+		frame.timeline_us = av_rescale(pts, 1000000, clock_rate_);
 	}
 
 	bool RecorderTrack::DescribeVideo(const RecordedFrame & frame)

@@ -5,6 +5,8 @@ This guide explains how to record what a peer connection sends or receives into 
 - Recording senders and receivers
 - Replacing a file that exists
 - Choosing the container
+- Splitting a recording into segments, and how many to keep
+- Keeping the last seconds in memory and saving them on demand
 - Following a recording with a listener
 - How tracks are started, timed and left out
 - Measuring what a recording lost
@@ -91,6 +93,66 @@ The container follows the file name:
 A name FFmpeg does not know gets Matroska. A track whose codec the file cannot hold, VP8 in MP4 for example, is left out and reported as a warning, and the rest is recorded.
 
 Matroska has no codec ID of its own for G.711, so it is stored as Windows audio (`A_MS/ACM`), the way FFmpeg itself stores it. Players built on FFmpeg, such as VLC and mpv, play it; some others do not.
+
+## Recording in Segments
+
+For recordings that run for hours, such as surveillance or support sessions, a recorder can split the recording into segments: files that each play on their own, ended by duration or size, of which it keeps as many as asked.
+
+```java
+SegmentOptions segments = SegmentOptions.builder(Paths.get("recordings", "camera-%05d.mkv"))
+        .maxDuration(Duration.ofMinutes(10))        // end a segment after 10 minutes,
+        .maxSize(512L * 1024 * 1024)                // or once it holds 512 MB
+        .maxTotalSize(20L * 1024 * 1024 * 1024)     // keep the newest 20 GB
+        .build();
+
+try (MediaRecorder recorder = new MediaRecorder(segments)) {
+    recorder.setListener(new MediaRecorderListener() {
+
+        @Override
+        public void onSegmentFinished(MediaRecorderSegment segment) {
+            upload(segment.getFile());
+        }
+    });
+    recorder.addTrack(videoReceiver);
+    recorder.addTrack(audioReceiver);
+    recorder.start();
+
+    // ...
+}
+```
+
+The file name of the pattern holds the segment's number as `%d`, or zero-padded as `%05d`; a literal percent sign is `%%`. The extension picks the container of all segments, as for a single file. Numbering goes on from the highest number already in the directory, so a recorder started again continues after the last segment, and a segment never empties a file that exists: its number is skipped instead.
+
+- **Every segment begins at a key frame.** Once a segment has reached its duration or size, the recorder asks the video tracks for key frames, and the next segment begins with the first that arrives, usually a fraction of a second later. A segment is therefore somewhat longer or larger than the limit. Without video, a segment ends right at the limit.
+- **Several video tracks lose nothing.** A video track whose key frame comes after the one that began the next segment goes on in the segment before until then, so neither file has a gap. One that sends no key frame within three seconds starts the new segment at its next.
+- **Each segment starts at zero.** Its tracks are shifted by the same amount, so they stay in sync, and one segment follows the other without a gap. `MediaRecorderSegment.getStart()` tells where a segment lies in the recording.
+- **A codec change starts a segment.** A file cannot change the codec of a stream, so a track that changes its codec, e.g. after a renegotiation, goes on in the next segment, which begins as soon as the new codec is known. A single file leaves such a track out from then on instead.
+- **A slow disk holds nothing up.** Segments are finished and opened by the recorder's writer thread, with the frames queuing up meanwhile as always, and old segments are deleted on the listener's thread.
+
+`onSegmentFinished` hears of every segment once it is finished and closed, the last one when the recorder stops. Right after it returns, the oldest segments beyond `maxSegments` or `maxTotalSize` are deleted, so a segment to be kept for longer has to be moved or copied by then. The newest segment is always kept, and the one being written does not count toward `maxTotalSize`, so the recording takes up to that much and one segment more. `getSegments()` lists the segments that are kept, and `getFile()` returns the last one finished.
+
+A write that fails, e.g. because the disk is full, ends the recording as it does for a single file. The segment it happened in is kept as `PARTIAL` if it holds media; one that failed before any went into it is deleted.
+
+## Replay Buffer
+
+A `ReplayBuffer` keeps the last seconds of a call in memory and writes them into a file only when asked, for "save the last 30 seconds":
+
+```java
+try (ReplayBuffer buffer = new ReplayBuffer(Duration.ofSeconds(30))) {
+    buffer.addTrack(videoReceiver);
+    buffer.addTrack(audioReceiver);
+    buffer.start();
+
+    // ... something happens worth keeping ...
+
+    buffer.save(Paths.get("incident.mkv"))
+            .thenAccept(replay -> System.out.println("Saved " + replay.getDuration()));
+}
+```
+
+`save` creates the file at once, refusing one that exists, and the buffer's own thread writes the replay, while the buffer goes on taking frames. The future completes on the listener's thread with a `MediaRecorderSegment`, or exceptionally if nothing could be saved, and the file is then deleted. A buffer can save any number of replays, in any container; a track whose codec the container cannot hold is left out of that replay with a warning.
+
+A replay begins with a key frame of every video track: the last one before the window, so a replay holds at least the window, and a few seconds more. Since WebRTC rarely sends key frames of its own accord, the buffer asks its video tracks for one every third of the window, at least every two seconds and at most every ten. Besides the window, the buffer holds at most 256 MB, or what its constructor is given; beyond that, the oldest frames go first, and a replay is shorter. A track that changes its codec is kept with the new codec from then on.
 
 ## Following a Recording
 

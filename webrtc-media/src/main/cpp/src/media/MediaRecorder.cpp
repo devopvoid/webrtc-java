@@ -23,12 +23,9 @@
 #include <chrono>
 #include <cstring>
 #include <exception>
+#include <limits>
 #include <new>
 #include <utility>
-
-extern "C" {
-#include <libavutil/dict.h>
-}
 
 namespace ffmpeg
 {
@@ -55,30 +52,63 @@ namespace ffmpeg
 		// the header timeout and for key frame requests it held back.
 		constexpr std::chrono::milliseconds kWriterTick(250);
 
-		bool IsMp4(const AVOutputFormat * format)
+		// How long the segment before takes the frames of a video track that
+		// has not reached a key frame in the next one, before the track waits
+		// for it with nothing recorded.
+		constexpr int64_t kDrainUs = 3000000;
+
+		// How long a segment that is due to end waits for a key frame of a
+		// video track before it ends at whatever frame comes.
+		constexpr int64_t kRotationWaitUs = 3000000;
+
+		// How many existing files a segment skips before it gives up.
+		constexpr int kMaxSkippedSegments = 1000;
+
+		// How often a replay buffer asks for key frames, which is how far
+		// beyond its window it may have to reach back: a third of the window,
+		// but neither often enough to cost a call much, nor so rarely that the
+		// buffer holds much more than asked.
+		constexpr int64_t kMinReplayKeyFrameIntervalUs = 2000000;
+		constexpr int64_t kMaxReplayKeyFrameIntervalUs = 10000000;
+
+		std::string SegmentPattern(const MediaRecorder::SegmentConfig & segments)
 		{
-			return std::strcmp(format->name, "mp4") == 0 || std::strcmp(format->name, "mov") == 0;
+			return segments.prefix + "%0" + std::to_string(segments.width) + "d" + segments.suffix;
 		}
 	}
 
-	MediaRecorder::MediaRecorder(const webrtc_java_api * api, std::string path) :
+	MediaRecorder::MediaRecorder(const webrtc_java_api * api, Mode mode, std::string path) :
 		api_(api),
+		mode_(mode),
 		path_(std::move(path)),
-		out_of_memory_error_("Recording to " + path_ + " failed: " + ErrorText(AVERROR(ENOMEM)))
+		subject_(mode == Mode::kReplay ? "Buffering for replays" : "Recording to " + path_),
+		out_of_memory_error_(subject_ + " failed: " + ErrorText(AVERROR(ENOMEM)))
 	{
+	}
+
+	MediaRecorder::MediaRecorder(const webrtc_java_api * api, std::string path) :
+		MediaRecorder(api, Mode::kFile, std::move(path))
+	{
+	}
+
+	MediaRecorder::MediaRecorder(const webrtc_java_api * api, SegmentConfig segments) :
+		MediaRecorder(api, Mode::kSegments, SegmentPattern(segments))
+	{
+		segments_ = std::move(segments);
+		next_index_ = segments_.first_index;
+	}
+
+	MediaRecorder::MediaRecorder(const webrtc_java_api * api, ReplayConfig replay) :
+		MediaRecorder(api, Mode::kReplay, std::string())
+	{
+		replay_ = replay;
+		key_frame_interval_us_ = std::min(std::max(replay_.window_us / 3, kMinReplayKeyFrameIntervalUs),
+				kMaxReplayKeyFrameIntervalUs);
 	}
 
 	MediaRecorder::~MediaRecorder()
 	{
 		Stop();
-
-		if (context_ != nullptr) {
-			if (context_->pb != nullptr && !(context_->oformat->flags & AVFMT_NOFILE)) {
-				avio_closep(&context_->pb);
-			}
-
-			avformat_free_context(context_);
-		}
 	}
 
 	void MediaRecorder::SetObserver(std::unique_ptr<MediaRecorderObserver> observer)
@@ -88,27 +118,28 @@ namespace ffmpeg
 
 	int MediaRecorder::Open()
 	{
-		// The container follows the file name; a name FFmpeg cannot place
-		// gets Matroska, which holds every codec WebRTC sends.
-		int result = avformat_alloc_output_context2(&context_, nullptr, nullptr, path_.c_str());
+		if (mode_ == Mode::kFile) {
+			output_ = std::make_unique<RecorderOutput>(path_, 0, 0);
 
-		if (result < 0 || context_ == nullptr) {
-			result = avformat_alloc_output_context2(&context_, nullptr, "matroska", path_.c_str());
-		}
-		if (result < 0) {
-			return result;
-		}
-
-		// Frames arrive in real time, so the streams never drift far apart,
-		// and holding back more for interleaving only costs memory.
-		context_->max_interleave_delta = 2000000;
-
-		if (!(context_->oformat->flags & AVFMT_NOFILE)) {
-			result = WriteFault::Check(WriteFault::Call::kOpen,
-					avio_open(&context_->pb, path_.c_str(), AVIO_FLAG_WRITE));
+			int result = output_->Open(false);
 
 			if (result < 0) {
 				return result;
+			}
+
+			format_ = output_->GetFormat();
+		}
+		else if (mode_ == Mode::kSegments) {
+			// As a segment will choose it when it opens.
+			const std::string name = "segment" + segments_.suffix;
+
+			format_ = av_guess_format(nullptr, name.c_str(), nullptr);
+
+			if (format_ == nullptr) {
+				format_ = av_guess_format("matroska", nullptr, nullptr);
+			}
+			if (format_ == nullptr) {
+				return AVERROR_MUXER_NOT_FOUND;
 			}
 		}
 
@@ -171,6 +202,14 @@ namespace ffmpeg
 		// before there is a writer, which would finish the file on its way
 		// out, so that taking the observers off again undoes all of it.
 		try {
+			const size_t count = tracks_.size();
+
+			switched_.assign(count, true);
+			awaiting_segment_.assign(count, false);
+			key_times_.resize(count);
+			last_key_us_.assign(count, 0);
+			last_frame_us_.assign(count, std::numeric_limits<int64_t>::min());
+
 			// The inputs do not change once started, so the callbacks may hold
 			// on to them without the lock.
 			for (const auto & input : inputs_) {
@@ -288,6 +327,25 @@ namespace ffmpeg
 		return stats;
 	}
 
+	bool MediaRecorder::SaveReplay(int id, std::string path)
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		if (mode_ != Mode::kReplay || !started_ || stopped_ || writer_ended_) {
+			return false;
+		}
+
+		SaveRequest request;
+		request.id = id;
+		request.path = std::move(path);
+
+		save_requests_.push_back(std::move(request));
+		poke_ = true;
+		wake_.notify_one();
+
+		return true;
+	}
+
 	void MediaRecorder::RemoveObservers()
 	{
 		for (const auto & input : inputs_) {
@@ -358,7 +416,8 @@ namespace ffmpeg
 			input->ssrc = frame->ssrc;
 		}
 
-		if (frame->mime_type == nullptr || input->mime_type != frame->mime_type) {
+		if (frame->mime_type == nullptr
+				|| (mode_ == Mode::kFile && input->mime_type != frame->mime_type)) {
 			// A stream in a file cannot change its codec halfway.
 			if (!input->reported_codec_change) {
 				input->reported_codec_change = true;
@@ -370,6 +429,16 @@ namespace ffmpeg
 			}
 
 			return;
+		}
+
+		if (input->mime_type != frame->mime_type) {
+			// Segments and replays go on with the new codec, which the writer
+			// describes anew, from a key frame.
+			input->mime_type = frame->mime_type;
+
+			if (video) {
+				input->waiting_for_key_frame = true;
+			}
 		}
 
 		if (video && input->waiting_for_key_frame) {
@@ -498,6 +567,7 @@ namespace ffmpeg
 		std::deque<RecordedFrame> batch;
 		std::vector<std::string> warnings;
 		std::vector<int> key_frame_requests;
+		std::vector<SaveRequest> saves;
 
 		std::unique_lock<std::mutex> lock(mutex_);
 
@@ -511,6 +581,7 @@ namespace ffmpeg
 			batch.swap(queue_);
 			queued_bytes_ = 0;
 			warnings.swap(pending_warnings_);
+			saves.swap(save_requests_);
 
 			CollectKeyFrameRequestsLocked(&key_frame_requests, api_->now_us());
 
@@ -537,16 +608,36 @@ namespace ffmpeg
 				Handle(std::move(frame));
 			}
 
-			// Nothing may arrive for a track that is waited for, so the
-			// clock is looked at here as well.
-			MaybeWriteHeader(false);
+			const int64_t now_us = api_->now_us();
+
+			if (mode_ == Mode::kReplay) {
+				// After the frames that came before the request.
+				for (const SaveRequest & save : saves) {
+					Save(save);
+				}
+
+				saves.clear();
+
+				RequestReplayKeyFrames(now_us);
+			}
+			else {
+				// Nothing may arrive for a track that is waited for, so the
+				// clock is looked at here as well.
+				MaybeWriteHeader(false);
+
+				if (mode_ == Mode::kSegments) {
+					CheckSegments(now_us);
+				}
+			}
 
 			lock.lock();
 
-			if (stopping && queue_.empty()) {
+			if (stopping && queue_.empty() && save_requests_.empty()) {
 				break;
 			}
 		}
+
+		writer_ended_ = true;
 
 		lock.unlock();
 
@@ -565,9 +656,15 @@ namespace ffmpeg
 
 		RecorderTrack & track = *tracks_[frame.track];
 
+		if (track.GetStatus() == RecorderTrack::Status::kReady && frame.mime_type != track.GetMimeType()) {
+			// Only segments and replays get here: the frames of a single file
+			// keep the codec they began with.
+			ChangeCodec(track, frame);
+		}
+
 		if (track.GetStatus() == RecorderTrack::Status::kPending) {
 			std::string message;
-			RecorderTrack::Status status = track.Probe(frame, context_->oformat, &message);
+			RecorderTrack::Status status = track.Probe(frame, format_, &message);
 
 			if (status == RecorderTrack::Status::kUnsupported) {
 				Warn(message);
@@ -584,9 +681,21 @@ namespace ffmpeg
 			if (first_ready_us_ == 0) {
 				first_ready_us_ = api_->now_us();
 			}
+			if (awaiting_segment_[frame.track] && !rotation_due_) {
+				// Described with its new codec, which goes into a segment of
+				// its own.
+				DueRotation();
+			}
 		}
 
 		if (track.GetStatus() != RecorderTrack::Status::kReady) {
+			return;
+		}
+
+		track.Timestamp(frame, start_us_);
+
+		if (mode_ == Mode::kReplay) {
+			Buffer(std::move(frame));
 			return;
 		}
 
@@ -598,21 +707,609 @@ namespace ffmpeg
 			return;
 		}
 
-		// A track that got ready only after the header has no stream.
-		if (track.GetStream() != nullptr) {
-			Write(frame);
+		Route(frame);
+	}
+
+	void MediaRecorder::ChangeCodec(RecorderTrack & track, const RecordedFrame & frame)
+	{
+		const int index = track.GetIndex();
+
+		Warn("Track " + std::to_string(index) + " changed its codec from " + track.GetMimeType()
+				+ " to " + frame.mime_type
+				+ (mode_ == Mode::kSegments ? ", and goes on in the next segment" : ""));
+
+		track.Reset();
+
+		if (mode_ == Mode::kReplay) {
+			// A stream in a file cannot change its codec, and a replay holds
+			// the new one.
+			RemoveFromBuffer(index);
+		}
+		else if (!header_written_) {
+			pending_.erase(std::remove_if(pending_.begin(), pending_.end(),
+					[this, index](const RecordedFrame & pending) {
+						if (pending.track != index) {
+							return false;
+						}
+
+						pending_bytes_ -= static_cast<size_t>(pending.packet->size);
+						return true;
+					}), pending_.end());
+		}
+		else {
+			awaiting_segment_[index] = true;
 		}
 	}
 
-	void MediaRecorder::Write(RecordedFrame & frame)
+	void MediaRecorder::Route(RecordedFrame & frame)
 	{
-		AVPacket * packet = tracks_[frame.track]->Stamp(frame, start_us_);
+		if (mode_ == Mode::kSegments) {
+			RouteSegment(frame);
+		}
+		// A track that got ready only after the header has no stream.
+		else if (output_->HasStream(frame.track)) {
+			Write(*output_, frame);
+		}
+	}
 
-		// Takes the packet's reference and leaves the packet blank.
-		int result = WriteFault::Check(WriteFault::Call::kPacket, av_interleaved_write_frame(context_, packet));
+	void MediaRecorder::RouteSegment(RecordedFrame & frame)
+	{
+		const int index = frame.track;
+		const bool video = tracks_[index]->IsVideo();
+
+		if (rotation_due_) {
+			// A segment begins with a key frame of a video track. With no
+			// video, or none that sends one in time, it begins anywhere.
+			if ((video && frame.key_frame) || !AnyVideoReady()
+					|| api_->now_us() - rotation_due_us_ > kRotationWaitUs) {
+				Rotate(frame);
+
+				if (failed_) {
+					return;
+				}
+			}
+		}
+
+		if (awaiting_segment_[index]) {
+			return;
+		}
+
+		if (video && !switched_[index]) {
+			// Until its own key frame, a video track goes on in the segment
+			// before, so that both play without a gap.
+			if (frame.key_frame && output_->HasStream(index)) {
+				switched_[index] = true;
+
+				Write(*output_, frame);
+
+				if (draining_ != nullptr && !Draining()) {
+					FinishSegment(std::move(draining_));
+				}
+			}
+			else if (draining_ != nullptr && draining_->HasStream(index)) {
+				Write(*draining_, frame);
+			}
+			else if (output_->HasStream(index)) {
+				CountAwaitingKeyFrame(index);
+			}
+		}
+		else if (output_->HasStream(index)) {
+			Write(*output_, frame);
+		}
+
+		if (!failed_ && !rotation_due_ && SegmentLimitReached()) {
+			DueRotation();
+		}
+	}
+
+	void MediaRecorder::Rotate(const RecordedFrame & frame)
+	{
+		// A segment that still drains when the next one is due is done.
+		FinishSegment(std::move(draining_));
+
+		if (failed_) {
+			return;
+		}
+
+		draining_ = std::move(output_);
+
+		if (!OpenSegment(frame.timeline_us)) {
+			FinishSegment(std::move(draining_));
+			return;
+		}
+
+		for (size_t i = 0; i < tracks_.size(); i++) {
+			switched_[i] = !tracks_[i]->IsVideo()
+					|| (static_cast<int>(i) == frame.track && frame.key_frame);
+
+			// A track that changed its codec and is not described anew yet
+			// waits for the segment after.
+			awaiting_segment_[i] = awaiting_segment_[i] && !output_->HasStream(static_cast<int>(i));
+		}
+
+		rotation_due_ = false;
+		drain_started_us_ = api_->now_us();
+
+		if (!Draining()) {
+			FinishSegment(std::move(draining_));
+		}
+	}
+
+	void MediaRecorder::DueRotation()
+	{
+		rotation_due_ = true;
+		rotation_due_us_ = api_->now_us();
+
+		RequestKeyFrames();
+	}
+
+	bool MediaRecorder::OpenSegment(int64_t start_us)
+	{
+		for (int skipped = 0; ; skipped++) {
+			const int64_t index = next_index_++;
+			auto segment = std::make_unique<RecorderOutput>(SegmentPath(index), start_us, index);
+			const std::string & path = segment->GetPath();
+
+			int result = segment->Open(true);
+
+			if (result == AVERROR(EEXIST) && skipped < kMaxSkippedSegments) {
+				// Left as it is; reported once, not for every file in a row.
+				if (!skipped_existing_) {
+					skipped_existing_ = true;
+					Warn(path + " exists already, so the segment goes into the next free file");
+				}
+				continue;
+			}
+			if (result < 0) {
+				// Nothing to delete: the file was not opened, or is not ours.
+				Fail("Opening " + path + " failed", result);
+				return false;
+			}
+
+			for (const auto & track : tracks_) {
+				if (track->GetStatus() == RecorderTrack::Status::kReady) {
+					result = segment->AddStream(*track);
+
+					if (result < 0) {
+						Fail("Adding track " + std::to_string(track->GetIndex()) + " to " + path + " failed", result);
+						break;
+					}
+				}
+			}
+
+			if (result >= 0) {
+				result = segment->WriteHeader();
+
+				if (result < 0) {
+					Fail("Writing the header of " + path + " failed", result);
+				}
+			}
+
+			if (result < 0) {
+				// Closed first, since a file that is open cannot be deleted
+				// everywhere. Its failure is the one reported.
+				segment->Close();
+
+				if (observer_ != nullptr) {
+					observer_->OnSegmentFinished(index, path, start_us, 0,
+							static_cast<int>(Result::kFailed));
+				}
+				return false;
+			}
+
+			output_ = std::move(segment);
+
+			return true;
+		}
+	}
+
+	void MediaRecorder::FinishSegment(std::unique_ptr<RecorderOutput> segment)
+	{
+		if (segment == nullptr) {
+			return;
+		}
+
+		// Even after a failed write: whatever made it into the file is only
+		// playable with a trailer. After an earlier failure, the same cause
+		// is not reported twice.
+		int result = segment->WriteTrailer();
 
 		if (result < 0) {
-			Fail("Writing to " + path_ + " failed", result);
+			if (!failed_) {
+				Fail("Finishing " + segment->GetPath() + " failed", result);
+			}
+			segment->SetFailed();
+		}
+
+		result = segment->Close();
+
+		if (result < 0) {
+			if (!failed_) {
+				Fail("Closing " + segment->GetPath() + " failed", result);
+			}
+			segment->SetFailed();
+		}
+
+		Result outcome = Result::kFailed;
+
+		if (segment->HasMedia()) {
+			outcome = segment->IsFailed() ? Result::kPartial : Result::kComplete;
+		}
+
+		if (observer_ != nullptr) {
+			observer_->OnSegmentFinished(segment->GetIndex(), segment->GetPath(),
+					segment->GetStartUs(), segment->GetDurationUs(), static_cast<int>(outcome));
+		}
+	}
+
+	void MediaRecorder::CheckSegments(int64_t now_us)
+	{
+		if (failed_ || output_ == nullptr) {
+			return;
+		}
+
+		// A video track that sends no key frame in time waits for it with
+		// nothing recorded, rather than hold the segment before open.
+		if (draining_ != nullptr && now_us - drain_started_us_ > kDrainUs) {
+			FinishSegment(std::move(draining_));
+
+			if (failed_) {
+				return;
+			}
+		}
+
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		for (size_t i = 0; i < tracks_.size(); i++) {
+			const RecorderTrack & track = *tracks_[i];
+
+			if (track.GetStatus() != RecorderTrack::Status::kReady || !track.IsVideo()) {
+				continue;
+			}
+
+			// Asked again as long as they are waited for; the requests go out
+			// no more than once a second.
+			if (rotation_due_ || (!switched_[i] && output_->HasStream(static_cast<int>(i)))) {
+				WantKeyFrameLocked(inputs_[i].get());
+			}
+		}
+	}
+
+	bool MediaRecorder::Draining() const
+	{
+		for (size_t i = 0; i < tracks_.size(); i++) {
+			if (!switched_[i] && !awaiting_segment_[i] && draining_->HasStream(static_cast<int>(i))) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	std::string MediaRecorder::SegmentPath(int64_t index) const
+	{
+		std::string digits = std::to_string(index);
+
+		if (digits.size() < static_cast<size_t>(segments_.width)) {
+			digits.insert(0, static_cast<size_t>(segments_.width) - digits.size(), '0');
+		}
+
+		return segments_.prefix + digits + segments_.suffix;
+	}
+
+	void MediaRecorder::RequestKeyFrames()
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		for (size_t i = 0; i < tracks_.size(); i++) {
+			const RecorderTrack & track = *tracks_[i];
+
+			if (track.GetStatus() == RecorderTrack::Status::kReady && track.IsVideo()) {
+				WantKeyFrameLocked(inputs_[i].get());
+			}
+		}
+	}
+
+	void MediaRecorder::CountAwaitingKeyFrame(int track)
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		inputs_[track]->stats.dropped_awaiting_key_frame++;
+	}
+
+	bool MediaRecorder::AnyVideoReady() const
+	{
+		for (const auto & track : tracks_) {
+			if (track->GetStatus() == RecorderTrack::Status::kReady && track->IsVideo()) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool MediaRecorder::SegmentLimitReached() const
+	{
+		if (segments_.max_duration_us > 0 && output_->GetDurationUs() >= segments_.max_duration_us) {
+			return true;
+		}
+
+		return segments_.max_bytes > 0 && output_->GetBytes() >= segments_.max_bytes;
+	}
+
+	void MediaRecorder::Buffer(RecordedFrame frame)
+	{
+		const int index = frame.track;
+
+		if (tracks_[index]->IsVideo() && frame.key_frame) {
+			key_times_[index].push_back(frame.timeline_us);
+			last_key_us_[index] = api_->now_us();
+		}
+
+		last_frame_us_[index] = frame.timeline_us;
+		ring_bytes_ += static_cast<size_t>(frame.packet->size);
+		ring_.push_back(std::move(frame));
+
+		if (!header_written_) {
+			header_written_ = true;
+
+			if (observer_ != nullptr) {
+				observer_->OnStarted();
+			}
+		}
+
+		TrimBuffer();
+	}
+
+	void MediaRecorder::TrimBuffer()
+	{
+		const int64_t cutoff = ring_.back().timeline_us - replay_.window_us;
+		int64_t keep_from = cutoff;
+
+		// Every video track that still sends needs the key frame its part of
+		// the window decodes from: the last one before the window, or the
+		// first one in it.
+		for (size_t i = 0; i < tracks_.size(); i++) {
+			const std::deque<int64_t> & keys = key_times_[i];
+
+			if (keys.empty() || last_frame_us_[i] < cutoff) {
+				continue;
+			}
+
+			int64_t from = keys.front();
+
+			for (int64_t key : keys) {
+				if (key > cutoff) {
+					break;
+				}
+				from = key;
+			}
+
+			keep_from = std::min(keep_from, from);
+		}
+
+		// Past its limit, the buffer lets go of the oldest frames whatever
+		// they are; a replay then begins at the next key frame.
+		while (!ring_.empty() && (ring_.front().timeline_us < keep_from
+				|| ring_bytes_ > static_cast<size_t>(replay_.max_bytes))) {
+			const RecordedFrame & front = ring_.front();
+			const int index = front.track;
+
+			if (front.key_frame && tracks_[index]->IsVideo() && !key_times_[index].empty()) {
+				key_times_[index].pop_front();
+
+				// What follows of the track decodes from nothing, so it waits
+				// for the next key frame, and asks for it.
+				if (key_times_[index].empty()) {
+					RestartAtKeyFrame(index);
+				}
+			}
+
+			ring_bytes_ -= static_cast<size_t>(front.packet->size);
+			ring_.pop_front();
+		}
+	}
+
+	void MediaRecorder::RemoveFromBuffer(int track)
+	{
+		ring_.erase(std::remove_if(ring_.begin(), ring_.end(),
+				[this, track](const RecordedFrame & frame) {
+					if (frame.track != track) {
+						return false;
+					}
+
+					ring_bytes_ -= static_cast<size_t>(frame.packet->size);
+					return true;
+				}), ring_.end());
+
+		key_times_[track].clear();
+		last_frame_us_[track] = std::numeric_limits<int64_t>::min();
+	}
+
+	void MediaRecorder::RequestReplayKeyFrames(int64_t now_us)
+	{
+		if (failed_) {
+			return;
+		}
+
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		for (size_t i = 0; i < tracks_.size(); i++) {
+			const RecorderTrack & track = *tracks_[i];
+
+			// WebRTC sends key frames rarely of its own accord, and without
+			// them the buffer could let go of nothing.
+			if (track.GetStatus() == RecorderTrack::Status::kReady && track.IsVideo()
+					&& now_us - last_key_us_[i] >= key_frame_interval_us_) {
+				WantKeyFrameLocked(inputs_[i].get());
+			}
+		}
+	}
+
+	void MediaRecorder::Save(const SaveRequest & request)
+	{
+		if (observer_ == nullptr) {
+			return;
+		}
+		if (ring_.empty()) {
+			observer_->OnReplaySaved(request.id, static_cast<int>(Result::kEmpty), 0, 0, std::string());
+			return;
+		}
+
+		const size_t count = tracks_.size();
+		const int64_t cutoff = ring_.back().timeline_us - replay_.window_us;
+		const int64_t none = std::numeric_limits<int64_t>::max();
+
+		// Where each track begins: a video track at the key frame its part of
+		// the window decodes from, the others where the earliest of those is.
+		std::vector<int64_t> begin(count, none);
+		int64_t start = none;
+
+		for (size_t i = 0; i < count; i++) {
+			const std::deque<int64_t> & keys = key_times_[i];
+
+			if (!tracks_[i]->IsVideo() || keys.empty() || last_frame_us_[i] < cutoff) {
+				continue;
+			}
+
+			int64_t from = keys.front();
+
+			for (int64_t key : keys) {
+				if (key > cutoff) {
+					break;
+				}
+				from = key;
+			}
+
+			begin[i] = from;
+			start = std::min(start, from);
+		}
+
+		if (start == none) {
+			start = std::max(cutoff, ring_.front().timeline_us);
+		}
+
+		for (size_t i = 0; i < count; i++) {
+			if (!tracks_[i]->IsVideo()) {
+				begin[i] = start;
+			}
+		}
+
+		std::vector<bool> has_frames(count, false);
+
+		for (const RecordedFrame & frame : ring_) {
+			if (frame.timeline_us >= begin[frame.track]) {
+				has_frames[frame.track] = true;
+			}
+		}
+
+		RecorderOutput output(request.path, start, request.id);
+		const std::string & path = output.GetPath();
+
+		int result = output.Open(false);
+
+		if (result < 0) {
+			SaveFailed(request, "Opening " + path + " failed", result);
+			return;
+		}
+
+		for (size_t i = 0; i < count; i++) {
+			std::string message;
+
+			if (!has_frames[i] || tracks_[i]->GetStatus() != RecorderTrack::Status::kReady) {
+				continue;
+			}
+			if (!tracks_[i]->CanBeHeldBy(output.GetFormat(), &message)) {
+				Warn(message);
+				continue;
+			}
+
+			result = output.AddStream(*tracks_[i]);
+
+			if (result < 0) {
+				output.Close();
+				SaveFailed(request, "Adding track " + std::to_string(i) + " to " + path + " failed", result);
+				return;
+			}
+		}
+
+		if (!output.HasStreams()) {
+			output.Close();
+			observer_->OnReplaySaved(request.id, static_cast<int>(Result::kEmpty), 0, 0, std::string());
+			return;
+		}
+
+		result = output.WriteHeader();
+
+		if (result < 0) {
+			output.Close();
+			SaveFailed(request, "Writing the header of " + path + " failed", result);
+			return;
+		}
+
+		std::vector<bool> begun(count, false);
+		std::string error;
+
+		for (RecordedFrame & frame : ring_) {
+			const int index = frame.track;
+
+			if (!output.HasStream(index) || frame.timeline_us < begin[index]) {
+				continue;
+			}
+			if (tracks_[index]->IsVideo() && !begun[index]) {
+				if (!frame.key_frame) {
+					continue;
+				}
+				begun[index] = true;
+			}
+
+			// The buffer keeps the frame for the replays to come.
+			result = output.Write(frame, true);
+
+			if (result < 0) {
+				error = "Writing to " + path + " failed: " + ErrorText(result);
+				break;
+			}
+		}
+
+		// Even after a failed write: whatever made it into the file is only
+		// playable with a trailer.
+		result = output.WriteTrailer();
+
+		if (result < 0 && error.empty()) {
+			error = "Finishing " + path + " failed: " + ErrorText(result);
+		}
+
+		result = output.Close();
+
+		if (result < 0 && error.empty()) {
+			error = "Closing " + path + " failed: " + ErrorText(result);
+		}
+
+		Result outcome;
+
+		if (output.HasMedia()) {
+			outcome = error.empty() ? Result::kComplete : Result::kPartial;
+		}
+		else {
+			outcome = error.empty() ? Result::kEmpty : Result::kFailed;
+		}
+
+		observer_->OnReplaySaved(request.id, static_cast<int>(outcome), start, output.GetDurationUs(), error);
+	}
+
+	void MediaRecorder::SaveFailed(const SaveRequest & request, const std::string & message, int error)
+	{
+		observer_->OnReplaySaved(request.id, static_cast<int>(Result::kFailed), 0, 0,
+				message + ": " + ErrorText(error));
+	}
+
+	void MediaRecorder::Write(RecorderOutput & output, RecordedFrame & frame)
+	{
+		int result = output.Write(frame, false);
+
+		if (result < 0) {
+			Fail("Writing to " + output.GetPath() + " failed", result, &output);
 		}
 	}
 
@@ -640,40 +1337,47 @@ namespace ffmpeg
 		}
 
 		for (const auto & track : tracks_) {
-			if (track->GetStatus() == RecorderTrack::Status::kReady) {
-				int result = track->CreateStream(context_);
+			if (track->GetStatus() == RecorderTrack::Status::kPending) {
+				Warn("Track " + std::to_string(track->GetIndex())
+						+ " had no media to record when the recording began, and is left out"
+						+ (mode_ == Mode::kSegments ? " until the next segment" : ""));
+			}
+		}
 
-				if (result < 0) {
-					Fail("Adding track " + std::to_string(track->GetIndex()) + " to the file failed", result);
-					pending_.clear();
-					return false;
+		if (mode_ == Mode::kSegments) {
+			// The first segment begins with the earliest frame held back,
+			// which is a key frame for every video track.
+			int64_t start = std::numeric_limits<int64_t>::max();
+
+			for (const RecordedFrame & frame : pending_) {
+				start = std::min(start, frame.timeline_us);
+			}
+
+			if (!OpenSegment(start)) {
+				pending_.clear();
+				return false;
+			}
+		}
+		else {
+			for (const auto & track : tracks_) {
+				if (track->GetStatus() == RecorderTrack::Status::kReady) {
+					int result = output_->AddStream(*track);
+
+					if (result < 0) {
+						Fail("Adding track " + std::to_string(track->GetIndex()) + " to the file failed", result);
+						pending_.clear();
+						return false;
+					}
 				}
 			}
-			else if (track->GetStatus() == RecorderTrack::Status::kPending) {
-				Warn("Track " + std::to_string(track->GetIndex())
-						+ " had no media to record when the recording began, and is left out");
+
+			int result = output_->WriteHeader();
+
+			if (result < 0) {
+				Fail("Writing the header of " + path_ + " failed", result);
+				pending_.clear();
+				return false;
 			}
-		}
-
-		AVDictionary * options = nullptr;
-
-		if (IsMp4(context_->oformat)) {
-			// Fragmented, so that a recording cut short, by a crash or a full
-			// disk, still plays up to where it stopped; and in fragments of a
-			// second rather than per key frame, which WebRTC sends rarely and
-			// which would hold whole minutes in memory.
-			av_dict_set(&options, "movflags", "+empty_moov+default_base_moof", 0);
-			av_dict_set(&options, "frag_duration", "1000000", 0);
-		}
-
-		int result = WriteFault::Check(WriteFault::Call::kHeader, avformat_write_header(context_, &options));
-
-		av_dict_free(&options);
-
-		if (result < 0) {
-			Fail("Writing the header of " + path_ + " failed", result);
-			pending_.clear();
-			return false;
 		}
 
 		header_written_ = true;
@@ -686,7 +1390,7 @@ namespace ffmpeg
 			RecordedFrame frame = std::move(pending_.front());
 			pending_.pop_front();
 
-			Write(frame);
+			Route(frame);
 		}
 
 		pending_.clear();
@@ -697,32 +1401,42 @@ namespace ffmpeg
 
 	void MediaRecorder::Finish()
 	{
+		if (mode_ == Mode::kReplay) {
+			ring_.clear();
+			ring_bytes_ = 0;
+			return;
+		}
+
 		MaybeWriteHeader(true);
+
+		pending_.clear();
+
+		if (mode_ == Mode::kSegments) {
+			FinishSegment(std::move(draining_));
+			FinishSegment(std::move(output_));
+			return;
+		}
 
 		if (header_written_) {
 			// Even after a failed write: whatever made it into the file
 			// is only playable with a trailer.
-			int result = WriteFault::Check(WriteFault::Call::kTrailer, av_write_trailer(context_));
+			int result = output_->WriteTrailer();
 
 			if (result < 0 && !failed_) {
 				Fail("Finishing " + path_ + " failed", result);
 			}
 		}
 
-		pending_.clear();
-
 		Close();
 	}
 
 	void MediaRecorder::Close()
 	{
-		if (context_ == nullptr || context_->pb == nullptr || (context_->oformat->flags & AVFMT_NOFILE)) {
+		if (output_ == nullptr) {
 			return;
 		}
 
-		// Flushes what is still buffered, so a full disk may only show here,
-		// and the file system may refuse to close a file it could not keep.
-		int result = WriteFault::Check(WriteFault::Call::kClose, avio_closep(&context_->pb));
+		int result = output_->Close();
 
 		// After an earlier failure, the same cause is not reported twice.
 		if (result < 0 && !failed_) {
@@ -730,9 +1444,13 @@ namespace ffmpeg
 		}
 	}
 
-	void MediaRecorder::Fail(const std::string & message, int error)
+	void MediaRecorder::Fail(const std::string & message, int error, RecorderOutput * output)
 	{
 		failed_ = true;
+
+		if (output != nullptr) {
+			output->SetFailed();
+		}
 
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
@@ -756,13 +1474,16 @@ namespace ffmpeg
 		failed_ = true;
 
 		std::deque<RecordedFrame> dropped;
+		std::vector<SaveRequest> saves;
 
 		try {
 			std::lock_guard<std::mutex> lock(mutex_);
 
 			accepting_ = false;
+			writer_ended_ = true;
 			queue_.swap(dropped);
 			queued_bytes_ = 0;
+			save_requests_.swap(saves);
 		}
 		catch (...) {
 			// Without the lock the callbacks go on queueing, up to the limit,
@@ -772,6 +1493,8 @@ namespace ffmpeg
 		dropped.clear();
 		pending_.clear();
 		pending_bytes_ = 0;
+		ring_.clear();
+		ring_bytes_ = 0;
 
 		const std::string * message = &out_of_memory_error_;
 		std::string described;
@@ -783,7 +1506,7 @@ namespace ffmpeg
 		}
 		catch (const std::exception & e) {
 			try {
-				described = "Recording to " + path_ + " failed: " + e.what();
+				described = subject_ + " failed: " + e.what();
 				message = &described;
 			}
 			catch (...) {
@@ -791,7 +1514,7 @@ namespace ffmpeg
 		}
 		catch (...) {
 			try {
-				described = "Recording to " + path_ + " failed";
+				described = subject_ + " failed";
 				message = &described;
 			}
 			catch (...) {
@@ -804,6 +1527,18 @@ namespace ffmpeg
 			}
 		}
 		catch (...) {
+		}
+
+		// Replays asked for and not saved are answered, so that nobody waits
+		// for them until the stop.
+		for (const SaveRequest & save : saves) {
+			try {
+				if (observer_ != nullptr) {
+					observer_->OnReplaySaved(save.id, static_cast<int>(Result::kFailed), 0, 0, *message);
+				}
+			}
+			catch (...) {
+			}
 		}
 
 		// Once failed, finishing writes no more media and reports nothing,
