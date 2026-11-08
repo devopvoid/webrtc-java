@@ -112,6 +112,10 @@ final class HttpIce {
 
 	private boolean closed;
 
+	private RecoveryPolicy recoveryPolicy;
+
+	void recovery(RecoveryPolicy policy) { recoveryPolicy = policy; }
+
 
 	HttpIce(WebRtc rtc, HttpClient client, PeerImpl peer, String authorization, Duration timeout) {
 		this.rtc = rtc;
@@ -147,7 +151,13 @@ final class HttpIce {
 	 * disconnected for {@link #DISCONNECTED_GRACE}.
 	 */
 	void watch() {
-		Subscription subscription = peer.onStateChange(this::stateChanged);
+		if (recoveryPolicy != null) {
+			peer.startRecovery(recoveryPolicy, this::restart);
+		}
+		Subscription subscription = peer.onStateChange(state -> {
+			if (recoveryPolicy == null) stateChanged(state);
+			else if (state == PeerState.CLOSED) close();
+		});
 
 		synchronized (this) {
 			if (closed) {

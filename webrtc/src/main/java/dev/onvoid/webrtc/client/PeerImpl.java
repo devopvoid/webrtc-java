@@ -34,6 +34,8 @@ import java.util.function.Supplier;
 
 import dev.onvoid.webrtc.PeerConnectionObserver;
 import dev.onvoid.webrtc.RTCDataChannel;
+import dev.onvoid.webrtc.RTCConfiguration;
+import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCIceGatheringState;
@@ -101,6 +103,8 @@ final class PeerImpl implements Peer {
 	private final SignalingLink signaling;
 
 	private final PeerOptions options;
+
+	private IceRecovery recovery;
 
 	/** The stream the tracks added without stream ids share. */
 	final String defaultStreamId = UUID.randomUUID().toString();
@@ -241,6 +245,12 @@ final class PeerImpl implements Peer {
 		}
 
 		signaling.attach();
+		if (options.recovery != null) {
+			startRecovery(options.recovery, () -> {
+				connection.restartIce();
+				return CompletableFuture.completedFuture(null);
+			});
+		}
 	}
 
 	@Override
@@ -407,6 +417,77 @@ final class PeerImpl implements Peer {
 	@Override
 	public Subscription onStats(Duration interval, Consumer<PeerStats> handler) {
 		return statistics.subscribe(interval, handler);
+	}
+
+	/** Installs the same controller with the transport-specific restart operation. */
+	void startRecovery(RecoveryPolicy policy, Supplier<CompletableFuture<Void>> restart) {
+		control.execute(() -> {
+			if (isClosing()) return;
+			if (recovery != null) recovery.close();
+			recovery = new IceRecovery(policy, control, rtc.timer, this::isClosing, restart, new IceRecovery.Host() {
+				@Override
+				public CompletableFuture<List<RTCIceServer>> servers(int attempt) {
+					return recoveryServers(policy, attempt);
+				}
+
+				@Override
+				public void useServers(List<RTCIceServer> servers) {
+					RTCConfiguration config = connection.getConfiguration();
+					config.iceServers = servers;
+					connection.setConfiguration(config);
+				}
+
+				@Override
+				public void event(RecoveryEvent event) {
+					events.execute(() -> call(policy.listener, event));
+				}
+			});
+			recovery.stateChanged(state);
+		});
+	}
+
+	private CompletableFuture<List<RTCIceServer>> recoveryServers(RecoveryPolicy policy, int attempt) {
+		if (policy.iceServers == null) {
+			return CompletableFuture.completedFuture(null);
+		}
+
+		CompletableFuture<List<RTCIceServer>> result = new CompletableFuture<>();
+		events.execute(() -> {
+			if (isClosing()) {
+				result.completeExceptionally(closedError());
+				return;
+			}
+			try {
+				requireNonNull(policy.iceServers.apply(attempt), "ICE server stage").whenComplete((servers, error) -> {
+					if (error != null) {
+						result.completeExceptionally(error);
+						return;
+					}
+					try {
+						result.complete(copyIceServers(servers));
+					}
+					catch (Throwable e) {
+						result.completeExceptionally(e);
+					}
+				});
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e);
+			}
+		}, () -> result.completeExceptionally(closedError()));
+		return result;
+	}
+
+	private static List<RTCIceServer> copyIceServers(List<RTCIceServer> servers) {
+		List<RTCIceServer> copy = new ArrayList<>();
+		for (RTCIceServer server : requireNonNull(servers, "ICE servers")) {
+			RTCIceServer item = new RTCIceServer();
+			for (String url : server.urls) item.urls.add(requireNonNull(url, "ICE server URL"));
+			item.username = server.username;
+			item.password = server.password;
+			copy.add(item);
+		}
+		return copy;
 	}
 
 	@Override
@@ -691,13 +772,14 @@ final class PeerImpl implements Peer {
 
 	// What WebRTC reports, on the control executor.
 
-	private void connectionChanged(RTCPeerConnectionState nativeState) {
+	void connectionChanged(RTCPeerConnectionState nativeState) {
 		if (closed) {
 			return;
 		}
 
 		PeerState newState = PeerState.of(nativeState);
 		state = newState;
+		if (recovery != null) recovery.stateChanged(newState);
 
 		events.execute(() -> deliverState(newState), () -> settleConnected(newState));
 	}
@@ -721,6 +803,7 @@ final class PeerImpl implements Peer {
 		teardownStarted = true;
 		closing.set(true);
 		closed = true;
+		if (recovery != null) recovery.close();
 
 		PeerClosedException error = closedError();
 

@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.RecoveryPolicy;
 import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.client.Whep;
 
@@ -66,6 +67,9 @@ public class WhepExample {
             // Authenticated TURN is configured with .turnServer(url, username, password).
             Whep.Session session = Whep.from(endpoint)
                     .iceServer("stun:stun.l.google.com:19302")
+                    .recovery(RecoveryPolicy.builder()
+                            .onEvent(event -> System.out.println("ICE recovery: " + event.state()))
+                            .build())
                     .play(rtc)
                     .get(15, TimeUnit.SECONDS);
 
