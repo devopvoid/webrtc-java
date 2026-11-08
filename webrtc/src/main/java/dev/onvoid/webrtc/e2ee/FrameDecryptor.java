@@ -78,7 +78,10 @@ final class FrameDecryptor extends FrameCryptor {
 		int generation = FrameFormat.generation(kid);
 		long now = System.nanoTime();
 
-		KeyProvider.RemoteKey key = keys.decryptionKey(participant, generation, now);
+		// A key moved forward by the ratchet is one this version never has.
+		KeyProvider.RemoteKey key = FrameFormat.ratchetStep(kid) == 0
+				? keys.decryptionKey(participant, generation, now)
+				: null;
 
 		if (key == null) {
 			return fail(stream, CryptoFailure.UNKNOWN_KEY, participant, generation, mimeType);

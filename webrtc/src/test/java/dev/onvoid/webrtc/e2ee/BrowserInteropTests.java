@@ -100,6 +100,8 @@ class BrowserInteropTests {
 
 			List<String> output = runNode(input.toString());
 
+			assertTrue(output.contains("format " + KeyProvider.FORMAT), () -> "The formats differ: " + output);
+
 			assertEquals(CipherSuite.values().length, output.stream().filter(l -> l.startsWith("vector")).count());
 			output.stream().filter(l -> l.startsWith("vector"))
 					.forEach(l -> assertTrue(l.endsWith(" ok"), "RFC 9605 vector in JavaScript: " + l));

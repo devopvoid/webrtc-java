@@ -36,6 +36,9 @@
 
 const subtle = globalThis.crypto.subtle;
 
+/** The name of the frame format, as the Java KeyProvider.FORMAT has it. */
+export const FORMAT = 'webrtc-java-sframe/1';
+
 /** The cipher suites of RFC 9605, Section 4.5, by their registry value. */
 export const CipherSuite = Object.freeze({
 	AES_128_CTR_HMAC_SHA256_80: 1,
@@ -66,7 +69,7 @@ export const Failure = Object.freeze({
 
 const NONCE_LENGTH = 12;
 const MAX_PARTICIPANT = 0xffffffff;
-const MAX_CONTEXT = 0xffffff;
+const MAX_CONTEXT = 0xffff;
 
 /** OBU_FRAME and OBU_SEQUENCE_HEADER, no extension, no size field. */
 const AV1_WRAPPER = 6 << 3;
@@ -299,9 +302,13 @@ export class SFrameKey {
 
 // ---------------------------------------------------------- Frame format
 
-/** KID = context (24 bits) | participant (32 bits) | generation (8 bits). */
-export function keyId(context, participant, generation) {
-	return BigInt(context) << 40n | BigInt(participant) << 8n | BigInt(generation);
+/**
+ * KID = context (16 bits) | participant (32 bits) | generation (8 bits) |
+ * ratchet step (8 bits). This version always sends a ratchet step of 0, and
+ * takes any other step for a key it does not have.
+ */
+export function keyId(context, participant, generation, ratchetStep = 0) {
+	return BigInt(context) << 48n | BigInt(participant) << 16n | BigInt(generation) << 8n | BigInt(ratchetStep);
 }
 
 function codecOf(mimeType) {
@@ -776,12 +783,14 @@ class FrameDecryptor extends FrameCryptor {
 			return this.fail(stream, Failure.MALFORMED, -1, -1, info);
 		}
 
-		const participant = Number(header.kid >> 8n & 0xffffffffn);
-		const generation = Number(header.kid & 0xffn);
-		const context = Number(header.kid >> 40n);
+		const participant = Number(header.kid >> 16n & 0xffffffffn);
+		const generation = Number(header.kid >> 8n & 0xffn);
+		const ratchetStep = Number(header.kid & 0xffn);
+		const context = Number(header.kid >> 48n);
 		const now = Date.now();
 
-		const key = keys.decryptionKey(participant, generation, now);
+		// A key moved forward by the ratchet is one this version never has.
+		const key = ratchetStep === 0 ? keys.decryptionKey(participant, generation, now) : null;
 
 		if (!key) {
 			return this.fail(stream, Failure.UNKNOWN_KEY, participant, generation, info);

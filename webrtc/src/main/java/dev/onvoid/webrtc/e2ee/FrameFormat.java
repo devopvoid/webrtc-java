@@ -33,8 +33,8 @@ final class FrameFormat {
 	/** The largest key generation, 8 bits. */
 	static final int MAX_GENERATION = 0xFF;
 
-	/** The largest context, 24 bits. */
-	static final int MAX_CONTEXT = 0xFF_FFFF;
+	/** The largest context, 16 bits. */
+	static final int MAX_CONTEXT = 0xFFFF;
 
 	/**
 	 * The OBU header an AV1 delta frame is wrapped in: OBU_FRAME (type 6), no
@@ -59,23 +59,33 @@ final class FrameFormat {
 	}
 
 	/**
-	 * KID = context (24 bits) | participant (32 bits) | generation (8 bits),
-	 * from the most significant bits down, after RFC 9605, Section 5.2.
+	 * KID = context (16 bits) | participant (32 bits) | generation (8 bits) |
+	 * ratchet step (8 bits), from the most significant bits down. The lowest
+	 * 16 bits are the "key generation | ratchet step" of RFC 9605, Section
+	 * 5.1, the participant and context above them follow Section 5.2.
+	 * <p>
+	 * The ratchet step is the number of times the generation's key was moved
+	 * forward with the ratchet of RFC 9605, Section 5.1. This version always
+	 * sends 0, and takes any other step for a key it does not have.
 	 */
-	static long kid(int context, long participant, int generation) {
-		return (long) context << 40 | participant << 8 | generation;
+	static long kid(int context, long participant, int generation, int ratchetStep) {
+		return (long) context << 48 | participant << 16 | (long) generation << 8 | ratchetStep;
 	}
 
 	static int context(long kid) {
-		return (int) (kid >>> 40);
+		return (int) (kid >>> 48);
 	}
 
 	static long participant(long kid) {
-		return kid >>> 8 & MAX_PARTICIPANT;
+		return kid >>> 16 & MAX_PARTICIPANT;
 	}
 
 	static int generation(long kid) {
-		return (int) (kid & MAX_GENERATION);
+		return (int) (kid >>> 8 & MAX_GENERATION);
+	}
+
+	static int ratchetStep(long kid) {
+		return (int) (kid & 0xFF);
 	}
 
 	/**

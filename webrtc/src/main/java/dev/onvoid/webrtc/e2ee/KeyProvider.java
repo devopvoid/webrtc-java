@@ -83,6 +83,13 @@ import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
  */
 public final class KeyProvider {
 
+	/**
+	 * The name of the frame format the transforms write and read. Nothing in
+	 * a frame says which format it is in, so the participants of a call agree
+	 * on it by their signaling, along with the cipher suite and the keys.
+	 */
+	public static final String FORMAT = "webrtc-java-sframe/1";
+
 	/** The smallest base key accepted, in bytes. */
 	static final int MIN_KEY_LENGTH = 16;
 
@@ -636,7 +643,7 @@ public final class KeyProvider {
 
 		SFrame sframe(CipherSuite suite, int context, long participant) {
 			return derived.computeIfAbsent(context, c ->
-					SFrame.derive(suite, FrameFormat.kid(c, participant, generation), baseKey));
+					SFrame.derive(suite, FrameFormat.kid(c, participant, generation, 0), baseKey));
 		}
 	}
 
