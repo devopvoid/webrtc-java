@@ -193,6 +193,29 @@ Desktop capture is particularly useful for screen sharing applications, remote a
 
 ## Sharing system audio
 
-Add a separate [`SystemAudioSource`](/guide/audio/system-audio-source) audio track
-to share output audio alongside desktop video. Window selection applies only to
-video; the audio source captures system output independently.
+Add a [`SystemAudioSource`](/guide/audio/system-audio-source) audio track to share
+the audio the system plays alongside the desktop video, and the microphone as a
+third track if the presenter speaks. All three can come from one factory and go
+over one peer connection; put them into one stream so the receiver keeps them in
+sync. With the [Client API](/guide/client-api):
+
+```java
+LocalVideo screen = rtc.media().screen(ScreenOptions.screen(source).build());
+LocalAudio microphone = rtc.media().microphone();
+
+// The source is yours: close it after the runtime, which closes its track.
+SystemAudioSource systemOutput = new SystemAudioSource();
+LocalAudio systemAudio = rtc.media().audioTrack("system-audio", systemOutput);
+
+peer.addTrack(screen, "presentation");
+peer.addTrack(microphone, "presentation");
+peer.addTrack(systemAudio, "presentation");
+
+systemOutput.start(); // on a background thread in an application with a UI
+```
+
+Window selection applies only to video; the audio source captures the whole
+system output. Remote call audio played on the captured output is captured too on
+Windows and Linux, so route it to another output. The
+[`ScreenShareAudioExample`](/guide/examples#screen-share-with-audio) runs this
+end to end.

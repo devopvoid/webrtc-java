@@ -476,7 +476,7 @@ Sender audioSender = peer.addTrack(microphone);
 | `screen(ScreenOptions)` | A screen or a window, as the [Desktop Video](/guide/video/desktop-capture) guide describes. |
 | `customVideo(String)` | Frames you push. |
 | `customAudio(String)` | Audio you push, in every mode. |
-| `videoTrack(String, VideoTrackSource)`, `audioTrack(String, AudioTrackSource)` | A source of the core API, such as one the [media module](/guide/media/media-files) feeds. The source stays yours. |
+| `videoTrack(String, VideoTrackSource)`, `audioTrack(String, AudioTrackSource)` | A source of the core API, such as one the [media module](/guide/media/media-files) feeds, or a [`SystemAudioSource`](/guide/audio/system-audio-source) for the audio the system plays. The source stays yours. |
 
 ```java
 Devices devices = media.devices();

@@ -52,6 +52,16 @@ audioTrack.dispose();
 systemAudio.dispose(); // or close(), also supported by try-with-resources
 ```
 
+With the [Client API](/guide/client-api), pass the source to `audioTrack()`. It
+stays yours, so close it only after the track, or the runtime that closes it:
+
+```java
+SystemAudioSource systemOutput = new SystemAudioSource();
+LocalAudio systemAudio = rtc.media().audioTrack("system-audio", systemOutput);
+peer.addTrack(systemAudio, "presentation");
+systemOutput.start();
+```
+
 Use `try/finally` in application code to release these resources on errors too.
 `stop()` and `dispose()` are idempotent. `stop()` keeps the source and its tracks
 usable for `start()` again; disposal is permanent. A stop or disposal from a local
@@ -106,7 +116,9 @@ playout is excluded by ScreenCaptureKit; remote audio played in another process
 can still be captured.
 
 Run `SystemAudioExample` from `webrtc-examples` for a capture-only example that
-counts received PCM frames without playing them back. The opt-in
+counts received PCM frames without playing them back, and
+[`ScreenShareAudioExample`](/guide/examples#screen-share-with-audio) to send a
+screen, the microphone and the system audio over one peer. The opt-in
 `SystemAudioSourceIntegrationTest` (`-Dtest.systemAudio=true`) needs audio playing
 on the default output and recording permission; lifecycle tests use deterministic
 backends without hardware.
