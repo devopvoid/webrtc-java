@@ -71,6 +71,29 @@ public final class AllocationFault {
 	static native int encodedObservers(long frames);
 
 	/**
+	 * Attaches an observer that counts the frames it is shown.
+	 *
+	 * @param frames A handle from {@link NativeApi#encodedFramesOf}.
+	 *
+	 * @return The counter, or {@code 0} if it could not be attached.
+	 */
+	public static native long addCountingObserver(long frames);
+
+	/**
+	 * @param counter The counter from {@link #addCountingObserver(long)}.
+	 *
+	 * @return The frames the observer was shown so far.
+	 */
+	public static native long countedFrames(long counter);
+
+	/**
+	 * Detaches and frees a counter.
+	 *
+	 * @param counter The counter from {@link #addCountingObserver(long)}.
+	 */
+	public static native void removeCountingObserver(long counter);
+
+	/**
 	 * Forgets a fault that has not fired.
 	 */
 	public static native void disarm();

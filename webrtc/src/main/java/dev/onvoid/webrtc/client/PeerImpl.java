@@ -37,6 +37,7 @@ import dev.onvoid.webrtc.PeerConnectionObserver;
 import dev.onvoid.webrtc.RTCDataChannel;
 import dev.onvoid.webrtc.RTCConfiguration;
 import dev.onvoid.webrtc.RTCIceServer;
+import dev.onvoid.webrtc.RTCEncodedFrame;
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCIceGatheringState;
@@ -161,17 +162,19 @@ final class PeerImpl implements Peer {
 		this.stateHandlers = new Handlers<>(rtc::reportError);
 		this.errorHandlers = new Handlers<>(rtc::reportError);
 		this.chain = new OperationChain(control, rtc.timer, rtc.operationTimeout, name, new ChainHost());
+		CodecPreferences codecs = new CodecPreferences(this, options.e2ee != null);
+
 		this.steps = new NegotiationSteps(control, rtc.timer, chain, () -> connection, options.gatheringTimeout,
 				this::ignoresOffer, error -> {
 					if (!closed) {
 						deliverError(error);
 					}
-				});
+				}, codecs::apply);
 		this.automatic = new PerfectNegotiation(this, options, chain, steps);
 		this.statistics = new StatsSampler(this);
 		this.channels = new DataChannels(this);
-		this.tracks = new RemoteTracks(this, options.receiveTransform);
-		this.manual = new ManualNegotiation(this, options, chain, steps, tracks, new CodecPreferences(this));
+		this.tracks = new RemoteTracks(this, receiveTransforms(options));
+		this.manual = new ManualNegotiation(this, options, chain, steps, tracks, codecs);
 		this.signaling = new SignalingLink(this, options.signaling);
 
 		rtc.track(connected, events);
@@ -317,7 +320,7 @@ final class PeerImpl implements Peer {
 			}
 
 			try {
-				sender.attach(connection, ids, encodings, guard(options.sendTransform, "a sender of " + name));
+				sender.attach(connection, ids, encodings, guard(sendTransform(sender), "a sender of " + name));
 				added.complete(null);
 			}
 			catch (Throwable e) {
@@ -650,19 +653,56 @@ final class PeerImpl implements Peer {
 
 		AtomicBoolean reported = new AtomicBoolean();
 
-		return frame -> {
-			try {
-				transform.transform(frame);
-			}
-			catch (Throwable e) {
-				frame.drop();
+		return new RTCEncodedFrameTransformer() {
 
-				if (reported.compareAndSet(false, true)) {
-					deliverError(new WebRtcException("The transform of " + owner
-							+ " failed, and drops each frame it fails on", e));
+			@Override
+			public void transform(RTCEncodedFrame frame) {
+				try {
+					transform.transform(frame);
+				}
+				catch (Throwable e) {
+					frame.drop();
+
+					if (reported.compareAndSet(false, true)) {
+						deliverError(new WebRtcException("The transform of " + owner
+								+ " failed, and drops each frame it fails on", e));
+					}
 				}
 			}
+
+			@Override
+			public boolean allowsPlaintextObservers() {
+				// Wrapping must not open up what the transform protects.
+				return transform.allowsPlaintextObservers();
+			}
 		};
+	}
+
+	/**
+	 * The transform of a sender: an encryptor of its own with end-to-end
+	 * encryption, which asks the sender for a key frame when the key changes,
+	 * or the send transform of the options.
+	 */
+	private RTCEncodedFrameTransformer sendTransform(SenderImpl sender) {
+		if (options.e2ee != null) {
+			return options.e2ee.createEncryptor(sender::generateKeyFrame);
+		}
+
+		return options.sendTransform;
+	}
+
+	/** Makes the transform of each remote track, or null for none. */
+	private static Function<Runnable, RTCEncodedFrameTransformer> receiveTransforms(PeerOptions options) {
+		if (options.e2ee != null) {
+			return options.e2ee::createDecryptor;
+		}
+		if (options.receiveTransform != null) {
+			RTCEncodedFrameTransformer transform = options.receiveTransform;
+
+			return keyFrameRequest -> transform;
+		}
+
+		return null;
 	}
 
 	void deliverError(WebRtcException error) {

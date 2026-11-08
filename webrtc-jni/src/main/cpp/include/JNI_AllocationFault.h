@@ -67,6 +67,30 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
+	 * Method:    addCountingObserver
+	 * Signature: (J)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_addCountingObserver
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
+	 * Method:    countedFrames
+	 * Signature: (J)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_countedFrames
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
+	 * Method:    removeCountingObserver
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_AllocationFault_removeCountingObserver
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_AllocationFault
 	 * Method:    disarm
 	 * Signature: ()V
 	 */

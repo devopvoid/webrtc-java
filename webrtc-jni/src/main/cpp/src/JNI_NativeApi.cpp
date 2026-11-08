@@ -120,6 +120,16 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_receiverFrames
 	});
 }
 
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_framesSealed
+(JNIEnv * env, jclass caller, jlong frames)
+{
+	return jni::CallFromJava(env, [&]() -> jboolean {
+		auto transformer = reinterpret_cast<jni::EncodedFrameTransformer *>(frames);
+
+		return transformer != nullptr && transformer->IsSealed() ? JNI_TRUE : JNI_FALSE;
+	});
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseFrames
 (JNIEnv * env, jclass caller, jlong frames)
 {

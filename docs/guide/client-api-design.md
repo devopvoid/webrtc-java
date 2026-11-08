@@ -301,6 +301,7 @@ public final class PeerOptions {
         public Builder channelReceiveLimit(long bytes);                  // unhandled messages of a data channel, default 16 MiB
         public Builder sendTransform(RTCEncodedFrameTransformer transform);    // every sender, from its first frame
         public Builder receiveTransform(RTCEncodedFrameTransformer transform); // every receiver, from its first frame
+        public Builder e2ee(KeyProvider keys);                           // SFrame encryption of both, instead of the transforms
         public Builder configure(Consumer<RTCConfiguration> customizer); // anything else RTCConfiguration has
         public PeerOptions build();
     }

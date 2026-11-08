@@ -41,6 +41,8 @@ import java.util.stream.Stream;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.RTCRtpSender;
+import dev.onvoid.webrtc.e2ee.KeyProvider;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
 import dev.onvoid.webrtc.media.audio.AudioLayer;
 import dev.onvoid.webrtc.media.player.AllocationFault;
@@ -137,6 +139,85 @@ class MediaRecorderTest {
 		assertEquals(TestCall.HEIGHT, info.getVideoHeight());
 		assertEquals("opus", info.getAudioCodec());
 		assertEquals(48000, info.getSampleRate());
+		assertDuration(info);
+	}
+
+	@Test
+	void refusesEncryptedTracks() throws Exception {
+		KeyProvider callerKeys = KeyProvider.builder(1).build();
+		KeyProvider calleeKeys = KeyProvider.builder(2).build();
+		byte[] key = callerKeys.generateKey();
+		callerKeys.setEncryptionKey(0, key);
+		calleeKeys.setDecryptionKey(1, 0, key);
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(tempDir.resolve("refused.mkv"))) {
+			RTCRtpSender sender = call.getVideoSender();
+			RTCRtpReceiver receiver = call.getReceiver(0);
+
+			sender.setTransform(callerKeys.createEncryptor());
+			receiver.setTransform(calleeKeys.createDecryptor());
+
+			// The decrypted media is not to be stored, unless the keys say so.
+			assertThrows(IllegalStateException.class, () -> recorder.addTrack(sender));
+			assertThrows(IllegalStateException.class, () -> recorder.addTrack(receiver));
+
+			// A refused track leaves the recorder as it was.
+			recorder.addTrack(call.getAudioSender());
+			assertEquals(MediaRecorderState.IDLE, recorder.getState());
+
+			receiver.dispose();
+		}
+	}
+
+	@Test
+	void recordsAllowedEncryptedCall() throws Exception {
+		Path file = tempDir.resolve("encrypted.mkv");
+		Listener listener = new Listener();
+
+		KeyProvider callerKeys = KeyProvider.builder(1).build();
+		KeyProvider calleeKeys = KeyProvider.builder(2).allowPlaintextRecording(true).build();
+		byte[] key = callerKeys.generateKey();
+		callerKeys.setEncryptionKey(0, key);
+		calleeKeys.setDecryptionKey(1, 0, key);
+
+		try (TestCall call = new TestCall(factory)) {
+			RTCRtpReceiver video = call.getReceiver(0);
+			RTCRtpReceiver audio = call.getReceiver(1);
+
+			// The receivers decrypt before the senders encrypt, so that no
+			// frame reaches them in the clear.
+			video.setTransform(calleeKeys.createDecryptor(video::requestKeyFrame));
+			audio.setTransform(calleeKeys.createDecryptor());
+			call.getVideoSender().setTransform(callerKeys.createEncryptor());
+			call.getAudioSender().setTransform(callerKeys.createEncryptor());
+
+			try (MediaRecorder recorder = new MediaRecorder(file)) {
+				recorder.setListener(listener);
+				recorder.addTrack(video);
+				recorder.addTrack(audio);
+				recorder.start();
+
+				assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+				Thread.sleep(RECORD_MS);
+
+				assertTrue(recorder.stop());
+			}
+			finally {
+				video.dispose();
+				audio.dispose();
+			}
+		}
+
+		assertNull(listener.error.get());
+		assertTrue(calleeKeys.getStats().getDecryptedFrames() > 0);
+
+		// What was recorded is the decrypted media, which reads as such.
+		MediaInfo info = readInfo(file);
+
+		assertEquals("vp8", info.getVideoCodec());
+		assertEquals("opus", info.getAudioCodec());
 		assertDuration(info);
 	}
 

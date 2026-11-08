@@ -180,12 +180,20 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * instance is disposed. Setting it before the connection is negotiated
 	 * avoids the key frame the encoder otherwise sends when the first
 	 * transform is set on a running video sender.
+	 * <p>
+	 * A transform whose {@link
+	 * RTCEncodedFrameTransformer#allowsPlaintextObservers()} is false keeps
+	 * every observer of the encoded frames, such as a recorder, from seeing
+	 * any frame for as long as it is set.
 	 *
 	 * @param transformer The transform, or {@code null} to remove it.
 	 *
 	 * @see RTCEncodedFrameTransformer
 	 */
-	public native void setTransform(RTCEncodedFrameTransformer transformer);
+	public void setTransform(RTCEncodedFrameTransformer transformer) {
+		// Asked once, so that the native side need not call into Java.
+		applyTransform(transformer, transformer != null && !transformer.allowsPlaintextObservers());
+	}
 
 	/**
 	 * Asks the encoder to make the next video frame a key frame, e.g. so that
@@ -293,5 +301,7 @@ public class RTCRtpSender extends DisposableNativeObject {
 	public int hashCode() {
 		return nativeHashCode();
 	}
+
+	private native void applyTransform(RTCEncodedFrameTransformer transformer, boolean sealed);
 
 }

@@ -31,6 +31,7 @@ import dev.onvoid.webrtc.RTCConfiguration;
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCIceTransportPolicy;
+import dev.onvoid.webrtc.e2ee.KeyProvider;
 import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
@@ -73,6 +74,8 @@ public final class PeerOptions {
 
 	final RTCEncodedFrameTransformer receiveTransform;
 
+	final KeyProvider e2ee;
+
 
 	private PeerOptions(Builder builder) {
 		this.name = builder.name;
@@ -90,6 +93,7 @@ public final class PeerOptions {
 		this.channelReceiveLimit = builder.channelReceiveLimit;
 		this.sendTransform = builder.sendTransform;
 		this.receiveTransform = builder.receiveTransform;
+		this.e2ee = builder.e2ee;
 	}
 
 	/**
@@ -158,6 +162,8 @@ public final class PeerOptions {
 		private RTCEncodedFrameTransformer sendTransform;
 
 		private RTCEncodedFrameTransformer receiveTransform;
+
+		private KeyProvider e2ee;
 
 
 		private Builder() {
@@ -377,6 +383,37 @@ public final class PeerOptions {
 		}
 
 		/**
+		 * Encrypts every frame the peer sends, and decrypts every frame it
+		 * receives, end to end with the keys of the given provider, in the
+		 * SFrame format that the guide specifies for browsers to implement
+		 * too.
+		 * <p>
+		 * Each sender gets an encryptor of its own, set before negotiation,
+		 * which asks it for a key frame when the encryption key changes; each
+		 * remote track a decryptor, set before {@link Peer#onTrack} hands it
+		 * out, which asks the remote side for a key frame once video decrypts
+		 * again after frames were dropped. Frames that fail are dropped and
+		 * reported to the provider's {@link
+		 * dev.onvoid.webrtc.e2ee.CryptoListener}, not to {@code onError}.
+		 * <p>
+		 * The peer negotiates only the video codecs that can be encrypted, VP8,
+		 * VP9 and AV1, since H.264 and H.265 frames would be dropped, see {@link
+		 * dev.onvoid.webrtc.e2ee.CryptoFailure#UNSUPPORTED_CODEC}.
+		 * {@link Sender#transform} and {@link RemoteTrack#transform} still
+		 * replace the transform of one sender or track. A {@code MediaRecorder}
+		 * refuses the senders and tracks unless the provider {@link
+		 * KeyProvider.Builder#allowPlaintextRecording allows recording}.
+		 *
+		 * @param keys the keys of the call.
+		 *
+		 * @return this builder.
+		 */
+		public Builder e2ee(KeyProvider keys) {
+			this.e2ee = requireNonNull(keys, "keys");
+			return this;
+		}
+
+		/**
 		 * Changes anything else of the {@link RTCConfiguration} the peer is
 		 * created with, after this builder applied its own values.
 		 *
@@ -393,10 +430,16 @@ public final class PeerOptions {
 		 * @return the options.
 		 *
 		 * @throws IllegalStateException if the peer negotiates automatically
-		 *                               and has no signaling, or recovery is
-		 *                               configured for manual negotiation.
+		 *                               and has no signaling, recovery is
+		 *                               configured for manual negotiation, or
+		 *                               end-to-end encryption is set together
+		 *                               with a send or receive transform.
 		 */
 		public PeerOptions build() {
+			if (e2ee != null && (sendTransform != null || receiveTransform != null)) {
+				throw new IllegalStateException("End-to-end encryption brings its own transforms, "
+						+ "and takes no send or receive transform besides");
+			}
 			if (recovery != null && negotiation != Negotiation.AUTOMATIC) {
 				throw new IllegalStateException("Peer recovery requires automatic negotiation");
 			}

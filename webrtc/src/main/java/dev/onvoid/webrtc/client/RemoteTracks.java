@@ -26,7 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
@@ -49,8 +51,11 @@ final class RemoteTracks {
 
 	private final PeerImpl peer;
 
-	/** Set on each track before the application hears of it, or null. */
-	private final RTCEncodedFrameTransformer transform;
+	/**
+	 * Makes the transform of each track, set before the application hears of
+	 * it, from what asks the track's sender for a key frame; or null.
+	 */
+	private final Function<Runnable, RTCEncodedFrameTransformer> transforms;
 
 	private final BiConsumer<RTCRtpReceiver, RTCEncodedFrameTransformer> installTransform;
 
@@ -73,16 +78,21 @@ final class RemoteTracks {
 	private final Handlers<RemoteTrack> handlers;
 
 
-	RemoteTracks(PeerImpl peer, RTCEncodedFrameTransformer transform) {
-		this(peer, transform, RTCRtpReceiver::setTransform);
+	RemoteTracks(PeerImpl peer, Function<Runnable, RTCEncodedFrameTransformer> transforms) {
+		this(peer, transforms, RTCRtpReceiver::setTransform);
 	}
 
 	/** Allows a test to fail installation before the native receiver takes the transform. */
 	RemoteTracks(PeerImpl peer, RTCEncodedFrameTransformer transform,
 			BiConsumer<RTCRtpReceiver, RTCEncodedFrameTransformer> installTransform) {
+		this(peer, transform == null ? null : keyFrameRequest -> transform, installTransform);
+	}
+
+	private RemoteTracks(PeerImpl peer, Function<Runnable, RTCEncodedFrameTransformer> transforms,
+			BiConsumer<RTCRtpReceiver, RTCEncodedFrameTransformer> installTransform) {
 		this.peer = peer;
 		this.installTransform = installTransform;
-		this.transform = transform;
+		this.transforms = transforms;
 		this.handlers = new Handlers<>(peer.rtc::reportError);
 	}
 
@@ -158,10 +168,22 @@ final class RemoteTracks {
 			return;
 		}
 
-		if (transform != null) {
+		// The track a key frame request of the transform goes to, once there
+		// is one: frames may arrive before it is published.
+		AtomicReference<RemoteTrackImpl> published = new AtomicReference<>();
+
+		if (transforms != null) {
 			String owner = "the track " + id + " of " + peer.name;
 
 			try {
+				RTCEncodedFrameTransformer transform = transforms.apply(() -> {
+					RemoteTrackImpl remote = published.get();
+
+					if (remote instanceof RemoteVideoImpl) {
+						((RemoteVideoImpl) remote).requestKeyFrame();
+					}
+				});
+
 				// Before the application hears of the track, and so before
 				// its first frame arrives.
 				installTransform.accept(receiver, peer.guard(transform, owner));
@@ -196,6 +218,7 @@ final class RemoteTracks {
 
 		byId.put(id, remote);
 		tracks.add(remote);
+		published.set(remote);
 
 		peer.events.execute(() -> {
 			delivered.add(remote);

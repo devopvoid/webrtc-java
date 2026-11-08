@@ -56,6 +56,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_internal_NativeApi
+	 * Method:    framesSealed
+	 * Signature: (J)Z
+	 */
+	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_framesSealed
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_internal_NativeApi
 	 * Method:    releaseFrames
 	 * Signature: (J)V
 	 */

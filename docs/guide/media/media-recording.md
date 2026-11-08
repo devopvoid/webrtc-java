@@ -157,4 +157,17 @@ System.out.println("Queue peak: " + stats.getMaxQueuedBytes() + " bytes");
 
 ## Recording an Encrypted Call
 
-A sender's frames are recorded before an [encoded transform](/guide/advanced/encoded-transforms) runs on them, and a receiver's after it. An end-to-end encrypted call is therefore recorded in the clear, on either side. [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) shows both together.
+A sender's frames are recorded before an [encoded transform](/guide/advanced/encoded-transforms) runs on them, and a receiver's after it. An end-to-end encrypted call would therefore be recorded in the clear, on either side, so whether it may be is up to the encryption:
+
+- The transforms of a `KeyProvider` of [End-to-End Encryption](/guide/advanced/end-to-end-encryption) do not allow it by default. `addTrack` refuses their senders, receivers and tracks with an `IllegalStateException`, and a recording that is running gets no further frame of a track once such a transform is set on it.
+- A key provider built with `allowPlaintextRecording(true)` allows it, for an application that records its calls on purpose:
+
+```java
+KeyProvider keys = KeyProvider.builder(myId)
+        .allowPlaintextRecording(true)
+        .build();
+```
+
+- A transform of your own allows it unless its `allowsPlaintextObservers()` returns false.
+
+A recording of an encrypted call holds the decrypted media, outside the protection of the call. [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) shows both together.
