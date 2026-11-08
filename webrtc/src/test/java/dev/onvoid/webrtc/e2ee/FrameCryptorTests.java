@@ -162,8 +162,8 @@ class FrameCryptorTests {
 			byte[] frame = frame(1000);
 			byte[] sealed = process(encryptor(sender), SSRC, "video/VP8", true, true, frame);
 
-			// The tag, and a header of a two-byte KID and a counter of zero.
-			assertEquals(frame.length + 3 + suite.getTagLength(), sealed.length, suite.name());
+			// The tag, and a header of a three-byte KID and a counter of zero.
+			assertEquals(frame.length + 4 + suite.getTagLength(), sealed.length, suite.name());
 			assertArrayEquals(frame, process(decryptor(receiver), SSRC, "video/VP8", true, true, sealed),
 					suite.name());
 		}
@@ -406,6 +406,55 @@ class FrameCryptorTests {
 		assertNull(process(decryptor, SSRC, "audio/opus", false, false, oldLate));
 		assertEquals(CryptoFailure.UNKNOWN_KEY, last(bobEvents).getFailure());
 		assertEquals(0, last(bobEvents).getGeneration());
+	}
+
+	@Test
+	void keyIdHasFourFields() {
+		long kid = FrameFormat.kid(0xABCD, 0xFEDC_BA98L, 0x76, 0x54);
+
+		assertEquals(0xABCD_FEDC_BA98_7654L, kid);
+		assertEquals(0xABCD, FrameFormat.context(kid));
+		assertEquals(0xFEDC_BA98L, FrameFormat.participant(kid));
+		assertEquals(0x76, FrameFormat.generation(kid));
+		assertEquals(0x54, FrameFormat.ratchetStep(kid));
+
+		// What goes out: the ratchet step is always 0 in this version.
+		byte[] sealed = process(encryptor(alice), SSRC, "video/VP9", true, true, frame(50));
+		long[] header = header(sealed, 0);
+
+		assertEquals(FrameFormat.kid(0, ALICE, 0, 0), header[0]);
+	}
+
+	@Test
+	void ratchetedKeysAreUnknown() {
+		// A frame under a key moved forward once, as a later version may
+		// send: its key is not there, however well it would authenticate.
+		long kid = FrameFormat.kid(0, ALICE, 0, 1);
+		SFrame sframe = SFrame.derive(alice.getCipherSuite(), kid, aliceKey);
+
+		byte[] plaintext = frame(100);
+		byte[] sealed = new byte[SFrame.MAX_HEADER_LENGTH + plaintext.length + 16];
+		int length = sframe.encrypt(0, new byte[0], 0, 0, plaintext, 0, plaintext.length, sealed, 0);
+
+		assertNull(process(decryptor(bob), SSRC, "video/VP9", true, true, Arrays.copyOf(sealed, length)));
+
+		CryptoEvent event = last(bobEvents);
+		assertEquals(CryptoFailure.UNKNOWN_KEY, event.getFailure());
+		assertEquals(ALICE, event.getParticipant());
+		assertEquals(0, event.getGeneration());
+	}
+
+	@Test
+	void contextsRunOut() {
+		KeyProvider keys = KeyProvider.builder(ALICE).build();
+
+		for (int i = 0; i <= FrameFormat.MAX_CONTEXT; i++) {
+			assertEquals(i, keys.allocateContext());
+		}
+
+		// 65,536 streams in all, and then none.
+		assertEquals(-1, keys.allocateContext());
+		assertEquals(-1, keys.allocateContext());
 	}
 
 	@Test

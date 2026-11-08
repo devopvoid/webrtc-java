@@ -189,24 +189,29 @@ receiver.transform = new RTCRtpScriptTransform(worker, { side: 'receive' });
 
 This section specifies the format, so that it can be implemented elsewhere. It is RFC 9605 applied per frame, with the key IDs and the codec layouts below.
 
+### Version
+
+This is version 1, named `webrtc-java-sframe/1`: `KeyProvider.FORMAT` in Java, `FORMAT` in the browser module. Nothing in a frame says which format it is in, so the participants of a call agree on it, as on the cipher suite and the keys: by the application's signaling, as part of what it sends with the keys. A later version, such as SFrame with the RTP payload format WebRTC is working on, which needs no codec layouts, has a name of its own and is agreed the same way, never told apart by trying.
+
 ### Cipher Suites and Keys
 
 Every participant of a call uses the same cipher suite of RFC 9605, Section 4.5, by default `AES_128_GCM_SHA256_128` (0x0004). The key and salt of each key ID are derived from the participant's key with `derive_key_salt` (RFC 9605, Section 4.4.2), and frames are encrypted and decrypted with `encrypt` and `decrypt` (Sections 4.4.3 and 4.4.4).
 
 ### Key IDs
 
-A key ID (KID) is made up of three fields, from the most significant bit down, after the MLS scheme of RFC 9605, Section 5.2:
+A key ID (KID) is made up of four fields, from the most significant bit down. The lowest 16 bits are the "key generation | ratchet step" of the sender keys scheme of RFC 9605, Section 5.1, and the fields above them follow the MLS scheme of Section 5.2:
 
 ```
- 63            40 39                          8 7          0
-+----------------+-----------------------------+------------+
-| context (24)   | participant (32)            | generation |
-+----------------+-----------------------------+------------+
+ 63          48 47                         16 15          8 7            0
++--------------+-----------------------------+-------------+--------------+
+| context (16) | participant (32)            | generation  | ratchet step |
++--------------+-----------------------------+-------------+--------------+
 ```
 
 - **participant**: the ID of the participant who encrypted the frame. A receiver finds the key by it and by the generation.
 - **generation**: the generation of that participant's key, 0 to 255.
-- **context**: one per RTP stream the participant sends, given out from 0 upwards and never reused for the participant's key provider. Since the KID goes into the key derivation, every stream encrypts with a key and salt of its own.
+- **ratchet step**: how many times the generation's key was moved forward with the ratchet of RFC 9605, Section 5.1, `base_key[i+1] = HKDF-Expand(HKDF-Extract("", base_key[i]), "SFrame 1.0 Ratchet", Nh)`. This version of the format always sends 0, and a receiver drops a frame with any other step as one whose key it does not have.
+- **context**: one per RTP stream the participant sends, given out from 0 upwards and never reused for the participant's key provider, which therefore serves up to 65,536 streams. Since the KID goes into the key derivation, every stream encrypts with a key and salt of its own.
 
 ### Counters
 

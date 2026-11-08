@@ -66,7 +66,7 @@ public enum CryptoFailure {
 	UNSUPPORTED_CODEC,
 
 	/**
-	 * The {@link KeyProvider} gave out every one of its 2<sup>24</sup>
+	 * The {@link KeyProvider} gave out every one of its 2<sup>16</sup>
 	 * sender contexts, and has to be replaced.
 	 */
 	CONTEXTS_EXHAUSTED

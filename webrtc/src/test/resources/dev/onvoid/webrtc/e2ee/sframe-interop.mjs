@@ -11,7 +11,7 @@
 //   jsKey <participant> <hex>       the key this side encrypts with
 //   frame <mime> <key 0|1> <ssrc> <plain hex> <sealed hex>
 //
-// Prints "vector <n> ok|fail", "decrypt <n> ok|fail <why>" and
+// Prints "format <name>", "vector <n> ok|fail", "decrypt <n> ok|fail <why>" and
 // "sealed <n> <hex>", then "done".
 
 import { readFileSync } from 'node:fs';
@@ -22,6 +22,8 @@ const sframe = await import(pathToFileURL(moduleFile).href);
 
 const hex = (s) => Uint8Array.from(s.match(/../g) || [], (b) => parseInt(b, 16));
 const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+
+console.log(`format ${sframe.FORMAT}`);
 
 // The SFrame vectors of RFC 9605, Appendix C.3.
 let index = 0;
