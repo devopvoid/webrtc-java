@@ -16,43 +16,64 @@
 
 package dev.onvoid.webrtc.media.audio;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import dev.onvoid.webrtc.TestBase;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import static org.junit.jupiter.api.Assertions.*;
 
-/** Opt in with -Dtest.systemAudio=true while playing audio on the default output. */
+/**
+ * Captures the real system output. Opt in with {@code -Dtest.systemAudio=true}
+ * while audio plays on the default output.
+ */
 @EnabledIfSystemProperty(named = "test.systemAudio", matches = "true")
 class SystemAudioSourceIntegrationTest extends TestBase {
+
     @Test
     void capturesOutputAndRestarts() throws Exception {
         try (SystemAudioSource source = new SystemAudioSource()) {
             AudioTrack track = factory.createAudioTrack("system", source);
             AtomicReference<CountDownLatch> received = new AtomicReference<>(new CountDownLatch(5));
+
             try {
                 track.addSink((data, bits, rate, channels, frames) -> {
-                    if (bits == 16 && rate == 48000 && channels == 2 && frames == 480) {
-                        for (byte sample : data) {
-                            if (sample != 0) { received.get().countDown(); break; }
+                    if (bits != 16 || rate != 48000 || channels != 2 || frames != 480) {
+                        return;
+                    }
+
+                    for (byte sample : data) {
+                        if (sample != 0) {
+                            received.get().countDown();
+                            break;
                         }
                     }
                 });
+
                 source.start();
                 assertTrue(received.get().await(10, TimeUnit.SECONDS), "Play audio on the default output");
+
                 source.stop();
                 assertNull(source.getFailure());
                 assertFalse(source.isRecording());
+
                 received.set(new CountDownLatch(5));
+
                 source.start();
                 assertTrue(received.get().await(10, TimeUnit.SECONDS), "No audio after restart");
                 assertTrue(source.isRecording());
+
                 source.stop();
                 assertNull(source.getFailure());
             }
-            finally { track.dispose(); }
+            finally {
+                track.dispose();
+            }
         }
     }
+
 }

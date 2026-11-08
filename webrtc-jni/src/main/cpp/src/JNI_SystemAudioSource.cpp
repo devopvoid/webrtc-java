@@ -17,31 +17,49 @@
 #include "JNI_SystemAudioSource.h"
 #include "JavaBoundary.h"
 #include "NativeHandle.h"
+
+#include "media/audio/CustomAudioSource.h"
 #include "media/audio/SystemAudioCapture.h"
 
+#include <memory>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_SystemAudioSource_00024Capture_initialize
-(JNIEnv * env, jobject caller) {
-    jni::CallFromJava(env, [&]() {
-        auto capture = jni::SystemAudioCapture::Create();
-        capture->Open();
-        SetHandle(env, caller, capture.get());
-        capture.release();
-    });
+(JNIEnv * env, jobject caller)
+{
+	jni::CallFromJava(env, [&]() {
+		std::unique_ptr<jni::SystemAudioCapture> capture = jni::SystemAudioCapture::Create();
+		capture->Open();
+
+		SetHandle(env, caller, capture.release());
+	});
 }
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_SystemAudioSource_00024Capture_pump
-(JNIEnv * env, jobject caller, jobject javaSource) {
-    jni::CallFromJava(env, [&]() {
-        jni::NativeLease<jni::SystemAudioCapture> capture(env, caller);
-        CHECK_HANDLE(capture);
-        jni::NativeLease<jni::CustomAudioSource> source(env, javaSource);
-        CHECK_HANDLE(source);
-        capture->Pump(source);
-    });
+(JNIEnv * env, jobject caller, jobject javaSource)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::SystemAudioCapture> capture(env, caller);
+		CHECK_HANDLE(capture);
+
+		jni::NativeLease<jni::CustomAudioSource> source(env, javaSource);
+		CHECK_HANDLE(source);
+
+		capture->Pump(source);
+	});
 }
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_SystemAudioSource_00024Capture_dispose
-(JNIEnv * env, jobject caller) {
-    jni::CallFromJava(env, [&]() {
-        auto * capture = jni::TakeHandle<jni::SystemAudioCapture>(env, caller);
-        if (capture) jni::ReleaseHandle(env, capture, [capture](bool) { delete capture; });
-    });
+(JNIEnv * env, jobject caller)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::SystemAudioCapture * capture = jni::TakeHandle<jni::SystemAudioCapture>(env, caller);
+
+		if (capture == nullptr) {
+			return;
+		}
+
+		jni::ReleaseHandle(env, capture, [capture](bool) {
+			delete capture;
+		});
+	});
 }

@@ -56,7 +56,8 @@ Use `try/finally` in application code to release these resources on errors too.
 `stop()` and `dispose()` are idempotent. `stop()` keeps the source and its tracks
 usable for `start()` again; disposal is permanent. A stop or disposal from a local
 audio sink requests shutdown without joining its own callback thread. Do not
-restart from an audio callback or push additional PCM into this source.
+restart from an audio callback. The inherited `pushAudio` methods throw
+`IllegalStateException`: push other audio into a separate `CustomAudioSource`.
 
 ## Device and permission changes
 

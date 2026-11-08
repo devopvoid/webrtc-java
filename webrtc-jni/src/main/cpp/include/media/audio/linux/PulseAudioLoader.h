@@ -21,8 +21,8 @@
 
 #include <dlfcn.h>
 
-#include <string>
 #include <mutex>
+#include <string>
 
 #include "Exception.h"
 
@@ -60,6 +60,16 @@ namespace jni
         typedef void (*pa_operation_unref_t)(pa_operation* o);
         typedef pa_operation_state_t (*pa_operation_get_state_t)(const pa_operation* o);
         typedef const char* (*pa_proplist_gets_t)(const pa_proplist* p, const char* key);
+
+        typedef pa_stream* (*pa_stream_new_t)(pa_context* c, const char* name, const pa_sample_spec* ss, const pa_channel_map* map);
+        typedef void (*pa_stream_unref_t)(pa_stream* s);
+        typedef int (*pa_stream_connect_record_t)(pa_stream* s, const char* dev, const pa_buffer_attr* attr, pa_stream_flags_t flags);
+        typedef int (*pa_stream_disconnect_t)(pa_stream* s);
+        typedef pa_stream_state_t (*pa_stream_get_state_t)(const pa_stream* s);
+        typedef int (*pa_stream_peek_t)(pa_stream* s, const void** data, size_t* nbytes);
+        typedef int (*pa_stream_drop_t)(pa_stream* s);
+        typedef size_t (*pa_stream_readable_size_t)(const pa_stream* s);
+        typedef int (*pa_stream_get_latency_t)(pa_stream* s, pa_usec_t* r_usec, int* negative);
 
         class PulseAudioLoader {
         public:
@@ -112,24 +122,16 @@ namespace jni
                 LOAD_SYM(pa_operation_get_state);
                 LOAD_SYM(pa_proplist_gets);
 
-                pa_stream_new = reinterpret_cast<decltype(pa_stream_new)>(dlsym(lib_handle, "pa_stream_new"));
-                if (!pa_stream_new) { close(); return false; }
-                pa_stream_unref = reinterpret_cast<decltype(pa_stream_unref)>(dlsym(lib_handle, "pa_stream_unref"));
-                if (!pa_stream_unref) { close(); return false; }
-                pa_stream_connect_record = reinterpret_cast<decltype(pa_stream_connect_record)>(dlsym(lib_handle, "pa_stream_connect_record"));
-                if (!pa_stream_connect_record) { close(); return false; }
-                pa_stream_disconnect = reinterpret_cast<decltype(pa_stream_disconnect)>(dlsym(lib_handle, "pa_stream_disconnect"));
-                if (!pa_stream_disconnect) { close(); return false; }
-                pa_stream_get_state = reinterpret_cast<decltype(pa_stream_get_state)>(dlsym(lib_handle, "pa_stream_get_state"));
-                if (!pa_stream_get_state) { close(); return false; }
-                pa_stream_peek = reinterpret_cast<decltype(pa_stream_peek)>(dlsym(lib_handle, "pa_stream_peek"));
-                if (!pa_stream_peek) { close(); return false; }
-                pa_stream_drop = reinterpret_cast<decltype(pa_stream_drop)>(dlsym(lib_handle, "pa_stream_drop"));
-                if (!pa_stream_drop) { close(); return false; }
-                pa_stream_readable_size = reinterpret_cast<decltype(pa_stream_readable_size)>(dlsym(lib_handle, "pa_stream_readable_size"));
-                if (!pa_stream_readable_size) { close(); return false; }
-                pa_stream_get_latency = reinterpret_cast<decltype(pa_stream_get_latency)>(dlsym(lib_handle, "pa_stream_get_latency"));
-                if (!pa_stream_get_latency) { close(); return false; }
+                LOAD_SYM(pa_stream_new);
+                LOAD_SYM(pa_stream_unref);
+                LOAD_SYM(pa_stream_connect_record);
+                LOAD_SYM(pa_stream_disconnect);
+                LOAD_SYM(pa_stream_get_state);
+                LOAD_SYM(pa_stream_peek);
+                LOAD_SYM(pa_stream_drop);
+                LOAD_SYM(pa_stream_readable_size);
+                LOAD_SYM(pa_stream_get_latency);
+
                 loaded = true;
                 return true;
             }
@@ -176,19 +178,23 @@ namespace jni
             pa_operation_get_state_t pa_operation_get_state;
             pa_proplist_gets_t pa_proplist_gets;
 
-            decltype(&::pa_stream_new) pa_stream_new = nullptr;
-            decltype(&::pa_stream_unref) pa_stream_unref = nullptr;
-            decltype(&::pa_stream_connect_record) pa_stream_connect_record = nullptr;
-            decltype(&::pa_stream_disconnect) pa_stream_disconnect = nullptr;
-            decltype(&::pa_stream_get_state) pa_stream_get_state = nullptr;
-            decltype(&::pa_stream_peek) pa_stream_peek = nullptr;
-            decltype(&::pa_stream_drop) pa_stream_drop = nullptr;
-            decltype(&::pa_stream_readable_size) pa_stream_readable_size = nullptr;
-            decltype(&::pa_stream_get_latency) pa_stream_get_latency = nullptr;
+            pa_stream_new_t pa_stream_new;
+            pa_stream_unref_t pa_stream_unref;
+            pa_stream_connect_record_t pa_stream_connect_record;
+            pa_stream_disconnect_t pa_stream_disconnect;
+            pa_stream_get_state_t pa_stream_get_state;
+            pa_stream_peek_t pa_stream_peek;
+            pa_stream_drop_t pa_stream_drop;
+            pa_stream_readable_size_t pa_stream_readable_size;
+            pa_stream_get_latency_t pa_stream_get_latency;
 
         private:
-            std::mutex load_mutex;
             PulseAudioLoader() : loaded(false), lib_handle(nullptr) {}
+
+            // Serializes load(): the device manager and the system audio
+            // capture may load the library from different threads.
+            std::mutex load_mutex;
+
             bool loaded;
             void* lib_handle;
         };

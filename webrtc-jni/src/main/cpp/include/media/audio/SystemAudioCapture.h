@@ -14,37 +14,73 @@
  * limitations under the License.
  */
 
-#ifndef JNI_SYSTEM_AUDIO_CAPTURE_H
-#define JNI_SYSTEM_AUDIO_CAPTURE_H
+#ifndef JNI_WEBRTC_MEDIA_AUDIO_SYSTEM_AUDIO_CAPTURE_H_
+#define JNI_WEBRTC_MEDIA_AUDIO_SYSTEM_AUDIO_CAPTURE_H_
 
 #include "media/audio/CustomAudioSource.h"
+
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
 
-namespace jni {
-// Platform callbacks only write PCM into a bounded queue; they never call Java
-// or WebRTC. The owning Java worker polls and delivers complete 10 ms chunks.
-class SystemAudioCapture {
-public:
-    virtual ~SystemAudioCapture() = default;
-    virtual void Open() = 0;
-    virtual void Poll() = 0;
-    void Pump(CustomAudioSource * source);
-    void Append(const int16_t * samples, size_t frames, int64_t timestamp_us);
-    void Fail(const char * message) noexcept;
-    static std::unique_ptr<SystemAudioCapture> Create();
-private:
-    struct Chunk {
-        std::array<int16_t, 960> samples{};
-        size_t frames = 0;
-        int64_t time = 0;
-    };
-    std::mutex mutex_;
-    std::deque<Chunk> chunks_;
-    std::string failure_;
-};
+namespace jni
+{
+	// Captures what the system plays on its default output, as 16-bit 48 kHz
+	// stereo PCM. Each platform implements Open() and Poll().
+	//
+	// Platform callbacks only write PCM into a bounded queue; they never call
+	// Java or WebRTC. The owning Java worker calls Pump(), which polls the
+	// platform and delivers the complete 10 ms chunks to a CustomAudioSource.
+	// Open(), Pump() and the destructor run on that one worker thread.
+	class SystemAudioCapture
+	{
+		public:
+			static constexpr int kSampleRate = 48000;
+			static constexpr size_t kChannels = 2;
+			static constexpr size_t kFramesPerChunk = kSampleRate / 100;
+
+			// Creates the capture of the current platform, not opened yet.
+			static std::unique_ptr<SystemAudioCapture> Create();
+
+			virtual ~SystemAudioCapture() = default;
+
+			// Opens the default output. Throws an Exception on failure.
+			virtual void Open() = 0;
+
+			// Appends the audio the platform has buffered since the last call.
+			// Throws an Exception once capture has failed.
+			virtual void Poll() = 0;
+
+			// Polls the platform and pushes every complete chunk to the source,
+			// stamped with its capture time.
+			void Pump(CustomAudioSource * source);
+
+			// Queues interleaved frames whose first one was captured at the given
+			// time, on the clock of webrtc::TimeMicros(). Null samples queue
+			// silence of the given length.
+			void Append(const int16_t * samples, size_t frames, int64_t timestamp_us);
+
+			// Records a failure, which the next Pump() throws. Safe to call from
+			// platform callbacks.
+			void Fail(const char * message) noexcept;
+
+		private:
+			struct Chunk
+			{
+				std::array<int16_t, kFramesPerChunk * kChannels> samples{};
+				size_t frames = 0;
+				int64_t timestamp_us = 0;
+			};
+
+			// Guards chunks_ and failure_.
+			std::mutex mutex_;
+			std::deque<Chunk> chunks_;
+			std::string failure_;
+	};
 }
+
 #endif
