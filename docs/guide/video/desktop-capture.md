@@ -190,3 +190,9 @@ When implementing desktop capture in your application, remember to:
 - Handle potential permission requirements on different operating systems
 
 Desktop capture is particularly useful for screen sharing applications, remote assistance tools, collaborative workspaces, and educational platforms where visual content sharing is essential.
+
+## Sharing system audio
+
+Add a separate [`SystemAudioSource`](/guide/audio/system-audio-source) audio track
+to share output audio alongside desktop video. Window selection applies only to
+video; the audio source captures system output independently.

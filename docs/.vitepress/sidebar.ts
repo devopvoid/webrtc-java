@@ -35,6 +35,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'Audio Devices', link: '/audio/audio-devices' },
 				{ text: 'Audio Processing', link: '/audio/audio-processing' },
 				{ text: 'Custom Audio Source', link: '/audio/custom-audio-source' },
+				{ text: 'System Audio Source', link: '/audio/system-audio-source' },
 				{ text: 'Headless Audio', link: '/audio/headless-audio' },
 				{ text: 'DTMF Sender', link: '/audio/dtmf-sender' },
 			],
