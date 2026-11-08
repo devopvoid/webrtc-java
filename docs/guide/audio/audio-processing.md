@@ -300,7 +300,7 @@ audioProcessing.processStream(
 
 ## Speech in the Processed Microphone Audio
 
-WebRTC passes the microphone's audio from the audio device module straight to the senders, so a sink on a microphone track gets nothing. The factory detects speech in that audio as it is sent, after echo cancellation, noise suppression and gain control, in native code, and tells a listener only when speech begins and ends:
+A sink on a microphone track gets the audio its senders send, after echo cancellation, noise suppression and gain control, on WebRTC's capture thread. To learn only when speech begins and ends, without handling the audio in Java, let the factory detect speech in that audio in native code and tell a listener:
 
 ```java
 VoiceActivityListener listener = speaking -> {

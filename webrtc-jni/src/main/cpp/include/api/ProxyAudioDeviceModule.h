@@ -19,11 +19,15 @@
 
 #include "api/audio/audio_device.h"
 #include "api/audio/audio_device_defines.h"
+#include "api/audio/audio_processing.h"
 #include "api/scoped_refptr.h"
 #include "rtc_base/thread.h"
 
+#include "media/audio/DeviceAudioSource.h"
+
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 namespace jni
@@ -40,6 +44,14 @@ namespace jni
 	// thread as well trips RTC_CHECK_RUNS_SERIALIZED in
 	// AudioSendStream::SendAudioData and aborts the process, and interleaves
 	// microphone frames with the pushed audio whenever it does not.
+	//
+	// Recorded audio therefore never reaches WebRTC's own transport. While
+	// capture is enabled the proxy hands it to its DeviceAudioCapture, which
+	// runs it through the factory's AudioProcessing and on to the
+	// DeviceAudioSources, the sources PeerConnectionFactory.createAudioSource()
+	// creates. Their tracks' senders receive it through the tracks' sinks, like
+	// the senders of every other local source. Render calls still go to
+	// WebRTC, which feeds the same AudioProcessing the playout signal.
 	//
 	// While capture is disabled, InitRecording() and StartRecording() fail so
 	// AudioState never opens the device, and recorded data that still arrives
@@ -70,6 +82,14 @@ namespace jni
 			// switch is made on the calling thread.
 			void SetCaptureEnabled(bool enabled);
 			bool CaptureEnabled() const;
+
+			// Sets the AudioProcessing the factory is built with, which the
+			// recorded audio runs through. Called before the factory exists.
+			void SetAudioProcessing(webrtc::scoped_refptr<webrtc::AudioProcessing> processing);
+
+			// The capture the factory's DeviceAudioSources receive the recorded
+			// audio from. The sources share it, and may outlive this proxy.
+			std::shared_ptr<DeviceAudioCapture> DeviceCapture() const;
 
 			// webrtc::AudioDeviceModule implementation.
 			int32_t ActiveAudioLayer(AudioLayer * audioLayer) const override;
@@ -154,11 +174,12 @@ namespace jni
 
 			// The AudioTransport registered with the wrapped module in place of
 			// the one WebRTC registers with this proxy. Render calls are always
-			// forwarded; recorded data is forwarded only while capture is enabled.
+			// forwarded to WebRTC; recorded data goes to the DeviceAudioCapture,
+			// and only while capture is enabled.
 			class TransportGate : public webrtc::AudioTransport
 			{
 				public:
-					explicit TransportGate(const std::atomic<bool> & captureEnabled);
+					TransportGate(const std::atomic<bool> & captureEnabled, DeviceAudioCapture & capture);
 					~TransportGate() override = default;
 
 					void SetTarget(webrtc::AudioTransport * target);
@@ -203,11 +224,14 @@ namespace jni
 
 				private:
 					const std::atomic<bool> & captureEnabled_;
+					DeviceAudioCapture & capture_;
 					std::atomic<webrtc::AudioTransport *> target_;
 			};
 
 			webrtc::scoped_refptr<webrtc::AudioDeviceModule> delegate_;
 			std::atomic<bool> captureEnabled_;
+			// Declared before the gate, which refers to it.
+			const std::shared_ptr<DeviceAudioCapture> deviceCapture_;
 			TransportGate gate_;
 			bool gateRegistered_;
 			// The factory's worker thread, set while WebRTC's transport is registered.
