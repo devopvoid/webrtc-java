@@ -33,7 +33,8 @@ namespace jni
 	ProxyAudioDeviceModule::ProxyAudioDeviceModule(webrtc::scoped_refptr<webrtc::AudioDeviceModule> delegate) :
 			delegate_(std::move(delegate)),
 			captureEnabled_(false),
-			gate_(captureEnabled_),
+			deviceCapture_(std::make_shared<DeviceAudioCapture>()),
+			gate_(captureEnabled_, *deviceCapture_),
 			gateRegistered_(false),
 			workerThread_(nullptr)
 	{
@@ -50,6 +51,9 @@ namespace jni
 			RTC_LOG(LS_WARNING) << "ProxyAudioDeviceModule: the AudioDeviceModule kept its audio callback. "
 								   "Stop its playout and recording before disposing the PeerConnectionFactory.";
 		}
+
+		// No more audio is recorded for the sources, which may live on.
+		deviceCapture_->Detach();
 	}
 
 	void ProxyAudioDeviceModule::SetCaptureEnabled(bool enabled)
@@ -85,6 +89,16 @@ namespace jni
 	bool ProxyAudioDeviceModule::CaptureEnabled() const
 	{
 		return captureEnabled_.load(std::memory_order_acquire);
+	}
+
+	void ProxyAudioDeviceModule::SetAudioProcessing(webrtc::scoped_refptr<webrtc::AudioProcessing> processing)
+	{
+		deviceCapture_->SetAudioProcessing(std::move(processing));
+	}
+
+	std::shared_ptr<DeviceAudioCapture> ProxyAudioDeviceModule::DeviceCapture() const
+	{
+		return deviceCapture_;
 	}
 
 	int32_t ProxyAudioDeviceModule::ActiveAudioLayer(AudioLayer * audioLayer) const
@@ -421,8 +435,10 @@ namespace jni
 
 	// TransportGate
 
-	ProxyAudioDeviceModule::TransportGate::TransportGate(const std::atomic<bool> & captureEnabled) :
+	ProxyAudioDeviceModule::TransportGate::TransportGate(const std::atomic<bool> & captureEnabled,
+														 DeviceAudioCapture & capture) :
 			captureEnabled_(captureEnabled),
+			capture_(capture),
 			target_(nullptr)
 	{
 	}
@@ -462,17 +478,19 @@ namespace jni
 	{
 		newMicLevel = currentMicLevel;
 
-		webrtc::AudioTransport * target = target_.load(std::memory_order_acquire);
-
-		if (!target || !captureEnabled_.load(std::memory_order_acquire)) {
+		if (!captureEnabled_.load(std::memory_order_acquire)) {
 			// Drop the frame. Send streams of this factory are fed by their
 			// tracks' sources, not by the device.
 			return 0;
 		}
 
-		return target->RecordedDataIsAvailable(audioSamples, nSamples, nBytesPerSample, nChannels,
-											   samplesPerSec, totalDelayMS, clockDrift, currentMicLevel,
-											   keyPressed, newMicLevel, estimatedCaptureTimeNS);
+		// Never handed to WebRTC's transport, which would feed it into every
+		// send stream of the factory. The device sources' tracks take it to
+		// their senders instead.
+		capture_.OnRecordedData(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec,
+								totalDelayMS, keyPressed, estimatedCaptureTimeNS);
+
+		return 0;
 	}
 
 	int32_t ProxyAudioDeviceModule::TransportGate::NeedMorePlayData(size_t nSamples,

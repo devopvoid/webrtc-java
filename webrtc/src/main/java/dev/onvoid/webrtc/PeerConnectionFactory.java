@@ -257,6 +257,11 @@ public class PeerConnectionFactory extends DisposableNativeObject {
 	 * factory's audio device module. The audio source may be used by one or
 	 * more {@link AudioTrack}s.
 	 * <p>
+	 * The audio reaches the senders of these tracks through the tracks, after
+	 * the factory's audio processing: echo cancellation, noise suppression and
+	 * gain control as the options ask for. A sink added to such a track gets
+	 * the same audio, on WebRTC's capture thread, while the device records.
+	 * <p>
 	 * Calling this commits the factory to device-captured audio and lets it open
 	 * the recording device; see the class description.
 	 *

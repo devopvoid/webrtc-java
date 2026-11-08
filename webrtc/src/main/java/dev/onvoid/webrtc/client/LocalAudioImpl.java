@@ -29,9 +29,9 @@ import dev.onvoid.webrtc.media.audio.VoiceActivityListener;
 /**
  * A local audio track, from the microphone or pushed audio. Speech is
  * detected in native code. Pushed audio reaches the detector as a sink of the
- * native track. A microphone's source hands no audio to sinks, as WebRTC
- * passes captured audio straight to the senders, so a microphone track takes
- * its speech from the runtime's audio processing instead.
+ * native track. A microphone track takes its speech from the detector of the
+ * runtime's audio processing instead, which sees the processed microphone
+ * audio once, whatever the number of microphone tracks.
  */
 class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 

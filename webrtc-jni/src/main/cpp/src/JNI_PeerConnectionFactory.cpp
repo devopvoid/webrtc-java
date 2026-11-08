@@ -47,11 +47,13 @@
 
 #include "api/ProxyAudioDeviceModule.h"
 #include "media/audio/CustomAudioSource.h"
+#include "media/audio/DeviceAudioSource.h"
 #include "media/audio/codec/AudioCodecFactories.h"
 #include "media/video/codec/DefaultVideoCodecFactories.h"
 #include "media/video/codec/VideoDecoderFactoryWrapper.h"
 #include "media/video/codec/VideoEncoderFactoryWrapper.h"
 
+#include "api/make_ref_counted.h"
 #include "api/media_stream_interface.h"
 #include "rtc_base/logging.h"
 #include "rtc_base/thread.h"
@@ -159,13 +161,20 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 			dependencies.signaling_thread = signalingThread.get();
 			dependencies.socket_factory = networkThread->socketserver();
 			dependencies.event_log_factory = std::make_unique<webrtc::RtcEventLogFactory>();
-			dependencies.env = webrtc::CreateEnvironment(std::move(fieldTrials));
+
+			webrtc::Environment environment = webrtc::CreateEnvironment(std::move(fieldTrials));
+			dependencies.env = environment;
 			dependencies.adm = proxy;
 			dependencies.audio_encoder_factory = audioEncoderFactory;
 			dependencies.audio_decoder_factory = audioDecoderFactory;
 			// The tap of the module that processes the captured audio: that of the
 			// application's module, or of the one built here.
 			std::shared_ptr<jni::AudioCaptureTap> tap;
+
+			// The module is built here rather than by the factory, since the proxy
+			// runs the recorded audio through it and WebRTC the playout audio: both
+			// must reach the same module for echo cancellation to work.
+			webrtc::scoped_refptr<webrtc::AudioProcessing> audioProcessingModule;
 
 			if (processing != nullptr) {
 				auto moduleTap = GetHandle<std::shared_ptr<jni::AudioCaptureTap>>(env, audioProcessing, "captureTapHandle");
@@ -175,17 +184,24 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 				}
 
 				tap = *moduleTap;
-				dependencies.audio_processing_builder = webrtc::CustomAudioProcessing(
-					webrtc::scoped_refptr<webrtc::AudioProcessing>(processing));
+				audioProcessingModule = webrtc::scoped_refptr<webrtc::AudioProcessing>(processing);
 			}
 			else {
 				tap = std::make_shared<jni::AudioCaptureTap>();
 
-				auto builder = std::make_unique<webrtc::BuiltinAudioProcessingBuilder>();
-				builder->SetCapturePostProcessing(jni::AudioCaptureTap::CreateProcessing(tap));
+				webrtc::BuiltinAudioProcessingBuilder builder;
+				builder.SetCapturePostProcessing(jni::AudioCaptureTap::CreateProcessing(tap));
 
-				dependencies.audio_processing_builder = std::move(builder);
+				audioProcessingModule = builder.Build(environment);
+
+				if (!audioProcessingModule) {
+					throw jni::Exception("Create AudioProcessing failed");
+				}
 			}
+
+			proxy->SetAudioProcessing(audioProcessingModule);
+
+			dependencies.audio_processing_builder = webrtc::CustomAudioProcessing(audioProcessingModule);
 			dependencies.video_encoder_factory = std::move(videoEncoderFactory);
 			dependencies.video_decoder_factory = std::move(videoDecoderFactory);
 
@@ -352,14 +368,16 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
 		CHECK_HANDLEV(factory, nullptr);
 
+		jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
+		CHECK_HANDLEV(audioModule, nullptr);
+
 		auto audioOptions = jni::AudioOptions::toNative(env, jni::JavaLocalRef<jobject>(env, jAudioOptions));
 
-		webrtc::scoped_refptr<webrtc::AudioSourceInterface> audioSource = factory->CreateAudioSource(audioOptions);
-
-		if (audioSource == nullptr) {
-			env->Throw(jni::JavaError(env, "Create audio-track source failed"));
-			return nullptr;
-		}
+		// Not WebRTC's own LocalAudioSource, which leaves the recorded audio to
+		// reach the senders past the track: this source hands it to the track's
+		// sinks, its senders among them. See DeviceAudioCapture.
+		webrtc::scoped_refptr<webrtc::AudioSourceInterface> audioSource =
+			webrtc::make_ref_counted<jni::DeviceAudioSource>(audioOptions, audioModule->DeviceCapture());
 
 		return jni::JavaFactories::createOwning(env, std::move(audioSource)).release();
 	}
