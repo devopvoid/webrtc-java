@@ -37,3 +37,18 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_ToneAudioDeviceModule_
 		SetHandle(env, caller, audioModule.release());
 	});
 }
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_audio_ToneAudioDeviceModule_isRecording
+(JNIEnv * env, jobject caller)
+{
+	jboolean recording = JNI_FALSE;
+
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::ToneAudioDeviceModule> audioModule(env, caller);
+		CHECK_HANDLE(audioModule);
+
+		recording = audioModule->Recording() ? JNI_TRUE : JNI_FALSE;
+	});
+
+	return recording;
+}

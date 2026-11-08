@@ -41,22 +41,6 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    setDeviceCaptureEnabled
-	 * Signature: (Z)V
-	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCaptureEnabled
-	(JNIEnv *, jobject, jboolean);
-
-	/*
-	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
-	 * Method:    isSinkFedAudioTrack
-	 * Signature: (Ldev/onvoid/webrtc/media/MediaStreamTrack;)Z
-	 */
-	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFedAudioTrack
-	(JNIEnv *, jobject, jobject);
-
-	/*
-	 * Class:     dev_onvoid_webrtc_PeerConnectionFactory
 	 * Method:    createVideoTrack
 	 * Signature: (Ljava/lang/String;Ldev/onvoid/webrtc/media/video/VideoTrackSource;)Ldev/onvoid/webrtc/media/video/VideoTrack;
 	 */

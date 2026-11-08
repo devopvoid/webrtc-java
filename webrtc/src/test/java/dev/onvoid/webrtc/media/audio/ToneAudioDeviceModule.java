@@ -35,6 +35,14 @@ public class ToneAudioDeviceModule extends AudioDeviceModuleBase {
 		initialize(frequencyHz);
 	}
 
+	/**
+	 * Returns whether the module records, as the device a factory opens and
+	 * closes would.
+	 *
+	 * @return True while recording.
+	 */
+	public native boolean isRecording();
+
 	private native void initialize(int frequencyHz);
 
 }

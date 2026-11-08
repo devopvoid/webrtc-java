@@ -49,9 +49,8 @@ import dev.onvoid.webrtc.media.video.CustomVideoSource;
  * {@link #getVideoSource()} and {@link #getAudioSource()} for {@code null}
  * before making a track, or ask {@link #getInfo()} first.
  * <p>
- * A factory fed from here is sending pushed audio, so it cannot also send
- * audio captured by its {@code AudioDeviceModule}. Use a separate factory if
- * an application needs both.
+ * The audio is pushed into its track, so the same factory may send the
+ * microphone beside it.
  * <p>
  * Closing this releases the player and both media sources. Dispose of any
  * tracks made from them first.

@@ -46,7 +46,6 @@
 #include "api/rtc_event_log/rtc_event_log_factory.h"
 
 #include "api/ProxyAudioDeviceModule.h"
-#include "media/audio/CustomAudioSource.h"
 #include "media/audio/DeviceAudioSource.h"
 #include "media/audio/codec/AudioCodecFactories.h"
 #include "media/video/codec/DefaultVideoCodecFactories.h"
@@ -147,10 +146,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_initialize
 				}
 			}
 
-			// Hand WebRTC a proxy of the module so the device capture path can be
-			// switched off once this factory sends audio from sink-fed sources. See
-			// ProxyAudioDeviceModule for why both paths must never feed the same
-			// send stream.
+			// Hand WebRTC a proxy of the module, which takes the recorded audio to
+			// the device sources' tracks instead of to every send stream of the
+			// factory. See ProxyAudioDeviceModule.
 			auto proxy = jni::ProxyAudioDeviceModule::Create(adm);
 
 			// No worker thread is supplied: WebRTC is removing support for one that
@@ -336,26 +334,6 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_removeVoiceA
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_setDeviceCaptureEnabled
-(JNIEnv * env, jobject caller, jboolean enabled)
-{
-	jni::CallFromJava(env, [&]() {
-		// Keeps the module, which a dispose releases with the factory.
-		jni::NativeLease<webrtc::PeerConnectionFactoryInterface> factory(env, caller);
-		CHECK_HANDLE(factory);
-
-		jni::ProxyAudioDeviceModule * audioModule = GetHandle<jni::ProxyAudioDeviceModule>(env, caller, "audioModuleHandle");
-		CHECK_HANDLE(audioModule);
-
-		try {
-			audioModule->SetCaptureEnabled(enabled == JNI_TRUE);
-		}
-		catch (...) {
-			ThrowCxxJavaException(env);
-		}
-	});
-}
-
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAudioSourceInternal
 (JNIEnv * env, jobject caller, jobject jAudioOptions)
 {
@@ -416,36 +394,6 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createAud
 		ThrowCxxJavaException(env);
 		return nullptr;
 	}
-}
-
-JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_isSinkFedAudioTrack
-(JNIEnv * env, jobject caller, jobject jTrack)
-{
-	return jni::CallFromJava(env, [&]() -> jboolean {
-		if (jTrack == nullptr) {
-			return JNI_FALSE;
-		}
-
-		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
-
-		if (track == nullptr || track->kind() != webrtc::MediaStreamTrackInterface::kAudioKind) {
-			return JNI_FALSE;
-		}
-
-		webrtc::AudioSourceInterface * source = static_cast<webrtc::AudioTrackInterface *>(track.get())->GetSource();
-
-		if (source == nullptr) {
-			return JNI_FALSE;
-		}
-
-		// A remote source hands the track's sinks the audio it decodes, and a
-		// CustomAudioSource hands them the audio the application pushes. Either way
-		// a sender of that track is fed through the track rather than by the audio
-		// device module.
-		bool sinkFed = source->remote() || dynamic_cast<jni::CustomAudioSource *>(source) != nullptr;
-
-		return sinkFed ? JNI_TRUE : JNI_FALSE;
-	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_PeerConnectionFactory_createVideoTrack

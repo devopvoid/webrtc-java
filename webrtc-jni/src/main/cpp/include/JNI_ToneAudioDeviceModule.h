@@ -15,6 +15,14 @@ extern "C" {
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_ToneAudioDeviceModule_initialize
 	(JNIEnv *, jobject, jint);
 
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_ToneAudioDeviceModule
+	 * Method:    isRecording
+	 * Signature: ()Z
+	 */
+	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_audio_ToneAudioDeviceModule_isRecording
+	(JNIEnv *, jobject);
+
 #ifdef __cplusplus
 }
 #endif

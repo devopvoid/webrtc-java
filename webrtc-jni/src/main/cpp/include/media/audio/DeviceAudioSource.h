@@ -21,12 +21,15 @@
 #include "api/audio/audio_processing.h"
 #include "api/audio_options.h"
 #include "api/media_stream_interface.h"
+#include "api/audio/audio_device.h"
 #include "api/notifier.h"
 #include "api/scoped_refptr.h"
 #include "common_audio/resampler/include/push_resampler.h"
 #include "rtc_base/synchronization/mutex.h"
+#include "rtc_base/thread.h"
 #include "rtc_base/thread_annotations.h"
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -48,13 +51,22 @@ namespace jni
 	// side is left to WebRTC, which feeds the same AudioProcessing the render
 	// signal, so echo cancellation sees the audio it has to remove.
 	//
+	// It also decides when the device records: while a source has a sink and
+	// WebRTC asks for a recording, which it does while any send stream of the
+	// factory runs and the application has not switched recording off. A
+	// factory that sends only pushed or forwarded audio therefore never opens
+	// the recording device. The device is started and stopped on the factory's
+	// worker thread, where WebRTC asks for it; a change of the sinks posts the
+	// update there rather than waiting for it, so that no lock is held while
+	// the device's recording thread is joined.
+	//
 	// Shared by the factory's ProxyAudioDeviceModule, which feeds it on the
 	// recording thread, and by every DeviceAudioSource it created, which may
 	// outlive the module.
-	class DeviceAudioCapture
+	class DeviceAudioCapture : public std::enable_shared_from_this<DeviceAudioCapture>
 	{
 		public:
-			DeviceAudioCapture() = default;
+			explicit DeviceAudioCapture(webrtc::scoped_refptr<webrtc::AudioDeviceModule> device);
 			DeviceAudioCapture(const DeviceAudioCapture &) = delete;
 			DeviceAudioCapture & operator=(const DeviceAudioCapture &) = delete;
 
@@ -62,8 +74,23 @@ namespace jni
 			// before the factory exists.
 			void SetAudioProcessing(webrtc::scoped_refptr<webrtc::AudioProcessing> processing);
 
-			// Releases the AudioProcessing and every source, once the module is
-			// gone and no more audio can arrive.
+			// Sets the factory's worker thread, while WebRTC's transport is
+			// registered with the device, and clears it when the transport is
+			// unregistered, before the thread is stopped. Called on that thread.
+			void SetWorkerThread(webrtc::Thread * workerThread);
+
+			// Records whether WebRTC asks the device to record. Called on the
+			// worker thread.
+			void SetRecordingRequested(bool requested);
+
+			// Whether WebRTC asks the device to record, which is what WebRTC
+			// is told when it asks whether the device records, whatever the
+			// sources: it decides from that when to ask again.
+			bool RecordingRequested() const;
+
+			// Stops a recording this object started, and releases the
+			// AudioProcessing, the device and every source, once the module is
+			// gone, its worker thread with it, and no more audio can arrive.
 			void Detach();
 
 			// Called on the recording thread with 10 ms of interleaved 16-bit
@@ -74,10 +101,31 @@ namespace jni
 
 			// A source is registered while it has at least one sink, and held
 			// for that long, so it is alive whenever audio is handed to it.
+			// Neither call starts or stops the device: once its lock is
+			// released, the source calls UpdateRecording().
 			void AddSource(webrtc::scoped_refptr<DeviceAudioSource> source);
 			webrtc::scoped_refptr<DeviceAudioSource> RemoveSource(DeviceAudioSource * source);
 
+			// Brings the device's recording in line with the sources and with
+			// WebRTC's request: at once on the worker thread, else posted to it.
+			// Must not be called while a source's lock is held.
+			void UpdateRecording();
+
 		private:
+			// Starts or stops the device. Runs on the worker thread.
+			void ApplyRecording();
+
+			bool HasSources();
+
+			// Guards the device and the worker thread.
+			webrtc::Mutex controlMutex_;
+			webrtc::scoped_refptr<webrtc::AudioDeviceModule> device_ RTC_GUARDED_BY(controlMutex_);
+			webrtc::Thread * workerThread_ RTC_GUARDED_BY(controlMutex_) = nullptr;
+
+			// Set on the worker thread; read by Detach() once it is gone.
+			std::atomic<bool> recordingRequested_ { false };
+			std::atomic<bool> recordingStarted_ { false };
+
 			// Guards the processing state, which only the recording thread
 			// uses; it changes threads when the device is restarted.
 			webrtc::Mutex processMutex_;
@@ -115,6 +163,10 @@ namespace jni
 			void Deliver(const webrtc::AudioFrame & frame, std::optional<int64_t> absoluteCaptureTimeMs);
 
 		private:
+			// Adds the sink and registers this source with the capture if it
+			// is the first one, under the lock.
+			void AddSinkLocked(webrtc::AudioTrackSinkInterface * sink, bool & registered);
+
 			const webrtc::AudioOptions options_;
 			const std::shared_ptr<DeviceAudioCapture> capture_;
 
