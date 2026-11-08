@@ -21,6 +21,7 @@
 
 #include <dlfcn.h>
 
+#include <mutex>
 #include <string>
 
 #include "Exception.h"
@@ -60,6 +61,16 @@ namespace jni
         typedef pa_operation_state_t (*pa_operation_get_state_t)(const pa_operation* o);
         typedef const char* (*pa_proplist_gets_t)(const pa_proplist* p, const char* key);
 
+        typedef pa_stream* (*pa_stream_new_t)(pa_context* c, const char* name, const pa_sample_spec* ss, const pa_channel_map* map);
+        typedef void (*pa_stream_unref_t)(pa_stream* s);
+        typedef int (*pa_stream_connect_record_t)(pa_stream* s, const char* dev, const pa_buffer_attr* attr, pa_stream_flags_t flags);
+        typedef int (*pa_stream_disconnect_t)(pa_stream* s);
+        typedef pa_stream_state_t (*pa_stream_get_state_t)(const pa_stream* s);
+        typedef int (*pa_stream_peek_t)(pa_stream* s, const void** data, size_t* nbytes);
+        typedef int (*pa_stream_drop_t)(pa_stream* s);
+        typedef size_t (*pa_stream_readable_size_t)(const pa_stream* s);
+        typedef int (*pa_stream_get_latency_t)(pa_stream* s, pa_usec_t* r_usec, int* negative);
+
         class PulseAudioLoader {
         public:
             static PulseAudioLoader& instance() {
@@ -68,6 +79,7 @@ namespace jni
             }
 
             bool load() {
+                std::lock_guard<std::mutex> lock(load_mutex);
                 if (loaded) return true;
                 
                 // Try to open the library
@@ -109,6 +121,16 @@ namespace jni
                 LOAD_SYM(pa_operation_unref);
                 LOAD_SYM(pa_operation_get_state);
                 LOAD_SYM(pa_proplist_gets);
+
+                LOAD_SYM(pa_stream_new);
+                LOAD_SYM(pa_stream_unref);
+                LOAD_SYM(pa_stream_connect_record);
+                LOAD_SYM(pa_stream_disconnect);
+                LOAD_SYM(pa_stream_get_state);
+                LOAD_SYM(pa_stream_peek);
+                LOAD_SYM(pa_stream_drop);
+                LOAD_SYM(pa_stream_readable_size);
+                LOAD_SYM(pa_stream_get_latency);
 
                 loaded = true;
                 return true;
@@ -156,8 +178,23 @@ namespace jni
             pa_operation_get_state_t pa_operation_get_state;
             pa_proplist_gets_t pa_proplist_gets;
 
+            pa_stream_new_t pa_stream_new;
+            pa_stream_unref_t pa_stream_unref;
+            pa_stream_connect_record_t pa_stream_connect_record;
+            pa_stream_disconnect_t pa_stream_disconnect;
+            pa_stream_get_state_t pa_stream_get_state;
+            pa_stream_peek_t pa_stream_peek;
+            pa_stream_drop_t pa_stream_drop;
+            pa_stream_readable_size_t pa_stream_readable_size;
+            pa_stream_get_latency_t pa_stream_get_latency;
+
         private:
             PulseAudioLoader() : loaded(false), lib_handle(nullptr) {}
+
+            // Serializes load(): the device manager and the system audio
+            // capture may load the library from different threads.
+            std::mutex load_mutex;
+
             bool loaded;
             void* lib_handle;
         };
