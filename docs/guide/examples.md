@@ -84,6 +84,37 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopVideoExample"
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopVideoExample" -D"exec.args=window"
 ```
 
+## System Audio
+
+The [`SystemAudioExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/SystemAudioExample.java) captures the audio the system plays on its default output with a [`SystemAudioSource`](/guide/audio/system-audio-source), and counts the frames that reach a sink of its track, without sending or playing anything.
+
+**Key features demonstrated:**
+- Capturing the system output as a local audio track
+- Reading the captured audio through a sink of the track
+- Stopping the capture and checking it for a failure
+
+Play audio in another application while it runs, and press Enter to stop. On macOS, grant screen and audio recording permission when asked.
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.SystemAudioExample"
+```
+
+## Screen Share with Audio
+
+The [`ScreenShareAudioExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ScreenShareAudioExample.java) shares a screen together with the microphone and the system audio, from one runtime and over one peer, with the [Client API](/guide/client-api).
+
+**Key features demonstrated:**
+- Sending a screen, the microphone and the system output as three tracks of one stream
+- Sending a `SystemAudioSource` through `audioTrack()`, beside the microphone
+- Telling the received audio tracks apart by their IDs
+- Counting received audio without playing it back, which the system audio capture would record again
+
+Each audio sender gets the audio of its own track, so the microphone keeps its echo cancellation and the system output is sent as it plays. Play audio in another application and speak into the microphone while it runs, and press Enter to stop.
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ScreenShareAudioExample"
+```
+
 ## Media File
 
 The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFileExample.java) demonstrates how to send a media file over a peer connection, in place of a camera and a microphone. See the [Media Files](/guide/media/media-files) guide for the API it uses.
