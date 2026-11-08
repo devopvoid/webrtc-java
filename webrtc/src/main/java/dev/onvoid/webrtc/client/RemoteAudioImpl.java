@@ -39,6 +39,19 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 	// Confined to the peer's control executor.
 
 	private final List<AudioDispatcher> dispatchers = new ArrayList<>();
+	private long pcmGeneration;
+
+	/** On control; generation changes whenever the observed sink set changes. */
+	long[] pcmObservation() {
+		if (dispatchers.isEmpty()) {
+			return null;
+		}
+		long callbacks = 0;
+		for (AudioDispatcher dispatcher : dispatchers) {
+			callbacks += dispatcher.pcmCallbacks();
+		}
+		return new long[] { pcmGeneration, callbacks };
+	}
 
 
 	RemoteAudioImpl(PeerImpl peer, RTCRtpReceiver receiver, AudioTrack track,
@@ -69,6 +82,7 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 
 		onControl(() -> {
 			dispatchers.add(dispatcher);
+			pcmGeneration++;
 			// The dispatcher copies each chunk, so it needs no new array per call.
 			track.addSink(dispatcher, AudioDataAccess.REUSED);
 		});
@@ -78,6 +92,7 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 
 			onControl(() -> {
 				if (dispatchers.remove(dispatcher)) {
+					pcmGeneration++;
 					track.removeSink(dispatcher);
 				}
 			});

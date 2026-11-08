@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -397,6 +398,10 @@ final class PeerImpl implements Peer {
 	void onLocalCandidates(Consumer<RTCIceCandidate> candidates, Runnable gathered) {
 		this.candidateListener = candidates;
 		this.gatheredListener = gathered;
+	}
+
+	Map<String, long[]> pcmObservations() {
+		return tracks.pcmObservations();
 	}
 
 	@Override

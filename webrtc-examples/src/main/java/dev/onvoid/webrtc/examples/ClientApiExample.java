@@ -97,6 +97,10 @@ public class ClientApiExample {
 
             receive(callee);
             caller.onStateChange(state -> System.out.println("Caller is " + state));
+            caller.onDiagnostics(Duration.ofSeconds(1), diagnosis -> {
+                System.out.println("Caller diagnosis: " + diagnosis.state());
+                diagnosis.conditions().forEach(cause -> System.out.println(cause.reason()));
+            });
 
             // Pushed media. The same tracks could be sent on any number of peers.
             CustomVideo video = rtc.media().customVideo("pattern");

@@ -38,6 +38,8 @@ import dev.onvoid.webrtc.RTCStatsType;
  */
 final class StatsReader {
 
+	private final DiagnosticsReader diagnostics = new DiagnosticsReader();
+
 	private long lastMicros = -1;
 
 	private long lastBytesSent;
@@ -55,6 +57,10 @@ final class StatsReader {
 
 
 	PeerStats read(RTCStatsReport report) {
+		return read(report, Collections.emptyMap());
+	}
+
+	PeerStats read(RTCStatsReport report, Map<String, long[]> pcm) {
 		Map<String, RTCStats> stats = report.getStats();
 
 		long bytesSent = 0;
@@ -65,6 +71,8 @@ final class StatsReader {
 		Map<String, long[]> streams = new HashMap<>();
 		List<VideoStats> outbound = new ArrayList<>();
 		List<VideoStats> inbound = new ArrayList<>();
+		List<AudioStats> inboundAudio = new ArrayList<>();
+		List<AudioStats> outboundAudio = new ArrayList<>();
 
 		for (RTCStats entry : stats.values()) {
 			Map<String, Object> values = entry.getAttributes();
@@ -88,6 +96,9 @@ final class StatsReader {
 				if ("video".equals(values.get("kind"))) {
 					inbound.add(video(stats, values, string(values.get("trackIdentifier")), null));
 				}
+				else if ("audio".equals(values.get("kind"))) {
+					inboundAudio.add(audio(stats, entry, values, pcm));
+				}
 			}
 			else if (entry.getType() == RTCStatsType.OUTBOUND_RTP) {
 				if ("video".equals(values.get("kind"))) {
@@ -95,6 +106,15 @@ final class StatsReader {
 					String trackId = source == null ? null : string(source.getAttributes().get("trackIdentifier"));
 
 					outbound.add(video(stats, values, trackId, string(values.get("qualityLimitationReason"))));
+				}
+				else if ("audio".equals(values.get("kind"))) {
+					RTCStats source = lookup(stats, values.get("mediaSourceId"));
+					Map<String, Object> audioValues = new HashMap<>();
+					if (source != null) {
+						audioValues.putAll(source.getAttributes());
+					}
+					audioValues.putAll(values);
+					outboundAudio.add(audio(stats, entry, audioValues, Collections.emptyMap()));
 				}
 			}
 		}
@@ -137,11 +157,18 @@ final class StatsReader {
 			lastRecentPacketLoss = recentPacketLoss;
 		}
 
-		return new PeerStats(Instant.EPOCH.plus(micros, ChronoUnit.MICROS), inUse(transports),
+		inboundAudio.sort(Comparator.comparing(AudioStats::id));
+		outboundAudio.sort(Comparator.comparing(AudioStats::id));
+		Instant timestamp = Instant.EPOCH.plus(micros, ChronoUnit.MICROS);
+		PeerDiagnostics diagnosis = diagnostics.read(timestamp, recentPacketLoss, transports,
+				stats, inboundAudio);
+
+		return new PeerStats(timestamp, inUse(transports),
 				Collections.unmodifiableList(transports), bytesSent, bytesReceived,
 				outgoingBitrate, incomingBitrate, lossRate(packetsLost, packetsReceived),
 				recentPacketLoss, Collections.unmodifiableList(outbound),
-				Collections.unmodifiableList(inbound), report);
+				Collections.unmodifiableList(inbound), report,
+				Collections.unmodifiableList(inboundAudio), Collections.unmodifiableList(outboundAudio), diagnosis);
 	}
 
 	private static TransportStats transport(Map<String, RTCStats> stats, RTCStats entry) {
@@ -149,6 +176,7 @@ final class StatsReader {
 		String pairId = string(values.get("selectedCandidatePairId"));
 		RTCStats pair = lookup(stats, pairId);
 		String candidateType = null;
+		boolean relayed = false;
 		Duration roundTripTime = null;
 
 		if (pair != null) {
@@ -160,13 +188,16 @@ final class StatsReader {
 
 			RTCStats local = lookup(stats, pair.getAttributes().get("localCandidateId"));
 
+			RTCStats remote = lookup(stats, pair.getAttributes().get("remoteCandidateId"));
+			relayed = remote != null && "relay".equals(remote.getAttributes().get("candidateType"));
 			if (local != null) {
 				candidateType = string(local.getAttributes().get("candidateType"));
 			}
 		}
 
 		return new TransportStats(entry.getId(), pairId, candidateType, roundTripTime,
-				longValue(values.get("bytesSent")), longValue(values.get("bytesReceived")));
+				longValue(values.get("bytesSent")), longValue(values.get("bytesReceived")),
+				relayed || "relay".equals(candidateType));
 	}
 
 	/**
@@ -245,6 +276,38 @@ final class StatsReader {
 				(int) longValue(values.get("frameHeight")),
 				doubleValue(values.get("framesPerSecond")),
 				qualityLimitation);
+	}
+
+	private static AudioStats audio(Map<String, RTCStats> stats, RTCStats entry,
+			Map<String, Object> values, Map<String, long[]> pcm) {
+		RTCStats codec = lookup(stats, values.get("codecId"));
+		String trackId = string(values.get("trackIdentifier"));
+		Double jitter = optionalDouble(values.get("jitter"));
+		Double level = optionalDouble(values.get("audioLevel"));
+		if (level != null && level > 1) {
+			level = null;
+		}
+		long[] observed = pcm.get(trackId);
+		return new AudioStats(entry.getId(), trackId,
+				codec == null ? null : string(codec.getAttributes().get("mimeType")),
+				optionalLong(values.get("packetsReceived")),
+				jitter == null ? null : Duration.ofNanos((long) (jitter * 1e9)),
+				optionalLong(values.get("concealedSamples")), optionalLong(values.get("concealmentEvents")),
+				level, optionalLong(values.get("totalSamplesReceived")),
+				observed == null ? null : observed[1], observed == null ? -1 : observed[0]);
+	}
+
+	private static Long optionalLong(Object value) {
+		return value instanceof Number && ((Number) value).longValue() >= 0
+				? ((Number) value).longValue() : null;
+	}
+
+	private static Double optionalDouble(Object value) {
+		if (!(value instanceof Number)) {
+			return null;
+		}
+		double number = ((Number) value).doubleValue();
+		return Double.isFinite(number) && number >= 0 ? number : null;
 	}
 
 	private static RTCStats lookup(Map<String, RTCStats> stats, Object id) {

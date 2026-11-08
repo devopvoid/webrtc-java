@@ -54,6 +54,23 @@ class DispatcherTests {
 
 
 	@Test
+	void pcmCountsBeforeHandler() {
+		List<Integer> heard = new ArrayList<>();
+		AudioDispatcher audio = audio(Duration.ofMillis(10), chunk -> {
+			if (chunk.frames() > 0) heard.add(number(chunk));
+		});
+		push(audio, 1);
+		push(audio, 2);
+		assertEquals(2, audio.pcmCallbacks());
+		assertTrue(heard.isEmpty());
+		audio.onData(new byte[0], 16, 48000, 1, 0);
+		audio.onData(new byte[0], 8, 48000, 1, 1);
+		assertEquals(2, audio.pcmCallbacks());
+		pool.runAll();
+		assertTrue(errors.isEmpty());
+	}
+
+	@Test
 	void audioBufferDropsOldest() {
 		List<Integer> heard = new ArrayList<>();
 		AudioDispatcher audio = audio(Duration.ofMillis(30), chunk -> heard.add(number(chunk)));
