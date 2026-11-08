@@ -22,6 +22,22 @@ This example is the shortest way to see a complete call working, and a starting 
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ClientApiExample" -D"exec.args=10"
 ```
 
+## File Transfer
+
+The [`FileTransferExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/FileTransferExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends a file from one to the other with [File Transfer](/guide/data/file-transfer). It needs no audio or video hardware and no server.
+
+**Key features demonstrated:**
+- Running `FileTransfers` over a data channel on both sides
+- Accepting an offer under a safe file name, in a directory of the application's choice
+- Following the progress the receiver confirms
+- Waiting until the receiver checked the SHA-256 of the file and moved it into place
+
+Pass a file to send, or a size in MiB for a file of random data, 20 by default:
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.FileTransferExample" -D"exec.args=50"
+```
+
 ## PeerConnection
 
 The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) sends the camera and the microphone from one peer to another in the same process, with the [Client API](/guide/client-api), and logs the video frames and audio that arrive.
