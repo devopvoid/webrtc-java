@@ -153,8 +153,8 @@ final class LocalMediaImpl implements LocalMedia {
 		try (Creation creation = begin()) {
 			if (rtc.audioMode != AudioMode.DEVICES) {
 				throw new ConfigurationException("The runtime was built with AudioMode." + rtc.audioMode
-						+ ", which sends pushed audio only. Build it with AudioMode.DEVICES to capture the microphone, "
-						+ "or use customAudio() to push audio");
+						+ ", which never opens the microphone. Build it with AudioMode.DEVICES to capture the "
+						+ "microphone, or use customAudio() to push audio");
 			}
 
 			AudioTrackSource source = rtc.factory.createAudioSource(options);
@@ -242,10 +242,6 @@ final class LocalMediaImpl implements LocalMedia {
 		try (Creation creation = begin()) {
 			boolean pushed = source instanceof CustomAudioSource;
 
-			if (pushed && rtc.audioMode == AudioMode.DEVICES) {
-				throw new ConfigurationException("A CustomAudioSource needs a runtime built with AudioMode.CUSTOM or "
-						+ "AudioMode.HEADLESS; this one captures the microphone");
-			}
 			if (!pushed && rtc.audioMode != AudioMode.DEVICES) {
 				throw new ConfigurationException("A captured audio source needs a runtime built with AudioMode.DEVICES; "
 						+ "this one was built with AudioMode." + rtc.audioMode);
@@ -263,12 +259,6 @@ final class LocalMediaImpl implements LocalMedia {
 		requireNonNull(label, "label");
 
 		try (Creation creation = begin()) {
-			if (rtc.audioMode == AudioMode.DEVICES) {
-				throw new ConfigurationException("The runtime was built with AudioMode.DEVICES, which sends the "
-						+ "microphone. WebRTC feeds captured audio into every audio sender of a runtime, so pushed "
-						+ "audio needs a runtime built with AudioMode.CUSTOM or AudioMode.HEADLESS");
-			}
-
 			CustomAudioSource source = new CustomAudioSource();
 
 			try {

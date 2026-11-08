@@ -45,17 +45,10 @@ PeerConnectionFactory factory = new PeerConnectionFactory();
 AudioTrack audioTrack = factory.createAudioTrack("audio-track-id", audioSource);
 ```
 
-::: warning One kind of audio input per factory
-A factory sends audio either from its `AudioDeviceModule`, which is what tracks created with `createAudioSource(AudioOptions)` send, or from audio you push. WebRTC feeds device-captured audio into **every** audio sender of a factory, so a sender that is fed both ways is fed by two threads at once. That is a race inside WebRTC, and it aborts the whole process:
+::: tip Pushed and device-captured audio side by side
+Each audio sender gets the audio of its own track, so one factory, and one peer connection, can send a `CustomAudioSource` track beside a microphone track created with `createAudioSource(AudioOptions)`, and beside a track forwarded from a remote peer.
 
-```
-Fatal error in: ../../audio/audio_send_stream.cc
-Check failed: !race_checker.RaceDetected()
-```
-
-The factory therefore commits to the kind used first and throws an `IllegalStateException` if you ask for the other. The same applies to a track received from a remote peer and forwarded on, since its audio is pushed as well. If you need both, create a second `PeerConnectionFactory`.
-
-While a factory sends pushed audio it never opens the recording device, so no microphone is used. Playout of received audio is unaffected.
+The recording device is opened only while a microphone track is sent. A factory that sends only pushed audio never opens it. Playout of received audio is unaffected.
 :::
 
 ### Pushing Audio Data

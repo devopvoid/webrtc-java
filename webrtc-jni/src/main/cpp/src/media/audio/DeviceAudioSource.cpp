@@ -55,6 +55,11 @@ namespace jni
 
 	// DeviceAudioCapture
 
+	DeviceAudioCapture::DeviceAudioCapture(webrtc::scoped_refptr<webrtc::AudioDeviceModule> device) :
+		device_(std::move(device))
+	{
+	}
+
 	void DeviceAudioCapture::SetAudioProcessing(webrtc::scoped_refptr<webrtc::AudioProcessing> processing)
 	{
 		webrtc::MutexLock lock(&processMutex_);
@@ -62,9 +67,125 @@ namespace jni
 		processing_ = std::move(processing);
 	}
 
+	void DeviceAudioCapture::SetWorkerThread(webrtc::Thread * workerThread)
+	{
+		webrtc::MutexLock lock(&controlMutex_);
+
+		workerThread_ = workerThread;
+	}
+
+	void DeviceAudioCapture::SetRecordingRequested(bool requested)
+	{
+		recordingRequested_.store(requested);
+
+		ApplyRecording();
+	}
+
+	bool DeviceAudioCapture::RecordingRequested() const
+	{
+		return recordingRequested_.load();
+	}
+
+	void DeviceAudioCapture::UpdateRecording()
+	{
+		{
+			webrtc::MutexLock lock(&controlMutex_);
+
+			if (workerThread_ == nullptr) {
+				// No factory runs on the device: either none was created yet,
+				// so no source can have a sink, or it is going away, and
+				// Detach() stops what is left.
+				return;
+			}
+			if (!workerThread_->IsCurrent()) {
+				// Posted while the lock is held, so the thread cannot be
+				// cleared and stopped in between. The task holds only a weak
+				// reference: the sources may let this object go meanwhile.
+				workerThread_->PostTask([weak = weak_from_this()]() {
+					if (auto self = weak.lock()) {
+						self->ApplyRecording();
+					}
+				});
+				return;
+			}
+		}
+
+		ApplyRecording();
+	}
+
+	void DeviceAudioCapture::ApplyRecording()
+	{
+		webrtc::scoped_refptr<webrtc::AudioDeviceModule> device;
+
+		{
+			webrtc::MutexLock lock(&controlMutex_);
+
+			device = device_;
+		}
+
+		if (!device) {
+			return;
+		}
+
+		const bool record = recordingRequested_.load() && HasSources();
+		bool started = recordingStarted_.load();
+
+		if (started && !device->Recording()) {
+			// The application stopped the recording through its Java
+			// AudioDeviceModule; start it again if it is still needed.
+			recordingStarted_.store(false);
+			started = false;
+		}
+
+		if (record && !started) {
+			if (device->Recording()) {
+				// The application started the recording through its Java
+				// AudioDeviceModule. Its audio reaches the sources already, and
+				// the recording stays the application's to stop.
+				return;
+			}
+			if (device->InitRecording() != 0 || device->StartRecording() != 0) {
+				RTC_LOG(LS_ERROR) << "DeviceAudioCapture: starting the recording failed";
+				return;
+			}
+
+			recordingStarted_.store(true);
+
+			RTC_LOG(LS_INFO) << "DeviceAudioCapture: recording started";
+		}
+		else if (!record && started) {
+			device->StopRecording();
+
+			recordingStarted_.store(false);
+
+			RTC_LOG(LS_INFO) << "DeviceAudioCapture: recording stopped";
+		}
+	}
+
+	bool DeviceAudioCapture::HasSources()
+	{
+		webrtc::MutexLock lock(&sourcesMutex_);
+
+		return !sources_.empty();
+	}
+
 	void DeviceAudioCapture::Detach()
 	{
 		std::vector<webrtc::scoped_refptr<DeviceAudioSource>> sources;
+		webrtc::scoped_refptr<webrtc::AudioDeviceModule> device;
+
+		{
+			webrtc::MutexLock lock(&controlMutex_);
+
+			workerThread_ = nullptr;
+			device = std::move(device_);
+		}
+
+		// The worker thread is gone, so nothing starts the device anymore. A
+		// recording this object started would otherwise outlive the factory.
+		if (device && recordingStarted_.exchange(false)) {
+			device->StopRecording();
+		}
 
 		{
 			webrtc::MutexLock lock(&processMutex_);
@@ -193,6 +314,19 @@ namespace jni
 
 	void DeviceAudioSource::AddSink(webrtc::AudioTrackSinkInterface * sink)
 	{
+		bool registered = false;
+
+		AddSinkLocked(sink, registered);
+
+		// Outside the lock: stopping the device joins its recording thread,
+		// which may be waiting for this lock to deliver audio.
+		if (registered) {
+			capture_->UpdateRecording();
+		}
+	}
+
+	void DeviceAudioSource::AddSinkLocked(webrtc::AudioTrackSinkInterface * sink, bool & registered)
+	{
 		webrtc::MutexLock lock(&mutex_);
 
 		if (sink == nullptr || std::find(sinks_.begin(), sinks_.end(), sink) != sinks_.end()) {
@@ -206,6 +340,7 @@ namespace jni
 		// this lock while holding its own.
 		if (sinks_.size() == 1) {
 			capture_->AddSource(webrtc::scoped_refptr<DeviceAudioSource>(this));
+			registered = true;
 		}
 	}
 
@@ -230,6 +365,11 @@ namespace jni
 			if (sinks_.empty()) {
 				released = capture_->RemoveSource(this);
 			}
+		}
+
+		// Outside the lock, see AddSink().
+		if (released) {
+			capture_->UpdateRecording();
 		}
 	}
 

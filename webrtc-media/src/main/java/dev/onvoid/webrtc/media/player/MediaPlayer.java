@@ -53,9 +53,8 @@ import dev.onvoid.webrtc.media.video.CustomVideoSource;
  * player.play();
  * }</pre>
  * <p>
- * A factory fed by this player is sending pushed audio, so it cannot also send
- * audio captured by its {@code AudioDeviceModule}. Use a separate factory if
- * an application needs both.
+ * The audio is pushed into its track, so the same factory may send the
+ * microphone beside it.
  *
  * @author Alex Andres
  */

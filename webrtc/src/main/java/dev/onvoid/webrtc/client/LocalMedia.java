@@ -124,9 +124,8 @@ public interface LocalMedia {
 	 *
 	 * @param label  the track label.
 	 * @param source the source that feeds the track. A {@link CustomAudioSource}
-	 *               needs a runtime built with {@link AudioMode#CUSTOM} or
-	 *               {@link AudioMode#HEADLESS}, any other source {@link
-	 *               AudioMode#DEVICES}.
+	 *               fits any runtime, any other source needs a runtime built
+	 *               with {@link AudioMode#DEVICES}.
 	 *
 	 * @return the track.
 	 *
@@ -141,9 +140,6 @@ public interface LocalMedia {
 	 * @param label the track label.
 	 *
 	 * @return the track.
-	 *
-	 * @throws ConfigurationException if the runtime's {@link AudioMode} is
-	 *                                {@link AudioMode#DEVICES}.
 	 */
 	CustomAudio customAudio(String label);
 

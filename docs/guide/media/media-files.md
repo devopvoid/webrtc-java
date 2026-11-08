@@ -87,14 +87,7 @@ if (source.getVideoSource() != null) {
 }
 ```
 
-::: warning A factory sends either pushed audio or captured audio
-A `PeerConnectionFactory` fed from this module is sending pushed audio and cannot also send audio captured by its `AudioDeviceModule`. Give such a factory a dummy audio layer, and use a second factory if an application needs both:
-
-```java
-AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
-PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
-```
-:::
+The audio of this module is pushed into its track, like that of a `CustomAudioSource`, so the same factory and peer connection can send the microphone beside it. A factory that sends only pushed audio never opens the recording device.
 
 ## Reading What a Source Contains
 

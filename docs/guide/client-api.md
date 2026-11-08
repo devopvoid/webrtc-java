@@ -72,15 +72,15 @@ Every timeout of the client API, these two as well as the gathering timeout and 
 
 ### Audio Modes
 
-WebRTC feeds the audio a factory captures into every audio sender of that factory, so captured audio and audio you push cannot be mixed in one runtime. The runtime's `AudioMode` picks one of them up front:
+The runtime's `AudioMode` decides whether it may open the microphone and where it plays remote audio. Every mode sends audio pushed through `CustomAudio`; each sender gets the audio of its own track, so a `DEVICES` runtime can send the microphone and pushed audio side by side, also on one peer:
 
 | Mode | Sends | Plays remote audio | Use it for |
 |---|---|---|---|
-| `DEVICES` | the microphone | to the speakers | calls on a desktop |
-| `CUSTOM` | audio pushed through `CustomAudio` | to the speakers | applications that generate or relay audio |
+| `DEVICES` | the microphone and audio pushed through `CustomAudio` | to the speakers | calls on a desktop |
+| `CUSTOM` | audio pushed through `CustomAudio`; the microphone is never opened | to the speakers | applications that generate or relay audio |
 | `HEADLESS` | audio pushed through `CustomAudio` | to `RemoteAudio.onAudio` handlers only | servers, bots and tests, without any audio hardware |
 
-Asking a runtime for the other kind fails at once with a `ConfigurationException` that names the mode, rather than when the first track is added. Two runtimes can run side by side if an application needs both kinds.
+Asking a `CUSTOM` or `HEADLESS` runtime for the microphone fails at once with a `ConfigurationException` that names the mode, rather than when the first track is added. The microphone is opened only while one of its tracks is sent.
 
 ## Peers and Signaling
 
@@ -475,7 +475,7 @@ Sender audioSender = peer.addTrack(microphone);
 | `microphone()`, `microphone(AudioOptions)` | The microphone, with echo cancellation, noise suppression and gain control unless `AudioOptions` say otherwise. `DEVICES` mode only. |
 | `screen(ScreenOptions)` | A screen or a window, as the [Desktop Video](/guide/video/desktop-capture) guide describes. |
 | `customVideo(String)` | Frames you push. |
-| `customAudio(String)` | Audio you push. `CUSTOM` and `HEADLESS` modes only. |
+| `customAudio(String)` | Audio you push, in every mode. |
 | `videoTrack(String, VideoTrackSource)`, `audioTrack(String, AudioTrackSource)` | A source of the core API, such as one the [media module](/guide/media/media-files) feeds. The source stays yours. |
 
 ```java

@@ -466,7 +466,7 @@ public interface LocalMedia {
     LocalAudio microphone(AudioOptions options);        // echo cancellation, noise suppression, gain control
     LocalVideo screen(ScreenOptions options);           // a screen or a window from devices()
     CustomVideo customVideo(String label);
-    CustomAudio customAudio(String label);              // AudioMode.CUSTOM or HEADLESS
+    CustomAudio customAudio(String label);              // any AudioMode
     LocalVideo videoTrack(String label, VideoTrackSource source);   // over a source of the core API
     LocalAudio audioTrack(String label, AudioTrackSource source);   // such as a MediaFileSource's
 }

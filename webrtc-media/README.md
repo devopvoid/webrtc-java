@@ -37,8 +37,8 @@ decoded pictures to a `CustomVideoSource` and 10 ms chunks to a `CustomAudioSour
 per frame. Frames are paced in real time and carry their own presentation times, so playback keeps
 the timing of the file rather than the timing of a thread.
 
-A factory that sends media from this module sends pushed audio, so it cannot also send audio
-captured by its `AudioDeviceModule`. Use a separate factory if you need both.
+The audio of this module is pushed into its track, so the same factory can send the microphone
+beside it.
 
 ## FFmpeg
 
