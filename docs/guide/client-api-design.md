@@ -40,7 +40,6 @@ Each row describes the core API, which stays as it is.
 | Signaling correctness is left to the app | Glare, rollback, candidates that arrive before the remote description (they fail silently with the plain `addIceCandidate`), and `onRenegotiationNeeded` firing mid-negotiation. | Built-in perfect negotiation with a polite/impolite role, candidate queuing, and a browser-compatible JSON message format. |
 | Manual disposal of query results | Every `RTCRtpSender`, `RTCRtpReceiver` and `RTCRtpTransceiver` returned to the app must be disposed, sources are not owned by tracks, and the factory has to outlive its connections. | No `dispose()` in the API. Everything is `AutoCloseable`, owned by its creator, and closed in the right order. |
 | Receive-only needs a dummy track | A WHEP client creates a `VideoDeviceSource` and a `VideoTrack` only to pass them to a `RECV_ONLY` transceiver. | `PeerOptions.receive(VIDEO, AUDIO)`. |
-| Audio input mode is found at run time | Mixing device and custom audio in one factory throws `IllegalStateException` on the first track of the other kind. | `AudioMode` is chosen when the runtime is built. The wrong call fails at once with a message naming the mode. |
 | Device queries can block the caller | The guides say to query devices on worker threads, never on UI or render threads. | `Devices` is a snapshot kept current in the background, so reading it is cheap on any thread. |
 
 ## Before and after
@@ -148,6 +147,7 @@ and it hands on to the event executor what the application should hear.
 | Encoded transforms | a thread of each sender and receiver | Better not. A slow transform delays its own frames. A frame it throws on is dropped, and the first such failure reaches `onError`. |
 | Native calls | internal control threads | Not application code. Each operation has a timeout (default 30 s), so a stuck native call fails with a `TimeoutException` instead of hanging. The peer then brings signaling back to stable, and gives up if that fails too. |
 | WHIP and WHEP requests | `java.net.http.HttpClient`, never the control pool | Not application code. A slow server holds up no peer. |
+| `FileTransfers` handlers, file reads and writes | a thread of each `FileTransfers`, never the peer's event thread | Yes, but it delays the other transfers of that channel. |
 | WebRTC callbacks | signaling, network and capture threads | Not application code. The library copies and enqueues only. |
 
 ### Guarantees
@@ -242,14 +242,17 @@ public final class WebRtc implements AutoCloseable {
 }
 
 public enum AudioMode {
-    DEVICES,    // capture the microphone, play to the speakers
-    CUSTOM,     // send audio you push, play remote audio to the speakers
+    DEVICES,    // send the microphone and audio you push, play to the speakers
+    CUSTOM,     // send audio you push, never open the microphone, play to the speakers
     HEADLESS    // no audio hardware: send audio you push, read remote audio through onAudio
 }
 ```
 
-- `AudioMode` moves the factory's device-or-custom rule to build time. `media().microphone()` on a
-  `CUSTOM` runtime throws `ConfigurationException` saying why.
+- `AudioMode` decides when the runtime is built whether it may open the microphone and where it
+  plays remote audio. Every mode sends audio pushed through `CustomAudio`. Each sender gets the
+  audio of its own track, so a `DEVICES` runtime sends the microphone and pushed audio side by side,
+  also on one peer. `media().microphone()` on a `CUSTOM` or `HEADLESS` runtime throws
+  `ConfigurationException` saying why, rather than failing when the track is sent.
 - `HEADLESS` uses `HeadlessAudioDeviceModule`, so servers and bots run without audio hardware.
 - Library threads are daemon threads. On the runtime's own event pool a thread takes the name of
   the peer it works for (`webrtc-client-events-alice`), so thread dumps show which peer is busy.
@@ -294,6 +297,7 @@ public final class PeerOptions {
         public Builder relayOnly(boolean relayOnly);                     // TURN candidates only
         public Builder signaling(Signaling signaling);                   // required with Negotiation.AUTOMATIC
         public Builder polite(boolean polite);                           // perfect negotiation role, default false
+        public Builder recovery(RecoveryPolicy policy);                  // ICE recovery, off by default
         public Builder negotiation(Negotiation negotiation);             // AUTOMATIC by default, or MANUAL
         public Builder receive(MediaKind... kinds);                      // receive-only audio and video
         public Builder gatheringTimeout(Duration timeout);               // the longest Gathering.COMPLETE waits, default 3 s
@@ -347,6 +351,7 @@ public interface Peer extends AutoCloseable {
     Negotiator negotiator();                                   // MANUAL mode only
     CompletableFuture<PeerStats> stats();
     Subscription onStats(Duration interval, Consumer<PeerStats> handler);
+    Subscription onDiagnostics(Duration interval, Consumer<PeerDiagnostics> handler);  // the first diagnosis, then changes
     void restartIce();
 
     // Escape hatch: runs on the operation queue with the underlying connection.
@@ -361,7 +366,7 @@ public enum PeerState { NEW, CONNECTING, CONNECTED, DISCONNECTED, FAILED, CLOSED
 ```
 
 - `PeerState` folds `RTCPeerConnectionState` into six values. `DISCONNECTED` can recover by
-  itself. `FAILED` needs `restartIce()` or a new peer.
+  itself. `FAILED` needs `restartIce()`, a `RecoveryPolicy`, or a new peer.
 - `addTrack` returns the `Sender` handle right away. If the native call fails, the error goes to
   `onError` and the sender's futures fail.
 - `addTrack` without stream ids puts every such track of a peer into one shared stream, so a browser
@@ -370,6 +375,48 @@ public enum PeerState { NEW, CONNECTING, CONNECTED, DISCONNECTED, FAILED, CLOSED
   waits, from a thread that is not an event thread.
 - Objects obtained inside `withNative` are owned by the caller, as in the low-level API, and must
   not be used after the function returns.
+
+### ICE recovery
+
+Recovery is opt-in and stays on the same peer. A policy restarts ICE, and nothing else: it never
+reconnects signaling, creates a new peer or session, or replaces tracks and channels. Those are
+the application's to decide, since only it knows its signaling and its users.
+
+```java
+public final class RecoveryPolicy {
+
+    public static Builder builder();
+
+    public static final class Builder {
+        public Builder grace(Duration value);                    // after DISCONNECTED, default 2 s; FAILED starts at once
+        public Builder backoff(Duration initial, Duration maximum);  // doubles after each failed attempt
+        public Builder maxAttempts(int value);                   // per outage, default 3
+        public Builder attemptTimeout(Duration value);           // default 15 s, credentials and signaling included
+        public Builder iceServers(Function<Integer, ? extends CompletionStage<List<RTCIceServer>>> provider);
+        public Builder onEvent(Consumer<RecoveryEvent> handler);
+        public RecoveryPolicy build();
+    }
+}
+
+public final class RecoveryEvent {
+
+    public enum State { WAITING, ATTEMPTING, RETRYING, RECOVERED, EXHAUSTED }
+
+    public State state();
+    public int attempt();                   // in this outage, from 1; 0 for a recovery during the grace
+    public Throwable cause();               // the last failure, on RETRYING and EXHAUSTED
+}
+```
+
+- Only `CONNECTED` counts as recovered, not a signaling exchange that went through. It resets the
+  budget, also after `EXHAUSTED`, which leaves the peer open and tries no more until then.
+- Attempts never overlap: repeated failures during one start no second restart, and an HTTP
+  restart still out finishes before the next begins.
+- `iceServers` fetches fresh TURN credentials before an attempt. Its list replaces all ICE servers.
+  It and the events run on the peer's event executor.
+- `whenConnected()` keeps meaning the first connection. A later one is a `RECOVERED` event.
+- Automatic peers take a policy through `PeerOptions`. `Whip` and `Whep` take one for their
+  sessions, which then restart by PATCH on the same session.
 
 ### `Signaling` and `SignalMessage`
 
@@ -629,6 +676,10 @@ Encoding.builder().maxBitrate(1_500_000).maxFrameRate(30).scaleDownBy(1.0).build
 - Transforms see every encoded frame, after the encoder or before the decoder, as end-to-end
   encryption needs. `PeerOptions` sets them before the first frame. A first transform set on a video
   sender that already sends restarts its encoder, which costs a key frame.
+- `PeerOptions.e2ee(KeyProvider)` takes the place of both transforms with SFrame encryption: an
+  encryptor per sender and a decryptor per remote track, which handle key changes, replay and key
+  frame requests. The peer then negotiates only the video codecs that can be encrypted, VP8, VP9 and
+  AV1. Frames that fail go to the key provider's listener, not to `onError`.
 
 ### `DataChannel`
 
@@ -657,6 +708,8 @@ public final class Message {
     public String text();                                      // UTF-8
     public byte[] bytes();                                     // a copy you own
     public int size();
+    public String preview(int maxBytes);                       // for logs: escaped text, or hex
+    public String preview(int maxBytes, UnaryOperator<String> mask);
 }
 ```
 
@@ -673,6 +726,82 @@ ChannelOptions.builder().ordered(false).maxRetransmits(0).protocol("json").negot
   beats filling memory or dropping messages unnoticed.
 - The buffer that `RTCDataChannelObserver.onMessage` passes is copied into `Message`. Nothing a
   handler gets refers to native memory.
+- `Message.toString()` gives the type and the length only, so logging a message never leaks what it
+  carries. `preview` shows content when asked for, and can mask it first.
+
+### `FileTransfers`
+
+Files over a data channel, in the package `dev.onvoid.webrtc.client.transfer`. A `send` future of
+a channel says only that the data reached the transport. Transfers need more: confirmation by the
+receiver, bounded memory on both sides, and a way to go on after the connection broke.
+
+```java
+public final class FileTransfers implements AutoCloseable {
+
+    public static FileTransfers over(DataChannel channel);  // takes the channel over
+    public static FileTransfers over(DataChannel channel, TransferOptions options);
+
+    public OutgoingTransfer send(Path file) throws IOException;
+    public OutgoingTransfer send(Path file, String name) throws IOException;
+    public OutgoingTransfer resume(OutgoingTransfer previous) throws IOException;  // over a new channel
+    public Subscription onOffer(Consumer<TransferOffer> handler);
+    public CompletableFuture<Void> whenClosed();
+    @Override
+    public void close();
+}
+
+public final class TransferOffer {
+
+    public String id();
+    public String name();
+    public long size();
+    public String safeFileName();           // the name, made safe to use as a file name
+    public IncomingTransfer accept(Path target);
+    public void reject(String reason);
+}
+
+public interface Transfer {
+
+    String id();
+    String name();
+    long size();
+    Path file();
+    TransferProgress progress();
+    Subscription onProgress(Consumer<TransferProgress> handler);
+    CompletableFuture<Void> whenDone();     // the receiver has the whole file, checked
+    void cancel();
+}
+
+public interface OutgoingTransfer extends Transfer { }
+
+public interface IncomingTransfer extends Transfer {
+
+    Path partialFile();                     // where the file grows until it is complete
+}
+
+public final class TransferOptions {
+
+    public static TransferOptions defaults();
+    public static Builder builder();
+
+    public static final class Builder {
+        public Builder chunkSize(int bytes);
+        public Builder window(int bytes);   // the most the sender has out unconfirmed
+        public Builder resumable(boolean resumable);
+        public TransferOptions build();
+    }
+}
+```
+
+- `FileTransfers` takes the channel over on both sides: nothing else may be sent on it.
+- The receiver confirms what it wrote, and the sender never has more than the receiver's window out
+  unconfirmed, so a slow disk slows the sender instead of filling memory.
+- A transfer is done once the receiver found the SHA-256 of the whole file to match and moved the
+  file into place.
+- Files go one at a time in each direction, in the order they were sent, and both sides may send
+  at once.
+- A channel that closes fails transfers with a resumable `TransferException`. The sender resumes
+  over a new channel, and the receiver goes on where it stopped once it accepts with the same target.
 
 ### `PeerStats`
 
@@ -695,9 +824,39 @@ public final class PeerStats {
     public double recentPacketLoss();       // since the previous sample, -1 without one
     public List<VideoStats> outboundVideo();// trackId, width, height, framesPerSecond, codec, qualityLimitation
     public List<VideoStats> inboundVideo();
-    public RTCStatsReport report();         // everything else
+    public List<AudioStats> outboundAudio();// codec, jitter, concealment, audio level, sample counts
+    public List<AudioStats> inboundAudio();
+    public PeerDiagnostics diagnostics();
+    public String diagnosticReport();       // JSON for support, from an allowlist
+    public RTCStatsReport report();         // everything else, sensitive parts included
+}
+
+public final class PeerDiagnostics {
+
+    public enum State { OBSERVING, HEALTHY, DEGRADED }
+
+    public Instant timestamp();
+    public State state();
+    public Set<QualityCondition> conditions();
+}
+
+public enum QualityCondition {
+    VIDEO_CPU_LIMITED, HIGH_PACKET_LOSS, TURN_IN_USE, AUDIO_PACKETS_WITHOUT_PCM;
+
+    public String reason();
+    public boolean isProblem();             // false for TURN_IN_USE, which is only informational
 }
 ```
+
+- A diagnosis names conditions with their reason instead of a combined score, which would hide
+  why a call is bad. `HEALTHY` means no problem the library knows was confirmed, not that all works.
+- A problem is confirmed, and cleared, only over three measurements spanning at least three seconds.
+  Packet loss enters at 5% and clears at 2%, so a value near one threshold does not flap. A gap of
+  over five seconds or a clock that went back starts the history again (`OBSERVING`).
+- `stats()`, `onStats` and `onDiagnostics` share one history per peer. `onDiagnostics` hands out the
+  first diagnosis, then only changes to its state or conditions.
+- `diagnosticReport()` can go into a support ticket as it is. It leaves out raw stats, ids,
+  addresses, ports, URLs, credentials, SDP, certificates and codec parameters.
 
 ### `Whip` and `Whep`
 
@@ -723,6 +882,8 @@ public final class Whip {
         public Builder gathering(Gathering gathering);
         public Builder timeout(Duration timeout);
         public Builder sendTransform(RTCEncodedFrameTransformer transform);
+        public Builder e2ee(KeyProvider keys);       // the server forwards what it cannot read
+        public Builder recovery(RecoveryPolicy policy);
         public CompletableFuture<Session> publish(WebRtc rtc);
     }
 }
@@ -742,6 +903,8 @@ public final class Whep {
         public Builder gathering(Gathering gathering);
         public Builder timeout(Duration timeout);
         public Builder receiveTransform(RTCEncodedFrameTransformer transform);
+        public Builder e2ee(KeyProvider keys);
+        public Builder recovery(RecoveryPolicy policy);
         public CompletableFuture<Boolean> detect(WebRtc rtc);    // does the endpoint serve WHEP?
         public CompletableFuture<Session> play(WebRtc rtc);
     }
@@ -758,7 +921,8 @@ public void close();                                 // ends the session on the 
 
 - The offer goes out at once, without candidates, and candidates follow by PATCH. The peer takes the
   ICE servers the endpoint names unless the builder named its own.
-- The session restarts ICE by itself when the connection breaks, or by `session.restartIce()`.
+- The session restarts ICE by itself when the connection breaks, or by `session.restartIce()`. A
+  `RecoveryPolicy` replaces the built-in rule, and still restarts by PATCH on the same session.
 - Requests go through `java.net.http.HttpClient` and never run on the control pool. Each has a
   deadline for all of it, and the session's timeout or a cancel aborts what is out.
 - Failures with a status are `HttpStatusException`s, with the problem details the server sent.
@@ -780,6 +944,8 @@ public class BlockingCallException extends WebRtcException { }   // join() or ge
 public class ChannelFullException extends WebRtcException { }    // a send beyond channelSendLimit
 public class AudioQueueFullException extends WebRtcException { } // a push beyond queueLimit, with AudioOverflow.REJECT
 public class HttpStatusException extends WebRtcException { }     // a WHIP or WHEP endpoint answered with an error
+public class TransferException extends WebRtcException { }       // a file transfer failed; isResumable() says if it can go on
+public class TransferCancelledException extends TransferException { }
 ```
 
 ## Scenarios
@@ -900,12 +1066,17 @@ Anything the client API doesn't cover stays reachable through `withNative` and
 | `PeerStats` | `getStats(RTCStatsCollectorCallback)`, `RTCStatsReport` |
 | `Whip`, `Whep` | a peer with `Negotiation.MANUAL`, `java.net.http.HttpClient` |
 | `transform` on senders and tracks | `RTCEncodedFrameTransformer` |
+| `e2ee` | the SFrame encryptors and decryptors of `dev.onvoid.webrtc.e2ee` |
+| `RecoveryPolicy` | `restartIce()` on the same peer, or a PATCH of the WHIP or WHEP session |
+| `PeerDiagnostics`, `AudioStats` | samples of `RTCStatsReport` |
+| `FileTransfers` | a `DataChannel`, with a protocol of its own on top |
 
 ## Implementation
 
 The package lives in `webrtc/src/main/java/dev/onvoid/webrtc/client/`, with tests in
-`webrtc/src/test/java/dev/onvoid/webrtc/client/`. `module-info.java` exports it, and exports
-`dev.onvoid.webrtc.client.internal` to the media module only: `EncodedFrames` hands `MediaRecorder`
+`webrtc/src/test/java/dev/onvoid/webrtc/client/`. `module-info.java` exports it and
+`dev.onvoid.webrtc.client.transfer`, and exports `dev.onvoid.webrtc.client.internal` to the media
+module only: `EncodedFrames` hands `MediaRecorder`
 the encoded frames of senders and remote tracks, taken on the peer's control executor. `VideoView`
 lives in `webrtc-java-swing` (package `dev.onvoid.webrtc.client.swing`), so that the core module does
 not need `java.desktop`, and in `webrtc-java-javafx` (`dev.onvoid.webrtc.client.javafx`), where
@@ -920,7 +1091,8 @@ How the threading model is built:
   *event* executor runs application code and owns what the handlers have been told so far.
 - `PeerImpl` holds the two together and leaves the rest to classes of their own: `OperationChain`,
   `PerfectNegotiation`, `ManualNegotiation`, `NegotiationSteps`, `RemoteTracks`, `DataChannels`,
-  `StatsSampler` and `SignalingLink`.
+  `StatsSampler`, `SignalingLink` and `IceRecovery`. All of them run on the peer's control executor,
+  and so does `DiagnosticsReader`, which keeps the history of a peer's diagnosis.
 - Operations that the standard puts on the operations chain go through `OperationChain.enqueue`,
   which starts one only after the previous one finished and fails it after `operationTimeout`.
 - Native observer completions are posted back to the control executor before anything is chained
