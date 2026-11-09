@@ -125,6 +125,17 @@ class TestCall implements AutoCloseable {
 	}
 
 	/**
+	 * Stops giving the caller media, and waits for what it has encoded to
+	 * have been sent, so that its senders send nothing more.
+	 */
+	void stopFeeding() throws InterruptedException {
+		feeding = false;
+		feeder.join();
+
+		Thread.sleep(500);
+	}
+
+	/**
 	 * Makes the caller send its video in the named codec from now on, by
 	 * preferring it and negotiating the call again.
 	 */

@@ -481,6 +481,8 @@ class SegmentedRecorderTest {
 
 		try (TestCall call = new TestCall(factory);
 				MediaRecorder recorder = new MediaRecorder(options)) {
+			call.stopFeeding();
+
 			recorder.addTrack(call.getVideoSender());
 			recorder.start();
 
