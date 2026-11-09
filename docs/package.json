@@ -2,8 +2,10 @@
   "name": "webrtc-java-docs",
   "scripts": {
     "dev": "vitepress dev",
+    "prebuild": "node scripts/check-client-api-design.mjs",
     "build": "vitepress build",
-    "preview": "vitepress preview"
+    "preview": "vitepress preview",
+    "check:design": "node scripts/check-client-api-design.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",
