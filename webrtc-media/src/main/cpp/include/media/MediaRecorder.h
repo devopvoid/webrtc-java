@@ -280,6 +280,11 @@ namespace ffmpeg
 			// Asks every video track that is ready for a key frame.
 			void RequestKeyFrames();
 
+			// Forgets a key frame request of the track that the key frame it
+			// just sent answers, so that the request does not go out later,
+			// and hold up the next one that is needed.
+			void KeyFrameArrived(int track);
+
 			// Counts a frame that was dropped on the writer thread on the way
 			// to its track's next key frame.
 			void CountAwaitingKeyFrame(int track);

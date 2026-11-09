@@ -797,6 +797,12 @@ namespace ffmpeg
 			Write(*output_, frame);
 		}
 
+		// A request still held back from while the rotation was due is
+		// answered by this key frame.
+		if (video && frame.key_frame && switched_[index] && !rotation_due_) {
+			KeyFrameArrived(index);
+		}
+
 		if (!failed_ && !rotation_due_ && SegmentLimitReached()) {
 			DueRotation();
 		}
@@ -1007,6 +1013,19 @@ namespace ffmpeg
 			if (track.GetStatus() == RecorderTrack::Status::kReady && track.IsVideo()) {
 				WantKeyFrameLocked(inputs_[i].get());
 			}
+		}
+	}
+
+	void MediaRecorder::KeyFrameArrived(int track)
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+
+		Input * input = inputs_[track].get();
+
+		// A track that waits for a key frame again, having dropped frames
+		// since this one was queued, still needs another.
+		if (!input->waiting_for_key_frame) {
+			input->key_frame_wanted = false;
 		}
 	}
 
