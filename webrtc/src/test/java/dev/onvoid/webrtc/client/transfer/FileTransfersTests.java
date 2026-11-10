@@ -337,11 +337,19 @@ class FileTransfersTests {
 
 		Path source = randomFile("fresh", 50 * 1024);
 		Path target = dir.resolve("fresh.out");
-		CompletableFuture<IncomingTransfer> incoming = acceptInto(receiver, target);
+		CompletableFuture<IncomingTransfer> incoming = new CompletableFuture<>();
+		receiver.onOffer(offer -> {
+			// A partial file of the same transfer, from before, is not continued.
+			// Written before the accept, which opens it.
+			try {
+				Files.write(dir.resolve("fresh.out." + offer.id().substring(0, 16) + ".part"), new byte[10 * 1024]);
+				incoming.complete(offer.accept(target));
+			}
+			catch (IOException e) {
+				incoming.completeExceptionally(e);
+			}
+		});
 		OutgoingTransfer outgoing = sender.send(source);
-
-		// A partial file of the same transfer, from before, is not continued.
-		Files.write(dir.resolve("fresh.out." + outgoing.id().substring(0, 16) + ".part"), new byte[10 * 1024]);
 
 		await(outgoing.whenDone());
 		await(await(incoming).whenDone());
