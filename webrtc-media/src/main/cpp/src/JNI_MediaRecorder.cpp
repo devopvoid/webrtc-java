@@ -229,6 +229,18 @@ JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_s
 	});
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_sync
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	if (handle == 0) {
+		return;
+	}
+
+	ffmpeg::CallFromJava(env, [&]() {
+		RecorderOf(handle)->Sync();
+	});
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_dispose
 (JNIEnv * env, jclass caller, jlong handle)
 {

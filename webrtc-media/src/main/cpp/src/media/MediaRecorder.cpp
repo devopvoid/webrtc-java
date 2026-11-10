@@ -346,6 +346,27 @@ namespace ffmpeg
 		return true;
 	}
 
+	void MediaRecorder::Sync()
+	{
+		std::unique_lock<std::mutex> lock(mutex_);
+
+		if (!started_ || writer_ended_) {
+			return;
+		}
+
+		// The round under way may have taken its frames before the call, and
+		// the next one handles whatever is left. A key frame wanted while
+		// handling them is asked for only at the start of the round after.
+		const uint64_t target = loops_ + 3;
+
+		while (loops_ < target && !writer_ended_) {
+			poke_ = true;
+			wake_.notify_one();
+
+			looped_.wait(lock);
+		}
+	}
+
 	void MediaRecorder::RemoveObservers()
 	{
 		for (const auto & input : inputs_) {
@@ -632,12 +653,16 @@ namespace ffmpeg
 
 			lock.lock();
 
+			loops_++;
+			looped_.notify_all();
+
 			if (stopping && queue_.empty() && save_requests_.empty()) {
 				break;
 			}
 		}
 
 		writer_ended_ = true;
+		looped_.notify_all();
 
 		lock.unlock();
 
@@ -1504,6 +1529,7 @@ namespace ffmpeg
 
 			accepting_ = false;
 			writer_ended_ = true;
+			looped_.notify_all();
 			queue_.swap(dropped);
 			queued_bytes_ = 0;
 			save_requests_.swap(saves);

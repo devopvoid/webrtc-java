@@ -26,6 +26,7 @@ import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpSender;
 import dev.onvoid.webrtc.client.RemoteTrack;
 import dev.onvoid.webrtc.client.Sender;
+import dev.onvoid.webrtc.internal.NativeApi;
 
 /**
  * Keeps the last seconds of what a peer connection sends or receives in
@@ -103,6 +104,14 @@ public class ReplayBuffer implements AutoCloseable {
 	 * @throws IOException If the native buffer cannot be created.
 	 */
 	public ReplayBuffer(Duration window, long maxBytes) throws IOException {
+		this(window, maxBytes, NativeApi.tableAddress());
+	}
+
+	/**
+	 * Creates a buffer that takes its frames and its clock from the given
+	 * webrtc-java function table, as the tests do.
+	 */
+	ReplayBuffer(Duration window, long maxBytes, long tableAddress) throws IOException {
 		Objects.requireNonNull(window, "Window is null");
 
 		if (window.compareTo(Duration.ofSeconds(1)) < 0) {
@@ -113,7 +122,7 @@ public class ReplayBuffer implements AutoCloseable {
 		}
 
 		this.window = window;
-		this.recorder = MediaRecorder.replayBuffer(window, maxBytes);
+		this.recorder = MediaRecorder.replayBuffer(window, maxBytes, tableAddress);
 	}
 
 	/**
@@ -192,6 +201,20 @@ public class ReplayBuffer implements AutoCloseable {
 	 */
 	public void addTrack(RemoteTrack track) {
 		recorder.addTrack(track);
+	}
+
+	/**
+	 * @see MediaRecorder#addEncodedFrames(long, Runnable)
+	 */
+	void addEncodedFrames(long frames, Runnable keyFrameRequest) {
+		recorder.addEncodedFrames(frames, keyFrameRequest);
+	}
+
+	/**
+	 * @see MediaRecorder#sync()
+	 */
+	void sync() throws InterruptedException {
+		recorder.sync();
 	}
 
 	/**

@@ -271,6 +271,14 @@ public class MediaRecorder implements AutoCloseable {
 	 * @throws IOException         If the directory cannot be read.
 	 */
 	public MediaRecorder(SegmentOptions segments) throws IOException {
+		this(segments, NativeApi.tableAddress());
+	}
+
+	/**
+	 * Creates a recorder for segments that takes its frames and its clock
+	 * from the given webrtc-java function table, as the tests do.
+	 */
+	MediaRecorder(SegmentOptions segments, long tableAddress) throws IOException {
 		Objects.requireNonNull(segments, "Segments are null");
 
 		if (!Files.isDirectory(segments.getDirectory())) {
@@ -285,24 +293,27 @@ public class MediaRecorder implements AutoCloseable {
 		this.segments = segments;
 		this.replay = false;
 		this.handle = createSegments(segments.pathPrefix(), segments.nameSuffix(), segments.width(),
-				segments.nextIndex(), maxDurationUs, segments.getMaxSize(), NativeApi.tableAddress());
+				segments.nextIndex(), maxDurationUs, segments.getMaxSize(), tableAddress);
 	}
 
-	/** A recorder for a {@link ReplayBuffer}. */
-	private MediaRecorder(Duration window, long maxBytes) throws IOException {
+	/**
+	 * A recorder for a {@link ReplayBuffer}, which takes its frames and its
+	 * clock from the given webrtc-java function table.
+	 */
+	private MediaRecorder(Duration window, long maxBytes, long tableAddress) throws IOException {
 		this.file = null;
 		this.output = null;
 		this.segments = null;
 		this.replay = true;
-		this.handle = createReplay(window.toNanos() / 1000, maxBytes, NativeApi.tableAddress());
+		this.handle = createReplay(window.toNanos() / 1000, maxBytes, tableAddress);
 	}
 
 	/**
 	 * Creates the recorder of a replay buffer, which keeps what arrives in
 	 * memory for {@link #saveReplay(Path)}.
 	 */
-	static MediaRecorder replayBuffer(Duration window, long maxBytes) throws IOException {
-		return new MediaRecorder(window, maxBytes);
+	static MediaRecorder replayBuffer(Duration window, long maxBytes, long tableAddress) throws IOException {
+		return new MediaRecorder(window, maxBytes, tableAddress);
 	}
 
 	/**
@@ -764,10 +775,66 @@ public class MediaRecorder implements AutoCloseable {
 					+ "does not allow recording the decrypted media");
 		}
 
+		attach(frames, keyFrameRequest);
+	}
+
+	/**
+	 * Records the frames behind a handle of the function table this recorder
+	 * was created with, as the tests do with frames of their own, which no
+	 * sender or receiver stands behind.
+	 *
+	 * @param frames          The handle, whose reference the recorder takes
+	 *                        over.
+	 * @param keyFrameRequest How to ask the track for a key frame.
+	 */
+	void addEncodedFrames(long frames, Runnable keyFrameRequest) {
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+
+			attach(frames, keyFrameRequest);
+		}
+	}
+
+	private void attach(long frames, Runnable keyFrameRequest) {
 		// The native recorder takes over the reference the handle carries.
 		addTrack(handle, frames);
 
 		keyFrameRequests.add(keyFrameRequest);
+	}
+
+	/**
+	 * Waits until the writer has handled every frame taken so far, and the
+	 * listener has been told what came of it, and the tracks asked for key
+	 * frames. For tests, which drive the recorder with frames and a clock of
+	 * their own, and look at what it made of them in between.
+	 */
+	void sync() throws InterruptedException {
+		long recorder;
+		ExecutorService executor;
+
+		synchronized (lock) {
+			recorder = handle;
+			executor = events;
+		}
+
+		// Outside the lock: the writer calls back into this recorder.
+		sync(recorder);
+
+		if (executor == null) {
+			return;
+		}
+
+		try {
+			// What the writer posted before runs first.
+			executor.submit(() -> { }).get();
+		}
+		catch (RejectedExecutionException e) {
+			// Stopped: what was posted before runs before the thread ends.
+			executor.awaitTermination(10, TimeUnit.SECONDS);
+		}
+		catch (ExecutionException e) {
+			throw new IllegalStateException(e.getCause());
+		}
 	}
 
 	private void checkState(MediaRecorderState expected) {
@@ -947,6 +1014,8 @@ public class MediaRecorder implements AutoCloseable {
 	private native long createReplay(long windowUs, long maxBytes, long tableAddress) throws IOException;
 
 	private static native boolean saveReplay(long handle, int id, String path);
+
+	private static native void sync(long handle);
 
 	private static native int addTrack(long handle, long frames);
 
