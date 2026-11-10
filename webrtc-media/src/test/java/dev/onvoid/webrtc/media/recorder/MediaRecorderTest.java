@@ -16,6 +16,11 @@
 
 package dev.onvoid.webrtc.media.recorder;
 
+import static dev.onvoid.webrtc.media.recorder.SegmentedRecorderTest.assertStreams;
+import static dev.onvoid.webrtc.media.recorder.SegmentedRecorderTest.audio;
+import static dev.onvoid.webrtc.media.recorder.SegmentedRecorderTest.millis;
+import static dev.onvoid.webrtc.media.recorder.SegmentedRecorderTest.seconds;
+import static dev.onvoid.webrtc.media.recorder.SegmentedRecorderTest.video;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -60,8 +65,15 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
- * Tests recording a call between two local peer connections, checked by
- * reading the recorded file back.
+ * Tests recording into a single file, checked by reading the file back.
+ * <p>
+ * Most tests feed the recorder {@link FakeTrack frames of their own} on a
+ * {@link FakeFeed clock of their own}, as in {@link SegmentedRecorderTest},
+ * so that what goes into the file, what is dropped and when a fault strikes
+ * follow from the frames alone. A few record a call between two local peer
+ * connections, for what only WebRTC's own tracks can show: a receiver asked
+ * for a key frame, and end-to-end encryption. How fast the call runs is up to
+ * the machine, so they check only what holds however fast it runs.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @Execution(ExecutionMode.SAME_THREAD)
@@ -93,13 +105,150 @@ class MediaRecorderTest {
 	}
 
 	@Test
+	void recordsIntoMatroska() throws Exception {
+		Path file = tempDir.resolve("tracks.mkv");
+		Listener listener = new Listener();
+
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video, audio);
+
+			recorder.setListener(listener);
+			video.addTo(recorder);
+			audio.addTo(recorder);
+			recorder.start();
+
+			assertEquals(MediaRecorderState.RECORDING, recorder.getState());
+
+			feed.play(seconds(3));
+
+			assertEquals(0, listener.started.getCount(), "not started");
+			assertNull(recorder.getResult());
+
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderState.STOPPED, recorder.getState());
+			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
+			assertEquals(file.toAbsolutePath(), recorder.getFile());
+			assertEquals(0, video.observers());
+			assertEquals(0, audio.observers());
+
+			recorder.sync();
+		}
+
+		assertNull(listener.error.get());
+		assertEquals(Collections.emptyList(), listener.warnings);
+
+		assertStreams(file, video(75, 0, 2960), audio(150, 0, 2980));
+
+		MediaInfo info = readInfo(file);
+
+		assertEquals("vp8", info.getVideoCodec());
+		assertEquals(FakeTrack.WIDTH, info.getVideoWidth());
+		assertEquals(FakeTrack.HEIGHT, info.getVideoHeight());
+		assertEquals("opus", info.getAudioCodec());
+		assertEquals(48000, info.getSampleRate());
+	}
+
+	@Test
+	void recordsIntoWebm() throws Exception {
+		Path file = tempDir.resolve("tracks.webm");
+
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video, audio);
+
+			video.addTo(recorder);
+			audio.addTo(recorder);
+			recorder.start();
+
+			feed.play(seconds(1));
+
+			assertTrue(recorder.stop());
+		}
+
+		assertStreams(file, video(25, 0, 960), audio(50, 0, 980));
+
+		MediaInfo info = readInfo(file);
+
+		assertEquals("vp8", info.getVideoCodec());
+		assertEquals("opus", info.getAudioCodec());
+	}
+
+	@Test
+	void leavesOutTrackWithoutMediaAtFirst() throws Exception {
+		Path file = tempDir.resolve("late.mkv");
+		Listener listener = new Listener();
+
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video, audio);
+
+			feed.pause(audio);
+
+			recorder.setListener(listener);
+			video.addTo(recorder);
+			audio.addTo(recorder);
+			recorder.start();
+
+			// The file waits three seconds for the audio, then begins without
+			// it, from the first video frame; audio that comes later has no
+			// stream to go into.
+			feed.playUntil(seconds(4));
+			feed.resume(audio);
+			feed.playUntil(seconds(5));
+
+			assertTrue(recorder.stop());
+
+			recorder.sync();
+		}
+
+		assertStreams(file, video(125, 0, 4960));
+		assertEquals(List.of("Track 1 had no media to record when the recording began, and is left out"),
+				listener.warnings);
+	}
+
+	@Test
+	void leavesOutTrackThatChangesItsCodec() throws Exception {
+		Path file = tempDir.resolve("changed.mkv");
+		Listener listener = new Listener();
+
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video, audio);
+
+			recorder.setListener(listener);
+			video.addTo(recorder);
+			audio.addTo(recorder);
+			recorder.start();
+
+			feed.playUntil(seconds(2));
+			video.switchCodec("video/VP9");
+			feed.playUntil(seconds(4));
+
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
+
+			recorder.sync();
+		}
+
+		// A stream in a file keeps its codec: the video ends at the change,
+		// and the audio goes on.
+		assertStreams(file, video(50, 0, 1960), audio(200, 0, 3980));
+		assertEquals(List.of("Track 0 changed its codec and is no longer recorded"), listener.warnings);
+	}
+
+	@Test
 	void recordsReceivedCallIntoMatroska() throws Exception {
 		Path file = tempDir.resolve("received.mkv");
 		Listener listener = new Listener();
 
 		try (TestCall call = new TestCall(factory)) {
 			// Well into the call, so that the receiver has had its key frame
-			// long ago and the recorder has to ask for one.
+			// long ago and the recorder has to ask the sender for one.
 			Thread.sleep(1500);
 
 			RTCRtpReceiver video = call.getReceiver(0);
@@ -111,14 +260,11 @@ class MediaRecorderTest {
 				recorder.addTrack(audio);
 				recorder.start();
 
-				assertEquals(MediaRecorderState.RECORDING, recorder.getState());
 				assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-				assertNull(recorder.getResult());
 
 				Thread.sleep(RECORD_MS);
 
 				assertTrue(recorder.stop());
-				assertEquals(MediaRecorderState.STOPPED, recorder.getState());
 				assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
 			}
 			finally {
@@ -132,14 +278,40 @@ class MediaRecorderTest {
 
 		MediaInfo info = readInfo(file);
 
-		assertTrue(info.hasVideo());
-		assertTrue(info.hasAudio());
 		assertEquals("vp8", info.getVideoCodec());
 		assertEquals(TestCall.WIDTH, info.getVideoWidth());
 		assertEquals(TestCall.HEIGHT, info.getVideoHeight());
 		assertEquals("opus", info.getAudioCodec());
 		assertEquals(48000, info.getSampleRate());
-		assertDuration(info);
+		assertTrue(info.getDurationUs() > 0, "duration: " + info.getDurationUs());
+	}
+
+	@Test
+	void recordsSentCallIntoWebm() throws Exception {
+		Path file = tempDir.resolve("sent.webm");
+		Listener listener = new Listener();
+
+		try (TestCall call = new TestCall(factory);
+				MediaRecorder recorder = new MediaRecorder(file)) {
+			recorder.setListener(listener);
+			recorder.addTrack(call.getVideoSender());
+			recorder.addTrack(call.getAudioSender());
+			recorder.start();
+
+			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+
+			Thread.sleep(RECORD_MS);
+
+			assertTrue(recorder.stop());
+		}
+
+		assertNull(listener.error.get());
+
+		MediaInfo info = readInfo(file);
+
+		assertEquals("vp8", info.getVideoCodec());
+		assertEquals("opus", info.getAudioCodec());
+		assertTrue(info.getDurationUs() > 0, "duration: " + info.getDurationUs());
 	}
 
 	@Test
@@ -218,35 +390,7 @@ class MediaRecorderTest {
 
 		assertEquals("vp8", info.getVideoCodec());
 		assertEquals("opus", info.getAudioCodec());
-		assertDuration(info);
-	}
-
-	@Test
-	void recordsSentCallIntoWebm() throws Exception {
-		Path file = tempDir.resolve("sent.webm");
-		Listener listener = new Listener();
-
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
-			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
-			recorder.addTrack(call.getAudioSender());
-			recorder.start();
-
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(RECORD_MS);
-
-			assertTrue(recorder.stop());
-		}
-
-		assertNull(listener.error.get());
-
-		MediaInfo info = readInfo(file);
-
-		assertEquals("vp8", info.getVideoCodec());
-		assertEquals("opus", info.getAudioCodec());
-		assertDuration(info);
+		assertTrue(info.getDurationUs() > 0, "duration: " + info.getDurationUs());
 	}
 
 	@Test
@@ -256,22 +400,8 @@ class MediaRecorderTest {
 		// own shows that no file of another name was written.
 		Path dir = Files.createDirectory(tempDir.resolve("unicode"));
 		Path file = UnicodeFileName.resolve(dir, "mkv");
-		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
-			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
-			recorder.start();
-
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(1000);
-
-			assertTrue(recorder.stop());
-		}
-
-		assertNull(listener.error.get());
+		recordVideo(file, false);
 
 		try (Stream<Path> files = Files.list(dir)) {
 			List<Path> written = files.collect(Collectors.toList());
@@ -331,43 +461,44 @@ class MediaRecorderTest {
 
 		Files.write(file, EARLIER_RECORDING);
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file, true)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file, true)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+			feed.play(seconds(1));
 
-			Thread.sleep(1000);
-
+			assertEquals(0, listener.started.getCount(), "not started");
 			assertArrayEquals(EARLIER_RECORDING, Files.readAllBytes(file));
 			assertEquals(2, filesIn(dir).size());
 
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
 			assertEquals(file, recorder.getFile());
+
+			recorder.sync();
 		}
 
 		assertNull(listener.error.get());
 		assertEquals(Collections.singletonList(file), filesIn(dir));
-		assertEquals("vp8", readInfo(file).getVideoCodec());
+		assertStreams(file, video(25, 0, 960));
 	}
 
 	@Test
 	void replacingCreatesMissingFile(@TempDir Path dir) throws Exception {
 		Path file = dir.resolve("created.mp4");
-		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file, true)) {
-			recorder.setListener(listener);
-			recorder.addTrack(call.getAudioSender());
+		try (FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file, true)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, audio);
+
+			audio.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(1000);
+			feed.play(seconds(1));
 
 			assertTrue(recorder.stop());
 		}
@@ -386,12 +517,15 @@ class MediaRecorderTest {
 
 		Files.write(file, EARLIER_RECORDING);
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file, true)) {
-			recorder.addTrack(call.getVideoSender());
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file, true)) {
+			FakeFeed feed = new FakeFeed(recorder::sync);
+
+			video.addTo(recorder);
 			recorder.start();
 
-			// Too soon for any frame to have made it into the file.
+			feed.play(seconds(1));
+
 			assertFalse(recorder.stop());
 			assertEquals(MediaRecorderResult.EMPTY, recorder.getResult());
 		}
@@ -421,20 +555,26 @@ class MediaRecorderTest {
 
 		WriteFault.failHeader();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file, true)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file, true)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "not failed");
+			feed.play(seconds(1));
+
 			assertFalse(recorder.stop());
 			assertEquals(MediaRecorderResult.FAILED, recorder.getResult());
+
+			recorder.sync();
 		}
 		finally {
 			WriteFault.disarm();
 		}
 
+		assertErrorStartsWith(listener, "Writing the header of ");
 		assertArrayEquals(EARLIER_RECORDING, Files.readAllBytes(file));
 		assertEquals(Collections.singletonList(file), filesIn(dir));
 	}
@@ -444,24 +584,25 @@ class MediaRecorderTest {
 		Path file = dir.resolve("blocked.mkv");
 		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file, true)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file, true)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(1000);
+			feed.play(seconds(1));
 
 			// No file can take the place of a directory that holds something.
 			Files.createFile(Files.createDirectory(file).resolve("child"));
 
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.PARTIAL, recorder.getResult());
-			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "not reported");
 			assertFalse(file.equals(recorder.getFile()));
-			assertEquals("vp8", readInfo(recorder.getFile()).getVideoCodec());
+			assertStreams(recorder.getFile(), video(25, 0, 960));
+
+			recorder.sync();
 		}
 
 		assertErrorStartsWith(listener, "Replacing " + file + " failed");
@@ -472,23 +613,11 @@ class MediaRecorderTest {
 		Assumptions.assumeTrue(dir.getFileSystem().supportedFileAttributeViews().contains("posix"));
 
 		Path file = dir.resolve("private.mkv");
-		Listener listener = new Listener();
 
 		Files.write(file, EARLIER_RECORDING);
 		Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r-----"));
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file, true)) {
-			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
-			recorder.start();
-
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(1000);
-
-			assertTrue(recorder.stop());
-		}
+		recordVideo(file, true);
 
 		assertEquals(PosixFilePermissions.fromString("rw-r-----"), Files.getPosixFilePermissions(file));
 	}
@@ -497,7 +626,6 @@ class MediaRecorderTest {
 	void replacingKeepsLink(@TempDir Path dir) throws Exception {
 		Path file = dir.resolve("real.mkv");
 		Path link = dir.resolve("link.mkv");
-		Listener listener = new Listener();
 
 		Files.write(file, EARLIER_RECORDING);
 
@@ -508,18 +636,7 @@ class MediaRecorderTest {
 			Assumptions.abort("No symbolic links here: " + e);
 		}
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(link, true)) {
-			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
-			recorder.start();
-
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(1000);
-
-			assertTrue(recorder.stop());
-		}
+		recordVideo(link, true);
 
 		assertTrue(Files.isSymbolicLink(link));
 		assertEquals("vp8", readInfo(file).getVideoCodec());
@@ -557,35 +674,38 @@ class MediaRecorderTest {
 
 	@Test
 	void recordsMuLawIntoMatroska() throws Exception {
-		assertRecordsG711("PCMU", "pcm_mulaw");
+		assertRecordsG711("audio/PCMU", "pcm_mulaw");
 	}
 
 	@Test
 	void recordsALawIntoMatroska() throws Exception {
-		assertRecordsG711("PCMA", "pcm_alaw");
+		assertRecordsG711("audio/PCMA", "pcm_alaw");
 	}
 
 	@Test
 	void leavesOutCodecFileCannotHold() throws Exception {
-		// MP4 has no place for VP8, which the call sends.
+		// MP4 has no place for VP8.
 		Path file = tempDir.resolve("audio-only.mp4");
 		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video, audio);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
-			recorder.addTrack(call.getAudioSender());
+			video.addTo(recorder);
+			audio.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(RECORD_MS);
+			feed.play(seconds(1));
 
 			assertTrue(recorder.stop());
+
+			recorder.sync();
 		}
 
-		assertFalse(listener.warnings.isEmpty());
+		assertEquals(1, listener.warnings.size(), listener.warnings.toString());
 		assertTrue(listener.warnings.get(0).contains("video/VP8"), listener.warnings.get(0));
 
 		MediaInfo info = readInfo(file);
@@ -598,14 +718,17 @@ class MediaRecorderTest {
 	void deletesFileWithoutMedia() throws Exception {
 		Path file = tempDir.resolve("nothing.mkv");
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync);
+
 			assertTrue(Files.exists(file));
 
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			// Too soon for any frame to have made it into the file.
+			feed.play(seconds(1));
+
 			assertFalse(recorder.stop());
 			assertEquals(MediaRecorderResult.EMPTY, recorder.getResult());
 		}
@@ -661,13 +784,15 @@ class MediaRecorderTest {
 	void rejectsTracksOnceStarted() throws Exception {
 		Path file = tempDir.resolve("rejects.mkv");
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
-			recorder.addTrack(call.getVideoSender());
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			video.addTo(recorder);
 			recorder.start();
 
-			assertThrows(IllegalStateException.class, () -> recorder.addTrack(call.getAudioSender()));
+			assertThrows(IllegalStateException.class, () -> audio.addTo(recorder));
 			assertThrows(IllegalStateException.class, recorder::start);
+			assertEquals(0, audio.observers());
 		}
 	}
 
@@ -677,8 +802,10 @@ class MediaRecorderTest {
 		AtomicReference<Boolean> stopped = new AtomicReference<>();
 		CountDownLatch done = new CountDownLatch(1);
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(new MediaRecorderListener() {
 
 				@Override
@@ -687,10 +814,13 @@ class MediaRecorderTest {
 					done.countDown();
 				}
 			});
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
+			feed.play(millis(200));
+
 			assertTrue(done.await(10, TimeUnit.SECONDS), "stopping from the listener hung");
+			assertEquals(MediaRecorderState.STOPPED, recorder.getState());
 		}
 
 		assertTrue(stopped.get());
@@ -702,29 +832,34 @@ class MediaRecorderTest {
 		Path file = tempDir.resolve("failed-track.mkv");
 		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
 
 			AllocationFault.failNextAllocation();
 
-			assertThrows(OutOfMemoryError.class, () -> recorder.addTrack(call.getVideoSender()));
+			assertThrows(OutOfMemoryError.class, () -> video.addTo(recorder));
 
 			// Not added on either side: there is nothing to start with.
 			assertThrows(IllegalStateException.class, recorder::start);
 
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+			feed.play(seconds(1));
+
 			assertTrue(recorder.stop());
+
+			recorder.sync();
 		}
 		finally {
 			AllocationFault.disarm();
 		}
 
 		assertNull(listener.error.get());
-		assertTrue(readInfo(file).hasVideo());
+		assertStreams(file, video(25, 0, 960));
 	}
 
 	@Test
@@ -732,29 +867,35 @@ class MediaRecorderTest {
 		Path file = tempDir.resolve("failed-start.mkv");
 		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 
 			AllocationFault.failNextThreadStart();
 
 			RuntimeException e = assertThrows(RuntimeException.class, recorder::start);
 			assertTrue(e.getMessage().startsWith("Starting a thread failed"), e.getMessage());
 			assertEquals(MediaRecorderState.IDLE, recorder.getState());
+			assertEquals(0, video.observers());
 
 			// Nothing was left half started, so it starts on a second try.
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+			feed.play(seconds(1));
+
 			assertTrue(recorder.stop());
+
+			recorder.sync();
 		}
 		finally {
 			AllocationFault.disarm();
 		}
 
 		assertNull(listener.error.get());
-		assertTrue(readInfo(file).hasVideo());
+		assertStreams(file, video(25, 0, 960));
 	}
 
 	@Test
@@ -762,11 +903,14 @@ class MediaRecorderTest {
 		Path file = tempDir.resolve("failed-attach.mkv");
 		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video, audio);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
-			recorder.addTrack(call.getAudioSender());
+			video.addTo(recorder);
+			audio.addTo(recorder);
 
 			// The second track fails, with the first one attached.
 			AllocationFault.failObserverAdd(1);
@@ -775,40 +919,39 @@ class MediaRecorderTest {
 			assertFalse(AllocationFault.isArmed());
 			assertEquals(MediaRecorderState.IDLE, recorder.getState());
 			assertNull(recorder.getResult());
+			assertEquals(0, video.observers());
+			assertEquals(0, audio.observers());
 
 			// Nothing was left half started, so it starts on a second try,
 			// with both tracks.
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(1000);
+			feed.play(seconds(1));
 
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
+
+			recorder.sync();
 		}
 		finally {
 			AllocationFault.disarm();
 		}
 
 		assertNull(listener.error.get());
-		assertTrue(listener.warnings.isEmpty(), listener.warnings.toString());
-
-		MediaInfo info = readInfo(file);
-
-		assertTrue(info.hasVideo());
-		assertTrue(info.hasAudio());
+		assertEquals(Collections.emptyList(), listener.warnings);
+		assertStreams(file, video(25, 0, 960), audio(50, 0, 980));
 	}
 
 	@Test
 	void closeAfterFailedAttach() throws Exception {
 		Path file = tempDir.resolve("closed-after-failed-attach.mkv");
 
-		try (TestCall call = new TestCall(factory)) {
-			MediaRecorder recorder = new MediaRecorder(file);
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus()) {
+			MediaRecorder recorder = recorder(file);
 
-			recorder.addTrack(call.getVideoSender());
-			recorder.addTrack(call.getAudioSender());
+			video.addTo(recorder);
+			audio.addTo(recorder);
 
 			AllocationFault.failObserverAdd(1);
 
@@ -819,9 +962,13 @@ class MediaRecorderTest {
 			assertEquals(MediaRecorderResult.EMPTY, recorder.getResult());
 			assertFalse(Files.exists(file));
 
-			// The call goes on: an observer left on the first track would
-			// call into the recorder freed by now.
-			Thread.sleep(500);
+			// An observer left on the first track would call into the
+			// recorder freed by now.
+			assertEquals(0, video.observers());
+			assertEquals(0, audio.observers());
+
+			video.push(FakeFeed.START_US);
+			audio.push(FakeFeed.START_US);
 		}
 		finally {
 			AllocationFault.disarm();
@@ -833,21 +980,24 @@ class MediaRecorderTest {
 		Path file = tempDir.resolve("dropped-frame.mkv");
 		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+			feed.play(seconds(1));
 
-			// The next frame cannot be copied, on a WebRTC thread, where
-			// nothing may be thrown.
+			// The frame at 1 s cannot be copied, on the thread that pushes it,
+			// where nothing may be thrown. The video goes on from the key
+			// frame asked for then, the next frame.
 			AllocationFault.failNextAllocation();
-			awaitFault();
 
-			Thread.sleep(1000);
+			feed.play(seconds(1));
 
+			assertFalse(AllocationFault.isArmed());
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
 
@@ -855,39 +1005,41 @@ class MediaRecorderTest {
 
 			assertEquals(1, track.getDroppedAllocationFailed());
 			assertEquals(0, track.getDroppedQueueFull());
+			assertEquals(0, track.getDroppedAwaitingKeyFrame());
+			assertEquals(List.of(FakeFeed.START_US, FakeFeed.START_US + millis(1040)), video.getKeyFrameTimesUs());
+
+			recorder.sync();
 		}
 		finally {
 			AllocationFault.disarm();
 		}
 
 		assertNull(listener.error.get());
-		assertTrue(readInfo(file).hasVideo());
+		assertStreams(file, video(49, 0, 1960));
 	}
 
 	@Test
 	void countsVideoLostToFullQueue() throws Exception {
 		Path file = tempDir.resolve("full-queue.mkv");
-		Listener listener = new Listener();
 		MediaRecorderStats stats;
 
-		try (TestCall call = new TestCall(factory)) {
-			MediaRecorder recorder = new MediaRecorder(file);
+		try (FakeTrack video = FakeTrack.vp8()) {
+			MediaRecorder recorder = recorder(file);
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
 
-			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
+			feed.play(seconds(1));
 
-			// Twice, since the recorder asks for a key frame once a second:
-			// the first time it gets one right away, the second time the video
-			// goes on without one until the second is over.
+			// The frame at 1 s finds no room, and the key frame asked for
+			// comes with the next. So does the frame at 1.2 s, but the
+			// recorder asks once a second at most: the video goes on without
+			// it until the request at 2 s brings the next key frame.
 			AllocationFault.failNextQueueRoom();
-			awaitFault();
+			feed.play(millis(200));
 			AllocationFault.failNextQueueRoom();
-			awaitFault();
-
-			Thread.sleep(1500);
+			feed.playUntil(seconds(3));
 
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
@@ -908,26 +1060,27 @@ class MediaRecorderTest {
 
 		assertEquals(2, track.getDroppedQueueFull());
 		assertEquals(0, track.getDroppedAllocationFailed());
-		assertTrue(track.getDroppedAwaitingKeyFrame() > 0, "nothing skipped");
-		assertEquals(2 + track.getDroppedAwaitingKeyFrame(), track.getDroppedFrames());
+		assertEquals(19, track.getDroppedAwaitingKeyFrame());
+		assertEquals(21, track.getDroppedFrames());
 		assertTrue(stats.getMaxQueuedBytes() > 0);
+
+		assertStreams(file, video(54, 0, 2960));
 	}
 
 	@Test
 	void countsAudioLostToAllocation() throws Exception {
 		Path file = tempDir.resolve("lost-audio.mkv");
-		Listener listener = new Listener();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
-			recorder.setListener(listener);
-			recorder.addTrack(call.getAudioSender());
+		try (FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, audio);
+
+			audio.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
+			feed.play(seconds(1));
 			AllocationFault.failNextAllocation();
-			awaitFault();
+			feed.play(seconds(1));
 
 			assertTrue(recorder.stop());
 
@@ -939,16 +1092,19 @@ class MediaRecorderTest {
 		finally {
 			AllocationFault.disarm();
 		}
+
+		assertStreams(file, audio(99, 0, 1980));
 	}
 
 	@Test
 	void statsPerTrack() throws Exception {
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(tempDir.resolve("stats.mkv"))) {
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.opus();
+				MediaRecorder recorder = recorder(tempDir.resolve("stats.mkv"))) {
 			assertTrue(recorder.getStats().getTracks().isEmpty());
 
-			recorder.addTrack(call.getVideoSender());
-			recorder.addTrack(call.getAudioSender());
+			video.addTo(recorder);
+			audio.addTo(recorder);
 
 			MediaRecorderStats stats = recorder.getStats();
 
@@ -966,17 +1122,21 @@ class MediaRecorderTest {
 
 		WriteFault.failHeader();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+			feed.play(seconds(1));
 
 			// Nothing playable went into the file, so it is not kept.
 			assertFalse(recorder.stop());
 			assertEquals(MediaRecorderResult.FAILED, recorder.getResult());
+
+			recorder.sync();
 		}
 		finally {
 			WriteFault.disarm();
@@ -995,16 +1155,20 @@ class MediaRecorderTest {
 		// Well into the recording, once there is media in the file.
 		WriteFault.failPacket(30);
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+			feed.play(seconds(2));
 
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.PARTIAL, recorder.getResult());
+
+			recorder.sync();
 		}
 		finally {
 			WriteFault.disarm();
@@ -1022,17 +1186,21 @@ class MediaRecorderTest {
 		// The first frame, which is held back until the header is written.
 		AllocationFault.failWriterAllocation(0);
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
-			assertFalse(AllocationFault.isArmed());
+			feed.play(seconds(1));
 
+			assertFalse(AllocationFault.isArmed());
 			assertFalse(recorder.stop());
 			assertEquals(MediaRecorderResult.FAILED, recorder.getResult());
+
+			recorder.sync();
 		}
 		finally {
 			AllocationFault.disarm();
@@ -1051,18 +1219,23 @@ class MediaRecorderTest {
 		// Well into the recording, once there is media in the file.
 		AllocationFault.failWriterAllocation(30);
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+			feed.play(seconds(2));
+
 			assertEquals(0, listener.started.getCount(), "not started");
 
 			// The writer has ended, and the file was finished then.
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.PARTIAL, recorder.getResult());
+
+			recorder.sync();
 		}
 		finally {
 			AllocationFault.disarm();
@@ -1083,9 +1256,9 @@ class MediaRecorderTest {
 	}
 
 	/**
-	 * Records a call whose file fails to be finished or closed when the
-	 * recorder stops: the failure is reported, and the file is kept as
-	 * partial.
+	 * Records a second of video whose file fails to be finished or closed
+	 * when the recorder stops: the failure is reported, and the file is kept
+	 * as partial.
 	 */
 	private void assertFailedFinishKeepsFile(String name, Runnable fault, String error) throws Exception {
 		Path file = tempDir.resolve(name);
@@ -1093,22 +1266,21 @@ class MediaRecorderTest {
 
 		fault.run();
 
-		try (TestCall call = new TestCall(factory);
-				MediaRecorder recorder = new MediaRecorder(file)) {
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
 			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
+			video.addTo(recorder);
 			recorder.start();
 
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(1000);
+			feed.play(seconds(1));
 
 			assertNull(listener.error.get());
 			assertTrue(recorder.stop());
 			assertEquals(MediaRecorderResult.PARTIAL, recorder.getResult());
 
-			// Reported before the event thread ends, which the stop let do.
-			assertTrue(listener.failed.await(10, TimeUnit.SECONDS), "no error");
+			recorder.sync();
 		}
 		finally {
 			WriteFault.disarm();
@@ -1118,15 +1290,74 @@ class MediaRecorderTest {
 		assertTrue(Files.exists(file));
 	}
 
-	/** Waits for a frame to run into the fault that is armed. */
-	private static void awaitFault() throws InterruptedException {
-		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+	/**
+	 * Records a second of video into the given file.
+	 */
+	private static void recordVideo(Path file, boolean overwrite) throws Exception {
+		Listener listener = new Listener();
 
-		while (AllocationFault.isArmed() && System.nanoTime() < deadline) {
-			Thread.sleep(10);
+		try (FakeTrack video = FakeTrack.vp8();
+				MediaRecorder recorder = recorder(file, overwrite)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video);
+
+			recorder.setListener(listener);
+			video.addTo(recorder);
+			recorder.start();
+
+			feed.play(seconds(1));
+
+			assertTrue(recorder.stop());
+			assertEquals(MediaRecorderResult.COMPLETE, recorder.getResult());
+
+			recorder.sync();
 		}
 
-		assertFalse(AllocationFault.isArmed(), "no frame arrived");
+		assertNull(listener.error.get());
+	}
+
+	/**
+	 * Records G.711 into Matroska, which has no codec ID of its own for it,
+	 * and reads the audio back as the codec it was sent in.
+	 */
+	private void assertRecordsG711(String mimeType, String codecName) throws Exception {
+		Path file = tempDir.resolve(codecName + ".mkv");
+		Listener listener = new Listener();
+
+		try (FakeTrack video = FakeTrack.vp8();
+				FakeTrack audio = FakeTrack.g711(mimeType);
+				MediaRecorder recorder = recorder(file)) {
+			FakeFeed feed = new FakeFeed(recorder::sync, video, audio);
+
+			recorder.setListener(listener);
+			video.addTo(recorder);
+			audio.addTo(recorder);
+			recorder.start();
+
+			feed.play(seconds(1));
+
+			assertTrue(recorder.stop());
+
+			recorder.sync();
+		}
+
+		assertNull(listener.error.get());
+		assertEquals(Collections.emptyList(), listener.warnings);
+		assertStreams(file, video(25, 0, 960), audio(50, 0, 980));
+
+		MediaInfo info = readInfo(file);
+
+		assertEquals("vp8", info.getVideoCodec());
+		assertEquals(codecName, info.getAudioCodec());
+		assertEquals(8000, info.getSampleRate());
+		assertEquals(1, info.getChannels());
+	}
+
+	private static MediaRecorder recorder(Path file) throws IOException {
+		return recorder(file, false);
+	}
+
+	private static MediaRecorder recorder(Path file, boolean overwrite) throws IOException {
+		return new MediaRecorder(file, overwrite, FakeMedia.tableAddress());
 	}
 
 	private static List<Path> filesIn(Path dir) {
@@ -1144,53 +1375,10 @@ class MediaRecorderTest {
 		assertTrue(error != null && error.startsWith(prefix), "error: " + error);
 	}
 
-	/**
-	 * Records a call that sends G.711 into Matroska, which has no codec ID of
-	 * its own for it, and reads the audio back as the codec it was sent in.
-	 */
-	private void assertRecordsG711(String sdpName, String codecName) throws Exception {
-		Path file = tempDir.resolve(sdpName + ".mkv");
-		Listener listener = new Listener();
-
-		try (TestCall call = new TestCall(factory, sdpName);
-				MediaRecorder recorder = new MediaRecorder(file)) {
-			recorder.setListener(listener);
-			recorder.addTrack(call.getVideoSender());
-			recorder.addTrack(call.getAudioSender());
-			recorder.start();
-
-			assertTrue(listener.started.await(10, TimeUnit.SECONDS), "not started");
-
-			Thread.sleep(RECORD_MS);
-
-			assertTrue(recorder.stop());
-		}
-
-		assertNull(listener.error.get());
-		assertTrue(listener.warnings.isEmpty(), listener.warnings.toString());
-
-		MediaInfo info = readInfo(file);
-
-		assertEquals("vp8", info.getVideoCodec());
-		assertEquals(codecName, info.getAudioCodec());
-		assertEquals(8000, info.getSampleRate());
-		assertEquals(1, info.getChannels());
-		assertDuration(info);
-	}
-
 	private static MediaInfo readInfo(Path file) throws Exception {
 		try (MediaReader reader = new MediaReader(file)) {
 			return reader.getInfo();
 		}
-	}
-
-	private static void assertDuration(MediaInfo info) {
-		long durationMs = info.getDurationUs() / 1000;
-
-		// The file begins when the first key frame arrives, somewhat after
-		// the start, and ends with what was queued at the stop.
-		assertTrue(durationMs > RECORD_MS - 1000 && durationMs < RECORD_MS + 2000,
-				"duration: " + durationMs + " ms");
 	}
 
 
@@ -1201,8 +1389,6 @@ class MediaRecorderTest {
 		final List<String> warnings = new CopyOnWriteArrayList<>();
 
 		final AtomicReference<String> error = new AtomicReference<>();
-
-		final CountDownLatch failed = new CountDownLatch(1);
 
 
 		@Override
@@ -1218,7 +1404,6 @@ class MediaRecorderTest {
 		@Override
 		public void onError(String message) {
 			error.set(message);
-			failed.countDown();
 		}
 	}
 

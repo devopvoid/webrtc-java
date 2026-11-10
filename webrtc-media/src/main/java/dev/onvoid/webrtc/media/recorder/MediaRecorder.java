@@ -206,6 +206,14 @@ public class MediaRecorder implements AutoCloseable {
 	 * @throws IOException If the file cannot be written, or is a directory.
 	 */
 	public MediaRecorder(Path file, boolean overwrite) throws IOException {
+		this(file, overwrite, NativeApi.tableAddress());
+	}
+
+	/**
+	 * Creates a recorder writing to the given file that takes its frames and
+	 * its clock from the given webrtc-java function table, as the tests do.
+	 */
+	MediaRecorder(Path file, boolean overwrite, long tableAddress) throws IOException {
 		Objects.requireNonNull(file, "File is null");
 
 		Path target = file.toAbsolutePath();
@@ -229,7 +237,7 @@ public class MediaRecorder implements AutoCloseable {
 		this.output = overwrite ? createTemporaryFile(target) : Files.createFile(target);
 
 		try {
-			this.handle = create(output.toString(), NativeApi.tableAddress());
+			this.handle = create(output.toString(), tableAddress);
 		}
 		catch (IOException | RuntimeException | Error e) {
 			deleteOutput();
