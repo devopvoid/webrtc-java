@@ -88,6 +88,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
+	 * Method:    sync
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_sync
+	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
 	 * Method:    dispose
 	 * Signature: (J)V
 	 */

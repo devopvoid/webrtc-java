@@ -346,6 +346,27 @@ namespace ffmpeg
 		return true;
 	}
 
+	void MediaRecorder::Sync()
+	{
+		std::unique_lock<std::mutex> lock(mutex_);
+
+		if (!started_ || writer_ended_) {
+			return;
+		}
+
+		// The round under way may have taken its frames before the call, and
+		// the next one handles whatever is left. A key frame wanted while
+		// handling them is asked for only at the start of the round after.
+		const uint64_t target = loops_ + 3;
+
+		while (loops_ < target && !writer_ended_) {
+			poke_ = true;
+			wake_.notify_one();
+
+			looped_.wait(lock);
+		}
+	}
+
 	void MediaRecorder::RemoveObservers()
 	{
 		for (const auto & input : inputs_) {
@@ -632,12 +653,16 @@ namespace ffmpeg
 
 			lock.lock();
 
+			loops_++;
+			looped_.notify_all();
+
 			if (stopping && queue_.empty() && save_requests_.empty()) {
 				break;
 			}
 		}
 
 		writer_ended_ = true;
+		looped_.notify_all();
 
 		lock.unlock();
 
@@ -1063,6 +1088,10 @@ namespace ffmpeg
 		if (tracks_[index]->IsVideo() && frame.key_frame) {
 			key_times_[index].push_back(frame.timeline_us);
 			last_key_us_[index] = api_->now_us();
+
+			// The clock asked for it until it came, and a request still held
+			// back would bring another one before its time.
+			KeyFrameArrived(index);
 		}
 
 		last_frame_us_[index] = frame.timeline_us;
@@ -1500,6 +1529,7 @@ namespace ffmpeg
 
 			accepting_ = false;
 			writer_ended_ = true;
+			looped_.notify_all();
 			queue_.swap(dropped);
 			queued_bytes_ = 0;
 			save_requests_.swap(saves);

@@ -171,6 +171,13 @@ namespace ffmpeg
 			// observer hears nothing.
 			bool SaveReplay(int id, std::string path);
 
+			// Waits until the writer has handled everything taken before the
+			// call, frames and requests alike, and has looked at the clock
+			// after them. Returns at once if there is no writer, or it has
+			// ended. For tests, which drive the recorder with frames and a
+			// clock of their own and have to know what it made of them.
+			void Sync();
+
 		private:
 			enum class Mode
 			{
@@ -382,6 +389,9 @@ namespace ffmpeg
 
 			std::mutex mutex_;
 			std::condition_variable wake_;
+			// Counts the rounds of the writer, for Sync().
+			std::condition_variable looped_;
+			uint64_t loops_ = 0;
 			std::vector<std::unique_ptr<Input>> inputs_;
 			std::deque<RecordedFrame> queue_;
 			size_t queued_bytes_ = 0;
