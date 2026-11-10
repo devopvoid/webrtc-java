@@ -50,7 +50,18 @@ final class WriteFault {
 	/**
 	 * Fails the writing of the file header, before any media is in the file.
 	 */
-	static native void failHeader();
+	static void failHeader() {
+		failHeader(0);
+	}
+
+	/**
+	 * Fails the writing of the header that follows the given number of them,
+	 * e.g. that of a later segment.
+	 *
+	 * @param afterHeaders How many headers are written before the one that
+	 *                     fails.
+	 */
+	static native void failHeader(int afterHeaders);
 
 	/**
 	 * Fails the write of the packet that follows the given number of them.

@@ -36,9 +36,9 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_WriteFault_failOpen
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_WriteFault_failHeader
-(JNIEnv * env, jclass caller)
+(JNIEnv * env, jclass caller, jint afterHeaders)
 {
-	WriteFault::Fail(WriteFault::Call::kHeader, AVERROR(ENOSPC), 0);
+	WriteFault::Fail(WriteFault::Call::kHeader, AVERROR(ENOSPC), afterHeaders);
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_WriteFault_failPacket

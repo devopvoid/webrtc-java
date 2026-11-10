@@ -32,6 +32,22 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
+	 * Method:    createSegments
+	 * Signature: (Ljava/lang/String;Ljava/lang/String;IJJJJ)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_createSegments
+	(JNIEnv *, jobject, jstring, jstring, jint, jlong, jlong, jlong, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
+	 * Method:    createReplay
+	 * Signature: (JJJ)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_createReplay
+	(JNIEnv *, jobject, jlong, jlong, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
 	 * Method:    addTrack
 	 * Signature: (JJ)I
 	 */
@@ -61,6 +77,14 @@ extern "C" {
 	 */
 	JNIEXPORT jlongArray JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_stats
 	(JNIEnv *, jclass, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder
+	 * Method:    saveReplay
+	 * Signature: (JILjava/lang/String;)Z
+	 */
+	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_recorder_MediaRecorder_saveReplay
+	(JNIEnv *, jclass, jlong, jint, jstring);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_MediaRecorder

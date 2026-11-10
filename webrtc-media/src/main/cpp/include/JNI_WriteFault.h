@@ -33,10 +33,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_WriteFault
 	 * Method:    failHeader
-	 * Signature: ()V
+	 * Signature: (I)V
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_recorder_WriteFault_failHeader
-	(JNIEnv *, jclass);
+	(JNIEnv *, jclass, jint);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_recorder_WriteFault

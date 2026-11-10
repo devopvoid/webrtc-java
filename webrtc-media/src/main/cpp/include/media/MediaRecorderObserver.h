@@ -17,6 +17,7 @@
 #ifndef WEBRTC_JAVA_MEDIA_MEDIA_RECORDER_OBSERVER_H_
 #define WEBRTC_JAVA_MEDIA_MEDIA_RECORDER_OBSERVER_H_
 
+#include <cstdint>
 #include <string>
 
 namespace ffmpeg
@@ -41,6 +42,18 @@ namespace ffmpeg
 			// The given video track waits for a key frame, and the sender or
 			// receiver it records should be asked for one.
 			virtual void OnKeyFrameNeeded(int track) = 0;
+
+			// A segment was finished and closed, or failed before any media
+			// went into it. The result is a MediaRecorder::Result: complete,
+			// partial, or failed for a file that holds nothing to keep.
+			virtual void OnSegmentFinished(int64_t index, const std::string & path,
+					int64_t start_us, int64_t duration_us, int result) = 0;
+
+			// A replay asked for with the given id was saved, or not. The
+			// result is a MediaRecorder::Result; the error says what went
+			// wrong, and is empty if nothing did.
+			virtual void OnReplaySaved(int id, int result, int64_t start_us,
+					int64_t duration_us, const std::string & error) = 0;
 	};
 }
 

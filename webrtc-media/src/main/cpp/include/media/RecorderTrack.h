@@ -54,6 +54,11 @@ namespace ffmpeg
 		bool key_frame = false;
 		int width = 0;
 		int height = 0;
+		// Where the frame lies on the timeline of the recording, which
+		// RecorderTrack::Timestamp() sets: in the clock of its track, and in
+		// microseconds.
+		int64_t pts = 0;
+		int64_t timeline_us = 0;
 	};
 
 	// One recorded sender or receiver, as a stream in the output file.
@@ -86,22 +91,34 @@ namespace ffmpeg
 			int GetIndex() const;
 			Status GetStatus() const;
 			bool IsVideo() const;
+			int GetClockRate() const;
 
-			// Learns what it can about the stream from the frame. When this
-			// makes the track unsupported, the message says why.
+			// The MIME type of the codec the track was described with.
+			const std::string & GetMimeType() const;
+
+			// Learns what it can about the stream from the frame. A format of
+			// null accepts every codec WebRTC sends, for a file that is not
+			// known yet. When this makes the track unsupported, the message
+			// says why.
 			Status Probe(const RecordedFrame & frame, const AVOutputFormat * format,
 					std::string * message);
 
+			// Whether a file of the given format can hold the stream of a
+			// ready track. If not, the message says why.
+			bool CanBeHeldBy(const AVOutputFormat * format, std::string * message) const;
+
+			// Forgets what it learned, for a stream that changed its codec,
+			// which is then described anew from its next frames.
+			void Reset();
+
 			// Adds the stream of a ready track to the output.
-			int CreateStream(AVFormatContext * context);
+			int CreateStream(AVFormatContext * context, AVStream ** stream) const;
 
-			// The stream in the output, or null while there is none.
-			AVStream * GetStream() const;
-
-			// Turns the frame into a packet of this track's stream, stamped
-			// with its presentation time. start_us is when recording started,
-			// in the clock of RecordedFrame::time_us.
-			AVPacket * Stamp(RecordedFrame & frame, int64_t start_us);
+			// Places the frame on the timeline of the recording, setting its
+			// pts and timeline_us. start_us is when recording started, in the
+			// clock of RecordedFrame::time_us. Called for every frame of the
+			// track, in the order they arrived.
+			void Timestamp(RecordedFrame & frame, int64_t start_us);
 
 		private:
 			bool DescribeVideo(const RecordedFrame & frame);
@@ -124,8 +141,7 @@ namespace ffmpeg
 			int height_ = 0;
 			int channels_ = 0;
 			std::vector<uint8_t> extradata_;
-
-			AVStream * stream_ = nullptr;
+			std::string mime_type_;
 
 			// Timing. RTP timestamps are exact within a stream, but start at a
 			// random value, so a track is anchored on the clock once and
@@ -135,7 +151,6 @@ namespace ffmpeg
 			uint32_t last_rtp_ = 0;
 			int64_t rtp_offset_ = 0;
 			int64_t base_pts_ = 0;
-			int64_t last_pts_ = -1;
 	};
 }
 

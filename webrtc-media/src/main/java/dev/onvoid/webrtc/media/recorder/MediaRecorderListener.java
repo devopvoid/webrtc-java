@@ -58,4 +58,19 @@ public interface MediaRecorderListener {
 	default void onError(String message) {
 	}
 
+	/**
+	 * A segment of a recorder that records in {@link SegmentOptions segments}
+	 * was finished and closed, the last one when the recorder is stopped. A
+	 * segment that failed before any media went into it is deleted and not
+	 * reported here, only to {@link #onError(String)}.
+	 * <p>
+	 * The oldest segments that the options do not keep are deleted right
+	 * after this call returns, so a segment to be kept beyond them has to be
+	 * copied or moved by then. One that is moved away is no longer deleted.
+	 *
+	 * @param segment The segment that was finished.
+	 */
+	default void onSegmentFinished(MediaRecorderSegment segment) {
+	}
+
 }

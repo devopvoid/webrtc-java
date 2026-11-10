@@ -69,6 +69,8 @@ class TestCall implements AutoCloseable {
 	private final RTCRtpSender videoSender;
 	private final RTCRtpSender audioSender;
 
+	private final PeerConnectionFactory factory;
+
 	private volatile boolean feeding;
 	private Thread feeder;
 
@@ -82,6 +84,8 @@ class TestCall implements AutoCloseable {
 	 * "PCMA".
 	 */
 	TestCall(PeerConnectionFactory factory, String audioCodec) throws Exception {
+		this.factory = factory;
+
 		caller = new Peer(factory);
 		callee = new Peer(factory);
 
@@ -118,6 +122,30 @@ class TestCall implements AutoCloseable {
 
 	RTCRtpSender getAudioSender() {
 		return audioSender;
+	}
+
+	/**
+	 * Stops giving the caller media, and waits for what it has encoded to
+	 * have been sent, so that its senders send nothing more.
+	 */
+	void stopFeeding() throws InterruptedException {
+		feeding = false;
+		feeder.join();
+
+		Thread.sleep(500);
+	}
+
+	/**
+	 * Makes the caller send its video in the named codec from now on, by
+	 * preferring it and negotiating the call again.
+	 */
+	void switchVideoCodec(String codecName) throws Exception {
+		prefer(factory, caller.connection, videoSender, MediaType.VIDEO, codecName);
+
+		RTCSessionDescription offer = caller.createOffer();
+		callee.setRemoteDescription(offer);
+		RTCSessionDescription answer = callee.createAnswer();
+		caller.setRemoteDescription(answer);
 	}
 
 	/**

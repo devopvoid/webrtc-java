@@ -41,6 +41,8 @@ namespace ffmpeg
 		on_warning_ = env->GetMethodID(cls, "onNativeWarning", "(Ljava/lang/String;)V");
 		on_error_ = env->GetMethodID(cls, "onNativeError", "(Ljava/lang/String;)V");
 		on_key_frame_needed_ = env->GetMethodID(cls, "onNativeKeyFrameNeeded", "(I)V");
+		on_segment_finished_ = env->GetMethodID(cls, "onNativeSegmentFinished", "(JLjava/lang/String;JJI)V");
+		on_replay_saved_ = env->GetMethodID(cls, "onNativeReplaySaved", "(IIJJLjava/lang/String;)V");
 
 		env->DeleteLocalRef(cls);
 
@@ -104,6 +106,59 @@ namespace ffmpeg
 
 		if (CanCallJava(env)) {
 			env->CallVoidMethod(recorder_, on_key_frame_needed_, static_cast<jint>(track));
+
+			ClearPendingException(env);
+		}
+
+		Detach(attached);
+	}
+
+	void JavaRecorderObserver::OnSegmentFinished(int64_t index, const std::string & path,
+			int64_t start_us, int64_t duration_us, int result)
+	{
+		if (on_segment_finished_ == nullptr) {
+			return;
+		}
+
+		bool attached = false;
+		JNIEnv * env = Attach(&attached);
+
+		if (CanCallJava(env)) {
+			jstring jPath = NewJavaString(env, path);
+
+			if (jPath != nullptr) {
+				env->CallVoidMethod(recorder_, on_segment_finished_, static_cast<jlong>(index), jPath,
+						static_cast<jlong>(start_us), static_cast<jlong>(duration_us), static_cast<jint>(result));
+				env->DeleteLocalRef(jPath);
+			}
+
+			ClearPendingException(env);
+		}
+
+		Detach(attached);
+	}
+
+	void JavaRecorderObserver::OnReplaySaved(int id, int result, int64_t start_us,
+			int64_t duration_us, const std::string & error)
+	{
+		if (on_replay_saved_ == nullptr) {
+			return;
+		}
+
+		bool attached = false;
+		JNIEnv * env = Attach(&attached);
+
+		if (CanCallJava(env)) {
+			// No text for no error.
+			jstring jError = error.empty() ? nullptr : NewJavaString(env, error);
+
+			if (error.empty() || jError != nullptr) {
+				env->CallVoidMethod(recorder_, on_replay_saved_, static_cast<jint>(id), static_cast<jint>(result),
+						static_cast<jlong>(start_us), static_cast<jlong>(duration_us), jError);
+			}
+			if (jError != nullptr) {
+				env->DeleteLocalRef(jError);
+			}
 
 			ClearPendingException(env);
 		}

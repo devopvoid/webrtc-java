@@ -46,6 +46,10 @@ namespace ffmpeg
 			void OnWarning(const std::string & message) override;
 			void OnError(const std::string & message) override;
 			void OnKeyFrameNeeded(int track) override;
+			void OnSegmentFinished(int64_t index, const std::string & path,
+					int64_t start_us, int64_t duration_us, int result) override;
+			void OnReplaySaved(int id, int result, int64_t start_us,
+					int64_t duration_us, const std::string & error) override;
 
 		private:
 			// Calls a void Java method taking one String.
@@ -69,6 +73,8 @@ namespace ffmpeg
 			jmethodID on_warning_ = nullptr;
 			jmethodID on_error_ = nullptr;
 			jmethodID on_key_frame_needed_ = nullptr;
+			jmethodID on_segment_finished_ = nullptr;
+			jmethodID on_replay_saved_ = nullptr;
 	};
 }
 

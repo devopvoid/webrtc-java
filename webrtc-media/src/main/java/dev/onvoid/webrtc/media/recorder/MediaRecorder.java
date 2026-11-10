@@ -18,12 +18,21 @@ package dev.onvoid.webrtc.media.recorder;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -71,6 +80,12 @@ import dev.onvoid.webrtc.media.player.FFmpeg;
  * is asked to replace it, which happens only once the new recording is
  * finished: a recording that fails or gets no media costs nothing.
  * <p>
+ * A recorder created with {@link #MediaRecorder(SegmentOptions)} splits the
+ * recording into segments, files that each begin with a key frame and play on
+ * their own, ending one by its duration or size and keeping as many as the
+ * options say. To keep only the last seconds in memory and save them on
+ * demand, see {@link ReplayBuffer}.
+ * <p>
  * How it behaves:
  * <ul>
  * <li>A video track is recorded from its first key frame, and the recorder
@@ -104,11 +119,36 @@ public class MediaRecorder implements AutoCloseable {
 
 	private final Object lock = new Object();
 
-	/** The file being written: the file itself, or one beside it to replace it. */
+	/**
+	 * The file being written: the file itself, or one beside it to replace
+	 * it. Null for segments and replays, whose files the native recorder
+	 * creates or is given.
+	 */
 	private final Path output;
 
-	/** Where the recording is meant to end up, or stays if it cannot. */
+	/**
+	 * Where the recording is meant to end up, or stays if it cannot; for
+	 * segments, the last one finished.
+	 */
 	private volatile Path file;
+
+	/** How to split the recording, or null for a single file. */
+	private final SegmentOptions segments;
+
+	/** The segments kept so far, oldest first. Guarded by itself. */
+	private final Deque<MediaRecorderSegment> keptSegments = new ArrayDeque<>();
+
+	/** What the kept segments take together. Guarded by keptSegments. */
+	private long keptBytes;
+
+	/** Whether this records into a replay buffer rather than a file. */
+	private final boolean replay;
+
+	/** The replays asked for and not saved yet, by their id. */
+	private final Map<Integer, PendingSave> pendingSaves = new ConcurrentHashMap<>();
+
+	/** The id of the next replay. Guarded by lock. */
+	private int nextSaveId;
 
 	/**
 	 * How to ask each track for a key frame, by track index. Filled before
@@ -182,6 +222,8 @@ public class MediaRecorder implements AutoCloseable {
 		}
 
 		this.file = target;
+		this.segments = null;
+		this.replay = false;
 		// Created here rather than by the native recorder, which would empty
 		// a file that came into being since the check.
 		this.output = overwrite ? createTemporaryFile(target) : Files.createFile(target);
@@ -194,6 +236,73 @@ public class MediaRecorder implements AutoCloseable {
 
 			throw e;
 		}
+	}
+
+	/**
+	 * Creates a recorder that splits the recording into segments, as the
+	 * given options say.
+	 * <p>
+	 * Each segment is a file of its own that begins with a key frame of every
+	 * video track, so that it plays without the ones before. Its timestamps
+	 * begin at zero, and the tracks keep their sync across segments. A
+	 * segment's file is created only when the segment begins, numbered on
+	 * from the highest number already in the directory, so a recorder started
+	 * again goes on after the last segment and never empties a file: a
+	 * number whose file exists in the meantime is skipped.
+	 * <p>
+	 * When a segment is due to end, its video tracks are asked for key
+	 * frames, and the next segment begins at the first one. A video track
+	 * whose key frame comes later goes on in the segment before until then,
+	 * so that neither of the two has a gap; one that sends none within a few
+	 * seconds starts the new segment at its next key frame.
+	 * <p>
+	 * A track that changes its codec, which a single file cannot hold, goes
+	 * on with the new codec in the next segment, which begins as soon as the
+	 * new codec is known.
+	 * <p>
+	 * Each finished segment is reported to {@link
+	 * MediaRecorderListener#onSegmentFinished(MediaRecorderSegment)}, and the
+	 * segments kept so far are listed by {@link #getSegments()}.
+	 *
+	 * @param segments How to split the recording.
+	 *
+	 * @throws NoSuchFileException If the directory of the segments does not
+	 *                             exist.
+	 * @throws IOException         If the directory cannot be read.
+	 */
+	public MediaRecorder(SegmentOptions segments) throws IOException {
+		Objects.requireNonNull(segments, "Segments are null");
+
+		if (!Files.isDirectory(segments.getDirectory())) {
+			throw new NoSuchFileException(segments.getDirectory().toString(), null, "Not a directory");
+		}
+
+		Duration maxDuration = segments.getMaxDuration();
+		long maxDurationUs = maxDuration != null ? maxDuration.toNanos() / 1000 : 0;
+
+		this.file = null;
+		this.output = null;
+		this.segments = segments;
+		this.replay = false;
+		this.handle = createSegments(segments.pathPrefix(), segments.nameSuffix(), segments.width(),
+				segments.nextIndex(), maxDurationUs, segments.getMaxSize(), NativeApi.tableAddress());
+	}
+
+	/** A recorder for a {@link ReplayBuffer}. */
+	private MediaRecorder(Duration window, long maxBytes) throws IOException {
+		this.file = null;
+		this.output = null;
+		this.segments = null;
+		this.replay = true;
+		this.handle = createReplay(window.toNanos() / 1000, maxBytes, NativeApi.tableAddress());
+	}
+
+	/**
+	 * Creates the recorder of a replay buffer, which keeps what arrives in
+	 * memory for {@link #saveReplay(Path)}.
+	 */
+	static MediaRecorder replayBuffer(Duration window, long maxBytes) throws IOException {
+		return new MediaRecorder(window, maxBytes);
 	}
 
 	/**
@@ -359,7 +468,12 @@ public class MediaRecorder implements AutoCloseable {
 			result = MediaRecorderResult.values()[stop(handle)];
 			state = MediaRecorderState.STOPPED;
 
-			finishOutput();
+			if (output != null) {
+				finishOutput();
+			}
+
+			// The writer has ended, and answered every replay it took.
+			failPendingSaves(new IllegalStateException("The replay buffer was stopped"));
 
 			if (events != null) {
 				// Lets the reports already queued run, then ends the thread.
@@ -417,11 +531,59 @@ public class MediaRecorder implements AutoCloseable {
 	 * the file given to the constructor, or the temporary file beside it
 	 * if the recording could not take the place of that file, as {@link
 	 * MediaRecorderListener#onError(String)} was told.
+	 * <p>
+	 * A recorder that records in segments returns the segment it finished
+	 * last, or {@code null} before the first one is finished.
 	 *
 	 * @return The file of the recording.
 	 */
 	public Path getFile() {
 		return file;
+	}
+
+	/**
+	 * Returns the segments of the recording that are kept, oldest first: those
+	 * finished so far, without those the options had deleted. Once the
+	 * recorder is stopped, the last segment is among them.
+	 *
+	 * @return The segments, or an empty list for a recorder that does not
+	 * record in segments.
+	 */
+	public List<MediaRecorderSegment> getSegments() {
+		synchronized (keptSegments) {
+			return Collections.unmodifiableList(new ArrayList<>(keptSegments));
+		}
+	}
+
+	/**
+	 * Saves what the replay buffer holds into the given file, which must not
+	 * exist yet. The future completes on the listener's thread.
+	 */
+	CompletableFuture<MediaRecorderSegment> saveReplay(Path file) throws IOException {
+		Objects.requireNonNull(file, "File is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.RECORDING);
+
+			Path target = file.toAbsolutePath();
+
+			// Created here, so that a file that exists is never emptied.
+			Files.createFile(target);
+
+			int id = nextSaveId++;
+			CompletableFuture<MediaRecorderSegment> future = new CompletableFuture<>();
+
+			pendingSaves.put(id, new PendingSave(target, future));
+
+			if (!saveReplay(handle, id, target.toString())) {
+				pendingSaves.remove(id);
+				deleteQuietly(target);
+
+				throw new IllegalStateException("The replay buffer failed, as the listener was told");
+			}
+
+			return future;
+		}
 	}
 
 	/**
@@ -492,11 +654,64 @@ public class MediaRecorder implements AutoCloseable {
 	}
 
 	private void deleteOutput() {
+		deleteQuietly(output);
+	}
+
+	private static void deleteQuietly(Path path) {
 		try {
-			Files.deleteIfExists(output);
+			Files.deleteIfExists(path);
 		}
 		catch (IOException e) {
 			// The file stays behind, empty; there is nothing else to do.
+		}
+	}
+
+	/** Fails the replays that were asked for and will not be saved. */
+	private void failPendingSaves(Exception cause) {
+		for (Integer id : new ArrayList<>(pendingSaves.keySet())) {
+			PendingSave save = pendingSaves.remove(id);
+
+			if (save != null) {
+				post(() -> {
+					deleteQuietly(save.file);
+					save.future.completeExceptionally(cause);
+				});
+			}
+		}
+	}
+
+	/**
+	 * Keeps the segment, and returns the oldest ones the options no longer
+	 * keep, to be deleted.
+	 */
+	private List<MediaRecorderSegment> keep(MediaRecorderSegment segment) {
+		List<MediaRecorderSegment> expired = new ArrayList<>();
+		int maxSegments = segments.getMaxSegments();
+		long maxTotalSize = segments.getMaxTotalSize();
+
+		synchronized (keptSegments) {
+			keptSegments.addLast(segment);
+			keptBytes += segment.getSize();
+
+			while (keptSegments.size() > 1
+					&& ((maxSegments > 0 && keptSegments.size() > maxSegments)
+					|| (maxTotalSize > 0 && keptBytes > maxTotalSize))) {
+				MediaRecorderSegment oldest = keptSegments.removeFirst();
+
+				keptBytes -= oldest.getSize();
+				expired.add(oldest);
+			}
+		}
+
+		return expired;
+	}
+
+	private static long sizeOf(Path path) {
+		try {
+			return Files.size(path);
+		}
+		catch (IOException e) {
+			return 0;
 		}
 	}
 
@@ -642,7 +857,96 @@ public class MediaRecorder implements AutoCloseable {
 		});
 	}
 
+	/** Called by native code on the writer thread. */
+	private void onNativeSegmentFinished(long index, String path, long startUs, long durationUs, int result) {
+		// In the order of the native MediaRecorder::Result.
+		MediaRecorderResult outcome = MediaRecorderResult.values()[result];
+		Path segmentFile = Paths.get(path);
+
+		if (!outcome.keepsFile()) {
+			// Nothing in it plays; what went wrong was reported already.
+			post(() -> deleteQuietly(segmentFile));
+			return;
+		}
+
+		MediaRecorderSegment segment = new MediaRecorderSegment(index, segmentFile, startUs, durationUs,
+				sizeOf(segmentFile), outcome);
+
+		// Kept here, so that the segments are known once the recorder is
+		// stopped; deleted on the event thread, which the writer does not
+		// wait for.
+		List<MediaRecorderSegment> expired = keep(segment);
+
+		file = segmentFile;
+
+		post(() -> {
+			MediaRecorderListener current = listener;
+
+			if (current != null) {
+				current.onSegmentFinished(segment);
+			}
+
+			for (MediaRecorderSegment old : expired) {
+				try {
+					Files.deleteIfExists(old.getFile());
+				}
+				catch (IOException e) {
+					current = listener;
+
+					if (current != null) {
+						current.onWarning("Deleting the old segment " + old.getFile() + " failed: " + e);
+					}
+				}
+			}
+		});
+	}
+
+	/** Called by native code on the writer thread. */
+	private void onNativeReplaySaved(int id, int result, long startUs, long durationUs, String error) {
+		PendingSave save = pendingSaves.remove(id);
+
+		if (save == null) {
+			return;
+		}
+
+		MediaRecorderResult outcome = MediaRecorderResult.values()[result];
+
+		if (!outcome.keepsFile()) {
+			post(() -> {
+				deleteQuietly(save.file);
+
+				if (outcome == MediaRecorderResult.EMPTY) {
+					save.future.completeExceptionally(new IllegalStateException("The replay buffer holds no media"));
+				}
+				else {
+					save.future.completeExceptionally(new IOException(error));
+				}
+			});
+			return;
+		}
+
+		MediaRecorderSegment segment = new MediaRecorderSegment(id, save.file, startUs, durationUs,
+				sizeOf(save.file), outcome);
+
+		post(() -> {
+			MediaRecorderListener current = listener;
+
+			if (error != null && current != null) {
+				current.onWarning(error);
+			}
+
+			save.future.complete(segment);
+		});
+	}
+
 	private native long create(String path, long tableAddress) throws IOException;
+
+	private native long createSegments(String prefix, String suffix, int width, long firstIndex,
+			long maxDurationUs, long maxBytes, long tableAddress) throws IOException;
+
+	private native long createReplay(long windowUs, long maxBytes, long tableAddress) throws IOException;
+
+	private static native boolean saveReplay(long handle, int id, String path);
 
 	private static native int addTrack(long handle, long frames);
 
@@ -653,5 +957,20 @@ public class MediaRecorder implements AutoCloseable {
 	private static native long[] stats(long handle);
 
 	private static native void dispose(long handle);
+
+
+	/** A replay that was asked for: where it goes, and who waits for it. */
+	private static final class PendingSave {
+
+		final Path file;
+
+		final CompletableFuture<MediaRecorderSegment> future;
+
+
+		PendingSave(Path file, CompletableFuture<MediaRecorderSegment> future) {
+			this.file = file;
+			this.future = future;
+		}
+	}
 
 }
