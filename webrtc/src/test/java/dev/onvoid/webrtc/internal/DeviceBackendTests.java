@@ -28,7 +28,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import dev.onvoid.webrtc.media.AudioBackendUnavailableException;
@@ -179,8 +180,6 @@ class DeviceBackendTests {
 	public static class RemovedDefaultDevice {
 
 		public static void main(String[] args) {
-			// PulseAudio's thread stays attached to the JVM once it has called
-			// the listener, and keeps the JVM from ending on its own.
 			try {
 				probe();
 			}
@@ -188,7 +187,8 @@ class DeviceBackendTests {
 				e.printStackTrace();
 				System.exit(1);
 			}
-			System.exit(0);
+			// Returns without System.exit: the JVM ends on its own only if
+			// no thread of PulseAudio has stayed attached to it.
 		}
 
 		private static void probe() throws Exception {
@@ -199,37 +199,51 @@ class DeviceBackendTests {
 			expectDefault(SINK, MediaDevices.getDefaultAudioRenderDevice());
 			expectDefault(SOURCE, MediaDevices.getDefaultAudioCaptureDevice());
 
-			CountDownLatch removed = new CountDownLatch(2);
+			BlockingQueue<String> removals = new LinkedBlockingQueue<>();
 
 			MediaDevices.addDeviceChangeListener(new DeviceChangeListener() {
 				@Override
 				public void deviceConnected(Device device) { }
 				@Override
 				public void deviceDisconnected(Device device) {
-					// The listener runs on PulseAudio's own thread, which does
-					// not wait for the answers: these ask for the device just
-					// removed, and the server answers that it does not exist.
-					MediaDevices.getDefaultAudioRenderDevice();
-					MediaDevices.getDefaultAudioCaptureDevice();
-					removed.countDown();
+					// The defaults the server names now that the device is
+					// gone, not the ones it named before.
+					try {
+						removals.add(device.getDescriptor()
+								+ ": render=" + descriptor(MediaDevices.getDefaultAudioRenderDevice())
+								+ ", capture=" + descriptor(MediaDevices.getDefaultAudioCaptureDevice()));
+					}
+					catch (RuntimeException e) {
+						removals.add(device.getDescriptor() + ": " + e);
+					}
 				}
 			});
 
+			// One after the other, so that each listener call sees one removal.
 			pactl("unload-module", "module-null-sink");
+			expectRemoval(SINK + ": render=null, capture=" + SOURCE, removals);
+
 			pactl("unload-module", "module-null-source");
+			expectRemoval(SOURCE + ": render=null, capture=null", removals);
 
-			if (!removed.await(10, TimeUnit.SECONDS)) {
-				throw new AssertionError("The removals were not reported");
-			}
-
-			// Answered after the failed queries, on the same connection: the
-			// server has no device left to name the default.
 			expectDefault(null, MediaDevices.getDefaultAudioRenderDevice());
 			expectDefault(null, MediaDevices.getDefaultAudioCaptureDevice());
 		}
 
+		private static void expectRemoval(String expected, BlockingQueue<String> removals) throws Exception {
+			String removal = removals.poll(10, TimeUnit.SECONDS);
+
+			if (!expected.equals(removal)) {
+				throw new AssertionError("Expected the removal " + expected + ", got " + removal);
+			}
+		}
+
+		private static String descriptor(AudioDevice device) {
+			return device == null ? null : device.getDescriptor();
+		}
+
 		private static void expectDefault(String descriptor, AudioDevice device) {
-			String actual = device == null ? null : device.getDescriptor();
+			String actual = descriptor(device);
 
 			if (descriptor == null ? actual != null : !descriptor.equals(actual)) {
 				throw new AssertionError("Expected the default " + descriptor + ", got " + device);

@@ -15,6 +15,7 @@
  */
 
 #include "media/DeviceChangeListener.h"
+#include "api/JavaCallbackThread.h"
 #include "api/WebRTCUtils.h"
 #include "media/audio/AudioDevice.h"
 #include "media/video/VideoDevice.h"
@@ -31,6 +32,7 @@ namespace jni
 {
 	DeviceChangeListener::DeviceChangeListener(JNIEnv * env, const JavaGlobalRef<jobject> & listener) :
 		listener(listener),
+		detached(false),
 		javaClass(JavaClasses::get<JavaDeviceChangeListenerClass>(env))
 	{
 	}
@@ -45,19 +47,41 @@ namespace jni
 		notify(device, javaClass->deviceDisconnected);
 	}
 
+	void DeviceChangeListener::detach()
+	{
+		detached = true;
+	}
+
 	void DeviceChangeListener::notify(const avdev::DevicePtr & device, jmethodID method)
 	{
-		JNIEnv * env = AttachCurrentThread();
+		// This runs on a thread the operating system owns (a CoreAudio queue, the MMDevice
+		// notification thread, the PulseAudio main loop, ...), which has no handler for a C++
+		// exception. A Java listener called here would also hold up the next change, and a device
+		// query it makes would wait for the very thread it runs on: the PulseAudio main loop
+		// answers only once the listener has returned. Attached to the JVM, the thread would
+		// moreover keep it from ending, as these threads run as long as the process does.
+		std::shared_ptr<DeviceChangeListener> self = weak_from_this().lock();
 
-		if (env == nullptr) {
+		if (!self || detached) {
 			return;
 		}
 
-		// This runs on a thread the operating system owns (a CoreAudio queue, the MMDevice
-		// notification thread, the PulseAudio main loop, ...), which has no handler for a C++
-		// exception and never returns to Java. So nothing may be thrown from here, and what the
-		// Java listener throws is reported and cleared: left pending, it would be there for the
-		// next JNI call on this thread, which may be the next listener or the next event.
+		try {
+			JavaCallbackThread::PostDeviceChange([self, device, method](JNIEnv * env) {
+				if (!self->detached) {
+					self->call(env, device, method);
+				}
+			});
+		}
+		catch (...) {
+			RTC_LOG(LS_ERROR) << "Device change notification failed";
+		}
+	}
+
+	void DeviceChangeListener::call(JNIEnv * env, const avdev::DevicePtr & device, jmethodID method)
+	{
+		// What the Java listener throws is reported and cleared: left pending, it would be there
+		// for the next JNI call on this thread, which may be the next listener or the next event.
 		try {
 			JavaLocalRef<jobject> jdevice = nullptr;
 

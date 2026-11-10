@@ -122,7 +122,9 @@ for (VideoCaptureCapability capability : capabilities) {
 
 ## Hotplug Events
 
-You can listen for device hotplug events to be notified when devices are connected or disconnected:
+You can listen for device hotplug events to be notified when devices are connected or disconnected.
+Listeners are called on a thread of the library, one change at a time and in order, so a listener may
+query `MediaDevices` again, for example for the new default device:
 
 ```java
 // Import required classes

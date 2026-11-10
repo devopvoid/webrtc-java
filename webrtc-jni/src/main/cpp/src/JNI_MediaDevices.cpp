@@ -68,6 +68,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_MediaDevices_removeDeviceCha
 		jni::WebRTCContext * context = static_cast<jni::WebRTCContext *>(javaContext);
 		auto listener = javaContext->removeNativeRef<jni::DeviceChangeListener>(env, jni::JavaLocalRef<jobject>(env, jListener));
 
+		if (listener) {
+			listener->detach();
+		}
+
 		try {
 			context->getAudioDeviceManager()->detachHotplugListener(listener);
 			context->getVideoDeviceManager()->detachHotplugListener(listener);
