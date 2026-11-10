@@ -415,14 +415,10 @@ class MediaPlayerTest {
 
 			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
 
-			// Audio going out alongside it can be a little ahead of the frame.
-			long first = playback.firstFramePositionUs.get();
-
-			assertTrue(first >= 1_000_000 && first < 1_040_000, "first frame at " + first + " us");
-
 			// 1 s to 2.933 s, and the audio from the first packet the reader
 			// lands on, a few milliseconds after 1 s, uncut: about half a
-			// second more of each than seek gives.
+			// second more of each than seek gives. Where the position goes is
+			// up to positionFollowsAFastSeekToItsKeyframe.
 			assertTrue(Math.abs(playback.frames.get() - 30) <= 1,
 					"video frames: " + playback.frames.get());
 			assertTrue(Math.abs(playback.chunks.get() - 198) <= 3,
@@ -962,11 +958,16 @@ class MediaPlayerTest {
 			playback.player.fastSeek(1_500_000);
 			playback.player.play();
 
-			assertTrue(waitFor(() -> playback.frames.get() > 0, 10_000), "no video");
+			assertTrue(waitFor(() -> playback.frames.get() > 1, 10_000), "no video");
 
-			long first = playback.firstFramePositionUs.get();
+			// At the first frame, the position is still the one asked for, or
+			// that of audio that went out before it, depending on which came
+			// first. At the second, the first frame has gone out: the position
+			// follows it and the audio alongside, a little ahead at most, and
+			// is well short of 1.5 s.
+			long second = playback.framePositionsUs.get(1);
 
-			assertTrue(first < 1_100_000, "first frame at " + first + " us");
+			assertTrue(second >= 1_000_000 && second < 1_400_000, "second frame at " + second + " us");
 		}
 	}
 
