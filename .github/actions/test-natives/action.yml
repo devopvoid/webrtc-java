@@ -57,9 +57,9 @@ runs:
         name: natives-media-${{ inputs.platform-name }}
         path: natives
 
-    # PulseAudio, libudev and libdbus are deliberately not installed here: the
-    # natives open them at runtime, and the armhf lane, whose image has none of
-    # them, proves that they load without them.
+    # PulseAudio, libudev and libdbus are deliberately not installed as runtime
+    # libraries: the natives open them at runtime, and the armhf lane, whose
+    # image has none of them, proves that they load without them.
     - name: Install 32-bit runtime libraries
       if: runner.os == 'Linux' && inputs.java-architecture == 'armv7'
       run: |
@@ -73,6 +73,18 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libx11-6 libxext6 libxfixes3 libxdamage1 libxtst6 libxrandr2 libxcomposite1 libglib2.0-0 libgbm1 libdrm2
+      shell: bash
+
+    # Not a runtime library either: DeviceBackendTests starts a PulseAudio
+    # server of its own, with virtual devices only, to remove a default device
+    # while the natives use it. The armhf lane keeps running without it. No
+    # autospawn, so that the other tests still find no server running.
+    - name: Install a PulseAudio server for the device tests
+      if: runner.os == 'Linux' && inputs.java-architecture != 'armv7'
+      run: |
+        sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
+        mkdir -p ~/.config/pulse
+        echo "autospawn = no" > ~/.config/pulse/client.conf
       shell: bash
 
     - name: Set up JDK ${{ inputs.java-version }}

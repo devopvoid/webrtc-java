@@ -150,13 +150,23 @@ namespace jni
 			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				iterate(mainloop, op);
 
-			op = pa.pa_context_get_source_info_by_name(context, defaultCaptureName.c_str(), getSourceInfoCallback, this);
+			// Without a source the server names no default, and an empty name is no query at all.
+			if (defaultCaptureName.empty()) {
+				defaultCaptureDescName.clear();
+			}
+			else {
+				op = pa.pa_context_get_source_info_by_name(context, defaultCaptureName.c_str(), getSourceInfoCallback, this);
 
-			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
-				iterate(mainloop, op);
+				if (!pa.pa_threaded_mainloop_in_thread(mainloop))
+					iterate(mainloop, op);
+			}
 
 			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				pa.pa_threaded_mainloop_unlock(mainloop);
+
+			if (defaultCaptureName.empty() || defaultCaptureDescName.empty()) {
+				return nullptr;
+			}
 
             AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultCaptureDescName, defaultCaptureName);
 			defaultDevice->directionType = AudioDeviceDirectionType::adtCapture;
@@ -191,13 +201,23 @@ namespace jni
 			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				iterate(mainloop, op);
 
-			op = pa.pa_context_get_sink_info_by_name(context, defaultPlaybackName.c_str(), getSinkInfoCallback, this);
+			// Without a sink the server names no default, and an empty name is no query at all.
+			if (defaultPlaybackName.empty()) {
+				defaultPlaybackDescName.clear();
+			}
+			else {
+				op = pa.pa_context_get_sink_info_by_name(context, defaultPlaybackName.c_str(), getSinkInfoCallback, this);
 
-			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
-				iterate(mainloop, op);
+				if (!pa.pa_threaded_mainloop_in_thread(mainloop))
+					iterate(mainloop, op);
+			}
 
 			if (!pa.pa_threaded_mainloop_in_thread(mainloop))
 				pa.pa_threaded_mainloop_unlock(mainloop);
+
+			if (defaultPlaybackName.empty() || defaultPlaybackDescName.empty()) {
+				return nullptr;
+			}
 
             AudioDevicePtr defaultDevice = std::make_shared<AudioDevice>(defaultPlaybackDescName, defaultPlaybackName);
             defaultDevice->directionType = AudioDeviceDirectionType::adtRender;
@@ -226,12 +246,17 @@ namespace jni
 
             auto& pa = PulseAudioLoader::instance();
 
-			if (last > 0) {
-				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
+			// A failed query, e.g. for a source removed after the server named it the default,
+			// ends with last < 0 and no info, and nothing follows it.
+			if (last < 0) {
+				engine->defaultCaptureDescName.clear();
+			}
+			else if (last == 0 && info) {
+				engine->defaultCaptureDescName = info->description ? info->description : "";
 				return;
 			}
 
-			engine->defaultCaptureDescName = info->description;
+			pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 		}
 
 		void PulseAudioDeviceManager::getSourceCallback(pa_context * ctx, const pa_source_info * info, int last, void * userdata)
@@ -266,13 +291,18 @@ namespace jni
 		{
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
 
-			if (last > 0) {
-                auto& pa = PulseAudioLoader::instance();
-				pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
+			// A failed query, e.g. for a sink removed after the server named it the default,
+			// ends with last < 0 and no info, and nothing follows it.
+			if (last < 0) {
+				engine->defaultPlaybackDescName.clear();
+			}
+			else if (last == 0 && info) {
+				engine->defaultPlaybackDescName = info->description ? info->description : "";
 				return;
 			}
 
-			engine->defaultPlaybackDescName = info->description;
+			auto& pa = PulseAudioLoader::instance();
+			pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 		}
 
 		void PulseAudioDeviceManager::getSinkCallback(pa_context * ctx, const pa_sink_info * info, int last, void * userdata)
@@ -350,8 +380,9 @@ namespace jni
             auto& pa = PulseAudioLoader::instance();
 
 			PulseAudioDeviceManager * engine = reinterpret_cast<PulseAudioDeviceManager *>(userdata);
-			engine->defaultCaptureName = info->default_source_name;
-			engine->defaultPlaybackName = info->default_sink_name;
+			// A failed query has no info, and a server without sources or sinks names no default.
+			engine->defaultCaptureName = info && info->default_source_name ? info->default_source_name : "";
+			engine->defaultPlaybackName = info && info->default_sink_name ? info->default_sink_name : "";
 
 			pa.pa_threaded_mainloop_signal(engine->mainloop, 0);
 		}
