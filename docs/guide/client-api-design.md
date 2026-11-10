@@ -219,6 +219,7 @@ public final class WebRtc implements AutoCloseable {
     public List<Peer> peers();                       // snapshot of the open peers
     public AudioMode audioMode();
     public LoadStats loadStats();                    // how much work waits and runs, cheap enough to read every second
+    public CompletableFuture<CallCheckResult> checkCall(CallCheck check);  // camera, microphone and network before a call
 
     public CompletableFuture<Void> closeAsync();
     @Override
@@ -857,6 +858,75 @@ public enum QualityCondition {
   first diagnosis, then only changes to its state or conditions.
 - `diagnosticReport()` can go into a support ticket as it is. It leaves out raw stats, ids,
   addresses, ports, URLs, credentials, SDP, certificates and codec parameters.
+
+### `CallCheck`, before a call
+
+A self-test for "am I ready for the call?": the camera delivers frames, the microphone audio that is
+neither silent nor clipped, and a connection to a test peer comes up.
+
+```java
+public final class CallCheck {
+
+    public static Builder builder();
+
+    public static final class Builder {
+        public Builder video(LocalVideo track);         // frames arrive, not all black
+        public Builder audio(LocalAudio track);         // audio arrives, not silent, not clipped
+        public Builder network(PeerOptions options);    // a connection to a test peer comes up
+        public Builder duration(Duration duration);     // how long to measure, default 3 s
+        public Builder timeout(Duration timeout);       // how long to wait for the first sample, default 10 s
+        public CallCheck build();
+    }
+}
+
+public final class CallCheckResult {
+
+    public enum Problem { NO_VIDEO, DARK_VIDEO, NO_AUDIO, SILENT_AUDIO, CLIPPED_AUDIO, NO_CONNECTION;
+        public String reason();
+    }
+
+    public boolean isReady();                           // no problem found, not a guarantee
+    public Set<Problem> problems();
+    public Video video();                               // null for a part not checked
+    public Audio audio();
+    public Network network();
+
+    public static final class Video {
+        public int frames();
+        public double framesPerSecond();
+        public int width();
+        public int height();
+        public double brightness();                     // average luma of the brightest frame, 0 to 1
+    }
+
+    public static final class Audio {
+        public Duration received();
+        public double peakLevel();                      // linear, 0 to 1
+        public double rmsLevel();
+        public double clipping();                       // share of samples at full scale
+    }
+
+    public static final class Network {
+        public boolean isConnected();
+        public Duration connectTime();
+        public Duration roundTripTime();
+        public String candidateType();
+        public boolean isRelayed();
+        public Throwable failure();                     // TimeoutException, or why the peer failed
+    }
+}
+```
+
+- The parts run at the same time, so a check takes as long as its slowest part. Each waits on the
+  runtime's timer for its first sample, then measures for the duration, which tests fire by hand
+  with a `ManualTimer`.
+- Problems with reasons, as for `PeerDiagnostics`, rather than a score.
+- Reachability is told by a connection to a real test peer, never derived from the configuration.
+  `relayOnly(true)` makes a connection prove the TURN servers.
+- WebRTC records a microphone only while a send stream runs, and the client API does not start the
+  recording itself. So the check sends a microphone to a pair of peers of its own, whose sender drops
+  every encoded frame, so that the user does not hear themselves. The audio reaches the check
+  through a sink on the track, after processing.
 
 ### `Whip` and `Whep`
 

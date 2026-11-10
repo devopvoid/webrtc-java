@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.media.audio.AudioDataAccess;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.AudioTrackSink;
 import dev.onvoid.webrtc.media.audio.VoiceActivityConfig;
 import dev.onvoid.webrtc.media.audio.VoiceActivityListener;
 
@@ -40,6 +42,8 @@ class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 	// Guarded by this.
 
 	private final List<VoiceActivity> listeners = new ArrayList<>();
+
+	private final List<AudioTrackSink> sinks = new ArrayList<>();
 
 
 	/**
@@ -91,19 +95,62 @@ class LocalAudioImpl extends LocalTrackImpl implements LocalAudio {
 		};
 	}
 
+	/**
+	 * Hands the audio the track sends to the sink, on the thread that
+	 * delivers it, in an array that is valid only during the call. A
+	 * microphone's audio flows only while WebRTC records it.
+	 *
+	 * @return the subscription that removes the sink.
+	 */
+	Subscription onPcm(AudioTrackSink sink) {
+		requireNonNull(sink, "sink");
+
+		synchronized (this) {
+			if (!isLive()) {
+				return () -> { };
+			}
+
+			sinks.add(sink);
+			audioTrack().addSink(sink, AudioDataAccess.REUSED);
+		}
+
+		return () -> {
+			synchronized (LocalAudioImpl.this) {
+				// Once the track ended, the release removes what is left.
+				if (isLive() && sinks.remove(sink)) {
+					audioTrack().removeSink(sink);
+				}
+			}
+		};
+	}
+
 	@Override
 	void beforeRelease() {
 		List<VoiceActivity> attached;
+		List<AudioTrackSink> attachedSinks;
 
 		synchronized (this) {
 			attached = new ArrayList<>(listeners);
 			listeners.clear();
+			attachedSinks = new ArrayList<>(sinks);
+			sinks.clear();
 		}
 
 		for (VoiceActivity listener : attached) {
 			listener.closed = true;
 			detach(listener);
 		}
+		for (AudioTrackSink sink : attachedSinks) {
+			audioTrack().removeSink(sink);
+		}
+	}
+
+	/**
+	 * @return true for a track of captured audio, which flows only while
+	 * WebRTC records, and so only while a peer sends a microphone track.
+	 */
+	boolean isMicrophone() {
+		return microphone;
 	}
 
 	private void detach(VoiceActivity listener) {

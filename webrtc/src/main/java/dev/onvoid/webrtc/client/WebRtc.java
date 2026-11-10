@@ -314,6 +314,33 @@ public final class WebRtc implements AutoCloseable {
 	}
 
 	/**
+	 * Checks before a call that the camera and microphone deliver what a call
+	 * needs and that a connection to a test peer comes up, all at the same
+	 * time. It takes as long as the slowest part: up to the check's timeout
+	 * for the first frame, the first audio and the connection, then its
+	 * duration of measuring. The peers the check creates show among {@link
+	 * #peers()} meanwhile and are closed before the result goes out.
+	 *
+	 * @param check what to check.
+	 *
+	 * @return a future that completes on an event thread of the runtime's
+	 * local media with what the check found, or fails with a {@link
+	 * PeerClosedException} when the runtime closes first. Cancelling it stops
+	 * waiting, not the check.
+	 *
+	 * @throws IllegalArgumentException if a track of the check was not
+	 *                                  created by this runtime.
+	 * @throws ConfigurationException   if WebRTC refuses the network options.
+	 * @throws PeerClosedException      if the runtime is closed.
+	 */
+	public CompletableFuture<CallCheckResult> checkCall(CallCheck check) {
+		requireNonNull(check, "check");
+		checkOpen();
+
+		return media.toPublic(CallChecker.start(this, check));
+	}
+
+	/**
 	 * @return the peers that are not closed.
 	 */
 	public List<Peer> peers() {
