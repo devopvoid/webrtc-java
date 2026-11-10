@@ -133,7 +133,8 @@ class SegmentedRecorderTest {
 					assertTrue(Math.abs(gapMs) < 200, "gap " + gapMs + " ms after " + segment);
 				}
 
-				assertPlaysOnItsOwn(segment.getFile(), 2);
+				// Stopped right after the last one began, it may hold no audio.
+				assertPlaysOnItsOwn(segment.getFile(), 2, i == segments.size() - 1);
 
 				if (i > 0) {
 					assertBeginsWithVideo(segment.getFile());
@@ -171,9 +172,11 @@ class SegmentedRecorderTest {
 
 			assertTrue(segments.size() >= 2, "segments: " + segments);
 
-			for (MediaRecorderSegment segment : segments) {
+			for (int i = 0; i < segments.size(); i++) {
+				MediaRecorderSegment segment = segments.get(i);
+
 				assertTrue(segment.getFile().getFileName().toString().matches("call-\\d\\.webm"), segment.toString());
-				assertPlaysOnItsOwn(segment.getFile(), 2);
+				assertPlaysOnItsOwn(segment.getFile(), 2, i == segments.size() - 1);
 			}
 		}
 	}
@@ -207,8 +210,8 @@ class SegmentedRecorderTest {
 				// Ends at the next key frame once the limit is reached.
 				assertTrue(segments.get(i).getSize() >= maxSize, segments.get(i).toString());
 			}
-			for (MediaRecorderSegment segment : segments) {
-				assertPlaysOnItsOwn(segment.getFile(), 2);
+			for (int i = 0; i < segments.size(); i++) {
+				assertPlaysOnItsOwn(segments.get(i).getFile(), 2, i == segments.size() - 1);
 			}
 		}
 	}
