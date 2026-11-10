@@ -1019,6 +1019,69 @@ ICE credentials, SDP, certificates and codec parameters. Missing measurements
 become JSON null. The raw `report()` and its string representation are not
 sanitized diagnostic exports.
 
+## Checking Before a Call
+
+Diagnostics watch a call that is under way. `checkCall` answers the question before it: am I ready
+for the call? It checks that the camera delivers frames, that the microphone delivers audio that is
+neither silent nor clipped, and that a connection to a test peer comes up, all at the same time:
+
+```java
+LocalCamera camera = rtc.media().camera();
+LocalAudio microphone = rtc.media().microphone();
+
+CallCheck check = CallCheck.builder()
+        .video(camera)
+        .audio(microphone)                 // ask the user to say something meanwhile
+        .network(PeerOptions.builder()
+                .iceServer("turn:turn.example.com", "user", "secret")
+                .relayOnly(true)           // only a relayed connection counts
+                .signaling(testPeerSignaling)
+                .build())
+        .build();
+
+rtc.checkCall(check).thenAccept(result -> {
+    if (result.isReady()) {
+        System.out.println("Ready: " + result);
+    }
+    result.problems().forEach(problem -> System.out.println(problem.reason()));
+});
+```
+
+Every part is optional, but a check needs at least one. Each waits up to the check's `timeout`
+(10 seconds by default) for the first frame, the first audio or the connection, then measures for
+its `duration` (3 seconds by default). The future completes on an event thread of the runtime's
+local media, so the rule against `join()` holds there. The tracks stay the application's: the check
+neither closes nor mutes them, and the same tracks can go into the call once it is done.
+
+| Problem | Found when |
+|---|---|
+| `NO_VIDEO` | The video track delivered no frame within the timeout. |
+| `DARK_VIDEO` | No frame had an average luma above 8% of white: a covered lens, a closed privacy shutter or no light. The brightest frame counts, since a camera's first frames are often dark while its exposure settles. A muted track sends black frames, so it is dark too. |
+| `NO_AUDIO` | The audio track delivered no audio within the timeout. |
+| `SILENT_AUDIO` | The audio never rose above -50 dBFS: a muted microphone, or nobody spoke. |
+| `CLIPPED_AUDIO` | More than 0.1% of the samples were at full scale (99% of it or above): the input is too loud and distorts. |
+| `NO_CONNECTION` | No connection to the test peer came up within the timeout. `network().failure()` tells why: a `TimeoutException`, or the failure of the peer. |
+
+Besides the problems, the result has the measurements behind them: frames, frame rate, resolution and
+brightness of the video; how much audio arrived, with its peak and RMS level and the share of
+clipped samples; and for the network the time it took to connect, the round trip time, the local
+candidate type and whether the connection is relayed. `isReady()` means that no part found a
+problem, not that the call is sure to work.
+
+Audio is measured as the track sends it, after audio processing. WebRTC records a microphone only
+while it sends it, so for a microphone the check sends the track to a peer of its own, in the same
+runtime, which drops every encoded frame before it goes out: nothing is played back, and the user
+does not hear themselves. That peer, and the one of the network check, show among `rtc.peers()`
+while the check runs and are closed before the result goes out.
+
+Whether the network lets a call through cannot be told from the local configuration, only from a
+connection that is made. The network part therefore connects to a real test peer: one the
+application runs for this, such as an echo bot behind its own signaling, or any other peer that
+answers the offer. The check creates a peer with the given options, opens a data channel so that it
+offers, reads the connection's statistics once it is up and closes the peer. With `relayOnly(true)`
+the connection can only go through the TURN servers of the options, so a connection proves that they
+work; without it, a direct connection may come up instead.
+
 ## Closing
 
 You close what you created, and closing an owner closes what it owns:

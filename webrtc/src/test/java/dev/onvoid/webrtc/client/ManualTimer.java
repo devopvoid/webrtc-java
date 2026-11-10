@@ -100,6 +100,33 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 		return count;
 	}
 
+	/**
+	 * Waits until a task with the delay waits to be fired, which tells that
+	 * another thread got as far as scheduling it.
+	 */
+	void awaitScheduled(Duration delay, long timeoutSeconds) throws InterruptedException {
+		awaitScheduled(delay, 1, timeoutSeconds);
+	}
+
+	/**
+	 * Waits until at least the given number of tasks with the delay wait to
+	 * be fired.
+	 */
+	synchronized void awaitScheduled(Duration delay, int count, long timeoutSeconds) throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+
+		while (scheduled(delay) < count) {
+			long left = deadline - System.nanoTime();
+
+			if (left <= 0) {
+				throw new IllegalStateException(count + " tasks with a delay of " + delay
+						+ " were not scheduled within " + timeoutSeconds + " s");
+			}
+
+			TimeUnit.NANOSECONDS.timedWait(this, left);
+		}
+	}
+
 	@Override
 	public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
 		return add(new Task<>(Executors.callable(command, null), unit.toMillis(delay), false));
@@ -177,6 +204,7 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 		}
 
 		tasks.add(task);
+		notifyAll();
 
 		return task;
 	}
