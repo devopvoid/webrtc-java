@@ -1063,6 +1063,10 @@ namespace ffmpeg
 		if (tracks_[index]->IsVideo() && frame.key_frame) {
 			key_times_[index].push_back(frame.timeline_us);
 			last_key_us_[index] = api_->now_us();
+
+			// The clock asked for it until it came, and a request still held
+			// back would bring another one before its time.
+			KeyFrameArrived(index);
 		}
 
 		last_frame_us_[index] = frame.timeline_us;
