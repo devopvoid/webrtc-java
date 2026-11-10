@@ -39,6 +39,9 @@ final class FakeTrack implements AutoCloseable {
 	static final int DELTA_FRAME_SIZE = 1000;
 	static final int AUDIO_FRAME_SIZE = 100;
 
+	/** 20 ms of G.711, one byte a sample. */
+	static final int G711_FRAME_SIZE = 160;
+
 	private static int nextSsrc = 1000;
 
 	private final long frames;
@@ -98,6 +101,15 @@ final class FakeTrack implements AutoCloseable {
 	 */
 	static FakeTrack opus() {
 		return new FakeTrack(false, "audio/opus", 48000);
+	}
+
+	/**
+	 * @param mimeType "audio/PCMU" or "audio/PCMA".
+	 *
+	 * @return A G.711 track.
+	 */
+	static FakeTrack g711(String mimeType) {
+		return new FakeTrack(false, mimeType, 8000);
 	}
 
 	boolean isVideo() {
@@ -245,7 +257,7 @@ final class FakeTrack implements AutoCloseable {
 			pushed++;
 		}
 
-		byte[] data = video ? videoPayload(codec, key) : audioPayload();
+		byte[] data = video ? videoPayload(codec, key) : audioPayload(codec);
 
 		FakeMedia.push(frames, video, codec, ssrc, rtpTimestamp, key, key ? WIDTH : 0, key ? HEIGHT : 0, timeUs,
 				data);
@@ -297,9 +309,14 @@ final class FakeTrack implements AutoCloseable {
 	}
 
 	/**
-	 * An Opus packet of one 20 ms CELT frame, mono (RFC 6716, section 3.1).
+	 * An Opus packet of one 20 ms CELT frame, mono (RFC 6716, section 3.1),
+	 * or 20 ms of G.711, every byte of which is a sample.
 	 */
-	private static byte[] audioPayload() {
+	private static byte[] audioPayload(String codec) {
+		if (!codec.equals("audio/opus")) {
+			return new byte[G711_FRAME_SIZE];
+		}
+
 		byte[] data = new byte[AUDIO_FRAME_SIZE];
 
 		data[0] = (byte) 0xF8;
