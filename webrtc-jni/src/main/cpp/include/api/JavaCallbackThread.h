@@ -33,12 +33,20 @@ namespace jni
 	// their media. So these observers are queued and called here instead, one
 	// at a time and in the order they were posted.
 	//
-	// The thread starts on first use and is attached to the JVM as a daemon,
-	// so that it never holds up the JVM's exit.
+	// Device change listeners have a thread of their own, for the same reason:
+	// the operating system notifies them on its own thread, a PulseAudio main
+	// loop or an MMDevice notification thread, which the device queries they
+	// make wait for. A separate one, so that a listener waiting for an observer
+	// does not wait for itself.
+	//
+	// The threads start on first use and are attached to the JVM as daemons,
+	// so that they never hold up the JVM's exit.
 	class JavaCallbackThread
 	{
 		public:
 			static void Post(absl::AnyInvocable<void(JNIEnv *) &&> callback);
+
+			static void PostDeviceChange(absl::AnyInvocable<void(JNIEnv *) &&> callback);
 	};
 }
 

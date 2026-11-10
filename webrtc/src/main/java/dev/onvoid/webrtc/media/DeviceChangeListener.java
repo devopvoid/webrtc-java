@@ -19,6 +19,12 @@ package dev.onvoid.webrtc.media;
 /**
  * A device change listener is notified whenever a media device such as a
  * camera, microphone, or speaker is connected to or removed from the system.
+ * <p>
+ * Listeners are called on a thread of the library, not on the one the system
+ * reports the change on, one change at a time and in the order they were
+ * reported. A listener may query {@link MediaDevices}, which then reflects the
+ * change. Once a listener has been removed, it gets no more changes, apart from
+ * one it may be handling at that moment.
  *
  * @author Alex Andres
  */
