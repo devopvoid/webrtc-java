@@ -269,7 +269,7 @@ jobs:
           cp "$WEBRTC_JAR" "webrtc-jni/target/webrtc-java-$VERSION-linux-x86_64.jar"
           (cd webrtc-media/target/natives && "$JAVA_HOME/bin/jar" xf "$GITHUB_WORKSPACE/$MEDIA_JAR" && rm -rf META-INF)
 
-          mvn -B -pl webrtc,webrtc-media,webrtc-swing,webrtc-javafx install -DskipNativeBuild -DskipTests
+          mvn -B -pl .,webrtc,webrtc-media,webrtc-swing,webrtc-javafx install -DskipNativeBuild -DskipTests
 
       - name: Build the native image
         run: mvn -B -pl webrtc-examples -Pnative package
