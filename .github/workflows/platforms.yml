@@ -197,3 +197,79 @@ jobs:
           java-distribution: temurin
           version: ${{ inputs.version }}
           jni-check: 'true'
+
+  # The native image example, built with GraalVM against the natives the build
+  # job uploaded, which the image carries inside itself. It connects two peers
+  # and exits with an error unless video, audio, channel messages, statistics
+  # and log messages all arrived. --exact-reachability-metadata makes anything
+  # the metadata of webrtc-java lacks fail at once, which would otherwise only
+  # fail where a lookup happens to find nothing.
+  native-image:
+    name: native-image (linux_x86-64)
+    needs: build
+    timeout-minutes: 30
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download natives
+        uses: actions/download-artifact@v8
+        with:
+          name: natives-linux_x86-64
+          path: natives
+
+      - name: Download media natives
+        uses: actions/download-artifact@v8
+        with:
+          name: natives-media-linux_x86-64
+          path: natives
+
+      - name: Install runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-6 libxext6 libxfixes3 libxdamage1 libxtst6 libxrandr2 libxcomposite1 libglib2.0-0 libgbm1 libdrm2
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm-community'
+
+      - name: Set the release dry-run version
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: mvn -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+
+      # The example resolves the libraries from the local repository, natives
+      # included, as an application does. webrtc attaches its natives from
+      # webrtc-jni/target and needs them installed beforehand, since it depends
+      # on them itself; webrtc-media packages its own from target/natives.
+      - name: Install the libraries with the natives
+        run: |
+          VERSION=$(sed -n 's|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml | head -n 1)
+          WEBRTC_JAR=$(find natives -name 'webrtc-java-*-linux-x86_64.jar' ! -name 'webrtc-java-media-*' | head -n 1)
+          MEDIA_JAR=$(find natives -name 'webrtc-java-media-*-linux-x86_64.jar' | head -n 1)
+
+          if [ -z "$VERSION" ] || [ -z "$WEBRTC_JAR" ] || [ -z "$MEDIA_JAR" ]; then
+            echo "Missing the version ($VERSION) or a native jar ($WEBRTC_JAR, $MEDIA_JAR)" >&2
+            exit 1
+          fi
+
+          mvn -B -q install:install-file -Dfile="$WEBRTC_JAR" -DgroupId=dev.onvoid.webrtc \
+            -DartifactId=webrtc-java -Dversion="$VERSION" -Dpackaging=jar -Dclassifier=linux-x86_64
+
+          mkdir -p webrtc-jni/target webrtc-media/target/natives
+          cp "$WEBRTC_JAR" "webrtc-jni/target/webrtc-java-$VERSION-linux-x86_64.jar"
+          (cd webrtc-media/target/natives && "$JAVA_HOME/bin/jar" xf "$GITHUB_WORKSPACE/$MEDIA_JAR" && rm -rf META-INF)
+
+          mvn -B -pl webrtc,webrtc-media,webrtc-swing,webrtc-javafx install -DskipNativeBuild -DskipTests
+
+      - name: Build the native image
+        run: mvn -B -pl webrtc-examples -Pnative package
+
+      - name: Run the native image
+        run: timeout 120 webrtc-examples/target/webrtc-native-image-example

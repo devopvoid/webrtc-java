@@ -45,7 +45,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 
 **Platforms**
 
-Prebuilt native libraries behind a thin JNI layer:
+Prebuilt native libraries behind a thin JNI layer, also in a **[GraalVM native image](https://jrtc.dev/guide/advanced/native-image)**, a single executable without an installed Java runtime:
 
 | OS      | x64 | arm64 | arm32 |
 |---------|:---:|:-----:|:-----:|

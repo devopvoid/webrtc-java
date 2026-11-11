@@ -82,6 +82,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'End-to-End Encryption', link: '/advanced/end-to-end-encryption' },
 				{ text: 'Video Codecs', link: '/advanced/video-codecs' },
 				{ text: 'Audio Codecs', link: '/advanced/audio-codecs' },
+				{ text: 'GraalVM Native Image', link: '/advanced/native-image' },
 			],
 		},
 	]
