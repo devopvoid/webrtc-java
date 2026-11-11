@@ -83,7 +83,12 @@ PeerConnectionFactory factory = new PeerConnectionFactory();
 
 // Create a video track with the desktop source
 VideoTrack videoTrack = factory.createVideoTrack("video0", videoSource);
+
+// Keep the resolution, so that text stays readable, also when the bandwidth runs short.
+videoTrack.setContentHint(VideoContentHint.TEXT);
 ```
+
+The [content hint](/guide/media/constraints#content-hint) can be changed at any time, also while the track is sent.
 
 ### Adding the Track to a Peer Connection
 

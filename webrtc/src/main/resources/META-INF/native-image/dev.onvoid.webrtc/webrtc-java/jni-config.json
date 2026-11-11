@@ -1144,6 +1144,12 @@
     "allDeclaredFields": true
   },
   {
+    "name": "dev.onvoid.webrtc.media.video.VideoContentHint",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
     "name": "dev.onvoid.webrtc.media.video.VideoDesktopSource",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true,

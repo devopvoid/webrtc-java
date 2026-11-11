@@ -142,6 +142,19 @@ sender.setParameters(parameters);
 
 If unset, WebRTC keeps the resolution of screen shares and of tracks hinted as detailed or text, and the frame rate of other video.
 
+### Content Hint
+
+A content hint on the track says what it shows, and so decides the same for every sender of the track that has no `degradationPreference` of its own. It can be changed while the track is sent, without renegotiation, as when a video starts in a shared window:
+
+```java
+videoTrack.setContentHint(VideoContentHint.TEXT);     // keep the resolution
+
+// Later, a video plays in the same window.
+videoTrack.setContentHint(VideoContentHint.MOTION);   // keep the frame rate
+```
+
+`MOTION` keeps the frame rate, `DETAIL` and `TEXT` keep the resolution, and `DEFAULT` leaves it to the source, which keeps the resolution of screen shares. `DETAIL` and `TEXT` also put the encoder into its screen content mode, which VP8, VP9, H.264 (OpenH264) and AV1 code differently; WebRTC treats `TEXT` as `DETAIL` for now. The senders have taken the hint once `setContentHint` returns. It cannot be set from within the callback of a video sink, where it throws an `IllegalStateException`.
+
 ## Simulcast
 
 With simulcast, a video sender encodes the same video several times, at different resolutions, so that a server can forward to each receiver the one its connection can take. The encodings are given when the transceiver is created, each with an RTP stream ID (`rid`):

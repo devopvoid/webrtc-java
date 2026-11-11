@@ -108,6 +108,47 @@ public class VideoTrack extends MediaStreamTrack {
 		sinks.remove(sink);
 	}
 
+	/**
+	 * Returns what the track is hinted to show.
+	 *
+	 * @return the content hint, {@link VideoContentHint#DEFAULT} unless set.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
+	 */
+	public native VideoContentHint getContentHint();
+
+	/**
+	 * Hints what the track shows, which decides what its senders keep when
+	 * the network or the CPU cannot keep up: the frame rate or the
+	 * resolution. Can be changed while the track is sent, without
+	 * renegotiation; every sender of the track has taken it once this
+	 * returns, and a sender the track is given later takes it as well. A
+	 * change may make a sender reconfigure its encoder. Waits briefly for a
+	 * WebRTC thread.
+	 *
+	 * @param hint What the track shows.
+	 *
+	 * @throws IllegalStateException if the track has been disposed, or if
+	 *                               called from within the callback of a
+	 *                               sink, of this track or any other.
+	 */
+	public void setContentHint(VideoContentHint hint) {
+		if (isNull(hint)) {
+			throw new NullPointerException();
+		}
+		if (SinkRegistry.inCallback()) {
+			// A sender reconfigures on WebRTC's worker thread, which then adds
+			// its sink to the source again and waits for the lock this thread
+			// holds while it hands out the frame.
+			throw new IllegalStateException("The content hint cannot be set on a thread that is handing "
+					+ "media to a sink. Set it on another thread");
+		}
+
+		setContentHintInternal(hint);
+	}
+
+	private native void setContentHintInternal(VideoContentHint hint);
+
 	private native long addSinkInternal(VideoTrackSink sink, boolean shared);
 
 	private native void removeSinkInternal(long sinkHandle);

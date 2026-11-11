@@ -89,6 +89,7 @@ namespace jni
 		JavaEnums::add<webrtc::DtxStatus>(env, PKG"RTCDtxStatus");
 		JavaEnums::add<webrtc::MediaSourceInterface::SourceState>(env, PKG_MEDIA"MediaSource$State");
 		JavaEnums::add<webrtc::MediaStreamTrackInterface::TrackState>(env, PKG_MEDIA"MediaStreamTrackState");
+		JavaEnums::add<webrtc::VideoTrackInterface::ContentHint>(env, PKG_MEDIA"video/VideoContentHint");
 		JavaEnums::add<webrtc::PeerConnectionInterface::BundlePolicy>(env, PKG"RTCBundlePolicy");
 		JavaEnums::add<webrtc::PeerConnectionInterface::IceConnectionState>(env, PKG"RTCIceConnectionState");
 		JavaEnums::add<webrtc::PeerConnectionInterface::IceGatheringState>(env, PKG"RTCIceGatheringState");

@@ -154,8 +154,17 @@ abstract class LocalTrackImpl implements LocalTrack {
 	}
 
 	/**
-	 * Puts another native track in place of the current one, keeping whether
-	 * it is enabled.
+	 * Gives a native track that is to replace the current one the settings
+	 * of this track, before any sender sends it. Called under this object's
+	 * lock.
+	 */
+	void adopt(MediaStreamTrack next) {
+		next.setEnabled(enabled);
+	}
+
+	/**
+	 * Puts another native track in place of the current one, keeping its
+	 * settings, such as whether it is enabled.
 	 *
 	 * @return the track and release replaced, and the senders that send it now;
 	 * null once the track ended.
@@ -167,7 +176,7 @@ abstract class LocalTrackImpl implements LocalTrack {
 
 		Replaced replaced = new Replaced(track, releaseSource, new ArrayList<>(senders));
 
-		next.setEnabled(enabled);
+		adopt(next);
 		track = next;
 		releaseSource = nextRelease;
 
