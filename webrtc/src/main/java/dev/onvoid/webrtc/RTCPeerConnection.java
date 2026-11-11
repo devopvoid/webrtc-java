@@ -16,9 +16,6 @@
 
 package dev.onvoid.webrtc;
 
-import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
-
 import dev.onvoid.webrtc.internal.NativeObject;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
@@ -42,9 +39,11 @@ public class RTCPeerConnection extends NativeObject {
 	private long observerHandle;
 
 	/**
-	 * The factory that created this connection. Set right after construction;
-	 * null only if a connection was obtained some other way.
+	 * The factory that created this connection, whose threads a close keeps
+	 * while it is handed on. Set right after construction; null only if a
+	 * connection was obtained some other way.
 	 */
+	@SuppressWarnings("unused")
 	private PeerConnectionFactory factory;
 
 
@@ -56,8 +55,7 @@ public class RTCPeerConnection extends NativeObject {
 	}
 
 	/**
-	 * Sets the factory that created this connection, so that tracks added to it
-	 * can be reported back to that factory.
+	 * Sets the factory that created this connection.
 	 *
 	 * @param factory The creating factory.
 	 */
@@ -101,19 +99,9 @@ public class RTCPeerConnection extends NativeObject {
 	 *                  to.
 	 *
 	 * @return The RTCRtpSender which will be used to transmit the media data.
-	 *
-	 * @throws IllegalStateException If the track is an audio track that pushes
-	 *                               its audio, for example one received from a
-	 *                               remote peer, while the creating factory
-	 *                               already sends audio captured by its audio
-	 *                               device module. See {@link
-	 *                               PeerConnectionFactory} for why a factory
-	 *                               sends only one kind of audio input.
 	 */
 	public RTCRtpSender addTrack(MediaStreamTrack track,
 			List<String> streamIds) {
-		commitAudioInput(track);
-
 		return addTrackInternal(track, streamIds);
 	}
 
@@ -139,26 +127,9 @@ public class RTCPeerConnection extends NativeObject {
 	 *
 	 * @return The RTCRtpTransceiver which will be used to transmit and receive
 	 * the media data.
-	 *
-	 * @throws IllegalStateException If the transceiver sends and the track is an
-	 *                               audio track that pushes its audio, for
-	 *                               example one received from a remote peer,
-	 *                               while the creating factory already sends
-	 *                               audio captured by its audio device module.
-	 *                               See {@link PeerConnectionFactory} for why a
-	 *                               factory sends only one kind of audio input.
 	 */
 	public RTCRtpTransceiver addTransceiver(MediaStreamTrack track,
 			RTCRtpTransceiverInit init) {
-		// A transceiver that only receives never sends the track's audio. Its
-		// direction can be changed later through RTCRtpTransceiver.setDirection,
-		// which is not covered here.
-		if (isNull(init) || isNull(init.direction)
-				|| init.direction == RTCRtpTransceiverDirection.SEND_RECV
-				|| init.direction == RTCRtpTransceiverDirection.SEND_ONLY) {
-			commitAudioInput(track);
-		}
-
 		return addTransceiverInternal(track, init);
 	}
 
@@ -177,19 +148,6 @@ public class RTCPeerConnection extends NativeObject {
 	 */
 	public RTCRtpTransceiver addTransceiver(MediaType mediaType, RTCRtpTransceiverInit init) {
 		return addTransceiverOfType(mediaType, init);
-	}
-
-	/**
-	 * Reports a track that is about to be sent to the factory that created this
-	 * connection, which rejects a track whose audio is pushed while the factory
-	 * already sends audio captured by its audio device module.
-	 *
-	 * @param track The track about to be sent, may be {@code null}.
-	 */
-	private void commitAudioInput(MediaStreamTrack track) {
-		if (nonNull(factory)) {
-			factory.commitAudioInput(track);
-		}
 	}
 
 	/**
@@ -507,8 +465,29 @@ public class RTCPeerConnection extends NativeObject {
 	/**
 	 * Closes the peer connection, terminates all media and releases any used
 	 * resources.
+	 * <p>
+	 * When called from an observer callback of a connection created by the
+	 * same factory, the connection is closed once that callback has returned,
+	 * since WebRTC goes on with it afterwards. Until then, the {@link
+	 * PeerConnectionObserver} may still hear of the operation in progress.
+	 * <p>
+	 * It may be called from any thread, also while other threads still call
+	 * methods of this connection, and more than once: only the first call
+	 * closes the connection, later and concurrent ones return without doing
+	 * anything. Methods called after it throw an {@link
+	 * IllegalStateException}, except the state getters, which report a closed
+	 * connection. A method that another thread is running when the connection
+	 * is closed finds it closed from then on; the native connection is freed
+	 * once that method has returned. Until then, observers may still hear of
+	 * operations that WebRTC completed before the close; once it is freed,
+	 * those still unreported fail.
 	 */
 	public native void close();
+
+	@Override
+	protected IllegalStateException disposedException() {
+		return new IllegalStateException("RTCPeerConnection is closed");
+	}
 
 	/**
 	 * Two RTCPeerConnection instances are equal if they are bound to the
@@ -531,9 +510,7 @@ public class RTCPeerConnection extends NativeObject {
 
 	@Override
 	public int hashCode() {
-		long handle = getNativeHandle();
-
-		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+		return nativeHashCode();
 	}
 
 	private native RTCRtpSender addTrackInternal(MediaStreamTrack track,

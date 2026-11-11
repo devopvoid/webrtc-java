@@ -15,6 +15,7 @@
  */
 
 #include "JNI_Logging.h"
+#include "JavaBoundary.h"
 #include "rtc/LogSink.h"
 #include "JavaEnums.h"
 #include "JavaRef.h"
@@ -116,5 +117,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logToDebug
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_logging_Logging_logTimestamps
 (JNIEnv * env, jclass caller, jboolean enable)
 {
-	webrtc::LogMessage::LogTimestamps(static_cast<bool>(enable));
+	jni::CallFromJava(env, [&]() {
+		webrtc::LogMessage::LogTimestamps(static_cast<bool>(enable));
+	});
 }

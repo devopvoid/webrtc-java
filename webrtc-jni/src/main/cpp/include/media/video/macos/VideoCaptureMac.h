@@ -19,6 +19,7 @@
 
 #include "media/video/VideoCaptureBase.h"
 
+#include "rtc_base/synchronization/mutex.h"
 #include "rtc_base/timestamp_aligner.h"
 
 #include "sdk/objc/base/RTCVideoCapturer.h"
@@ -39,15 +40,20 @@ namespace jni
 			VideoCaptureMac();
 			~VideoCaptureMac();
 
-            void start() override;
+			void setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink) override;
+
+			void start() override;
 			void stop() override;
 			void destroy() override;
 
 			void OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame);
 
 		private:
-            webrtc::TimestampAligner timestamp_aligner;
-            RTCCameraVideoCapturer * cameraVideoCapturer;
+			webrtc::TimestampAligner timestamp_aligner;
+			// Frames arrive on the capturer's queue, the sink is replaced on the caller's thread.
+			webrtc::Mutex sinkMutex;
+			VideoCaptureCallback * callback;
+			RTCCameraVideoCapturer * cameraVideoCapturer;
 	};
 }
 

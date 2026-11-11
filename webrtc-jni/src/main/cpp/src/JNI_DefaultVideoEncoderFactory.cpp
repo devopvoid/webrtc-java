@@ -15,6 +15,7 @@
  */
 
 #include "JNI_DefaultVideoEncoderFactory.h"
+#include "JavaBoundary.h"
 #include "media/video/codec/DefaultVideoCodecFactories.h"
 #include "media/video/codec/VideoCodecInfo.h"
 #include "JavaUtils.h"
@@ -22,14 +23,16 @@
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_video_codec_DefaultVideoEncoderFactory_getSupportedCodecsInternal
 (JNIEnv * env, jclass caller)
 {
-	try {
-		auto factory = jni::CreateDefaultVideoEncoderFactory();
+	return jni::CallFromJava(env, [&]() -> jobjectArray {
+		try {
+			auto factory = jni::CreateDefaultVideoEncoderFactory();
 
-		return jni::VideoCodecInfo::toJavaArray(env, factory->GetSupportedFormats()).release();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+			return jni::VideoCodecInfo::toJavaArray(env, factory->GetSupportedFormats()).release();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-	return nullptr;
+		return nullptr;
+	});
 }

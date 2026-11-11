@@ -4,7 +4,7 @@
 
 	<groupId>dev.onvoid.webrtc</groupId>
 	<artifactId>webrtc-java-parent</artifactId>
-	<version>0.21.0-SNAPSHOT</version>
+	<version>1.0.1-SNAPSHOT</version>
 	<packaging>pom</packaging>
 
 	<name>webrtc-java-parent</name>
@@ -44,16 +44,20 @@
 	</scm>
 
 	<properties>
-		<timestamp>${maven.build.timestamp}</timestamp>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<maven.build.timestamp.format>yyyy-MM-dd HH:mm</maven.build.timestamp.format>
+		<!-- The time every jar entry and the jars' Build-Date carry, so that the
+		     same sources build into the same jars. release:prepare sets it to
+		     the time of the release commit and again for the next development
+		     version; snapshots keep the time of the last release. -->
+		<project.build.outputTimestamp>2026-11-06T02:27:31Z</project.build.outputTimestamp>
 	</properties>
 
 	<modules>
 		<module>webrtc-jni</module>
 		<module>webrtc</module>
-		<module>webrtc-java-media</module>
-		<module>webrtc-java-javafx</module>
+		<module>webrtc-media</module>
+		<module>webrtc-swing</module>
+		<module>webrtc-javafx</module>
 		<module>webrtc-examples</module>
 	</modules>
 
@@ -75,38 +79,22 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>3.16.0</version>
-					<executions>
-						<execution>
-							<id>default-compile</id>
-							<configuration>
-								<release>9</release>
-								<!-- No excludes: compile everything to ensure module-info contains the right entries -->
-							</configuration>
-						</execution>
-						<execution>
-							<id>base-compile</id>
-							<goals>
-								<goal>compile</goal>
-							</goals>
-							<configuration>
-								<!-- Recompile everything for the target VM except the module-info.java -->
-								<excludes>
-									<exclude>module-info.java</exclude>
-								</excludes>
-							</configuration>
-						</execution>
-					</executions>
 					<!-- Defaults for compiler and testCompile -->
 					<configuration>
-						<release>8</release><!-- compatibility expectations -->
+						<release>11</release><!-- compatibility expectations -->
 						<!-- Only required when haven't configured the maven-toolchains-plugin -->
 						<jdkToolchain>
-							<version>9</version>
+							<version>11</version>
 						</jdkToolchain>
 						<showDeprecation>true</showDeprecation>
 						<showWarnings>true</showWarnings>
 						<fork>true</fork>
 					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-clean-plugin</artifactId>
+					<version>3.5.0</version>
 				</plugin>
 				<plugin>
 					<groupId>org.sonatype.central</groupId>
@@ -126,6 +114,35 @@
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-deploy-plugin</artifactId>
 					<version>3.2.0</version>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-enforcer-plugin</artifactId>
+					<version>3.6.3</version>
+					<executions>
+						<execution>
+							<id>enforce-build-environment</id>
+							<goals>
+								<goal>enforce</goal>
+							</goals>
+							<configuration>
+								<rules>
+									<!-- The cmake-maven-plugin of the native builds needs 3.9.6,
+									     the central-publishing-maven-plugin 3.9.2. -->
+									<requireMavenVersion>
+										<version>[3.9.6,)</version>
+									</requireMavenVersion>
+									<!-- The libraries target Java 11, but the examples need 17. -->
+									<requireJavaVersion>
+										<version>[17,)</version>
+									</requireJavaVersion>
+									<requirePluginVersions>
+										<message>Give every plugin a version in the root pom's pluginManagement.</message>
+									</requirePluginVersions>
+								</rules>
+							</configuration>
+						</execution>
+					</executions>
 				</plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
@@ -166,7 +183,7 @@
 							<compress>true</compress>
 							<manifestEntries>
 								<Version>${project.version}</Version>
-								<Build-Date>${maven.build.timestamp}</Build-Date>
+								<Build-Date>${project.build.outputTimestamp}</Build-Date>
 							</manifestEntries>
 						</archive>
 						<skipIfEmpty>true</skipIfEmpty>
@@ -240,6 +257,10 @@
 		</pluginManagement>
 
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>

@@ -15,10 +15,11 @@
  */
 
 #include "JNI_VideoBufferConverter.h"
+#include "JavaBoundary.h"
 #include "JavaRuntimeException.h"
 #include "JavaUtils.h"
 
-#include "api/video/i420_buffer.h"
+#include "api/VideoFrame.h"
 
 #include "libyuv/convert.h"
 #include "libyuv/video_common.h"
@@ -158,6 +159,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I
 			return;
 		}
 
+		const jint chromaWidth = static_cast<jint>((width + 1LL) / 2);
+		const jint chromaHeight = static_cast<jint>((height + 1LL) / 2);
+		jni::I420Buffer::CheckPlane(env, "Y", jSrcY, srcStrideY, width, height);
+		jni::I420Buffer::CheckPlane(env, "U", jSrcU, srcStrideU, chromaWidth, chromaHeight);
+		jni::I420Buffer::CheckPlane(env, "V", jSrcV, srcStrideV, chromaWidth, chromaHeight);
+
 		const uint8_t * srcY = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcY));
 		const uint8_t * srcU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcU));
 		const uint8_t * srcV = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcV));
@@ -189,30 +196,38 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_I
 (JNIEnv * env, jclass, jobject jSrcY, jint srcStrideY, jobject jSrcU, jint srcStrideU,
 	jobject jSrcV, jint srcStrideV, jobject dst, jint width, jint height, jint fourCC)
 {
-	const uint8_t * srcY = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcY));
-	const uint8_t * srcU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcU));
-	const uint8_t * srcV = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcV));
+	jni::CallFromJava(env, [&]() {
+		const jint chromaWidth = static_cast<jint>((width + 1LL) / 2);
+		const jint chromaHeight = static_cast<jint>((height + 1LL) / 2);
+		jni::I420Buffer::CheckPlane(env, "Y", jSrcY, srcStrideY, width, height);
+		jni::I420Buffer::CheckPlane(env, "U", jSrcU, srcStrideU, chromaWidth, chromaHeight);
+		jni::I420Buffer::CheckPlane(env, "V", jSrcV, srcStrideV, chromaWidth, chromaHeight);
 
-	uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(dst));
+		const uint8_t * srcY = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcY));
+		const uint8_t * srcU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcU));
+		const uint8_t * srcV = static_cast<uint8_t *>(env->GetDirectBufferAddress(jSrcV));
 
-	if (address != NULL) {
-		jlong bufferLength = env->GetDirectBufferCapacity(dst);
+		uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(dst));
 
-		if (!CheckBufferSize(env, width, height, fourCC, static_cast<uint64_t>(bufferLength))) {
-			return;
+		if (address != NULL) {
+			jlong bufferLength = env->GetDirectBufferCapacity(dst);
+
+			if (!CheckBufferSize(env, width, height, fourCC, static_cast<uint64_t>(bufferLength))) {
+				return;
+			}
+
+			const int conversionResult = ConvertFromI420(srcY, srcStrideY, srcU, srcStrideU,
+				srcV, srcStrideV, address, width, height, static_cast<uint32_t>(fourCC));
+
+			if (conversionResult < 0) {
+				env->Throw(jni::JavaRuntimeException(env, "Failed to convert buffer to I420: %d",
+					conversionResult));
+			}
 		}
-
-		const int conversionResult = ConvertFromI420(srcY, srcStrideY, srcU, srcStrideU,
-			srcV, srcStrideV, address, width, height, static_cast<uint32_t>(fourCC));
-
-		if (conversionResult < 0) {
-			env->Throw(jni::JavaRuntimeException(env, "Failed to convert buffer to I420: %d",
-				conversionResult));
+		else {
+			env->Throw(jni::JavaRuntimeException(env, "Non-direct buffer provided"));
 		}
-	}
-	else {
-		env->Throw(jni::JavaRuntimeException(env, "Non-direct buffer provided"));
-	}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_byteArrayToI420
@@ -228,6 +243,12 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_b
 		if (!CheckBufferSize(env, width, height, fourCC, static_cast<uint64_t>(srcLength))) {
 			return;
 		}
+
+		const jint chromaWidth = static_cast<jint>((width + 1LL) / 2);
+		const jint chromaHeight = static_cast<jint>((height + 1LL) / 2);
+		jni::I420Buffer::CheckPlane(env, "Y", jDstY, dstStrideY, width, height, true);
+		jni::I420Buffer::CheckPlane(env, "U", jDstU, dstStrideU, chromaWidth, chromaHeight, true);
+		jni::I420Buffer::CheckPlane(env, "V", jDstV, dstStrideV, chromaWidth, chromaHeight, true);
 
 		uint8_t * dstY = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstY));
 		uint8_t * dstU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstU));
@@ -264,33 +285,41 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoBufferConverter_d
 (JNIEnv * env, jclass, jobject src, jint width, jint height, jobject jDstY, jint dstStrideY,
 	jobject jDstU, jint dstStrideU, jobject jDstV, jint dstStrideV, jint fourCC)
 {
-	uint8_t * dstY = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstY));
-	uint8_t * dstU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstU));
-	uint8_t * dstV = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstV));
+	jni::CallFromJava(env, [&]() {
+		const jint chromaWidth = static_cast<jint>((width + 1LL) / 2);
+		const jint chromaHeight = static_cast<jint>((height + 1LL) / 2);
+		jni::I420Buffer::CheckPlane(env, "Y", jDstY, dstStrideY, width, height, true);
+		jni::I420Buffer::CheckPlane(env, "U", jDstU, dstStrideU, chromaWidth, chromaHeight, true);
+		jni::I420Buffer::CheckPlane(env, "V", jDstV, dstStrideV, chromaWidth, chromaHeight, true);
 
-	const uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(src));
+		uint8_t * dstY = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstY));
+		uint8_t * dstU = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstU));
+		uint8_t * dstV = static_cast<uint8_t *>(env->GetDirectBufferAddress(jDstV));
 
-	if (address != NULL) {
-		jlong bufferLength = env->GetDirectBufferCapacity(src);
+		const uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(src));
 
-		if (!CheckBufferSize(env, width, height, fourCC, static_cast<uint64_t>(bufferLength))) {
-			return;
+		if (address != NULL) {
+			jlong bufferLength = env->GetDirectBufferCapacity(src);
+
+			if (!CheckBufferSize(env, width, height, fourCC, static_cast<uint64_t>(bufferLength))) {
+				return;
+			}
+
+			const int conversionResult = libyuv::ConvertToI420(
+				address, bufferLength,
+				dstY, dstStrideY,
+				dstU, dstStrideU,
+				dstV, dstStrideV,
+				0, 0, width, height, width, height,
+				libyuv::kRotate0, static_cast<uint32_t>(fourCC));
+
+			if (conversionResult < 0) {
+				env->Throw(jni::JavaRuntimeException(env, "Failed to convert buffer to I420: %d",
+					conversionResult));
+			}
 		}
-
-		const int conversionResult = libyuv::ConvertToI420(
-			address, bufferLength,
-			dstY, dstStrideY,
-			dstU, dstStrideU,
-			dstV, dstStrideV,
-			0, 0, width, height, width, height,
-			libyuv::kRotate0, static_cast<uint32_t>(fourCC));
-
-		if (conversionResult < 0) {
-			env->Throw(jni::JavaRuntimeException(env, "Failed to convert buffer to I420: %d",
-				conversionResult));
+		else {
+			env->Throw(jni::JavaRuntimeException(env, "Non-direct buffer provided"));
 		}
-	}
-	else {
-		env->Throw(jni::JavaRuntimeException(env, "Non-direct buffer provided"));
-	}
+	});
 }

@@ -16,11 +16,11 @@
 
 package dev.onvoid.webrtc.media.video;
 
-import dev.onvoid.webrtc.internal.NativeObject;
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
  * A class representing a video capture device that can be controlled to capture video.
- * Extends NativeObject to interact with native code implementations.
+ * Extends DisposableNativeObject to interact with native code implementations.
  * <pre>
  * VideoCapture capture = new VideoCapture();
  * capture.setVideoCaptureDevice(device);
@@ -32,12 +32,12 @@ import dev.onvoid.webrtc.internal.NativeObject;
  * capture.dispose();
  * </pre>
  * Notes:
- * <li>Always call dispose() to release native resources.</li>
+ * <li>Always call dispose(), or use try-with-resources, to release native resources.</li>
  * <li>Methods are not guaranteed to be thread-safe unless externally synchronized.</li>
  *
  * @author Alex Andres
  */
-public class VideoCapture extends NativeObject {
+public class VideoCapture extends DisposableNativeObject {
 
 	/**
 	 * Constructs a new VideoCapture and initializes underlying native resources.
@@ -97,8 +97,15 @@ public class VideoCapture extends NativeObject {
 	 * Idempotency:
 	 * Calling start() while already started should be a no-op (implementation-dependent).
 	 *
+	 * <p>
+	 * May be called again after {@link #stop()}; the sink set before stays
+	 * registered.
+	 *
 	 * @throws NullPointerException if the instance is disposed.
-	 * @throws IllegalStateException if prerequisites (device/capability) are missing.
+	 * @throws IllegalStateException if no device was set with
+	 *         {@link #setVideoCaptureDevice(VideoDevice)}.
+	 * @throws Error if the native capture cannot be started, e.g. because the
+	 *         device is not available; the message describes the cause.
 	 */
 	public native void start();
 
@@ -118,13 +125,15 @@ public class VideoCapture extends NativeObject {
 	 * <p>
 	 * Lifecycle:
 	 * <li>Implicitly stops capture if currently running.</li>
-	 * <li>After disposal, any further method call, including another call to
-	 *     {@code dispose()} itself, throws {@link NullPointerException}.</li>
+	 * <li>After disposal, any further method call throws an
+	 *     {@link IllegalStateException}; another call to {@code dispose()}
+	 *     itself does nothing.</li>
 	 * <p>
 	 * Best Practice:
-	 * Always invoke in a finally block or use a higher-level resource management
-	 * construct to avoid native leaks.
+	 * Always invoke in a finally block or use try-with-resources to avoid
+	 * native leaks.
 	 */
+	@Override
 	public native void dispose();
 
 	/**

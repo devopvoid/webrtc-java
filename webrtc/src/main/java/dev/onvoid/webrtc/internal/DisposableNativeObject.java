@@ -18,15 +18,34 @@ package dev.onvoid.webrtc.internal;
 
 /**
  * Allows disposing the native object bound to the Java object and free native
- * resources.
+ * resources, also through a try-with-resources statement.
  *
  * @author Alex Andres
  */
-public abstract class DisposableNativeObject extends NativeObject {
+public abstract class DisposableNativeObject extends NativeObject implements AutoCloseable {
 
 	/**
 	 * Invoke native object destructors and free native resources.
+	 * <p>
+	 * It may be called from any thread and more than once: only the first call
+	 * disposes the object, later and concurrent ones do nothing. Methods
+	 * called afterwards throw an {@link IllegalStateException}. A method that
+	 * another thread is running meanwhile goes on with the native object, which
+	 * is freed once that method has returned.
 	 */
 	public abstract void dispose();
+
+	/**
+	 * Disposes this object, see {@link #dispose()}, which lets a
+	 * try-with-resources statement release it, also when an exception leaves
+	 * the block.
+	 * <p>
+	 * {@link dev.onvoid.webrtc.RTCDataChannel} is the one exception: closing it
+	 * closes the channel, which then still has to be disposed.
+	 */
+	@Override
+	public void close() {
+		dispose();
+	}
 
 }

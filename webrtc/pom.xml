@@ -5,30 +5,57 @@
 	<parent>
 		<groupId>dev.onvoid.webrtc</groupId>
 		<artifactId>webrtc-java-parent</artifactId>
-		<version>0.21.0-SNAPSHOT</version>
+		<version>1.0.1-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>webrtc-java</artifactId>
 
 	<name>webrtc-java</name>
 
+	<properties>
+		<!-- The JVM arguments of every test run, the jni-check profile's
+		     included. add-modules and add-reads: see the test compilation
+		     below. add-exports: dev.onvoid.webrtc.internal is not exported to
+		     applications, but the tests cover NativeApi, which native extension
+		     modules use to reach the native sources. -->
+		<webrtc.test.argLine>
+			--add-modules java.desktop
+			--add-reads webrtc.java=java.desktop
+			--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.media=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.media.audio=ALL-UNNAMED
+			--add-opens webrtc.java/dev.onvoid.webrtc.media.video=ALL-UNNAMED
+		</webrtc.test.argLine>
+	</properties>
+
 	<build>
 		<plugins>
+			<!-- The module does not read java.desktop, but a desktop capture test
+			     opens an AWT window of its own to capture. -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>default-testCompile</id>
+						<configuration>
+							<compilerArgs>
+								<arg>--add-modules</arg>
+								<arg>java.desktop</arg>
+								<arg>--add-reads</arg>
+								<arg>webrtc.java=java.desktop</arg>
+							</compilerArgs>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<!-- add-exports: dev.onvoid.webrtc.internal is not exported to
-					     applications, but the tests cover NativeApi, which native
-					     extension modules use to reach the native sources. -->
-					<argLine>
-						--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.media=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.media.audio=ALL-UNNAMED
-						--add-opens webrtc.java/dev.onvoid.webrtc.media.video=ALL-UNNAMED
-					</argLine>
+					<argLine>${webrtc.test.argLine}</argLine>
 				</configuration>
 			</plugin>
 		</plugins>
@@ -36,17 +63,17 @@
 
 	<profiles>
 		<!--
-			Opt-in JNI reference-discipline check: runs the same tests under
-			-Xcheck:jni, which validates every JNI call's local/global refs and
-			aborts the JVM with "FATAL ERROR in native method: ..." on a real
-			violation (e.g. a double-freed or already-deleted local ref):
-			exactly the class of bug JNI_*.cpp changes are prone to introducing.
-			Not part of the default test run: -Xcheck:jni also emits a
+			Opt-in JNI check: runs the same tests under -Xcheck:jni, which
+			validates every JNI call's local/global refs and aborts the JVM with
+			"FATAL ERROR in native method: ..." on a real violation (e.g. a
+			double-freed or already-deleted local ref): exactly the class of bug
+			JNI_*.cpp changes are prone to introducing. It also warns with
 			"WARNING in native method: JNI call made without checking
-			exceptions" for every native call in this codebase that doesn't
-			immediately check for a pending exception (thousands of them,
-			pre-existing, harmless on their own), which would drown out
-			everything else if left on by default.
+			exceptions" about a JNI call made while the exception the previous
+			one may have thrown was left unchecked. The tests run without any
+			such warning, and CI's jni-check job fails on a single one (see
+			.github/actions/test-natives). Not part of the default test run,
+			since every JNI call gets slower.
 
 			The TCP forkNode is required, not optional: -Xcheck:jni writes its
 			diagnostics straight to the process's native stdout, which is the
@@ -56,8 +83,11 @@
 			directly writing to native stream" instead of reporting test
 			results.
 
-			Run with: mvn -pl webrtc test -Pjni-check
-			Then check for real bugs with: grep "FATAL ERROR" -r target/surefire-reports
+			Run with: mvn -pl webrtc-jni,webrtc package -Pjni-check
+			(package, not test: in the test phase the tests load the native jar
+			installed in ~/.m2, not the one just built). The diagnostics end up
+			in the build output: grep it for "FATAL ERROR in native method" and
+			"WARNING in native method".
 		-->
 		<profile>
 			<id>jni-check</id>
@@ -68,15 +98,7 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory" />
-							<argLine>
-								-Xcheck:jni
-								--add-exports webrtc.java/dev.onvoid.webrtc.internal=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.logging=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.media=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.media.audio=ALL-UNNAMED
-								--add-opens webrtc.java/dev.onvoid.webrtc.media.video=ALL-UNNAMED
-							</argLine>
+							<argLine>-Xcheck:jni ${webrtc.test.argLine}</argLine>
 						</configuration>
 					</plugin>
 				</plugins>
@@ -125,7 +147,7 @@
 			build jobs. Maven Central publishes a version as one atomic bundle, hence
 			all classifiers must be attached to a single deployment.
 
-			Run with: mvn deploy -pl .,webrtc,webrtc-java-media -Prelease -Dnatives.dir=/abs/path
+			Run with: mvn deploy -pl .,webrtc,webrtc-media -Prelease -Dnatives.dir=/abs/path
 		-->
 		<profile>
 			<id>attach-natives-all</id>

@@ -41,6 +41,10 @@ class RTCConfigurationFieldsTests extends TestBase {
 
 	private static final long TIMEOUT_SECONDS = 10;
 
+	// 2049-12-31T23:59:59Z, as UTCTime and in milliseconds.
+	private static final String CERTIFICATE_NOT_AFTER = "491231235959Z";
+	private static final long CERTIFICATE_EXPIRES = 2524607999000L;
+
 
 	@Test
 	void nativeDefaults() {
@@ -166,6 +170,26 @@ class RTCConfigurationFieldsTests extends TestBase {
 
 		assertThrows(NullPointerException.class,
 				() -> factory.createPeerConnection(config, new Observer()));
+	}
+
+	@Test
+	void certificateExpiresFromCertificate() throws Exception {
+		// The expiration time given in Java is not passed on: the one read
+		// back is that of the certificate, in milliseconds. It used to be 0.
+		RTCConfiguration config = new RTCConfiguration();
+		config.certificates.add(TestCertificates.selfSigned("260101000000Z", CERTIFICATE_NOT_AFTER));
+
+		RTCPeerConnection connection = factory.createPeerConnection(config, new Observer());
+
+		try {
+			List<RTCCertificatePEM> certificates = connection.getConfiguration().certificates;
+
+			assertEquals(1, certificates.size());
+			assertEquals(CERTIFICATE_EXPIRES, certificates.get(0).getExpires());
+		}
+		finally {
+			connection.close();
+		}
 	}
 
 	@Test

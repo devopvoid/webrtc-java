@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
+
 /**
  * Sends one track on one peer, made by {@link Peer#addTrack}.
  */
@@ -49,6 +51,36 @@ public interface Sender {
 	CompletableFuture<Void> configure(Encoding encoding);
 
 	/**
+	 * Sets the transform that every encoded frame of this sender passes
+	 * through, after the encoder and before the packetizer, in place of the
+	 * one set before, such as the {@link PeerOptions.Builder#sendTransform
+	 * send transform} of the peer. The first transform set on a video sender
+	 * that already sends restarts its encoder, which costs a key frame; set
+	 * the peer's send transform to have it in place from the start.
+	 * <p>
+	 * The transform stays with the sender when its track is replaced. It runs
+	 * on a thread of this sender, not on the peer's event thread; see {@link
+	 * RTCEncodedFrameTransformer}. A frame it throws on is dropped, and the
+	 * first such failure reaches the peer's {@code onError} handlers.
+	 *
+	 * @param transform the transform, or null to send frames unchanged.
+	 *
+	 * @return a future that completes once the transform is set.
+	 */
+	CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform);
+
+	/**
+	 * Asks the encoder to make the next video frame a key frame, as a
+	 * transform that changed its key needs, or a receiver that cannot decode
+	 * what came before. Does nothing for audio, and nothing before the peer
+	 * is negotiated, when there is no encoder yet; the stream starts with a
+	 * key frame anyway.
+	 *
+	 * @return a future that completes once the encoder was asked.
+	 */
+	CompletableFuture<Void> generateKeyFrame();
+
+	/**
 	 * Sends DTMF tones on an audio sender, 100 ms each with 70 ms between
 	 * them. See {@link #sendTones(String, Duration, Duration)}.
 	 *
@@ -70,7 +102,9 @@ public interface Sender {
 	 *
 	 * @return a future that completes once the tones have been sent. It fails
 	 * with an {@link IllegalStateException} if the sender cannot send tones,
-	 * because it sends video or the remote peer does not accept them.
+	 * because it sends video or the remote peer does not accept them, and a
+	 * few seconds after their planned end if WebRTC stopped sending them
+	 * midway.
 	 */
 	CompletableFuture<Void> sendTones(String tones, Duration duration, Duration gap);
 

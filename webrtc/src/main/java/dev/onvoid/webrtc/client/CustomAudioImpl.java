@@ -18,7 +18,9 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
+import java.time.Duration;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -27,13 +29,38 @@ import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 
 /**
  * An audio track fed with audio the application pushes. Pushed audio is cut
- * into 10 ms chunks, which the runtime's timer thread hands to the source one
- * every 10 ms. That thread is the only one that pushes into the source, as
- * {@link CustomAudioSource} requires.
+ * into 10 ms chunks, which the runtime's audio pacer hands to the source one
+ * every 10 ms. Its thread is the only one that pushes into the source, as
+ * {@link CustomAudioSource} requires, and it runs no timeouts, which a slow
+ * push would hold up.
  */
 final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 
+	private static final long TICK_NANOS = TimeUnit.MILLISECONDS.toNanos(10);
+
+	/**
+	 * How late a tick may run and still send. The pacer runs at a fixed rate,
+	 * so after a stall it runs the missed ticks back to back: those up to this
+	 * late are made up for, so that a short stall keeps the pace, and the
+	 * earlier ones are skipped, so that a long one does not burst out all the
+	 * audio of the pause at once. Skipped ticks leave the queue as it is.
+	 */
+	private static final long MAX_LATE_NANOS = TimeUnit.MILLISECONDS.toNanos(50);
+
+	private static final Duration CHUNK = Duration.ofNanos(TICK_NANOS);
+
+	/** The queue limit by default, 10 seconds in chunks. */
+	private static final int DEFAULT_MAX_CHUNKS = 1000;
+
 	private final CustomAudioSource source;
+
+	// Confined to the pacer, once the ticker is scheduled.
+
+	/** When the first tick was due. */
+	private long start;
+
+	/** The ticks run so far. */
+	private long ticks;
 
 	// Guarded by queue.
 
@@ -45,13 +72,17 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 
 	private int partialLength;
 
+	private int maxChunks = DEFAULT_MAX_CHUNKS;
+
+	private AudioOverflow overflow = AudioOverflow.REJECT;
+
 	private ScheduledFuture<?> ticker;
 
 	private boolean stopped;
 
 
 	CustomAudioImpl(LocalMediaImpl media, AudioTrack track, CustomAudioSource source) {
-		super(media, track, source::dispose);
+		super(media, track, source::dispose, false);
 
 		this.source = source;
 	}
@@ -73,7 +104,22 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 				return;
 			}
 
-			if (!pcmFormat.equals(format)) {
+			boolean newFormat = !pcmFormat.equals(format);
+
+			if (overflow == AudioOverflow.REJECT) {
+				// Checked before anything is queued, so that a refused push
+				// leaves no part of itself behind.
+				long added = newFormat
+						? (partialLength > 0 ? 1 : 0) + pcm.length / pcmFormat.bytesPer10Ms()
+						: (partialLength + (long) pcm.length) / format.bytesPer10Ms();
+
+				if (queue.size() + added > maxChunks) {
+					throw new AudioQueueFullException("The queue holds " + queue.size() * 10L + " ms, and the "
+							+ "audio would add " + added * 10 + " ms, beyond the limit of " + maxChunks * 10L + " ms");
+				}
+			}
+
+			if (newFormat) {
 				flushPartial();
 				format = pcmFormat;
 				partial = new byte[pcmFormat.bytesPer10Ms()];
@@ -90,15 +136,33 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 				offset += count;
 
 				if (partialLength == partial.length) {
-					queue.add(new Chunk(partial, format));
+					enqueue(new Chunk(partial, format));
 					partial = new byte[format.bytesPer10Ms()];
 					partialLength = 0;
 				}
 			}
 
 			if (ticker == null) {
-				ticker = rtc.timer.scheduleAtFixedRate(this::tick, 0, 10, TimeUnit.MILLISECONDS);
+				start = rtc.clock.getAsLong();
+				ticker = rtc.audioPacer.scheduleAtFixedRate(this::tick, 0, TICK_NANOS, TimeUnit.NANOSECONDS);
 			}
+		}
+	}
+
+	@Override
+	public void queueLimit(Duration max, AudioOverflow overflow) {
+		requireNonNull(max, "max");
+		requireNonNull(overflow, "overflow");
+
+		if (max.compareTo(CHUNK) < 0) {
+			throw new IllegalArgumentException("The limit must be at least 10 ms, got " + max);
+		}
+
+		synchronized (queue) {
+			this.maxChunks = (int) Math.min(max.dividedBy(CHUNK), Integer.MAX_VALUE);
+			this.overflow = overflow;
+
+			dropOverflow();
 		}
 	}
 
@@ -128,19 +192,48 @@ final class CustomAudioImpl extends LocalAudioImpl implements CustomAudio {
 				ticker = null;
 			}
 		}
+
+		super.beforeRelease();
 	}
 
 	/** Queues what is left of the previous format, filled with silence. */
 	private void flushPartial() {
 		if (partialLength > 0) {
-			queue.add(new Chunk(partial, format));
+			// What lies beyond may be audio that clear() dropped.
+			Arrays.fill(partial, partialLength, partial.length, (byte) 0);
+			enqueue(new Chunk(partial, format));
 		}
 
 		partial = null;
 		partialLength = 0;
 	}
 
+	/**
+	 * Queues a chunk. With {@link AudioOverflow#DROP_OLDEST} the queue is kept
+	 * within its limit chunk by chunk, so that even a long push holds no more
+	 * than that; {@link AudioOverflow#REJECT} has checked the push before.
+	 */
+	private void enqueue(Chunk chunk) {
+		queue.add(chunk);
+
+		dropOverflow();
+	}
+
+	private void dropOverflow() {
+		if (overflow == AudioOverflow.DROP_OLDEST) {
+			while (queue.size() > maxChunks) {
+				queue.poll();
+			}
+		}
+	}
+
 	private void tick() {
+		long late = rtc.clock.getAsLong() - (start + ticks++ * TICK_NANOS);
+
+		if (late > MAX_LATE_NANOS) {
+			return;
+		}
+
 		Chunk chunk;
 
 		synchronized (queue) {

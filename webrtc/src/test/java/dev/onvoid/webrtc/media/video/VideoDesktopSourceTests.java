@@ -16,11 +16,15 @@
 
 package dev.onvoid.webrtc.media.video;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import dev.onvoid.webrtc.TestBase;
+import dev.onvoid.webrtc.media.MediaStreamTrackState;
 import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 import dev.onvoid.webrtc.media.video.desktop.ScreenCapturer;
 
@@ -33,6 +37,11 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -42,6 +51,67 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 class VideoDesktopSourceTests extends TestBase {
 
 	private static final String OS = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+
+	@Test
+	void frameRateOutOfRangeRejected() {
+		VideoDesktopSource source = new VideoDesktopSource();
+
+		try {
+			// 65536 would reach the capture thread as 0, -1 as 65535.
+			for (int frameRate : new int[] { Integer.MIN_VALUE, -1, 0, 1001, 65536, Integer.MAX_VALUE }) {
+				assertThrows(IllegalArgumentException.class, () -> source.setFrameRate(frameRate));
+			}
+
+			assertDoesNotThrow(() -> source.setFrameRate(1));
+			assertDoesNotThrow(() -> source.setFrameRate(VideoDesktopSource.MAX_FRAME_RATE));
+		}
+		finally {
+			source.dispose();
+		}
+	}
+
+	@Test
+	void maxFrameSizeHoldsBothLimits() throws Exception {
+		// The portal would wait for the user to pick a source.
+		assumeFalse("wayland".equalsIgnoreCase(System.getenv("XDG_SESSION_TYPE")), "Wayland");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		DesktopSource screen = firstScreen();
+
+		VideoDesktopSource source = new VideoDesktopSource();
+		source.setSourceId(screen.id, false);
+		// On any common screen, fitting the width leaves the height too large.
+		source.setMaxFrameSize(320, 60);
+
+		VideoTrack track = factory.createVideoTrack("screen", source);
+
+		CompletableFuture<int[]> size = new CompletableFuture<>();
+
+		VideoTrackSink sink = frame -> {
+			size.complete(new int[] { frame.buffer.getWidth(), frame.buffer.getHeight() });
+			frame.release();
+		};
+
+		int[] first;
+
+		try {
+			track.addSink(sink);
+			source.start();
+
+			first = size.completeOnTimeout(null, 10, TimeUnit.SECONDS).join();
+		}
+		finally {
+			source.stop();
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+		}
+
+		assumeTrue(first != null, "The screen delivered no frames");
+
+		assertEquals(60, first[1]);
+		assertTrue(first[0] <= 320, "Width " + first[0] + " exceeds the limit");
+	}
 
 	@Test
 	void screenFramesFollowScreen() throws Exception {
@@ -131,6 +201,154 @@ class VideoDesktopSourceTests extends TestBase {
 		assertTrue(max - min > 50,
 				"Frames did not follow the screen: " + means.size() + " frames, mean luma "
 						+ String.format(Locale.ROOT, "%.1f to %.1f", min, max));
+	}
+
+	@Test
+	void retainedFrameKeepsPixels() throws Exception {
+		assumeFalse(isWaylandSession(), "Starting a capture asks the user what to share");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		DesktopSource screen = firstScreen();
+
+		// A window of our own, to change the screen while a frame is retained.
+		Frame window = new Frame();
+		Rectangle bounds = GraphicsEnvironment.getLocalGraphicsEnvironment()
+				.getDefaultScreenDevice().getDefaultConfiguration().getBounds();
+
+		EventQueue.invokeAndWait(() -> {
+			window.setUndecorated(true);
+			window.setAlwaysOnTop(true);
+			window.setBackground(Color.BLACK);
+			window.setBounds(bounds.x + bounds.width / 10, bounds.y + bounds.height / 10,
+					bounds.width * 8 / 10, bounds.height * 8 / 10);
+			window.setVisible(true);
+			window.toFront();
+		});
+
+		// No maximum size: only frames that are not scaled were shared.
+		VideoDesktopSource source = new VideoDesktopSource();
+		source.setSourceId(screen.id, false);
+		source.setFrameRate(10);
+
+		VideoTrack track = factory.createVideoTrack("screen", source);
+
+		AtomicReference<VideoFrame> retained = new AtomicReference<>();
+		AtomicReference<ByteBuffer> original = new AtomicReference<>();
+		CountDownLatch firstFrame = new CountDownLatch(1);
+		CountDownLatch changedFrame = new CountDownLatch(1);
+
+		VideoProcessor processor = new VideoProcessor() {
+			@Override
+			public void setSink(VideoTrackSink sink) {
+			}
+
+			@Override
+			public void onFrameCaptured(VideoFrame frame) {
+				ByteBuffer pixels = ((NativeI420Buffer) frame.buffer).getDataY();
+
+				if (retained.get() == null) {
+					frame.retain();
+
+					original.set(copyOf(pixels));
+					retained.set(frame);
+					firstFrame.countDown();
+				}
+				else if (!original.get().equals(pixels)) {
+					changedFrame.countDown();
+				}
+			}
+		};
+
+		// Without a sink the source drops its frames.
+		VideoTrackSink sink = VideoFrame::release;
+
+		try {
+			source.setVideoProcessor(processor);
+			track.addSink(sink);
+			source.start();
+
+			assumeTrue(firstFrame.await(10, TimeUnit.SECONDS), "The screen delivered no frames");
+
+			EventQueue.invokeAndWait(() -> {
+				window.setBackground(Color.WHITE);
+				window.repaint();
+			});
+
+			assumeTrue(changedFrame.await(10, TimeUnit.SECONDS), "The screen did not change");
+
+			source.stop();
+
+			assertEquals(original.get(), ((NativeI420Buffer) retained.get().buffer).getDataY(),
+					"The next capture changed the pixels of a retained frame");
+		}
+		finally {
+			source.stop();
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+
+			if (retained.get() != null) {
+				retained.get().release();
+			}
+
+			EventQueue.invokeAndWait(window::dispose);
+		}
+	}
+
+	@Test
+	void missingBackendEndsTrack() {
+		assumeFalse(isWaylandSession(), "Starting a capture asks the user what to share");
+		assumeTrue(hasNoBackend(), "A capture backend is available");
+
+		VideoDesktopSource source = new VideoDesktopSource();
+		VideoTrack track = factory.createVideoTrack("screen", source);
+
+		AtomicInteger ended = new AtomicInteger();
+
+		track.addTrackEndedListener(t -> ended.incrementAndGet());
+
+		try {
+			source.start();
+			// Waits for the capture thread, which has given up by then.
+			source.stop();
+
+			assertEquals(MediaStreamTrackState.ENDED, track.getState());
+			assertEquals(1, ended.get());
+		}
+		finally {
+			track.dispose();
+			source.dispose();
+		}
+	}
+
+	private static ByteBuffer copyOf(ByteBuffer buffer) {
+		ByteBuffer copy = ByteBuffer.allocate(buffer.remaining());
+
+		copy.put(buffer.duplicate());
+		copy.flip();
+
+		return copy;
+	}
+
+	private static boolean isWaylandSession() {
+		return "wayland".equals(System.getenv("XDG_SESSION_TYPE"));
+	}
+
+	private static boolean hasNoBackend() {
+		ScreenCapturer capturer = new ScreenCapturer();
+
+		try {
+			capturer.getDesktopSources();
+
+			return false;
+		}
+		catch (Error | RuntimeException e) {
+			// Without a display, as on headless Linux, listing fails.
+			return true;
+		}
+		finally {
+			capturer.dispose();
+		}
 	}
 
 	private static double meanLuma(NativeI420Buffer buffer) {

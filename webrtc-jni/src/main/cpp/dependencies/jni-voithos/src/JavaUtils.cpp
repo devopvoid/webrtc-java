@@ -16,14 +16,33 @@
 #include "JavaThreadEnv.h"
 #include "JavaWrappedException.h"
 
+#include <atomic>
+
+#include <atomic>
 #include <exception>
 #include <ios>
+
+namespace
+{
+	std::atomic<JavaVM *> javaVM { nullptr };
+}
+
+void SetJavaVM(JavaVM * vm)
+{
+	javaVM.store(vm);
+}
+
+JavaVM * GetJavaVM()
+{
+	return javaVM.load();
+}
 
 bool ExceptionCheck(JNIEnv * env)
 {
 	if (env->ExceptionCheck()) {
+		// Not described here: the exception travels on, to be thrown back
+		// into Java or reported by whoever catches it.
 		jthrowable exception = env->ExceptionOccurred();
-		env->ExceptionDescribe();
 		env->ExceptionClear();
 
 		if (exception) {
@@ -44,8 +63,27 @@ void ThrowJavaException(JNIEnv * env, const char * className, const char * messa
 
 	jni::JavaLocalRef<jclass> cls(env, env->FindClass(className));
 
-	if (cls.get() != nullptr) {
-		env->ThrowNew(cls.get(), message);
+	if (cls.get() == nullptr) {
+		return;
+	}
+
+	// ThrowNew takes Modified UTF-8; messages may carry what WebRTC reports.
+	jmethodID ctor = env->GetMethodID(cls.get(), "<init>", "(Ljava/lang/String;)V");
+
+	if (ctor == nullptr) {
+		return;
+	}
+
+	jni::JavaLocalRef<jstring> text = message != nullptr ? jni::JavaString::toJava(env, message) : nullptr;
+
+	if (message != nullptr && text.get() == nullptr) {
+		return;
+	}
+
+	jni::JavaLocalRef<jthrowable> throwable(env, static_cast<jthrowable>(env->NewObject(cls.get(), ctor, text.get())));
+
+	if (throwable.get() != nullptr) {
+		env->Throw(throwable.get());
 	}
 }
 
@@ -64,10 +102,10 @@ void ThrowCxxJavaException(JNIEnv * env)
 		env->Throw(e.exception().get());
 	}
 	catch (const std::ios_base::failure & e) {
-		env->Throw(jni::JavaIOException(env, e.what()));
+		env->Throw(jni::JavaIOException(env, "%s", e.what()));
 	}
 	catch (const std::exception & e) {
-		env->Throw(jni::JavaError(env, e.what()));
+		env->Throw(jni::JavaError(env, "%s", e.what()));
 	}
 	catch (...) {
 		env->Throw(jni::JavaError(env, "Unhandled Exception"));
@@ -118,6 +156,21 @@ jmethodID GetStaticMethod(JNIEnv * env, jclass cls, const char * name, const cha
 	return method;
 }
 
+namespace
+{
+	std::atomic<NativeHandleHook> nativeHandleHook { nullptr };
+}
+
+void SetNativeHandleHook(NativeHandleHook hook)
+{
+	nativeHandleHook.store(hook, std::memory_order_release);
+}
+
+NativeHandleHook GetNativeHandleHook()
+{
+	return nativeHandleHook.load(std::memory_order_acquire);
+}
+
 jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName,
 	const char * declaringClass)
 {
@@ -137,14 +190,16 @@ jfieldID GetHandleField(JNIEnv * env, jobject obj, const std::string & fieldName
 
 jfieldID GetFieldID(JNIEnv * env, jobject obj, const std::string & fieldName, const char * type)
 {
-	jclass cls = env->GetObjectClass(obj);
+	// Deleted on return: on a native thread attached for a callback, nothing
+	// else frees local references until the thread detaches.
+	jni::JavaLocalRef<jclass> cls(env, env->GetObjectClass(obj));
 
-	if (cls == nullptr) {
+	if (cls.get() == nullptr) {
 		ExceptionCheck(env);
 		return nullptr;
 	}
 
-	return GetFieldID(env, cls, fieldName, type);
+	return GetFieldID(env, cls.get(), fieldName, type);
 }
 
 jfieldID GetFieldID(JNIEnv * env, jclass cls, const std::string & fieldName, const char * type)
@@ -161,7 +216,7 @@ jfieldID GetFieldID(JNIEnv * env, jclass cls, const std::string & fieldName, con
 
 JNIEnv * AttachCurrentThread()
 {
-	thread_local std::unique_ptr<jni::JavaThreadEnv> threadEnv(new jni::JavaThreadEnv(javaContext->getVM()));
+	thread_local std::unique_ptr<jni::JavaThreadEnv> threadEnv(new jni::JavaThreadEnv(GetJavaVM()));
 
 	return threadEnv->getEnv();
 }

@@ -43,8 +43,9 @@ namespace jni
             bool remote() const override;
 
             // Push audio data with synchronization. The chunk is captured now,
-            // so it is stamped with this source's clock less the configured
-            // capture delay. This is what the Java pushAudio() calls.
+            // so it is stamped with webrtc::TimeMicros(), the clock of the
+            // overload below, less the configured capture delay. This is what
+            // the Java pushAudio() calls.
             void PushAudioData(const void * audio_data, int bits_per_sample,
                               int sample_rate, size_t number_of_channels,
                               size_t number_of_frames);

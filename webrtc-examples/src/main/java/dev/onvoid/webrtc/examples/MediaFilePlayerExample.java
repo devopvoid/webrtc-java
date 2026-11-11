@@ -588,8 +588,11 @@ public class MediaFilePlayerExample {
 
                 @Override
                 public void onError(String message) {
-                    LOG.warning("Playback failed: " + message);
-                    stopIfCurrent();
+                    LOG.warning("Playback error: " + message);
+                    // A rejected output item does not stop playback.
+                    if (source.getState() == MediaPlayerState.PAUSED) {
+                        stopIfCurrent();
+                    }
                 }
             });
 
@@ -689,10 +692,18 @@ public class MediaFilePlayerExample {
                 return "Not recording";
             }
 
-            boolean recorded = running.stop();
             running.close();
 
-            return recorded ? "Saved " + recording : "Nothing was recorded";
+            switch (running.getResult()) {
+                case COMPLETE:
+                    return "Saved " + recording;
+                case PARTIAL:
+                    return "Saved " + recording + ", but writing it failed";
+                case FAILED:
+                    return "Recording failed";
+                default:
+                    return "Nothing was recorded";
+            }
         }
 
         /**

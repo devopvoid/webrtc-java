@@ -18,6 +18,7 @@
 #include "JavaClasses.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
+#include "LeakDetection.h"
 
 #include <utility>
 
@@ -40,6 +41,9 @@ namespace jni
 		const auto javaClass = JavaClasses::get<JavaMediaStreamTrackClass>(env);
 
 		env->SetBooleanField(javaTrack, javaClass->view, JNI_TRUE);
+
+		// Owns nothing, so there is nothing to forget to dispose.
+		LeakDetection::Released(env, javaTrack);
 
 		return std::move(javaTrack);
 	}

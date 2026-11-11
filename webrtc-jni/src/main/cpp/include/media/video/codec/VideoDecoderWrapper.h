@@ -117,8 +117,10 @@ namespace jni
 			Settings settings;
 			bool initialized;
 
-			// Parsing stops while the decoder provides the QP itself.
-			bool qpParsingEnabled;
+			// Parsing stops while the decoder provides the QP itself. Read on
+			// the decoder thread and written on the Java decoder's, which
+			// may deliver its frames from a thread of its own.
+			std::atomic<bool> qpParsingEnabled;
 			webrtc::H264BitstreamParser h264BitstreamParser;
 	};
 }

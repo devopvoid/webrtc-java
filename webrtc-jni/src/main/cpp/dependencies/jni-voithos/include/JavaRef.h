@@ -87,7 +87,10 @@ namespace jni
 	class JavaLocalRef<T, typename std::enable_if_t<std::is_convertible<T, jobject>::value>> : public JavaRef<T>
 	{
 		public:
-			JavaLocalRef() = default;
+			JavaLocalRef() :
+				env(nullptr)
+			{
+			}
 			
 			JavaLocalRef(std::nullptr_t) :
 				env(nullptr)
@@ -177,22 +180,37 @@ namespace jni
 
 			void retain(T obj)
 			{
-				deleteLocalRef();
+				// Takes the new reference before it lets go of the old one: on
+				// self-assignment, or with another wrapper of the same handle,
+				// obj is the reference deleteLocalRef() would free.
+				jobject ref = nullptr;
 
 				if (obj != nullptr) {
-					this->obj = env->NewLocalRef(obj);
+					if (env == nullptr) {
+						env = AttachCurrentThread();
+					}
+
+					ref = env->NewLocalRef(obj);
 				}
+
+				deleteLocalRef();
+
+				this->obj = ref;
 			}
 
 			void deleteLocalRef()
 			{
+				if (this->obj == nullptr) {
+					return;
+				}
+
 				if (env == nullptr) {
 					env = AttachCurrentThread();
 				}
 
-				if (this->obj != nullptr) {
-					env->DeleteLocalRef(this->obj);
-				}
+				env->DeleteLocalRef(this->obj);
+
+				this->obj = nullptr;
 			}
 
 		private:

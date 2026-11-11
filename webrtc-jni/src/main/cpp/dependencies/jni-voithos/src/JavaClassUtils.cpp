@@ -13,17 +13,18 @@ namespace jni
 {
 	JavaClassUtils::JavaClassUtils(JNIEnv * env)
 	{
-		jclass cls = env->FindClass("java/lang/Class");
+		JavaLocalRef<jclass> cls(env, env->FindClass("java/lang/Class"));
 
-		getClassName = GetMethod(env, cls, "getName", "()Ljava/lang/String;");
+		getClassName = GetMethod(env, cls.get(), "getName", "()Ljava/lang/String;");
 	}
 
 	std::string JavaClassUtils::toNativeClassName(JNIEnv * env, const JavaLocalRef<jobject> & javaRef)
 	{
 		const auto classUtils = JavaClasses::get<JavaClassUtils>(env);
 
-		jclass cls = env->GetObjectClass(javaRef.get());
-		jstring clsName = static_cast<jstring>(env->CallObjectMethod(cls, classUtils->getClassName));
+		JavaLocalRef<jclass> cls(env, env->GetObjectClass(javaRef.get()));
+		jstring clsName = static_cast<jstring>(env->CallObjectMethod(cls.get(), classUtils->getClassName));
+		ExceptionCheck(env);
 
 		return JavaString::toNative(env, JavaLocalRef<jstring>(env, clsName));
 	}

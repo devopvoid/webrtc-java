@@ -86,8 +86,8 @@ Unrecognized characters are ignored.
 ### Duration and Inter-Tone Gap Constraints
 
 The duration and inter-tone gap parameters have the following constraints:
-- Duration must be between 70ms and 6000ms (default: 100ms)
-- Inter-tone gap must be at least 50ms (default: 50ms)
+- Duration must be between 40ms and 6000ms (default: 100ms)
+- Inter-tone gap must be at least 30ms (default: 50ms)
 
 If these constraints are not met, the `insertDtmf` method will return `false`.
 
@@ -132,16 +132,21 @@ int interToneGap = dtmfSender.interToneGap();
 
 ## Cleanup
 
-When you're done with the DTMF sender, you should unregister any observers:
+Each call to `getDtmfSender()` returns a new `RTCDtmfSender` that holds its own reference to the
+native DTMF sender. It stays safe to use after the connection has closed, when `canInsertDtmf()`
+returns `false`, until you dispose it. Disposing also unregisters the observer registered through
+it:
 
 ```java
-// Unregister the observer
-dtmfSender.unregisterObserver();
+dtmfSender.dispose();
 ```
 
-`RTCDtmfSender` has no `dispose()` method of its own; it is tied to the native sender's lifetime.
-The `RTCRtpSender` it came from, however, is not owned by the peer connection, so make sure to
-dispose that once you're done with it:
+To stop listening without disposing, call `dtmfSender.unregisterObserver()`. It removes only the
+observer registered through that instance; one registered since through another `RTCDtmfSender` of
+the same sender stays.
+
+The `RTCRtpSender` the DTMF sender came from is not owned by the peer connection either, so make
+sure to dispose that once you're done with it:
 
 ```java
 sender.dispose();

@@ -26,10 +26,26 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioTrack
 	 * Method:    addSinkInternal
-	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioTrackSink;Z)J
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/AudioTrackSink;ZZ)J
 	 */
 	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addSinkInternal
-	(JNIEnv *, jobject, jobject, jboolean);
+	(JNIEnv *, jobject, jobject, jboolean, jboolean);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioTrack
+	 * Method:    addVoiceActivityListenerInternal
+	 * Signature: (Ldev/onvoid/webrtc/media/audio/VoiceActivityListener;FI)J
+	 */
+	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_addVoiceActivityListenerInternal
+	(JNIEnv *, jobject, jobject, jfloat, jint);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_audio_AudioTrack
+	 * Method:    removeVoiceActivityListenerInternal
+	 * Signature: (J)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioTrack_removeVoiceActivityListenerInternal
+	(JNIEnv *, jobject, jlong);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_audio_AudioTrack

@@ -69,7 +69,7 @@ config.cryptoOptions = crypto;
 
 `cryptexPolicy` encrypts the RTP header extensions and CSRCs as a whole (RFC 9335) where the peer supports it (`NEGOTIATE`) or always (`REQUIRE`).
 
-`certificates` takes the DTLS certificate a peer connection authenticates with, as an `RTCCertificatePEM`; without one, WebRTC generates a certificate per connection. A certificate that does not parse makes `createPeerConnection()` and `setConfiguration()` throw.
+`certificates` takes the DTLS certificate a peer connection authenticates with, as an `RTCCertificatePEM`; without one, WebRTC generates a certificate per connection. A certificate that does not parse makes `createPeerConnection()` and `setConfiguration()` throw. The expiration time passed to its constructor is informational: WebRTC takes it from the certificate. The certificates that `getConfiguration()` and `RTCDtlsTransport.getRemoteCertificates()` return carry that time in `getExpires()`, in milliseconds since the Unix epoch, or `RTCCertificatePEM.EXPIRES_UNKNOWN` (-1) if it cannot be read.
 
 ## Signaling
 

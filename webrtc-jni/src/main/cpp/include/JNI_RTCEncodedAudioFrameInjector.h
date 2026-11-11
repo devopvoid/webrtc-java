@@ -22,10 +22,10 @@
 extern "C" {
 #endif
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injectDirectBuffer
-  (JNIEnv *, jobject, jobject, jint, jint, jint, jlong, jint, jboolean, jlong, jboolean);
+  (JNIEnv *, jobject, jobject, jint, jint, jint, jlong, jint, jboolean, jlong, jboolean, jintArray);
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_injectByteArray
-  (JNIEnv *, jobject, jbyteArray, jint, jlong, jint, jboolean, jlong, jboolean);
+  (JNIEnv *, jobject, jbyteArray, jint, jlong, jint, jboolean, jlong, jboolean, jintArray);
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedAudioFrameInjector_dispose
   (JNIEnv *, jobject);

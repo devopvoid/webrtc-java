@@ -1,0 +1,1820 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.onvoid.webrtc.media.player;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import java.io.IOException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.LongStream;
+
+import dev.onvoid.webrtc.PeerConnectionFactory;
+import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
+import dev.onvoid.webrtc.media.audio.AudioLayer;
+import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.AudioTrackSink;
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
+import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.media.video.VideoTrackSink;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+
+/**
+ * Tests playing a media source into custom media sources. The media is
+ * observed where an application would see it, on the sinks of the tracks made
+ * from those sources, so what these assert is what a peer connection would be
+ * sent.
+ * <p>
+ * The asset runs three seconds and is played in real time, so these tests take
+ * about as long as the media they play.
+ *
+ * @author Alex Andres
+ */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Execution(ExecutionMode.SAME_THREAD)
+class MediaPlayerTest {
+
+	/**
+	 * The committed asset: 320x240 VP8 at 15 fps, 48 kHz mono Opus, 3.008 s,
+	 * with a keyframe every second so that seeking has somewhere to land.
+	 */
+	private static final String ASSET = "/media-test.webm";
+
+	/** 3.008 seconds at 15 frames a second. */
+	private static final int EXPECTED_FRAMES = 45;
+
+	/**
+	 * 320x240 H.264 at 15 fps, ten seconds, in MPEG-TS, with a key frame every
+	 * four seconds, at 0, 4 and 8 s. On the container's clock those are 0.133,
+	 * 4.133 and 8.133 s: two B-frames put the first picture 0.133 s in, while
+	 * its decode time is 0. MPEG-TS has no index, so FFmpeg seeks in it by
+	 * searching for a timestamp, which can land past the key frame before the
+	 * position. Made with libx264 (veryfast, CRF 42, keyint 60, no scene cuts,
+	 * two B-frames) from a moving gradient.
+	 */
+	private static final String TS_ASSET = "/media-test-h264.ts";
+
+	/** 3840x2160 H.264, fifteen pictures. */
+	private static final String H264_4K = "/media-test-h264-4k.mkv";
+
+	/** 1920x1080 H.264, fifteen pictures. */
+	private static final String H264_1080P = "/media-test-h264-1080p.mkv";
+
+	/** 3.008 seconds in chunks of 10 ms. */
+	private static final int EXPECTED_CHUNKS = 300;
+
+	private AudioDeviceModule audioModule;
+	private PeerConnectionFactory factory;
+
+	@TempDir
+	Path tempDir;
+
+
+	@BeforeAll
+	void initFactory() {
+		// A dummy audio layer, because this factory sends pushed audio and
+		// must not also be capturing from a device.
+		audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		factory = new PeerConnectionFactory(audioModule);
+	}
+
+	@AfterAll
+	void disposeFactory() {
+		factory.dispose();
+		audioModule.dispose();
+	}
+
+	@Test
+	void retriesUnacceptedPacketsAndDrainRequests() throws Exception {
+		for (boolean video : new boolean[] { true, false }) {
+			for (int mode : new int[] { 1, 4 }) {
+				DecoderFault.arm(video, mode);
+				try (Playback playback = new Playback()) {
+					playback.player.play();
+					assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+					assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+					assertEquals(1, DecoderFault.retries(), "unaccepted input was lost");
+					assertTrue(Math.abs(playback.frames.get() - EXPECTED_FRAMES) <= 1);
+					assertTrue(Math.abs(playback.chunks.get() - EXPECTED_CHUNKS) <= 2);
+				}
+				finally {
+					DecoderFault.disarm();
+				}
+			}
+		}
+	}
+
+	@Test
+	void drainFailuresPauseWithoutEndingOrLooping() throws Exception {
+		for (boolean video : new boolean[] { true, false }) {
+			for (int mode : new int[] { 2, 3 }) {
+				for (boolean looping : new boolean[] { false, true }) {
+					DecoderFault.arm(video, mode);
+					try (Playback playback = new Playback()) {
+						CountDownLatch failed = new CountDownLatch(1);
+						AtomicInteger ends = new AtomicInteger();
+						AtomicInteger errors = new AtomicInteger();
+						playback.player.setListener(new MediaPlayerListener() {
+							@Override
+							public void onError(String message) {
+								errors.incrementAndGet();
+								failed.countDown();
+							}
+
+							@Override
+							public void onEndOfStream() {
+								ends.incrementAndGet();
+							}
+						});
+						playback.player.setLooping(looping);
+						playback.player.play();
+						assertTrue(failed.await(15, TimeUnit.SECONDS), "no drain error");
+						assertEquals(MediaPlayerState.PAUSED, playback.player.getState());
+						assertTrue(waitFor(() -> PlaybackProbe.waitingPlayers() == 1, 5000),
+								"decode thread stuck waiting for the paused pacer at EOF");
+						assertEquals(0, ends.get());
+						// Resuming after a drain error must finish this pass, without
+						// having rewound and decoded a second one while paused.
+						playback.player.setLooping(false);
+						playback.player.play();
+						assertTrue(waitFor(() -> ends.get() == 1, 10000), "no end after resume");
+						assertTrue(playback.frames.get() <= EXPECTED_FRAMES);
+						assertEquals(1, errors.get());
+						playback.player.close();
+						assertEquals(1, errors.get());
+						assertEquals(1, ends.get());
+					}
+					finally {
+						DecoderFault.disarm();
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	void nativeObserverStartsAndStopsExactlyOnce() throws Exception {
+		assertTrue(DecoderFault.observerLifecycle(asset().toString(),
+				dev.onvoid.webrtc.internal.NativeApi.tableAddress()));
+	}
+
+	@Test
+	void playsToEnd() throws Exception {
+		try (Playback playback = new Playback()) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// Allowing one frame either way: which side of the last frame
+			// interval the file ends on is the container's business.
+			assertTrue(Math.abs(playback.frames.get() - EXPECTED_FRAMES) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - EXPECTED_CHUNKS) <= 2,
+					"audio chunks: " + playback.chunks.get());
+
+			assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+		}
+	}
+
+	@Test
+	void deliversWhatWebRtcTakes() throws Exception {
+		try (Playback playback = new Playback()) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(320, playback.width.get());
+			assertEquals(240, playback.height.get());
+
+			// The audio has to arrive as 10 ms of 48 kHz PCM whatever the
+			// source was, which for this asset means it was resampled.
+			assertEquals(48000, playback.sampleRate.get());
+			assertEquals(1, playback.channels.get());
+			assertEquals(480, playback.framesPerChunk.get());
+		}
+	}
+
+	@Test
+	void playsAvi() throws Exception {
+		MediaReader reader = new MediaReader(MediaReaderTest.asset(MediaReaderTest.AVI_ASSET));
+
+		// Opening the player is what fails when a decoder for the file's
+		// codecs was left out of the FFmpeg build.
+		try (Playback playback = new Playback(reader)) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The asset holds six frames, all of which have to come out.
+			assertEquals(6, playback.frames.get());
+			assertEquals(1920, playback.width.get());
+			assertEquals(1080, playback.height.get());
+
+			assertTrue(playback.chunks.get() > 0, "no audio");
+			assertEquals(2, playback.channels.get());
+		}
+	}
+
+	@Test
+	void coarseInterleavingKeepsVideoEven() throws Exception {
+		// All three seconds of audio are stored ahead of the video, so the
+		// video can only be decoded once the audio has been read. A player
+		// that stops reading while the audio queue is full gets to the video
+		// seconds late and delivers what is overdue in a burst that WebRTC's
+		// encoder answers by dropping all but the last frame of it.
+		MediaReader reader = new MediaReader(
+				MediaReaderTest.asset(MediaReaderTest.COARSE_ASSET));
+
+		try (Playback playback = new Playback(reader)) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			List<Long> times;
+			synchronized (playback.frameTimes) {
+				times = new ArrayList<>(playback.frameTimes);
+			}
+
+			assertEquals(75, times.size());
+
+			// Frame i and the first audio chunk share a timeline, so frame i
+			// is due I frame intervals after that chunk arrived. How late the
+			// worst frame is tells a player that starved its video, seconds
+			// behind, from a busy machine that was merely slow for a moment,
+			// which a count of closely spaced frames cannot.
+			long start = Math.min(playback.firstChunkNs.get(), times.get(0));
+			long frameNs = TimeUnit.MILLISECONDS.toNanos(40);
+			long maxLateNs = 0;
+			StringBuilder offsets = new StringBuilder();
+
+			for (int i = 0; i < times.size(); i++) {
+				long offsetNs = times.get(i) - start;
+
+				maxLateNs = Math.max(maxLateNs, offsetNs - i * frameNs);
+				offsets.append(i == 0 ? "" : " ").append(offsetNs / 1_000_000);
+			}
+
+			assertTrue(maxLateNs < TimeUnit.SECONDS.toNanos(1),
+					"video was up to " + maxLateNs / 1_000_000 + " ms late; frames arrived at "
+							+ offsets + " ms after the first audio");
+		}
+	}
+
+	@Test
+	void pacesInRealTime() throws Exception {
+		try (Playback playback = new Playback()) {
+			long started = System.nanoTime();
+
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+			// Three seconds of media takes three seconds to play. The upper
+			// bound is loose because a busy machine can only ever be late.
+			assertTrue(elapsedMs > 2500, "finished too early: " + elapsedMs + " ms");
+			assertTrue(elapsedMs < 8000, "finished too late: " + elapsedMs + " ms");
+		}
+	}
+
+	@Test
+	void loopsWithoutEnding() throws Exception {
+		try (Playback playback = new Playback()) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			// Well past the length of the asset, so a player that did not
+			// start over would have run out by now.
+			assertFalse(playback.ended.await(4500, TimeUnit.MILLISECONDS),
+					"a looping player reported an end of stream");
+
+			assertTrue(playback.frames.get() > EXPECTED_FRAMES,
+					"stopped at the end of the first pass: " + playback.frames.get());
+			assertEquals(MediaPlayerState.PLAYING, playback.player.getState());
+		}
+	}
+
+	@Test
+	void pauseHoldsPlayback() throws Exception {
+		try (Playback playback = new Playback()) {
+			playback.player.play();
+
+			Thread.sleep(800);
+
+			playback.player.pause();
+
+			assertEquals(MediaPlayerState.PAUSED, playback.player.getState());
+
+			// Whatever was in flight when the pause landed may still arrive,
+			// so the count is read once things have settled.
+			Thread.sleep(200);
+
+			int atPause = playback.frames.get();
+
+			Thread.sleep(700);
+
+			assertEquals(atPause, playback.frames.get(), "frames kept arriving while paused");
+		}
+	}
+
+	@Test
+	void seekMovesPlayback() throws Exception {
+		try (Playback playback = new Playback()) {
+			// Half a second is left to play out from 2.5 s.
+			playback.player.seek(2_500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// A second of the asset is fifteen frames, well short of a pass.
+			assertTrue(playback.frames.get() < EXPECTED_FRAMES / 2,
+					"played more than the tail: " + playback.frames.get());
+			assertTrue(playback.frames.get() > 0, "played nothing after the seek");
+		}
+	}
+
+	@Test
+	void seekStartsAtThePositionAskedFor() throws Exception {
+		try (Playback playback = new Playback()) {
+			// Between the keyframes at 1 s and 2 s. The reader lands on the
+			// one at 1 s, and what lies between it and 1.5 s is decoded only
+			// to get there.
+			playback.player.seek(1_500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The first frame at or after 1.5 s is the one at 23 / 15 s.
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 1_500_000 && first < 1_500_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// 1.533 s to 2.933 s, and 1.5 s to 3.008 s of audio. Starting at
+			// the keyframe would have played 15 frames and 50 chunks more.
+			assertTrue(Math.abs(playback.frames.get() - 22) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 151) <= 2,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void fastSeekPlaysFromTheKeyframeBefore() throws Exception {
+		try (Playback playback = new Playback()) {
+			// Between the keyframes at 1 s and 2 s: playback starts at the one
+			// at 1 s, with nothing dropped.
+			playback.player.fastSeek(1_500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// 1 s to 2.933 s, and the audio from the first packet the reader
+			// lands on, a few milliseconds after 1 s, uncut: about half a
+			// second more of each than seek gives. Where the position goes is
+			// up to positionFollowsAFastSeekToItsKeyframe.
+			assertTrue(Math.abs(playback.frames.get() - 30) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 198) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void seekCutsTheAudioFrameItFallsIn() throws Exception {
+		// Two seconds in frames of 100 ms, at the rate WebRTC takes, so that
+		// nothing is resampled and every sample played is one of the file's.
+		Path flac = TestMedia.constantFlac(tempDir, 48000, 20, (short) 1000);
+
+		try (Playback playback = new Playback(new MediaReader(flac))) {
+			// Half way into the frame at 1 s, which the reader lands on.
+			playback.player.seek(1_050_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// 0.95 s is exactly 95 chunks, none of them padded.
+			assertEquals(95, playback.chunks.get());
+			assertEquals(95 * 480, playback.nonZeroSamples.get());
+		}
+	}
+
+	@Test
+	void seekWithoutIndexStartsAtThePositionAskedFor() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI())))) {
+			// Just before the key frame at 8 s. A search for 7.8 s lands past
+			// the one at 4 s, and the decoder has nothing to show until 8 s,
+			// so the player has to look further back.
+			playback.player.seek(7_800_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The picture at 7.8 s is the 118th, 117 / 15 s in.
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 7_800_000 && first < 7_800_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// 7.8 s to the end: the last 33 of the 150 pictures.
+			assertTrue(Math.abs(playback.frames.get() - 33) <= 1,
+					"video frames: " + playback.frames.get());
+		}
+	}
+
+	@Test
+	void seekWithoutIndexToItsStartPlaysItAll() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI())))) {
+			// A search for exactly where the first picture is would find the
+			// next key frame: it goes by decode times, and that of the first
+			// picture comes 0.133 s before it.
+			playback.player.seek(0);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(20, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(0, playback.firstFramePositionUs.get(), 1);
+			assertTrue(Math.abs(playback.frames.get() - 150) <= 1,
+					"video frames: " + playback.frames.get());
+		}
+	}
+
+	@Test
+	void loopAfterASeekWithoutIndexThatLandedLateStartsOver() throws Exception {
+		// The asset cut off after its last keyframe, at 8 s. A search for
+		// 7.8 s lands past the one at 4 s, and the decoder, holding
+		// pictures back for its B-frames, gives the one at 8.133 s only once
+		// it is drained at the end, where a seek that landed late is not
+		// retried.
+		Path ts = cutAfterLastKeyFrame(
+				Paths.get(MediaPlayerTest.class.getResource(TS_ASSET).toURI()),
+				tempDir.resolve("cut.ts"));
+
+		try (Playback playback = new Playback(new MediaReader(ts))) {
+			playback.player.setLooping(true);
+			playback.player.seek(7_800_000);
+			playback.player.play();
+
+			// Past the seam and well into the next pass.
+			assertFalse(playback.ended.await(2000, TimeUnit.MILLISECONDS),
+					"a looping player reported an end of stream");
+
+			List<Long> positions = new ArrayList<>(playback.framePositionsUs);
+
+			assertTrue(positions.size() > 10, "frames: " + positions);
+
+			// The picture at 8 s, and then the next pass from the start.
+			// The late landing, left over from the seek once the source had
+			// started over, used to send the reader back before 7.8 s, so that
+			// the last pictures played again before the next pass.
+			// A sink runs inside the push, before its result is known. The
+			// position it sees belongs to the last successful delivery: first
+			// the seek target, then the picture at 8 s, then the next pass.
+			assertEquals(7_800_000L, positions.get(0));
+			assertTrue(positions.get(1) > 7_800_000, "not from the position: " + positions);
+			assertTrue(positions.get(2) < 1_000_000, "next pass not from the start: " + positions);
+
+			for (int i = 3; i < positions.size(); i++) {
+				assertTrue(positions.get(i) > positions.get(i - 1),
+						"position went back at frame " + i + ": " + positions);
+			}
+		}
+	}
+
+	@Test
+	void seekNearTheEndIsNotLost() throws Exception {
+		// Two seconds of video only. All of it is decoded and queued within
+		// moments, so the decoding thread spends the playback waiting for the
+		// queue to play out, which is where a seek used to be mistaken for the
+		// end of the source.
+		try (Playback playback = new Playback(new MediaReader(
+				Paths.get(MediaPlayerTest.class.getResource("/media-test-h264.mkv").toURI())))) {
+			playback.player.play();
+
+			Thread.sleep(700);
+
+			int before = playback.frames.get();
+
+			assertTrue(before > 0 && before < 30, "frames before the seek: " + before);
+			assertEquals(1, playback.ended.getCount(), "ended before the seek");
+
+			playback.player.seek(0);
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// The seek went back to the start, so the whole source plays again
+			// on top of what was delivered before it.
+			assertTrue(playback.frames.get() >= before + 29,
+					"playback did not go on after the seek: " + playback.frames.get()
+							+ " frames, " + before + " before it");
+			assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+		}
+	}
+
+	@Test
+	void positionFollowsABackwardSeekOfAudio() throws Exception {
+		// Audio alone, where nothing but the audio sets the position.
+		Path flac = TestMedia.constantFlac(tempDir, 48000, 40, (short) 1000);
+
+		try (Playback playback = new Playback(new MediaReader(flac))) {
+			playback.player.play();
+
+			Thread.sleep(1500);
+
+			long before = playback.player.getPositionUs();
+
+			assertTrue(before > 1_000_000, "position before the seek: " + before);
+
+			playback.player.seek(0);
+
+			Thread.sleep(400);
+
+			long after = playback.player.getPositionUs();
+
+			// About 0.4 s into the source again, not held at where it was.
+			assertTrue(after < before / 2, "position after seeking back: " + after
+					+ " us, " + before + " us before it");
+			// And still playing: the source is decoded to its end long before
+			// it plays out, and a flush that came after the seek had happened
+			// threw away all of it, so that the player ended at once.
+			assertEquals(MediaPlayerState.PLAYING, playback.player.getState());
+			assertTrue(after > 0, "position after seeking back: " + after + " us");
+		}
+	}
+
+	@Test
+	void seekCountsFromTheFirstFrame() throws Exception {
+		// Video at 5 s on the container's clock, audio a second after it. The
+		// source starts where its first frame does, so 2 s in is 7 s there.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.seek(2_000_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 2_000_000 && first < 2_000_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// Video runs up to 3 s, audio from 1 s to 4 s.
+			assertTrue(Math.abs(playback.frames.get() - 15) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 200) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void videoAheadOfAudioKeepsItsPace() throws Exception {
+		// A decoder running on many threads gives out its first picture once
+		// it has been fed as many packets, by which time the audio a second
+		// in has long reached the pacer. That must not make the first second
+		// of video overdue, or it goes out all at once.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// Fourteen frames apart at 15 fps, with room for a slow machine.
+			long spanMs = TimeUnit.NANOSECONDS.toMillis(
+					playback.frameTimes.get(14) - playback.frameTimes.get(0));
+
+			assertTrue(spanMs > 700, "the first 15 frames took " + spanMs + " ms");
+		}
+	}
+
+	@Test
+	void seekCountsFromAudioThatStartsFirst() throws Exception {
+		// The other way around: audio at 5 s, video a second after it.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			playback.player.seek(2_000_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first >= 2_000_000 && first < 2_000_000 + 1_000_000 / 15,
+					"first frame at " + first + " us");
+
+			// Video runs from 1 s to 4 s, audio up to 3 s.
+			assertTrue(Math.abs(playback.frames.get() - 30) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 100) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void seekBeforeVideoStartsKeepsTheAudio() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			playback.player.seek(500_000);
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			// All of the video, which starts at 1 s, and audio from 0.5 s.
+			assertTrue(Math.abs(playback.frames.get() - EXPECTED_FRAMES) <= 1,
+					"video frames: " + playback.frames.get());
+			assertTrue(Math.abs(playback.chunks.get() - 250) <= 3,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void positionCountsFromTheFirstFrame() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			AtomicLong firstDeliveredFramePositionUs = new AtomicLong(-1);
+			AudioTrackSink afterVideo = (data, bits, rate, ch, count) -> {
+				// Both sinks run on the pacer thread. An audio callback after
+				// a video callback sees the completed video push, whereas the
+				// video callback itself still sees the last accepted audio.
+				if (playback.frames.get() > 0) {
+					firstDeliveredFramePositionUs.compareAndSet(-1, playback.player.getPositionUs());
+				}
+			};
+			playback.audioTrack.addSink(afterVideo);
+
+			try {
+				playback.player.play();
+
+				assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+				// Video starts a second after the source does. Read its
+				// position only once delivery has returned successfully.
+				assertEquals(1_000_000, firstDeliveredFramePositionUs.get(),
+						"position after the first video delivery");
+
+				long end = playback.player.getPositionUs();
+
+				assertTrue(end > 3_900_000 && end < 4_100_000, "ended at " + end + " us");
+			}
+			finally {
+				playback.audioTrack.removeSink(afterVideo);
+			}
+		}
+	}
+
+	@Test
+	void playsAgainFromTheFirstFrame() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			int frames = playback.frames.get();
+			int chunks = playback.chunks.get();
+
+			assertTrue(frames >= EXPECTED_FRAMES - 1, "video frames: " + frames);
+
+			playback.framePositionsUs.clear();
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() >= 2 * frames, 10_000),
+					"second pass played " + (playback.frames.get() - frames) + " of " + frames);
+			assertTrue(playback.framePositionsUs.get(0) < 1_000_000 / 15,
+					"second pass started at " + playback.framePositionsUs.get(0) + " us");
+			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
+					"second pass of audio: " + (playback.chunks.get() - chunks));
+		}
+	}
+
+	@Test
+	void playsAgainFromAudioThatStartsFirst() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 6000, 5000)))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+
+			int frames = playback.frames.get();
+			int chunks = playback.chunks.get();
+
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() >= 2 * frames, 10_000),
+					"second pass played " + (playback.frames.get() - frames) + " of " + frames);
+			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
+					"second pass of audio: " + (playback.chunks.get() - chunks) + " of " + chunks);
+		}
+	}
+
+	@Test
+	void playsAgainWithoutAnEntryBeforeTheStart() throws Exception {
+		// Aiming before the start finds nothing in an FLV file, and that is
+		// not the end of the seek.
+		Path flv = TestMedia.pcmFlv(tempDir, (short) 1000, 5000, 10);
+
+		try (Playback playback = new Playback(new MediaReader(flv))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(15, TimeUnit.SECONDS), "no end of stream");
+			assertEquals(null, playback.error.get());
+
+			int chunks = playback.chunks.get();
+
+			assertTrue(chunks > 0, "played nothing");
+
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.chunks.get() >= 2 * chunks - 3, 10_000),
+					"second pass of audio: " + (playback.chunks.get() - chunks) + " of " + chunks
+							+ ", error: " + playback.error.get());
+		}
+	}
+
+	@Test
+	void loopsWithoutAGapAtTheSeam() throws Exception {
+		// The file does not say how long it runs, so the next pass is placed
+		// after the last frame seen. That is 4 s from the start of the source,
+		// not from the start of the container's clock.
+		try (Playback playback = new Playback(new MediaReader(
+				TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000)))) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > EXPECTED_FRAMES + 15, 7_000),
+					"video frames after a pass and a half: " + playback.frames.get());
+		}
+	}
+
+	@Test
+	void loopsWithoutAGapWhenTheFileGivesItsEnd() throws Exception {
+		// A Matroska file gives where it ends, 9 s on its clock, which is not
+		// how long it runs, and is not where the next pass goes.
+		Path mkv = TestMedia.shiftedMatroska(tempDir, asset(), 5000, 6000, 9008);
+
+		try (Playback playback = new Playback(new MediaReader(mkv))) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > EXPECTED_FRAMES + 15, 7_000),
+					"video frames after a pass and a half: " + playback.frames.get());
+		}
+	}
+
+	@Test
+	void pausedSeekFinishesWithoutPlaying() throws Exception {
+		// A block of 25 s comes out of the decoder in one go, which is more
+		// than the audio queue takes even when a seek has just emptied it.
+		// While paused, nothing makes room in it again.
+		Path mkv = TestMedia.longPcmBlockMatroska(tempDir, (short) 1000, 25);
+
+		try (Playback playback = new Playback(new MediaReader(mkv))) {
+			playback.player.play();
+
+			assertTrue(waitFor(() -> PlaybackProbe.waitingPushes() > 0, 10_000),
+					"the audio queue did not fill up");
+
+			playback.player.pause();
+
+			long seeks = PlaybackProbe.seeks();
+
+			playback.player.seek(0);
+
+			assertTrue(waitFor(() -> PlaybackProbe.seeks() > seeks, 3_000),
+					"the seek was not carried out, with "
+							+ PlaybackProbe.waitingPushes() + " push waiting");
+		}
+	}
+
+	@Test
+	void videoQueueKeepsToItsByteLimit() throws Exception {
+		// Two players, as what counts is what they take side by side. A loop
+		// gives the decoder more to do than the 15 pictures of the asset.
+		long limit = MediaPlayer.getMaxQueuedVideoBytes();
+
+		try (Playback first = new Playback(new MediaReader(resource(H264_4K)));
+				Playback second = new Playback(new MediaReader(resource(H264_4K)))) {
+			first.player.setLooping(true);
+			second.player.setLooping(true);
+
+			first.player.play();
+			second.player.play();
+
+			// A machine that decodes this slower than it plays has nothing
+			// to show here.
+			assumeTrue(waitFor(() -> PlaybackProbe.waitingPushes() == 2, 30_000),
+					"the video queues did not fill up");
+
+			long firstPeak = first.player.getPeakQueuedVideoBytes();
+			long secondPeak = second.player.getPeakQueuedVideoBytes();
+
+			// Sixty pictures would come to over 700 MiB.
+			assertTrue(firstPeak <= limit, "first player took " + firstPeak + " bytes");
+			assertTrue(secondPeak <= limit, "second player took " + secondPeak + " bytes");
+
+			// Full up to within a picture, and what is measured is what is
+			// queued now.
+			long picture = 3840L * 2160 * 3 / 2;
+
+			assertTrue(firstPeak > limit - 2 * picture, "first player took " + firstPeak + " bytes");
+			assertTrue(first.player.getQueuedVideoBytes() <= firstPeak,
+					"queued " + first.player.getQueuedVideoBytes() + " of " + firstPeak);
+		}
+	}
+
+	@Test
+	void videoQueueHoldsSixtyPicturesOf1080p() throws Exception {
+		try (Playback playback = new Playback(new MediaReader(resource(H264_1080P)))) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assumeTrue(waitFor(() -> PlaybackProbe.waitingPushes() > 0, 30_000),
+					"the video queue did not fill up");
+
+			// Not cut short by the limit on bytes.
+			long peak = playback.player.getPeakQueuedVideoBytes();
+			long picture = 1920L * 1080 * 3 / 2;
+
+			assertTrue(peak >= 59 * picture, "took " + peak + " bytes");
+			assertTrue(peak < MediaPlayer.getMaxQueuedVideoBytes(), "took " + peak + " bytes");
+		}
+	}
+
+	@Test
+	void closedPlayerHoldsNoVideo() throws Exception {
+		Playback playback = new Playback();
+
+		playback.player.play();
+
+		assertTrue(waitFor(() -> playback.frames.get() > 0, 10_000), "played nothing");
+
+		playback.close();
+
+		assertEquals(0, playback.player.getQueuedVideoBytes());
+		assertEquals(0, playback.player.getPeakQueuedVideoBytes());
+	}
+
+	@Test
+	void lateVideoLeavesThePositionAlone() throws Exception {
+		// Twelve seconds of audio ahead of the video in the file. Only ten go
+		// into the queue, so the video gets its turn once two have played,
+		// and frames that were due at the start are delivered at 2 s.
+		Path mkv = TestMedia.lateVideoMatroska(tempDir, asset(), 12_000);
+
+		try (Playback playback = new Playback(new MediaReader(mkv))) {
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > 0, 10_000), "no video");
+
+			long first = playback.firstFramePositionUs.get();
+
+			assertTrue(first > 1_500_000, "position fell back to " + first + " us");
+		}
+	}
+
+	@Test
+	void positionRestartsWithTheNextPass() throws Exception {
+		try (Playback playback = new Playback()) {
+			playback.player.setLooping(true);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() >= EXPECTED_FRAMES + 30, 10_000),
+					"frames: " + playback.frames.get());
+
+			// The decoder starts over about a second ahead of what is played,
+			// which must not show: the position keeps rising up to the end of
+			// the pass, falls back once, and then rises again.
+			List<Long> positions = new ArrayList<>(playback.framePositionsUs);
+			int seam = -1;
+
+			for (int i = 1; i < positions.size(); i++) {
+				if (positions.get(i) < positions.get(i - 1)) {
+					assertEquals(-1, seam, "went back more than once: " + positions);
+
+					seam = i;
+				}
+			}
+
+			assertTrue(seam > 0, "never went back: " + positions);
+			assertTrue(positions.get(seam - 1) > 2_800_000,
+					"pass cut short at frame " + seam + ": " + positions);
+			assertTrue(positions.get(seam) < 200_000,
+					"next pass late at frame " + seam + ": " + positions);
+		}
+	}
+
+	@Test
+	void positionFollowsAFastSeekToItsKeyframe() throws Exception {
+		try (Playback playback = new Playback()) {
+			// The keyframe is at 1 s. The position must not wait at 1.5 s for
+			// playback to catch up with it.
+			playback.player.fastSeek(1_500_000);
+			playback.player.play();
+
+			assertTrue(waitFor(() -> playback.frames.get() > 1, 10_000), "no video");
+
+			// At the first frame, the position is still the one asked for, or
+			// that of audio that went out before it, depending on which came
+			// first. At the second, the first frame has gone out: the position
+			// follows it and the audio alongside, a little ahead at most, and
+			// is well short of 1.5 s.
+			long second = playback.framePositionsUs.get(1);
+
+			assertTrue(second >= 1_000_000 && second < 1_400_000, "second frame at " + second + " us");
+		}
+	}
+
+	@Test
+	void needsAtLeastOneSource() throws Exception {
+		MediaReader reader = new MediaReader(asset());
+
+		assertThrows(IllegalArgumentException.class,
+				() -> new MediaPlayer(reader, null, null));
+
+		reader.close();
+	}
+
+	@Test
+	void rejectsDisposedSources() throws Exception {
+		for (boolean disposedVideo : new boolean[] { true, false }) {
+			for (boolean otherSource : new boolean[] { true, false }) {
+				try (Sources sources = new Sources(); MediaReader reader = new MediaReader(asset())) {
+					if (disposedVideo) {
+						sources.video.dispose();
+					}
+					else {
+						sources.audio.dispose();
+					}
+					CustomVideoSource video = disposedVideo || otherSource ? sources.video : null;
+					CustomAudioSource audio = !disposedVideo || otherSource ? sources.audio : null;
+					assertThrows(IllegalStateException.class, () -> new MediaPlayer(reader, video, audio));
+					// Rejection must leave the reader with its caller, ready to use.
+					assertNotNull(reader.getInfo());
+					try (MediaPlayer player = new MediaPlayer(reader,
+							disposedVideo ? null : sources.video, disposedVideo ? sources.audio : null)) {
+						assertEquals(MediaPlayerState.IDLE, player.getState());
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	void sourcesSurviveConstructorHandoff() throws Exception {
+		try (Sources sources = new Sources()) {
+			// The transfer of the reader is between source acquisition in Java
+			// and the pacer's AddRef. Force disposal on another thread in that gap.
+			try (MediaReader reader = new MediaReader(asset()) {
+				@Override
+				synchronized long detach() {
+					try {
+						CompletableFuture.runAsync(() -> {
+							sources.video.dispose();
+							sources.audio.dispose();
+						}).get(5, TimeUnit.SECONDS);
+					}
+					catch (Exception e) {
+						throw new AssertionError("Disposal during source handoff failed", e);
+					}
+					return super.detach();
+				}
+			}; MediaPlayer player = new MediaPlayer(reader, sources.video, sources.audio)) {
+				CountDownLatch finished = new CountDownLatch(1);
+				AtomicReference<String> error = new AtomicReference<>();
+				player.setListener(new MediaPlayerListener() {
+					@Override
+					public void onEndOfStream() {
+						finished.countDown();
+					}
+
+					@Override
+					public void onError(String message) {
+						error.set(message);
+						finished.countDown();
+					}
+				});
+				player.play();
+				assertTrue(finished.await(15, TimeUnit.SECONDS), "no end of stream");
+				assertEquals(null, error.get());
+				assertEquals(MediaPlayerState.ENDED, player.getState());
+			}
+		}
+	}
+
+	@Test
+	void closesTwice() throws Exception {
+		Playback playback = new Playback();
+
+		playback.close();
+		playback.close();
+	}
+
+	@Test
+	void adoptedReaderIsClosed() throws Exception {
+		MediaReader reader = new MediaReader(asset());
+
+		try (Playback playback = new Playback(reader)) {
+			// The player took the reader over, so the Java one is spent and
+			// must not be usable any more.
+			assertThrows(IllegalStateException.class, reader::getInfo);
+		}
+	}
+
+	@Test
+	void closesFromEndOfStream() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch closed = new CountDownLatch(1);
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					// On the player's own thread, which is the one closing it
+					// has to wait for.
+					player.close();
+					closed.countDown();
+				}
+			});
+
+			player.seek(2_500_000);
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			player.close();
+		}
+	}
+
+	@Test
+	void reportsWhatTheListenerThrows() throws Exception {
+		// What the listener throws on the player's thread goes to that
+		// thread's uncaught exception handler, as it would on a Java thread,
+		// rather than half to native stderr through ExceptionDescribe.
+		CountDownLatch reported = new CountDownLatch(1);
+		Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+
+		Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+			if (e instanceof IllegalStateException && "listener fails on purpose".equals(e.getMessage())) {
+				reported.countDown();
+			}
+			else if (previous != null) {
+				previous.uncaughtException(thread, e);
+			}
+		});
+
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					throw new IllegalStateException("listener fails on purpose");
+				}
+			});
+
+			player.seek(2_500_000);
+			player.play();
+
+			assertTrue(reported.await(10, TimeUnit.SECONDS), "not reported");
+
+			player.close();
+		}
+		finally {
+			Thread.setDefaultUncaughtExceptionHandler(previous);
+		}
+	}
+
+	@Test
+	void reportsInOrderOnOneThreadWithoutOverlap() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			RecordingListener listener = new RecordingListener(player);
+
+			player.setListener(listener);
+			player.seek(2_500_000);
+
+			// Three changes from this thread, the end from the decode thread.
+			// The listener holds on to the second PLAYING until the decode
+			// thread has ended the source, which it does whatever the
+			// listener does, so a report of the end that did not wait for
+			// that call would overlap it.
+			player.play();
+			player.pause();
+			player.play();
+
+			assertTrue(listener.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			player.close();
+
+			// Everything has been reported once close() returns.
+			assertEquals(Arrays.asList("PLAYING", "PAUSED", "PLAYING", "ENDED",
+					"end of stream", "CLOSED"), listener.reports);
+			assertTrue(listener.endedWhileHeld.get(), "the source did not end while the listener was held");
+			assertEquals(0, listener.overlaps.get(), "listener calls overlapped");
+			assertEquals(1, listener.threads.size(), "listener called on: " + listener.threads);
+			assertFalse(listener.threads.contains(Thread.currentThread()),
+					"listener called on the thread giving the commands");
+		}
+	}
+
+	@Test
+	void closesFromStateChangeOfCommand() throws Exception {
+		try (Sources sources = new Sources()) {
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			AtomicInteger closes = new AtomicInteger();
+			CountDownLatch closed = new CountDownLatch(1);
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onStateChanged(MediaPlayerState state) {
+					// On the player's event thread, which the close cannot
+					// wait for, and after play() may already have returned.
+					if (state == MediaPlayerState.PLAYING) {
+						player.close();
+						closes.incrementAndGet();
+					}
+					else if (state == MediaPlayerState.CLOSED) {
+						closed.countDown();
+					}
+				}
+			});
+
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(1, closes.get());
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			// Commands after the close find nothing to act on.
+			player.play();
+			player.seek(0);
+			player.close();
+		}
+	}
+
+	@Test
+	void closesFromVideoSink() throws Exception {
+		try (Sources sources = new Sources()) {
+			VideoTrack track = factory.createVideoTrack("video", sources.video);
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch closed = new CountDownLatch(1);
+
+			// Called on the player's pacing thread, which is the one closing
+			// it has to wait for, and not through the listener.
+			VideoTrackSink sink = frame -> {
+				try {
+					player.close();
+					closed.countDown();
+				}
+				finally {
+					frame.release();
+				}
+			};
+
+			track.addSink(sink);
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			player.close();
+
+			track.removeSink(sink);
+			track.dispose();
+		}
+	}
+
+	@Test
+	void closesFromAudioSink() throws Exception {
+		try (Sources sources = new Sources()) {
+			AudioTrack track = factory.createAudioTrack("audio", sources.audio);
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch closed = new CountDownLatch(1);
+
+			AudioTrackSink sink = (data, bits, rate, ch, count) -> {
+				player.close();
+				closed.countDown();
+			};
+
+			track.addSink(sink);
+			player.play();
+
+			assertTrue(closed.await(10, TimeUnit.SECONDS), "not closed");
+			assertEquals(MediaPlayerState.CLOSED, player.getState());
+
+			player.close();
+
+			track.removeSink(sink);
+			track.dispose();
+		}
+	}
+
+	@Test
+	void endsOnlyOnceTheLastDeliveryHasReturned() throws Exception {
+		try (Sources sources = new Sources()) {
+			AudioTrack track = factory.createAudioTrack("audio", sources.audio);
+			MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+					sources.video, sources.audio);
+			CountDownLatch ended = new CountDownLatch(1);
+			AtomicInteger held = new AtomicInteger();
+			AtomicInteger endedWhileHeld = new AtomicInteger();
+
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+			});
+
+			// Every chunk, the last one among them, is held on the pacing
+			// thread, by then out of its queue and on its way into WebRTC. An
+			// end of the stream reported while one is held comes before
+			// everything has been delivered, and an application closing a
+			// recorder or a receiver on it would cut that chunk off.
+			AudioTrackSink sink = (data, bits, rate, ch, count) -> {
+				held.incrementAndGet();
+
+				try {
+					if (ended.await(200, TimeUnit.MILLISECONDS)) {
+						endedWhileHeld.incrementAndGet();
+					}
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
+			};
+
+			track.addSink(sink);
+
+			// Close to the end, so that only a few chunks are held.
+			player.seek(2_950_000);
+			player.play();
+
+			assertTrue(ended.await(10, TimeUnit.SECONDS), "not ended");
+			assertTrue(held.get() > 0, "no audio");
+			assertEquals(0, endedWhileHeld.get(), "ended while a chunk was being delivered");
+
+			player.close();
+
+			track.removeSink(sink);
+			track.dispose();
+		}
+	}
+
+	@Test
+	void outlivesDisposedSources() throws Exception {
+		CustomVideoSource videoSource = new CustomVideoSource();
+		CustomAudioSource audioSource = new CustomAudioSource();
+		VideoTrack videoTrack = factory.createVideoTrack("video", videoSource);
+		AudioTrack audioTrack = factory.createAudioTrack("audio", audioSource);
+
+		try (MediaPlayer player = new MediaPlayer(new MediaReader(asset()),
+				videoSource, audioSource)) {
+			player.play();
+
+			Thread.sleep(300);
+
+			// Everything an application holds goes, the player carries on
+			// pushing into the sources it was given.
+			videoTrack.dispose();
+			audioTrack.dispose();
+			videoSource.dispose();
+			audioSource.dispose();
+
+			Thread.sleep(700);
+
+			assertEquals(MediaPlayerState.PLAYING, player.getState());
+		}
+	}
+
+	@Test
+	void failsWithoutDecoder() throws Exception {
+		Path file = TestMedia.muLawWav(tempDir);
+
+		try (Sources sources = new Sources()) {
+			// The reader opens, since the demuxer knows the format.
+			MediaReader reader = new MediaReader(file);
+
+			assertThrows(IOException.class,
+					() -> new MediaPlayer(reader, null, sources.audio));
+		}
+	}
+
+	@Test
+	void followsChannelChange() throws Exception {
+		Path file = TestMedia.channelSwitchingFlac(tempDir, 5, 10);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			// Stereo out throughout, as the file started.
+			assertEquals(2, playback.channels.get());
+			assertTrue(Math.abs(playback.chunks.get() - 150) <= 2,
+					"audio chunks: " + playback.chunks.get());
+			assertEquals(0, playback.unevenChunks.get(),
+					"chunks with differing channels");
+		}
+	}
+
+	@Test
+	void pausesOnDecodeError() throws Exception {
+		Path file = TestMedia.corruptFlac(tempDir, 10, 4);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			CountDownLatch failed = new CountDownLatch(1);
+			CountDownLatch ended = new CountDownLatch(1);
+
+			playback.player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+
+				@Override
+				public void onError(String message) {
+					failed.countDown();
+				}
+			});
+
+			playback.player.play();
+
+			assertTrue(failed.await(10, TimeUnit.SECONDS), "no error");
+
+			// Stopped where it failed, rather than claiming to play on.
+			assertEquals(MediaPlayerState.PAUSED, playback.player.getState());
+
+			int before = playback.chunks.get();
+
+			// Carries on past the frame that failed.
+			playback.player.play();
+
+			assertTrue(ended.await(10, TimeUnit.SECONDS), "no end of stream");
+			assertEquals(MediaPlayerState.ENDED, playback.player.getState());
+			assertTrue(playback.chunks.get() > before, "nothing played after resuming");
+		}
+	}
+
+	@Test
+	void deliversResamplerTail() throws Exception {
+		// One second at 44.1 kHz, which is exactly 48000 samples at 48 kHz.
+		Path file = TestMedia.constantFlac(tempDir, 44100, 10, (short) 8000);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(100, playback.chunks.get());
+			assertEquals(48000, playback.nonZeroSamples.get());
+		}
+	}
+
+	@Test
+	void downmixesMoreThanEightChannels() throws Exception {
+		// One second of 14 planar channels. A frame has the planes from the
+		// ninth on only in its extended data, and reading them from its data
+		// pointers instead crashes the process.
+		Path file = TestMedia.wideOpusMatroska(tempDir, 14, 50);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(2, playback.channels.get());
+			assertTrue(Math.abs(playback.chunks.get() - 100) <= 2,
+					"audio chunks: " + playback.chunks.get());
+		}
+	}
+
+	@Test
+	void fillsAudioGapWithSilence() throws Exception {
+		// A second of audio, a second missing, and a second more. Closing the
+		// gap up would play the last second a second early, ahead of any
+		// video that follows its own timestamps.
+		Path file = TestMedia.pcmMatroska(tempDir, (short) 1000,
+				blockTimes(0, 10, 2000, 10));
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(300, playback.chunks.get());
+			assertEquals(96000, playback.nonZeroSamples.get());
+			assertEquals(IntStream.range(100, 200).boxed().collect(Collectors.toList()),
+					playback.silentChunks);
+		}
+	}
+
+	@Test
+	void skipsRepeatedAudio() throws Exception {
+		// The second second starts 50 ms before the first one ends, so 50 ms
+		// of it repeat what has played already.
+		Path file = TestMedia.pcmMatroska(tempDir, (short) 1000,
+				blockTimes(0, 10, 950, 10));
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+
+			assertEquals(195, playback.chunks.get());
+			assertEquals(195 * 480, playback.nonZeroSamples.get());
+			assertTrue(playback.silentChunks.isEmpty(),
+					"silent chunks: " + playback.silentChunks);
+		}
+	}
+
+	/**
+	 * The times of two runs of 100 ms blocks, in milliseconds.
+	 */
+	private static long[] blockTimes(long firstStart, int firstBlocks,
+			long secondStart, int secondBlocks) {
+		return LongStream.concat(
+				LongStream.range(0, firstBlocks).map(i -> firstStart + i * 100),
+				LongStream.range(0, secondBlocks).map(i -> secondStart + i * 100))
+				.toArray();
+	}
+
+	private static int countNonZero(byte[] data) {
+		int count = 0;
+
+		for (int i = 0; i + 1 < data.length; i += 2) {
+			if (data[i] != 0 || data[i + 1] != 0) {
+				count++;
+			}
+		}
+
+		return count;
+	}
+
+	private static boolean channelsEqual(byte[] data) {
+		// Interleaved 16-bit frames: the left and right sample of a frame are
+		// the two bytes pairs of each four.
+		for (int i = 0; i + 3 < data.length; i += 4) {
+			if (data[i] != data[i + 2] || data[i + 1] != data[i + 3]) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Copies an MPEG-TS file up to the next packet of its video stream after
+	 * its last keyframe, so that the keyframe is the last picture. The muxer
+	 * marks the first packet of a keyframe with the random access indicator
+	 * of its adaptation field.
+	 */
+	private static Path cutAfterLastKeyFrame(Path source, Path target) throws IOException {
+		final int size = 188;
+		byte[] data = Files.readAllBytes(source);
+
+		int keyFrame = -1;
+		int keyPid = -1;
+
+		for (int i = 0; i + size <= data.length; i += size) {
+			boolean adaptation = (data[i + 3] & 0x20) != 0 && (data[i + 4] & 0xff) > 0;
+
+			if (adaptation && (data[i + 5] & 0x40) != 0) {
+				keyFrame = i;
+				keyPid = ((data[i + 1] & 0x1f) << 8) | (data[i + 2] & 0xff);
+			}
+		}
+
+		assertTrue(keyFrame >= 0, "no keyframe marked in " + source);
+
+		int end = data.length;
+
+		for (int i = keyFrame + size; i + size <= data.length; i += size) {
+			int pid = ((data[i + 1] & 0x1f) << 8) | (data[i + 2] & 0xff);
+			boolean start = (data[i + 1] & 0x40) != 0;
+
+			if (pid == keyPid && start) {
+				end = i;
+				break;
+			}
+		}
+
+		return Files.write(target, Arrays.copyOf(data, end));
+	}
+
+	private static boolean waitFor(BooleanSupplier condition, long timeoutMs)
+			throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+
+		while (!condition.getAsBoolean()) {
+			if (System.nanoTime() > deadline) {
+				return false;
+			}
+
+			Thread.sleep(5);
+		}
+
+		return true;
+	}
+
+	private static Path resource(String name) throws Exception {
+		return Paths.get(MediaPlayerTest.class.getResource(name).toURI());
+	}
+
+	private static Path asset() throws Exception {
+		URL url = MediaPlayerTest.class.getResource(ASSET);
+
+		assertNotNull(url, "Test asset " + ASSET + " is missing");
+
+		return Paths.get(url.toURI());
+	}
+
+	/**
+	 * Records what a player reports, which thread it reports it on, and
+	 * whether a report came in while another was still being handled.
+	 */
+	private static final class RecordingListener implements MediaPlayerListener {
+
+		final List<String> reports = Collections.synchronizedList(new ArrayList<>());
+		final Set<Thread> threads = ConcurrentHashMap.newKeySet();
+		final AtomicInteger overlaps = new AtomicInteger();
+		final AtomicBoolean endedWhileHeld = new AtomicBoolean();
+		final CountDownLatch ended = new CountDownLatch(1);
+
+		private final MediaPlayer player;
+		private final AtomicBoolean inCall = new AtomicBoolean();
+		private int playing;
+
+
+		RecordingListener(MediaPlayer player) {
+			this.player = player;
+		}
+
+		@Override
+		public void onStateChanged(MediaPlayerState state) {
+			enter(state.name());
+
+			try {
+				if (state == MediaPlayerState.PLAYING && ++playing == 2) {
+					endedWhileHeld.set(awaitEnded());
+				}
+			}
+			finally {
+				leave();
+			}
+		}
+
+		@Override
+		public void onEndOfStream() {
+			enter("end of stream");
+			leave();
+
+			ended.countDown();
+		}
+
+		@Override
+		public void onError(String message) {
+			enter("error: " + message);
+			leave();
+		}
+
+		private void enter(String report) {
+			if (!inCall.compareAndSet(false, true)) {
+				overlaps.incrementAndGet();
+			}
+
+			threads.add(Thread.currentThread());
+			reports.add(report);
+		}
+
+		private void leave() {
+			inCall.set(false);
+		}
+
+		/**
+		 * Waits for the player to read as ended, which the decode thread sets
+		 * without waiting for this call to return.
+		 */
+		private boolean awaitEnded() {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+
+			while (player.getState() != MediaPlayerState.ENDED) {
+				if (System.nanoTime() > deadline) {
+					return false;
+				}
+
+				try {
+					Thread.sleep(5);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+
+					return false;
+				}
+			}
+
+			return true;
+		}
+	}
+
+	/**
+	 * A pair of sources with no tracks, for tests that only need somewhere to
+	 * deliver to.
+	 */
+	private static final class Sources implements AutoCloseable {
+
+		final CustomVideoSource video = new CustomVideoSource();
+		final CustomAudioSource audio = new CustomAudioSource();
+
+		@Override
+		public void close() {
+			video.dispose();
+			audio.dispose();
+		}
+	}
+
+	/**
+	 * One playback: the sources, the tracks made from them, the sinks that
+	 * count what arrives, and the player feeding it all.
+	 */
+	private final class Playback implements AutoCloseable {
+
+		final CustomVideoSource videoSource = new CustomVideoSource();
+		final CustomAudioSource audioSource = new CustomAudioSource();
+
+		final VideoTrack videoTrack;
+		final AudioTrack audioTrack;
+		final MediaPlayer player;
+
+		final CountDownLatch ended = new CountDownLatch(1);
+		final AtomicInteger frames = new AtomicInteger();
+		final AtomicInteger chunks = new AtomicInteger();
+		final AtomicInteger width = new AtomicInteger();
+		final AtomicInteger height = new AtomicInteger();
+		final AtomicInteger sampleRate = new AtomicInteger();
+		final AtomicInteger channels = new AtomicInteger();
+		final AtomicInteger framesPerChunk = new AtomicInteger();
+		final AtomicReference<String> error = new AtomicReference<>();
+		final List<Long> frameTimes = Collections.synchronizedList(new ArrayList<>());
+		final AtomicLong firstFramePositionUs = new AtomicLong(-1);
+		final List<Long> framePositionsUs = Collections.synchronizedList(new ArrayList<>());
+		final AtomicLong firstChunkNs = new AtomicLong();
+		final AtomicInteger unevenChunks = new AtomicInteger();
+		final AtomicLong nonZeroSamples = new AtomicLong();
+		final List<Integer> silentChunks = Collections.synchronizedList(new ArrayList<>());
+
+		private final VideoTrackSink videoSink = frame -> {
+			// This callback runs inside the push. The position still belongs
+			// to the last successful delivery until this push returns.
+			long positionUs = Playback.this.player.getPositionUs();
+
+			if (firstFramePositionUs.get() < 0) {
+				firstFramePositionUs.set(positionUs);
+			}
+
+			framePositionsUs.add(positionUs);
+
+			frameTimes.add(System.nanoTime());
+			frames.incrementAndGet();
+			width.set(frame.buffer.getWidth());
+			height.set(frame.buffer.getHeight());
+		};
+
+		private final AudioTrackSink audioSink = (data, bits, rate, ch, count) -> {
+			firstChunkNs.compareAndSet(0, System.nanoTime());
+			int index = chunks.getAndIncrement();
+			sampleRate.set(rate);
+			channels.set(ch);
+			framesPerChunk.set(count);
+
+			if (ch == 2 && !channelsEqual(data)) {
+				unevenChunks.incrementAndGet();
+			}
+
+			int nonZero = countNonZero(data);
+
+			if (nonZero == 0) {
+				silentChunks.add(index);
+			}
+
+			nonZeroSamples.addAndGet(nonZero);
+		};
+
+		private boolean closed;
+
+
+		Playback() throws Exception {
+			this(new MediaReader(asset()));
+		}
+
+		Playback(MediaReader reader) throws Exception {
+			videoTrack = factory.createVideoTrack("video", videoSource);
+			audioTrack = factory.createAudioTrack("audio", audioSource);
+
+			videoTrack.addSink(videoSink);
+			audioTrack.addSink(audioSink);
+
+			player = new MediaPlayer(reader, videoSource, audioSource);
+			player.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+
+				@Override
+				public void onError(String message) {
+					error.set(message);
+					ended.countDown();
+				}
+			});
+		}
+
+		@Override
+		public void close() {
+			if (closed) {
+				return;
+			}
+
+			closed = true;
+
+			player.close();
+
+			videoTrack.removeSink(videoSink);
+			audioTrack.removeSink(audioSink);
+
+			videoTrack.dispose();
+			audioTrack.dispose();
+			videoSource.dispose();
+			audioSource.dispose();
+
+			assertNull(error.get());
+		}
+
+		private void assertNull(String message) {
+			if (message != null) {
+				throw new AssertionError("playback reported an error: " + message);
+			}
+		}
+	}
+
+}

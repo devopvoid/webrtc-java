@@ -1,0 +1,220 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "JNI_MediaPlayer.h"
+#include "media/ApiCheck.h"
+#include "media/ErrorText.h"
+#include "media/JavaPlayerObserver.h"
+#include "media/JniBoundary.h"
+#include "media/MediaPlayer.h"
+#include "media/MediaReader.h"
+#include "webrtc_java_api.h"
+
+#include <memory>
+#include <string>
+#include <thread>
+
+extern "C" {
+#include <libavutil/error.h>
+}
+
+namespace
+{
+	ffmpeg::MediaPlayer * PlayerOf(jlong handle)
+	{
+		return reinterpret_cast<ffmpeg::MediaPlayer *>(handle);
+	}
+
+	// Releases a player that never made it to Java. Its observer goes first:
+	// closing reports the closed state, which would be a call into Java for a
+	// player nobody listens to yet, and with an exception pending such a call
+	// is not allowed, and would also clear it.
+	struct DiscardPlayer
+	{
+		void operator()(ffmpeg::MediaPlayer * player) const
+		{
+			player->SetObserver(nullptr);
+
+			delete player;
+		}
+	};
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
+(JNIEnv * env, jobject caller, jlong readerHandle, jlong tableAddress,
+		jlong videoSourceHandle, jlong audioSourceHandle, jboolean hardwareDecoding)
+{
+	// The Java side detached the reader before this call, so it is ours now
+	// and has to be released here if anything goes wrong.
+	std::unique_ptr<ffmpeg::MediaReader> reader(
+			reinterpret_cast<ffmpeg::MediaReader *>(readerHandle));
+
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		if (reader == nullptr) {
+			ffmpeg::ThrowIOException(env, "The reader is closed");
+
+			return 0;
+		}
+
+		const webrtc_java_api * api =
+				reinterpret_cast<const webrtc_java_api *>(tableAddress);
+
+		std::string apiError = ffmpeg::CheckApi(api);
+
+		if (!apiError.empty()) {
+			ffmpeg::ThrowIOException(env, apiError);
+
+			return 0;
+		}
+
+		// Also released that way when a C++ exception unwinds through here.
+		std::unique_ptr<ffmpeg::MediaPlayer, DiscardPlayer> player(
+				new ffmpeg::MediaPlayer(std::move(reader), api,
+						reinterpret_cast<void *>(videoSourceHandle),
+						reinterpret_cast<void *>(audioSourceHandle)));
+
+		player->SetObserver(std::make_unique<ffmpeg::JavaPlayerObserver>(env, caller));
+		player->SetHardwareDecoding(hardwareDecoding == JNI_TRUE);
+
+		int result = player->Initialize();
+
+		if (result < 0) {
+			// Released before throwing, see DiscardPlayer.
+			player.reset();
+
+			ffmpeg::ThrowIOException(env, "Opening the decoders failed: " + ffmpeg::ErrorText(result));
+
+			return 0;
+		}
+
+		return reinterpret_cast<jlong>(player.release());
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_start
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	ffmpeg::CallFromJava(env, [&] {
+		if (handle != 0) {
+			PlayerOf(handle)->Play();
+		}
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_suspend
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	ffmpeg::CallFromJava(env, [&] {
+		if (handle != 0) {
+			PlayerOf(handle)->Pause();
+		}
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_seek
+(JNIEnv * env, jclass caller, jlong handle, jlong positionUs, jboolean precise)
+{
+	ffmpeg::CallFromJava(env, [&] {
+		if (handle != 0) {
+			PlayerOf(handle)->Seek(positionUs, precise == JNI_TRUE);
+		}
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_setLooping
+(JNIEnv * env, jclass caller, jlong handle, jboolean looping)
+{
+	ffmpeg::CallFromJava(env, [&] {
+		if (handle != 0) {
+			PlayerOf(handle)->SetLooping(looping == JNI_TRUE);
+		}
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_position
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		return handle != 0 ? PlayerOf(handle)->GetPositionUs() : 0;
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_queuedVideoBytes
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		return handle != 0 ? static_cast<jlong>(PlayerOf(handle)->GetQueuedVideoBytes()) : 0;
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_peakQueuedVideoBytes
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
+		return handle != 0 ? static_cast<jlong>(PlayerOf(handle)->GetPeakQueuedVideoBytes()) : 0;
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_maxQueuedVideoBytes
+(JNIEnv * env, jclass caller)
+{
+	return static_cast<jlong>(ffmpeg::MediaPacer::kVideoByteCapacity);
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_hardwareDecoding
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	return ffmpeg::CallFromJava<jboolean>(env, JNI_FALSE, [&]() -> jboolean {
+		return handle != 0 && PlayerOf(handle)->IsHardwareDecoding() ? JNI_TRUE : JNI_FALSE;
+	});
+}
+
+JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_state
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	// A player that is gone is closed, which is what the Java side reports
+	// once it has let go of the handle.
+	return ffmpeg::CallFromJava<jint>(env, ffmpeg::kClosed, [&]() -> jint {
+		return handle != 0 ? PlayerOf(handle)->GetState() : ffmpeg::kClosed;
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_dispose
+(JNIEnv * env, jclass caller, jlong handle)
+{
+	// Closing twice is allowed, so a handle that is already zero is simply
+	// nothing to do.
+	if (handle == 0) {
+		return;
+	}
+
+	ffmpeg::CallFromJava(env, [&] {
+		ffmpeg::MediaPlayer * player = PlayerOf(handle);
+
+		if (player->IsOwnThread()) {
+			// Called from something the player is calling, such as a sink of a
+			// track it feeds. Destroying it here would wait for this very thread,
+			// and the delivery that made the call still uses the player once the
+			// call returns. Another thread destroys it, and its wait ends as soon
+			// as this thread is out of the player.
+			std::thread([player] { delete player; }).detach();
+
+			return;
+		}
+
+		delete player;
+	});
+}

@@ -20,10 +20,17 @@ package dev.onvoid.webrtc.media.video;
  * The sink a {@link VideoProcessor} delivers processed frames to. It passes
  * them on to its source until it is detached, when the processor is replaced
  * or the source is disposed, and drops them afterwards.
+ * <p>
+ * A delivery holds no lock: a callback further down may call into the source
+ * while another thread, holding the monitor of the source, detaches this sink.
+ * The native call keeps the native source alive by itself and drops the frame
+ * of a disposed source. So {@link #detach()} does not wait for a delivery that
+ * is running, which may still reach the tracks, and every delivery that starts
+ * after it returned is dropped.
  */
 final class ProcessedFrameSink implements VideoTrackSink {
 
-	private VideoTrackSource source;
+	private volatile VideoTrackSource source;
 
 
 	ProcessedFrameSink(VideoTrackSource source) {
@@ -36,16 +43,14 @@ final class ProcessedFrameSink implements VideoTrackSink {
 			throw new NullPointerException("VideoFrame must not be null");
 		}
 
-		// Holding the lock while delivering keeps the source from being
-		// disposed during the native call.
-		synchronized (this) {
-			if (source != null) {
-				source.deliverProcessedFrame(frame);
-			}
+		VideoTrackSource target = source;
+
+		if (target != null) {
+			target.deliverProcessedFrame(frame);
 		}
 	}
 
-	synchronized void detach() {
+	void detach() {
 		source = null;
 	}
 }

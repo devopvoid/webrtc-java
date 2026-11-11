@@ -14,6 +14,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'What is webrtc-java?', link: '/introduction' },
 				{ text: 'Getting Started', link: '/get-started' },
 				{ text: 'Client API', link: '/client-api' },
+				{ text: 'Client API Design', link: '/client-api-design' },
 			],
 		},
 		{
@@ -34,6 +35,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'Audio Devices', link: '/audio/audio-devices' },
 				{ text: 'Audio Processing', link: '/audio/audio-processing' },
 				{ text: 'Custom Audio Source', link: '/audio/custom-audio-source' },
+				{ text: 'System Audio Source', link: '/audio/system-audio-source' },
 				{ text: 'Headless Audio', link: '/audio/headless-audio' },
 				{ text: 'DTMF Sender', link: '/audio/dtmf-sender' },
 			],
@@ -52,6 +54,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			collapsed: false,
 			items: [
 				{ text: 'Data Channels', link: '/data/data-channels' },
+				{ text: 'File Transfer', link: '/data/file-transfer' },
 			],
 		},
 		{
@@ -76,8 +79,10 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			items: [
 				{ text: 'Field Trials', link: '/advanced/field-trials' },
 				{ text: 'Encoded Transforms', link: '/advanced/encoded-transforms' },
+				{ text: 'End-to-End Encryption', link: '/advanced/end-to-end-encryption' },
 				{ text: 'Video Codecs', link: '/advanced/video-codecs' },
 				{ text: 'Audio Codecs', link: '/advanced/audio-codecs' },
+				{ text: 'GraalVM Native Image', link: '/advanced/native-image' },
 			],
 		},
 	]

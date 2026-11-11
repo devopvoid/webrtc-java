@@ -39,10 +39,24 @@ public class CustomAudioSource extends AudioTrackSource {
 	public static final int MAX_SAMPLES_PER_PUSH = 7680;
 
 	/**
-	 * The most channels one pushed chunk may hold. Mirrors
-	 * {@code kMaxNumberOfAudioChannels} in the native library.
+	 * The lowest sample rate a chunk may have. WebRTC resamples what it sends
+	 * to the rate of the encoder, and aborts the process when the rate is too
+	 * far below that.
 	 */
-	public static final int MAX_CHANNELS = 24;
+	public static final int MIN_SAMPLE_RATE = 8000;
+
+	/**
+	 * The highest sample rate a chunk may have. Mirrors
+	 * {@code kMaxInputSampleRateHz} of the audio coding module in the native
+	 * library.
+	 */
+	public static final int MAX_SAMPLE_RATE = 192000;
+
+	/**
+	 * The most channels one pushed chunk may hold. The audio coding module in
+	 * the native library takes 1, 2, 4, 6 or 8 channels.
+	 */
+	public static final int MAX_CHANNELS = 8;
 
 
 	/**
@@ -56,6 +70,8 @@ public class CustomAudioSource extends AudioTrackSource {
 
 	/**
 	 * Constructs a new CustomAudioSource instance with a specified SyncClock.
+	 * The source shares the clock, which may therefore be disposed before
+	 * this source.
 	 *
 	 * @param clock The SyncClock to use for timing and synchronization.
 	 */
@@ -71,26 +87,35 @@ public class CustomAudioSource extends AudioTrackSource {
 	 * from one thread at a time.
 	 * <p>
 	 * The samples must be 16-bit signed PCM in the platform byte order, with
-	 * the channels interleaved. A call carries one chunk of audio, for which
-	 * 10 ms is the size WebRTC works with; at most
+	 * the channels interleaved. A call carries one chunk of exactly 10 ms,
+	 * {@code sampleRate / 100} frames, of 1, 2, 4, 6 or 8 channels: a sender
+	 * drops anything else without a trace, so it is rejected here. At most
 	 * {@value #MAX_SAMPLES_PER_PUSH} samples, counting every channel, fit in
 	 * one chunk.
+	 * <p>
+	 * The chunk is treated as captured at the moment of the call, and stamped
+	 * with {@link dev.onvoid.webrtc.media.SyncClock#currentTimeUs()}, the clock
+	 * of {@link #pushAudio(byte[], int, int, int, int, long)}, so the two may
+	 * be mixed on one source.
 	 *
 	 * @param audioData       The raw audio data bytes to process. Must hold at
 	 *                        least {@code frameCount * channels * 2} bytes.
 	 * @param bits_per_sample The number of bits per sample, which must be 16.
-	 * @param sampleRate      The sample rate of the audio in Hz (e.g., 44100, 48000).
-	 * @param channels        The number of audio channels (1 for mono, 2 for stereo).
-	 * @param frameCount      The number of frames in the provided audio data. A
-	 *                        frame holds one sample for each channel, so 10 ms
-	 *                        at 48 kHz is 480 frames whatever the channel count.
+	 * @param sampleRate      The sample rate of the audio in Hz (e.g., 44100, 48000),
+	 *                        from {@value #MIN_SAMPLE_RATE} to {@value #MAX_SAMPLE_RATE}.
+	 * @param channels        The number of audio channels: 1, 2, 4, 6 or 8.
+	 * @param frameCount      The number of frames in the provided audio data,
+	 *                        which must be {@code sampleRate / 100} with a rate divisible by 100. A frame
+	 *                        holds one sample for each channel, so 10 ms at
+	 *                        48 kHz is 480 frames whatever the channel count.
 	 *
 	 * @throws NullPointerException     If the audio data is {@code null}.
 	 * @throws IllegalArgumentException If the audio format is not 16-bit PCM,
-	 *                                  if a value is not positive, if the chunk
-	 *                                  is larger than WebRTC can take, or if the
-	 *                                  array is too short for the frames it is
-	 *                                  said to hold.
+	 *                                  if the sample rate or channel count is
+	 *                                  not one WebRTC can send, if the chunk is
+	 *                                  not 10 ms long or larger than WebRTC can
+	 *                                  take, or if the array is too short for
+	 *                                  the frames it is said to hold.
 	 */
 	public void pushAudio(byte[] audioData, int bits_per_sample, int sampleRate,
 						  int channels, int frameCount) {
@@ -112,18 +137,21 @@ public class CustomAudioSource extends AudioTrackSource {
 	 * @param audioData       The raw audio data bytes to process. Must hold at
 	 *                        least {@code frameCount * channels * 2} bytes.
 	 * @param bits_per_sample The number of bits per sample, which must be 16.
-	 * @param sampleRate      The sample rate of the audio in Hz (e.g., 44100, 48000).
-	 * @param channels        The number of audio channels (1 for mono, 2 for stereo).
-	 * @param frameCount      The number of frames in the provided audio data.
+	 * @param sampleRate      The sample rate of the audio in Hz (e.g., 44100, 48000),
+	 *                        from {@value #MIN_SAMPLE_RATE} to {@value #MAX_SAMPLE_RATE}.
+	 * @param channels        The number of audio channels: 1, 2, 4, 6 or 8.
+	 * @param frameCount      The number of frames in the provided audio data,
+	 *                        which must be {@code sampleRate / 100} with a rate divisible by 100.
 	 * @param timestampUs     The capture time of the chunk, on the clock of
 	 *                        {@link dev.onvoid.webrtc.media.SyncClock#currentTimeUs()}.
 	 *
 	 * @throws NullPointerException     If the audio data is {@code null}.
 	 * @throws IllegalArgumentException If the audio format is not 16-bit PCM,
-	 *                                  if a value is not positive, if the chunk
-	 *                                  is larger than WebRTC can take, or if the
-	 *                                  array is too short for the frames it is
-	 *                                  said to hold.
+	 *                                  if the sample rate or channel count is
+	 *                                  not one WebRTC can send, if the chunk is
+	 *                                  not 10 ms long or larger than WebRTC can
+	 *                                  take, or if the array is too short for
+	 *                                  the frames it is said to hold.
 	 *
 	 * @see dev.onvoid.webrtc.media.SyncClock#currentTimeUs()
 	 */
@@ -136,9 +164,10 @@ public class CustomAudioSource extends AudioTrackSource {
 	}
 
 	/**
-	 * Checks that a chunk of audio is something WebRTC can take, so that a bad
-	 * chunk is rejected here instead of reading past the end of the array or
-	 * aborting the process in native code.
+	 * Checks that a chunk of audio is something WebRTC can send, so that a bad
+	 * chunk is rejected here instead of reading past the end of the array,
+	 * aborting the process in native code, or being dropped by the encoder
+	 * while the push appears to succeed.
 	 *
 	 * @param audioData       The raw audio data bytes to process.
 	 * @param bits_per_sample The number of bits per sample, which must be 16.
@@ -158,18 +187,24 @@ public class CustomAudioSource extends AudioTrackSource {
 					"Audio must be %d-bit PCM, got %d bits per sample",
 					BITS_PER_SAMPLE, bits_per_sample));
 		}
-		if (sampleRate <= 0) {
-			throw new IllegalArgumentException(
-					"Sample rate must be positive, got " + sampleRate);
-		}
-		if (channels <= 0 || channels > MAX_CHANNELS) {
+		if (sampleRate < MIN_SAMPLE_RATE || sampleRate > MAX_SAMPLE_RATE || sampleRate % 100 != 0) {
 			throw new IllegalArgumentException(String.format(
-					"Channel count must be between 1 and %d, got %d",
-					MAX_CHANNELS, channels));
+					"Sample rate must be between %d and %d Hz and divisible by 100, got %d",
+					MIN_SAMPLE_RATE, MAX_SAMPLE_RATE, sampleRate));
 		}
-		if (frameCount <= 0) {
+		if (channels != 1 && (channels <= 0 || channels > MAX_CHANNELS || channels % 2 != 0)) {
 			throw new IllegalArgumentException(
-					"Frame count must be positive, got " + frameCount);
+					"Channel count must be 1, 2, 4, 6 or 8, got " + channels);
+		}
+
+		// The encoder takes 10 ms at a time and drops any other size, which
+		// the push cannot tell since encoding happens on another thread.
+		int framesPer10Ms = sampleRate / 100;
+
+		if (frameCount != framesPer10Ms) {
+			throw new IllegalArgumentException(String.format(
+					"A chunk holds exactly 10 ms of audio, %d frames at %d Hz, got %d frames",
+					framesPer10Ms, sampleRate, frameCount));
 		}
 
 		// WebRTC copies the chunk into a fixed-size audio frame and aborts the
@@ -179,7 +214,7 @@ public class CustomAudioSource extends AudioTrackSource {
 		if (samples > MAX_SAMPLES_PER_PUSH) {
 			throw new IllegalArgumentException(String.format(
 					"A chunk holds at most %d samples across all channels, got %d "
-							+ "(%d frames x %d channels). Push shorter chunks, 10 ms each.",
+							+ "(%d frames x %d channels). Use fewer channels or a lower sample rate.",
 					MAX_SAMPLES_PER_PUSH, samples, frameCount, channels));
 		}
 

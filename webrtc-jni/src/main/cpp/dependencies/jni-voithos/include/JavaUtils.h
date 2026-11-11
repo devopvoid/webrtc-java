@@ -17,27 +17,28 @@
 #include <vector>
 
 
+// Return from a native method whose native object is gone, with an
+// IllegalStateException thrown unless an exception is pending already. The
+// handle is a raw pointer or a lease, which names its object's class.
 #define CHECK_HANDLE(handle)															\
 	do {																				\
-		if (handle == NULL) {															\
-			JNIEnv * env = AttachCurrentThread();										\
-			env->Throw(jni::JavaNullPointerException(env, "Object handle is null"));	\
+		if (!(handle)) {																\
+			ThrowNullHandle(handle);													\
 			return;																		\
 		}																				\
 	} while(0)
 
 #define CHECK_HANDLEV(handle, retValue)													\
 	do {																				\
-		if (handle == NULL) {															\
-			JNIEnv * env = AttachCurrentThread();										\
-			env->Throw(jni::JavaNullPointerException(env, "Object handle is null"));	\
+		if (!(handle)) {																\
+			ThrowNullHandle(handle);													\
 			return retValue;															\
 		}																				\
 	} while(0)
 
 #define CHECK_HANDLE_DEFAULT(handle, retValue)											\
 	do {																				\
-		if (handle == NULL) {															\
+		if (!(handle)) {																\
 			return retValue;															\
 		}																				\
 	} while(0)
@@ -46,7 +47,23 @@
 // Uses JNI directly, so reporting an allocation failure needs no C++ allocation.
 void ThrowJavaException(JNIEnv * env, const char * className, const char * message) noexcept;
 void ThrowCxxJavaException(JNIEnv * env);
+// The VM the library is loaded into. JNI_OnLoad sets it before anything else,
+// independently of the library's JavaContext, which is published only once it
+// is fully initialized: its initialization already needs the VM, through the
+// JNI references and AttachCurrentThread.
+void SetJavaVM(JavaVM * vm);
+JavaVM * GetJavaVM();
 JNIEnv * AttachCurrentThread();
+
+// Throws the IllegalStateException of a missing native object for
+// CHECK_HANDLE on a raw pointer. A lease has an overload of its own, found by
+// argument-dependent lookup, that names the object's class.
+template<typename T>
+void ThrowNullHandle(T *)
+{
+	ThrowJavaException(AttachCurrentThread(), "java/lang/IllegalStateException", "Native object is disposed");
+}
+
 bool ExceptionCheck(JNIEnv * env);
 jclass FindClass(JNIEnv * env, const char * name);
 jmethodID GetMethod(JNIEnv * env, jclass cls, const char * name, const char * sig);
@@ -102,6 +119,14 @@ T * GetHandle(JNIEnv * env, jobject obj)
 	return GetHandle<T>(env, obj, "nativeHandle");
 }
 
+// Told about every Java object whose "nativeHandle" field SetHandle() sets:
+// bound is whether it is set to a native object or to none. Null, and then
+// not called, unless something listens.
+using NativeHandleHook = void (*)(JNIEnv * env, jobject obj, bool bound);
+
+void SetNativeHandleHook(NativeHandleHook hook);
+NativeHandleHook GetNativeHandleHook();
+
 template<typename T>
 void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t,
 	const char * declaringClass = nullptr)
@@ -116,6 +141,12 @@ void SetHandle(JNIEnv * env, jobject obj, const std::string & handleName, T * t,
 	jlong handle = reinterpret_cast<jlong>(t);
 
 	env->SetLongField(obj, field, handle);
+
+	if (NativeHandleHook hook = GetNativeHandleHook()) {
+		if (handleName == "nativeHandle") {
+			hook(env, obj, handle != 0);
+		}
+	}
 }
 
 template<typename T>

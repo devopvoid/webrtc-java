@@ -3,9 +3,13 @@
 This guide explains how to record what a peer connection sends or receives into a media file with `MediaRecorder`, from the `webrtc-java-media` module. It covers:
 
 - Recording senders and receivers
+- Replacing a file that exists
 - Choosing the container
+- Splitting a recording into segments, and how many to keep
+- Keeping the last seconds in memory and saving them on demand
 - Following a recording with a listener
 - How tracks are started, timed and left out
+- Measuring what a recording lost
 - Recording an end-to-end encrypted call
 
 `MediaRecorder` writes the encoded frames of each sender or receiver into the file as they are, without decoding or re-encoding them. A recording therefore costs next to no CPU, keeps exactly the quality that went over the network, and needs no codec at all, only the container. The frames are taken in native code, straight from WebRTC, and written by a thread of the recorder's own, so neither Java nor a slow disk ever holds up the call.
@@ -30,7 +34,24 @@ try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
 
 A sender's frames are recorded as they leave the encoder, a receiver's as they go to the decoder. Senders and receivers of any number of peer connections can go into one file, e.g. both sides of a call.
 
-`stop()` waits until everything received so far is written and the file is finished, and returns whether the file holds a recording. A recorder that never got any media to write deletes its file rather than leave an unplayable one behind. `close()` stops a recording that still runs.
+`stop()` waits until everything received so far is written and the file is finished and closed, and returns whether the recording was kept. A recorder that never got any media to write deletes what it wrote rather than leave an unplayable file behind. `close()` stops a recording that still runs.
+
+How the recording ended, `getResult()` tells once the recorder is stopped, and keeps telling after `close()`:
+
+| Result | File | Meaning |
+| --- | --- | --- |
+| `COMPLETE` | kept | Everything was written, and the file was finished and closed. |
+| `PARTIAL` | kept | Media went into the file, but writing, finishing or closing it failed later, or it could not [replace an existing file](#replacing-a-file). What made it into the file is kept, since it may still play. |
+| `EMPTY` | deleted | No media arrived before the stop. |
+| `FAILED` | deleted | Writing failed before any media went into the file. |
+
+```java
+recorder.stop();
+
+if (recorder.getResult() == MediaRecorderResult.PARTIAL) {
+    System.out.println("Incomplete recording in " + recorder.getFile());
+}
+```
 
 ::: warning
 Keep the senders and receivers undisposed while recording. The recorder asks them for key frames, and a disposed one cannot be asked.
@@ -45,6 +66,20 @@ recorder.addTrack(remoteTrack);          // a RemoteTrack from peer.onTrack
 
 The peer keeps its native senders and receivers to itself and asks them for key frames on its own thread, so nothing needs to be kept undisposed: removing a sender or closing the peer ends the track in the recording, and `stop()` still finishes the file.
 
+## Replacing a File
+
+A recorder does not touch a file that exists: its constructor throws a `FileAlreadyExistsException`, so a new recording cannot cost an earlier one by accident. To replace the file, ask for it:
+
+```java
+try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"), true)) {
+    // ...
+}
+```
+
+The recording then goes into a temporary file beside it, named `.recording-<id>.mkv`, and the existing file stays untouched until `stop()` has finished the recording. Only then does the recording take its place, in one step, with the permissions of the file it replaces, and a symbolic link stays a link to the new recording. A recording that gets no media, or fails before any went into the file, leaves the existing file as it was.
+
+If the process ends before the stop, the existing file is still there, next to the temporary file with what was recorded so far. If the recording cannot take the place of the existing file when it stops, it stays in the temporary file: `onError` is told, the result is `PARTIAL`, and `getFile()` returns where it is.
+
 ## Containers
 
 The container follows the file name:
@@ -58,6 +93,66 @@ The container follows the file name:
 A name FFmpeg does not know gets Matroska. A track whose codec the file cannot hold, VP8 in MP4 for example, is left out and reported as a warning, and the rest is recorded.
 
 Matroska has no codec ID of its own for G.711, so it is stored as Windows audio (`A_MS/ACM`), the way FFmpeg itself stores it. Players built on FFmpeg, such as VLC and mpv, play it; some others do not.
+
+## Recording in Segments
+
+For recordings that run for hours, such as surveillance or support sessions, a recorder can split the recording into segments: files that each play on their own, ended by duration or size, of which it keeps as many as asked.
+
+```java
+SegmentOptions segments = SegmentOptions.builder(Paths.get("recordings", "camera-%05d.mkv"))
+        .maxDuration(Duration.ofMinutes(10))        // end a segment after 10 minutes,
+        .maxSize(512L * 1024 * 1024)                // or once it holds 512 MB
+        .maxTotalSize(20L * 1024 * 1024 * 1024)     // keep the newest 20 GB
+        .build();
+
+try (MediaRecorder recorder = new MediaRecorder(segments)) {
+    recorder.setListener(new MediaRecorderListener() {
+
+        @Override
+        public void onSegmentFinished(MediaRecorderSegment segment) {
+            upload(segment.getFile());
+        }
+    });
+    recorder.addTrack(videoReceiver);
+    recorder.addTrack(audioReceiver);
+    recorder.start();
+
+    // ...
+}
+```
+
+The file name of the pattern holds the segment's number as `%d`, or zero-padded as `%05d`; a literal percent sign is `%%`. The extension picks the container of all segments, as for a single file. Numbering goes on from the highest number already in the directory, so a recorder started again continues after the last segment, and a segment never empties a file that exists: its number is skipped instead.
+
+- **Every segment begins at a key frame.** Once a segment has reached its duration or size, the recorder asks the video tracks for key frames, and the next segment begins with the first that arrives, usually a fraction of a second later. A segment is therefore somewhat longer or larger than the limit. Without video, a segment ends right at the limit.
+- **Several video tracks lose nothing.** A video track whose key frame comes after the one that began the next segment goes on in the segment before until then, so neither file has a gap. One that sends no key frame within three seconds starts the new segment at its next.
+- **Each segment starts at zero.** Its tracks are shifted by the same amount, so they stay in sync, and one segment follows the other without a gap. `MediaRecorderSegment.getStart()` tells where a segment lies in the recording.
+- **A codec change starts a segment.** A file cannot change the codec of a stream, so a track that changes its codec, e.g. after a renegotiation, goes on in the next segment, which begins as soon as the new codec is known. A single file leaves such a track out from then on instead.
+- **A slow disk holds nothing up.** Segments are finished and opened by the recorder's writer thread, with the frames queuing up meanwhile as always, and old segments are deleted on the listener's thread.
+
+`onSegmentFinished` hears of every segment once it is finished and closed, the last one when the recorder stops. Right after it returns, the oldest segments beyond `maxSegments` or `maxTotalSize` are deleted, so a segment to be kept for longer has to be moved or copied by then. The newest segment is always kept, and the one being written does not count toward `maxTotalSize`, so the recording takes up to that much and one segment more. `getSegments()` lists the segments that are kept, and `getFile()` returns the last one finished.
+
+A write that fails, e.g. because the disk is full, ends the recording as it does for a single file. The segment it happened in is kept as `PARTIAL` if it holds media; one that failed before any went into it is deleted.
+
+## Replay Buffer
+
+A `ReplayBuffer` keeps the last seconds of a call in memory and writes them into a file only when asked, for "save the last 30 seconds":
+
+```java
+try (ReplayBuffer buffer = new ReplayBuffer(Duration.ofSeconds(30))) {
+    buffer.addTrack(videoReceiver);
+    buffer.addTrack(audioReceiver);
+    buffer.start();
+
+    // ... something happens worth keeping ...
+
+    buffer.save(Paths.get("incident.mkv"))
+            .thenAccept(replay -> System.out.println("Saved " + replay.getDuration()));
+}
+```
+
+`save` creates the file at once, refusing one that exists, and the buffer's own thread writes the replay, while the buffer goes on taking frames. The future completes on the listener's thread with a `MediaRecorderSegment`, or exceptionally if nothing could be saved, and the file is then deleted. A buffer can save any number of replays, in any container; a track whose codec the container cannot hold is left out of that replay with a warning.
+
+A replay begins with a key frame of every video track: the last one before the window, so a replay holds at least the window, and a few seconds more. Since WebRTC rarely sends key frames of its own accord, the buffer asks its video tracks for one every third of the window, at least every two seconds and at most every ten. Besides the window, the buffer holds at most 256 MB, or what its constructor is given; beyond that, the oldest frames go first, and a replay is shorter. A track that changes its codec is kept with the new codec from then on.
 
 ## Following a Recording
 
@@ -85,14 +180,56 @@ recorder.setListener(new MediaRecorderListener() {
 
 Calls arrive in order on a thread the recorder keeps for them, so a listener may take its time and may even stop the recorder.
 
+`onError` also hears of a file that cannot be finished or closed when the recorder stops, e.g. because the last data does not fit on the disk. The recording then ends as `PARTIAL`.
+
+Running out of native memory while writing ends the recording the same way: `onError` is told, the frames still waiting are dropped, and the file is finished right away, so what is in it still plays. The recording ends as `PARTIAL`, or as `FAILED` if nothing had gone into the file yet.
+
 ## How Tracks Are Recorded
 
 - **Video starts at a key frame.** A decoder can do nothing with the frames before one, so they are skipped. The recorder asks the sender or receiver for a key frame, so recording starts within moments instead of waiting until WebRTC sends one of its own accord, which it rarely does.
 - **The file begins once the tracks are known.** The file header describes every stream, and a stream is only known from its first frames. The file begins once every track has sent some, or once the tracks that have waited three seconds for the rest. A track that sends nothing by then is left out, with a warning.
 - **Tracks share one timeline.** Each track is placed by when its first frame arrived, and follows its own RTP timestamps from there, so its timing is exact. The tracks of one sender line up within the jitter of the network.
 - **One simulcast layer.** A sender with simulcast is recorded at the layer whose frames reach the recorder first.
-- **Nothing is lost to a slow disk, up to a point.** Frames queue up in memory for the writer, up to 64 MB. Beyond that, frames are dropped, and video starts over at the next key frame.
+- **Nothing is lost to a slow disk, up to a point.** Frames queue up in memory for the writer, up to 64 MB. Beyond that, frames are dropped, and video starts over at the next key frame. `getStats()` [tells how much that cost](#measuring-what-was-lost).
+
+## Measuring What Was Lost
+
+A result of `COMPLETE` means that everything the recorder took went into the file. It says nothing about frames it had to drop before that, and a video gap can come from a single one, since video only goes on from the next key frame. `getStats()` tells what happened, per track and in the order the tracks were added. It can be asked at any time, also after `close()`:
+
+```java
+MediaRecorderStats stats = recorder.getStats();
+
+for (MediaRecorderStats.Track track : stats.getTracks()) {
+    if (track.getDroppedFrames() > 0) {
+        System.out.println("Lost " + track.getDroppedFrames() + " frames");
+    }
+}
+
+System.out.println("Queue peak: " + stats.getMaxQueuedBytes() + " bytes");
+```
+
+| Value | Meaning |
+| --- | --- |
+| `getDroppedQueueFull()` | Frames dropped because the writer did not keep up and its queue was full. |
+| `getDroppedAllocationFailed()` | Frames dropped because there was no memory to copy them. |
+| `getDroppedAwaitingKeyFrame()` | Video frames dropped on the way to the next key frame, since nothing could decode them after what was lost before. |
+| `getDroppedFrames()` | All of these together. |
+
+`getMaxQueuedBytes()` is the most that ever waited for the writer, of all tracks together, and shows how close a recording came to the limit of 64 MB. Frames a track was never meant to record do not count, such as those before its first key frame or those of another simulcast layer.
 
 ## Recording an Encrypted Call
 
-A sender's frames are recorded before an [encoded transform](/guide/advanced/encoded-transforms) runs on them, and a receiver's after it. An end-to-end encrypted call is therefore recorded in the clear, on either side. [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) shows both together.
+A sender's frames are recorded before an [encoded transform](/guide/advanced/encoded-transforms) runs on them, and a receiver's after it. An end-to-end encrypted call would therefore be recorded in the clear, on either side, so whether it may be is up to the encryption:
+
+- The transforms of a `KeyProvider` of [End-to-End Encryption](/guide/advanced/end-to-end-encryption) do not allow it by default. `addTrack` refuses their senders, receivers and tracks with an `IllegalStateException`, and a recording that is running gets no further frame of a track once such a transform is set on it.
+- A key provider built with `allowPlaintextRecording(true)` allows it, for an application that records its calls on purpose:
+
+```java
+KeyProvider keys = KeyProvider.builder(myId)
+        .allowPlaintextRecording(true)
+        .build();
+```
+
+- A transform of your own allows it unless its `allowsPlaintextObservers()` returns false.
+
+A recording of an encrypted call holds the decrypted media, outside the protection of the call. [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) shows both together.

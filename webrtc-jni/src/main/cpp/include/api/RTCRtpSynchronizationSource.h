@@ -35,11 +35,9 @@ namespace jni
 
 				jclass cls;
 				jmethodID ctor;
-				jfieldID voiceActivityFlag;
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpSource & source);
-		webrtc::RtpSource toNative(JNIEnv * env, const JavaRef<jobject> & source);
 	}
 }
 

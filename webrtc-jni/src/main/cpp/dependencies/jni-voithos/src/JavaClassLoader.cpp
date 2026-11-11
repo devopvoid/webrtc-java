@@ -19,11 +19,13 @@ namespace jni
 			explicit JavaClassLoader(JNIEnv * env, const JavaGlobalRef<jobject> & classLoader) :
 				classLoader(classLoader)
 			{
-				classLoaderClass_ = reinterpret_cast<jclass>(env->NewGlobalRef(env->FindClass("java/lang/ClassLoader")));
+				JavaLocalRef<jclass> cls(env, env->FindClass("java/lang/ClassLoader"));
 
 				if (ExceptionCheck(env)) {
 					return;
 				}
+
+				classLoaderClass_ = reinterpret_cast<jclass>(env->NewGlobalRef(cls.get()));
 
 				loadClass = env->GetMethodID(classLoaderClass_, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
 

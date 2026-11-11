@@ -28,8 +28,11 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCConfiguration;
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCIceTransportPolicy;
+import dev.onvoid.webrtc.e2ee.KeyProvider;
+import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
  * How {@link WebRtc#createPeer} sets up a peer.
@@ -44,6 +47,8 @@ import dev.onvoid.webrtc.RTCIceTransportPolicy;
 public final class PeerOptions {
 
 	final String name;
+
+	final RecoveryPolicy recovery;
 
 	final List<RTCIceServer> iceServers;
 
@@ -65,9 +70,16 @@ public final class PeerOptions {
 
 	final long channelReceiveLimit;
 
+	final RTCEncodedFrameTransformer sendTransform;
+
+	final RTCEncodedFrameTransformer receiveTransform;
+
+	final KeyProvider e2ee;
+
 
 	private PeerOptions(Builder builder) {
 		this.name = builder.name;
+		this.recovery = builder.recovery;
 		this.iceServers = Collections.unmodifiableList(new ArrayList<>(builder.iceServers));
 		this.relayOnly = builder.relayOnly;
 		this.signaling = builder.signaling;
@@ -79,6 +91,9 @@ public final class PeerOptions {
 		this.gatheringTimeout = builder.gatheringTimeout;
 		this.channelSendLimit = builder.channelSendLimit;
 		this.channelReceiveLimit = builder.channelReceiveLimit;
+		this.sendTransform = builder.sendTransform;
+		this.receiveTransform = builder.receiveTransform;
+		this.e2ee = builder.e2ee;
 	}
 
 	/**
@@ -126,6 +141,8 @@ public final class PeerOptions {
 
 		private String name;
 
+		private RecoveryPolicy recovery;
+
 		private boolean relayOnly;
 
 		private Signaling signaling;
@@ -142,8 +159,25 @@ public final class PeerOptions {
 
 		private long channelReceiveLimit = 16 * 1024 * 1024;
 
+		private RTCEncodedFrameTransformer sendTransform;
+
+		private RTCEncodedFrameTransformer receiveTransform;
+
+		private KeyProvider e2ee;
+
 
 		private Builder() {
+		}
+
+		/**
+		 * Enables ICE recovery for automatic negotiation. Disabled by default.
+		 * Signaling recovery and creating a replacement session remain application
+		 * responsibilities; no peer, track or channel is replaced by this policy.
+		 * For manual peers use the WHIP/WHEP builder's recovery option instead.
+		 */
+		public Builder recovery(RecoveryPolicy policy) {
+			recovery = requireNonNull(policy, "policy");
+			return this;
 		}
 
 		/**
@@ -254,13 +288,7 @@ public final class PeerOptions {
 		 * @return this builder.
 		 */
 		public Builder gatheringTimeout(Duration timeout) {
-			requireNonNull(timeout, "timeout");
-
-			if (timeout.isNegative() || timeout.isZero()) {
-				throw new IllegalArgumentException("The timeout must be positive, got " + timeout);
-			}
-
-			this.gatheringTimeout = timeout;
+			this.gatheringTimeout = Timeouts.requirePositive(timeout, "gathering timeout");
 			return this;
 		}
 
@@ -309,6 +337,83 @@ public final class PeerOptions {
 		}
 
 		/**
+		 * Sets the transform that every encoded frame the peer sends passes
+		 * through, after the encoder and before the packetizer, as end-to-end
+		 * encryption needs. It is set on each sender as the track is added,
+		 * before negotiation, so no frame leaves without it and the encoder
+		 * needs no restart. {@link Sender#transform} replaces it for one
+		 * sender.
+		 * <p>
+		 * The transform runs on a thread of each sender, not on the peer's
+		 * event thread; see {@link RTCEncodedFrameTransformer}. A frame it
+		 * throws on is dropped, and the first such failure of each sender
+		 * reaches the peer's {@code onError} handlers.
+		 *
+		 * @param transform the transform of every sender.
+		 *
+		 * @return this builder.
+		 */
+		public Builder sendTransform(RTCEncodedFrameTransformer transform) {
+			this.sendTransform = requireNonNull(transform, "transform");
+			return this;
+		}
+
+		/**
+		 * Sets the transform that every encoded frame the peer receives passes
+		 * through, after the depacketizer and before the decoder, as
+		 * end-to-end encryption needs. It is set on each receiver before
+		 * {@link Peer#onTrack} hands its track out, so it is in place before
+		 * the first frame arrives. {@link RemoteTrack#transform} replaces it
+		 * for one track. If installation fails, the transceiver is stopped,
+		 * the track is not published, and the failure reaches {@code onError}.
+		 * If the receive path cannot be stopped, the peer closes.
+		 * <p>
+		 * The transform runs on a thread of each receiver, not on the peer's
+		 * event thread; see {@link RTCEncodedFrameTransformer}. A frame it
+		 * throws on is dropped, and the first such failure of each receiver
+		 * reaches the peer's {@code onError} handlers.
+		 *
+		 * @param transform the transform of every receiver.
+		 *
+		 * @return this builder.
+		 */
+		public Builder receiveTransform(RTCEncodedFrameTransformer transform) {
+			this.receiveTransform = requireNonNull(transform, "transform");
+			return this;
+		}
+
+		/**
+		 * Encrypts every frame the peer sends, and decrypts every frame it
+		 * receives, end to end with the keys of the given provider, in the
+		 * SFrame format that the guide specifies for browsers to implement
+		 * too.
+		 * <p>
+		 * Each sender gets an encryptor of its own, set before negotiation,
+		 * which asks it for a key frame when the encryption key changes; each
+		 * remote track a decryptor, set before {@link Peer#onTrack} hands it
+		 * out, which asks the remote side for a key frame once video decrypts
+		 * again after frames were dropped. Frames that fail are dropped and
+		 * reported to the provider's {@link
+		 * dev.onvoid.webrtc.e2ee.CryptoListener}, not to {@code onError}.
+		 * <p>
+		 * The peer negotiates only the video codecs that can be encrypted, VP8,
+		 * VP9 and AV1, since H.264 and H.265 frames would be dropped, see {@link
+		 * dev.onvoid.webrtc.e2ee.CryptoFailure#UNSUPPORTED_CODEC}.
+		 * {@link Sender#transform} and {@link RemoteTrack#transform} still
+		 * replace the transform of one sender or track. A {@code MediaRecorder}
+		 * refuses the senders and tracks unless the provider {@link
+		 * KeyProvider.Builder#allowPlaintextRecording allows recording}.
+		 *
+		 * @param keys the keys of the call.
+		 *
+		 * @return this builder.
+		 */
+		public Builder e2ee(KeyProvider keys) {
+			this.e2ee = requireNonNull(keys, "keys");
+			return this;
+		}
+
+		/**
 		 * Changes anything else of the {@link RTCConfiguration} the peer is
 		 * created with, after this builder applied its own values.
 		 *
@@ -325,9 +430,19 @@ public final class PeerOptions {
 		 * @return the options.
 		 *
 		 * @throws IllegalStateException if the peer negotiates automatically
-		 *                               and has no signaling.
+		 *                               and has no signaling, recovery is
+		 *                               configured for manual negotiation, or
+		 *                               end-to-end encryption is set together
+		 *                               with a send or receive transform.
 		 */
 		public PeerOptions build() {
+			if (e2ee != null && (sendTransform != null || receiveTransform != null)) {
+				throw new IllegalStateException("End-to-end encryption brings its own transforms, "
+						+ "and takes no send or receive transform besides");
+			}
+			if (recovery != null && negotiation != Negotiation.AUTOMATIC) {
+				throw new IllegalStateException("Peer recovery requires automatic negotiation");
+			}
 			if (negotiation == Negotiation.AUTOMATIC && signaling == null) {
 				throw new IllegalStateException("A peer that negotiates automatically needs a Signaling. "
 						+ "Set one, or use Negotiation.MANUAL to drive the exchange through Peer.negotiator()");

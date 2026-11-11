@@ -18,7 +18,7 @@ package dev.onvoid.webrtc;
 
 import java.util.List;
 
-import dev.onvoid.webrtc.internal.NativeObject;
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
  * Allows an application to access information about the Datagram Transport
@@ -31,16 +31,22 @@ import dev.onvoid.webrtc.internal.NativeObject;
  * transport layer for the RTP or RTCP component of a specific {@link
  * RTCRtpTransceiver}, or a group of RTCRtpTransceivers if such a group has been
  * negotiated via [BUNDLE].
+ * <p>
+ * Each instance holds a reference to the native transport, which keeps it
+ * readable after the connection has closed or dropped it; the transport then
+ * reports {@link RTCDtlsTransportState#CLOSED}. Release it with {@link
+ * #dispose()} once it is no longer needed.
  *
  * @author Alex Andres
  */
-public class RTCDtlsTransport extends NativeObject {
+public class RTCDtlsTransport extends DisposableNativeObject {
 
 	/**
 	 * The native observer registered via {@link #registerObserver}. The
 	 * RTCDtlsTransport does not take ownership of the Java observer, but it
-	 * owns the native observer wrapper; it is freed when replaced and when
-	 * {@link #unregisterObserver()} is called.
+	 * owns the native observer wrapper; it is freed when replaced, when
+	 * {@link #unregisterObserver()} is called, and when this transport is
+	 * disposed.
 	 */
 	@SuppressWarnings("unused")
 	private long observerHandle;
@@ -64,7 +70,8 @@ public class RTCDtlsTransport extends NativeObject {
 
 	/**
 	 * Returns the certificate chain in use by the remote side, with each
-	 * certificate encoded in PEM format.
+	 * certificate encoded in PEM format. The list is empty until the DTLS
+	 * handshake has received the certificates of the remote side.
 	 *
 	 * @return The certificate chain in use by the remote side.
 	 */
@@ -73,15 +80,40 @@ public class RTCDtlsTransport extends NativeObject {
 	/**
 	 * Register an observer to receive events from this transport. The observer
 	 * will replace the previously registered observer.
+	 * <p>
+	 * A transport has one observer, also when several RTCDtlsTransport
+	 * instances stand for it: registering through one replaces the observer
+	 * registered through another.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The new DTLS transport observer.
 	 */
 	public native void registerObserver(RTCDtlsTransportObserver observer);
 
 	/**
-	 * Unregister the last set RTCDtlsTransportObserver.
+	 * Unregister the RTCDtlsTransportObserver last registered through this
+	 * instance. An observer that another instance has registered since stays.
 	 */
 	public native void unregisterObserver();
+
+	/**
+	 * Unregisters the observer registered through this instance, if any, and
+	 * releases the native reference held by this instance.
+	 * <p>
+	 * An RTCDtlsTransport is not exclusively owned by this instance: the
+	 * connection, its senders and receivers, and other RTCDtlsTransport
+	 * instances obtained via separate calls to {@link
+	 * RTCRtpSender#getTransport()} or {@link RTCRtpReceiver#getTransport()}
+	 * keep their own references. Disposing this instance does not affect the
+	 * transport itself or any other instance referring to it.
+	 */
+	@Override
+	public native void dispose();
 
 	/**
 	 * Two RTCDtlsTransport instances are equal if they are bound to the same
@@ -104,9 +136,7 @@ public class RTCDtlsTransport extends NativeObject {
 
 	@Override
 	public int hashCode() {
-		long handle = getNativeHandle();
-
-		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+		return nativeHashCode();
 	}
 
 }

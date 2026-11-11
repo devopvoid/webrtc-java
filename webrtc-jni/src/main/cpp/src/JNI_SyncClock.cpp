@@ -15,16 +15,23 @@
  */
 
 #include "JNI_SyncClock.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "JavaUtils.h"
 #include "media/SyncClock.h"
 
 #include "rtc_base/time_utils.h"
 
+#include <memory>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_initialize
 (JNIEnv * env, jobject caller)
 {
 	try {
-	    jni::SyncClock * clock = new jni::SyncClock();
+	    // The handle holds a reference, not the clock itself: a custom source
+	    // constructed with this clock takes its own, so disposing the Java
+	    // clock leaves the native one alive for as long as a source uses it.
+	    auto clock = new std::shared_ptr<jni::SyncClock>(std::make_shared<jni::SyncClock>());
     
 	    SetHandle(env, caller, clock);
 	}
@@ -36,46 +43,61 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_initialize
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_getTimestampUs
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
-    CHECK_HANDLEV(clock, 0);
+	return jni::CallFromJava(env, [&]() -> jlong {
+	    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, caller);
+	    CHECK_HANDLEV(clock, 0);
     
-    return clock->GetTimestampUs();
+	    return (*clock)->GetTimestampUs();
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_getTimestampMs
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
-    CHECK_HANDLEV(clock, 0);
+	return jni::CallFromJava(env, [&]() -> jlong {
+	    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, caller);
+	    CHECK_HANDLEV(clock, 0);
     
-    return clock->GetTimestampMs();
+	    return (*clock)->GetTimestampMs();
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_getNtpTime
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
-    CHECK_HANDLEV(clock, 0);
+	return jni::CallFromJava(env, [&]() -> jlong {
+	    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, caller);
+	    CHECK_HANDLEV(clock, 0);
     
-    webrtc::NtpTime ntpTime = clock->GetNtpTime();
-    return ntpTime.ToMs();
+	    webrtc::NtpTime ntpTime = (*clock)->GetNtpTime();
+	    return ntpTime.ToMs();
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_SyncClock_dispose
 (JNIEnv * env, jobject caller)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, caller);
-    CHECK_HANDLE(clock);
-    
-    delete clock;
-    
-    SetHandle<std::nullptr_t>(env, caller, nullptr);
+	jni::CallFromJava(env, [&]() {
+	    auto clock = jni::TakeHandle<std::shared_ptr<jni::SyncClock>>(env, caller);
+
+	    if (clock == nullptr) {
+	        return;
+	    }
+
+	    // Drops this wrapper's reference only; sources still using the clock
+	    // keep theirs.
+	    jni::ReleaseHandle(env, clock, [clock](bool) {
+	        delete clock;
+	    });
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_SyncClock_currentTimeUs
 (JNIEnv * env, jclass caller)
 {
-    // The clock capture timestamps handed to the custom media sources are
-    // interpreted in, which is the one WebRTC itself runs on.
-    return webrtc::TimeMicros();
+	return jni::CallFromJava(env, [&]() -> jlong {
+	    // The clock capture timestamps handed to the custom media sources are
+	    // interpreted in, which is the one WebRTC itself runs on.
+	    return webrtc::TimeMicros();
+	});
 }

@@ -60,10 +60,17 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * packet, replacing any observer set before. {@code null} removes the
 	 * observer.
 	 * <p>
-	 * A sender has one observer. It belongs to the RTCRtpSender object it was
-	 * set through: disposing that object removes it, also when it was set
-	 * through another object of the same sender in the meantime, so set it
-	 * through one object.
+	 * A sender has one observer, also when several RTCRtpSender objects stand
+	 * for it: setting it through one replaces the observer set through
+	 * another. Removing it, or disposing this object, removes only the
+	 * observer set through this object, and only while no other object has
+	 * replaced it.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The observer, or {@code null}.
 	 */
@@ -89,8 +96,12 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * form of RTP packets. When bundling is used, multiple RTCRtpSenders will
 	 * share one transport and will all send RTP and RTCP over the same
 	 * transport.
+	 * <p>
+	 * Each call returns a new instance holding its own reference to the
+	 * transport, to be released with {@link RTCDtlsTransport#dispose()}.
 	 *
-	 * @return The transport over which media from the MediaStreamTrack is sent.
+	 * @return The transport over which media from the MediaStreamTrack is sent,
+	 * or null if the sender has none yet.
 	 */
 	public native RTCDtlsTransport getTransport();
 
@@ -149,6 +160,9 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * Returns the RTCDtmfSender associated with this RTCRtpSender. The RTCDtmfSender
 	 * enables the transmission of DTMF (Dual-Tone Multi-Frequency) tones over the
 	 * RTCPeerConnection.
+	 * <p>
+	 * Each call returns a new instance holding its own reference to the DTMF
+	 * sender, to be released with {@link RTCDtmfSender#dispose()}.
 	 *
 	 * @return The DTMF sender object associated with this RTP sender, or null if DTMF
 	 *         is not supported for the media type of the associated track.
@@ -166,20 +180,28 @@ public class RTCRtpSender extends DisposableNativeObject {
 	 * instance is disposed. Setting it before the connection is negotiated
 	 * avoids the key frame the encoder otherwise sends when the first
 	 * transform is set on a running video sender.
+	 * <p>
+	 * A transform whose {@link
+	 * RTCEncodedFrameTransformer#allowsPlaintextObservers()} is false keeps
+	 * every observer of the encoded frames, such as a recorder, from seeing
+	 * any frame for as long as it is set.
 	 *
 	 * @param transformer The transform, or {@code null} to remove it.
 	 *
 	 * @see RTCEncodedFrameTransformer
 	 */
-	public native void setTransform(RTCEncodedFrameTransformer transformer);
+	public void setTransform(RTCEncodedFrameTransformer transformer) {
+		// Asked once, so that the native side need not call into Java.
+		applyTransform(transformer, transformer != null && !transformer.allowsPlaintextObservers());
+	}
 
 	/**
 	 * Asks the encoder to make the next video frame a key frame, e.g. so that
 	 * a newly joined receiver or a recording can start decoding at once. Does
-	 * nothing for an audio sender.
+	 * nothing for an audio sender, and nothing before the connection is
+	 * negotiated, when the sender has no encoder yet.
 	 *
-	 * @throws RuntimeException If the sender has no encoder yet, before the
-	 *                          connection is negotiated.
+	 * @throws RuntimeException If WebRTC refuses the request.
 	 */
 	public native void generateKeyFrame();
 
@@ -277,9 +299,9 @@ public class RTCRtpSender extends DisposableNativeObject {
 
 	@Override
 	public int hashCode() {
-		long handle = getNativeHandle();
-
-		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+		return nativeHashCode();
 	}
+
+	private native void applyTransform(RTCEncodedFrameTransformer transformer, boolean sealed);
 
 }

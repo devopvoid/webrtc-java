@@ -68,8 +68,10 @@ VideoFrame frame = new VideoFrame(buffer, System.nanoTime());
 videoSource.pushFrame(frame);
 
 // Don't forget to release the frame when done
-frame.dispose();
+frame.release();
 ```
+
+A frame can also carry a `VideoFrameBuffer` of your own. The source takes its pixels from `toI420()`: a `NativeI420Buffer` returned there is used as it is, and any other `I420Buffer` is copied, so its planes have to be direct byte buffers that are as large as their strides and the height require. A buffer that does not fit its description is rejected with a `RuntimeException`. `VideoFrame.copy()` works the same way, and always returns a frame with a `NativeI420Buffer`.
 
 ## Video Format Considerations
 
@@ -166,6 +168,8 @@ Frames must still be pushed in real time. A frame is encoded and sent when it ar
 
 Timestamps must also advance by at least one millisecond from frame to frame. WebRTC drops a frame whose capture time does not move forward.
 :::
+
+`pushFrame(VideoFrame)` stamps its frames with the same clock, so a source may mix the two calls.
 
 Push audio with timestamps from the same clock, as described in [Custom Audio Source](/guide/audio/custom-audio-source), and the two stay in sync on the receiving side.
 

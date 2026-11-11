@@ -34,6 +34,11 @@ namespace jni
 		this->device = device;
 	}
 
+	bool VideoCaptureBase::hasDevice() const
+	{
+		return device != nullptr;
+	}
+
 	void VideoCaptureBase::setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability)
 	{
 		this->capability = capability;

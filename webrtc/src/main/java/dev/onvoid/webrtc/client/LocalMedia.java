@@ -24,6 +24,11 @@ import dev.onvoid.webrtc.media.video.VideoTrackSource;
 /**
  * Creates the tracks a runtime sends, from {@link WebRtc#media()}. Every track
  * belongs to the runtime and is closed with it, unless it was closed before.
+ * <p>
+ * The methods that make a track work on the calling thread and wait briefly
+ * for a WebRTC thread. {@link #camera()} and {@link #screen(ScreenOptions)}
+ * also open their capture there, which can take longer, so a UI thread should
+ * leave them to another thread.
  */
 public interface LocalMedia {
 
@@ -119,9 +124,8 @@ public interface LocalMedia {
 	 *
 	 * @param label  the track label.
 	 * @param source the source that feeds the track. A {@link CustomAudioSource}
-	 *               needs a runtime built with {@link AudioMode#CUSTOM} or
-	 *               {@link AudioMode#HEADLESS}, any other source {@link
-	 *               AudioMode#DEVICES}.
+	 *               fits any runtime, any other source needs a runtime built
+	 *               with {@link AudioMode#DEVICES}.
 	 *
 	 * @return the track.
 	 *
@@ -136,9 +140,6 @@ public interface LocalMedia {
 	 * @param label the track label.
 	 *
 	 * @return the track.
-	 *
-	 * @throws ConfigurationException if the runtime's {@link AudioMode} is
-	 *                                {@link AudioMode#DEVICES}.
 	 */
 	CustomAudio customAudio(String label);
 

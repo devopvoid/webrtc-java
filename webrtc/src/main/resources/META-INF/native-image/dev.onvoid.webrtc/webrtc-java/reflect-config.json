@@ -1,0 +1,1512 @@
+[
+  {
+    "name": "java.io.IOException"
+  },
+  {
+    "name": "java.lang.Boolean"
+  },
+  {
+    "name": "java.lang.Byte"
+  },
+  {
+    "name": "java.lang.Class"
+  },
+  {
+    "name": "java.lang.ClassLoader"
+  },
+  {
+    "name": "java.lang.Double"
+  },
+  {
+    "name": "java.lang.Enum"
+  },
+  {
+    "name": "java.lang.Error"
+  },
+  {
+    "name": "java.lang.Float"
+  },
+  {
+    "name": "java.lang.IllegalArgumentException"
+  },
+  {
+    "name": "java.lang.IllegalStateException"
+  },
+  {
+    "name": "java.lang.Integer"
+  },
+  {
+    "name": "java.lang.Iterable"
+  },
+  {
+    "name": "java.lang.Long"
+  },
+  {
+    "name": "java.lang.NullPointerException"
+  },
+  {
+    "name": "java.lang.OutOfMemoryError"
+  },
+  {
+    "name": "java.lang.RuntimeException"
+  },
+  {
+    "name": "java.lang.Short"
+  },
+  {
+    "name": "java.lang.String"
+  },
+  {
+    "name": "java.lang.Thread"
+  },
+  {
+    "name": "java.lang.Thread$UncaughtExceptionHandler"
+  },
+  {
+    "name": "java.lang.Throwable"
+  },
+  {
+    "name": "java.math.BigInteger"
+  },
+  {
+    "name": "java.nio.Buffer"
+  },
+  {
+    "name": "java.nio.ByteBuffer"
+  },
+  {
+    "name": "java.util.ArrayList"
+  },
+  {
+    "name": "java.util.HashMap"
+  },
+  {
+    "name": "java.util.Iterator"
+  },
+  {
+    "name": "java.util.List"
+  },
+  {
+    "name": "java.util.Map"
+  },
+  {
+    "name": "java.util.Map$Entry"
+  },
+  {
+    "name": "java.util.Set"
+  },
+  {
+    "name": "dev.onvoid.webrtc.AddIceCandidateObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.CreateSessionDescriptionObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.PeerConnectionFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.PeerConnectionObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.PortAllocatorConfig",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCAdapterType",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCAnswerOptions",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCBundlePolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCandidateNetworkPolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCandidatePairChangeEvent",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCertificatePEM",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCConfiguration",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCContinualGatheringPolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCryptexPolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCryptoOptions",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannel",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelBuffer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelInit",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelSendObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelState",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDegradationPreference",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransport",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransportObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransportState",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtmfSender",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtmfSenderObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtxStatus",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrame",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrameInjector",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrameInjectorObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedFrame",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrame",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrameInjector",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrameInjectorObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceCandidate",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceConnectionState",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceGatheringState",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceServer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceTransport",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceTransportPolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCOfferAnswerOptions",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCOfferOptions",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnection",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnectionIceErrorEvent",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnectionState",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPortPrunePolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPriorityType",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCResolutionRestriction",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtcpMuxPolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtcpParameters",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCapabilities",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCodecCapability",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCodecParameters",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpContributingSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpEncodingParameters",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionCapability",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionParameters",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpPacketInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpParameters",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpReceiver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpReceiverObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSendParameters",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSender",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSenderObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSynchronizationSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiverDirection",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiverInit",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSdpType",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSessionDescription",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSignalingState",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStats",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsCollectorCallback",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsReport",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsType",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCTcpCandidatePolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCVpnPreference",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.SetSessionDescriptionObserver",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.TlsCertPolicy",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.client.AudioDispatcher",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.client.CallChecker$AudioPart",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.DisposableNativeObject",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.LeakDetector",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeApi",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeClassLoader",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeObject",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.RefCountedObject",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.LogSink",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.Logging",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.Logging$Severity",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.AudioBackendUnavailableException",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.AudioDeviceDirectionType",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.Device",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceChangeListener",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceException",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceFormFactor",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceTransport",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaDevices",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaSource$State",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStream",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrack",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackEndedListener",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackMuteListener",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackState",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaType",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.SyncClock",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioConverter",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDevice",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDeviceModule",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDeviceModuleBase",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioLayer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioOptions",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessing",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$CaptureLevelAdjustment",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$CaptureLevelAdjustment$AnalogMicGainEmulation",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$EchoCanceller",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor$Mode",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$Mode",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$AdaptiveDigital",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$FixedDigital",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$InputVolumeController",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$HighPassFilter",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$NoiseSuppression",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$NoiseSuppression$Level",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$Pipeline",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$Pipeline$DownmixMethod",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingStats",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingStreamConfig",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioResampler",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioSink",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrack",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrack$SinkDelivery",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrackSink",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrackSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.CustomAudioSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.HeadlessAudioDeviceModule",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.SystemAudioSource$Capture",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.VoiceActivityDetector",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.VoiceActivityListener",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioCodecInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioDecoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioEncoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.BuiltinAudioDecoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.BuiltinAudioEncoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.CustomVideoSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.I420Buffer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.NativeI420Buffer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoBufferConverter",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoCapture",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoCaptureCapability",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoContentHint",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDesktopSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDevice",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDeviceSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoFrame",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoFrameBuffer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoProcessor",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrack",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrackSink",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrackSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.EncodedImage",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoDecoder",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoDecoderCallback",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoEncoder",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoEncoderCallback",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoCodecInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoCodecStatus",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoder",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoder$Settings",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$BitrateAllocation",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$EncodeInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$EncoderInfo",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$RateControlParameters",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$ResolutionBitrateLimits",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$ScalingSettings",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$Settings",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCaptureCallback",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCapturer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCapturer$Result",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopSource",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.PowerManagement",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.ScreenCapturer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.WindowCapturer",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "java.net.http.HttpClient",
+    "methods": [
+      {"name": "shutdown", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "dev.onvoid.webrtc.AddIceCandidateObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.CreateSessionDescriptionObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.PeerConnectionFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.PeerConnectionObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.PortAllocatorConfig[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCAdapterType[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCAnswerOptions[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCBundlePolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCandidateNetworkPolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCandidatePairChangeEvent[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCertificatePEM[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCConfiguration[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCContinualGatheringPolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCryptexPolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCryptoOptions[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannel[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelBuffer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelInit[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelSendObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelState[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDegradationPreference[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransport[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransportObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransportState[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtmfSender[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtmfSenderObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtxStatus[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrame[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrameInjector[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrameInjectorObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedFrame[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrame[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrameInjector[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrameInjectorObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceCandidate[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceConnectionState[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceGatheringState[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceServer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceTransport[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceTransportPolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCOfferAnswerOptions[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCOfferOptions[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnection[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnectionIceErrorEvent[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnectionState[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPortPrunePolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPriorityType[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCResolutionRestriction[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtcpMuxPolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtcpParameters[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCapabilities[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCodecCapability[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCodecParameters[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpContributingSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpEncodingParameters[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionCapability[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionParameters[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpPacketInfo[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpParameters[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpReceiver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpReceiverObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSendParameters[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSender[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSenderObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSynchronizationSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiverDirection[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiverInit[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSdpType[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSessionDescription[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSignalingState[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStats[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsCollectorCallback[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsReport[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsType[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCTcpCandidatePolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCVpnPreference[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.SetSessionDescriptionObserver[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.TlsCertPolicy[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.DisposableNativeObject[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.LeakDetector[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeApi[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeClassLoader[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeObject[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.RefCountedObject[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.LogSink[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.Logging[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.Logging$Severity[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.AudioBackendUnavailableException[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.AudioDeviceDirectionType[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.Device[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceChangeListener[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceException[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceFormFactor[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceTransport[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaDevices[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaSource$State[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStream[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrack[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackEndedListener[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackMuteListener[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackState[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaType[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.SyncClock[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioConverter[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDevice[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDeviceModule[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDeviceModuleBase[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioLayer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioOptions[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessing[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$CaptureLevelAdjustment[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$CaptureLevelAdjustment$AnalogMicGainEmulation[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$EchoCanceller[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor$Mode[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$Mode[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$AdaptiveDigital[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$FixedDigital[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$InputVolumeController[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$HighPassFilter[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$NoiseSuppression[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$NoiseSuppression$Level[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$Pipeline[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$Pipeline$DownmixMethod[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingStats[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingStreamConfig[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioResampler[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioSink[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrack[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrackSink[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrackSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.CustomAudioSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.HeadlessAudioDeviceModule[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.SystemAudioSource$Capture[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.VoiceActivityDetector[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.VoiceActivityListener[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioCodecInfo[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioDecoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioEncoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.BuiltinAudioDecoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.BuiltinAudioEncoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.CustomVideoSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.I420Buffer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.NativeI420Buffer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoBufferConverter[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoCapture[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoCaptureCapability[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoContentHint[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDesktopSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDevice[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDeviceSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoFrame[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoFrameBuffer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoProcessor[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrack[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrackSink[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrackSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.EncodedImage[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoDecoder[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoDecoderCallback[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoEncoder[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoEncoderCallback[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoCodecInfo[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoCodecStatus[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoder[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoder$Settings[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$BitrateAllocation[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$EncodeInfo[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$EncoderInfo[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$RateControlParameters[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$ResolutionBitrateLimits[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$ScalingSettings[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$Settings[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCaptureCallback[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCapturer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCapturer$Result[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopSource[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.PowerManagement[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.ScreenCapturer[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.WindowCapturer[]"
+  },
+  {
+    "name": "int[][]"
+  },
+  {
+    "name": "java.lang.Boolean[]"
+  },
+  {
+    "name": "java.lang.Double[]"
+  },
+  {
+    "name": "java.lang.Integer[]"
+  },
+  {
+    "name": "java.lang.Long[]"
+  },
+  {
+    "name": "java.lang.String[]"
+  },
+  {
+    "name": "java.math.BigInteger[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoCodecInfo[][]"
+  }
+]

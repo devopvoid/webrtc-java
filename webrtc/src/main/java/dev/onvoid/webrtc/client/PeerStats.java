@@ -24,16 +24,20 @@ import dev.onvoid.webrtc.RTCStatsReport;
 
 /**
  * The statistics people look for first, taken from an {@link RTCStatsReport}.
- * Bitrates are computed between two samples, so the first sample a peer takes
- * has none.
+ * Bitrates and the recent packet loss are computed between the measurement
+ * times of two samples, so the first sample a peer takes has none.
+ * <p>
+ * Bytes and bitrates count all transports of the peer. The candidate type and
+ * the round trip time are those of one of them, the {@link #transport()
+ * connection in use}; {@link #transports()} has each one's.
  */
 public final class PeerStats {
 
 	private final Instant timestamp;
 
-	private final String candidateType;
+	private final TransportStats transport;
 
-	private final Duration roundTripTime;
+	private final List<TransportStats> transports;
 
 	private final long bytesSent;
 
@@ -45,70 +49,103 @@ public final class PeerStats {
 
 	private final double packetLoss;
 
+	private final double recentPacketLoss;
+
 	private final List<VideoStats> outboundVideo;
 
 	private final List<VideoStats> inboundVideo;
 
 	private final RTCStatsReport report;
 
+	private final List<AudioStats> inboundAudio;
+	private final List<AudioStats> outboundAudio;
+	private final PeerDiagnostics diagnostics;
 
-	PeerStats(Instant timestamp, String candidateType, Duration roundTripTime,
-			long bytesSent, long bytesReceived, long outgoingBitrate,
-			long incomingBitrate, double packetLoss,
-			List<VideoStats> outboundVideo, List<VideoStats> inboundVideo,
-			RTCStatsReport report) {
+
+	PeerStats(Instant timestamp, TransportStats transport, List<TransportStats> transports,
+			long bytesSent, long bytesReceived, long outgoingBitrate, long incomingBitrate,
+			double packetLoss, double recentPacketLoss, List<VideoStats> outboundVideo,
+			List<VideoStats> inboundVideo, RTCStatsReport report, List<AudioStats> inboundAudio,
+			List<AudioStats> outboundAudio, PeerDiagnostics diagnostics) {
+		this.inboundAudio = inboundAudio;
+		this.outboundAudio = outboundAudio;
+		this.diagnostics = diagnostics;
 		this.timestamp = timestamp;
-		this.candidateType = candidateType;
-		this.roundTripTime = roundTripTime;
+		this.transport = transport;
+		this.transports = transports;
 		this.bytesSent = bytesSent;
 		this.bytesReceived = bytesReceived;
 		this.outgoingBitrate = outgoingBitrate;
 		this.incomingBitrate = incomingBitrate;
 		this.packetLoss = packetLoss;
+		this.recentPacketLoss = recentPacketLoss;
 		this.outboundVideo = outboundVideo;
 		this.inboundVideo = inboundVideo;
 		this.report = report;
 	}
 
 	/**
-	 * @return when the statistics were taken.
+	 * @return when WebRTC measured the statistics, the timestamp of the
+	 * report.
 	 */
 	public Instant timestamp() {
 		return timestamp;
 	}
 
 	/**
-	 * @return the type of the local candidate in use: {@code host}, {@code
-	 * srflx}, {@code prflx} or {@code relay}. Null while not connected.
+	 * The transport whose candidate type and round trip time this sample
+	 * reports. It is the only one that has a candidate pair in use, as with
+	 * bundled media. Of several, it is the one that carried the most bytes,
+	 * sent and received, and of those the one with the lowest id.
+	 *
+	 * @return the transport, or null while none has a candidate pair in use.
+	 */
+	public TransportStats transport() {
+		return transport;
+	}
+
+	/**
+	 * @return every transport of the peer, ordered by id.
+	 */
+	public List<TransportStats> transports() {
+		return transports;
+	}
+
+	/**
+	 * @return the type of the local candidate in use on the {@link
+	 * #transport()} transport: {@code host}, {@code srflx}, {@code prflx} or
+	 * {@code relay}. Null while not connected.
 	 */
 	public String candidateType() {
-		return candidateType;
+		return transport == null ? null : transport.candidateType();
 	}
 
 	/**
-	 * @return the current round trip time, or null while not measured.
+	 * @return the current round trip time on the {@link #transport()}
+	 * transport, or null while not measured.
 	 */
 	public Duration roundTripTime() {
-		return roundTripTime;
+		return transport == null ? null : transport.roundTripTime();
 	}
 
 	/**
-	 * @return the bytes sent on the connection so far.
+	 * @return the bytes sent on all transports so far.
 	 */
 	public long bytesSent() {
 		return bytesSent;
 	}
 
 	/**
-	 * @return the bytes received on the connection so far.
+	 * @return the bytes received on all transports so far.
 	 */
 	public long bytesReceived() {
 		return bytesReceived;
 	}
 
 	/**
-	 * @return the bits sent per second since the previous sample, or -1 for
-	 * the first sample.
+	 * @return the bits sent per second since the previous sample, or -1 when
+	 * there is none to compare with: for the first sample, after the clock
+	 * went back, or after the byte counter started again.
 	 */
 	public long outgoingBitrate() {
 		return outgoingBitrate;
@@ -116,17 +153,30 @@ public final class PeerStats {
 
 	/**
 	 * @return the bits received per second since the previous sample, or -1
-	 * for the first sample.
+	 * when there is none to compare with: for the first sample, after the
+	 * clock went back, or after the byte counter started again.
 	 */
 	public long incomingBitrate() {
 		return incomingBitrate;
 	}
 
 	/**
-	 * @return the share of received packets lost so far, 0 to 1.
+	 * @return the share of received packets lost so far, 0 to 1. After a long
+	 * session it barely moves; {@link #recentPacketLoss()} shows what happens
+	 * now.
 	 */
 	public double packetLoss() {
 		return packetLoss;
+	}
+
+	/**
+	 * @return the share of the packets lost of those expected since the
+	 * previous sample, 0 to 1, and 0 if none were expected. -1 when there is
+	 * no sample to compare with: for the first one, or after the clock went
+	 * back. A stream whose counters started again counts from zero.
+	 */
+	public double recentPacketLoss() {
+		return recentPacketLoss;
 	}
 
 	/**
@@ -150,12 +200,37 @@ public final class PeerStats {
 		return report;
 	}
 
+	/** @return immutable statistics of received audio streams, ordered by statistics id. */
+	public List<AudioStats> inboundAudio() {
+		return inboundAudio;
+	}
+
+	/** @return immutable statistics of sent audio streams, ordered by statistics id. */
+	public List<AudioStats> outboundAudio() {
+		return outboundAudio;
+	}
+
+	/** @return the diagnosis maintained across samples of this peer. */
+	public PeerDiagnostics diagnostics() {
+		return diagnostics;
+	}
+
+	/**
+	 * Exports a JSON snapshot using an allowlist. Raw stats, identifiers, addresses,
+	 * ports, URLs, credentials, SDP, certificates and codec parameters are excluded.
+	 * @return the diagnostic report, suitable for writing to a UTF-8 file.
+	 */
+	public String diagnosticReport() {
+		return DiagnosticExport.json(this);
+	}
+
 	@Override
 	public String toString() {
-		return "PeerStats[candidate=" + candidateType + ", rtt=" + roundTripTime
+		return "PeerStats[candidate=" + candidateType() + ", rtt=" + roundTripTime()
 				+ ", sent=" + bytesSent + " B, received=" + bytesReceived
 				+ " B, out=" + outgoingBitrate + " bps, in=" + incomingBitrate
-				+ " bps, loss=" + packetLoss + ", outboundVideo=" + outboundVideo
+				+ " bps, loss=" + packetLoss + ", recentLoss=" + recentPacketLoss
+				+ ", transports=" + transports + ", outboundVideo=" + outboundVideo
 				+ ", inboundVideo=" + inboundVideo + "]";
 	}
 }

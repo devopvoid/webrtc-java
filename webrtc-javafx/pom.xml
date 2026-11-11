@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>dev.onvoid.webrtc</groupId>
+		<artifactId>webrtc-java-parent</artifactId>
+		<version>1.0.1-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>webrtc-java-javafx</artifactId>
+
+	<name>webrtc-java-javafx</name>
+	<description>
+		JavaFX extension for webrtc-java. Shows the video of the client API in JavaFX scenes.
+	</description>
+
+	<properties>
+		<!-- The oldest OpenJFX line still served, which runs on Java 11. An
+		     application brings the JavaFX it uses; this module only compiles
+		     against it. -->
+		<javafx.version>17.0.20</javafx.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>dev.onvoid.webrtc</groupId>
+			<artifactId>webrtc-java</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<!-- Optional: an application that uses this module has JavaFX already,
+		     in the version it chose. -->
+		<dependency>
+			<groupId>org.openjfx</groupId>
+			<artifactId>javafx-graphics</artifactId>
+			<version>${javafx.version}</version>
+			<optional>true</optional>
+		</dependency>
+	</dependencies>
+</project>

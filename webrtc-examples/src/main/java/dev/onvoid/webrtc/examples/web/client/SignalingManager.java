@@ -27,6 +27,7 @@ import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.client.SignalMessage;
 import dev.onvoid.webrtc.client.Signaling;
+import dev.onvoid.webrtc.client.Subscription;
 
 import dev.onvoid.webrtc.examples.web.model.*;
 
@@ -158,10 +159,22 @@ public class SignalingManager implements Signaling {
      * the peer created last, which replaces the one before.
      *
      * @param inbound Takes the messages the browser sends.
+     *
+     * @return Lets go of the peer when it closes. The connection to the signaling
+     *         server stays open for the next peer.
      */
     @Override
-    public void attach(Consumer<SignalMessage> inbound) {
+    public synchronized Subscription attach(Consumer<SignalMessage> inbound) {
         this.inbound = inbound;
+
+        return () -> {
+            synchronized (this) {
+                // A peer closed after its successor attached leaves that one in place.
+                if (this.inbound == inbound) {
+                    this.inbound = null;
+                }
+            }
+        };
     }
 
     /**

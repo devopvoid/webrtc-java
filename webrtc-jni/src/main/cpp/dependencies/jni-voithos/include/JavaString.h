@@ -13,6 +13,7 @@
 
 #include <jni.h>
 #include <string>
+#include <vector>
 
 namespace jni
 {
@@ -21,13 +22,19 @@ namespace jni
 		public:
 			explicit JavaString(JNIEnv * env);
 
+			// UTF-16 to UTF-8; null becomes "".
 			static std::string toNative(JNIEnv * env, const JavaRef<jstring> & jstr);
+			// UTF-8 to UTF-16: "" stays "", U+0000 and characters beyond the
+			// BMP survive. Throws no C++ exception; null with a pending Java
+			// exception if the string cannot be made.
 			static JavaLocalRef<jstring> toJava(JNIEnv * env, const std::string & str);
+			// For values that WebRTC leaves empty when they are absent and that
+			// Java reports as null.
+			static JavaLocalRef<jstring> toJavaOrNull(JNIEnv * env, const std::string & str);
 			static JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const std::vector<std::string> & vector);
 
 		private:
 			jclass cls;
-			jmethodID getBytes;
 	};
 }
 

@@ -1,0 +1,85 @@
+# webrtc-java-media
+
+Media extension for [webrtc-java](https://github.com/devopvoid/webrtc-java). It reads media files
+and network streams with FFmpeg and feeds them into a peer connection, so an application can send
+a video file the way it would send a camera. It also records what a peer connection sends or
+receives into media files.
+
+```java
+MediaFileSource source = new MediaFileSource(Path.of("movie.mp4"));
+
+VideoTrack videoTrack = factory.createVideoTrack("video", source.getVideoSource());
+AudioTrack audioTrack = factory.createAudioTrack("audio", source.getAudioSource());
+
+peerConnection.addTrack(videoTrack, List.of("stream"));
+peerConnection.addTrack(audioTrack, List.of("stream"));
+
+source.play();
+```
+
+Recording writes the encoded frames into the file as they are, without decoding or re-encoding:
+
+```java
+try (MediaRecorder recorder = new MediaRecorder(Path.of("call.mkv"))) {
+    recorder.addTrack(videoReceiver);
+    recorder.addTrack(audioReceiver);
+    recorder.start();
+    // ...
+    recorder.stop();
+}
+```
+
+## How it fits together
+
+Decoding happens entirely in native code. The module does not carry frames through Java: it calls
+into webrtc-java's native side through the small C interface in `webrtc_java_api.h`, which hands
+decoded pictures to a `CustomVideoSource` and 10 ms chunks to a `CustomAudioSource` without a copy
+per frame. Frames are paced in real time and carry their own presentation times, so playback keeps
+the timing of the file rather than the timing of a thread.
+
+The audio of this module is pushed into its track, so the same factory can send the microphone
+beside it.
+
+## FFmpeg
+
+This module uses [FFmpeg](https://ffmpeg.org), licensed under the LGPL version 2.1 or later. The
+FFmpeg source it is built from is the `third-party/ffmpeg` submodule, pinned to a release tag, and
+is configured without `--enable-gpl` and without `--enable-nonfree`.
+
+FFmpeg is linked dynamically and its libraries ship as separate files inside the platform jar, so
+you may replace them with your own build, as the LGPL requires. The wrapper code in this module is
+licensed under the Apache License 2.0 like the rest of webrtc-java.
+
+Each platform jar carries the LGPL text and a notice under `META-INF/licenses/ffmpeg`. The notice
+names the FFmpeg release the libraries are built from, unmodified, and where its source is; how it
+is configured is in `src/main/cpp/dependencies/ffmpeg/CMakeLists.txt`. Some of the formats FFmpeg
+decodes, such as H.264, H.265/HEVC and AAC, may be covered by patents in some countries, and whether
+your use of them needs a patent license is for you to determine.
+
+## Building
+
+This module is part of the normal build, and it builds FFmpeg from a submodule, so the submodule
+has to be present:
+
+```shell
+git submodule update --init --depth 1 webrtc-media/third-party/ffmpeg webrtc-media/third-party/dav1d
+mvn install
+```
+
+The first build compiles FFmpeg, which takes a while; later builds reuse the install directory
+(`ffmpeg.install.dir`, by default `~/ffmpeg/<platform>`).
+
+Building FFmpeg needs `make` and `nasm`. On Windows they come from MSYS2, which the build looks for
+in `C:/msys64` unless `MSYS2_ROOT` points somewhere else:
+
+```shell
+winget install MSYS2.MSYS2
+C:\msys64\usr\bin\bash -lc "pacman -S --needed make nasm diffutils pkgconf"
+```
+
+dav1d, the software decoder of AV1, is built first and linked into FFmpeg. Building it needs Meson
+and Ninja (`pip install meson`, with `meson` on the `PATH`; `ninja` is there for the WebRTC build
+already).
+
+Maven still runs from an ordinary shell. The build enters MSYS2 and the Visual Studio environment
+on its own, because FFmpeg's configure needs a POSIX shell that can also see `cl` and `link`.

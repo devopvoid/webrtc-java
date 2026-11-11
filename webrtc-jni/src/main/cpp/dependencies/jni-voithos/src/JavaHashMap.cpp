@@ -33,13 +33,15 @@ namespace jni
 
 	void JavaHashMap::put(const JavaRef<jobject> & key, const JavaRef<jobject> & value)
 	{
-		env->CallVoidMethod(jMap, mapClass->put, key.get(), value.get());
+		// Map.put() returns the previous value, a local reference of its own.
+		JavaLocalRef<jobject> previous(env, env->CallObjectMethod(jMap, mapClass->put, key.get(), value.get()));
 		ExceptionCheck(env);
 	}
 
 	JavaMapIterator JavaHashMap::begin()
 	{
 		JavaLocalRef<jobject> entrySet = JavaLocalRef<jobject>(env, env->CallObjectMethod(jMap, mapClass->entrySet));
+		ExceptionCheck(env);
 
 		return JavaMapIterator(env, entrySet);
 	}

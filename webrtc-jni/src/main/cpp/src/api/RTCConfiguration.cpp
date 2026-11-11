@@ -82,7 +82,7 @@ namespace jni
 			JavaArrayList certificateList(env, certificates.size());
 
 			for (auto & certificate : certificates) {
-				certificateList.add(jni::RTCCertificatePEM::toJava(env, certificate->ToPEM()));
+				certificateList.add(jni::RTCCertificatePEM::toJava(env, *certificate));
 			}
 
 			auto type = JavaEnums::toJava(env, nativeType.type);

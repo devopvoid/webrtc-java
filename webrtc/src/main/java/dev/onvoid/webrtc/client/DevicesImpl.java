@@ -25,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import dev.onvoid.webrtc.media.AudioBackendUnavailableException;
 import dev.onvoid.webrtc.media.Device;
 import dev.onvoid.webrtc.media.DeviceChangeListener;
 import dev.onvoid.webrtc.media.MediaDevices;
@@ -38,16 +39,71 @@ import dev.onvoid.webrtc.media.video.desktop.WindowCapturer;
 
 /**
  * The {@link Devices} of a runtime. The device lists are read once, then again
- * on the media executor whenever the system reports a change. Where the system
+ * on the media executor whenever the system reports a change. The listener is
+ * registered before the first read, so that a change during that read queues
+ * another one rather than being missed, and the reads run one after another,
+ * so that the last one to start is the one that stays. Where the system
  * reports no changes, as a Linux machine without PulseAudio, the lists are
- * read on each call instead. A list that cannot be read is empty: a machine
- * without an audio system has no microphones to offer.
+ * read on each call instead.
+ * <p>
+ * A query that fails, including an unavailable audio backend, throws a
+ * {@link MediaException} when the list is read. Errors of the JVM pass through.
  */
 final class DevicesImpl implements Devices {
+
+	/**
+	 * Where the devices, and the changes to them, come from. The runtime uses
+	 * the system's, tests a source they control.
+	 */
+	interface Source {
+
+		/** The devices of the system, through {@link MediaDevices}. */
+		Source SYSTEM = new Source() {
+
+			@Override
+			public List<VideoDevice> cameras() {
+				return MediaDevices.getVideoCaptureDevices();
+			}
+
+			@Override
+			public List<AudioDevice> microphones() {
+				return MediaDevices.getAudioCaptureDevices();
+			}
+
+			@Override
+			public List<AudioDevice> speakers() {
+				return MediaDevices.getAudioRenderDevices();
+			}
+
+			@Override
+			public void watch(DeviceChangeListener listener) {
+				MediaDevices.addDeviceChangeListener(listener);
+			}
+
+			@Override
+			public void unwatch(DeviceChangeListener listener) {
+				MediaDevices.removeDeviceChangeListener(listener);
+			}
+		};
+
+		List<VideoDevice> cameras();
+
+		List<AudioDevice> microphones();
+
+		List<AudioDevice> speakers();
+
+		void watch(DeviceChangeListener listener);
+
+		void unwatch(DeviceChangeListener listener);
+
+	}
+
 
 	private final LocalMediaImpl media;
 
 	private final AudioDeviceModuleBase audioModule;
+
+	private final Source source;
 
 	private final Handlers<Devices> handlers;
 
@@ -56,20 +112,24 @@ final class DevicesImpl implements Devices {
 	/** True while the system reports changes, which keep the snapshots current. */
 	private final boolean watching;
 
-	private volatile List<VideoDevice> cameras = Collections.emptyList();
+	// Written in refresh(), under this.
 
-	private volatile List<AudioDevice> microphones = Collections.emptyList();
+	private volatile Snapshot<VideoDevice> cameras = Snapshot.empty();
 
-	private volatile List<AudioDevice> speakers = Collections.emptyList();
+	private volatile Snapshot<AudioDevice> microphones = Snapshot.empty();
+
+	private volatile Snapshot<AudioDevice> speakers = Snapshot.empty();
 
 
 	DevicesImpl(LocalMediaImpl media, AudioDeviceModuleBase audioModule) {
+		this(media, audioModule, Source.SYSTEM);
+	}
+
+	DevicesImpl(LocalMediaImpl media, AudioDeviceModuleBase audioModule, Source source) {
 		this.media = media;
 		this.audioModule = audioModule;
+		this.source = source;
 		this.handlers = new Handlers<>(media.rtc::reportError);
-
-		refresh();
-
 		this.listener = new DeviceChangeListener() {
 
 			@Override
@@ -83,22 +143,35 @@ final class DevicesImpl implements Devices {
 			}
 		};
 
-		this.watching = watch(listener);
+		// Listening first: a change from here on queues a read behind this
+		// one, which then reflects it.
+		this.watching = watch();
+
+		if (watching) {
+			try {
+				refresh();
+			}
+			catch (Throwable e) {
+				// An error of the JVM. No one would remove the listener.
+				unwatch(e);
+				throw e;
+			}
+		}
 	}
 
 	@Override
 	public List<VideoDevice> cameras() {
-		return watching ? cameras : read(MediaDevices::getVideoCaptureDevices);
+		return (watching ? cameras : read("cameras", source::cameras)).get();
 	}
 
 	@Override
 	public List<AudioDevice> microphones() {
-		return watching ? microphones : read(MediaDevices::getAudioCaptureDevices);
+		return (watching ? microphones : read("microphones", source::microphones)).get();
 	}
 
 	@Override
 	public List<AudioDevice> speakers() {
-		return watching ? speakers : read(MediaDevices::getAudioRenderDevices);
+		return (watching ? speakers : read("speakers", source::speakers)).get();
 	}
 
 	@Override
@@ -121,16 +194,11 @@ final class DevicesImpl implements Devices {
 						+ " captures no microphone");
 			}
 
-			try {
-				audioModule.setRecordingDevice(device);
-			}
-			catch (Throwable e) {
-				// Most platforms switch only while not recording.
-				audioModule.stopRecording();
-				audioModule.setRecordingDevice(device);
-				audioModule.initRecording();
-				audioModule.startRecording();
-			}
+			switchDevice(() -> audioModule.setRecordingDevice(device),
+					audioModule::stopRecording, () -> {
+						audioModule.initRecording();
+						audioModule.startRecording();
+					});
 			return null;
 		});
 	}
@@ -144,16 +212,11 @@ final class DevicesImpl implements Devices {
 				throw new ConfigurationException("A runtime built with AudioMode.HEADLESS plays to no speakers");
 			}
 
-			try {
-				audioModule.setPlayoutDevice(device);
-			}
-			catch (Throwable e) {
-				// Most platforms switch only while not playing.
-				audioModule.stopPlayout();
-				audioModule.setPlayoutDevice(device);
-				audioModule.initPlayout();
-				audioModule.startPlayout();
-			}
+			switchDevice(() -> audioModule.setPlayoutDevice(device),
+					audioModule::stopPlayout, () -> {
+						audioModule.initPlayout();
+						audioModule.startPlayout();
+					});
 			return null;
 		});
 	}
@@ -165,47 +228,117 @@ final class DevicesImpl implements Devices {
 
 	void dispose() {
 		if (watching) {
-			MediaDevices.removeDeviceChangeListener(listener);
+			source.unwatch(listener);
 		}
 		handlers.clear();
+	}
+
+	/**
+	 * Selects a device. Most platforms switch only while the module is stopped,
+	 * so a refused switch is tried again with the module stopped, and the
+	 * module is started again whether that works or not: a switch that fails
+	 * leaves it on the device it had.
+	 * <p>
+	 * A device that is no longer there fails at once. Stopping the module
+	 * would not bring it back.
+	 * <p>
+	 * Of what fails after the refusal, the stop or the second selection is
+	 * thrown, else the restart. The other failures, the refusal among them,
+	 * are suppressed in it.
+	 */
+	static void switchDevice(Runnable select, Runnable stop, Runnable start) {
+		try {
+			select.run();
+			return;
+		}
+		catch (IllegalArgumentException e) {
+			throw e;
+		}
+		catch (Throwable refused) {
+			Throwable failure = null;
+
+			try {
+				stop.run();
+				select.run();
+			}
+			catch (Throwable e) {
+				failure = e;
+			}
+
+			try {
+				start.run();
+			}
+			catch (Throwable e) {
+				failure = suppress(failure, e);
+			}
+
+			if (failure != null) {
+				throw DevicesImpl.<RuntimeException>sneakyThrow(suppress(failure, refused));
+			}
+		}
 	}
 
 	/** Called on a thread of the system, so it only posts. */
 	private void changed() {
 		media.executor.execute(() -> {
 			refresh();
-			handlers.accept(this);
+			media.events.execute(() -> handlers.accept(this));
 		});
 	}
 
-	private void refresh() {
-		cameras = read(MediaDevices::getVideoCaptureDevices);
-		microphones = read(MediaDevices::getAudioCaptureDevices);
-		speakers = read(MediaDevices::getAudioRenderDevices);
+	/**
+	 * Reads all lists. One read waits for another, so that an older read
+	 * never overwrites one the listener queued after it.
+	 */
+	private synchronized void refresh() {
+		cameras = read("cameras", source::cameras);
+		microphones = read("microphones", source::microphones);
+		speakers = read("speakers", source::speakers);
 	}
 
-	private <T> List<T> read(Supplier<List<T>> query) {
+	private static <T> Snapshot<T> read(String kind, Supplier<List<T>> query) {
 		try {
 			List<T> devices = query.get();
 
 			return devices == null
-					? Collections.<T>emptyList()
-					: Collections.unmodifiableList(new ArrayList<>(devices));
+					? Snapshot.empty()
+					: new Snapshot<>(Collections.unmodifiableList(new ArrayList<>(devices)), kind, null);
 		}
 		catch (Throwable e) {
-			// No device of the kind, such as without an audio system.
-			return Collections.emptyList();
+			if (e instanceof Error) {
+				throw (Error) e;
+			}
+
+			return new Snapshot<>(Collections.emptyList(), kind, e);
 		}
 	}
 
-	private static boolean watch(DeviceChangeListener listener) {
+	private boolean watch() {
 		try {
-			MediaDevices.addDeviceChangeListener(listener);
+			source.watch(listener);
 			return true;
 		}
 		catch (Throwable e) {
-			// The system reports no changes, as Linux without PulseAudio.
+			if (e instanceof AudioBackendUnavailableException) {
+				// The system reports no changes, as Linux without PulseAudio.
+				return false;
+			}
+			if (e instanceof Error) {
+				throw (Error) e;
+			}
+
+			media.rtc.reportError(new MediaException("Watching the devices failed, so they are read on each call: "
+					+ e.getMessage(), e));
 			return false;
+		}
+	}
+
+	private void unwatch(Throwable failure) {
+		try {
+			source.unwatch(listener);
+		}
+		catch (Throwable e) {
+			suppress(failure, e);
 		}
 	}
 
@@ -225,8 +358,50 @@ final class DevicesImpl implements Devices {
 		}
 	}
 
+	/**
+	 * @return the failure with the other one suppressed in it, or the other
+	 * one if there is no failure yet.
+	 */
+	private static Throwable suppress(Throwable failure, Throwable other) {
+		if (failure == null) {
+			return other;
+		}
+		if (other != failure) {
+			failure.addSuppressed(other);
+		}
+
+		return failure;
+	}
+
+	/**
+	 * Throws a throwable as it is, also a checked one that a native method
+	 * threw without declaring it.
+	 */
+	@SuppressWarnings("unchecked")
+	private static <E extends Throwable> E sneakyThrow(Throwable e) throws E {
+		throw (E) e;
+	}
+
+	/**
+	 * Runs a switch, which uses the audio module, on the media executor. It
+	 * is registered like the creation of a track, so that a runtime that
+	 * begins to close either waits for it before it frees the module, or is
+	 * seen closing here. The future handed out completes on the event
+	 * executor, so that the application's callbacks never hold up the media
+	 * executor.
+	 */
 	private <T> CompletableFuture<T> onMediaExecutor(Supplier<T> action) {
 		CompletableFuture<T> result = new CompletableFuture<>();
+		LocalMediaImpl.Creation operation;
+
+		try {
+			operation = media.begin();
+		}
+		catch (PeerClosedException e) {
+			result.completeExceptionally(e);
+			return result;
+		}
+
 		media.rtc.track(result, null);
 
 		media.executor.execute(() -> {
@@ -237,8 +412,49 @@ final class DevicesImpl implements Devices {
 				result.completeExceptionally(e instanceof WebRtcException
 						? e : new MediaException("Switching the device failed: " + e.getMessage(), e));
 			}
+			finally {
+				operation.close();
+			}
+		}, () -> {
+			operation.close();
+			result.completeExceptionally(new PeerClosedException("The runtime is closed"));
 		});
 
-		return result;
+		return media.toPublic(result);
+	}
+
+	/**
+	 * A list as it was read, or the failure of its query. The failure is
+	 * thrown anew on each call, so that callers share no exception.
+	 */
+	private static final class Snapshot<T> {
+
+		private static final Snapshot<?> EMPTY = new Snapshot<>(Collections.emptyList(), null, null);
+
+		private final List<T> devices;
+
+		private final String kind;
+
+		private final Throwable failure;
+
+
+		Snapshot(List<T> devices, String kind, Throwable failure) {
+			this.devices = devices;
+			this.kind = kind;
+			this.failure = failure;
+		}
+
+		@SuppressWarnings("unchecked")
+		static <T> Snapshot<T> empty() {
+			return (Snapshot<T>) EMPTY;
+		}
+
+		List<T> get() {
+			if (failure != null) {
+				throw new MediaException("Reading the " + kind + " failed: " + failure.getMessage(), failure);
+			}
+
+			return devices;
+		}
 	}
 }

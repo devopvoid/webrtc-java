@@ -21,17 +21,23 @@
 #include "JavaRef.h"
 
 #include "api/jsep.h"
+#include "api/rtc_error.h"
 
 #include <jni.h>
 #include <memory>
 
 namespace jni
 {
+	// Reports the outcome of setting a local or remote description to a Java
+	// SetSessionDescriptionObserver, exactly once.
 	class SetSessionDescriptionObserver : public webrtc::SetSessionDescriptionObserver
 	{
 		public:
 			explicit SetSessionDescriptionObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer);
-			~SetSessionDescriptionObserver() = default;
+			~SetSessionDescriptionObserver();
+
+			SetSessionDescriptionObserver(const SetSessionDescriptionObserver &) = delete;
+			SetSessionDescriptionObserver & operator=(const SetSessionDescriptionObserver &) = delete;
 
 			// SetSessionDescriptionObserver implementation.
 			void OnSuccess() override;
@@ -46,6 +52,8 @@ namespace jni
 					jmethodID onSuccess;
 					jmethodID onFailure;
 			};
+
+			void Notify(const char * error) noexcept;
 
 		private:
 			JavaGlobalRef<jobject> observer;

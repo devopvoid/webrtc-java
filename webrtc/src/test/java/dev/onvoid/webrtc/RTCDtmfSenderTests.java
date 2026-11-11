@@ -52,7 +52,7 @@ class RTCDtmfSenderTests extends TestBase {
             tones.add(tone);
             toneBuffers.add(toneBuffer);
 
-            if (tone == null || tone.isEmpty()) {
+            if (tone.isEmpty()) {
                 completedLatch.countDown();
             }
         }
@@ -81,6 +81,7 @@ class RTCDtmfSenderTests extends TestBase {
     TestPeerConnection caller;
     TestPeerConnection callee;
 
+    RTCRtpSender sender;
     RTCDtmfSender dtmfSender;
 
 
@@ -98,7 +99,7 @@ class RTCDtmfSenderTests extends TestBase {
         List<String> streamIds = new ArrayList<>();
         streamIds.add("stream1");
 
-        RTCRtpSender sender = peerConnection.addTrack(audioTrack, streamIds);
+        sender = peerConnection.addTrack(audioTrack, streamIds);
         dtmfSender = sender.getDtmfSender();
 
         caller.setRemotePeerConnection(callee);
@@ -123,6 +124,79 @@ class RTCDtmfSenderTests extends TestBase {
     void dispose() {
         caller.close();
         callee.close();
+
+        if (sender != null) {
+            sender.dispose();
+        }
+        dtmfSender.dispose();
+    }
+
+    @Test
+    void dtmfSenderOutlivesClosedConnection() {
+        TestDtmfSenderObserver observer = new TestDtmfSenderObserver();
+
+        dtmfSender.registerObserver(observer);
+
+        // Closing frees the connection's senders, and with the RTCRtpSender
+        // gone nothing else refers to the DTMF sender. The instance must keep
+        // the DTMF sender it refers to alive, rather than point to freed
+        // memory; this used to crash the VM.
+        caller.close();
+        callee.close();
+        sender.dispose();
+        sender = null;
+
+        for (int i = 0; i < 1000; i++) {
+            assertFalse(dtmfSender.canInsertDtmf());
+            assertFalse(dtmfSender.insertDtmf("1", 100, 70));
+            assertEquals("", dtmfSender.tones());
+        }
+
+        assertDoesNotThrow(dtmfSender::unregisterObserver);
+    }
+
+    @Test
+    void unregisterKeepsObserverOfOtherInstance() throws InterruptedException {
+        assertObserverOfOtherInstanceStays(false);
+    }
+
+    @Test
+    void disposeKeepsObserverOfOtherInstance() throws InterruptedException {
+        assertObserverOfOtherInstanceStays(true);
+    }
+
+    private void assertObserverOfOtherInstanceStays(boolean dispose) throws InterruptedException {
+        RTCDtmfSender first = sender.getDtmfSender();
+        RTCDtmfSender second = sender.getDtmfSender();
+
+        TestDtmfSenderObserver firstObserver = new TestDtmfSenderObserver();
+        TestDtmfSenderObserver secondObserver = new TestDtmfSenderObserver();
+
+        try {
+            first.registerObserver(firstObserver);
+            second.registerObserver(secondObserver);
+
+            // The second observer replaced the first, which leaves the first
+            // instance nothing to remove from the DTMF sender.
+            if (dispose) {
+                first.dispose();
+            }
+            else {
+                first.unregisterObserver();
+            }
+
+            assertTrue(dtmfSender.insertDtmf("1", 100, 70));
+            assertTrue(secondObserver.awaitCompletion(), "The observer of the other instance was removed");
+
+            assertEquals(Arrays.asList("1", ""), secondObserver.getTones());
+            assertTrue(firstObserver.getTones().isEmpty(), "The replaced observer must not receive events");
+        }
+        finally {
+            if (!dispose) {
+                first.dispose();
+            }
+            second.dispose();
+        }
     }
 
     @Test
@@ -138,6 +212,24 @@ class RTCDtmfSenderTests extends TestBase {
         assertTrue(dtmfSender.insertDtmf("#*,", 100, 70));
         assertFalse(dtmfSender.insertDtmf("123", 30, 70)); // Duration too short
         assertFalse(dtmfSender.insertDtmf("123", 100, 20)); // InterToneGap too short
+    }
+
+    @Test
+    void insertDtmfLimits() {
+        assertTrue(dtmfSender.insertDtmf("1", 40, 30));
+        assertEquals(40, dtmfSender.duration());
+        assertEquals(30, dtmfSender.interToneGap());
+
+        assertTrue(dtmfSender.insertDtmf("1", 6000, 30));
+        assertEquals(6000, dtmfSender.duration());
+
+        assertFalse(dtmfSender.insertDtmf("1", 39, 30));
+        assertFalse(dtmfSender.insertDtmf("1", 6001, 30));
+        assertFalse(dtmfSender.insertDtmf("1", 100, 29));
+
+        // A rejected call leaves the values of the last accepted one.
+        assertEquals(6000, dtmfSender.duration());
+        assertEquals(30, dtmfSender.interToneGap());
     }
 
     @Test
@@ -176,14 +268,14 @@ class RTCDtmfSenderTests extends TestBase {
 
         observer.waitUntilCompleted();
 
-        assertEquals(Arrays.asList("1", "2", "3", null), observer.getTones());
+        assertEquals(Arrays.asList("1", "2", "3", ""), observer.getTones());
 
         dtmfSender.unregisterObserver();
         dtmfSender.insertDtmf("456", 100, 70);
 
         Thread.sleep(500);
 
-        assertEquals(Arrays.asList("1", "2", "3", null), observer.getTones()); // No new events
+        assertEquals(Arrays.asList("1", "2", "3", ""), observer.getTones()); // No new events
     }
 
     @Test
@@ -201,7 +293,7 @@ class RTCDtmfSenderTests extends TestBase {
         assertTrue(dtmfSender.insertDtmf("1", 100, 70));
         assertTrue(second.awaitCompletion(), "Timed out waiting for DTMF sequence to complete");
 
-        assertEquals(Arrays.asList("1", null), second.getTones());
+        assertEquals(Arrays.asList("1", ""), second.getTones());
         assertTrue(first.getTones().isEmpty(), "The replaced observer must not receive events");
 
         dtmfSender.unregisterObserver();
@@ -213,17 +305,17 @@ class RTCDtmfSenderTests extends TestBase {
         dtmfSender.registerObserver(observer);
         assertTrue(dtmfSender.insertDtmf(String.join("", tones), duration, interToneGap));
 
-        // Wait until the DTMF sequence completes (observer receives null/empty tone).
+        // Wait until the DTMF sequence completes (observer receives an empty tone).
         assertTrue(observer.awaitCompletion(),
                 "Timed out waiting for DTMF sequence to complete");
 
-        // All tones should have been delivered to the observer in order, followed by null.
+        // All tones should have been delivered to the observer in order, followed by an empty one.
         List<String> expectedTones = new ArrayList<>(tones);
-        expectedTones.add(null);
+        expectedTones.add("");
         assertEquals(expectedTones, observer.getTones());
 
         // After completion, the internal tone buffer should be empty.
-        assertNull(dtmfSender.tones());
+        assertEquals("", dtmfSender.tones());
 
         dtmfSender.unregisterObserver();
     }

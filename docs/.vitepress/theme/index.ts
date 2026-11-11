@@ -3,6 +3,8 @@ import { h } from 'vue'
 import type { Theme } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
 import NextBanner from './NextBanner.vue'
+import DocsHome from './DocsHome.vue'
+import ThreadingDiagram from './ThreadingDiagram.vue'
 import './style.css'
 
 export default {
@@ -15,6 +17,7 @@ export default {
     })
   },
   enhanceApp({ app, router, siteData }) {
-    // ...
+    app.component('DocsHome', DocsHome)
+    app.component('ThreadingDiagram', ThreadingDiagram)
   }
 } satisfies Theme

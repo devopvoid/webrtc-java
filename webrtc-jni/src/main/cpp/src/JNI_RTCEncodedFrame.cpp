@@ -15,6 +15,7 @@
  */
 
 #include "JNI_RTCEncodedFrame.h"
+#include "JavaBoundary.h"
 
 #include "api/frame_transformer_interface.h"
 
@@ -37,53 +38,59 @@ namespace
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedFrame_copyData
 (JNIEnv * env, jclass caller, jlong handle, jobject target)
 {
-	webrtc::TransformableFrameInterface * frame = FrameOf(handle);
+	jni::CallFromJava(env, [&]() {
+		webrtc::TransformableFrameInterface * frame = FrameOf(handle);
 
-	if (frame == nullptr) {
-		return;
-	}
+		if (frame == nullptr) {
+			return;
+		}
 
-	uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(target));
-	jlong capacity = env->GetDirectBufferCapacity(target);
-	std::span<const uint8_t> data = frame->GetData();
+		uint8_t * address = static_cast<uint8_t *>(env->GetDirectBufferAddress(target));
+		jlong capacity = env->GetDirectBufferCapacity(target);
+		std::span<const uint8_t> data = frame->GetData();
 
-	if (address != nullptr && !data.empty() && capacity >= static_cast<jlong>(data.size())) {
-		std::memcpy(address, data.data(), data.size());
-	}
+		if (address != nullptr && !data.empty() && capacity >= static_cast<jlong>(data.size())) {
+			std::memcpy(address, data.data(), data.size());
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedFrame_setDataBuffer
 (JNIEnv * env, jclass caller, jlong handle, jobject source, jint offset, jint length)
 {
-	webrtc::TransformableFrameInterface * frame = FrameOf(handle);
-	const uint8_t * address = static_cast<const uint8_t *>(env->GetDirectBufferAddress(source));
+	jni::CallFromJava(env, [&]() {
+		webrtc::TransformableFrameInterface * frame = FrameOf(handle);
+		const uint8_t * address = static_cast<const uint8_t *>(env->GetDirectBufferAddress(source));
 
-	if (frame == nullptr || address == nullptr) {
-		return;
-	}
+		if (frame == nullptr || address == nullptr) {
+			return;
+		}
 
-	frame->SetData(std::span<const uint8_t>(address + offset, static_cast<size_t>(length)));
+		frame->SetData(std::span<const uint8_t>(address + offset, static_cast<size_t>(length)));
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCEncodedFrame_setDataArray
 (JNIEnv * env, jclass caller, jlong handle, jbyteArray source, jint offset, jint length)
 {
-	webrtc::TransformableFrameInterface * frame = FrameOf(handle);
+	jni::CallFromJava(env, [&]() {
+		webrtc::TransformableFrameInterface * frame = FrameOf(handle);
 
-	if (frame == nullptr) {
-		return;
-	}
+		if (frame == nullptr) {
+			return;
+		}
 
-	// SetData() copies, so the array stays pinned for no longer than that.
-	void * elements = env->GetPrimitiveArrayCritical(source, nullptr);
+		// SetData() copies, so the array stays pinned for no longer than that.
+		void * elements = env->GetPrimitiveArrayCritical(source, nullptr);
 
-	if (elements == nullptr) {
-		return;
-	}
+		if (elements == nullptr) {
+			return;
+		}
 
-	const uint8_t * address = static_cast<const uint8_t *>(elements) + offset;
+		const uint8_t * address = static_cast<const uint8_t *>(elements) + offset;
 
-	frame->SetData(std::span<const uint8_t>(address, static_cast<size_t>(length)));
+		frame->SetData(std::span<const uint8_t>(address, static_cast<size_t>(length)));
 
-	env->ReleasePrimitiveArrayCritical(source, elements, JNI_ABORT);
+		env->ReleasePrimitiveArrayCritical(source, elements, JNI_ABORT);
+	});
 }

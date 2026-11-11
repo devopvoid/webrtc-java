@@ -18,11 +18,14 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.internal.Timeouts;
+import dev.onvoid.webrtc.media.audio.AudioDataAccess;
 import dev.onvoid.webrtc.media.audio.AudioTrack;
 
 /**
@@ -36,6 +39,19 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 	// Confined to the peer's control executor.
 
 	private final List<AudioDispatcher> dispatchers = new ArrayList<>();
+	private long pcmGeneration;
+
+	/** On control; generation changes whenever the observed sink set changes. */
+	long[] pcmObservation() {
+		if (dispatchers.isEmpty()) {
+			return null;
+		}
+		long callbacks = 0;
+		for (AudioDispatcher dispatcher : dispatchers) {
+			callbacks += dispatcher.pcmCallbacks();
+		}
+		return new long[] { pcmGeneration, callbacks };
+	}
 
 
 	RemoteAudioImpl(PeerImpl peer, RTCRtpReceiver receiver, AudioTrack track,
@@ -52,14 +68,23 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 
 	@Override
 	public Subscription onAudio(Consumer<AudioChunk> handler) {
+		return onAudio(peer.rtc.audioBuffer, handler);
+	}
+
+	@Override
+	public Subscription onAudio(Duration buffer, Consumer<AudioChunk> handler) {
+		Timeouts.requirePositive(buffer, "buffer");
 		requireNonNull(handler, "handler");
 
 		SerialExecutor executor = new SerialExecutor(peer.rtc.framePool, peer.rtc::reportError, false, null);
-		AudioDispatcher dispatcher = new AudioDispatcher(handler, executor, peer.rtc::reportError);
+		AudioDispatcher dispatcher = new AudioDispatcher(handler, buffer, executor, peer.rtc.audioWork,
+				peer.rtc::reportError);
 
 		onControl(() -> {
 			dispatchers.add(dispatcher);
-			track.addSink(dispatcher);
+			pcmGeneration++;
+			// The dispatcher copies each chunk, so it needs no new array per call.
+			track.addSink(dispatcher, AudioDataAccess.REUSED);
 		});
 
 		return () -> {
@@ -67,6 +92,7 @@ final class RemoteAudioImpl extends RemoteTrackImpl implements RemoteAudio {
 
 			onControl(() -> {
 				if (dispatchers.remove(dispatcher)) {
+					pcmGeneration++;
 					track.removeSink(dispatcher);
 				}
 			});

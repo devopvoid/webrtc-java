@@ -23,6 +23,13 @@ import dev.onvoid.webrtc.media.video.VideoDevice;
 
 import java.util.List;
 
+/**
+ * Queries the platform media devices and watches for device changes.
+ * <p>
+ * Native device failures throw {@link DeviceException}. A missing or unreachable
+ * audio backend throws {@link AudioBackendUnavailableException}; it is not an
+ * empty device list.
+ */
 public class MediaDevices {
 
 	static {

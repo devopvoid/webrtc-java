@@ -145,7 +145,7 @@ namespace jni
 		delete worker.load(std::memory_order_acquire);
 	}
 
-	void EncodedFrameTransformer::SetTransformer(JNIEnv * env, jobject transformer)
+	void EncodedFrameTransformer::SetTransformer(JNIEnv * env, jobject transformer, bool sealed)
 	{
 		std::shared_ptr<RTCEncodedFrameTransformer> javaTransformer;
 
@@ -163,7 +163,12 @@ namespace jni
 			}
 		}
 
-		router->SetTransformer(std::move(javaTransformer));
+		router->SetTransformer(std::move(javaTransformer), sealed && transformer != nullptr);
+	}
+
+	bool EncodedFrameTransformer::IsSealed() const
+	{
+		return router->IsSealed();
 	}
 
 	EncodedFrameRouter::Observer * EncodedFrameTransformer::AddObserver(wj_encoded_frame_fn fn, void * opaque)
@@ -174,6 +179,11 @@ namespace jni
 	void EncodedFrameTransformer::RemoveObserver(EncodedFrameRouter::Observer * observer)
 	{
 		router->RemoveObserver(observer);
+	}
+
+	size_t EncodedFrameTransformer::GetObserverCount() const
+	{
+		return router->GetObserverCount();
 	}
 
 	void EncodedFrameTransformer::Transform(std::unique_ptr<webrtc::TransformableFrameInterface> frame)

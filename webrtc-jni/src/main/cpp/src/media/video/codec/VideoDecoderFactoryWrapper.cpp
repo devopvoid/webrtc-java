@@ -53,7 +53,11 @@ namespace jni
 			return nullptr;
 		}
 
-		JavaLocalFrame localFrame(env, 16);
+		JavaLocalFrame localFrame(env, 16, "createDecoder");
+
+		if (!localFrame.pushed()) {
+			return nullptr;
+		}
 
 		try {
 			JavaLocalRef<jobject> info = VideoCodecInfo::toJava(env, format);

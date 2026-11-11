@@ -16,8 +16,17 @@
 
 package dev.onvoid.webrtc.internal;
 
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+
 /**
  * Binds a native object pointer to a Java object extending this class.
+ * <p>
+ * Disposing (or closing) such an object unbinds its native object in one
+ * step, so that of several threads disposing it only one frees anything, and
+ * a repeated dispose does nothing. Methods called once it is disposed throw an
+ * {@link IllegalStateException}, see {@link #disposedException()}. A native
+ * method that is running on another thread at that moment keeps the native
+ * object: what the dispose frees is freed once that method has returned.
  *
  * @author Alex Andres
  */
@@ -32,6 +41,8 @@ public abstract class NativeObject {
 		catch (Exception e) {
 			throw new RuntimeException("Load library 'webrtc-java' failed", e);
 		}
+
+		LeakDetector.initialize();
 	}
 
 	/**
@@ -41,6 +52,18 @@ public abstract class NativeObject {
 	 */
 	@SuppressWarnings("unused")
 	private long nativeHandle;
+
+	/**
+	 * What the {@link LeakDetector} knows of this object, null unless it is
+	 * on and watches this object.
+	 */
+	volatile LeakDetector.Record leakRecord;
+
+	/** The hash code of {@link #nativeHashCode()}, or 0 until it is asked for. */
+	private volatile int nativeHash;
+
+	private static final AtomicIntegerFieldUpdater<NativeObject> NATIVE_HASH =
+			AtomicIntegerFieldUpdater.newUpdater(NativeObject.class, "nativeHash");
 
 
 	/**
@@ -53,6 +76,85 @@ public abstract class NativeObject {
 	 */
 	protected final long getNativeHandle() {
 		return nativeHandle;
+	}
+
+	/**
+	 * Returns the exception that a method of this object throws once the
+	 * object has been disposed (or closed) and no native object is bound to
+	 * it any more. The native side throws it.
+	 *
+	 * @return the exception naming this object's class.
+	 */
+	protected IllegalStateException disposedException() {
+		return new IllegalStateException(getClass().getSimpleName() + " is disposed");
+	}
+
+	/**
+	 * Returns a hash code for subclasses whose {@code equals()} compares
+	 * native handles, which stays the same for the whole life of this
+	 * object, unlike the handle: it is taken from the handle the first time
+	 * it is asked for, and kept after disposal, so that a disposed object
+	 * is still found in the hash set it was added to before.
+	 * <p>
+	 * Equal objects share their handle, and so their hash code: a native
+	 * object stays alive, at the same address, while any undisposed wrapper
+	 * of it does, and a disposed wrapper is equal only to itself. A new
+	 * native object at the address of a freed one hashes the same as the
+	 * old wrapper without being equal to it, which costs a collision only.
+	 *
+	 * @return the hash code of this object's native identity.
+	 */
+	protected final int nativeHashCode() {
+		int hash = nativeHash;
+
+		if (hash == 0) {
+			long handle = nativeHandle;
+
+			hash = handle != 0 ? Long.hashCode(handle) : System.identityHashCode(this);
+
+			// Zero marks a hash code not taken yet.
+			if (hash == 0) {
+				hash = 1;
+			}
+
+			// The first one taken wins, should a disposal on another thread
+			// race with the first call.
+			if (!NATIVE_HASH.compareAndSet(this, 0, hash)) {
+				hash = nativeHash;
+			}
+		}
+
+		return hash;
+	}
+
+	/**
+	 * Called by native code once a native object is bound to this one, only
+	 * while the {@link LeakDetector} is on.
+	 */
+	@SuppressWarnings("unused")
+	private void nativeHandleBound() {
+		LeakDetector.Record record = leakRecord;
+
+		if (record == null) {
+			leakRecord = LeakDetector.track(this);
+		}
+		else {
+			// Bound again after it was released.
+			record.released = false;
+		}
+	}
+
+	/**
+	 * Called by native code once this object no longer owns a native object,
+	 * or never did, only while the {@link LeakDetector} is on.
+	 */
+	@SuppressWarnings("unused")
+	private void nativeHandleReleased() {
+		LeakDetector.Record record = leakRecord;
+
+		if (record != null) {
+			record.released = true;
+		}
 	}
 
 }

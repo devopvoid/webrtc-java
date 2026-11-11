@@ -1,5 +1,7 @@
 package dev.onvoid.webrtc.media.audio;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import org.junit.jupiter.api.*;
 
 class AudioDeviceModuleTest {
@@ -44,5 +46,23 @@ class AudioDeviceModuleTest {
 		};
 
 		module.setAudioSource(source);
+	}
+
+	@Test
+	void missingPlayoutDeviceIsRejected() {
+		// Not another device in its place, as the first one listed.
+		assertThrows(IllegalArgumentException.class,
+				() -> module.setPlayoutDevice(missingDevice()));
+	}
+
+	@Test
+	void missingRecordingDeviceIsRejected() {
+		assertThrows(IllegalArgumentException.class,
+				() -> module.setRecordingDevice(missingDevice()));
+	}
+
+	/** A device as one unplugged since it was listed looks. */
+	private static AudioDevice missingDevice() {
+		return new AudioDevice("Unplugged", "no-such-device") { };
 	}
 }

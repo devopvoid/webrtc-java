@@ -15,6 +15,7 @@
  */
 
 #include "JNI_HeadlessAudioDeviceModule.h"
+#include "JavaBoundary.h"
 #include "Exception.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
@@ -26,17 +27,19 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_HeadlessAudioDeviceModule_initialize
 (JNIEnv* env, jobject caller)
 {
-	webrtc::scoped_refptr<jni::HeadlessAudioDeviceModule> audioModule = jni::HeadlessAudioDeviceModule::Create();
+	jni::CallFromJava(env, [&]() {
+		webrtc::scoped_refptr<jni::HeadlessAudioDeviceModule> audioModule = jni::HeadlessAudioDeviceModule::Create();
 
-	if (!audioModule) {
-		env->Throw(jni::JavaError(env, "Create HeadlessAudioDeviceModule failed"));
-		return;
-	}
+		if (!audioModule) {
+			env->Throw(jni::JavaError(env, "Create HeadlessAudioDeviceModule failed"));
+			return;
+		}
 
-	if (audioModule->Init() != 0) {
-		env->Throw(jni::JavaError(env, "Initialize HeadlessAudioDeviceModule failed"));
-		return;
-	}
+		if (audioModule->Init() != 0) {
+			env->Throw(jni::JavaError(env, "Initialize HeadlessAudioDeviceModule failed"));
+			return;
+		}
 
-	SetHandle(env, caller, audioModule.release());
+		SetHandle(env, caller, audioModule.release());
+	});
 }

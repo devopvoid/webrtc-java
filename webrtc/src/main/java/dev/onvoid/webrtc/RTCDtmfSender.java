@@ -16,7 +16,7 @@
 
 package dev.onvoid.webrtc;
 
-import dev.onvoid.webrtc.internal.NativeObject;
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 /**
  * Represents a DTMF (Dual-Tone Multi-Frequency) sender for WebRTC.
@@ -29,18 +29,24 @@ import dev.onvoid.webrtc.internal.NativeObject;
  * DTMF tones are the audible tones generated when pressing keys on a telephone keypad.
  * The supported DTMF tones are: 0-9, A-D, *, and #. In addition, the special characters
  * ',' (comma) can be used to insert a 2-second delay between tones.
+ * <p>
+ * Each instance holds a reference to the native DTMF sender, which keeps it
+ * usable after the connection has closed or dropped its {@link RTCRtpSender};
+ * it then can no longer insert tones. Release it with {@link #dispose()} once
+ * it is no longer needed.
  *
  * @author Alex Andres
  *
  * @see <a href="https://w3c.github.io/webrtc-pc/#rtcdtmfsender">W3C WebRTC 1.0: RTCDtmfSender</a>
  */
-public class RTCDtmfSender extends NativeObject {
+public class RTCDtmfSender extends DisposableNativeObject {
 
 	/**
 	 * The native observer registered via {@link #registerObserver}. The
 	 * RTCDtmfSender does not take ownership of the Java observer, but it
-	 * owns the native observer wrapper; it is freed when replaced and when
-	 * {@link #unregisterObserver()} is called.
+	 * owns the native observer wrapper; it is freed when replaced, when
+	 * {@link #unregisterObserver()} is called, and when this instance is
+	 * disposed.
 	 */
 	@SuppressWarnings("unused")
 	private long observerHandle;
@@ -77,10 +83,13 @@ public class RTCDtmfSender extends NativeObject {
 	 * <p>
 	 * The duration parameter indicates the duration in milliseconds to use for each
 	 * character passed in the tones parameter. The duration cannot be more than 6000 
-	 * milliseconds or less than 70 milliseconds. The default duration is 100 milliseconds.
+	 * milliseconds or less than 40 milliseconds. The default duration is 100 milliseconds.
 	 * <p>
 	 * The interToneGap parameter indicates the gap between tones in milliseconds.
-	 * The interToneGap cannot be less than 50 milliseconds. The default value is 50 milliseconds.
+	 * The interToneGap cannot be less than 30 milliseconds. The default value is 50 milliseconds.
+	 * <p>
+	 * If the duration or the interToneGap is outside these limits, this method has
+	 * no effect and returns false.
 	 *
 	 * @param tones        String containing the DTMF tones to be transmitted.
 	 *                     Valid characters are 0-9, A-D, #, *, and , (comma).
@@ -111,7 +120,7 @@ public class RTCDtmfSender extends NativeObject {
 	 * future calls to {@link #insertDtmf}. The duration is the length of time, in milliseconds, 
 	 * that each DTMF tone is played.
 	 * <p>
-	 * The default value is 100 milliseconds. Valid values are between 70 and 6000 milliseconds.
+	 * The default value is 100 milliseconds. Valid values are between 40 and 6000 milliseconds.
 	 *
 	 * @return The duration in milliseconds for each tone.
 	 */
@@ -124,7 +133,7 @@ public class RTCDtmfSender extends NativeObject {
 	 * future calls to {@link #insertDtmf}. The interToneGap is the length of time, in milliseconds,
 	 * between the end of one DTMF tone and the start of the next.
 	 * <p>
-	 * The default value is 50 milliseconds. Valid values must be at least 50 milliseconds but should
+	 * The default value is 50 milliseconds. Valid values must be at least 30 milliseconds but should
 	 * be as short as possible.
 	 *
 	 * @return The gap between tones in milliseconds.
@@ -135,21 +144,46 @@ public class RTCDtmfSender extends NativeObject {
 	 * Registers an observer to receive notifications about DTMF-related events.
 	 * <p>
 	 * Only one observer can be registered at a time. Registering a new observer
-	 * when one is already registered will replace the existing observer.
+	 * when one is already registered will replace the existing observer, also
+	 * one registered through another RTCDtmfSender instance of the same
+	 * {@link RTCRtpSender}.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The DTMF sender observer to register.
 	 */
 	public native void registerObserver(RTCDtmfSenderObserver observer);
 
 	/**
-	 * Unregisters the previously registered DTMF sender observer.
+	 * Unregisters the DTMF sender observer last registered through this
+	 * instance.
 	 * <p>
-	 * After calling this method, no observer will receive notifications about
-	 * DTMF-related events until a new observer is registered.
+	 * Once this method has returned, or the call of another thread that was
+	 * handing an observer to WebRTC through this instance at the same time,
+	 * that observer receives no more notifications about DTMF-related events. An observer that another instance has
+	 * registered since stays registered.
 	 * <p>
-	 * If no observer is currently registered, this method has no effect.
+	 * If no observer is currently registered through this instance, this
+	 * method has no effect.
 	 */
 	public native void unregisterObserver();
+
+	/**
+	 * Unregisters the observer registered through this instance, if any, and
+	 * releases the native reference held by this instance.
+	 * <p>
+	 * The DTMF sender is not exclusively owned by this instance: its {@link
+	 * RTCRtpSender} and other RTCDtmfSender instances obtained via separate
+	 * calls to {@link RTCRtpSender#getDtmfSender()} keep their own references.
+	 * Disposing this instance does not affect the DTMF sender itself or any
+	 * other instance referring to it.
+	 */
+	@Override
+	public native void dispose();
 
 	/**
 	 * Two RTCDtmfSender instances are equal if they are bound to the same
@@ -172,9 +206,7 @@ public class RTCDtmfSender extends NativeObject {
 
 	@Override
 	public int hashCode() {
-		long handle = getNativeHandle();
-
-		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+		return nativeHashCode();
 	}
 
 }

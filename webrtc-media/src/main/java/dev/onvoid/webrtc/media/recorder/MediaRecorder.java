@@ -1,0 +1,1053 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.onvoid.webrtc.media.recorder;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import dev.onvoid.webrtc.RTCRtpReceiver;
+import dev.onvoid.webrtc.RTCRtpSender;
+import dev.onvoid.webrtc.client.RemoteTrack;
+import dev.onvoid.webrtc.client.Sender;
+import dev.onvoid.webrtc.client.internal.EncodedFrames;
+import dev.onvoid.webrtc.internal.NativeApi;
+import dev.onvoid.webrtc.media.player.FFmpeg;
+
+/**
+ * Records what a peer connection sends or receives into a media file, without
+ * decoding or re-encoding it: the encoded frames of each sender or receiver
+ * go into the file as they are. A recording therefore costs next to no CPU,
+ * keeps the exact quality that went over the network, and needs no codec
+ * beyond the container.
+ * <p>
+ * The container follows the file name: {@code .mkv} (Matroska) holds every
+ * codec WebRTC sends and is the safe choice; {@code .webm} holds VP8, VP9,
+ * AV1 and Opus; {@code .mp4} holds H.264, H.265, AV1, VP9 and Opus, and is
+ * written fragmented, so that it plays up to where a recording was cut short.
+ * A track whose codec the file cannot hold is left out and reported to the
+ * {@link MediaRecorderListener#onWarning(String) listener}.
+ * <p>
+ * Example:
+ * <pre>{@code
+ * try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
+ *     recorder.addTrack(videoReceiver);
+ *     recorder.addTrack(audioReceiver);
+ *     recorder.start();
+ *
+ *     // ... the call goes on ...
+ *
+ *     recorder.stop();
+ * }
+ * }</pre>
+ * <p>
+ * A file that exists is refused unless {@link #MediaRecorder(Path, boolean)}
+ * is asked to replace it, which happens only once the new recording is
+ * finished: a recording that fails or gets no media costs nothing.
+ * <p>
+ * A recorder created with {@link #MediaRecorder(SegmentOptions)} splits the
+ * recording into segments, files that each begin with a key frame and play on
+ * their own, ending one by its duration or size and keeping as many as the
+ * options say. To keep only the last seconds in memory and save them on
+ * demand, see {@link ReplayBuffer}.
+ * <p>
+ * How it behaves:
+ * <ul>
+ * <li>A video track is recorded from its first key frame, and the recorder
+ * asks the sender or receiver for one so that it does not have to wait. The
+ * sender or receiver must therefore not be disposed while recording.</li>
+ * <li>The file begins once every track has sent its first frames, or once
+ * the tracks that have waited three seconds for the rest; a track that sends
+ * nothing by then is left out.</li>
+ * <li>Tracks are placed on a common timeline by when their frames arrived,
+ * and follow their own RTP timestamps from there.</li>
+ * <li>A sender with simulcast is recorded at one of its layers.</li>
+ * <li>A sender's frames are recorded before an {@link
+ * dev.onvoid.webrtc.RTCEncodedFrameTransformer} runs on them, a receiver's
+ * after, so an end-to-end encrypted call is recorded in the clear. Whether
+ * that may happen is the transform's decision: one whose {@link
+ * dev.onvoid.webrtc.RTCEncodedFrameTransformer#allowsPlaintextObservers()}
+ * says no, as the transforms of a {@link dev.onvoid.webrtc.e2ee.KeyProvider}
+ * do unless it {@link
+ * dev.onvoid.webrtc.e2ee.KeyProvider.Builder#allowPlaintextRecording(boolean)
+ * allows recording}, is refused by {@code addTrack}. Set on a track that is
+ * being recorded, it keeps the recorder from any further frame of it.</li>
+ * </ul>
+ *
+ * @author Alex Andres
+ */
+public class MediaRecorder implements AutoCloseable {
+
+	static {
+		FFmpeg.load();
+	}
+
+	private final Object lock = new Object();
+
+	/**
+	 * The file being written: the file itself, or one beside it to replace
+	 * it. Null for segments and replays, whose files the native recorder
+	 * creates or is given.
+	 */
+	private final Path output;
+
+	/**
+	 * Where the recording is meant to end up, or stays if it cannot; for
+	 * segments, the last one finished.
+	 */
+	private volatile Path file;
+
+	/** How to split the recording, or null for a single file. */
+	private final SegmentOptions segments;
+
+	/** The segments kept so far, oldest first. Guarded by itself. */
+	private final Deque<MediaRecorderSegment> keptSegments = new ArrayDeque<>();
+
+	/** What the kept segments take together. Guarded by keptSegments. */
+	private long keptBytes;
+
+	/** Whether this records into a replay buffer rather than a file. */
+	private final boolean replay;
+
+	/** The replays asked for and not saved yet, by their id. */
+	private final Map<Integer, PendingSave> pendingSaves = new ConcurrentHashMap<>();
+
+	/** The id of the next replay. Guarded by lock. */
+	private int nextSaveId;
+
+	/**
+	 * How to ask each track for a key frame, by track index. Filled before
+	 * the start, read by the writer thread after it.
+	 */
+	private final List<Runnable> keyFrameRequests = new CopyOnWriteArrayList<>();
+
+	/** Read on the event thread, so never a stale value. */
+	private volatile MediaRecorderListener listener;
+
+	/** Where listener calls and key frame requests run. */
+	private ExecutorService events;
+
+	/** The native recorder, or 0 once this recorder has been closed. */
+	private long handle;
+
+	private MediaRecorderState state = MediaRecorderState.IDLE;
+
+	/** How the recording ended, or null until it was stopped. */
+	private MediaRecorderResult result;
+
+	/** What the native recorder reported last, for the time after it is gone. */
+	private MediaRecorderStats stats = new MediaRecorderStats(new long[1]);
+
+
+	/**
+	 * Creates a recorder writing to the given file, which must not exist yet.
+	 *
+	 * @param file Where to record to; its extension picks the container.
+	 *
+	 * @throws java.nio.file.FileAlreadyExistsException If the file exists.
+	 * @throws IOException If the file cannot be written.
+	 */
+	public MediaRecorder(Path file) throws IOException {
+		this(file, false);
+	}
+
+	/**
+	 * Creates a recorder writing to the given file, which may be asked to
+	 * replace a file that exists.
+	 * <p>
+	 * A recorder that replaces a file writes to a temporary file in the same
+	 * directory, with the same extension, and leaves the existing file alone
+	 * until {@link #stop()} has finished the recording: only then does the
+	 * recording take its place, in one step and with its permissions. A
+	 * recording without media leaves the existing file as it was, and so
+	 * does a process that ends before the stop, which leaves the temporary
+	 * file behind as well.
+	 *
+	 * @param file      Where to record to; its extension picks the container.
+	 * @param overwrite Whether to replace the file if it exists.
+	 *
+	 * @throws java.nio.file.FileAlreadyExistsException If the file exists, and
+	 *                                                  is not to be replaced.
+	 * @throws IOException If the file cannot be written, or is a directory.
+	 */
+	public MediaRecorder(Path file, boolean overwrite) throws IOException {
+		this(file, overwrite, NativeApi.tableAddress());
+	}
+
+	/**
+	 * Creates a recorder writing to the given file that takes its frames and
+	 * its clock from the given webrtc-java function table, as the tests do.
+	 */
+	MediaRecorder(Path file, boolean overwrite, long tableAddress) throws IOException {
+		Objects.requireNonNull(file, "File is null");
+
+		Path target = file.toAbsolutePath();
+
+		if (overwrite && Files.exists(target)) {
+			if (!Files.isRegularFile(target)) {
+				throw new IOException(target + " is not a file");
+			}
+
+			// A link stays in place, and what it points to is replaced.
+			if (Files.isSymbolicLink(target)) {
+				target = target.toRealPath();
+			}
+		}
+
+		this.file = target;
+		this.segments = null;
+		this.replay = false;
+		// Created here rather than by the native recorder, which would empty
+		// a file that came into being since the check.
+		this.output = overwrite ? createTemporaryFile(target) : Files.createFile(target);
+
+		try {
+			this.handle = create(output.toString(), tableAddress);
+		}
+		catch (IOException | RuntimeException | Error e) {
+			deleteOutput();
+
+			throw e;
+		}
+	}
+
+	/**
+	 * Creates a recorder that splits the recording into segments, as the
+	 * given options say.
+	 * <p>
+	 * Each segment is a file of its own that begins with a key frame of every
+	 * video track, so that it plays without the ones before. Its timestamps
+	 * begin at zero, and the tracks keep their sync across segments. A
+	 * segment's file is created only when the segment begins, numbered on
+	 * from the highest number already in the directory, so a recorder started
+	 * again goes on after the last segment and never empties a file: a
+	 * number whose file exists in the meantime is skipped.
+	 * <p>
+	 * When a segment is due to end, its video tracks are asked for key
+	 * frames, and the next segment begins at the first one. A video track
+	 * whose key frame comes later goes on in the segment before until then,
+	 * so that neither of the two has a gap; one that sends none within a few
+	 * seconds starts the new segment at its next key frame.
+	 * <p>
+	 * A track that changes its codec, which a single file cannot hold, goes
+	 * on with the new codec in the next segment, which begins as soon as the
+	 * new codec is known.
+	 * <p>
+	 * Each finished segment is reported to {@link
+	 * MediaRecorderListener#onSegmentFinished(MediaRecorderSegment)}, and the
+	 * segments kept so far are listed by {@link #getSegments()}.
+	 *
+	 * @param segments How to split the recording.
+	 *
+	 * @throws NoSuchFileException If the directory of the segments does not
+	 *                             exist.
+	 * @throws IOException         If the directory cannot be read.
+	 */
+	public MediaRecorder(SegmentOptions segments) throws IOException {
+		this(segments, NativeApi.tableAddress());
+	}
+
+	/**
+	 * Creates a recorder for segments that takes its frames and its clock
+	 * from the given webrtc-java function table, as the tests do.
+	 */
+	MediaRecorder(SegmentOptions segments, long tableAddress) throws IOException {
+		Objects.requireNonNull(segments, "Segments are null");
+
+		if (!Files.isDirectory(segments.getDirectory())) {
+			throw new NoSuchFileException(segments.getDirectory().toString(), null, "Not a directory");
+		}
+
+		Duration maxDuration = segments.getMaxDuration();
+		long maxDurationUs = maxDuration != null ? maxDuration.toNanos() / 1000 : 0;
+
+		this.file = null;
+		this.output = null;
+		this.segments = segments;
+		this.replay = false;
+		this.handle = createSegments(segments.pathPrefix(), segments.nameSuffix(), segments.width(),
+				segments.nextIndex(), maxDurationUs, segments.getMaxSize(), tableAddress);
+	}
+
+	/**
+	 * A recorder for a {@link ReplayBuffer}, which takes its frames and its
+	 * clock from the given webrtc-java function table.
+	 */
+	private MediaRecorder(Duration window, long maxBytes, long tableAddress) throws IOException {
+		this.file = null;
+		this.output = null;
+		this.segments = null;
+		this.replay = true;
+		this.handle = createReplay(window.toNanos() / 1000, maxBytes, tableAddress);
+	}
+
+	/**
+	 * Creates the recorder of a replay buffer, which keeps what arrives in
+	 * memory for {@link #saveReplay(Path)}.
+	 */
+	static MediaRecorder replayBuffer(Duration window, long maxBytes, long tableAddress) throws IOException {
+		return new MediaRecorder(window, maxBytes, tableAddress);
+	}
+
+	/**
+	 * Sets what to report to, replacing whatever was set before. A listener of
+	 * {@code null} stops reporting.
+	 *
+	 * @param listener The listener, or {@code null}.
+	 */
+	public void setListener(MediaRecorderListener listener) {
+		this.listener = listener;
+	}
+
+	/**
+	 * Records what the given sender sends, as it comes out of the encoder.
+	 *
+	 * @param sender The sender to record.
+	 *
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the sender's transform does not
+	 *                                  allow recording.
+	 * @throws IllegalArgumentException If the sender was disposed.
+	 */
+	public void addTrack(RTCRtpSender sender) {
+		Objects.requireNonNull(sender, "Sender is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+
+			addTrack(NativeApi.encodedFramesOf(sender), sender::generateKeyFrame);
+		}
+	}
+
+	/**
+	 * Records what the given receiver receives, as it goes into the decoder.
+	 *
+	 * @param receiver The receiver to record.
+	 *
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the receiver's transform does not
+	 *                                  allow recording.
+	 * @throws IllegalArgumentException If the receiver was disposed.
+	 */
+	public void addTrack(RTCRtpReceiver receiver) {
+		Objects.requireNonNull(receiver, "Receiver is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+
+			addTrack(NativeApi.encodedFramesOf(receiver), receiver::requestKeyFrame);
+		}
+	}
+
+	/**
+	 * Records what a sender of the client API sends, as it comes out of the
+	 * encoder. Key frames are asked for on the sender's peer, which keeps
+	 * the sender to itself; removing the sender or closing the peer ends the
+	 * track in the recording.
+	 *
+	 * @param sender The sender to record.
+	 *
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the sender's transform does not
+	 *                                  allow recording.
+	 * @throws IllegalArgumentException If the sender was removed, or its peer
+	 *                                  closed.
+	 */
+	public void addTrack(Sender sender) {
+		Objects.requireNonNull(sender, "Sender is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+			addTrack(sourceOf(EncodedFrames.of(sender)));
+		}
+	}
+
+	/**
+	 * Records what a remote track of the client API receives, as it goes into
+	 * the decoder. Key frames are asked for on the track's peer; the track
+	 * ending, or the peer closing, ends the track in the recording.
+	 *
+	 * @param track The remote track to record.
+	 *
+	 * @throws IllegalStateException    If the recorder was started or closed,
+	 *                                  or the track's transform does not
+	 *                                  allow recording.
+	 * @throws IllegalArgumentException If the track ended.
+	 */
+	public void addTrack(RemoteTrack track) {
+		Objects.requireNonNull(track, "Track is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+			addTrack(sourceOf(EncodedFrames.of(track)));
+		}
+	}
+
+	/**
+	 * Starts recording the tracks added so far. If that fails, the recorder
+	 * is as it was before and may be started again.
+	 *
+	 * @throws IllegalStateException If the recorder has no tracks, or was
+	 *                               started or closed before.
+	 */
+	public void start() {
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+
+			if (keyFrameRequests.isEmpty()) {
+				throw new IllegalStateException("A recorder needs at least one track");
+			}
+
+			events = Executors.newSingleThreadExecutor(runnable -> {
+				Thread thread = new Thread(runnable, "MediaRecorder-events");
+				thread.setDaemon(true);
+				return thread;
+			});
+
+			try {
+				start(handle);
+			}
+			catch (RuntimeException | Error e) {
+				// The native recorder could not attach to every track or start
+				// its writer, and undid what it had done: it is still idle,
+				// may be started again, and closing it deletes its file.
+				events.shutdown();
+				events = null;
+
+				throw e;
+			}
+
+			state = MediaRecorderState.RECORDING;
+		}
+	}
+
+	/**
+	 * Stops recording and finishes the file, waiting for everything received
+	 * so far to be written. A recorder that never got any media to write
+	 * deletes what it wrote rather than leave an unplayable file behind, and
+	 * a file it was to replace stays as it was.
+	 * <p>
+	 * A file that holds media is kept even when writing, finishing or closing
+	 * it failed, since what made it into the file may still play, and takes
+	 * the place of a file it was to replace. Whether it is complete, {@link
+	 * #getResult()} tells.
+	 * <p>
+	 * Stopping a recorder that is stopped does nothing, and returns the same.
+	 * Stopping one that was never started is the same as stopping one that
+	 * got no media.
+	 *
+	 * @return True if the recording was kept, complete or not, false if it
+	 * was deleted.
+	 */
+	public boolean stop() {
+		synchronized (lock) {
+			if (result != null) {
+				return result.keepsFile();
+			}
+			if (handle == 0) {
+				return false;
+			}
+
+			// In the order of the native MediaRecorder::Result.
+			result = MediaRecorderResult.values()[stop(handle)];
+			state = MediaRecorderState.STOPPED;
+
+			if (output != null) {
+				finishOutput();
+			}
+
+			// The writer has ended, and answered every replay it took.
+			failPendingSaves(new IllegalStateException("The replay buffer was stopped"));
+
+			if (events != null) {
+				// Lets the reports already queued run, then ends the thread.
+				events.shutdown();
+			}
+
+			return result.keepsFile();
+		}
+	}
+
+	/**
+	 * Returns what the recorder is currently doing.
+	 *
+	 * @return The recorder state.
+	 */
+	public MediaRecorderState getState() {
+		synchronized (lock) {
+			return state;
+		}
+	}
+
+	/**
+	 * Returns how the recording ended: completely, partly, without media, or
+	 * failed. It is known once the recorder is stopped, and stays the same
+	 * from then on, after {@link #close()} as well.
+	 *
+	 * @return The result, or {@code null} if the recorder was not stopped
+	 * yet.
+	 */
+	public MediaRecorderResult getResult() {
+		synchronized (lock) {
+			return result;
+		}
+	}
+
+	/**
+	 * Returns what the recording lost so far, and how full the queue for the
+	 * writer got. It can be asked at any time, and stays the same once the
+	 * recorder is stopped, after {@link #close()} as well.
+	 *
+	 * @return The numbers as of now.
+	 */
+	public MediaRecorderStats getStats() {
+		synchronized (lock) {
+			if (handle != 0) {
+				stats = new MediaRecorderStats(stats(handle));
+			}
+
+			return stats;
+		}
+	}
+
+	/**
+	 * Returns where the recording goes, and once it is stopped, where it is:
+	 * the file given to the constructor, or the temporary file beside it
+	 * if the recording could not take the place of that file, as {@link
+	 * MediaRecorderListener#onError(String)} was told.
+	 * <p>
+	 * A recorder that records in segments returns the segment it finished
+	 * last, or {@code null} before the first one is finished.
+	 *
+	 * @return The file of the recording.
+	 */
+	public Path getFile() {
+		return file;
+	}
+
+	/**
+	 * Returns the segments of the recording that are kept, oldest first: those
+	 * finished so far, without those the options had deleted. Once the
+	 * recorder is stopped, the last segment is among them.
+	 *
+	 * @return The segments, or an empty list for a recorder that does not
+	 * record in segments.
+	 */
+	public List<MediaRecorderSegment> getSegments() {
+		synchronized (keptSegments) {
+			return Collections.unmodifiableList(new ArrayList<>(keptSegments));
+		}
+	}
+
+	/**
+	 * Saves what the replay buffer holds into the given file, which must not
+	 * exist yet. The future completes on the listener's thread.
+	 */
+	CompletableFuture<MediaRecorderSegment> saveReplay(Path file) throws IOException {
+		Objects.requireNonNull(file, "File is null");
+
+		synchronized (lock) {
+			checkState(MediaRecorderState.RECORDING);
+
+			Path target = file.toAbsolutePath();
+
+			// Created here, so that a file that exists is never emptied.
+			Files.createFile(target);
+
+			int id = nextSaveId++;
+			CompletableFuture<MediaRecorderSegment> future = new CompletableFuture<>();
+
+			pendingSaves.put(id, new PendingSave(target, future));
+
+			if (!saveReplay(handle, id, target.toString())) {
+				pendingSaves.remove(id);
+				deleteQuietly(target);
+
+				throw new IllegalStateException("The replay buffer failed, as the listener was told");
+			}
+
+			return future;
+		}
+	}
+
+	/**
+	 * Stops the recording if it still runs and releases the native recorder.
+	 * Closing a recorder that is closed does nothing.
+	 */
+	@Override
+	public void close() {
+		stop();
+
+		synchronized (lock) {
+			if (handle != 0) {
+				try {
+					stats = new MediaRecorderStats(stats(handle));
+				}
+				finally {
+					dispose(handle);
+					handle = 0;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Creates the file a recording goes into until it replaces the target. It
+	 * has the target's extension, which picks the container.
+	 */
+	private static Path createTemporaryFile(Path target) throws IOException {
+		String name = target.getFileName().toString();
+		int dot = name.lastIndexOf('.');
+		String extension = dot < 0 ? "" : name.substring(dot);
+
+		return Files.createFile(target.resolveSibling(".recording-" + UUID.randomUUID() + extension));
+	}
+
+	/** Called with the lock held, once the native recorder closed the output. */
+	private void finishOutput() {
+		if (!result.keepsFile()) {
+			deleteOutput();
+		}
+		else if (!output.equals(file)) {
+			try {
+				replaceFile();
+			}
+			catch (IOException e) {
+				// The recording is safe where it is, so it stays there.
+				String error = "Replacing " + file + " failed, the recording stays in " + output + ": " + e;
+
+				file = output;
+				result = MediaRecorderResult.PARTIAL;
+
+				onNativeError(error);
+			}
+		}
+	}
+
+	private void replaceFile() throws IOException {
+		if (Files.isRegularFile(file)) {
+			try {
+				Files.setPosixFilePermissions(output, Files.getPosixFilePermissions(file));
+			}
+			catch (UnsupportedOperationException e) {
+				// Not a POSIX file system.
+			}
+		}
+
+		Files.move(output, file, StandardCopyOption.ATOMIC_MOVE);
+	}
+
+	private void deleteOutput() {
+		deleteQuietly(output);
+	}
+
+	private static void deleteQuietly(Path path) {
+		try {
+			Files.deleteIfExists(path);
+		}
+		catch (IOException e) {
+			// The file stays behind, empty; there is nothing else to do.
+		}
+	}
+
+	/** Fails the replays that were asked for and will not be saved. */
+	private void failPendingSaves(Exception cause) {
+		for (Integer id : new ArrayList<>(pendingSaves.keySet())) {
+			PendingSave save = pendingSaves.remove(id);
+
+			if (save != null) {
+				post(() -> {
+					deleteQuietly(save.file);
+					save.future.completeExceptionally(cause);
+				});
+			}
+		}
+	}
+
+	/**
+	 * Keeps the segment, and returns the oldest ones the options no longer
+	 * keep, to be deleted.
+	 */
+	private List<MediaRecorderSegment> keep(MediaRecorderSegment segment) {
+		List<MediaRecorderSegment> expired = new ArrayList<>();
+		int maxSegments = segments.getMaxSegments();
+		long maxTotalSize = segments.getMaxTotalSize();
+
+		synchronized (keptSegments) {
+			keptSegments.addLast(segment);
+			keptBytes += segment.getSize();
+
+			while (keptSegments.size() > 1
+					&& ((maxSegments > 0 && keptSegments.size() > maxSegments)
+					|| (maxTotalSize > 0 && keptBytes > maxTotalSize))) {
+				MediaRecorderSegment oldest = keptSegments.removeFirst();
+
+				keptBytes -= oldest.getSize();
+				expired.add(oldest);
+			}
+		}
+
+		return expired;
+	}
+
+	private static long sizeOf(Path path) {
+		try {
+			return Files.size(path);
+		}
+		catch (IOException e) {
+			return 0;
+		}
+	}
+
+	/** Called with the lock held, in the idle state. */
+	private void addTrack(EncodedFrames.Source source) {
+		addTrack(source.take(), source::requestKeyFrame);
+	}
+
+	/**
+	 * Waits for the client API's peer to hand over the encoded frames. Its
+	 * control thread never takes this recorder's lock, so waiting under it
+	 * cannot deadlock.
+	 */
+	static EncodedFrames.Source sourceOf(CompletableFuture<EncodedFrames.Source> future) {
+		try {
+			return future.get(10, TimeUnit.SECONDS);
+		}
+		catch (InterruptedException e) {
+			giveUp(future);
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Interrupted while adding the track", e);
+		}
+		catch (ExecutionException e) {
+			throw new IllegalArgumentException(e.getCause().getMessage(), e.getCause());
+		}
+		catch (TimeoutException e) {
+			giveUp(future);
+			throw new IllegalStateException("The peer did not hand over the track in time", e);
+		}
+	}
+
+	/**
+	 * Stops waiting for a source. The peer closes one that comes after the
+	 * cancellation; this closes one that came before it, since no recorder
+	 * takes it over.
+	 */
+	static void giveUp(CompletableFuture<EncodedFrames.Source> future) {
+		future.cancel(false);
+		future.thenAccept(EncodedFrames.Source::close);
+	}
+
+	private void addTrack(long frames, Runnable keyFrameRequest) {
+		if (frames == 0) {
+			throw new IllegalArgumentException("The sender or receiver was disposed");
+		}
+		if (NativeApi.isSealed(frames)) {
+			NativeApi.releaseEncodedFrames(frames);
+
+			throw new IllegalStateException("The track is end-to-end encrypted, and its transform "
+					+ "does not allow recording the decrypted media");
+		}
+
+		attach(frames, keyFrameRequest);
+	}
+
+	/**
+	 * Records the frames behind a handle of the function table this recorder
+	 * was created with, as the tests do with frames of their own, which no
+	 * sender or receiver stands behind.
+	 *
+	 * @param frames          The handle, whose reference the recorder takes
+	 *                        over.
+	 * @param keyFrameRequest How to ask the track for a key frame.
+	 */
+	void addEncodedFrames(long frames, Runnable keyFrameRequest) {
+		synchronized (lock) {
+			checkState(MediaRecorderState.IDLE);
+
+			attach(frames, keyFrameRequest);
+		}
+	}
+
+	private void attach(long frames, Runnable keyFrameRequest) {
+		// The native recorder takes over the reference the handle carries.
+		addTrack(handle, frames);
+
+		keyFrameRequests.add(keyFrameRequest);
+	}
+
+	/**
+	 * Waits until the writer has handled every frame taken so far, and the
+	 * listener has been told what came of it, and the tracks asked for key
+	 * frames. For tests, which drive the recorder with frames and a clock of
+	 * their own, and look at what it made of them in between.
+	 */
+	void sync() throws InterruptedException {
+		long recorder;
+		ExecutorService executor;
+
+		synchronized (lock) {
+			recorder = handle;
+			executor = events;
+		}
+
+		// Outside the lock: the writer calls back into this recorder.
+		sync(recorder);
+
+		if (executor == null) {
+			return;
+		}
+
+		try {
+			// What the writer posted before runs first.
+			executor.submit(() -> { }).get();
+		}
+		catch (RejectedExecutionException e) {
+			// Stopped: what was posted before runs before the thread ends.
+			executor.awaitTermination(10, TimeUnit.SECONDS);
+		}
+		catch (ExecutionException e) {
+			throw new IllegalStateException(e.getCause());
+		}
+	}
+
+	private void checkState(MediaRecorderState expected) {
+		if (handle == 0) {
+			throw new IllegalStateException("The recorder is closed");
+		}
+		if (state != expected) {
+			throw new IllegalStateException("The recorder is " + state.name().toLowerCase()
+					+ ", not " + expected.name().toLowerCase());
+		}
+	}
+
+	private void post(Runnable event) {
+		ExecutorService executor = events;
+
+		if (executor == null) {
+			return;
+		}
+
+		try {
+			executor.execute(() -> {
+				try {
+					event.run();
+				}
+				catch (Throwable e) {
+					Thread thread = Thread.currentThread();
+					thread.getUncaughtExceptionHandler().uncaughtException(thread, e);
+				}
+			});
+		}
+		catch (RejectedExecutionException e) {
+			// Stopped in the meantime; nobody is waiting for this any more.
+		}
+	}
+
+	/** Called by native code on the writer thread. */
+	private void onNativeStarted() {
+		post(() -> {
+			MediaRecorderListener current = listener;
+
+			if (current != null) {
+				current.onStarted();
+			}
+		});
+	}
+
+	/** Called by native code on the writer thread. */
+	private void onNativeWarning(String message) {
+		post(() -> {
+			MediaRecorderListener current = listener;
+
+			if (current != null) {
+				current.onWarning(message);
+			}
+		});
+	}
+
+	/** Called by native code on the writer thread. */
+	private void onNativeError(String message) {
+		post(() -> {
+			MediaRecorderListener current = listener;
+
+			if (current != null) {
+				current.onError(message);
+			}
+		});
+	}
+
+	/** Called by native code on the writer thread. */
+	private void onNativeKeyFrameNeeded(int track) {
+		if (track < 0 || track >= keyFrameRequests.size()) {
+			return;
+		}
+
+		Runnable request = keyFrameRequests.get(track);
+
+		// Run away from the writer thread: asking WebRTC waits for its
+		// signaling thread, which may be busy stopping this very recorder.
+		post(() -> {
+			try {
+				request.run();
+			}
+			catch (RuntimeException e) {
+				// Not negotiated yet, or disposed of by the application. The
+				// recording waits for the next key frame instead.
+			}
+		});
+	}
+
+	/** Called by native code on the writer thread. */
+	private void onNativeSegmentFinished(long index, String path, long startUs, long durationUs, int result) {
+		// In the order of the native MediaRecorder::Result.
+		MediaRecorderResult outcome = MediaRecorderResult.values()[result];
+		Path segmentFile = Paths.get(path);
+
+		if (!outcome.keepsFile()) {
+			// Nothing in it plays; what went wrong was reported already.
+			post(() -> deleteQuietly(segmentFile));
+			return;
+		}
+
+		MediaRecorderSegment segment = new MediaRecorderSegment(index, segmentFile, startUs, durationUs,
+				sizeOf(segmentFile), outcome);
+
+		// Kept here, so that the segments are known once the recorder is
+		// stopped; deleted on the event thread, which the writer does not
+		// wait for.
+		List<MediaRecorderSegment> expired = keep(segment);
+
+		file = segmentFile;
+
+		post(() -> {
+			MediaRecorderListener current = listener;
+
+			if (current != null) {
+				current.onSegmentFinished(segment);
+			}
+
+			for (MediaRecorderSegment old : expired) {
+				try {
+					Files.deleteIfExists(old.getFile());
+				}
+				catch (IOException e) {
+					current = listener;
+
+					if (current != null) {
+						current.onWarning("Deleting the old segment " + old.getFile() + " failed: " + e);
+					}
+				}
+			}
+		});
+	}
+
+	/** Called by native code on the writer thread. */
+	private void onNativeReplaySaved(int id, int result, long startUs, long durationUs, String error) {
+		PendingSave save = pendingSaves.remove(id);
+
+		if (save == null) {
+			return;
+		}
+
+		MediaRecorderResult outcome = MediaRecorderResult.values()[result];
+
+		if (!outcome.keepsFile()) {
+			post(() -> {
+				deleteQuietly(save.file);
+
+				if (outcome == MediaRecorderResult.EMPTY) {
+					save.future.completeExceptionally(new IllegalStateException("The replay buffer holds no media"));
+				}
+				else {
+					save.future.completeExceptionally(new IOException(error));
+				}
+			});
+			return;
+		}
+
+		MediaRecorderSegment segment = new MediaRecorderSegment(id, save.file, startUs, durationUs,
+				sizeOf(save.file), outcome);
+
+		post(() -> {
+			MediaRecorderListener current = listener;
+
+			if (error != null && current != null) {
+				current.onWarning(error);
+			}
+
+			save.future.complete(segment);
+		});
+	}
+
+	private native long create(String path, long tableAddress) throws IOException;
+
+	private native long createSegments(String prefix, String suffix, int width, long firstIndex,
+			long maxDurationUs, long maxBytes, long tableAddress) throws IOException;
+
+	private native long createReplay(long windowUs, long maxBytes, long tableAddress) throws IOException;
+
+	private static native boolean saveReplay(long handle, int id, String path);
+
+	private static native void sync(long handle);
+
+	private static native int addTrack(long handle, long frames);
+
+	private static native void start(long handle);
+
+	private static native int stop(long handle);
+
+	private static native long[] stats(long handle);
+
+	private static native void dispose(long handle);
+
+
+	/** A replay that was asked for: where it goes, and who waits for it. */
+	private static final class PendingSave {
+
+		final Path file;
+
+		final CompletableFuture<MediaRecorderSegment> future;
+
+
+		PendingSave(Path file, CompletableFuture<MediaRecorderSegment> future) {
+			this.file = file;
+			this.future = future;
+		}
+	}
+
+}

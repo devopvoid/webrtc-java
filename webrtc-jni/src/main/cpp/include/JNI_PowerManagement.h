@@ -9,18 +9,18 @@ extern "C" {
 #endif
     /*
      * Class:     dev_onvoid_webrtc_media_video_desktop_PowerManagement
-     * Method:    enableUserActivity
+     * Method:    enableUserActivityInternal
      * Signature: ()V
      */
-    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_enableUserActivity
+    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_enableUserActivityInternal
       (JNIEnv *, jobject);
 
     /*
      * Class:     dev_onvoid_webrtc_media_video_desktop_PowerManagement
-     * Method:    disableUserActivity
+     * Method:    disableUserActivityInternal
      * Signature: ()V
      */
-    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_disableUserActivity
+    JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_PowerManagement_disableUserActivityInternal
       (JNIEnv *, jobject);
 
 #ifdef __cplusplus

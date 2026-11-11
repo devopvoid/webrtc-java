@@ -15,6 +15,8 @@
  */
 
 #include "JNI_CustomVideoSource.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "JavaUtils.h"
 #include "api/VideoFrame.h"
 
@@ -39,66 +41,76 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_init
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_initializeWithClock
 (JNIEnv * env, jobject caller, jobject javaClock)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, javaClock);
-    CHECK_HANDLE(clock);
+	jni::CallFromJava(env, [&]() {
+	    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, javaClock);
+	    CHECK_HANDLE(clock);
 
-    std::shared_ptr<jni::SyncClock> sync_clock(clock, [](jni::SyncClock*) {});  // Shared ownership without deleting
-    webrtc::scoped_refptr<jni::CustomVideoSource> source = webrtc::make_ref_counted<jni::CustomVideoSource>(sync_clock);
+	    // The source shares the clock, so disposing the Java clock while the
+	    // source is still pushed to does not free it.
+	    webrtc::scoped_refptr<jni::CustomVideoSource> source = webrtc::make_ref_counted<jni::CustomVideoSource>(*clock);
 
-    SetHandle(env, caller, source.release());
+	    SetHandle(env, caller, source.release());
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_dispose
 (JNIEnv * env, jobject caller)
 {
-    jni::CustomVideoSource * source = GetHandle<jni::CustomVideoSource>(env, caller);
-    CHECK_HANDLE(source);
+	jni::CallFromJava(env, [&]() {
+	    jni::CustomVideoSource * source = jni::TakeHandle<jni::CustomVideoSource>(env, caller);
 
-    webrtc::RefCountReleaseStatus status = source->Release();
+	    if (source == nullptr) {
+	        return;
+	    }
 
-    if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-        RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-    }
+	    jni::ReleaseHandle(env, source, [source](bool) {
+	        webrtc::RefCountReleaseStatus status = source->Release();
 
-    SetHandle<std::nullptr_t>(env, caller, nullptr);
-
-    source = nullptr;
+	        if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+	            RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+	        }
+	    });
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_pushFrame
 (JNIEnv * env, jobject caller, jobject javaFrame)
 {
-    jni::CustomVideoSource * source = GetHandle<jni::CustomVideoSource>(env, caller);
-    CHECK_HANDLE(source);
+	jni::CallFromJava(env, [&]() {
+	    jni::NativeLease<jni::CustomVideoSource> source(env, caller);
+	    CHECK_HANDLE(source);
 
-    if (javaFrame != nullptr) {
-        try {
-            auto frame = jni::JavaLocalRef<jobject>(env, javaFrame);
-            webrtc::VideoFrame nativeFrame = jni::VideoFrame::toNative(env, frame);
+	    if (javaFrame != nullptr) {
+	        try {
+	            auto frame = jni::JavaLocalRef<jobject>(env, javaFrame);
+	            webrtc::VideoFrame nativeFrame = jni::VideoFrame::toNative(env, frame);
 
-            source->PushFrame(nativeFrame);
-        }
-        catch (...) {
-            ThrowCxxJavaException(env);
-        }
-    }
+	            source->PushFrame(nativeFrame);
+	        }
+	        catch (...) {
+	            ThrowCxxJavaException(env);
+	        }
+	    }
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_CustomVideoSource_pushFrameTimestamped
 (JNIEnv * env, jobject caller, jobject javaFrame, jlong timestampUs)
 {
-    jni::CustomVideoSource * source = GetHandle<jni::CustomVideoSource>(env, caller);
-    CHECK_HANDLE(source);
+	jni::CallFromJava(env, [&]() {
+	    jni::NativeLease<jni::CustomVideoSource> source(env, caller);
+	    CHECK_HANDLE(source);
 
-    if (javaFrame != nullptr) {
-        try {
-            auto frame = jni::JavaLocalRef<jobject>(env, javaFrame);
-            webrtc::VideoFrame nativeFrame = jni::VideoFrame::toNative(env, frame);
+	    if (javaFrame != nullptr) {
+	        try {
+	            auto frame = jni::JavaLocalRef<jobject>(env, javaFrame);
+	            webrtc::VideoFrame nativeFrame = jni::VideoFrame::toNative(env, frame);
 
-            source->PushFrame(nativeFrame, timestampUs);
-        }
-        catch (...) {
-            ThrowCxxJavaException(env);
-        }
-    }
+	            source->PushFrame(nativeFrame, timestampUs);
+	        }
+	        catch (...) {
+	            ThrowCxxJavaException(env);
+	        }
+	    }
+	});
 }

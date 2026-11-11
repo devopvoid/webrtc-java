@@ -15,22 +15,34 @@
  */
 
 #include "api/RTCRtpContributingSource.h"
-#include "JavaObject.h"
 #include "JavaRef.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
+
+#include <cmath>
 
 namespace jni
 {
 	namespace RTCRtpContributingSource
 	{
+		jdouble toLinearAudioLevel(const std::optional<uint8_t> & audioLevel)
+		{
+			// RFC 6464 reserves 127 for silence, which the formula of the WebRTC
+			// specification would not reach.
+			if (!audioLevel.has_value() || *audioLevel >= 127) {
+				return 0;
+			}
+
+			return std::pow(10.0, -static_cast<double>(*audioLevel) / 20.0);
+		}
+
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpSource & source)
 		{
 			const auto javaClass = JavaClasses::get<JavaRTCRtpContributingSourceClass>(env);
 
 			jlong timestamp = static_cast<jlong>(source.timestamp().us());
 			jlong sourceId = static_cast<jlong>(source.source_id());
-			jdouble audioLevel = static_cast<jdouble>(source.audio_level().value_or(0));
+			jdouble audioLevel = toLinearAudioLevel(source.audio_level());
 			jlong rtpTimestamp = static_cast<jlong>(source.rtp_timestamp());
 
 			jobject object = env->NewObject(javaClass->cls, javaClass->ctor,
@@ -39,35 +51,11 @@ namespace jni
 			return JavaLocalRef<jobject>(env, object);
 		}
 
-		webrtc::RtpSource toNative(JNIEnv * env, const JavaRef<jobject> & source)
-		{
-			const auto javaClass = JavaClasses::get<JavaRTCRtpContributingSourceClass>(env);
-
-			JavaObject obj(env, source);
-
-			webrtc::RtpSource::Extensions extensions;
-			extensions.audio_level = static_cast<uint8_t>(obj.getDouble(javaClass->audioLevel));
-
-			return webrtc::RtpSource(
-				webrtc::Timestamp::Micros(static_cast<int64_t>(obj.getLong(javaClass->timestamp))),
-				static_cast<uint32_t>(obj.getLong(javaClass->sourceId)),
-				webrtc::RtpSourceType::CSRC,
-				static_cast<uint32_t>(obj.getLong(javaClass->rtpTimestamp)),
-				extensions
-			);
-		}
-
 		JavaRTCRtpContributingSourceClass::JavaRTCRtpContributingSourceClass(JNIEnv * env)
 		{
 			cls = FindClass(env, PKG"RTCRtpContributingSource");
 
 			ctor = GetMethod(env, cls, "<init>", "(JJDJ)V");
-
-			timestamp = GetFieldID(env, cls, "timestamp", "J");
-			sourceId = GetFieldID(env, cls, "sourceId", "J");
-			sourceType = GetFieldID(env, cls, "sourceType", "J");
-			audioLevel = GetFieldID(env, cls, "audioLevel", "D");
-			rtpTimestamp = GetFieldID(env, cls, "rtpTimestamp", "J");
 		}
 	}
 }

@@ -74,15 +74,20 @@ namespace jni
 			void RemoveCallback();
 			void RemoveSinkCallback(uint32_t ssrc);
 
-			void SetTransformer(std::shared_ptr<RTCEncodedFrameTransformer> transformer);
+			// A sealed transform keeps every frame from the observers until
+			// another transform, or none, takes its place.
+			void SetTransformer(std::shared_ptr<RTCEncodedFrameTransformer> transformer, bool sealed);
 			std::shared_ptr<RTCEncodedFrameTransformer> GetTransformer() const;
+			bool IsSealed() const;
 
 			Observer * AddObserver(wj_encoded_frame_fn fn, void * opaque);
 			// When this returns, the observer is not running and never runs
 			// again.
 			void RemoveObserver(Observer * observer);
+			size_t GetObserverCount() const;
 
-			// Shows the frame to every observer.
+			// Shows the frame to every observer, unless the transform is
+			// sealed.
 			void Observe(const webrtc::TransformableFrameInterface & frame);
 
 			// Hands the frame back to WebRTC, to the callback that registered
@@ -99,6 +104,8 @@ namespace jni
 
 			mutable std::mutex transformerMutex;
 			std::shared_ptr<RTCEncodedFrameTransformer> transformer;
+			// Read without the lock, on the thread of every frame.
+			std::atomic<bool> sealed;
 
 			// Held while observers run, which is what lets RemoveObserver()
 			// promise that its observer is done.

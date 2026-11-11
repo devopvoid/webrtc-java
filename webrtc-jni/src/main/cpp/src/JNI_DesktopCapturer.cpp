@@ -15,6 +15,8 @@
  */
 
 #include "JNI_DesktopCapturer.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "JavaArrayList.h"
 #include "JavaError.h"
 #include "JavaUtils.h"
@@ -27,25 +29,26 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_dispose
 (JNIEnv * env, jobject caller)
 {
-	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
-	CHECK_HANDLE(capturer);
+	jni::CallFromJava(env, [&]() {
+		jni::DesktopCapturer * capturer = jni::TakeHandle<jni::DesktopCapturer>(env, caller);
 
-	delete capturer;
+		if (capturer == nullptr) {
+			return;
+		}
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
-
-	auto callback = GetHandle<jni::DesktopCaptureCallback>(env, caller, "callbackHandle");
-
-	if (callback) {
-		delete callback;
-	}
+		// A captureFrame() running on another thread, or the one whose callback
+		// disposes the capturer, still uses it.
+		jni::ReleaseHandle(env, capturer, [capturer](bool) {
+			delete capturer;
+		});
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_getDesktopSources
 (JNIEnv * env, jobject caller)
 {
 	try {
-		jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
 		CHECK_HANDLEV(capturer, nullptr);
 
 		webrtc::DesktopCapturer::SourceList sources;
@@ -73,7 +76,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 (JNIEnv * env, jobject caller, jobject jsource)
 {
 	try {
-		jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
 		CHECK_HANDLE(capturer);
 
 		auto source = jni::DesktopSource::toNative(env, jni::JavaLocalRef<jobject>(env, jsource));
@@ -90,54 +93,54 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setFocusSelectedSource
 (JNIEnv * env, jobject caller, jboolean focus)
 {
-	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
-	CHECK_HANDLE(capturer);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	capturer->setFocusSelectedSource(focus);
+		capturer->setFocusSelectedSource(focus);
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setMaxFrameRate
 (JNIEnv * env, jobject caller, jint maxFrameRate)
 {
-	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
-	CHECK_HANDLE(capturer);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	capturer->SetMaxFrameRate(maxFrameRate);
+		capturer->SetMaxFrameRate(maxFrameRate);
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_start
 (JNIEnv * env, jobject caller, jobject jcallback)
 {
-	if (jcallback == nullptr) {
-		env->Throw(jni::JavaNullPointerException(env, "DesktopCaptureCallback is null"));
-		return;
-	}
+	jni::CallFromJava(env, [&]() {
+		if (jcallback == nullptr) {
+			env->Throw(jni::JavaNullPointerException(env, "DesktopCaptureCallback is null"));
+			return;
+		}
 
-	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
-	CHECK_HANDLE(capturer);
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	auto callback = new jni::DesktopCaptureCallback(env, jni::JavaGlobalRef<jobject>(env, jcallback));
+		auto callback = std::make_unique<jni::DesktopCaptureCallback>(env, jni::JavaGlobalRef<jobject>(env, jcallback), capturer->isWindowCapturer());
 
-	try {
-		SetHandle(env, caller, "callbackHandle", callback);
-
-		capturer->Start(callback);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		if (!capturer->Start(std::move(callback))) {
+			ThrowJavaException(env, "java/lang/IllegalStateException", "Capture has been started already");
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_captureFrame
 (JNIEnv * env, jobject caller)
 {
-	jni::DesktopCapturer * capturer = GetHandle<jni::DesktopCapturer>(env, caller);
-	CHECK_HANDLE(capturer);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
 
-	try {
-		capturer->CaptureFrame();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		if (!capturer->CaptureFrame()) {
+			ThrowJavaException(env, "java/lang/IllegalStateException", "Capture has not been started");
+		}
+	});
 }

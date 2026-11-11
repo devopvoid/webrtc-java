@@ -1,0 +1,8 @@
+includedir=@LIBVA_STAGED_INCLUDE_DIR@
+libdir=@LIBVA_LOADER_LIB_DIR@
+
+Name: libva
+Description: The libva headers of the host, with a stand-in that loads libva at run time
+Version: @LIBVA_API_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lva-loader -ldl -lpthread

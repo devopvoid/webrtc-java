@@ -15,6 +15,7 @@
  */
 
 #include "media/video/desktop/DesktopCapturer.h"
+#include "media/video/desktop/DesktopCaptureCallback.h"
 
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "modules/desktop_capture/desktop_capture_options.h"
@@ -24,7 +25,8 @@
 namespace jni
 {
 	DesktopCapturer::DesktopCapturer(bool screenCapturer) :
-		focusSelectedSource(false)
+		focusSelectedSource(false),
+		windowCapturer(!screenCapturer)
 	{
 		auto options = webrtc::DesktopCaptureOptions::CreateDefault();
 		// Enable desktop effects.
@@ -56,7 +58,8 @@ namespace jni
 				  "session without PipeWire support, or snap confinement."
 				: "DesktopCapturer: CreateWindowCapturer returned null. "
 				  "Possible causes: missing X11/XFIXES extension or snap confinement.");
-			// Leave capturer as nullptr; callers check via GetSourceList returning false.
+			// Leave capturer as nullptr: GetSourceList returns false, and
+			// CaptureFrame reports ERROR_PERMANENT.
 			return;
 		}
 
@@ -68,15 +71,25 @@ namespace jni
 		capturer.reset();
 	}
 
-	void DesktopCapturer::Start(webrtc::DesktopCapturer::Callback * callback)
+	bool DesktopCapturer::Start(std::unique_ptr<DesktopCaptureCallback> callback)
 	{
-		if (!capturer) return;
+		std::lock_guard<std::mutex> lock(startMutex);
 
-		capturer->Start(callback);
-
-		if (focusSelectedSource) {
-			capturer->FocusOnSelectedSource();
+		if (captureCallback) {
+			return false;
 		}
+
+		if (capturer) {
+			capturer->Start(callback.get());
+
+			if (focusSelectedSource) {
+				capturer->FocusOnSelectedSource();
+			}
+		}
+
+		captureCallback = std::move(callback);
+
+		return true;
 	}
 
 	void DesktopCapturer::SetMaxFrameRate(uint32_t max_frame_rate)
@@ -91,15 +104,34 @@ namespace jni
 		capturer->SetSharedMemoryFactory(std::move(factory));
 	}
 
-	void DesktopCapturer::CaptureFrame()
+	bool DesktopCapturer::CaptureFrame()
 	{
-		if (!capturer) return;
+		DesktopCaptureCallback * callback = nullptr;
+
+		{
+			// Not held while capturing: the result may call back into this
+			// capturer on the same thread.
+			std::lock_guard<std::mutex> lock(startMutex);
+
+			callback = captureCallback.get();
+		}
+
+		if (callback == nullptr) {
+			return false;
+		}
+
+		if (!capturer) {
+			callback->OnCaptureResult(webrtc::DesktopCapturer::Result::ERROR_PERMANENT, nullptr);
+			return true;
+		}
 
 #if defined(WEBRTC_MAC)
 		CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true);
 #endif
 
 		capturer->CaptureFrame();
+
+		return true;
 	}
 
 	void DesktopCapturer::SetExcludedWindow(webrtc::WindowId window)
@@ -135,5 +167,10 @@ namespace jni
 	{
 		if (!capturer) return false;
 		return capturer->IsOccluded(pos);
+	}
+
+	bool DesktopCapturer::isWindowCapturer() const
+	{
+		return windowCapturer;
 	}
 }

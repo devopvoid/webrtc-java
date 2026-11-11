@@ -15,6 +15,8 @@
  */
 
 #include "JNI_VideoDesktopSource.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "api/VideoTrackSink.h"
 #include "media/video/VideoTrackDesktopSource.h"
 #include "JavaRef.h"
@@ -24,97 +26,116 @@
 #include "rtc_base/logging.h"
 #include "rtc_base/ref_counted_object.h"
 
+#include <thread>
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setSourceId
 (JNIEnv * env, jobject caller, jlong sourceId, jboolean isWindow)
 {
-	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoTrackDesktopSource> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	videoSource->setSourceId(static_cast<webrtc::DesktopCapturer::SourceId>(sourceId), static_cast<bool>(isWindow));
+		videoSource->setSourceId(static_cast<webrtc::DesktopCapturer::SourceId>(sourceId), static_cast<bool>(isWindow));
+	});
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRate
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRateInternal
 (JNIEnv * env, jobject caller, jint frameRate)
 {
-	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoTrackDesktopSource> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	videoSource->setFrameRate(static_cast<uint16_t>(frameRate));
+		videoSource->setFrameRate(static_cast<uint16_t>(frameRate));
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setMaxFrameSize
 (JNIEnv* env, jobject caller, jint width, jint height)
 {
-	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoTrackDesktopSource> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	videoSource->setMaxFrameSize(webrtc::DesktopSize(width, height));
-}
-
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFocusSelectedSource
-(JNIEnv * env, jobject caller, jboolean focus)
-{
-	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
-	CHECK_HANDLE(videoSource);
-
-	videoSource->setFocusSelectedSource(focus);
+		videoSource->setMaxFrameSize(webrtc::DesktopSize(width, height));
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_start
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoTrackDesktopSource> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	try {
-		videoSource->start();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			videoSource->start();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_stop
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoTrackDesktopSource> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
 
-	try {
-		videoSource->stop();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		try {
+			videoSource->stop();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_disposeInternal
 (JNIEnv * env, jobject caller)
 {
-	jni::VideoTrackDesktopSource * videoSource = GetHandle<jni::VideoTrackDesktopSource>(env, caller);
-	CHECK_HANDLE(videoSource);
+	jni::CallFromJava(env, [&]() {
+		jni::VideoTrackDesktopSource * videoSource = jni::TakeHandle<jni::VideoTrackDesktopSource>(env, caller);
 
-	// A track may keep the source alive; it must not reach the processor
-	// any more.
-	videoSource->SetVideoProcessor(env, nullptr);
-	SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr);
+		if (videoSource == nullptr) {
+			return;
+		}
 
-	webrtc::RefCountReleaseStatus status = videoSource->Release();
+		// A track may keep the source alive; it must not reach the processor
+		// any more.
+		videoSource->SetVideoProcessor(env, nullptr);
+		SetHandle<std::nullptr_t>(env, caller, "processorHostHandle", nullptr);
 
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-	}
+		jni::ReleaseHandle(env, videoSource, [videoSource](bool deferred) {
+			auto release = [videoSource]() {
+				webrtc::RefCountReleaseStatus status = videoSource->Release();
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+				if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+					RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+				}
+			};
 
-	videoSource = nullptr;
+			// The last call may be a processed frame on the capture thread,
+			// which the destructor of the source stops and cannot join itself.
+			if (deferred) {
+				std::thread(release).detach();
+			}
+			else {
+				release();
+			}
+		});
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_initialize
 (JNIEnv * env, jobject caller)
 {
-	webrtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDesktopSource>();
+	jni::CallFromJava(env, [&]() {
+		webrtc::scoped_refptr<jni::VideoTrackDesktopSource> videoSource = webrtc::make_ref_counted<jni::VideoTrackDesktopSource>();
 
-	SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()));
-	SetHandle(env, caller, videoSource.release());
+		SetHandle(env, caller, "processorHostHandle", static_cast<jni::VideoProcessorHost *>(videoSource.get()));
+		SetHandle(env, caller, videoSource.release());
+	});
 }

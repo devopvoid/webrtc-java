@@ -8,7 +8,7 @@ API: `dev.onvoid.webrtc.media.video.VideoCapture`
 
 - Purpose: Control a physical or virtual video input device and deliver frames to a sink.
 - Typical workflow: set device ➜ set capability ➜ set sink ➜ start ➜ stop ➜ dispose.
-- Resource management: Always call `dispose()` to release native resources.
+- Resource management: Always call `dispose()`, or use try-with-resources, to release native resources.
 - Threading: Methods are not guaranteed to be thread‑safe; synchronize externally if accessed from multiple threads.
 
 Key methods:
@@ -17,7 +17,7 @@ Key methods:
 - `void setVideoSink(VideoTrackSink sink)` – register/replace the sink that will receive frames.
 - `void start()` – begin asynchronous capture and frame delivery.
 - `void stop()` – stop capture (idempotent).
-- `void dispose()` – release native resources; implicitly stops if running.
+- `void dispose()` – release native resources; implicitly stops if running. `close()` does the same.
 
 Related types:
 - `VideoDevice` – describes a capturable device (enumerate via your platform/device utilities).
@@ -91,9 +91,12 @@ If you need pixel format conversion, see `VideoBufferConverter`.
 ## Error handling and lifecycle
 
 - Constructor: Initializes native resources; failures may surface as runtime exceptions from native code.
-- `IllegalStateException`: Thrown if methods are invoked after disposal or when prerequisites are missing.
+- `IllegalStateException`: Thrown by `start()` if no device was selected with `setVideoCaptureDevice`.
+- `IllegalStateException`: Thrown if methods are invoked after disposal; another `dispose()` does nothing.
+- Other native failures (e.g. the selected device is not available) surface as an `Error` carrying the native message.
+- Restart: after `stop()`, `start()` can be called again; the sink set earlier stays registered.
 - Idempotency: `start()` and `stop()` are intended to be safe to call multiple times (implementation‑dependent no‑op if already in that state).
-- Always call `dispose()` in a `finally` block to avoid leaking native resources.
+- Always call `dispose()` in a `finally` block, or use try-with-resources, to avoid leaking native resources.
 
 ## Tips
 

@@ -46,10 +46,20 @@ public interface Signaling {
 	 * Called once, when the peer is created. A transport that receives
 	 * messages may push them into {@code inbound} instead of calling {@link
 	 * Peer#signal(SignalMessage)}. Does nothing by default.
+	 * <p>
+	 * The peer closes the returned subscription when it closes, after its last
+	 * call of {@link #send(SignalMessage)}, on its event thread. Closing it
+	 * removes this {@code inbound} and nothing else: the transport stays open,
+	 * so it may outlive the peer and take the next one, or serve several peers
+	 * at once. A transport that keeps {@code inbound} must let go of it there,
+	 * or it keeps the closed peer, and the runtime with it, reachable.
 	 *
 	 * @param inbound takes the messages the remote peer sent, from any thread.
+	 *
+	 * @return removes {@code inbound} from the transport.
 	 */
-	default void attach(Consumer<SignalMessage> inbound) {
+	default Subscription attach(Consumer<SignalMessage> inbound) {
+		return () -> { };
 	}
 
 	/**

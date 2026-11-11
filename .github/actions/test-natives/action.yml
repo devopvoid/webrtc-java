@@ -35,6 +35,11 @@ inputs:
     required: false
     default: ''
 
+  jni-check:
+    description: 'Run the tests under -Xcheck:jni instead, and fail on any JNI error or warning it reports.'
+    required: false
+    default: 'false'
+
 runs:
   using: "composite"
   steps:
@@ -52,9 +57,9 @@ runs:
         name: natives-media-${{ inputs.platform-name }}
         path: natives
 
-    # PulseAudio, libudev and libdbus are deliberately not installed here: the
-    # natives open them at runtime, and the armhf lane, whose image has none of
-    # them, proves that they load without them.
+    # PulseAudio, libudev and libdbus are deliberately not installed as runtime
+    # libraries: the natives open them at runtime, and the armhf lane, whose
+    # image has none of them, proves that they load without them.
     - name: Install 32-bit runtime libraries
       if: runner.os == 'Linux' && inputs.java-architecture == 'armv7'
       run: |
@@ -68,6 +73,18 @@ runs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libx11-6 libxext6 libxfixes3 libxdamage1 libxtst6 libxrandr2 libxcomposite1 libglib2.0-0 libgbm1 libdrm2
+      shell: bash
+
+    # Not a runtime library either: DeviceBackendTests starts a PulseAudio
+    # server of its own, with virtual devices only, to remove a default device
+    # while the natives use it. The armhf lane keeps running without it. No
+    # autospawn, so that the other tests still find no server running.
+    - name: Install a PulseAudio server for the device tests
+      if: runner.os == 'Linux' && inputs.java-architecture != 'armv7'
+      run: |
+        sudo apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils
+        mkdir -p ~/.config/pulse
+        echo "autospawn = no" > ~/.config/pulse/client.conf
       shell: bash
 
     - name: Set up JDK ${{ inputs.java-version }}
@@ -124,25 +141,58 @@ runs:
         MEDIA_JAR="$PWD/$MEDIA_JAR"
         WEBRTC_JAR="$PWD/$WEBRTC_JAR"
 
-        mkdir -p webrtc-java-media/target/natives
-        cd webrtc-java-media/target/natives
+        mkdir -p webrtc-media/target/natives
+        cd webrtc-media/target/natives
         # jar rather than unzip: the JDK is set up above, and unzip is not on
         # every runner image.
         "$JAVA_HOME/bin/jar" xf "$MEDIA_JAR"
         "$JAVA_HOME/bin/jar" xf "$WEBRTC_JAR"
         rm -rf META-INF
         ls -l
+        cd - > /dev/null
+
+        # The Swing module's tests need only webrtc-java's natives, and read
+        # them from a directory of the same name for the same reason.
+        mkdir -p webrtc-swing/target/natives
+        cd webrtc-swing/target/natives
+        "$JAVA_HOME/bin/jar" xf "$WEBRTC_JAR"
+        rm -rf META-INF
+        ls -l
       shell: bash
 
-    # One reactor for both, so that webrtc-java-media resolves webrtc-java
-    # from it. Testing rather than installing: webrtc attaches the host
+    # One reactor for all, so that webrtc-java-media and webrtc-java-swing
+    # resolve webrtc-java from it. The Swing view paints into images, which
+    # needs no display. Testing rather than installing: webrtc attaches the host
     # natives from webrtc-jni/target during its package phase, and on a runner
     # that only downloaded them there is no such directory.
     #
     # The native build is off: these natives were cross compiled by another
     # job, and this runner is here to run them, not to build them again.
     - name: Test
-      run: mvn -B -pl webrtc,webrtc-java-media test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
+      run: mvn -B -pl webrtc,webrtc-media,webrtc-swing test -DskipNativeBuild -P${{ inputs.profile }} -Dsurefire.timeout=1800
+      shell: bash
+      if: inputs.jni-check != 'true'
+
+    # The same tests under -Xcheck:jni, which checks every JNI call of the
+    # natives: a fatal error ends the test JVM, and a call made without
+    # checking for the exception the previous one may have thrown is a
+    # warning. The JVM writes them to native stdout, so the log goes to a file:
+    # one warning comes with a whole stack, and many of them would make an
+    # unreadable job log. The report counts them, sums them up by where they
+    # come from and fails on any, so that a missing check cannot creep back in.
+    - name: Test under -Xcheck:jni
+      if: inputs.jni-check == 'true'
+      run: |
+        status=0
+        mvn -B -pl webrtc,webrtc-media test -DskipNativeBuild -P${{ inputs.profile }} -Pjni-check \
+          -Dsurefire.timeout=1800 > jni-check.log 2>&1 || status=$?
+
+        # What Maven reported about the tests, which went to the file as well.
+        grep -E '^\[(INFO|WARNING|ERROR)\] (Tests run:|BUILD|Reactor Summary)|^\[ERROR\]' jni-check.log | tail -n 200 || true
+
+        bash "$GITHUB_ACTION_PATH/jni-check-report.sh" jni-check.log 0 || status=1
+
+        exit $status
       shell: bash
 
     # What failed, for runners that cannot be reproduced locally.
@@ -150,11 +200,14 @@ runs:
       if: failure()
       uses: actions/upload-artifact@v7
       with:
-        name: test-reports-native-${{ inputs.platform-name }}
+        name: test-reports-native-${{ inputs.platform-name }}${{ inputs.jni-check == 'true' && '-jni-check' || '' }}
         # A native crash ends the test JVM with a report of its own beside the
         # module, which names the thread that crashed and what it ran.
+        # Under -Xcheck:jni, the first of its diagnostics with their stacks,
+        # rather than the whole log.
         path: |
           **/target/surefire-reports/
           **/hs_err_pid*.log
+          jni-check-excerpt.txt
         if-no-files-found: ignore
         retention-days: 7

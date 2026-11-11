@@ -58,11 +58,17 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	 * RTP packet, replacing any observer set before. {@code null} removes the
 	 * observer.
 	 * <p>
-	 * A receiver has one observer. It belongs to the RTCRtpReceiver object it
-	 * was set through: disposing that object removes it, also when it was set
-	 * through another object of the same receiver in the meantime, so set it
-	 * through one object, such as the one {@link
-	 * PeerConnectionObserver#onTrack} provides.
+	 * A receiver has one observer, also when several RTCRtpReceiver objects
+	 * stand for it: setting it through one replaces the observer set through
+	 * another. Removing it, or disposing this object, removes only the
+	 * observer set through this object, and only while no other object has
+	 * replaced it.
+	 * <p>
+	 * Calls from several threads through this object, also while it is
+	 * disposed, are safe: the call made last wins, and one that meets a
+	 * dispose has no effect. While another thread's call through this object
+	 * is still handing an observer to WebRTC, this call may return before
+	 * WebRTC has its observer; the other call hands it on before it returns.
 	 *
 	 * @param observer The observer, or {@code null}.
 	 */
@@ -86,9 +92,12 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	 * the form of RTP packets. When bundling is used, multiple RTCRtpReceivers
 	 * will share one transport and will all receive RTP and RTCP over the same
 	 * transport.
+	 * <p>
+	 * Each call returns a new instance holding its own reference to the
+	 * transport, to be released with {@link RTCDtlsTransport#dispose()}.
 	 *
 	 * @return The transport over which media for the receiver's track is
-	 * received.
+	 * received, or null if the receiver has none yet.
 	 */
 	public native RTCDtlsTransport getTransport();
 
@@ -127,12 +136,20 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	 * The transform belongs to the native receiver, so it is shared by every
 	 * RTCRtpReceiver instance standing for it, and it stays in place when
 	 * this instance is disposed.
+	 * <p>
+	 * A transform whose {@link
+	 * RTCEncodedFrameTransformer#allowsPlaintextObservers()} is false keeps
+	 * every observer of the encoded frames, such as a recorder, from seeing
+	 * any frame for as long as it is set.
 	 *
 	 * @param transformer The transform, or {@code null} to remove it.
 	 *
 	 * @see RTCEncodedFrameTransformer
 	 */
-	public native void setTransform(RTCEncodedFrameTransformer transformer);
+	public void setTransform(RTCEncodedFrameTransformer transformer) {
+		// Asked once, so that the native side need not call into Java.
+		applyTransform(transformer, transformer != null && !transformer.allowsPlaintextObservers());
+	}
 
 	/**
 	 * Asks the remote sender for a video key frame, e.g. so that a recording
@@ -178,9 +195,9 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 
 	@Override
 	public int hashCode() {
-		long handle = getNativeHandle();
-
-		return handle == 0 ? System.identityHashCode(this) : Long.hashCode(handle);
+		return nativeHashCode();
 	}
+
+	private native void applyTransform(RTCEncodedFrameTransformer transformer, boolean sealed);
 
 }

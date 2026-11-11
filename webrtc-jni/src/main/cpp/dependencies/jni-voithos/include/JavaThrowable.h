@@ -43,12 +43,32 @@ namespace jni
 			{
 				const auto classDef = JavaClasses::get<T>(env);
 
-				jobject throwable = env->NewObject(classDef->cls, classDef->ctor, env->NewStringUTF(message.c_str()));
+				jstring text = createMessage();
+
+				jobject throwable = text != nullptr
+					? env->NewObject(classDef->cls, classDef->ctor, text)
+					: nullptr;
+
+				if (text != nullptr) {
+					env->DeleteLocalRef(text);
+				}
+
+				if (throwable == nullptr) {
+					// Hand on what made it fail, an OutOfMemoryError mostly, so
+					// that Throw never gets null.
+					jthrowable pending = env->ExceptionOccurred();
+					env->ExceptionClear();
+
+					return pending;
+				}
 
 				return static_cast<jthrowable>(throwable);
 			}
 
 		private:
+			// The message as a local reference, or null with an exception pending.
+			jstring createMessage() const;
+
 			JNIEnv * env;
 			std::string message;
 

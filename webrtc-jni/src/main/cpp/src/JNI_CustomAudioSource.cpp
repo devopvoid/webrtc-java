@@ -15,6 +15,8 @@
  */
 
 #include "JNI_CustomAudioSource.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "JavaUtils.h"
 
 #include "media/audio/CustomAudioSource.h"
@@ -38,37 +40,43 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_init
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_initializeWithClock
 (JNIEnv * env, jobject caller, jobject javaClock)
 {
-    jni::SyncClock * clock = GetHandle<jni::SyncClock>(env, javaClock);
-    CHECK_HANDLE(clock);
+	jni::CallFromJava(env, [&]() {
+	    jni::NativeLease<std::shared_ptr<jni::SyncClock>> clock(env, javaClock);
+	    CHECK_HANDLE(clock);
 
-    std::shared_ptr<jni::SyncClock> sync_clock(clock, [](jni::SyncClock*) {});  // Shared ownership without deleting
-    webrtc::scoped_refptr<jni::CustomAudioSource> source = webrtc::make_ref_counted<jni::CustomAudioSource>(sync_clock);
+	    // The source shares the clock, so disposing the Java clock while the
+	    // source is still pushed to does not free it.
+	    webrtc::scoped_refptr<jni::CustomAudioSource> source = webrtc::make_ref_counted<jni::CustomAudioSource>(*clock);
 
-    SetHandle(env, caller, source.release());
+	    SetHandle(env, caller, source.release());
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_dispose
 (JNIEnv * env, jobject caller)
 {
-    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
-    CHECK_HANDLE(source);
+	jni::CallFromJava(env, [&]() {
+		jni::CustomAudioSource * source = jni::TakeHandle<jni::CustomAudioSource>(env, caller);
 
-	webrtc::RefCountReleaseStatus status = source->Release();
+		if (source == nullptr) {
+			return;
+		}
 
-	if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
-		RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
-	}
+		jni::ReleaseHandle(env, source, [source](bool) {
+			webrtc::RefCountReleaseStatus status = source->Release();
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
-
-	source = nullptr;
+			if (status != webrtc::RefCountReleaseStatus::kDroppedLastRef) {
+				RTC_LOG(LS_WARNING) << "Native object was not deleted. A reference is still around somewhere.";
+			}
+		});
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_pushAudioInternal
 (JNIEnv * env, jobject caller, jbyteArray audioData, jint bits_per_sample, jint sampleRate, jint channels, jint frameCount)
 {
 	try {
-	    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
+	    jni::NativeLease<jni::CustomAudioSource> source(env, caller);
 	    CHECK_HANDLE(source);
     
 	    // The caller validated the format, the frame count and the array length.
@@ -89,7 +97,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_CustomAudioSource_push
 (JNIEnv * env, jobject caller, jbyteArray audioData, jint bits_per_sample, jint sampleRate, jint channels, jint frameCount, jlong timestampUs)
 {
 	try {
-	    jni::CustomAudioSource * source = GetHandle<jni::CustomAudioSource>(env, caller);
+	    jni::NativeLease<jni::CustomAudioSource> source(env, caller);
 	    CHECK_HANDLE(source);
 
 	    // The caller validated the format, the frame count and the array length.

@@ -27,6 +27,10 @@ namespace jni
 
 		void MacOSPowerManagement::enableUserActivity()
 		{
+            if (powerAssertion != kIOPMNullAssertionID) {
+                return;
+            }
+
             CFStringRef name = CFSTR("WebRTC-Java processing");
 
             if (IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep, kIOPMAssertionLevelOn, name, &powerAssertion) != kIOReturnSuccess) {

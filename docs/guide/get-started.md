@@ -114,6 +114,25 @@ implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VER
 implementation group: "dev.onvoid.webrtc", name: "webrtc-java", version: "{{ VERSION }}", classifier: "linux-aarch32"
 ```
 
+### Where the Native Library Is Loaded From
+
+The native library is looked for in this order:
+
+1. In the directory named by the system property `webrtc.java.library.dir`, if the library is there. It is loaded in place, nothing is extracted. Use this when the library is installed with the application, for example by a jpackage installer or a distribution package.
+2. In the native JAR on the class path. The library is extracted into the directory named by `webrtc.java.extract.dir`, or into the temporary directory (`java.io.tmpdir`) if that is not set, and loaded from there. Set `webrtc.java.extract.dir` when the temporary directory does not allow running code, as when `/tmp` is mounted with `noexec`.
+3. Where `System.loadLibrary` looks: the libraries of the Java runtime, which is where a jlink image keeps those of its modules, then `java.library.path`.
+
+```shell
+java -Dwebrtc.java.library.dir=/opt/myapp/lib -jar myapp.jar
+java -Dwebrtc.java.extract.dir=/var/lib/myapp/natives -jar myapp.jar
+```
+
+A library loaded from a directory keeps the file name it has in the native JAR, for example `libwebrtc-java-linux-x86_64.so`. The media module's library is found the same way; its FFmpeg libraries go next to it under their names in its native JAR (`libavcodec.so.62` and so on). If the library is found nowhere, the `UnsatisfiedLinkError` lists every place that was tried.
+
+A [GraalVM native image](/guide/advanced/native-image) carries the library inside itself, or finds it next to the executable.
+
+The Linux libraries are built against glibc. They do not load on a system with the musl C library, such as Alpine Linux; the error says so when it finds one.
+
 ## Your First Call
 
 webrtc-java has two APIs. The [Client API](/guide/client-api) in `dev.onvoid.webrtc.client` negotiates by itself, keeps your code off WebRTC's threads, and closes everything it created with one call. The core API in `dev.onvoid.webrtc` mirrors WebRTC's own classes one to one, for full control. Start with the client API; [Using the Core API](#using-the-core-api) below shows the same steps with the core API.
@@ -461,6 +480,36 @@ peerConnection.close();
 // Dispose of factory
 factory.dispose();
 ```
+
+A track may be disposed, and a listener removed, from within one of its listeners: the listeners the notification has not reached yet are then not called, and what goes is freed once the notification is over. An observer registered on one thread while the object is disposed on another is freed once and never left registered. A factory disposed while a closed connection is still being freed is released once that connection is.
+
+`dispose()` and `close()` may be called from any thread and more than once: only the first call frees anything, later ones do nothing. Once an object is disposed, its methods throw an `IllegalStateException` (a closed connection still reports its state). A method that another thread is running at that moment keeps the native object until it returns, and what the dispose frees is freed then.
+
+Apart from the media sources, which only have `dispose()`, objects with a `dispose()` method also have a `close()` that does the same. A try-with-resources statement therefore releases them, also when an exception leaves the block:
+
+```java
+try (AudioConverter converter = new AudioConverter(48000, 1, 16000, 1)) {
+    converter.convert(input, output);
+}
+```
+
+`RTCDataChannel` is the exception: its `close()` closes the channel, which then still has to be disposed.
+
+#### Finding Objects That Were Never Disposed
+
+An object that becomes unreachable without being disposed or closed leaks its native object. To find such objects, start the JVM with `-Dwebrtc.java.leak.detection=true`: each one is then reported, with its class, once the garbage collector finds it unreachable. Add `-Dwebrtc.java.leak.trace=true` to have the report tell where the object was created, at the cost of a stack trace per object.
+
+```shell
+java -Dwebrtc.java.leak.detection=true -Dwebrtc.java.leak.trace=true -jar app.jar
+```
+
+The reports are warnings through `Logging`, which writes nothing unless the application asks for it:
+
+```java
+Logging.logToDebug(Logging.Severity.WARNING);
+```
+
+Only objects that own a native object and have a `dispose()` or `close()` method are watched: not views such as the track of `RTCRtpSender.getTrack()`, which own nothing, and not reference-counted objects such as video frame buffers. The detector only reports; it never frees anything itself, since a native object may still be in use on a WebRTC thread. While it is off, which is the default, nothing is watched.
 
 ## Next Steps
 

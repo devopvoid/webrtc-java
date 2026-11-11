@@ -31,12 +31,12 @@ namespace jni
 
 			virtual JavaLocalRef<jobject> create(JNIEnv * env, const T * nativeObject) const
 			{
-				jobject object = env->NewObject(javaClass, javaCtor);
+				JavaLocalRef<jobject> object(env, env->NewObject(javaClass, javaCtor));
 				ExceptionCheck(env);
 
-				SetHandle(env, object, nativeObject);
+				SetHandle(env, object.get(), nativeObject);
 
-				return JavaLocalRef<jobject>(env, object);
+				return object;
 			}
 
 			virtual JavaLocalRef<jobjectArray> createArray(JNIEnv * env, const jsize & length) const

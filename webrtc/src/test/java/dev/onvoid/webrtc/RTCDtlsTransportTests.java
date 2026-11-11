@@ -18,7 +18,10 @@ package dev.onvoid.webrtc;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +46,8 @@ class RTCDtlsTransportTests extends TestBase {
 	private TestPeerConnection caller;
 	private TestPeerConnection callee;
 
+	private RTCRtpSender sender;
+
 	private RTCDtlsTransport transport;
 
 
@@ -57,7 +62,7 @@ class RTCDtlsTransportTests extends TestBase {
 		List<String> streamIds = new ArrayList<>();
 		streamIds.add("stream1");
 
-		RTCRtpSender sender = caller.getPeerConnection().addTrack(audioTrack, streamIds);
+		sender = caller.getPeerConnection().addTrack(audioTrack, streamIds);
 
 		caller.setRemotePeerConnection(callee);
 		callee.setRemotePeerConnection(caller);
@@ -75,6 +80,27 @@ class RTCDtlsTransportTests extends TestBase {
 	void dispose() {
 		caller.close();
 		callee.close();
+
+		if (transport != null) {
+			transport.dispose();
+		}
+	}
+
+	@Test
+	void noTransportBeforeNegotiation() {
+		TestPeerConnection offerer = new TestPeerConnection(factory);
+
+		try {
+			AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+			AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+			RTCRtpSender audioSender = offerer.getPeerConnection()
+					.addTrack(audioTrack, Collections.singletonList("stream1"));
+
+			assertNull(audioSender.getTransport());
+		}
+		finally {
+			offerer.close();
+		}
 	}
 
 	@Test
@@ -128,6 +154,151 @@ class RTCDtlsTransportTests extends TestBase {
 	}
 
 	@Test
+	void remoteCertificates() {
+		List<RTCCertificatePEM> certificates = transport.getRemoteCertificates();
+
+		assertFalse(certificates.isEmpty());
+
+		long now = System.currentTimeMillis();
+
+		for (RTCCertificatePEM certificate : certificates) {
+			assertTrue(certificate.getCertificate().startsWith("-----BEGIN CERTIFICATE-----"));
+
+			// WebRTC generates the certificate of each connection valid for
+			// 30 days. The time is read from the certificate in whole seconds
+			// and given in milliseconds; it used to be 0.
+			long expires = certificate.getExpires();
+
+			assertTrue(expires > now, "Expires " + expires + " is not after " + now);
+			assertTrue(expires <= now + TimeUnit.DAYS.toMillis(31), "Expires " + expires);
+			assertEquals(0, expires % 1000);
+		}
+	}
+
+	@Test
+	void remoteCertificatesBeforeHandshake() throws Exception {
+		TestPeerConnection offerer = new TestPeerConnection(factory);
+
+		try {
+			AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+			AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+			RTCRtpSender audioSender = offerer.getPeerConnection()
+					.addTrack(audioTrack, Collections.singletonList("stream1"));
+
+			// Setting the local description creates the transport, which has
+			// no remote certificates before the handshake. Reading them used
+			// to crash the VM.
+			offerer.createOffer();
+
+			RTCDtlsTransport dtlsTransport = audioSender.getTransport();
+			assertNotNull(dtlsTransport);
+			assertEquals(RTCDtlsTransportState.NEW, dtlsTransport.getState());
+
+			assertTrue(dtlsTransport.getRemoteCertificates().isEmpty());
+
+			dtlsTransport.dispose();
+		}
+		finally {
+			offerer.close();
+		}
+	}
+
+	@Test
+	void transportOutlivesClosedConnection() throws Exception {
+		CompletableFuture<RTCDtlsTransportState> closedState = new CompletableFuture<>();
+
+		transport.registerObserver(new RTCDtlsTransportObserver() {
+			@Override
+			public void onStateChange(RTCDtlsTransportState state) {
+				if (state == RTCDtlsTransportState.CLOSED) {
+					closedState.complete(state);
+				}
+			}
+
+			@Override
+			public void onError(String error) { }
+		});
+
+		// Closing frees the connection's transports, and with the sender gone
+		// nothing else refers to this one. The wrapper must keep the transport
+		// it refers to alive, rather than point to freed memory.
+		caller.close();
+		callee.close();
+		sender.dispose();
+
+		assertEquals(RTCDtlsTransportState.CLOSED, closedState.get(5, TimeUnit.SECONDS));
+
+		for (int i = 0; i < 1000; i++) {
+			assertEquals(RTCDtlsTransportState.CLOSED, transport.getState());
+			assertTrue(transport.getRemoteCertificates().isEmpty());
+		}
+
+		assertDoesNotThrow(transport::unregisterObserver);
+	}
+
+	@Test
+	void unregisterKeepsObserverOfOtherInstance() throws Exception {
+		assertObserverOfOtherInstanceStays(false);
+	}
+
+	@Test
+	void disposeKeepsObserverOfOtherInstance() throws Exception {
+		assertObserverOfOtherInstanceStays(true);
+	}
+
+	private void assertObserverOfOtherInstanceStays(boolean dispose) throws Exception {
+		RTCDtlsTransport other = sender.getTransport();
+
+		AtomicInteger firstObserverCalls = new AtomicInteger();
+		CompletableFuture<RTCDtlsTransportState> closedState = new CompletableFuture<>();
+
+		try {
+			transport.registerObserver(new RTCDtlsTransportObserver() {
+				@Override
+				public void onStateChange(RTCDtlsTransportState state) {
+					firstObserverCalls.incrementAndGet();
+				}
+
+				@Override
+				public void onError(String error) { }
+			});
+			other.registerObserver(new RTCDtlsTransportObserver() {
+				@Override
+				public void onStateChange(RTCDtlsTransportState state) {
+					if (state == RTCDtlsTransportState.CLOSED) {
+						closedState.complete(state);
+					}
+				}
+
+				@Override
+				public void onError(String error) { }
+			});
+
+			// The observer registered through the other instance replaced the
+			// first one, which leaves this instance nothing to remove from the
+			// transport.
+			if (dispose) {
+				transport.dispose();
+				transport = null;
+			}
+			else {
+				transport.unregisterObserver();
+			}
+
+			caller.close();
+			callee.close();
+			sender.dispose();
+
+			assertEquals(RTCDtlsTransportState.CLOSED, closedState.get(5, TimeUnit.SECONDS),
+					"The observer of the other instance was removed");
+			assertEquals(0, firstObserverCalls.get(), "The replaced observer must not receive events");
+		}
+		finally {
+			other.dispose();
+		}
+	}
+
+	@Test
 	void observerCanUseRtpSender() throws Exception {
 		// WebRTC reports DTLS states on the network thread, which is also the
 		// worker thread. Getting a sender's parameters blocks the signaling
@@ -170,6 +341,7 @@ class RTCDtlsTransportTests extends TestBase {
 			assertNotNull(parameters.get(10, TimeUnit.SECONDS));
 
 			dtlsTransport.unregisterObserver();
+			dtlsTransport.dispose();
 		}
 		finally {
 			offerer.close();

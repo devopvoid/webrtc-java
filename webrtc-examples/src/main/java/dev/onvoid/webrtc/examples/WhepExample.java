@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import dev.onvoid.webrtc.client.Peer;
+import dev.onvoid.webrtc.client.RecoveryPolicy;
 import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.client.Whep;
 
@@ -35,8 +36,8 @@ import dev.onvoid.webrtc.client.Whep;
  *   <li>Ending the session, which deletes it on the server</li>
  * </ul>
  * <p>
- * {@link Whep} sends an offer with all local candidates, applies the answer and waits until
- * the peer is connected. The Client API guide shows the same steps by hand, through the
+ * {@link Whep} sends an offer, trickles the local candidates after it, applies the answer and
+ * waits until the peer is connected. The Client API guide shows the same steps by hand, through the
  * peer's negotiator, for servers that speak a protocol of their own.
  * <p>
  * Run it against a WHEP endpoint, such as one of MediaMTX, for a number of seconds:
@@ -62,8 +63,13 @@ public class WhepExample {
             System.out.println("Requesting the stream from " + endpoint);
 
             // The main thread may wait for the session; a handler must not.
+            // For endpoints without Trickle ICE, add .gathering(Gathering.COMPLETE).
+            // Authenticated TURN is configured with .turnServer(url, username, password).
             Whep.Session session = Whep.from(endpoint)
                     .iceServer("stun:stun.l.google.com:19302")
+                    .recovery(RecoveryPolicy.builder()
+                            .onEvent(event -> System.out.println("ICE recovery: " + event.state()))
+                            .build())
                     .play(rtc)
                     .get(15, TimeUnit.SECONDS);
 
@@ -97,7 +103,7 @@ public class WhepExample {
 
             Thread.sleep(seconds * 1000L);
 
-            // Deletes the session on the server, then closes the peer.
+            // Deletes the session on the server and closes the peer.
             session.closeAsync().get(5, TimeUnit.SECONDS);
 
             System.out.println("Ended the session " + session.resource());

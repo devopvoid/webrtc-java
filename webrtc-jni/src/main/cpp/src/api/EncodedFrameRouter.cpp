@@ -28,6 +28,7 @@ namespace jni
 	EncodedFrameRouter::EncodedFrameRouter(webrtc::MediaType mediaType, bool sender) :
 		mediaType(mediaType),
 		sender(sender),
+		sealed(false),
 		observerCount(0)
 	{
 	}
@@ -86,7 +87,7 @@ namespace jni
 		}
 	}
 
-	void EncodedFrameRouter::SetTransformer(std::shared_ptr<RTCEncodedFrameTransformer> transformer)
+	void EncodedFrameRouter::SetTransformer(std::shared_ptr<RTCEncodedFrameTransformer> transformer, bool sealed)
 	{
 		std::shared_ptr<RTCEncodedFrameTransformer> previous;
 
@@ -95,6 +96,7 @@ namespace jni
 
 			previous = std::move(this->transformer);
 			this->transformer = std::move(transformer);
+			this->sealed.store(sealed, std::memory_order_release);
 		}
 
 		// The previous transform holds a global reference, which is deleted
@@ -107,6 +109,11 @@ namespace jni
 		std::lock_guard<std::mutex> lock(transformerMutex);
 
 		return transformer;
+	}
+
+	bool EncodedFrameRouter::IsSealed() const
+	{
+		return sealed.load(std::memory_order_acquire);
 	}
 
 	EncodedFrameRouter::Observer * EncodedFrameRouter::AddObserver(wj_encoded_frame_fn fn, void * opaque)
@@ -136,9 +143,20 @@ namespace jni
 		observerCount.store(observers.size(), std::memory_order_release);
 	}
 
+	size_t EncodedFrameRouter::GetObserverCount() const
+	{
+		return observerCount.load(std::memory_order_acquire);
+	}
+
 	void EncodedFrameRouter::Observe(const webrtc::TransformableFrameInterface & frame)
 	{
 		if (observerCount.load(std::memory_order_acquire) == 0) {
+			return;
+		}
+
+		// What a sealed transform protects: a sender's frames before it
+		// encrypts them, a receiver's after it decrypted them.
+		if (sealed.load(std::memory_order_acquire)) {
 			return;
 		}
 

@@ -19,10 +19,8 @@ package dev.onvoid.webrtc.client;
 import static java.util.Objects.requireNonNull;
 
 import java.time.Duration;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,39 +28,29 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import dev.onvoid.webrtc.AddIceCandidateObserver;
-import dev.onvoid.webrtc.CreateSessionDescriptionObserver;
 import dev.onvoid.webrtc.PeerConnectionObserver;
-import dev.onvoid.webrtc.RTCAnswerOptions;
 import dev.onvoid.webrtc.RTCDataChannel;
+import dev.onvoid.webrtc.RTCConfiguration;
+import dev.onvoid.webrtc.RTCIceServer;
+import dev.onvoid.webrtc.RTCEncodedFrame;
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCIceCandidate;
 import dev.onvoid.webrtc.RTCIceGatheringState;
-import dev.onvoid.webrtc.RTCOfferOptions;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCPeerConnectionState;
+import dev.onvoid.webrtc.RTCRtpEncodingParameters;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiver;
 import dev.onvoid.webrtc.RTCRtpTransceiverDirection;
 import dev.onvoid.webrtc.RTCRtpTransceiverInit;
-import dev.onvoid.webrtc.RTCSdpType;
-import dev.onvoid.webrtc.RTCSessionDescription;
-import dev.onvoid.webrtc.RTCSignalingState;
-import dev.onvoid.webrtc.SetSessionDescriptionObserver;
 import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.media.MediaStream;
-import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.MediaType;
-import dev.onvoid.webrtc.media.audio.AudioTrack;
-import dev.onvoid.webrtc.media.video.VideoTrack;
 
 /**
  * The {@link Peer} of a {@link WebRtc} runtime.
@@ -74,8 +62,18 @@ import dev.onvoid.webrtc.media.video.VideoTrack;
  * told so far. Neither ever waits for the other, and nothing on a WebRTC
  * thread waits for either, so no handler can deadlock the connection.
  * <p>
- * Changes that the standard runs on its operations chain go through {@link
- * #enqueue}, which starts one only once the one before finished.
+ * Changes that the standard runs on its operations chain go through the
+ * {@link OperationChain}, which starts one only once the one before finished,
+ * made of the {@link NegotiationSteps}. The automatic negotiation is the
+ * {@link PerfectNegotiation}; all three are confined to the control executor
+ * as well.
+ * <p>
+ * This class owns the lifecycle of the connection, its senders, and the step
+ * from internal to public futures. The other concerns have classes of their
+ * own, which keep to the same two executors and say which of their state
+ * belongs to which: the {@link DataChannels}, the {@link RemoteTracks}, the
+ * {@link StatsSampler}, the {@link SignalingLink}, and the {@link
+ * ManualNegotiation} with its {@link CodecPreferences}.
  */
 final class PeerImpl implements Peer {
 
@@ -85,9 +83,6 @@ final class PeerImpl implements Peer {
 		EncodedFrames.register(new EncodedFramesAccess());
 	}
 
-	/** How long an impolite peer waits for an answer after it ignored an offer. */
-	private static final long COLLISION_TIMEOUT_MS = 5000;
-
 	final WebRtc rtc;
 
 	final String name;
@@ -96,20 +91,31 @@ final class PeerImpl implements Peer {
 
 	final SerialExecutor events;
 
+	// Called from any thread; each says which of its state is confined to
+	// which executor.
+
+	final DataChannels channels;
+
+	final ManualNegotiation manual;
+
+	private final RemoteTracks tracks;
+
+	private final StatsSampler statistics;
+
+	private final SignalingLink signaling;
+
 	private final PeerOptions options;
 
-	private final Signaling signaling;
+	private IceRecovery recovery;
 
 	/** The stream the tracks added without stream ids share. */
-	private final String defaultStreamId = UUID.randomUUID().toString();
+	final String defaultStreamId = UUID.randomUUID().toString();
 
 	private final AtomicBoolean closing = new AtomicBoolean();
 
 	private final CompletableFuture<Void> closedInternal = new CompletableFuture<>();
 
 	private final CopyOnWriteArrayList<SenderImpl> senders = new CopyOnWriteArrayList<>();
-
-	private final CopyOnWriteArrayList<RemoteTrackImpl> remoteTracks = new CopyOnWriteArrayList<>();
 
 	private volatile PeerState state = PeerState.NEW;
 
@@ -119,43 +125,19 @@ final class PeerImpl implements Peer {
 
 	private boolean closed;
 
-	private final ArrayDeque<Runnable> operations = new ArrayDeque<>();
+	private boolean teardownStarted;
 
-	private boolean operationRunning;
+	private final OperationChain chain;
 
-	private CompletableFuture<?> runningOperation;
+	private final NegotiationSteps steps;
 
-	private boolean negotiationQueued;
-
-	private boolean ignoreOffer;
-
-	private int remoteAnswers;
-
-	private ScheduledFuture<?> collisionCheck;
-
-	private final List<HeldCandidate> heldCandidates = new ArrayList<>();
-
-	private final List<CompletableFuture<Void>> gatheringWaiters = new ArrayList<>();
-
-	private final Map<String, RemoteTrackImpl> remoteTrackById = new HashMap<>();
-
-	private final List<DataChannelImpl> channels = new ArrayList<>();
-
-	private final StatsReader statsReader = new StatsReader();
+	private final PerfectNegotiation automatic;
 
 	// Confined to the event executor.
 
 	private PeerState deliveredState = PeerState.NEW;
 
-	private final List<RemoteTrack> deliveredTracks = new ArrayList<>();
-
-	private final List<DataChannel> deliveredChannels = new ArrayList<>();
-
 	private final Handlers<PeerState> stateHandlers;
-
-	private final Handlers<RemoteTrack> trackHandlers;
-
-	private final Handlers<DataChannel> channelHandlers;
 
 	private final Handlers<WebRtcException> errorHandlers;
 
@@ -163,21 +145,37 @@ final class PeerImpl implements Peer {
 
 	private final ClientFuture<Void> closedFuture = new ClientFuture<>();
 
-	private final NegotiatorImpl negotiator = new NegotiatorImpl();
+	/** Gets the local candidates as well, or null. Called on the control executor. */
+	private volatile Consumer<RTCIceCandidate> candidateListener;
+
+	/** Runs once gathering is complete, or null. Called on the control executor. */
+	private volatile Runnable gatheredListener;
 
 
 	PeerImpl(WebRtc rtc, PeerOptions options, String name) {
 		this.rtc = rtc;
 		this.options = options;
 		this.name = name;
-		this.signaling = options.signaling;
-		this.control = new SerialExecutor(rtc.controlPool, rtc::reportError, false, null);
-		this.events = new SerialExecutor(rtc.eventExecutor, rtc::reportError, true,
+		this.control = new SerialExecutor(rtc.controlPool, rtc.controlWork, rtc::reportError, false, null);
+		this.events = new SerialExecutor(rtc.eventExecutor, rtc.eventWork, rtc::reportError, true,
 				rtc.ownsEventExecutor ? "webrtc-client-events-" + name : null);
 		this.stateHandlers = new Handlers<>(rtc::reportError);
-		this.trackHandlers = new Handlers<>(rtc::reportError);
-		this.channelHandlers = new Handlers<>(rtc::reportError);
 		this.errorHandlers = new Handlers<>(rtc::reportError);
+		this.chain = new OperationChain(control, rtc.timer, rtc.operationTimeout, name, new ChainHost());
+		CodecPreferences codecs = new CodecPreferences(this, options.e2ee != null);
+
+		this.steps = new NegotiationSteps(control, rtc.timer, chain, () -> connection, options.gatheringTimeout,
+				this::ignoresOffer, error -> {
+					if (!closed) {
+						deliverError(error);
+					}
+				}, codecs::apply);
+		this.automatic = new PerfectNegotiation(this, options, chain, steps);
+		this.statistics = new StatsSampler(this);
+		this.channels = new DataChannels(this);
+		this.tracks = new RemoteTracks(this, receiveTransforms(options));
+		this.manual = new ManualNegotiation(this, options, chain, steps, tracks, codecs);
+		this.signaling = new SignalingLink(this, options.signaling);
 
 		rtc.track(connected, events);
 		rtc.track(closedFuture, events);
@@ -250,8 +248,12 @@ final class PeerImpl implements Peer {
 			throw new ConfigurationException("Creating " + name + " failed: " + cause.getMessage(), cause);
 		}
 
-		if (signaling != null) {
-			signaling.attach(this::signal);
+		signaling.attach();
+		if (options.recovery != null) {
+			startRecovery(options.recovery, () -> {
+				connection.restartIce();
+				return CompletableFuture.completedFuture(null);
+			});
 		}
 	}
 
@@ -269,7 +271,7 @@ final class PeerImpl implements Peer {
 	public void signal(SignalMessage message) {
 		requireNonNull(message, "message");
 
-		control.execute(() -> handleSignal(message));
+		control.execute(() -> automatic.signal(message));
 	}
 
 	@Override
@@ -285,6 +287,27 @@ final class PeerImpl implements Peer {
 			ids.add(defaultStreamId);
 		}
 
+		return addSender(local, ids, Collections.emptyList(), new CompletableFuture<>());
+	}
+
+	/**
+	 * Adds a track to the stream of the tracks added without stream ids, sent
+	 * in the given encodings, as simulcast (RFC 8853) does with one for each
+	 * layer.
+	 *
+	 * @return a future that completes once the track is added, or fails if
+	 * WebRTC refuses the encodings.
+	 */
+	CompletableFuture<Void> addTrack(LocalTrack track, List<RTCRtpEncodingParameters> encodings) {
+		CompletableFuture<Void> added = new CompletableFuture<>();
+
+		addSender(checkTrack(track), List.of(defaultStreamId), encodings, added);
+
+		return added;
+	}
+
+	private SenderImpl addSender(LocalTrackImpl local, List<String> ids, List<RTCRtpEncodingParameters> encodings,
+			CompletableFuture<Void> added) {
 		SenderImpl sender = new SenderImpl(this, local);
 		senders.add(sender);
 
@@ -292,18 +315,21 @@ final class PeerImpl implements Peer {
 			if (closed) {
 				senders.remove(sender);
 				sender.failAttach(closedError());
+				added.completeExceptionally(closedError());
 				return;
 			}
 
 			try {
-				sender.attach(connection, ids);
+				sender.attach(connection, ids, encodings, guard(sendTransform(sender), "a sender of " + name));
+				added.complete(null);
 			}
 			catch (Throwable e) {
 				senders.remove(sender);
 				sender.failAttach(e);
 				deliverError(asWebRtcException(e, "Adding the track failed"));
+				added.completeExceptionally(e);
 			}
-		});
+		}, () -> added.completeExceptionally(closedError()));
 
 		return sender;
 	}
@@ -315,19 +341,12 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public Subscription onTrack(Consumer<RemoteTrack> handler) {
-		requireNonNull(handler, "handler");
-
-		return subscribe(() -> {
-			for (RemoteTrack track : new ArrayList<>(deliveredTracks)) {
-				call(handler, track);
-			}
-			return trackHandlers.add(handler);
-		});
+		return tracks.onTrack(handler);
 	}
 
 	@Override
 	public List<RemoteTrack> remoteTracks() {
-		return Collections.unmodifiableList(new ArrayList<RemoteTrack>(remoteTracks));
+		return tracks.current();
 	}
 
 	@Override
@@ -337,47 +356,12 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public DataChannel createChannel(String label, ChannelOptions options) {
-		requireNonNull(label, "label");
-		requireNonNull(options, "options");
-
-		DataChannelImpl channel = new DataChannelImpl(this, label);
-
-		control.execute(() -> {
-			if (closed) {
-				channel.closeFromPeer(new PeerClosedException("The peer " + name + " is closed"));
-				return;
-			}
-
-			try {
-				RTCDataChannel nativeChannel = connection.createDataChannel(label, options.toInit());
-
-				if (nativeChannel == null) {
-					throw new ConfigurationException("WebRTC refused the data channel " + label);
-				}
-
-				channels.add(channel);
-				channel.bind(nativeChannel);
-			}
-			catch (Throwable e) {
-				WebRtcException error = asWebRtcException(e, "Creating the data channel " + label + " failed");
-				channel.closeFromPeer(error);
-				deliverError(error);
-			}
-		});
-
-		return channel;
+		return channels.create(label, options);
 	}
 
 	@Override
 	public Subscription onChannel(Consumer<DataChannel> handler) {
-		requireNonNull(handler, "handler");
-
-		return subscribe(() -> {
-			for (DataChannel channel : new ArrayList<>(deliveredChannels)) {
-				call(handler, channel);
-			}
-			return channelHandlers.add(handler);
-		});
+		return channels.onChannel(handler);
 	}
 
 	@Override
@@ -399,12 +383,12 @@ final class PeerImpl implements Peer {
 
 	@Override
 	public CompletableFuture<Peer> whenConnected() {
-		return connected;
+		return ClientFuture.copyOf(connected);
 	}
 
 	@Override
 	public CompletableFuture<Void> whenClosed() {
-		return closedFuture;
+		return ClientFuture.copyOf(closedFuture);
 	}
 
 	@Override
@@ -414,85 +398,104 @@ final class PeerImpl implements Peer {
 					+ "Build it with Negotiation.MANUAL to drive the exchange by hand");
 		}
 
-		return negotiator;
+		return manual;
+	}
+
+	/**
+	 * Hands the candidates this peer gathers to the given listener as well,
+	 * on the control executor, and tells it when gathering is complete.
+	 *
+	 * @param candidates gets each local candidate.
+	 * @param gathered   runs once gathering is complete, each time.
+	 */
+	void onLocalCandidates(Consumer<RTCIceCandidate> candidates, Runnable gathered) {
+		this.candidateListener = candidates;
+		this.gatheredListener = gathered;
+	}
+
+	Map<String, long[]> pcmObservations() {
+		return tracks.pcmObservations();
 	}
 
 	@Override
 	public CompletableFuture<PeerStats> stats() {
-		CompletableFuture<PeerStats> result = new CompletableFuture<>();
-
-		control.execute(() -> {
-			if (closed) {
-				result.completeExceptionally(closedError());
-				return;
-			}
-
-			try {
-				connection.getStats(report -> control.execute(() -> {
-					try {
-						result.complete(statsReader.read(report));
-					}
-					catch (Throwable e) {
-						result.completeExceptionally(e);
-					}
-				}));
-			}
-			catch (Throwable e) {
-				result.completeExceptionally(asWebRtcException(e, "Reading the statistics failed"));
-			}
-		});
-
-		return toPublic(result);
+		return statistics.read();
 	}
 
 	@Override
 	public Subscription onStats(Duration interval, Consumer<PeerStats> handler) {
-		requireNonNull(interval, "interval");
-		requireNonNull(handler, "handler");
+		return statistics.subscribe(interval, handler);
+	}
 
-		long millis = interval.toMillis();
-
-		if (millis <= 0) {
-			throw new IllegalArgumentException("The interval must be positive, got " + interval);
-		}
-
-		AtomicBoolean active = new AtomicBoolean(true);
-		AtomicReference<ScheduledFuture<?>> task = new AtomicReference<>();
-
-		Runnable sample = () -> {
-			if (!active.get()) {
-				return;
-			}
-			if (closing.get()) {
-				active.set(false);
-
-				ScheduledFuture<?> scheduled = task.get();
-
-				if (scheduled != null) {
-					scheduled.cancel(false);
+	/** Installs the same controller with the transport-specific restart operation. */
+	void startRecovery(RecoveryPolicy policy, Supplier<CompletableFuture<Void>> restart) {
+		control.execute(() -> {
+			if (isClosing()) return;
+			if (recovery != null) recovery.close();
+			recovery = new IceRecovery(policy, control, rtc.timer, this::isClosing, restart, new IceRecovery.Host() {
+				@Override
+				public CompletableFuture<List<RTCIceServer>> servers(int attempt) {
+					return recoveryServers(policy, attempt);
 				}
-				return;
-			}
 
-			stats().whenComplete((stats, error) -> {
-				if (!active.get()) {
-					return;
+				@Override
+				public void useServers(List<RTCIceServer> servers) {
+					RTCConfiguration config = connection.getConfiguration();
+					config.iceServers = servers;
+					connection.setConfiguration(config);
 				}
-				if (error == null) {
-					handler.accept(stats);
-				}
-				else if (!(unwrap(error) instanceof PeerClosedException)) {
-					deliverError(asWebRtcException(error, "Reading the statistics failed"));
+
+				@Override
+				public void event(RecoveryEvent event) {
+					events.execute(() -> call(policy.listener, event));
 				}
 			});
-		};
+			recovery.stateChanged(state);
+		});
+	}
 
-		task.set(rtc.timer.scheduleAtFixedRate(sample, 0, millis, TimeUnit.MILLISECONDS));
+	private CompletableFuture<List<RTCIceServer>> recoveryServers(RecoveryPolicy policy, int attempt) {
+		if (policy.iceServers == null) {
+			return CompletableFuture.completedFuture(null);
+		}
 
-		return () -> {
-			active.set(false);
-			task.get().cancel(false);
-		};
+		CompletableFuture<List<RTCIceServer>> result = new CompletableFuture<>();
+		events.execute(() -> {
+			if (isClosing()) {
+				result.completeExceptionally(closedError());
+				return;
+			}
+			try {
+				requireNonNull(policy.iceServers.apply(attempt), "ICE server stage").whenComplete((servers, error) -> {
+					if (error != null) {
+						result.completeExceptionally(error);
+						return;
+					}
+					try {
+						result.complete(copyIceServers(servers));
+					}
+					catch (Throwable e) {
+						result.completeExceptionally(e);
+					}
+				});
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e);
+			}
+		}, () -> result.completeExceptionally(closedError()));
+		return result;
+	}
+
+	private static List<RTCIceServer> copyIceServers(List<RTCIceServer> servers) {
+		List<RTCIceServer> copy = new ArrayList<>();
+		for (RTCIceServer server : requireNonNull(servers, "ICE servers")) {
+			RTCIceServer item = new RTCIceServer();
+			for (String url : server.urls) item.urls.add(requireNonNull(url, "ICE server URL"));
+			item.username = server.username;
+			item.password = server.password;
+			copy.add(item);
+		}
+		return copy;
 	}
 
 	@Override
@@ -510,7 +513,7 @@ final class PeerImpl implements Peer {
 
 		CompletableFuture<T> result = new CompletableFuture<>();
 
-		control.execute(() -> enqueue(() -> CompletableFuture.completedFuture(action.apply(connection)))
+		control.execute(() -> chain.enqueue(() -> CompletableFuture.completedFuture(action.apply(connection)))
 				.whenComplete((value, error) -> complete(result, value, error)));
 
 		return toPublic(result);
@@ -520,7 +523,7 @@ final class PeerImpl implements Peer {
 	public CompletableFuture<Void> closeAsync() {
 		closeInternal();
 
-		return closedFuture;
+		return ClientFuture.copyOf(closedFuture);
 	}
 
 	@Override
@@ -537,7 +540,8 @@ final class PeerImpl implements Peer {
 	 * Starts closing, once.
 	 *
 	 * @return a future that completes on the control executor once the
-	 * connection is closed, before the handlers hear of it.
+	 * connection is closed and the control tasks queued before that have run,
+	 * before the handlers hear of it.
 	 */
 	CompletableFuture<Void> closeInternal() {
 		if (closing.compareAndSet(false, true)) {
@@ -564,14 +568,32 @@ final class PeerImpl implements Peer {
 	 * executor, so its callbacks run there like the handlers.
 	 */
 	<T> CompletableFuture<T> toPublic(CompletableFuture<T> internal) {
+		return toPublic(internal, value -> { });
+	}
+
+	/**
+	 * Hands a future out to the application, as {@link #toPublic(CompletableFuture)}
+	 * does, and frees a result that comes too late for it: the caller may have
+	 * cancelled or completed the future meanwhile, and then no one else would.
+	 *
+	 * @param unclaimed frees a result the future did not take.
+	 */
+	<T> CompletableFuture<T> toPublic(CompletableFuture<T> internal, Consumer<? super T> unclaimed) {
 		ClientFuture<T> result = new ClientFuture<>();
 
 		rtc.track(result, events);
 
-		// Completed in any case: should the event executor reject the task, on
-		// the thread that found it rejected.
-		internal.whenComplete((value, error) -> events.execute(() -> complete(result, value, error),
-				() -> complete(result, value, error)));
+		internal.whenComplete((value, error) -> {
+			Runnable deliver = () -> {
+				if (!complete(result, value, error) && error == null && value != null) {
+					unclaimed.accept(value);
+				}
+			};
+
+			// Completed in any case: should the event executor reject the
+			// task, on the thread that found it rejected.
+			events.execute(deliver, deliver);
+		});
 
 		return result;
 	}
@@ -614,6 +636,75 @@ final class PeerImpl implements Peer {
 		return result;
 	}
 
+	/**
+	 * Wraps a transform of the application, so that a frame it throws on is
+	 * dropped rather than sent on, and only the first failure reaches the
+	 * error handlers of the peer, not every one the uncaught exception
+	 * handler of the transform's thread.
+	 *
+	 * @param owner names the sender or receiver in the error.
+	 *
+	 * @return the wrapped transform, or null for none.
+	 */
+	RTCEncodedFrameTransformer guard(RTCEncodedFrameTransformer transform, String owner) {
+		if (transform == null) {
+			return null;
+		}
+
+		AtomicBoolean reported = new AtomicBoolean();
+
+		return new RTCEncodedFrameTransformer() {
+
+			@Override
+			public void transform(RTCEncodedFrame frame) {
+				try {
+					transform.transform(frame);
+				}
+				catch (Throwable e) {
+					frame.drop();
+
+					if (reported.compareAndSet(false, true)) {
+						deliverError(new WebRtcException("The transform of " + owner
+								+ " failed, and drops each frame it fails on", e));
+					}
+				}
+			}
+
+			@Override
+			public boolean allowsPlaintextObservers() {
+				// Wrapping must not open up what the transform protects.
+				return transform.allowsPlaintextObservers();
+			}
+		};
+	}
+
+	/**
+	 * The transform of a sender: an encryptor of its own with end-to-end
+	 * encryption, which asks the sender for a key frame when the key changes,
+	 * or the send transform of the options.
+	 */
+	private RTCEncodedFrameTransformer sendTransform(SenderImpl sender) {
+		if (options.e2ee != null) {
+			return options.e2ee.createEncryptor(sender::generateKeyFrame);
+		}
+
+		return options.sendTransform;
+	}
+
+	/** Makes the transform of each remote track, or null for none. */
+	private static Function<Runnable, RTCEncodedFrameTransformer> receiveTransforms(PeerOptions options) {
+		if (options.e2ee != null) {
+			return options.e2ee::createDecryptor;
+		}
+		if (options.receiveTransform != null) {
+			RTCEncodedFrameTransformer transform = options.receiveTransform;
+
+			return keyFrameRequest -> transform;
+		}
+
+		return null;
+	}
+
 	void deliverError(WebRtcException error) {
 		events.execute(() -> {
 			if (errorHandlers.isEmpty()) {
@@ -627,9 +718,15 @@ final class PeerImpl implements Peer {
 
 	/**
 	 * Registers a handler on the event executor, where it sees exactly the
-	 * events the other handlers saw.
+	 * events the other handlers saw. A handler that registers another does so
+	 * at once, so that the new one also sees the events already queued, such
+	 * as the messages of a channel it was just handed.
 	 */
 	Subscription subscribe(Supplier<Subscription> register) {
+		if (events.inExecutor()) {
+			return register.get();
+		}
+
 		DeferredSubscription subscription = new DeferredSubscription();
 
 		events.execute(() -> subscription.set(register.get()));
@@ -654,12 +751,12 @@ final class PeerImpl implements Peer {
 		senders.remove(sender);
 	}
 
-	void forgetChannel(DataChannelImpl channel) {
-		channels.remove(channel);
-	}
-
 	boolean isClosed() {
 		return closed;
+	}
+
+	private boolean ignoresOffer() {
+		return automatic.ignoresOffer();
 	}
 
 	static Throwable unwrap(Throwable error) {
@@ -681,13 +778,15 @@ final class PeerImpl implements Peer {
 		return new WebRtcException(message + ": " + error, error);
 	}
 
-	static <T> void complete(CompletableFuture<T> future, T value, Throwable error) {
+	/**
+	 * @return whether this completed the future, which was not done before.
+	 */
+	static <T> boolean complete(CompletableFuture<T> future, T value, Throwable error) {
 		if (error != null) {
-			future.completeExceptionally(unwrap(error));
+			return future.completeExceptionally(unwrap(error));
 		}
-		else {
-			future.complete(value);
-		}
+
+		return future.complete(value);
 	}
 
 	private LocalTrackImpl checkTrack(LocalTrack track) {
@@ -700,466 +799,71 @@ final class PeerImpl implements Peer {
 		return (LocalTrackImpl) track;
 	}
 
-	// Operations, on the control executor.
-
 	/**
-	 * Runs an operation once the ones queued before it finished. It fails
-	 * with a {@link PeerClosedException} when the peer closed first, and with
-	 * a {@link TimeoutException} when WebRTC never finishes it.
-	 *
-	 * @return a future that completes on the control executor.
+	 * @return the connection, or null before it is created. Only on the
+	 * control executor.
 	 */
-	private <T> CompletableFuture<T> enqueue(Supplier<CompletableFuture<T>> operation) {
-		CompletableFuture<T> result = new CompletableFuture<>();
-
-		operations.add(() -> {
-			CompletableFuture<T> running;
-
-			if (closed) {
-				running = new CompletableFuture<>();
-				running.completeExceptionally(closedError());
-			}
-			else {
-				try {
-					running = operation.get();
-				}
-				catch (Throwable e) {
-					running = new CompletableFuture<>();
-					running.completeExceptionally(e);
-				}
-			}
-
-			CompletableFuture<T> current = running;
-			runningOperation = current;
-
-			ScheduledFuture<?> timeout = rtc.timer.schedule(() -> control.execute(() ->
-					current.completeExceptionally(new TimeoutException("WebRTC did not finish an operation of "
-							+ name + " within " + rtc.operationTimeout))),
-					rtc.operationTimeout.toMillis(), TimeUnit.MILLISECONDS);
-
-			current.whenComplete((value, error) -> control.execute(() -> {
-				timeout.cancel(false);
-
-				runningOperation = null;
-				operationRunning = false;
-
-				complete(result, value, error);
-				runNextOperation();
-			}));
-		});
-
-		runNextOperation();
-
-		return result;
-	}
-
-	private void runNextOperation() {
-		if (operationRunning) {
-			return;
-		}
-
-		Runnable next = operations.poll();
-
-		if (next != null) {
-			operationRunning = true;
-			next.run();
-		}
-	}
-
-	private CompletableFuture<Void> setLocal() {
-		CompletableFuture<Void> future = new CompletableFuture<>();
-		connection.setLocalDescription(descriptionObserver(future, "Applying the local description failed"));
-		return future;
-	}
-
-	private CompletableFuture<Void> setLocal(RTCSessionDescription description) {
-		CompletableFuture<Void> future = new CompletableFuture<>();
-		connection.setLocalDescription(description, descriptionObserver(future, "Applying the local description failed"));
-		return future;
-	}
-
-	private CompletableFuture<Void> setRemote(RTCSessionDescription description) {
-		CompletableFuture<Void> future = new CompletableFuture<>();
-		connection.setRemoteDescription(description, descriptionObserver(future,
-				"Applying the remote " + description.sdpType.name().toLowerCase() + " failed"));
-		return future;
-	}
-
-	private CompletableFuture<RTCSessionDescription> createOffer() {
-		CompletableFuture<RTCSessionDescription> future = new CompletableFuture<>();
-		connection.createOffer(new RTCOfferOptions(), createObserver(future, "Creating the offer failed"));
-		return future;
-	}
-
-	private CompletableFuture<RTCSessionDescription> createAnswer() {
-		CompletableFuture<RTCSessionDescription> future = new CompletableFuture<>();
-		connection.createAnswer(new RTCAnswerOptions(), createObserver(future, "Creating the answer failed"));
-		return future;
-	}
-
-	private SetSessionDescriptionObserver descriptionObserver(CompletableFuture<Void> future, String message) {
-		return new SetSessionDescriptionObserver() {
-
-			@Override
-			public void onSuccess() {
-				control.execute(() -> future.complete(null));
-			}
-
-			@Override
-			public void onFailure(String error) {
-				control.execute(() -> future.completeExceptionally(new NegotiationException(message + ": " + error)));
-			}
-		};
-	}
-
-	private CreateSessionDescriptionObserver createObserver(
-			CompletableFuture<RTCSessionDescription> future, String message) {
-		return new CreateSessionDescriptionObserver() {
-
-			@Override
-			public void onSuccess(RTCSessionDescription description) {
-				control.execute(() -> future.complete(description));
-			}
-
-			@Override
-			public void onFailure(String error) {
-				control.execute(() -> future.completeExceptionally(new NegotiationException(message + ": " + error)));
-			}
-		};
+	RTCPeerConnection connection() {
+		return connection;
 	}
 
 	/**
-	 * Adds a remote candidate, or holds it while there is no remote
-	 * description to add it to.
+	 * Sends the local description through the signaling. On the control
+	 * executor.
 	 */
-	private CompletableFuture<Void> addRemoteCandidate(RTCIceCandidate candidate) {
-		CompletableFuture<Void> future = new CompletableFuture<>();
-
-		if (connection.getRemoteDescription() == null) {
-			heldCandidates.add(new HeldCandidate(candidate, future));
-		}
-		else {
-			addCandidate(candidate, future);
-		}
-
-		return future;
-	}
-
-	private void addCandidate(RTCIceCandidate candidate, CompletableFuture<Void> future) {
-		connection.addIceCandidate(candidate, new AddIceCandidateObserver() {
-
-			@Override
-			public void onSuccess() {
-				control.execute(() -> future.complete(null));
-			}
-
-			@Override
-			public void onFailure(String error) {
-				control.execute(() -> {
-					if (ignoreOffer) {
-						// A candidate of an offer this peer ignored.
-						future.complete(null);
-					}
-					else {
-						future.completeExceptionally(new NegotiationException("Adding a remote candidate failed: " + error));
-					}
-				});
-			}
-		});
-	}
-
-	private void releaseHeldCandidates() {
-		List<HeldCandidate> held = new ArrayList<>(heldCandidates);
-		heldCandidates.clear();
-
-		for (HeldCandidate candidate : held) {
-			addCandidate(candidate.candidate, candidate.future);
-		}
-	}
-
-	private CompletableFuture<Void> waitForGathering() {
-		if (connection.getIceGatheringState() == RTCIceGatheringState.COMPLETE) {
-			return CompletableFuture.completedFuture(null);
-		}
-
-		CompletableFuture<Void> future = new CompletableFuture<>();
-		gatheringWaiters.add(future);
-
-		// A STUN or TURN server that cannot be reached holds up the end of
-		// gathering for long; the description then goes with what there is.
-		rtc.timer.schedule(() -> control.execute(() -> {
-			if (gatheringWaiters.remove(future)) {
-				future.complete(null);
-			}
-		}), options.gatheringTimeout.toMillis(), TimeUnit.MILLISECONDS);
-
-		return future;
-	}
-
-	private void sendLocalDescription() {
-		send(SignalMessage.of(connection.getLocalDescription()));
-	}
-
-	private void send(SignalMessage message) {
-		if (signaling == null) {
-			return;
-		}
-
-		events.execute(() -> {
-			try {
-				signaling.send(message);
-			}
-			catch (Throwable e) {
-				deliverError(new WebRtcException("The signaling failed to send " + message.type(), e));
-			}
-		});
-	}
-
-	private void reportFailure(Object value, Throwable error) {
-		if (error != null && !(unwrap(error) instanceof PeerClosedException)) {
-			deliverError(asWebRtcException(error, "Negotiation of " + name + " failed"));
-		}
-	}
-
-	// Automatic negotiation: perfect negotiation, on the control executor.
-
-	private void onNegotiationNeeded() {
-		if (closed || options.negotiation != Negotiation.AUTOMATIC || negotiationQueued) {
-			return;
-		}
-
-		negotiationQueued = true;
-
-		enqueue(() -> {
-			negotiationQueued = false;
-
-			if (connection.getSignalingState() != RTCSignalingState.STABLE) {
-				// WebRTC asks again once the exchange under way is done.
-				return CompletableFuture.completedFuture(null);
-			}
-
-			return setLocal().thenRun(this::sendLocalDescription);
-		}).whenComplete(this::reportFailure);
-	}
-
-	private void handleSignal(SignalMessage message) {
-		if (closed) {
-			return;
-		}
-
-		switch (message.type()) {
-			case OFFER:
-			case ANSWER:
-				if (options.negotiation == Negotiation.MANUAL) {
-					deliverError(new NegotiationException("The peer " + name + " negotiates by hand. "
-							+ "Apply descriptions through Peer.negotiator(), not Peer.signal()"));
-					return;
-				}
-
-				enqueue(() -> applyRemoteDescription(message.description()))
-						.whenComplete(this::reportFailure);
-				break;
-
-			case CANDIDATE:
-				enqueue(() -> ignoreOffer
-						? CompletableFuture.<Void>completedFuture(null)
-						: addRemoteCandidate(message.candidate()))
-						.whenComplete(this::reportFailure);
-				break;
-
-			default:
-				// WebRTC needs no end of candidates.
-				break;
-		}
-	}
-
-	private CompletableFuture<Void> applyRemoteDescription(RTCSessionDescription description) {
-		boolean offer = description.sdpType == RTCSdpType.OFFER;
-		boolean collision = offer && connection.getSignalingState() != RTCSignalingState.STABLE;
-
-		ignoreOffer = !options.polite && collision;
-
-		if (ignoreOffer) {
-			// The polite peer gives way and answers this peer's offer instead.
-			watchCollision();
-			return CompletableFuture.completedFuture(null);
-		}
-
-		// A polite peer's own pending offer is rolled back implicitly.
-		return setRemote(description).thenCompose(ignored -> {
-			releaseHeldCandidates();
-
-			if (!offer) {
-				remoteAnswers++;
-				return CompletableFuture.completedFuture(null);
-			}
-
-			return setLocal().thenRun(this::sendLocalDescription);
-		});
-	}
-
-	/**
-	 * Tells the application when the remote peer never answered the offer this
-	 * peer kept, which happens when both peers are impolite.
-	 */
-	private void watchCollision() {
-		if (collisionCheck != null) {
-			return;
-		}
-
-		int answers = remoteAnswers;
-
-		collisionCheck = rtc.timer.schedule(() -> control.execute(() -> {
-			collisionCheck = null;
-
-			if (!closed && remoteAnswers == answers
-					&& connection.getSignalingState() == RTCSignalingState.HAVE_LOCAL_OFFER) {
-				deliverError(new NegotiationException("Both peers sent an offer at once, and both are impolite, "
-						+ "so neither gives way. Build exactly one of them with PeerOptions.Builder.polite(true)"));
-			}
-		}), COLLISION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+	void sendLocalDescription() {
+		signaling.send(SignalMessage.of(connection.getLocalDescription()));
 	}
 
 	// What WebRTC reports, on the control executor.
 
-	private void connectionChanged(RTCPeerConnectionState nativeState) {
+	void connectionChanged(RTCPeerConnectionState nativeState) {
 		if (closed) {
 			return;
 		}
 
 		PeerState newState = PeerState.of(nativeState);
 		state = newState;
+		if (recovery != null) recovery.stateChanged(newState);
 
 		events.execute(() -> deliverState(newState), () -> settleConnected(newState));
 	}
 
 	private void gatheringChanged(RTCIceGatheringState gatheringState) {
 		if (gatheringState == RTCIceGatheringState.COMPLETE) {
-			List<CompletableFuture<Void>> waiters = new ArrayList<>(gatheringWaiters);
-			gatheringWaiters.clear();
+			steps.gatheringComplete();
 
-			waiters.forEach(waiter -> waiter.complete(null));
+			Runnable listener = gatheredListener;
+
+			if (listener != null && !closed) {
+				listener.run();
+			}
 		}
-	}
-
-	private void trackAdded(RTCRtpReceiver receiver, MediaStream[] streams) {
-		List<String> streamIds = new ArrayList<>();
-
-		for (MediaStream stream : streams) {
-			streamIds.add(stream.id());
-			stream.dispose();
-		}
-
-		if (closed) {
-			receiver.dispose();
-			return;
-		}
-
-		MediaStreamTrack track = receiver.getTrack();
-		String id = track.getId();
-
-		if (remoteTrackById.containsKey(id)) {
-			// Renegotiation reported a track that is already known.
-			track.dispose();
-			receiver.dispose();
-			return;
-		}
-
-		RemoteTrackImpl remote = track instanceof VideoTrack
-				? new RemoteVideoImpl(this, receiver, (VideoTrack) track, id, streamIds)
-				: new RemoteAudioImpl(this, receiver, (AudioTrack) track, id, streamIds);
-
-		remoteTrackById.put(id, remote);
-		remoteTracks.add(remote);
-
-		events.execute(() -> {
-			deliveredTracks.add(remote);
-			trackHandlers.accept(remote);
-		});
-	}
-
-	private void trackRemoved(RTCRtpReceiver receiver) {
-		MediaStreamTrack track = receiver.getTrack();
-		String id = track.getId();
-
-		track.dispose();
-		receiver.dispose();
-
-		RemoteTrackImpl remote = remoteTrackById.remove(id);
-
-		if (remote == null || closed) {
-			return;
-		}
-
-		remoteTracks.remove(remote);
-		remote.end();
-
-		events.execute(() -> {
-			deliveredTracks.remove(remote);
-			remote.fireEnded();
-		});
-	}
-
-	private void channelOpened(DataChannelImpl channel) {
-		if (closed) {
-			channel.closeFromPeer(closedError());
-			return;
-		}
-
-		channels.add(channel);
-
-		events.execute(() -> {
-			deliveredChannels.add(channel);
-			channelHandlers.accept(channel);
-		});
-	}
-
-	void channelClosed(DataChannelImpl channel) {
-		channels.remove(channel);
-
-		events.execute(() -> deliveredChannels.remove(channel));
 	}
 
 	private void teardown() {
+		if (teardownStarted) {
+			return;
+		}
+		teardownStarted = true;
+		closing.set(true);
 		closed = true;
+		if (recovery != null) recovery.close();
 
 		PeerClosedException error = closedError();
 
-		if (runningOperation != null) {
-			runningOperation.completeExceptionally(error);
-		}
-		if (collisionCheck != null) {
-			collisionCheck.cancel(false);
-			collisionCheck = null;
-		}
+		chain.close(error);
+		automatic.close();
+		steps.close(error);
 
-		for (CompletableFuture<Void> waiter : gatheringWaiters) {
-			waiter.completeExceptionally(error);
-		}
-		gatheringWaiters.clear();
-
-		for (HeldCandidate candidate : heldCandidates) {
-			candidate.future.completeExceptionally(error);
-		}
-		heldCandidates.clear();
-
-		for (DataChannelImpl channel : new ArrayList<>(channels)) {
-			channel.closeFromPeer(error);
-		}
-		channels.clear();
+		channels.closeAll(error);
 
 		for (SenderImpl sender : senders) {
 			sender.closeFromPeer();
 		}
 		senders.clear();
 
-		List<RemoteTrackImpl> ended = new ArrayList<>(remoteTracks);
-
-		for (RemoteTrackImpl remote : ended) {
-			remote.end();
-		}
-		remoteTracks.clear();
-		remoteTrackById.clear();
+		List<RemoteTrackImpl> ended = tracks.endAll();
 
 		try {
 			if (connection != null) {
@@ -1172,25 +876,41 @@ final class PeerImpl implements Peer {
 
 		state = PeerState.CLOSED;
 		rtc.removePeer(this);
+
+		// Finished only once the tasks queued before the connection closed
+		// have run: a callback of WebRTC may have queued one behind this
+		// teardown, such as a channel the remote side opened, and that task
+		// still calls into its native objects. The runtime frees the factory,
+		// and with it WebRTC's threads, as soon as closedInternal completes.
+		// Nothing is queued for the connection once it has closed.
+		Runnable finish = () -> finishTeardown(ended, error);
+
+		control.execute(finish, finish);
+	}
+
+	private void finishTeardown(List<RemoteTrackImpl> ended, PeerClosedException error) {
 		closedInternal.complete(null);
 
 		events.execute(() -> {
-			for (RemoteTrackImpl remote : ended) {
-				remote.fireEnded();
-			}
-			deliveredTracks.clear();
-			deliveredChannels.clear();
+			// Behind the messages queued for sending, so that the transport
+			// hears of none once it was let go of.
+			signaling.detach();
+
+			tracks.fireEnded(ended);
+			channels.clearDelivered();
 
 			deliverState(PeerState.CLOSED);
 
 			connected.completeExceptionally(error);
 			closedFuture.complete(null);
 
-			trackHandlers.clear();
-			channelHandlers.clear();
+			tracks.clearHandlers();
+			channels.clearHandlers();
 			stateHandlers.clear();
 			errorHandlers.clear();
 		}, () -> {
+			signaling.detach();
+
 			connected.completeExceptionally(error);
 			closedFuture.complete(null);
 		});
@@ -1233,7 +953,13 @@ final class PeerImpl implements Peer {
 		public void onIceCandidate(RTCIceCandidate candidate) {
 			control.execute(() -> {
 				if (!closed) {
-					send(SignalMessage.of(candidate));
+					Consumer<RTCIceCandidate> listener = candidateListener;
+
+					if (listener != null) {
+						listener.accept(candidate);
+					}
+
+					signaling.send(SignalMessage.of(candidate));
 				}
 			});
 		}
@@ -1250,7 +976,7 @@ final class PeerImpl implements Peer {
 
 		@Override
 		public void onRenegotiationNeeded() {
-			control.execute(PeerImpl.this::onNegotiationNeeded);
+			control.execute(automatic::negotiationNeeded);
 		}
 
 		@Override
@@ -1261,12 +987,12 @@ final class PeerImpl implements Peer {
 
 		@Override
 		public void onAddTrack(RTCRtpReceiver receiver, MediaStream[] mediaStreams) {
-			control.execute(() -> trackAdded(receiver, mediaStreams));
+			control.execute(() -> tracks.added(receiver, mediaStreams));
 		}
 
 		@Override
 		public void onRemoveTrack(RTCRtpReceiver receiver) {
-			control.execute(() -> trackRemoved(receiver));
+			control.execute(() -> tracks.removed(receiver));
 		}
 
 		@Override
@@ -1275,99 +1001,35 @@ final class PeerImpl implements Peer {
 			// itself only posts as well.
 			DataChannelImpl channel = new DataChannelImpl(PeerImpl.this, dataChannel);
 
-			control.execute(() -> channelOpened(channel));
+			control.execute(() -> channels.opened(channel));
 		}
 	}
 
 
 
-	private final class NegotiatorImpl implements Negotiator {
+	/**
+	 * What the operations chain needs of this peer, on the control executor.
+	 */
+	private final class ChainHost implements OperationChain.Host {
 
 		@Override
-		public CompletableFuture<RTCSessionDescription> createOffer() {
-			return createOffer(Gathering.TRICKLE);
-		}
-
-		@Override
-		public CompletableFuture<RTCSessionDescription> createOffer(Gathering gathering) {
-			requireNonNull(gathering, "gathering");
-
-			return run(() -> PeerImpl.this.createOffer()
-					.thenCompose(PeerImpl.this::setLocal)
-					.thenCompose(ignored -> gathered(gathering)));
+		public boolean isClosed() {
+			return closed;
 		}
 
 		@Override
-		public CompletableFuture<RTCSessionDescription> answer(RTCSessionDescription offer) {
-			return answer(offer, Gathering.TRICKLE);
+		public PeerClosedException closedError() {
+			return PeerImpl.this.closedError();
 		}
 
 		@Override
-		public CompletableFuture<RTCSessionDescription> answer(RTCSessionDescription offer, Gathering gathering) {
-			requireNonNull(offer, "offer");
-			requireNonNull(gathering, "gathering");
-
-			if (offer.sdpType != RTCSdpType.OFFER) {
-				throw new IllegalArgumentException("Expected an offer, got " + offer.sdpType);
-			}
-
-			return run(() -> setRemote(offer)
-					.thenCompose(ignored -> {
-						releaseHeldCandidates();
-						return PeerImpl.this.createAnswer();
-					})
-					.thenCompose(PeerImpl.this::setLocal)
-					.thenCompose(ignored -> gathered(gathering)));
+		public CompletableFuture<Void> rollback() {
+			return steps.rollback();
 		}
 
 		@Override
-		public CompletableFuture<Void> applyAnswer(RTCSessionDescription answer) {
-			requireNonNull(answer, "answer");
-
-			if (answer.sdpType != RTCSdpType.ANSWER && answer.sdpType != RTCSdpType.PR_ANSWER) {
-				throw new IllegalArgumentException("Expected an answer, got " + answer.sdpType);
-			}
-
-			return run(() -> setRemote(answer).thenRun(PeerImpl.this::releaseHeldCandidates));
-		}
-
-		@Override
-		public CompletableFuture<Void> addCandidate(RTCIceCandidate candidate) {
-			requireNonNull(candidate, "candidate");
-
-			return run(() -> addRemoteCandidate(candidate));
-		}
-
-		private CompletableFuture<RTCSessionDescription> gathered(Gathering gathering) {
-			CompletableFuture<Void> ready = gathering == Gathering.COMPLETE
-					? waitForGathering()
-					: CompletableFuture.completedFuture(null);
-
-			return ready.thenApply(ignored -> connection.getLocalDescription());
-		}
-
-		private <T> CompletableFuture<T> run(Supplier<CompletableFuture<T>> operation) {
-			CompletableFuture<T> result = new CompletableFuture<>();
-
-			control.execute(() -> enqueue(operation)
-					.whenComplete((value, error) -> complete(result, value, error)));
-
-			return toPublic(result);
-		}
-	}
-
-
-
-	private static final class HeldCandidate {
-
-		final RTCIceCandidate candidate;
-
-		final CompletableFuture<Void> future;
-
-
-		HeldCandidate(RTCIceCandidate candidate, CompletableFuture<Void> future) {
-			this.candidate = candidate;
-			this.future = future;
+		public void abandon() {
+			teardown();
 		}
 	}
 }

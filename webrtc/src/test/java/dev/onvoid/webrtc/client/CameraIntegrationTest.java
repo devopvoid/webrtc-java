@@ -17,24 +17,31 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import dev.onvoid.webrtc.media.video.VideoDevice;
 
 import org.junit.jupiter.api.Test;
+import org.opentest4j.TestAbortedException;
 
 /**
- * Captures real cameras, so it skips on machines without one, as CI runners
- * are.
+ * Captures real cameras, so it skips on machines without one or without
+ * the optional camera backend libraries, as CI runners are.
  */
 class CameraIntegrationTest extends ClientTestBase {
 
@@ -130,10 +137,141 @@ class CameraIntegrationTest extends ClientTestBase {
 		waitFor(() -> atOne.get() > oneAfter + 10, "frames after the failed switch");
 	}
 
+	@Test
+	void latePeerFailsSwitch() throws Exception {
+		List<VideoDevice> cameras = cameras(2);
+
+		rtc.close();
+		rtc = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.operationTimeout(Duration.ofSeconds(2))
+				.build();
+
+		Peer[] peers = pair();
+		LocalCamera camera = rtc.media().camera(CameraOptions.builder().device(cameras.get(0)).build());
+		AtomicInteger received = new AtomicInteger();
+
+		// Some cameras cannot capture at the same time. Then the switch lets
+		// go of the old one first, and cannot go back to it.
+		boolean together;
+
+		try {
+			await(rtc.media().camera(CameraOptions.builder().device(cameras.get(1)).build()).closeAsync());
+			together = true;
+		}
+		catch (MediaException e) {
+			together = false;
+		}
+
+		peers[1].onTrack(track -> track.asVideo().onFrame(frame -> received.incrementAndGet()));
+		peers[0].addTrack(camera);
+		waitFor(() -> received.get() > 5, "frames before the switch");
+
+		// The peer's control executor is busy, so the peer takes neither the
+		// new camera, nor the old one back, in time.
+		CountDownLatch busy = new CountDownLatch(1);
+		((PeerImpl) peers[0]).control.execute(() -> {
+			try {
+				busy.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+
+		ExecutionException failed = assertThrows(ExecutionException.class,
+				() -> camera.switchCamera(cameras.get(1)).get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		assertInstanceOf(WebRtcException.class, failed.getCause());
+		assertInstanceOf(TimeoutException.class, failed.getCause().getCause());
+		assertFalse(camera.isEnded());
+
+		if (together) {
+			assertEquals(cameras.get(0), camera.device());
+			assertEquals(1, errors.size(), () -> "Errors: " + errors);
+			assertTrue(errors.remove(0).getMessage().startsWith("Not every peer went back"));
+		}
+		else {
+			assertEquals(cameras.get(1), camera.device());
+		}
+
+		// Once free, the peer sends the camera the track has. The track it
+		// sent before is released then, which the runtime's close checks.
+		busy.countDown();
+		int before = received.get();
+		waitFor(() -> received.get() > before + 10, "frames after the failed switch");
+	}
+
+	@Test
+	void lostCameraEndsTrack() throws Exception {
+		VideoDevice device = cameras(1).get(0);
+		CameraOptions first = CameraOptions.builder().device(device).resolution(640, 480).build();
+		CameraOptions second = CameraOptions.builder().device(device).resolution(320, 240).build();
+		AtomicReference<LocalCamera> other = new AtomicReference<>();
+
+		LocalCamera camera = rtc.media().camera(first);
+
+		// The switch lets go of the camera as the missing one cannot be opened
+		// beside it. Meanwhile another track takes the camera with other
+		// options, so the switch cannot open it again.
+		VideoDevice missing = new VideoDevice("Missing Camera", "/dev/video-missing") {
+
+			@Override
+			public String getDescriptor() {
+				if (other.get() == null) {
+					try {
+						other.set(rtc.media().camera(second));
+					}
+					catch (MediaException stillOpen) {
+						// Not let go of yet.
+					}
+				}
+
+				return super.getDescriptor();
+			}
+		};
+
+		ExecutionException failed = assertThrows(ExecutionException.class,
+				() -> camera.switchCamera(missing).get(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		assertInstanceOf(MediaException.class, failed.getCause());
+		assertTrue(camera.isEnded());
+		assertNotNull(other.get());
+
+		// Closing the ended track lets go of nothing the other track uses.
+		await(camera.closeAsync());
+
+		CompletableFuture<Integer> frame = new CompletableFuture<>();
+		other.get().onFrame(video -> frame.complete(video.buffer.getWidth()));
+		assertEquals(320, (int) await(frame));
+
+		// The capture of the other track is still the one shared.
+		assertThrows(MediaException.class, () -> rtc.media().camera(first));
+	}
+
 	private List<VideoDevice> cameras(int needed) {
-		List<VideoDevice> cameras = rtc.media().devices().cameras();
+		List<VideoDevice> cameras;
+
+		try {
+			cameras = rtc.media().devices().cameras();
+		}
+		catch (MediaException e) {
+			// The ARM32 CI lane deliberately runs without optional libudev.
+			// Other device failures must still fail these tests.
+			if (missingUdev(e)) {
+				// Watching can report the same missing backend to the error handler.
+				errors.removeIf(CameraIntegrationTest::missingUdev);
+				throw new TestAbortedException("Camera backend needs libudev", e);
+			}
+			throw e;
+		}
 		assumeTrue(cameras.size() >= needed, "Needs " + needed + " camera(s), found " + cameras.size());
 		return cameras;
+	}
+
+	private static boolean missingUdev(Throwable failure) {
+		return failure instanceof MediaException
+				&& failure.getCause() instanceof RuntimeException
+				&& "V4l2: libudev not found on system.".equals(failure.getCause().getMessage());
 	}
 
 	private static void waitFor(java.util.function.BooleanSupplier condition, String what) throws InterruptedException {

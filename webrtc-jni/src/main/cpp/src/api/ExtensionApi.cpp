@@ -17,6 +17,8 @@
 #include "api/ExtensionApi.h"
 #include "api/EncodedFrameTransformer.h"
 
+#include "AllocationFault.h"
+
 #include "media/audio/CustomAudioSource.h"
 #include "media/video/CustomVideoSource.h"
 
@@ -26,6 +28,7 @@
 #include "rtc_base/time_utils.h"
 
 #include <cstddef>
+#include <memory>
 
 namespace jni
 {
@@ -68,7 +71,7 @@ namespace jni
 			return error;
 		}
 
-		int ApiVideoSourcePush(void * source, const wj_i420_frame * frame)
+		int ApiVideoSourcePushColor(void * source, const wj_i420_frame * frame, const wj_color_space * color)
 		{
 			if (frame == nullptr) {
 				return WEBRTC_JAVA_ERR_HANDLE;
@@ -109,9 +112,19 @@ namespace jni
 						}
 					});
 
+			webrtc::ColorSpace colorSpace;
+
+			if (color != nullptr) {
+				colorSpace.set_primaries_from_uint8(color->primaries);
+				colorSpace.set_transfer_from_uint8(color->transfer);
+				colorSpace.set_matrix_from_uint8(color->matrix);
+				colorSpace.set_range_from_uint8(color->range);
+			}
+
 			webrtc::VideoFrame videoFrame = webrtc::VideoFrame::Builder()
 					.set_video_frame_buffer(buffer)
 					.set_rotation(rotation)
+					.set_color_space(color != nullptr ? &colorSpace : nullptr)
 					.build();
 
 			CustomVideoSource * videoSource = static_cast<CustomVideoSource *>(source);
@@ -124,6 +137,11 @@ namespace jni
 			}
 
 			return WEBRTC_JAVA_OK;
+		}
+
+		int ApiVideoSourcePush(void * source, const wj_i420_frame * frame)
+		{
+			return ApiVideoSourcePushColor(source, frame, nullptr);
 		}
 
 		int ApiAudioSourcePush(void * source, const wj_audio_chunk * chunk)
@@ -201,12 +219,24 @@ namespace jni
 				return nullptr;
 			}
 
-			webrtc::scoped_refptr<EncodedFrameTransformer> transformer(
-					static_cast<EncodedFrameTransformer *>(frames));
+			// Nothing may be thrown through the C interface.
+			try {
+				AllocationFault::CheckEncodedObserver();
 
-			EncodedFrameRouter::Observer * observer = transformer->AddObserver(fn, opaque);
+				// The handle first: an observer without one could never be
+				// removed, and would go on being called.
+				auto handle = std::make_unique<EncodedObserver>(EncodedObserver{
+					webrtc::scoped_refptr<EncodedFrameTransformer>(static_cast<EncodedFrameTransformer *>(frames)),
+					nullptr
+				});
 
-			return new EncodedObserver{ std::move(transformer), observer };
+				handle->observer = handle->transformer->AddObserver(fn, opaque);
+
+				return handle.release();
+			}
+			catch (...) {
+				return nullptr;
+			}
 		}
 
 		void ApiEncodedObserverRemove(void * observer)
@@ -241,7 +271,8 @@ namespace jni
 			&ApiAudioSourceRelease,
 			&ApiEncodedObserverAdd,
 			&ApiEncodedObserverRemove,
-			&ApiEncodedFramesRelease
+			&ApiEncodedFramesRelease,
+			&ApiVideoSourcePushColor
 		};
 	}
 

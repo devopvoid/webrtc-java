@@ -21,6 +21,8 @@
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
 
+#include <memory>
+
 namespace jni
 {
 	CreateSessionDescriptionObserver::CreateSessionDescriptionObserver(JNIEnv * env, const JavaGlobalRef<jobject> & observer) :
@@ -31,6 +33,10 @@ namespace jni
 
 	void CreateSessionDescriptionObserver::OnSuccess(webrtc::SessionDescriptionInterface * desc)
 	{
+		// The callback owns desc. Java gets a copy, so it is freed on every
+		// path out of here, including the early return.
+		std::unique_ptr<webrtc::SessionDescriptionInterface> owned(desc);
+
 		JNIEnv * env = AttachCurrentThread();
 
 		if (env == nullptr) {
@@ -38,7 +44,7 @@ namespace jni
 		}
 
 		try {
-			JavaLocalRef<jobject> javaDesc = jni::RTCSessionDescription::toJava(env, desc);
+			JavaLocalRef<jobject> javaDesc = jni::RTCSessionDescription::toJava(env, owned.get());
 
 			env->CallVoidMethod(observer, javaClass->onSuccess, javaDesc.get());
 		}

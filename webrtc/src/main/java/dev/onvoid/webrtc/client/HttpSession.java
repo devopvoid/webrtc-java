@@ -16,16 +16,24 @@
 
 package dev.onvoid.webrtc.client;
 
+import static dev.onvoid.webrtc.client.HttpCall.redacted;
 import static java.util.Objects.requireNonNull;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
@@ -33,44 +41,69 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import dev.onvoid.webrtc.RTCBundlePolicy;
+import dev.onvoid.webrtc.RTCConfiguration;
+import dev.onvoid.webrtc.RTCIceServer;
 import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
+import dev.onvoid.webrtc.internal.Timeouts;
 
 /**
  * A WHIP or WHEP session: a peer whose offer and answer went over HTTP, and the
  * resource the server created for it. Closing the session deletes the resource
- * and closes the peer.
+ * and closes the peer, independently of each other.
  */
 abstract class HttpSession implements AutoCloseable {
 
 	/** The largest answer read; an SDP answer is a few kilobytes. */
 	private static final int MAX_BODY = 1 << 20;
 
-	/** How much of an error response goes into a message. */
-	private static final int MAX_ERROR_BODY = 1024;
+	/** The status of a counter-offer, whose body is an offer to answer. */
+	private static final Set<Integer> COUNTER_OFFER = Set.of(406);
+
+	/** How long a counter-offer can be answered if it does not say. */
+	private static final long COUNTER_OFFER_VALIDITY_MILLIS = 30_000;
+
+	/** The "valid-until" parameter of a counter-offer's Content-Type. */
+	private static final Pattern VALID_UNTIL = Pattern.compile(";\\s*valid-until\\s*=\\s*\"?([^\";]+)\"?",
+			Pattern.CASE_INSENSITIVE);
 
 	private final Peer peer;
 
 	private final URI resource;
 
-	private final String bearerToken;
+	private final Map<String, URI> extensions;
+
+	private final String authorization;
 
 	private final Duration timeout;
 
 	private final WebRtc rtc;
+
+	/** The ICE of the session, or null for a session made without. */
+	private final HttpIce ice;
 
 	private final AtomicBoolean closing = new AtomicBoolean();
 
 	private final CompletableFuture<Void> closed = new CompletableFuture<>();
 
 
-	HttpSession(WebRtc rtc, Peer peer, URI resource, String bearerToken, Duration timeout) {
+	HttpSession(WebRtc rtc, Peer peer, URI resource, Map<String, URI> extensions, String authorization,
+			Duration timeout, HttpIce ice) {
 		this.rtc = rtc;
 		this.peer = peer;
 		this.resource = resource;
-		this.bearerToken = bearerToken;
+		this.extensions = extensions;
+		this.authorization = authorization;
 		this.timeout = timeout;
+		this.ice = ice;
+
+		if (ice != null) {
+			ice.watch();
+		}
 	}
 
 	/**
@@ -89,29 +122,81 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
+	 * @return the protocol extensions the endpoint offers for the session
+	 * (RFC 9725, 4.9): the URL of each by its relation type, such as {@code
+	 * urn:ietf:params:whip:ext:example:server-sent-events}, as the endpoint
+	 * named them in Link header fields of its answer, resolved against it.
+	 * Empty if it named none. This API uses none of them itself; an
+	 * application uses those it knows.
+	 */
+	public Map<String, URI> extensions() {
+		return extensions;
+	}
+
+	/**
+	 * @return the ICE of the session, or null.
+	 */
+	HttpIce ice() {
+		return ice;
+	}
+
+	/**
 	 * Deletes the session's resource on the server, which frees what the
-	 * server holds for it, and closes the peer.
+	 * server holds for it, and closes the peer. Both start at once, so that a
+	 * slow server does not keep the peer open. The deletion takes at most the
+	 * session's timeout. A deletion that fails also goes to the runtime's
+	 * error handler, for those who close without waiting.
 	 *
-	 * @return a future that completes once both are done.
+	 * @return a future that completes once both are done, or fails with a
+	 * {@link WebRtcException} when the resource could not be deleted, or with
+	 * why the peer did not close. A failure of both carries the peer's as a
+	 * suppressed exception.
 	 */
 	public CompletableFuture<Void> closeAsync() {
 		if (closing.compareAndSet(false, true)) {
-			CompletableFuture<Void> deleted;
-
-			try {
-				deleted = CompletableFuture.runAsync(() -> discard(rtc, resource, bearerToken, timeout),
-						rtc.controlPool);
-			}
-			catch (RejectedExecutionException e) {
-				leftOnServer(rtc, resource);
-				deleted = CompletableFuture.completedFuture(null);
+			if (ice != null) {
+				ice.close();
 			}
 
-			deleted.thenCompose(ignored -> peer.closeAsync())
-					.whenComplete((ignored, error) -> closed.complete(null));
+			CompletableFuture<Throwable> peerClosed = peer.closeAsync().handle((ignored, error) -> error);
+			CompletableFuture<WebRtcException> deleted = discard(rtc, resource, authorization, timeout);
+
+			deleted.thenAcceptBoth(peerClosed, (deleteError, peerError) -> {
+				Throwable error = PeerImpl.unwrap(peerError);
+
+				if (deleteError != null) {
+					if (error != null) {
+						deleteError.addSuppressed(error);
+					}
+					error = deleteError;
+				}
+
+				PeerImpl.complete(closed, null, error);
+			});
 		}
 
-		return closed;
+		return ClientFuture.copyOf(closed);
+	}
+
+	/**
+	 * Restarts ICE, as after the network changed: the peer gathers new
+	 * candidates, and only the ICE information goes to the session, by PATCH,
+	 * as WHIP and WHEP do; the media go on as negotiated. By default, the session
+	 * restarts ICE by itself too, when the connection fails or stays disconnected
+	 * for two seconds, up to three times in a row without success. The session
+	 * builder's recovery option replaces that rule with a {@link RecoveryPolicy}.
+	 *
+	 * @return a future that completes once the new ICE information of both
+	 * sides is applied, or fails, among others when the session takes no ICE
+	 * restarts. Sessions established with a WHEP counter-offer are supported
+	 * as well. If the restart is refused, the previous ICE session goes on.
+	 */
+	public CompletableFuture<Void> restartIce() {
+		CompletableFuture<Void> restarted = ice != null
+				? ice.restart()
+				: CompletableFuture.failedFuture(new WebRtcException("The session has no ICE to restart"));
+
+		return ClientFuture.copyOf(restarted);
 	}
 
 	/**
@@ -123,18 +208,78 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
-	 * Negotiates a manual peer over HTTP: creates the offer with all candidates,
-	 * posts it, applies the answer and waits until the peer is connected.
+	 * Negotiates the peer over HTTP and hands the session out once the peer is
+	 * connected. A caller that stops waiting, by cancelling the future or
+	 * completing it itself, ends the negotiation, and a session made too late
+	 * for the future is closed: either way the peer is closed and what the
+	 * server named is deleted. A request still out is cut off then, so that
+	 * a server that does not answer holds no connection; what it creates for
+	 * an offer it had yet to answer is left for it to time out.
+	 *
+	 * @param prepared  the steps that set the peer up for the offer, which
+	 *                  fail the session if they fail.
+	 * @param gathering when the initial offer is sent.
+	 * @param protocol what WHIP or WHEP asks beyond the offer and its answer.
+	 * @param factory  makes the session of the connected peer.
+	 *
+	 * @return the future handed to the application.
+	 */
+	static <S extends HttpSession> CompletableFuture<S> start(WebRtc rtc, PeerImpl peer, URI endpoint,
+			String authorization, Duration timeout, CompletableFuture<?> prepared, Gathering gathering,
+			Protocol protocol, RecoveryPolicy recovery, Factory<S> factory) {
+		CompletableFuture<Void> abandoned = new CompletableFuture<>();
+		AtomicReference<Map<String, URI>> extensions = new AtomicReference<>(Map.of());
+		HttpIce ice = new HttpIce(rtc, rtc.httpClient(authorization != null), peer, authorization, timeout);
+		ice.recovery(recovery);
+		CompletableFuture<S> session = peer.toPublic(negotiate(rtc, peer, endpoint, authorization, timeout, prepared,
+				gathering, protocol, ice, extensions, abandoned)
+				.thenApply(resource -> factory.create(rtc, peer, resource, extensions.get(), authorization, timeout,
+						ice)),
+				HttpSession::close);
+
+		// Once the session was handed out, this finds the negotiation finished.
+		session.whenComplete((value, error) -> abandoned.complete(null));
+
+		return session;
+	}
+
+	/**
+	 * Negotiates a manual peer over HTTP: creates the offer and posts it at
+	 * once, without candidates, as RFC 9725 recommends with Trickle ICE. Only
+	 * then is the offer applied, with the STUN and TURN servers the endpoint
+	 * named, and the candidates it gathers go to the session by PATCH. The
+	 * answer is applied, and the future completes once the peer is connected.
+	 * An endpoint that counters the offer, as WHEP allows, gets the answer to
+	 * its own offer instead, with all candidates. With COMPLETE gathering,
+	 * the initial offer is applied and gathered before POST; endpoint-provided
+	 * ICE servers then arrive too late for this gathering and are ignored.
+	 *
+	 * @param prepared  completes once the peer is set up for the offer.
+	 * @param ice        the ICE of the session once the offer is answered.
+	 * @param extensions gets the protocol extensions the endpoint named.
+	 * @param abandoned completes when no one waits for the session anymore,
+	 *                  which then ends as if it had failed.
 	 *
 	 * @return a future with the resource the server named, or null.
 	 */
-	static CompletableFuture<URI> negotiate(WebRtc rtc, Peer peer, URI endpoint, String bearerToken,
-			Duration timeout) {
+	private static CompletableFuture<URI> negotiate(WebRtc rtc, PeerImpl peer, URI endpoint, String authorization,
+			Duration timeout, CompletableFuture<?> prepared, Gathering gathering, Protocol protocol, HttpIce ice,
+			AtomicReference<Map<String, URI>> extensions, CompletableFuture<?> abandoned) {
 		CompletableFuture<URI> result = new CompletableFuture<>();
+		long started = System.nanoTime();
 		// The resource the server created. Whoever takes it out owns it: the
 		// session that connected, or whoever deletes it.
 		AtomicReference<URI> resource = new AtomicReference<>();
 		AtomicBoolean finished = new AtomicBoolean();
+		HttpClient client = rtc.httpClient(authorization != null);
+		// Made now, so that it ends with the session's deadline at the latest,
+		// however long the offer takes.
+		HttpCall offerRequest = new HttpCall(client, endpoint, "POST", authorization, timeout)
+				.followRedirects()
+				.retry(rtc.timer, protocol.retried)
+				.readBodies(protocol.counterOffers ? COUNTER_OFFER : Collections.emptySet());
+		// The request under way, which the end of the session cuts off.
+		AtomicReference<HttpCall> request = new AtomicReference<>(offerRequest);
 
 		// Either way the session ends, once: connected, failed or timed out.
 		Consumer<Throwable> fail = error -> {
@@ -142,44 +287,74 @@ abstract class HttpSession implements AutoCloseable {
 				return;
 			}
 
+			// Ends a request still out, whose answer would only meet a closed
+			// peer.
+			request.get().abort();
+			ice.close();
 			// Reported before the resource is deleted, which may take as long
 			// as the timeout again.
 			peer.close();
 			result.completeExceptionally(PeerImpl.asWebRtcException(error,
-					"The session with " + endpoint + " could not be set up"));
+					"The session with " + redacted(endpoint) + " could not be set up"));
 
-			URI created = resource.getAndSet(null);
-
-			if (created != null) {
-				try {
-					CompletableFuture.runAsync(() -> discard(rtc, created, bearerToken, timeout), rtc.controlPool);
-				}
-				catch (RejectedExecutionException e) {
-					leftOnServer(rtc, created);
-				}
-			}
+			discard(rtc, resource.getAndSet(null), authorization, timeout);
 		};
 
 		ScheduledFuture<?> deadline = rtc.timer.schedule(() -> fail.accept(new WebRtcException(
-				"The session with " + endpoint + " was not connected within " + timeout)),
-				timeout.toMillis(), TimeUnit.MILLISECONDS);
+				"The session with " + redacted(endpoint) + " was not connected within " + timeout)),
+				Timeouts.toMillis(timeout), TimeUnit.MILLISECONDS);
 
-		peer.negotiator().createOffer(Gathering.COMPLETE)
-				.thenApplyAsync(offer -> {
-					try {
-						return post(endpoint, offer.sdp, bearerToken, timeout, resource);
-					}
-					finally {
-						if (finished.get()) {
-							// The session ended while the offer was out, so what
-							// the server created meanwhile has no one else to
-							// delete it. The answer then meets a closed peer.
-							discard(rtc, resource.getAndSet(null), bearerToken, timeout);
-						}
-					}
-				}, rtc.controlPool)
-				.thenCompose(answer -> peer.negotiator()
-						.applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, answer)))
+		abandoned.thenRun(() -> {
+			deadline.cancel(false);
+			fail.accept(new CancellationException("The session with " + redacted(endpoint) + " was abandoned"));
+		});
+
+		CompletableFuture<RTCSessionDescription> initial = prepared.thenCompose(ready -> gathering == Gathering.COMPLETE
+				? peer.negotiator().createOffer(Gathering.COMPLETE) : peer.manual.offer());
+		initial
+				.thenCompose(offer -> post(offerRequest, endpoint, withRtcpMuxOnly(offer.sdp), protocol, resource)
+						.whenComplete((reply, error) -> {
+							if (finished.get()) {
+								// The session ended while the offer was out,
+								// after the server named what it created, which
+								// then has no one else to delete it.
+								discard(rtc, resource.getAndSet(null), authorization, timeout);
+							}
+						})
+						.thenApply(reply -> {
+							extensions.set(reply.extensions);
+							return reply;
+						})
+						.thenCompose(reply -> (gathering == Gathering.COMPLETE
+								? CompletableFuture.<Void>completedFuture(null)
+								: peer.manual.useIceServers(reply.iceServers)).handle((used, error) -> {
+							if (error != null) {
+								// Gathered without them, as if the endpoint had
+								// named none.
+								rtc.reportError(PeerImpl.unwrap(error));
+							}
+
+							return reply;
+						}))
+						.thenCompose(reply -> {
+							if (!reply.counterOffer) {
+								// Trickle offers are not applied yet; COMPLETE offers
+								// already carry the gathered candidates.
+								ice.attach(resource.get(), reply.etag, offer.sdp);
+
+								return (gathering == Gathering.COMPLETE
+										? CompletableFuture.<Void>completedFuture(null) : peer.manual.applyLocal(offer))
+										.thenCompose(applied -> peer.negotiator()
+										.applyAnswer(new RTCSessionDescription(RTCSdpType.ANSWER, reply.sdp)));
+							}
+
+							// The rest of the session's time, which the answer has.
+							Duration left = timeout.minusNanos(System.nanoTime() - started);
+
+							return answerCounterOffer(rtc, client, peer, reply, authorization,
+									left.isNegative() || left.isZero() ? Duration.ofNanos(1) : left, resource, ice,
+									request, finished);
+						}))
 				.thenCompose(applied -> peer.whenConnected())
 				.whenComplete((connected, error) -> {
 					deadline.cancel(false);
@@ -196,95 +371,339 @@ abstract class HttpSession implements AutoCloseable {
 	}
 
 	/**
-	 * Posts the offer and returns the answer. The resource the server names is
-	 * set as soon as it is known, so that it is deleted even if reading the
-	 * answer fails.
+	 * Posts the offer and returns what the endpoint answered with. The
+	 * resource the server names with an answer is set as soon as it is known,
+	 * so that it is deleted even if reading the answer fails. The request
+	 * follows the redirects WHIP and WHEP allow, and the resource is resolved
+	 * against the endpoint that answered.
 	 */
-	private static String post(URI endpoint, String sdp, String bearerToken, Duration timeout,
+	private static CompletableFuture<Reply> post(HttpCall request, URI endpoint, String sdp, Protocol protocol,
 			AtomicReference<URI> resource) {
-		HttpURLConnection connection = null;
+		return request.send("application/sdp", sdp.getBytes(StandardCharsets.UTF_8), MAX_BODY, head -> {
+			if (head.status == 201 || head.status == 200) {
+				resource.set(resourceOf(head.uri, head.header("Location")));
+			}
+		}).handle((response, error) -> {
+			if (error instanceof WebRtcException) {
+				throw (WebRtcException) error;
+			}
+			if (error != null) {
+				throw new WebRtcException("Sending the offer to " + redacted(endpoint) + " failed: " + error.getMessage(),
+						error);
+			}
+			if (response.status == 201) {
+				if (resource.get() == null) {
+					throw new WebRtcException("The endpoint " + redacted(endpoint) + " answered without a session Location");
+				}
+				requireContentType(response, "application/sdp");
+				return new Reply(response.body, false, null, 0, response, protocol);
+			}
+			if (protocol.counterOffers && isCounterOffer(response)) {
+				URI session = resourceOf(response.uri, response.header("Location"));
 
-		try {
-			connection = open(endpoint, "POST", bearerToken, timeout);
-			connection.setDoOutput(true);
-			connection.setRequestProperty("Content-Type", "application/sdp");
-			connection.setRequestProperty("Accept", "application/sdp");
+				if (session == null) {
+					throw new WebRtcException("The endpoint " + redacted(endpoint)
+							+ " countered the offer without naming the session");
+				}
 
-			byte[] body = sdp.getBytes(StandardCharsets.UTF_8);
-			connection.setFixedLengthStreamingMode(body.length);
-
-			try (OutputStream out = connection.getOutputStream()) {
-				out.write(body);
+				return new Reply(response.body, true, session,
+						counterOfferExpiry(response.header("Content-Type"), System.currentTimeMillis()), response,
+						protocol);
 			}
 
-			int status = connection.getResponseCode();
+			throw response.error("The endpoint " + redacted(endpoint) + " answered the offer with " + response.describe());
+		});
+	}
 
-			if (status != HttpURLConnection.HTTP_CREATED && status != HttpURLConnection.HTTP_OK) {
-				throw new WebRtcException("The endpoint " + endpoint + " answered the offer with status " + status
-						+ ": " + read(connection.getErrorStream(), MAX_ERROR_BODY, true));
-			}
+	/**
+	 * Answers the endpoint's own offer, which replaces the peer's, and sends
+	 * the answer to the session the endpoint named. The session is the
+	 * peer's to delete from the moment the answer goes out, since the server
+	 * creates it only then.
+	 *
+	 * @param timeout what is left of the session's timeout.
+	 */
+	private static CompletableFuture<Void> answerCounterOffer(WebRtc rtc, HttpClient client, PeerImpl peer,
+			Reply reply, String authorization, Duration timeout, AtomicReference<URI> resource, HttpIce ice,
+			AtomicReference<HttpCall> request, AtomicBoolean finished) {
+		return peer.manual.answerInstead(new RTCSessionDescription(RTCSdpType.OFFER, reply.sdp), Gathering.COMPLETE)
+				.thenCompose(answer -> {
+					if (System.currentTimeMillis() > reply.validUntil) {
+						throw new WebRtcException("The counter-offer for " + redacted(reply.session)
+								+ " expired before it was answered");
+					}
 
-			resource.set(resourceOf(endpoint, connection.getHeaderField("Location")));
+					HttpCall answerRequest = new HttpCall(client, reply.session, "PATCH", authorization, timeout);
+					request.set(answerRequest);
 
-			return read(connection.getInputStream(), MAX_BODY, false);
+					if (finished.get()) {
+						// Ended meanwhile, by what may have aborted the request
+						// before.
+						answerRequest.abort();
+					}
+					else {
+						resource.set(reply.session);
+					}
+
+					return answerRequest.send("application/sdp",
+							withRtcpMuxOnly(answer.sdp).getBytes(StandardCharsets.UTF_8), 0,
+							head -> { }).handle((response, error) -> {
+								if (error != null) {
+									throw new WebRtcException("Sending the answer to " + redacted(reply.session) + " failed: "
+											+ error.getMessage(), error);
+								}
+								if (response.status / 100 != 2) {
+									throw response.error("The endpoint answered the answer for "
+											+ redacted(reply.session) + " with " + response.describe());
+								}
+
+								ice.attach(reply.session, response.header("ETag"), answer.sdp);
+								return null;
+							});
+				});
+	}
+
+	/**
+	 * Tells a counter-offer from any other 406 answer, which WHEP asks to be
+	 * taken as an error: one has an SDP offer as its body.
+	 */
+	private static boolean isCounterOffer(HttpCall.Response response) {
+		String type = response.header("Content-Type");
+
+		if (response.status != 406 || type == null) {
+			return false;
 		}
-		catch (IOException e) {
-			throw new WebRtcException("Sending the offer to " + endpoint + " failed: " + e.getMessage(), e);
-		}
-		finally {
-			if (connection != null) {
-				connection.disconnect();
+
+		String mediaType = type.split(";", 2)[0].trim();
+
+		return mediaType.equalsIgnoreCase("application/sdp") && response.body.startsWith("v=0")
+				&& response.body.contains("\nm=");
+	}
+
+	/**
+	 * Reads until when a counter-offer can be answered: the "valid-until"
+	 * parameter of its Content-Type, an HTTP date, or else 30 seconds after
+	 * it came, as WHEP says.
+	 *
+	 * @param contentType the Content-Type of the counter-offer.
+	 * @param nowMillis   the time it came, as {@link System#currentTimeMillis()}.
+	 *
+	 * @return the time, as {@link System#currentTimeMillis()}.
+	 */
+	static long counterOfferExpiry(String contentType, long nowMillis) {
+		Matcher validUntil = VALID_UNTIL.matcher(contentType != null ? contentType : "");
+
+		if (validUntil.find()) {
+			try {
+				return ZonedDateTime.parse(validUntil.group(1).trim(), DateTimeFormatter.RFC_1123_DATE_TIME)
+						.toInstant().toEpochMilli();
 			}
+			catch (DateTimeParseException e) {
+				// Not an HTTP date; as if there were none.
+			}
+		}
+
+		return nowMillis + COUNTER_OFFER_VALIDITY_MILLIS;
+	}
+
+	/**
+	 * What WHIP or WHEP asks of a session beyond the offer and its answer.
+	 */
+	static final class Protocol {
+
+		/**
+		 * The statuses of an answer to the offer, together with a Retry-After
+		 * header field, after which the offer is sent again, as long as the
+		 * wait fits within the timeout.
+		 */
+		final Set<Integer> retried;
+
+		/** Whether the endpoint may counter the offer with one of its own. */
+		final boolean counterOffers;
+
+		/** What the relation types of protocol extensions start with. */
+		final String extensions;
+
+
+		Protocol(Set<Integer> retried, boolean counterOffers, String extensions) {
+			this.retried = retried;
+			this.counterOffers = counterOffers;
+			this.extensions = extensions;
 		}
 	}
 
-	private static void delete(URI resource, String bearerToken, Duration timeout) throws IOException {
-		HttpURLConnection connection = open(resource, "DELETE", bearerToken, timeout);
 
-		try {
-			int status = connection.getResponseCode();
 
-			if (status / 100 != 2) {
-				throw new WebRtcException("The endpoint answered the deletion of " + resource + " with status "
-						+ status + ": " + read(connection.getErrorStream(), MAX_ERROR_BODY, true));
-			}
+	/**
+	 * What the endpoint answered the offer with: an answer, or an offer of its
+	 * own.
+	 */
+	private static final class Reply {
+
+		final String sdp;
+
+		/** Whether the SDP is the endpoint's offer, which replaces the peer's. */
+		final boolean counterOffer;
+
+		/** Where the session is once a counter-offer is answered. */
+		final URI session;
+
+		/** Until when a counter-offer can be answered. */
+		final long validUntil;
+
+		/** The entity-tag of the ICE session, or null. */
+		final String etag;
+
+		/** The STUN and TURN servers the endpoint named. */
+		final List<RTCIceServer> iceServers;
+
+		/** The protocol extensions the endpoint named. */
+		final Map<String, URI> extensions;
+
+
+		Reply(String sdp, boolean counterOffer, URI session, long validUntil, HttpCall.Response response,
+				Protocol protocol) {
+			this.sdp = sdp;
+			this.counterOffer = counterOffer;
+			this.session = session;
+			this.validUntil = validUntil;
+			this.etag = response.header("ETag");
+			this.iceServers = HttpIce.iceServers(response.headers.allValues("Link"));
+			this.extensions = extensions(response.headers.allValues("Link"), response.uri, protocol.extensions);
 		}
-		finally {
-			connection.disconnect();
-		}
+	}
+
+
+
+	/**
+	 * Makes the session of a peer that connected.
+	 *
+	 * @param <S> the session type.
+	 */
+	interface Factory<S extends HttpSession> {
+
+		S create(WebRtc rtc, Peer peer, URI resource, Map<String, URI> extensions, String authorization,
+				Duration timeout, HttpIce ice);
 	}
 
 	/**
 	 * Deletes a resource that nothing else will, and reports rather than
-	 * throws if that fails.
+	 * throws if that fails. The deletion takes at most the timeout from now on.
+	 * A body of a 2xx answer is not read.
+	 *
+	 * @return a future with the failure reported, or null.
 	 */
-	private static void discard(WebRtc rtc, URI resource, String bearerToken, Duration timeout) {
+	private static CompletableFuture<WebRtcException> discard(WebRtc rtc, URI resource, String authorization,
+			Duration timeout) {
 		if (resource == null) {
-			return;
+			return CompletableFuture.completedFuture(null);
 		}
+
+		HttpCall request;
 
 		try {
-			delete(resource, bearerToken, timeout);
+			request = new HttpCall(rtc.httpClient(authorization != null), resource, "DELETE", authorization, timeout);
 		}
-		catch (Exception e) {
-			rtc.reportError(new WebRtcException("Deleting the session " + resource + " failed", e));
+		catch (RejectedExecutionException e) {
+			return CompletableFuture.completedFuture(leftOnServer(rtc, resource));
 		}
+
+		CompletableFuture<WebRtcException> deleted = request.send(null, null, 0, head -> { })
+				.handle((response, error) -> {
+					Throwable failure = error;
+
+					if (failure == null && response.status / 100 != 2) {
+						failure = response.error("The endpoint answered the deletion of " + redacted(resource)
+								+ " with " + response.describe());
+					}
+					if (failure == null) {
+						return null;
+					}
+
+					WebRtcException reported = new WebRtcException("Deleting the session " + redacted(resource) + " failed",
+							failure);
+					rtc.reportError(reported);
+					return reported;
+				});
+
+		try {
+			// The request's own timeout bounds the head of the answer; this ends
+			// the body of an error that does not come.
+			ScheduledFuture<?> deadline = rtc.timer.schedule(request::abort, Timeouts.toMillis(timeout),
+					TimeUnit.MILLISECONDS);
+			deleted.whenComplete((error, ignored) -> deadline.cancel(false));
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing, and the request's own timeout bounds it.
+		}
+
+		return deleted;
 	}
 
-	private static void leftOnServer(WebRtc rtc, URI resource) {
-		if (resource != null) {
-			rtc.reportError(new WebRtcException("The session " + resource
-					+ " was left on the server, since the runtime is closed"));
+	/**
+	 * Sends a HEAD request to an endpoint, which follows the redirects the
+	 * offer follows. It takes at most the timeout from now on.
+	 *
+	 * @return a future with the response, whatever its status, which fails
+	 * with a {@link WebRtcException} if the request does.
+	 */
+	static CompletableFuture<HttpCall.Response> head(WebRtc rtc, URI endpoint, String authorization,
+			Duration timeout) {
+		HttpCall request;
+
+		try {
+			request = new HttpCall(rtc.httpClient(authorization != null), endpoint, "HEAD", authorization, timeout)
+					.followRedirects();
 		}
+		catch (RejectedExecutionException e) {
+			return CompletableFuture.failedFuture(new WebRtcException("The runtime is closed", e));
+		}
+
+		CompletableFuture<HttpCall.Response> response = request.send(null, null, 0, head -> { })
+				.handle((value, error) -> {
+					if (error != null) {
+						throw new WebRtcException("Asking " + redacted(endpoint) + " with HEAD failed: " + error.getMessage(),
+								error);
+					}
+
+					return value;
+				});
+
+		try {
+			// The request's own timeout bounds the head of the answer; this ends
+			// the body of an error that does not come.
+			ScheduledFuture<?> deadline = rtc.timer.schedule(request::abort, Timeouts.toMillis(timeout),
+					TimeUnit.MILLISECONDS);
+			response.whenComplete((value, error) -> deadline.cancel(false));
+		}
+		catch (RejectedExecutionException e) {
+			// The runtime is closing, and the request's own timeout bounds it.
+		}
+
+		return response;
+	}
+
+	/**
+	 * @return the failure reported, or null if there was no resource.
+	 */
+	private static WebRtcException leftOnServer(WebRtc rtc, URI resource) {
+		if (resource == null) {
+			return null;
+		}
+
+		WebRtcException error = new WebRtcException("The session " + redacted(resource)
+				+ " was left on the server, since the runtime is closed");
+		rtc.reportError(error);
+		return error;
 	}
 
 	/**
 	 * Resolves the resource the server named for a session. It may be on
-	 * another host, as WHIP and WHEP allow, but the bearer token goes along to
+	 * another host, as WHIP and WHEP allow, but the credentials go along to
 	 * delete it, so an https endpoint cannot name a plain http resource.
 	 */
 	static URI resourceOf(URI endpoint, String location) {
-		if (location == null) {
+		if (location == null || location.trim().isEmpty()) {
 			return null;
 		}
 
@@ -294,67 +713,177 @@ abstract class HttpSession implements AutoCloseable {
 			resource = endpoint.resolve(location.trim());
 		}
 		catch (IllegalArgumentException e) {
-			throw new WebRtcException("The endpoint " + endpoint + " named an invalid resource: " + location, e);
+			// Without the exception, which quotes the Location.
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named an invalid resource");
 		}
 
 		String scheme = resource.getScheme();
 
 		if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
-			throw new WebRtcException("The endpoint " + endpoint + " named a resource that is not http: " + resource);
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named a resource that is not http: "
+					+ redacted(resource));
 		}
 		if ("https".equalsIgnoreCase(endpoint.getScheme()) && !"https".equalsIgnoreCase(scheme)) {
-			throw new WebRtcException("The endpoint " + endpoint + " named a resource without TLS: " + resource);
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named a resource without TLS: "
+					+ redacted(resource));
+		}
+		if (!"https".equalsIgnoreCase(scheme) && !HttpCall.isLoopback(resource.getHost())) {
+			throw new WebRtcException("The endpoint " + redacted(endpoint) + " named a resource without TLS: "
+					+ redacted(resource));
 		}
 
 		return resource;
 	}
 
-	private static HttpURLConnection open(URI uri, String method, String bearerToken, Duration timeout)
-			throws IOException {
-		HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
-		connection.setRequestMethod(method);
-		connection.setConnectTimeout((int) Math.min(Integer.MAX_VALUE, timeout.toMillis()));
-		connection.setReadTimeout((int) Math.min(Integer.MAX_VALUE, timeout.toMillis()));
-		// A redirect would take the bearer token to wherever it points, so it
-		// fails the request instead.
-		connection.setInstanceFollowRedirects(false);
-
-		if (bearerToken != null) {
-			connection.setRequestProperty("Authorization", "Bearer " + bearerToken);
-		}
-
-		return connection;
+	/**
+	 * Bundles all media on one transport, as RFC 9725 asks (4.4.1), so that
+	 * only the m-line that tags the BUNDLE group gathers candidates, the ones
+	 * that go to the session.
+	 */
+	static void requireBundle(RTCConfiguration config) {
+		config.bundlePolicy = RTCBundlePolicy.MAX_BUNDLE;
 	}
 
 	/**
-	 * Reads a response body of at most the given size. A larger one fails, or
-	 * is cut off when only a message is made of it.
+	 * Marks each m-line that multiplexes RTP and RTCP as rtcp-mux-only, as RFC
+	 * 9725 asks of what a client sends (4.4.1). WebRTC multiplexes them anyway,
+	 * by {@code RTCRtcpMuxPolicy.REQUIRE}, but does not say so; only the
+	 * description that goes out says it, the one applied stays as WebRTC made
+	 * it.
+	 *
+	 * @param sdp a description WebRTC made.
+	 *
+	 * @return the description with the attribute, where it was missing.
 	 */
-	private static String read(InputStream in, int limit, boolean truncate) throws IOException {
-		if (in == null) {
-			return "";
-		}
+	static String withRtcpMuxOnly(String sdp) {
+		String[] lines = sdp.split("\r?\n", -1);
+		StringBuilder marked = new StringBuilder(sdp.length() + 64);
+		boolean present = false;
 
-		try (InputStream stream = in) {
-			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			byte[] buffer = new byte[8192];
-			int count;
+		for (int i = 0; i < lines.length; i++) {
+			String line = lines[i];
 
-			while ((count = stream.read(buffer)) != -1) {
-				if (out.size() + count > limit) {
-					if (!truncate) {
-						throw new IOException("The response is larger than " + limit + " bytes");
-					}
+			if (line.startsWith("m=")) {
+				present = false;
 
-					out.write(buffer, 0, limit - out.size());
-					break;
+				for (int j = i + 1; j < lines.length && !lines[j].startsWith("m="); j++) {
+					present |= lines[j].equals("a=rtcp-mux-only");
 				}
-
-				out.write(buffer, 0, count);
 			}
 
-			return new String(out.toByteArray(), StandardCharsets.UTF_8);
+			marked.append(line);
+
+			if (i < lines.length - 1) {
+				marked.append("\r\n");
+			}
+			if (line.equals("a=rtcp-mux") && !present) {
+				marked.append("a=rtcp-mux-only\r\n");
+				present = true;
+			}
 		}
+
+		return marked.toString();
+	}
+
+	/** Rejects success bodies that are not of the negotiated media type. */
+	static void requireContentType(HttpCall.Response response, String expected) {
+		String type = response.header("Content-Type");
+		if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase(expected)) {
+			throw new WebRtcException("The session " + redacted(response.uri) + " answered with Content-Type "
+					+ type + "; expected " + expected);
+		}
+	}
+
+	/**
+	 * Reads the protocol extensions an endpoint names in Link header fields
+	 * (RFC 9725, 4.9): the links with a relation type that starts with the
+	 * prefix of the protocol. Links of other relation types, which a client
+	 * has to ignore, are left out.
+	 *
+	 * @param fields the values of the Link header fields.
+	 * @param base   the URL that answered, which relative targets resolve
+	 *               against.
+	 * @param prefix what the relation types of extensions start with, case
+	 *               aside.
+	 *
+	 * @return the target of each extension by its relation type, in order;
+	 * of one named twice, the first. A target that is no URL is left out.
+	 */
+	static Map<String, URI> extensions(List<String> fields, URI base, String prefix) {
+		Map<String, URI> extensions = new LinkedHashMap<>();
+
+		HttpIce.forEachLink(fields, (target, parameters) -> {
+			URI resolved;
+
+			try {
+				resolved = base.resolve(target);
+			}
+			catch (IllegalArgumentException e) {
+				return;
+			}
+
+			for (String relation : HttpIce.relations(parameters)) {
+				if (relation.length() > prefix.length()
+						&& relation.regionMatches(true, 0, prefix, 0, prefix.length())) {
+					extensions.putIfAbsent(relation, resolved);
+				}
+			}
+		});
+
+		return Collections.unmodifiableMap(extensions);
+	}
+
+	/**
+	 * @return the value of an Authorization header with a bearer token (RFC
+	 * 6750), as WHIP and WHEP ask clients to support.
+	 */
+	static String bearer(String token) {
+		return "Bearer " + requireNonNull(token, "token");
+	}
+
+	/**
+	 * @return the value of an Authorization header with Basic credentials (RFC
+	 * 7617), in UTF-8.
+	 *
+	 * @throws IllegalArgumentException if the user contains a colon, which
+	 *                                  Basic cannot tell from the one that
+	 *                                  separates the password.
+	 */
+	static String basic(String user, String password) {
+		requireNonNull(user, "user");
+		requireNonNull(password, "password");
+
+		if (user.indexOf(':') >= 0) {
+			throw new IllegalArgumentException("The user of Basic authentication must not contain a colon");
+		}
+
+		return "Basic " + Base64.getEncoder().encodeToString((user + ":" + password)
+				.getBytes(StandardCharsets.UTF_8));
+	}
+
+	/**
+	 * Checks the codec names given to a builder.
+	 *
+	 * @return the names, trimmed, in their order.
+	 *
+	 * @throws IllegalArgumentException if there are none, or one is blank.
+	 */
+	static List<String> codecNames(String... names) {
+		if (names.length == 0) {
+			throw new IllegalArgumentException("Name at least one codec");
+		}
+
+		List<String> checked = new ArrayList<>();
+
+		for (String name : names) {
+			if (requireNonNull(name, "name").trim().isEmpty()) {
+				throw new IllegalArgumentException("A codec name is blank");
+			}
+
+			checked.add(name.trim());
+		}
+
+		return Collections.unmodifiableList(checked);
 	}
 
 	static URI checkEndpoint(URI endpoint) {
@@ -362,8 +891,11 @@ abstract class HttpSession implements AutoCloseable {
 
 		String scheme = endpoint.getScheme();
 
-		if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
-			throw new IllegalArgumentException("The endpoint must be an http or https URL, got " + endpoint);
+		boolean local = "http".equalsIgnoreCase(scheme) && HttpCall.isLoopback(endpoint.getHost());
+
+		if (!"https".equalsIgnoreCase(scheme) && !local) {
+			throw new IllegalArgumentException("The endpoint must be an https URL, or an http one on this machine, "
+					+ "such as http://localhost, got " + redacted(endpoint));
 		}
 
 		return endpoint;

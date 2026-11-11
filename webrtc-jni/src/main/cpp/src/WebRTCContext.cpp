@@ -59,10 +59,18 @@ namespace jni
 	WebRTCContext::WebRTCContext(JavaVM * vm) :
 		JavaContext(vm),
 		webrtcEnv(webrtc::CreateEnvironment()),
+		sslInitialized(false),
 		audioDevManager(nullptr),
 		videoDevManager(nullptr),
 		powerManagement(nullptr)
 	{
+	}
+
+	WebRTCContext::~WebRTCContext()
+	{
+		if (sslInitialized) {
+			webrtc::CleanupSSL();
+		}
 	}
 
 	void WebRTCContext::initialize(JNIEnv * env)
@@ -70,7 +78,9 @@ namespace jni
 		if (!webrtc::InitializeSSL()) {
 			throw Exception("Initialize SSL failed");
 		}
-		
+
+		sslInitialized = true;
+
 		JavaEnums::add<webrtc::LoggingSeverity>(env, PKG_LOG"Logging$Severity");
 		JavaEnums::add<webrtc::MediaType>(env, PKG_MEDIA"MediaType");
 		JavaEnums::add<webrtc::DataChannelInterface::DataState>(env, PKG"RTCDataChannelState");
@@ -79,6 +89,7 @@ namespace jni
 		JavaEnums::add<webrtc::DtxStatus>(env, PKG"RTCDtxStatus");
 		JavaEnums::add<webrtc::MediaSourceInterface::SourceState>(env, PKG_MEDIA"MediaSource$State");
 		JavaEnums::add<webrtc::MediaStreamTrackInterface::TrackState>(env, PKG_MEDIA"MediaStreamTrackState");
+		JavaEnums::add<webrtc::VideoTrackInterface::ContentHint>(env, PKG_MEDIA"video/VideoContentHint");
 		JavaEnums::add<webrtc::PeerConnectionInterface::BundlePolicy>(env, PKG"RTCBundlePolicy");
 		JavaEnums::add<webrtc::PeerConnectionInterface::IceConnectionState>(env, PKG"RTCIceConnectionState");
 		JavaEnums::add<webrtc::PeerConnectionInterface::IceGatheringState>(env, PKG"RTCIceGatheringState");
@@ -135,15 +146,22 @@ namespace jni
 
 		auto javaGet = GetStaticMethod(env, javaClass, "getClassLoader", "()Ljava/lang/ClassLoader;");
 
-		auto loaderRef = jni::JavaGlobalRef<jobject>(env, env->CallStaticObjectMethod(javaClass, javaGet));
+		jni::JavaLocalRef<jobject> loader(env, env->CallStaticObjectMethod(javaClass, javaGet));
+		ExceptionCheck(env);
+
+		auto loaderRef = jni::JavaGlobalRef<jobject>(env, loader.get());
 
 		InitClassLoader(env, loaderRef);
 	}
 
 	void WebRTCContext::destroy(JNIEnv * env)
 	{
-		if (!webrtc::CleanupSSL()) {
-			env->Throw(jni::JavaError(env, "Cleanup SSL failed"));
+		if (sslInitialized) {
+			sslInitialized = false;
+
+			if (!webrtc::CleanupSSL()) {
+				env->Throw(jni::JavaError(env, "Cleanup SSL failed"));
+			}
 		}
 
 		audioDevManager = nullptr;

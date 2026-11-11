@@ -27,6 +27,8 @@ namespace jni
 				PowerManagement() = default;
 				virtual ~PowerManagement() = default;
 
+				// Both are idempotent: the assertion is taken once and released once. Callers
+				// must serialize them; the Java class counts the requests of its instances.
 				virtual void enableUserActivity() = 0;
 				virtual void disableUserActivity() = 0;
 		};

@@ -10,10 +10,10 @@ extern "C" {
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoTrack
 	 * Method:    addSinkInternal
-	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoTrackSink;)J
+	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoTrackSink;Z)J
 	 */
 	JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInternal
-	(JNIEnv *, jobject, jobject);
+	(JNIEnv *, jobject, jobject, jboolean);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoTrack
@@ -22,6 +22,22 @@ extern "C" {
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_removeSinkInternal
 	(JNIEnv *, jobject, jlong);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_VideoTrack
+	 * Method:    getContentHint
+	 * Signature: ()Ldev/onvoid/webrtc/media/video/VideoContentHint;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_getContentHint
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_VideoTrack
+	 * Method:    setContentHintInternal
+	 * Signature: (Ldev/onvoid/webrtc/media/video/VideoContentHint;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_setContentHintInternal
+	(JNIEnv *, jobject, jobject);
 
 #ifdef __cplusplus
 }

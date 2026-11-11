@@ -17,70 +17,175 @@
 package dev.onvoid.webrtc.media.video;
 
 import static java.util.Objects.isNull;
-import static java.util.Objects.nonNull;
 
+import dev.onvoid.webrtc.internal.SinkRegistry;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 
-import java.util.IdentityHashMap;
-import java.util.Map;
-
+/**
+ * A video track. Its sinks may be added and removed from any thread, also at
+ * the same time, and also from within the callback of a sink, the sink's own
+ * included.
+ * <p>
+ * WebRTC holds a lock while it hands a frame to the sinks, which adding and
+ * removing a sink take as well. A change made from within a callback
+ * therefore takes effect for the sinks at once, but the native sink is added
+ * or removed on another thread right after the callback has returned.
+ */
 public class VideoTrack extends MediaStreamTrack {
 
-	private final Map<VideoTrackSink, Long> sinks = new IdentityHashMap<>();
+	private final SinkRegistry<VideoTrackSink> sinks = new SinkRegistry<>(this::removeSinkInternal);
 
 
 	private VideoTrack() {
 		super();
 	}
 
+	/**
+	 * {@inheritDoc}
+	 * <p>
+	 * Removes the sinks of the track first, and waits for those that other
+	 * threads are still adding or removing.
+	 *
+	 * @throws IllegalStateException if called from within the callback of a
+	 *                               sink, of this track or any other.
+	 */
 	@Override
 	public void dispose() {
-		for (long nativeSink : sinks.values()) {
-			removeSinkInternal(nativeSink);
-		}
-
-		sinks.clear();
+		sinks.close();
 
 		super.dispose();
 	}
 
 	/**
-	 * Adds a VideoSink to the track. A track can have any number of
-	 * VideoSinks.
+	 * Adds a VideoSink to the track, which gets a copy of each frame of its
+	 * own, as with {@link VideoFrameAccess#COPY}. A track can have any number
+	 * of VideoSinks.
 	 *
-	 * @param sink The video sink to add.
+	 * @param sink The video sink to add. Adding it again does nothing.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
+	 *
+	 * @see #addSink(VideoTrackSink, VideoFrameAccess)
 	 */
 	public void addSink(VideoTrackSink sink) {
-		if (isNull(sink)) {
+		addSink(sink, VideoFrameAccess.COPY);
+	}
+
+	/**
+	 * Adds a VideoSink to the track. A track can have any number of
+	 * VideoSinks. Called from within the callback of a sink, it returns
+	 * before the sink is registered, and the sink gets the frames that follow
+	 * once it is.
+	 *
+	 * @param sink   The video sink to add. Adding it again does nothing,
+	 *               whatever the access.
+	 * @param access Whether the sink gets a writable copy of each frame or
+	 *               the read-only pixels the source handed out.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
+	 */
+	public void addSink(VideoTrackSink sink, VideoFrameAccess access) {
+		if (isNull(sink) || isNull(access)) {
 			throw new NullPointerException();
 		}
-		if (sinks.containsKey(sink)) {
-			return;
-		}
 
-		final long nativeSink = addSinkInternal(sink);
+		boolean shared = access == VideoFrameAccess.SHARED;
 
-		sinks.put(sink, nativeSink);
+		sinks.add(sink, (s, registration) -> addSinkInternal(new Delivery(s, registration), shared));
 	}
 
 	/**
 	 * Removes a VideoSink from the track. If the VideoSink was not attached to
-	 * the track, this is a no-op.
+	 * the track, this is a no-op. Once this returns, the sink gets no further
+	 * frames, except one that another thread is handing it at that moment. A
+	 * sink may remove itself in its {@link VideoTrackSink#onVideoFrame}.
 	 */
 	public void removeSink(VideoTrackSink sink) {
 		if (isNull(sink)) {
 			throw new NullPointerException();
 		}
 
-		final Long nativeSink = sinks.remove(sink);
-
-		if (nonNull(nativeSink)) {
-			removeSinkInternal(nativeSink);
-		}
+		sinks.remove(sink);
 	}
 
-	private native long addSinkInternal(VideoTrackSink sink);
+	/**
+	 * Returns what the track is hinted to show.
+	 *
+	 * @return the content hint, {@link VideoContentHint#DEFAULT} unless set.
+	 *
+	 * @throws IllegalStateException if the track has been disposed.
+	 */
+	public native VideoContentHint getContentHint();
+
+	/**
+	 * Hints what the track shows, which decides what its senders keep when
+	 * the network or the CPU cannot keep up: the frame rate or the
+	 * resolution. Can be changed while the track is sent, without
+	 * renegotiation; every sender of the track has taken it once this
+	 * returns, and a sender the track is given later takes it as well. A
+	 * change may make a sender reconfigure its encoder. Waits briefly for a
+	 * WebRTC thread.
+	 *
+	 * @param hint What the track shows.
+	 *
+	 * @throws IllegalStateException if the track has been disposed, or if
+	 *                               called from within the callback of a
+	 *                               sink, of this track or any other.
+	 */
+	public void setContentHint(VideoContentHint hint) {
+		if (isNull(hint)) {
+			throw new NullPointerException();
+		}
+		if (SinkRegistry.inCallback()) {
+			// A sender reconfigures on WebRTC's worker thread, which then adds
+			// its sink to the source again and waits for the lock this thread
+			// holds while it hands out the frame.
+			throw new IllegalStateException("The content hint cannot be set on a thread that is handing "
+					+ "media to a sink. Set it on another thread");
+		}
+
+		setContentHintInternal(hint);
+	}
+
+	private native void setContentHintInternal(VideoContentHint hint);
+
+	private native long addSinkInternal(VideoTrackSink sink, boolean shared);
 
 	private native void removeSinkInternal(long sinkHandle);
+
+
+
+	/**
+	 * What the native sink calls: it tells the registry when a thread hands
+	 * the sink a frame, and drops the frames of a removed sink.
+	 */
+	private static final class Delivery implements VideoTrackSink {
+
+		private final VideoTrackSink sink;
+
+		private final SinkRegistry.Registration registration;
+
+
+		Delivery(VideoTrackSink sink, SinkRegistry.Registration registration) {
+			this.sink = sink;
+			this.registration = registration;
+		}
+
+		@Override
+		public void onVideoFrame(VideoFrame frame) {
+			if (!registration.enter()) {
+				// The sink would have owned the reference.
+				frame.release();
+				return;
+			}
+
+			try {
+				sink.onVideoFrame(frame);
+			}
+			finally {
+				registration.exit();
+			}
+		}
+	}
 
 }

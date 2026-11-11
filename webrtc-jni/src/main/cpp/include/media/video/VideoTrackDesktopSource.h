@@ -17,12 +17,14 @@
 #ifndef JNI_WEBRTC_MEDIA_VIDEO_TRACK_DESKTOP_SOURCE_H_
 #define JNI_WEBRTC_MEDIA_VIDEO_TRACK_DESKTOP_SOURCE_H_
 
-#include "api/video/i420_buffer.h"
 #include "api/video/adapted_video_track_source.h"
+#include "common_video/include/video_frame_buffer_pool.h"
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "rtc_base/platform_thread.h"
 
 #include "media/video/VideoProcessorHost.h"
+
+#include <atomic>
 
 namespace jni
 {
@@ -59,7 +61,7 @@ namespace jni
 
         private:
             uint16_t frameRate;
-            bool isCapturing;
+            std::atomic<bool> isCapturing;
             bool focusSelectedSource;
 
             webrtc::DesktopSize maxFrameSize;
@@ -73,7 +75,7 @@ namespace jni
 
             webrtc::PlatformThread captureThread;
 
-            webrtc::scoped_refptr<webrtc::I420Buffer> buffer;
+            webrtc::VideoFrameBufferPool bufferPool;
 	};
 }
 

@@ -1,0 +1,306 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.onvoid.webrtc.media.player;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+/**
+ * Tests reading a media source. The asset is three seconds of VP8 and Opus in
+ * WebM, which is what a peer connection would be fed with.
+ *
+ * @author Alex Andres
+ */
+class MediaReaderTest {
+
+	/** The committed test asset: 320x240 VP8 at 15 fps, 48 kHz mono Opus. */
+	private static final String ASSET = "/media-test.webm";
+
+	/**
+	 * The first quarter second of Big Buck Bunny (CC BY 3.0, Blender
+	 * Foundation) as the 1080p AVI it is distributed in, cut without
+	 * re-encoding: MS-MPEG4 v2 video at 24 fps, 48 kHz stereo MP3.
+	 */
+	static final String AVI_ASSET = "/media-test.avi";
+
+	/**
+	 * Three seconds of 160x120 MJPEG at 25 fps and 8 kHz mono PCM in
+	 * Matroska, with all of the audio stored ahead of all of the video.
+	 */
+	static final String COARSE_ASSET = "/media-test-coarse.mkv";
+
+
+	@Test
+	void readsVideoInfo() throws Exception {
+		try (MediaReader reader = new MediaReader(asset())) {
+			MediaInfo info = reader.getInfo();
+
+			assertTrue(info.hasVideo());
+			assertEquals(320, info.getVideoWidth());
+			assertEquals(240, info.getVideoHeight());
+			assertEquals(15.0, info.getFrameRate(), 0.01);
+			assertEquals("vp8", info.getVideoCodec());
+		}
+	}
+
+	@Test
+	void readsAudioInfo() throws Exception {
+		try (MediaReader reader = new MediaReader(asset())) {
+			MediaInfo info = reader.getInfo();
+
+			assertTrue(info.hasAudio());
+			assertEquals(48000, info.getSampleRate());
+			assertEquals(1, info.getChannels());
+			assertEquals("opus", info.getAudioCodec());
+		}
+	}
+
+	@Test
+	void durationCountsFromTheFirstFrame(@TempDir Path dir) throws Exception {
+		Path mkv = TestMedia.shiftedMatroska(dir, asset(), 5000, 6000, 9008);
+
+		try (MediaReader reader = new MediaReader(mkv)) {
+			// Video from 5 s and audio up to 9 s on the file's clock.
+			assertEquals(4_008_000, reader.getInfo().getDurationUs(), 50_000);
+		}
+	}
+
+	@Test
+	void readsDuration() throws Exception {
+		try (MediaReader reader = new MediaReader(asset())) {
+			// The asset runs 3.008 seconds. The tolerance is there because the
+			// duration comes from the container, and FFmpeg may be replaced.
+			assertEquals(3_008_000, reader.getInfo().getDurationUs(), 50_000);
+		}
+	}
+
+	@Test
+	void opensWithLongestTimeout() throws Exception {
+		// Longer than microseconds can count. The deadline saturates, rather
+		// than wrap around into one that has passed already.
+		String source = asset().toAbsolutePath().toString();
+
+		try (MediaReader reader = new MediaReader(source, Duration.ofSeconds(Long.MAX_VALUE))) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+	}
+
+	@Test
+	void readsAviInfo() throws Exception {
+		try (MediaReader reader = new MediaReader(asset(AVI_ASSET))) {
+			MediaInfo info = reader.getInfo();
+
+			assertEquals(1920, info.getVideoWidth());
+			assertEquals(1080, info.getVideoHeight());
+			assertEquals(24.0, info.getFrameRate(), 0.01);
+			assertEquals("msmpeg4v2", info.getVideoCodec());
+
+			assertEquals(48000, info.getSampleRate());
+			assertEquals(2, info.getChannels());
+			assertEquals("mp3", info.getAudioCodec());
+		}
+	}
+
+	@Test
+	void missingSourceFails() {
+		IOException e = assertThrows(IOException.class,
+				() -> new MediaReader(Paths.get("no-such-file.webm")));
+
+		// The message has to name the source and what FFmpeg objected to,
+		// otherwise a wrong path is a guessing game.
+		assertTrue(e.getMessage().contains("no-such-file.webm"), e.getMessage());
+	}
+
+	@Test
+	void errorsExposeOnlyNetworkOrigin() {
+		String[][] sources = {
+				{ "rtsp://user:pass@camera/live?token=secret", "rtsp://camera" },
+				{ "rtsp://camera:8554/path-key?token=secret#fragment-key", "rtsp://camera:8554" },
+				{ "rtsp://user:pass@camera:8554", "rtsp://camera:8554" },
+				{ "rtsp://camera?token=secret", "rtsp://camera" },
+				{ "rtsp://camera#fragment-key", "rtsp://camera" },
+				{ "rtsp://camera/path@secret", "rtsp://camera" },
+				{ "rtsp://user:pass@[::1]:8554/path-key?token=secret", "rtsp://[::1]:8554" },
+				{ "rtsp://camera:8554", "rtsp://camera:8554" },
+				{ "rtsp:///path-key?token=secret", "rtsp://" }
+		};
+
+		for (String[] source : sources) {
+			// Fail before FFmpeg opens the URL: these invented addresses must
+			// never require a camera, a DNS lookup or a network timeout.
+			AllocationFault.failNextOption();
+
+			try {
+				IOException e = assertThrows(IOException.class, () -> new MediaReader(source[0]));
+
+				assertFalse(AllocationFault.isArmed());
+				assertTrue(e.getMessage().startsWith("Opening '" + source[1] + "' failed: "),
+						e.getMessage());
+			}
+			finally {
+				AllocationFault.disarm();
+			}
+		}
+	}
+
+	@Test
+	void opensPathBeyondBasicPlane(@TempDir Path dir) throws Exception {
+		// FFmpeg takes UTF-8, which is not the modified UTF-8 of JNI for
+		// characters beyond the Basic Multilingual Plane.
+		Path file = UnicodeFileName.resolve(dir, "webm");
+
+		Files.copy(asset(), file);
+
+		try (MediaReader reader = new MediaReader(file)) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+		try (MediaReader reader = new MediaReader(file.toString())) {
+			assertTrue(reader.getInfo().hasAudio());
+		}
+	}
+
+	@Test
+	void missingSourceBeyondBasicPlaneFails(@TempDir Path dir) {
+		Path file = UnicodeFileName.resolve(dir, "webm");
+
+		IOException e = assertThrows(IOException.class, () -> new MediaReader(file));
+
+		// The name comes back to Java as it went in.
+		assertTrue(e.getMessage().contains(UnicodeFileName.NAME), e.getMessage());
+	}
+
+	@Test
+	void rejectsSourceWithNullCharacter() throws Exception {
+		// Read up to the null character, the source would be the asset.
+		String source = asset().toAbsolutePath() + "\u0000.txt";
+
+		assertThrows(IOException.class, () -> new MediaReader(source));
+		assertEquals(0, AllocationFault.heldStrings());
+	}
+
+	@Test
+	void sourceCopyFails() throws Exception {
+		// The native copy of the source fails as an exhausted heap does: the
+		// failure reaches Java instead of ending the process, and the
+		// characters of the Java string are released all the same.
+		AllocationFault.failNextStringCopy();
+
+		try {
+			assertThrows(OutOfMemoryError.class, () -> new MediaReader(asset()));
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		assertEquals(0, AllocationFault.heldStrings());
+
+		try (MediaReader reader = new MediaReader(asset())) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+	}
+
+	@Test
+	void failedWhitelistRefusesSource() throws Exception {
+		// A source must not open without the limit on what it may reach.
+		AllocationFault.failNextOption();
+
+		try {
+			assertThrows(IOException.class, () -> new MediaReader(asset()));
+			assertFalse(AllocationFault.isArmed());
+		}
+		finally {
+			AllocationFault.disarm();
+		}
+
+		try (MediaReader reader = new MediaReader(asset())) {
+			assertTrue(reader.getInfo().hasVideo());
+		}
+	}
+
+	@Test
+	void closesTwice() throws Exception {
+		MediaReader reader = new MediaReader(asset());
+
+		reader.close();
+		reader.close();
+	}
+
+	@Test
+	void infoAfterCloseFails() throws Exception {
+		MediaReader reader = new MediaReader(asset());
+
+		reader.close();
+
+		assertThrows(IllegalStateException.class, reader::getInfo);
+	}
+
+	@Test
+	void infoRacingClose() throws Exception {
+		// Close may run on any thread, so a getInfo on another one either gets
+		// the info or finds the reader closed, never a reader being freed.
+		for (int round = 0; round < 200; round++) {
+			MediaReader reader = new MediaReader(asset());
+			CountDownLatch started = new CountDownLatch(1);
+
+			CompletableFuture<Void> reading = CompletableFuture.runAsync(() -> {
+				started.countDown();
+
+				try {
+					while (true) {
+						assertNotNull(reader.getInfo());
+					}
+				}
+				catch (IllegalStateException e) {
+					// Closed, which is how the loop ends.
+				}
+			});
+
+			started.await();
+			reader.close();
+			reading.get(10, TimeUnit.SECONDS);
+		}
+	}
+
+	private static Path asset() throws Exception {
+		return asset(ASSET);
+	}
+
+	static Path asset(String name) throws Exception {
+		URL url = MediaReaderTest.class.getResource(name);
+
+		assertNotNull(url, "Test asset " + name + " is missing");
+
+		return Paths.get(url.toURI());
+	}
+
+}

@@ -17,7 +17,9 @@
 package dev.onvoid.webrtc.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -38,13 +41,19 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCStats;
 import dev.onvoid.webrtc.RTCStatsType;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
+import dev.onvoid.webrtc.media.video.VideoContentHint;
 import dev.onvoid.webrtc.media.video.VideoFrame;
+import dev.onvoid.webrtc.media.video.VideoTrack;
+import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +81,16 @@ class MediaTests extends ClientTestBase {
 		CustomAudio voice = rtc.media().customAudio("voice");
 		CompletableFuture<AudioChunk> heard = new CompletableFuture<>();
 
-		peers[1].onTrack(track -> track.asAudio().onAudio(heard::complete));
+		peers[1].onTrack(track -> track.asAudio().onAudio(chunk -> {
+            // The playout clock can deliver silence before any RTP arrives.
+            // A non-silent chunk confirms that the pushed tone was decoded.
+            for (byte sample : chunk.samples()) {
+                if (sample != 0) {
+                    heard.complete(chunk);
+                    break;
+                }
+            }
+        }));
 		peers[0].addTrack(voice);
 
 		// One second in one go; the track sends it in 10 ms chunks.
@@ -83,6 +101,298 @@ class MediaTests extends ClientTestBase {
 
 		assertTrue(chunk.frames() > 0);
 		assertEquals(chunk.frames() * chunk.channels() * 2, chunk.samples().length);
+		PeerStats received = await(peers[1].stats());
+		assertEquals(1, received.inboundAudio().size(), () -> received.report().toString());
+		AudioStats audioStats = received.inboundAudio().get(0);
+		assertNotNull(audioStats.pcmCallbacks());
+		assertTrue(audioStats.pcmCallbacks() > 0);
+		assertNotNull(audioStats.codec());
+		assertFalse(received.diagnostics().conditions().contains(QualityCondition.AUDIO_PACKETS_WITHOUT_PCM));
+	}
+
+	@Test
+	void clearedAudioNotResent() throws Exception {
+		// A format change sends the chunk begun before it, filled with
+		// silence, not with the audio that clear() dropped from it.
+		ManualTimer pacer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.build();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+
+			// 160 bytes in 10 ms.
+			PcmFormat format = PcmFormat.of(8000, 1);
+			byte[] dropped = new byte[120];
+			byte[] kept = new byte[20];
+			Arrays.fill(dropped, (byte) 1);
+			Arrays.fill(kept, (byte) 2);
+
+			voice.push(dropped, format);
+			voice.clear();
+			voice.push(kept, format);
+			voice.push(new byte[2], PcmFormat.of(16000, 1));
+
+			pacer.fire(Duration.ofMillis(10));
+
+			assertEquals(1, sent.size());
+			assertEquals(160, sent.get(0).length);
+
+			for (int i = 0; i < 160; i++) {
+				assertEquals(i < 20 ? 2 : 0, sent.get(0)[i], "Byte " + i);
+			}
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void stalledAudioNotBurst() throws Exception {
+		// After a stall the pacer runs the missed ticks back to back. Those
+		// at most 50 ms late send, the earlier ones leave the audio queued.
+		ManualTimer pacer = new ManualTimer();
+		AtomicLong now = new AtomicLong();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.clock(now::get)
+				.build();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+			Duration tick = Duration.ofMillis(10);
+
+			// One second, 100 chunks of 160 bytes.
+			voice.push(new byte[16000], PcmFormat.of(8000, 1));
+			pacer.fire(tick);
+
+			assertEquals(1, sent.size());
+
+			// Stalled for a second: ticks 1 to 100 are due.
+			now.set(TimeUnit.SECONDS.toNanos(1));
+
+			for (int i = 0; i < 100; i++) {
+				pacer.fire(tick);
+			}
+
+			// Ticks 95 to 100, due from 950 ms on.
+			assertEquals(7, sent.size());
+			assertEquals(930, voice.queuedMillis());
+
+			// Back on pace.
+			now.addAndGet(tick.toNanos());
+			pacer.fire(tick);
+
+			assertEquals(8, sent.size());
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void defaultQueueLimit() throws Exception {
+		ManualTimer pacer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.build();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, data -> { });
+			PcmFormat format = PcmFormat.of(8000, 1);
+
+			// Ten seconds fit, not a chunk more.
+			voice.push(new byte[160000], format);
+			assertThrows(AudioQueueFullException.class, () -> voice.push(new byte[160], format));
+			assertEquals(10000, voice.queuedMillis());
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void fullQueueRejectsPush() throws Exception {
+		// A refused push leaves nothing of itself behind, not even in the
+		// chunk begun before it.
+		ManualTimer pacer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.build();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+			Duration tick = Duration.ofMillis(10);
+
+			// 160 bytes in 10 ms.
+			PcmFormat format = PcmFormat.of(8000, 1);
+			voice.queueLimit(Duration.ofMillis(50), AudioOverflow.REJECT);
+
+			// 45 ms, 5 of them begin a chunk.
+			voice.push(filled(720, 1), format);
+			voice.push(filled(160, 1), format);
+			assertEquals(50, voice.queuedMillis());
+
+			// Would complete the begun chunk.
+			assertThrows(AudioQueueFullException.class, () -> voice.push(filled(80, 9), format));
+			// So would a new format, which sends the begun chunk.
+			assertThrows(AudioQueueFullException.class, () -> voice.push(new byte[2], PcmFormat.of(16000, 1)));
+			assertEquals(50, voice.queuedMillis());
+
+			pacer.fire(tick);
+			voice.push(filled(80, 2), format);
+			assertEquals(50, voice.queuedMillis());
+
+			for (int i = 0; i < 5; i++) {
+				pacer.fire(tick);
+			}
+
+			assertEquals(6, sent.size());
+
+			for (byte[] chunk : sent) {
+				for (byte b : chunk) {
+					assertTrue(b == 1 || b == 2);
+				}
+			}
+
+			assertEquals(2, sent.get(5)[159]);
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void fullQueueDropsOldest() throws Exception {
+		ManualTimer pacer = new ManualTimer();
+		WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.audioPacer(pacer)
+				.build();
+		List<byte[]> sent = new ArrayList<>();
+
+		try {
+			CustomAudioImpl voice = recordingAudio(runtime, sent::add);
+			Duration tick = Duration.ofMillis(10);
+			PcmFormat format = PcmFormat.of(8000, 1);
+			voice.queueLimit(Duration.ofMillis(39), AudioOverflow.DROP_OLDEST);
+
+			// Five chunks, of which the limit, rounded down to 30 ms, keeps
+			// the newest three.
+			for (int i = 1; i <= 5; i++) {
+				voice.push(filled(160, i), format);
+			}
+
+			assertEquals(30, voice.queuedMillis());
+
+			// A push longer than the limit keeps its own end.
+			byte[] burst = new byte[800];
+
+			for (int i = 0; i < 5; i++) {
+				Arrays.fill(burst, i * 160, (i + 1) * 160, (byte) (6 + i));
+			}
+
+			voice.push(burst, format);
+			assertEquals(30, voice.queuedMillis());
+
+			// A lower limit drops at once.
+			voice.queueLimit(Duration.ofMillis(20), AudioOverflow.DROP_OLDEST);
+			assertEquals(20, voice.queuedMillis());
+
+			for (int i = 0; i < 3; i++) {
+				pacer.fire(tick);
+			}
+
+			assertEquals(2, sent.size());
+			assertEquals(9, sent.get(0)[0]);
+			assertEquals(10, sent.get(1)[0]);
+		}
+		finally {
+			runtime.close();
+		}
+	}
+
+	@Test
+	void screenFrameRateOutOfRangeRejected() {
+		ScreenOptions.Builder options = ScreenOptions.screen(new DesktopSource("screen", 0));
+
+		assertThrows(IllegalArgumentException.class, () -> options.frameRate(0));
+		assertThrows(IllegalArgumentException.class, () -> options.frameRate(1001));
+		assertThrows(IllegalArgumentException.class, () -> options.frameRate(65536));
+
+		assertEquals(1000, options.frameRate(1000).build().frameRate);
+	}
+
+	@Test
+	void queueLimitBelowChunkRejected() {
+		CustomAudio voice = rtc.media().customAudio("voice");
+
+		assertThrows(IllegalArgumentException.class,
+				() -> voice.queueLimit(Duration.ofMillis(9), AudioOverflow.REJECT));
+	}
+
+	@Test
+	void slowPushLeavesTimerFree() throws Exception {
+		// Pushed audio is sent on a thread of its own: a push that hangs in
+		// WebRTC holds up the audio, not the timeouts on the timer.
+		CountDownLatch pushing = new CountDownLatch(1);
+		CountDownLatch unblock = new CountDownLatch(1);
+		CustomAudioImpl voice = recordingAudio(rtc, data -> {
+			pushing.countDown();
+
+			try {
+				unblock.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+
+		try {
+			voice.push(new byte[160], PcmFormat.of(8000, 1));
+			assertTrue(pushing.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+
+			CompletableFuture<Void> fired = new CompletableFuture<>();
+			rtc.timer.schedule(() -> fired.complete(null), 1, TimeUnit.MILLISECONDS);
+
+			await(fired);
+		}
+		finally {
+			unblock.countDown();
+		}
+	}
+
+	@Test
+	void oversizedFormatRejected() {
+		// 10 ms of these hold 15360 samples, more than WebRTC takes at once.
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(192000, 8));
+
+		// The largest that fit, 7680 samples each.
+		PcmFormat.of(192000, 4);
+		PcmFormat.of(96000, 8);
+	}
+
+	@Test
+	void unsendableFormatRejected() {
+		// The encoder drops these, so a track would stay silent without a word.
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(48000, 3));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(48000, 5));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(48000, 7));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(192100, 2));
+		assertThrows(IllegalArgumentException.class, () -> PcmFormat.of(384000, 2));
 	}
 
 	@Test
@@ -104,51 +414,144 @@ class MediaTests extends ClientTestBase {
 	}
 
 	@Test
+	void contentHintChangesWhileSending() throws Exception {
+		SignalingPair link = Signaling.loopback();
+		AtomicInteger offers = new AtomicInteger();
+		Signaling counted = new Signaling() {
+
+			@Override
+			public void send(SignalMessage message) {
+				if (message.type() == SignalMessage.Type.OFFER) {
+					offers.incrementAndGet();
+				}
+				link.first().send(message);
+			}
+
+			@Override
+			public Subscription attach(Consumer<SignalMessage> inbound) {
+				return link.first().attach(inbound);
+			}
+		};
+		Peer caller = rtc.createPeer(PeerOptions.builder().name("caller").signaling(counted).build());
+		Peer callee = rtc.createPeer(PeerOptions.builder().name("callee").signaling(link.second())
+				.polite(true).build());
+
+		CustomVideo video = rtc.media().customVideo("video");
+		AtomicInteger tracks = new AtomicInteger();
+		AtomicReference<CountDownLatch> frames = new AtomicReference<>(new CountDownLatch(5));
+
+		callee.onTrack(track -> {
+			tracks.incrementAndGet();
+			track.asVideo().onFrame(frame -> frames.get().countDown());
+		});
+
+		video.setContentHint(VideoContentHint.TEXT);
+		caller.addTrack(video);
+		feedVideo(video, 320, 240);
+
+		assertTrue(frames.get().await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		int offered = offers.get();
+
+		for (VideoContentHint hint : new VideoContentHint[] { VideoContentHint.MOTION, VideoContentHint.DEFAULT }) {
+			video.setContentHint(hint);
+
+			assertEquals(hint, video.contentHint());
+			assertEquals(hint, ((VideoTrack) ((LocalTrackImpl) video).nativeTrack()).getContentHint());
+
+			// The senders took the hint when the call returned, and the same
+			// remote track goes on receiving.
+			frames.set(new CountDownLatch(5));
+			assertTrue(frames.get().await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		}
+
+		assertEquals(offered, offers.get());
+		assertEquals(1, tracks.get());
+		assertEquals(1, callee.remoteTracks().size());
+
+		video.close();
+		video.setContentHint(VideoContentHint.TEXT);
+
+		assertEquals(VideoContentHint.DEFAULT, video.contentHint());
+	}
+
+	@Test
+	void replacedTrackKeepsContentHint() throws Exception {
+		// As a camera switch does it.
+		LocalVideoImpl video = (LocalVideoImpl) rtc.media().customVideo("video");
+		CustomVideoSource nextSource = new CustomVideoSource();
+		VideoTrack next = rtc.factory.createVideoTrack("next", nextSource);
+
+		video.setContentHint(VideoContentHint.DETAIL);
+		video.setEnabled(false);
+
+		LocalTrackImpl.Replaced replaced = video.replaceNative(next, nextSource::dispose);
+
+		assertEquals(VideoContentHint.DETAIL, next.getContentHint());
+		assertFalse(next.isEnabled());
+
+		replaced.track.dispose();
+		replaced.release.run();
+		await(video.closeAsync());
+	}
+
+	@Test
 	void slowFrameHandlerGetsNewest() throws Exception {
 		Peer[] peers = pair();
 		CustomVideo video = rtc.media().customVideo("video");
 		AtomicInteger handled = new AtomicInteger();
-		CompletableFuture<Void> enough = new CompletableFuture<>();
+		CompletableFuture<Void> busy = new CompletableFuture<>();
+		CompletableFuture<Void> resumed = new CompletableFuture<>();
+		CountDownLatch done = new CountDownLatch(1);
 
 		peers[1].onTrack(track -> track.asVideo().onFrame(frame -> {
-			try {
-				// Much slower than the 30 frames per second sent.
-				Thread.sleep(200);
+			int count = handled.incrementAndGet();
+
+			if (count == 3) {
+				// Busy until the test lets it go, however fast frames come.
+				busy.complete(null);
+
+				try {
+					done.await(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+				}
+				catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+				}
 			}
-			catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
-			if (handled.incrementAndGet() == 3) {
-				enough.complete(null);
+			else if (count > 3) {
+				resumed.complete(null);
 			}
 		}));
 		peers[0].addTrack(video);
 
 		feedVideo(video, 160, 120);
 
-		await(enough);
+		await(busy);
 
-		// The decoder keeps going while the handler is busy: within the same
-		// time it gets well ahead of the handler, at whatever rate the encoder
-		// has ramped up to on this machine.
+		// The decoder keeps going while the handler is busy, at whatever rate
+		// the encoder has ramped up to on this machine, and the handler gets
+		// none of those frames meanwhile.
 		long decodedBefore = framesDecoded(await(peers[1].stats()));
-		int handledBefore = handled.get();
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
 		long decodedMeanwhile;
-		int handledMeanwhile;
 
-		do {
-			Thread.sleep(100);
-			decodedMeanwhile = framesDecoded(await(peers[1].stats())) - decodedBefore;
-			handledMeanwhile = handled.get() - handledBefore;
+		try {
+			do {
+				Thread.sleep(100);
+				decodedMeanwhile = framesDecoded(await(peers[1].stats())) - decodedBefore;
+			}
+			while (decodedMeanwhile < 10 && System.nanoTime() < deadline);
+
+			long decoded = decodedMeanwhile;
+
+			assertTrue(decoded >= 10, () -> "Meanwhile decoded " + decoded + " frames");
+			assertEquals(3, handled.get());
 		}
-		while ((decodedMeanwhile < 10 || decodedMeanwhile < handledMeanwhile + 5) && System.nanoTime() < deadline);
+		finally {
+			done.countDown();
+		}
 
-		long decoded = decodedMeanwhile;
-		int handledFrames = handledMeanwhile;
-
-		assertTrue(decoded >= 10 && decoded >= handledFrames + 5,
-				() -> "Meanwhile decoded " + decoded + " frames and handled " + handledFrames);
+		// Then gets the newest frame, and the ones after it.
+		await(resumed);
 	}
 
 	private static long framesDecoded(PeerStats stats) {
@@ -217,6 +620,25 @@ class MediaTests extends ClientTestBase {
 		CustomAudio other = rtc.media().customAudio("other");
 		await(one.replaceTrack(other));
 		assertEquals(other, one.track());
+	}
+
+	@Test
+	void sameTrackRegisteredOnce() throws Exception {
+		Peer[] peers = pair();
+		LocalTrackImpl voice = (LocalTrackImpl) rtc.media().customAudio("voice");
+		Sender sender = peers[0].addTrack(voice);
+
+		for (int i = 0; i < 3; i++) {
+			await(sender.replaceTrack(voice));
+		}
+
+		assertEquals(voice, sender.track());
+		assertEquals(Collections.singletonList(sender), voice.registeredSenders());
+
+		await(sender.remove());
+
+		// A removed sender, and its peer, are not kept by the track.
+		assertTrue(voice.registeredSenders().isEmpty());
 	}
 
 	@Test
@@ -368,6 +790,14 @@ class MediaTests extends ClientTestBase {
 		}, 0, 33, TimeUnit.MILLISECONDS);
 	}
 
+	/** PCM of the given length with every byte set to the value. */
+	private static byte[] filled(int length, int value) {
+		byte[] pcm = new byte[length];
+		Arrays.fill(pcm, (byte) value);
+
+		return pcm;
+	}
+
 	private static byte[] tone(int sampleRate, int channels, int millis) {
 		int frames = sampleRate * millis / 1000;
 		byte[] pcm = new byte[frames * channels * 2];
@@ -383,6 +813,25 @@ class MediaTests extends ClientTestBase {
 		}
 
 		return pcm;
+	}
+
+	/** A pushed-audio track whose source hands each chunk to the consumer. */
+	private static CustomAudioImpl recordingAudio(WebRtc runtime, Consumer<byte[]> chunks) {
+		LocalMediaImpl media = (LocalMediaImpl) runtime.media();
+
+		try (LocalMediaImpl.Creation creation = media.begin()) {
+			CustomAudioSource source = new CustomAudioSource() {
+
+				@Override
+				public void pushAudio(byte[] audioData, int bitsPerSample, int sampleRate, int channels,
+						int frameCount) {
+					chunks.accept(audioData.clone());
+				}
+			};
+
+			return media.register(new CustomAudioImpl(media, runtime.factory.createAudioTrack("voice", source),
+					source));
+		}
 	}
 
 }

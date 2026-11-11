@@ -37,6 +37,8 @@ public class CustomVideoSource extends VideoTrackSource {
 
 	/**
 	 * Constructs a new CustomVideoSource instance with a specified SyncClock.
+	 * The source shares the clock, which may therefore be disposed before
+	 * this source.
 	 *
 	 * @param clock The SyncClock to use for timing and synchronization.
 	 */
@@ -48,7 +50,10 @@ public class CustomVideoSource extends VideoTrackSource {
 
 	/**
 	 * Pushes a video frame to be processed by this video source. The frame is
-	 * treated as captured at the moment of the call.
+	 * treated as captured at the moment of the call, and stamped with
+	 * {@link dev.onvoid.webrtc.media.SyncClock#currentTimeUs()}, the clock of
+	 * {@link #pushFrame(VideoFrame, long)}, so the two may be mixed on one
+	 * source.
 	 *
 	 * @param frame The video frame to be pushed to the source.
 	 */

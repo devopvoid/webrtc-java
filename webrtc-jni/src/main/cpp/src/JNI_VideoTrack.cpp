@@ -15,14 +15,17 @@
  */
 
 #include "JNI_VideoTrack.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "api/VideoTrackSink.h"
+#include "JavaEnums.h"
 #include "JavaNullPointerException.h"
 #include "JavaUtils.h"
 
 #include "api/media_stream_interface.h"
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInternal
-(JNIEnv * env, jobject caller, jobject jsink)
+(JNIEnv * env, jobject caller, jobject jsink, jboolean shared)
 {
 	try {
 		if (jsink == nullptr) {
@@ -30,10 +33,10 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInt
 			return 0;
 		}
 
-		webrtc::VideoTrackInterface * track = GetHandle<webrtc::VideoTrackInterface>(env, caller);
+		jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
 		CHECK_HANDLEV(track, 0);
 
-		auto sink = new jni::VideoTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink));
+		auto sink = new jni::VideoTrackSink(env, jni::JavaGlobalRef<jobject>(env, jsink), shared == JNI_TRUE);
 
 		track->AddOrUpdateSink(sink, webrtc::VideoSinkWants());
 
@@ -48,14 +51,43 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_addSinkInt
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_removeSinkInternal
 (JNIEnv * env, jobject caller, jlong sinkHandle)
 {
-	webrtc::VideoTrackInterface * track = GetHandle<webrtc::VideoTrackInterface>(env, caller);
-	CHECK_HANDLE(track);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
 
-	auto sink = reinterpret_cast<webrtc::VideoSinkInterface<webrtc::VideoFrame> *>(sinkHandle);
+		auto sink = reinterpret_cast<webrtc::VideoSinkInterface<webrtc::VideoFrame> *>(sinkHandle);
 	
-	if (sink != nullptr) {
-		track->RemoveSink(sink);
+		if (sink != nullptr) {
+			track->RemoveSink(sink);
 
-		delete sink;
-	}
+			delete sink;
+		}
+	});
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_getContentHint
+(JNIEnv * env, jobject caller)
+{
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
+		CHECK_HANDLEV(track, nullptr);
+
+		return jni::JavaEnums::toJava(env, track->content_hint()).release();
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_setContentHintInternal
+(JNIEnv * env, jobject caller, jobject jHint)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
+
+		auto hint = jni::JavaEnums::toNative<webrtc::VideoTrackInterface::ContentHint>(env, jHint);
+
+		// The senders of the track reconfigure before this returns: the
+		// proxy runs it on the signaling thread, where the track notifies
+		// them, and each one waits for the worker thread.
+		track->set_content_hint(hint);
+	});
 }

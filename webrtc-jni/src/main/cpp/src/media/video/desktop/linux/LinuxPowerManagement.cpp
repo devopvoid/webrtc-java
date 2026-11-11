@@ -19,6 +19,7 @@
 
 #include <cstdio>
 #include <dbus/dbus.h>
+#include <memory>
 
 #include "rtc_base/logging.h"
 
@@ -26,12 +27,38 @@ namespace jni
 {
 	namespace avdev
 	{
+		namespace
+		{
+			struct ConnectionUnref
+			{
+				void operator()(DBusConnection * connection) const
+				{
+					DBusLoader::instance().dbus_connection_unref(connection);
+				}
+			};
+
+			struct MessageUnref
+			{
+				void operator()(DBusMessage * message) const
+				{
+					DBusLoader::instance().dbus_message_unref(message);
+				}
+			};
+
+			using ScopedConnection = std::unique_ptr<DBusConnection, ConnectionUnref>;
+			using ScopedMessage = std::unique_ptr<DBusMessage, MessageUnref>;
+		}
+
 		LinuxPowerManagement::LinuxPowerManagement()
 		{
 		}
 
 		void LinuxPowerManagement::enableUserActivity()
 		{
+			if (inhibited) {
+				return;
+			}
+
 			if (!DBusLoader::instance().load()) {
 				RTC_LOG(LS_WARNING) << "[PowerManagement] libdbus not found on system";
 				return;
@@ -42,7 +69,7 @@ namespace jni
 			DBusError error;
 			dbus.dbus_error_init(&error);
 
-			DBusConnection * dbusConnection = dbus.dbus_bus_get(DBUS_BUS_SESSION, &error);
+			ScopedConnection dbusConnection(dbus.dbus_bus_get(DBUS_BUS_SESSION, &error));
 
 			if (dbus.dbus_error_is_set(&error)) {
 				// throw
@@ -51,7 +78,7 @@ namespace jni
 				return;
 			}
 
-			if (dbus.dbus_bus_name_has_owner(dbusConnection, BUS_SERVICE_NAME, NULL)) {
+			if (dbus.dbus_bus_name_has_owner(dbusConnection.get(), BUS_SERVICE_NAME, NULL)) {
 				RTC_LOG(LS_INFO) << "[PowerManagement] Found service: " << BUS_SERVICE_NAME;
 			}
 			else {
@@ -60,39 +87,39 @@ namespace jni
 				return;
 			}
 
-			DBusMessage * message = dbus.dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
-				"Inhibit");
+			ScopedMessage message(dbus.dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
+				"Inhibit"));
 
 			if (message == nullptr) {
 				// throw
 				return;
 			}
 
-			dbus.dbus_message_append_args(message, DBUS_TYPE_STRING, &appName, DBUS_TYPE_STRING, &reason, DBUS_TYPE_INVALID);
+			dbus.dbus_message_append_args(message.get(), DBUS_TYPE_STRING, &appName, DBUS_TYPE_STRING, &reason, DBUS_TYPE_INVALID);
 
-			DBusMessage * reply = dbus.dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
-			dbus.dbus_message_unref(message);
+			ScopedMessage reply(dbus.dbus_connection_send_with_reply_and_block(dbusConnection.get(), message.get(), 50, &error));
 
 			if (dbus.dbus_error_is_set(&error)) {
 				dbus.dbus_error_free(&error);
-				dbus.dbus_connection_unref(dbusConnection);
 				// throw
 				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot retrieve cookie";
 				return;
 			}
 
 			DBusMessageIter reply_iter;
-			dbus.dbus_message_iter_init(reply, &reply_iter);
+			dbus.dbus_message_iter_init(reply.get(), &reply_iter);
 			dbus.dbus_message_iter_get_basic(&reply_iter, &dbusCookie);
+			inhibited = true;
 
 			RTC_LOG(LS_INFO) << "[PowerManagement] Acquired screensaver inhibition cookie";
-
-			dbus.dbus_message_unref(reply);
-			dbus.dbus_connection_unref(dbusConnection);
 		}
 
 		void LinuxPowerManagement::disableUserActivity()
         {
+			if (!inhibited) {
+				return;
+			}
+
 			if (!DBusLoader::instance().load()) {
 				RTC_LOG(LS_WARNING) << "[PowerManagement] libdbus not found on system";
 				return;
@@ -103,7 +130,7 @@ namespace jni
 			DBusError error;
 			dbus.dbus_error_init(&error);
 
-			DBusConnection * dbusConnection = dbus.dbus_bus_get(DBUS_BUS_SESSION, &error);
+			ScopedConnection dbusConnection(dbus.dbus_bus_get(DBUS_BUS_SESSION, &error));
 
 			if (dbus.dbus_error_is_set(&error)) {
 				// throw
@@ -112,32 +139,29 @@ namespace jni
 				return;
 			}
 
-			DBusMessage * message = dbus.dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
-				"UnInhibit");
+			ScopedMessage message(dbus.dbus_message_new_method_call(BUS_SERVICE_NAME, BUS_SERVICE_PATH, BUS_INTERFACE,
+				"UnInhibit"));
 
 			if (message == nullptr) {
 				// throw
 				return;
 			}
 
-			dbus.dbus_message_append_args(message, DBUS_TYPE_UINT32, &dbusCookie, DBUS_TYPE_INVALID);
+			dbus.dbus_message_append_args(message.get(), DBUS_TYPE_UINT32, &dbusCookie, DBUS_TYPE_INVALID);
 
-			DBusMessage * reply = dbus.dbus_connection_send_with_reply_and_block(dbusConnection, message, 50, &error);
-			dbus.dbus_message_unref(message);
+			ScopedMessage reply(dbus.dbus_connection_send_with_reply_and_block(dbusConnection.get(), message.get(), 50, &error));
 
 			if (dbus.dbus_error_is_set(&error)) {
 				// throw
 				RTC_LOG(LS_ERROR) << "[PowerManagement] Cannot release cookie";
 
 				dbus.dbus_error_free(&error);
-				dbus.dbus_connection_unref(dbusConnection);
 				return;
 			}
 
-			RTC_LOG(LS_INFO) << "[PowerManagement] Released screensaver inhibition cookie";
+			inhibited = false;
 
-			dbus.dbus_message_unref(reply);
-			dbus.dbus_connection_unref(dbusConnection);
+			RTC_LOG(LS_INFO) << "[PowerManagement] Released screensaver inhibition cookie";
         }
 	}
 }

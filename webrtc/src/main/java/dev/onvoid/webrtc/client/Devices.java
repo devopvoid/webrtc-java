@@ -28,23 +28,29 @@ import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
  * The media devices of the system. The lists are snapshots, kept current in
  * the background, so reading them is cheap on any thread. Where the system
  * reports no device changes, as a Linux machine without PulseAudio, they are
- * read on each call. A kind of device the system cannot list, such as audio
- * devices without an audio system, comes back as an empty list.
+ * read on each call. A query that fails, including an unavailable audio backend,
+ * throws a {@link MediaException}; an empty list means there are no such devices.
  */
 public interface Devices {
 
 	/**
 	 * @return the cameras.
+	 *
+	 * @throws MediaException if the cameras could not be read.
 	 */
 	List<VideoDevice> cameras();
 
 	/**
 	 * @return the microphones.
+	 *
+	 * @throws MediaException if the microphones could not be read.
 	 */
 	List<AudioDevice> microphones();
 
 	/**
 	 * @return the speakers.
+	 *
+	 * @throws MediaException if the speakers could not be read.
 	 */
 	List<AudioDevice> speakers();
 
@@ -85,7 +91,8 @@ public interface Devices {
 	/**
 	 * Calls the handler after a device was connected or disconnected.
 	 *
-	 * @param handler called on a background thread with the new snapshot.
+	 * @param handler called on an event thread of the runtime with the new
+	 *                snapshot.
 	 *
 	 * @return the subscription that removes the handler.
 	 */

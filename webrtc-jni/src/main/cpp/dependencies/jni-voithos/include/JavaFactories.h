@@ -15,8 +15,11 @@
 
 #include <jni.h>
 #include <memory>
+#include <type_traits>
 #include <typeindex>
+#include <typeinfo>
 #include <unordered_map>
+#include <utility>
 
 #ifdef __cpp_lib_any
 #include <any>
@@ -29,6 +32,47 @@ namespace jni
 		public:
 			JavaFactories() = default;
 			~JavaFactories() = default;
+
+			// Creates the Java object for what `owner` points to and moves the
+			// reference `owner` holds into it, for a Java object that owns and
+			// disposes its native object. The reference is handed over only once
+			// the Java object exists and holds the handle: if creating it fails,
+			// `owner` keeps the reference and frees it as usual, and the Java
+			// object, which nothing can reach yet, is left to the garbage
+			// collector. `owner` is a smart pointer with get() and release(), such
+			// as webrtc::scoped_refptr or std::unique_ptr, passed with std::move.
+			template <class Ptr>
+			static JavaLocalRef<jobject> createOwning(JNIEnv * env, Ptr && owner)
+			{
+				return createOwning(env, std::forward<Ptr>(owner), [](jobject) {});
+			}
+
+			// Same as above, and calls `bind` with the new Java object before the
+			// reference is handed over, so that whatever else has to be bound to
+			// the Java object (e.g. the handle of an observer) is bound before the
+			// Java object owns anything. If `bind` throws, `owner` keeps the
+			// reference.
+			template <class Ptr, class Bind>
+			static JavaLocalRef<jobject> createOwning(JNIEnv * env, Ptr && owner, Bind && bind)
+			{
+				static_assert(!std::is_lvalue_reference<Ptr>::value,
+					"Pass the owner with std::move, the call takes its reference");
+
+				using T = typename std::remove_cv<typename std::remove_pointer<decltype(owner.get())>::type>::type;
+
+				JavaLocalRef<jobject> object = create<T>(env, owner.get());
+
+				if (object.get() == nullptr) {
+					throw Exception("Create Java object for [%s] failed", typeid(T).name());
+				}
+
+				bind(object.get());
+
+				// The Java object holds the reference now.
+				static_cast<void>(owner.release());
+
+				return object;
+			}
 
 #ifdef __cpp_lib_any
 			template <class T>

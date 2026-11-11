@@ -36,10 +36,11 @@ namespace jni
 			candidate->ToString(&sdpStr);
 			
 			jobject jCandidate = env->NewObject(javaClass->cls, javaClass->ctor,
-				JavaString::toJava(env, candidate->sdp_mid()).get(),
+				// WebRTC leaves both empty when a candidate has none.
+				JavaString::toJavaOrNull(env, candidate->sdp_mid()).get(),
 				candidate->sdp_mline_index(),
 				JavaString::toJava(env, sdpStr).get(),
-				JavaString::toJava(env, candidate->server_url()).get());
+				JavaString::toJavaOrNull(env, candidate->server_url()).get());
 
 			return JavaLocalRef<jobject>(env, jCandidate);
 		}

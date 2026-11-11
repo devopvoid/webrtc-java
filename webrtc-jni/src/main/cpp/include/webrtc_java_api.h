@@ -31,8 +31,9 @@
  *
  *   1. Java side: dev.onvoid.webrtc.internal.NativeApi.tableAddress() returns
  *      the address of a "struct webrtc_java_api" owned by this library, and
- *      NativeApi.handleOf(source) returns the native handle of a
- *      CustomVideoSource or CustomAudioSource.
+ *      NativeApi.retainVideoSource(source) or retainAudioSource(source)
+ *      returns a retained handle of a CustomVideoSource or CustomAudioSource.
+ *      Release that reference with the matching source_release() when done.
  *   2. The extension receives both as jlong values and casts them back.
  *
  * There is no link-time dependency between the two native libraries, so the
@@ -117,8 +118,9 @@ struct wj_i420_frame {
 
 	/**
 	 * Capture time in the clock of now_us(). Frames must be pushed in
-	 * increasing timestamp order. A value of zero means "stamp it with the
-	 * source's own clock", which is what the Java pushFrame() does.
+	 * increasing timestamp order. A value of zero means "stamp it with
+	 * now_us() at the moment of the push", which is what the Java
+	 * pushFrame() does.
 	 */
 	int64_t timestamp_us;
 
@@ -126,6 +128,18 @@ struct wj_i420_frame {
 	wj_release_fn release;
 	/** Passed to "release" unchanged. */
 	void * opaque;
+};
+
+/**
+ * Color description using ITU-T H.273 identifiers for primaries, transfer and
+ * matrix (2 means unspecified). Range: 0 unspecified, 1 limited, 2 full.
+ * Unknown identifiers are treated as unspecified by the receiving library.
+ */
+struct wj_color_space {
+	uint8_t primaries;
+	uint8_t transfer;
+	uint8_t matrix;
+	uint8_t range;
 };
 
 /**
@@ -147,7 +161,8 @@ struct wj_audio_chunk {
 
 	/**
 	 * Capture time in the clock of now_us(), or zero to stamp the chunk with
-	 * the source's own clock, which is what the Java pushAudio() does.
+	 * now_us() at the moment of the push, which is what the Java pushAudio()
+	 * does.
 	 */
 	int64_t timestamp_us;
 };
@@ -282,7 +297,8 @@ struct webrtc_java_api {
 	 * @param opaque Passed to "fn" unchanged.
 	 *
 	 * @return The observer, for encoded_observer_remove(), or null if a
-	 *         handle or the function was null.
+	 *         handle or the function was null, or memory ran out. Nothing is
+	 *         attached then, and the handle stays valid.
 	 */
 	void * (*encoded_observer_add)(void * frames, wj_encoded_frame_fn fn, void * opaque);
 
@@ -300,6 +316,16 @@ struct webrtc_java_api {
 	 * handle must not be used afterwards.
 	 */
 	void (*encoded_frames_release)(void * frames);
+
+	/**
+	 * Like video_source_push, with a color description for the I420 pixels.
+	 * A null color description has the same behavior as video_source_push.
+	 * Ownership and error handling are identical. Appended in interface v1;
+	 * callers must check size before accessing this member.
+	 */
+	int (*video_source_push_color)(void * source, const struct wj_i420_frame * frame,
+			const struct wj_color_space * color);
+
 };
 
 #ifdef __cplusplus

@@ -1,0 +1,168 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef WEBRTC_JAVA_MEDIA_AUDIO_DECODER_H_
+#define WEBRTC_JAVA_MEDIA_AUDIO_DECODER_H_
+
+#include <cstdint>
+#include <vector>
+
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libswresample/swresample.h>
+}
+
+namespace ffmpeg
+{
+	// Decodes one audio stream into the only shape WebRTC accepts: interleaved
+	// signed 16-bit PCM, at most 48 kHz, mono or stereo, in chunks of exactly
+	// 10 ms.
+	//
+	// A source rarely arrives in that shape, so decoded audio goes through
+	// swresample and is then re-cut into 10 ms chunks, which is why this holds
+	// a buffer between calls: one decoded frame is seldom a whole number of
+	// chunks.
+	class AudioDecoder
+	{
+		public:
+			// The rate WebRTC works at internally, so resampling to it here
+			// saves it from doing the same work again later.
+			static constexpr int kSampleRate = 48000;
+
+			// WebRTC takes 10 ms of audio at a time and nothing else.
+			static constexpr int kFramesPerChunk = kSampleRate / 100;
+
+			// How far a frame's timestamp may stray from where the audio
+			// before it ends. Containers round their timestamps, so a frame
+			// is followed by its sample count as long as it stays this close,
+			// which is also below the point where audio running ahead of
+			// video starts to show.
+			static constexpr int64_t kTimestampToleranceUs = 40000;
+
+			// The longest stretch of missing audio filled with silence, or of
+			// repeated audio skipped. Beyond it the source's clock is taken
+			// to have jumped, as ffplay does past the same ten seconds.
+			static constexpr int64_t kMaxGapUs = 10000000;
+
+			AudioDecoder() = default;
+			~AudioDecoder();
+
+			AudioDecoder(const AudioDecoder &) = delete;
+			AudioDecoder & operator=(const AudioDecoder &) = delete;
+
+			// Opens a decoder for the given stream, which must outlive this
+			// decoder. Source audio of more than two channels is downmixed to
+			// stereo. Timestamps are given out relative to the start time,
+			// which is where the source starts on the container's clock.
+			// Returns 0 or a negative AVERROR.
+			int Open(const AVStream * stream, int64_t start_time_us = 0);
+
+			void Close();
+
+			// Drops the decoder's state and the partial chunk being gathered,
+			// which is what a seek needs. Forgets a position set with
+			// DiscardBefore.
+			void Flush();
+
+			// Makes the audio after a flush start at the given time on the
+			// source's timeline. A seek lands on a keyframe before it, and the
+			// audio decoded from there up to the position asked for is
+			// dropped: frames that end before it entirely, and the start of
+			// the frame it falls in, so the first chunk starts at it.
+			void DiscardBefore(int64_t timestamp_us);
+
+			// Hands a packet to the decoder, or null to start draining at the
+			// end of the stream. Returns 0 or a negative AVERROR.
+			int SendPacket(const AVPacket * packet);
+
+			// Takes the next 10 ms of audio, resampled and interleaved.
+			//
+			// Returns 0 when a chunk was produced, AVERROR(EAGAIN) when the
+			// decoder needs another packet first, AVERROR_EOF once draining
+			// has finished, or another negative AVERROR. The tail of a stream
+			// that does not fill a whole chunk is padded with silence, since a
+			// short chunk is not something WebRTC can be given.
+			int ReceiveChunk(std::vector<int16_t> & chunk, int64_t * timestamp_us);
+
+			int GetChannels() const;
+
+		private:
+			// Resamples one decoded frame into the pending buffer.
+			int Resample(const AVFrame * frame);
+
+			// Holds the audio to the frame's timestamp where it strays from
+			// where the audio before it ends: missing audio becomes silence,
+			// and a frame that repeats audio already given out skips what it
+			// repeats, which it reports as the number of input samples to
+			// skip.
+			int FollowTimestamp(int64_t timestamp_us, int * skip);
+
+			// Where the audio taken in so far ends, in microseconds on the
+			// source's timeline.
+			int64_t GetEndTimestampUs() const;
+
+			// Moves whatever swresample still holds into the pending buffer,
+			// which it only hands out when told that no more input follows.
+			int DrainResampler();
+
+			// Sets swresample up to convert from the given input to the
+			// output this decoder produces, replacing any earlier setup.
+			int ConfigureResampler(const AVChannelLayout * layout, int format,
+					int sample_rate);
+
+			// Moves one chunk out of the pending buffer.
+			void TakeChunk(std::vector<int16_t> & chunk, int64_t * timestamp_us);
+
+			AVCodecContext * codec_context_ = nullptr;
+			SwrContext * swr_context_ = nullptr;
+			AVFrame * decoded_ = nullptr;
+
+			// The input swresample is set up for. A stream may change any of
+			// these from one frame to the next, and a frame that no longer
+			// matches would be read with the wrong layout.
+			AVChannelLayout in_layout_ = {};
+			int in_format_ = -1;
+			int in_rate_ = 0;
+			AVRational time_base_ = { 0, 1 };
+			int64_t start_time_us_ = 0;
+			int channels_ = 0;
+
+			// Resampled samples not yet handed out, interleaved.
+			std::vector<int16_t> pending_;
+
+			// When the next chunk starts, in microseconds on the source's own
+			// timeline. Chunks advance it in exact 10 ms steps, so the audio
+			// this produces is perfectly regular whatever the container's
+			// packet timing looks like. Gaps in the source's timestamps are
+			// filled with silence rather than closed up, so audio stays where
+			// video, which follows its own timestamps, expects it.
+			int64_t next_timestamp_us_ = 0;
+			bool have_timestamp_ = false;
+
+			// Where the audio after a seek is to start. Only acted on while
+			// there is no timestamp yet, which is up to the first frame that
+			// reaches it.
+			int64_t discard_before_us_ = 0;
+			bool discarding_ = false;
+
+			// Set once the resampler has been drained at the end of the
+			// stream, so that it is drained once and not on every call.
+			bool resampler_drained_ = false;
+	};
+}
+
+#endif

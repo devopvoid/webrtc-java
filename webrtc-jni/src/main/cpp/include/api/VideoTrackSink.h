@@ -31,7 +31,9 @@ namespace jni
 	class VideoTrackSink : public webrtc::VideoSinkInterface<webrtc::VideoFrame>
 	{
 		public:
-			VideoTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink);
+			// A shared sink gets the pixels of the frames themselves, read-only,
+			// and any other a copy of its own.
+			VideoTrackSink(JNIEnv * env, const JavaGlobalRef<jobject> & sink, bool shared);
 			~VideoTrackSink() = default;
 
 			// VideoSinkInterface implementation.
@@ -48,6 +50,8 @@ namespace jni
 
 		private:
 			JavaGlobalRef<jobject> sink;
+
+			const bool shared;
 
 			const std::shared_ptr<JavaVideoTrackSinkClass> javaClass;
 			const std::shared_ptr<JavaVideoFrameClass> javaFrameClass;

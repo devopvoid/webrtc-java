@@ -72,6 +72,9 @@ class TestMediaCall implements AutoCloseable {
 	private volatile int width = DEFAULT_WIDTH;
 	private volatile int height = DEFAULT_HEIGHT;
 
+	private volatile int audioRate = 48000;
+	private volatile int audioChannels = 1;
+
 
 	TestMediaCall(PeerConnectionFactory factory, boolean video, boolean audio) {
 		this(factory, video, audio, "VP8");
@@ -146,6 +149,15 @@ class TestMediaCall implements AutoCloseable {
 	}
 
 	/**
+	 * Sets the format of the audio the call sends, 48 kHz mono unless changed.
+	 * Call it before {@link #startMedia()}.
+	 */
+	void setAudioFormat(int sampleRate, int channels) {
+		this.audioRate = sampleRate;
+		this.audioChannels = channels;
+	}
+
+	/**
 	 * Waits for both ends to connect.
 	 */
 	void awaitConnected() throws InterruptedException {
@@ -168,10 +180,22 @@ class TestMediaCall implements AutoCloseable {
 	 * if there are none yet.
 	 */
 	Map<String, Object> getOutboundVideoStats() throws InterruptedException {
+		return getOutboundStats(videoSender);
+	}
+
+	/**
+	 * Returns the caller's statistics of its outbound audio stream, or null
+	 * if there are none yet.
+	 */
+	Map<String, Object> getOutboundAudioStats() throws InterruptedException {
+		return getOutboundStats(audioSender);
+	}
+
+	private Map<String, Object> getOutboundStats(RTCRtpSender sender) throws InterruptedException {
 		CountDownLatch done = new CountDownLatch(1);
 		AtomicReference<Map<String, Object>> outbound = new AtomicReference<>();
 
-		caller.getPeerConnection().getStats(videoSender, report -> {
+		caller.getPeerConnection().getStats(sender, report -> {
 			for (RTCStats stats : report.getStats().values()) {
 				if (stats.getType() == RTCStatsType.OUTBOUND_RTP) {
 					outbound.set(stats.getAttributes());
@@ -336,7 +360,10 @@ class TestMediaCall implements AutoCloseable {
 	}
 
 	private void feed() {
-		byte[] audio = new byte[480 * 2];
+		int rate = audioRate;
+		int channels = audioChannels;
+		int frames = rate / 100;
+		byte[] audio = new byte[frames * channels * 2];
 		long startNs = System.nanoTime();
 		long audioChunks = 0;
 		long videoFrames = 0;
@@ -347,13 +374,16 @@ class TestMediaCall implements AutoCloseable {
 
 			while (audioSource != null && audioChunks * 10 <= elapsedMs) {
 				// A tone, so that the encoder has something to encode.
-				for (int i = 0; i < 480; i++) {
-					short sample = (short) (Math.sin(2 * Math.PI * 440 * (audioChunks * 480 + i) / 48000) * 8000);
-					audio[2 * i] = (byte) sample;
-					audio[2 * i + 1] = (byte) (sample >> 8);
+				for (int i = 0; i < frames; i++) {
+					short sample = (short) (Math.sin(2 * Math.PI * 440 * (audioChunks * frames + i) / rate) * 8000);
+
+					for (int channel = 0; channel < channels; channel++) {
+						audio[2 * (i * channels + channel)] = (byte) sample;
+						audio[2 * (i * channels + channel) + 1] = (byte) (sample >> 8);
+					}
 				}
 
-				audioSource.pushAudio(audio, 16, 48000, 1, 480);
+				audioSource.pushAudio(audio, 16, rate, channels, frames);
 				audioChunks++;
 			}
 

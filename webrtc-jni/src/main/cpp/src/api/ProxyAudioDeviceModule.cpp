@@ -32,15 +32,19 @@ namespace jni
 
 	ProxyAudioDeviceModule::ProxyAudioDeviceModule(webrtc::scoped_refptr<webrtc::AudioDeviceModule> delegate) :
 			delegate_(std::move(delegate)),
-			captureEnabled_(false),
-			gate_(captureEnabled_),
-			gateRegistered_(false),
-			workerThread_(nullptr)
+			deviceCapture_(std::make_shared<DeviceAudioCapture>(delegate_)),
+			gate_(*deviceCapture_),
+			gateRegistered_(false)
 	{
 	}
 
 	ProxyAudioDeviceModule::~ProxyAudioDeviceModule()
 	{
+		// Stops a recording the capture started, which the module would keep
+		// running, and with it its callback, and lets the sources live on
+		// without audio.
+		deviceCapture_->Detach();
+
 		// WebRTC unregisters its transport before releasing the factory. Should
 		// the wrapped module still point at the gate, detach it so the module
 		// does not keep a dangling pointer once this proxy is gone. A module
@@ -52,39 +56,14 @@ namespace jni
 		}
 	}
 
-	void ProxyAudioDeviceModule::SetCaptureEnabled(bool enabled)
+	void ProxyAudioDeviceModule::SetAudioProcessing(webrtc::scoped_refptr<webrtc::AudioProcessing> processing)
 	{
-		webrtc::Thread * workerThread = workerThread_.load(std::memory_order_acquire);
-
-		if (workerThread) {
-			workerThread->BlockingCall([this, enabled]() {
-				ApplyCaptureEnabled(enabled);
-			});
-		}
-		else {
-			ApplyCaptureEnabled(enabled);
-		}
+		deviceCapture_->SetAudioProcessing(std::move(processing));
 	}
 
-	void ProxyAudioDeviceModule::ApplyCaptureEnabled(bool enabled)
+	std::shared_ptr<DeviceAudioCapture> ProxyAudioDeviceModule::DeviceCapture() const
 	{
-		captureEnabled_.store(enabled, std::memory_order_release);
-
-		RTC_LOG(LS_INFO) << "ProxyAudioDeviceModule: device capture " << (enabled ? "enabled" : "disabled");
-
-		if (!enabled && delegate_->Recording()) {
-			// A recording that is already running was started by the application
-			// through the Java AudioDeviceModule, which holds the wrapped module
-			// and does not pass through this proxy. Leave it running; its frames
-			// are dropped instead. WebRTC cannot have started it, because it only
-			// starts a recording while capture is enabled.
-			RTC_LOG(LS_INFO) << "ProxyAudioDeviceModule: dropping recorded audio, send streams are sink-fed";
-		}
-	}
-
-	bool ProxyAudioDeviceModule::CaptureEnabled() const
-	{
-		return captureEnabled_.load(std::memory_order_acquire);
+		return deviceCapture_;
 	}
 
 	int32_t ProxyAudioDeviceModule::ActiveAudioLayer(AudioLayer * audioLayer) const
@@ -94,16 +73,26 @@ namespace jni
 
 	int32_t ProxyAudioDeviceModule::RegisterAudioCallback(webrtc::AudioTransport * audioCallback)
 	{
+		// WebRtcVoiceEngine registers and unregisters its transport on the
+		// factory's worker thread, which lives exactly as long as the
+		// transport is registered.
+		if (audioCallback == nullptr) {
+			// The factory goes away. Stop a recording the capture started while
+			// the worker thread still runs; the module rejects the transport's
+			// removal while it records.
+			deviceCapture_->SetRecordingRequested(false);
+			deviceCapture_->SetWorkerThread(nullptr);
+		}
+
 		gate_.SetTarget(audioCallback);
 
 		int32_t result = delegate_->RegisterAudioCallback(audioCallback ? &gate_ : nullptr);
 
 		if (result == 0) {
 			gateRegistered_ = audioCallback != nullptr;
-
-			// WebRtcVoiceEngine registers and unregisters its transport on the
-			// factory's worker thread.
-			workerThread_.store(audioCallback ? webrtc::Thread::Current() : nullptr, std::memory_order_release);
+		}
+		if (audioCallback != nullptr) {
+			deviceCapture_->SetWorkerThread(webrtc::Thread::Current());
 		}
 
 		return result;
@@ -185,24 +174,13 @@ namespace jni
 
 	int32_t ProxyAudioDeviceModule::RecordingIsAvailable(bool * available)
 	{
-		if (!CaptureEnabled()) {
-			if (!available) {
-				return -1;
-			}
-			*available = false;
-			return 0;
-		}
-
 		return delegate_->RecordingIsAvailable(available);
 	}
 
 	int32_t ProxyAudioDeviceModule::InitRecording()
 	{
-		if (!CaptureEnabled()) {
-			return -1;
-		}
-
-		return delegate_->InitRecording();
+		// The capture initializes the recording once it starts it.
+		return 0;
 	}
 
 	bool ProxyAudioDeviceModule::RecordingIsInitialized() const
@@ -227,21 +205,28 @@ namespace jni
 
 	int32_t ProxyAudioDeviceModule::StartRecording()
 	{
-		if (!CaptureEnabled()) {
-			return -1;
-		}
+		// WebRTC asks for a recording whenever a send stream starts, also one
+		// fed by a pushed or forwarded track. The device records only while a
+		// device source has a sink as well.
+		deviceCapture_->SetRecordingRequested(true);
 
-		return delegate_->StartRecording();
+		return 0;
 	}
 
 	int32_t ProxyAudioDeviceModule::StopRecording()
 	{
-		return delegate_->StopRecording();
+		// The last send stream stopped, or the application switched recording
+		// off through RTCPeerConnection.setAudioRecording(false).
+		deviceCapture_->SetRecordingRequested(false);
+
+		return 0;
 	}
 
 	bool ProxyAudioDeviceModule::Recording() const
 	{
-		return delegate_->Recording();
+		// What WebRTC asked for, not what the device does: AudioState asks for
+		// a recording only while it believes none runs.
+		return deviceCapture_->RecordingRequested();
 	}
 
 	int32_t ProxyAudioDeviceModule::InitSpeaker()
@@ -421,8 +406,8 @@ namespace jni
 
 	// TransportGate
 
-	ProxyAudioDeviceModule::TransportGate::TransportGate(const std::atomic<bool> & captureEnabled) :
-			captureEnabled_(captureEnabled),
+	ProxyAudioDeviceModule::TransportGate::TransportGate(DeviceAudioCapture & capture) :
+			capture_(capture),
 			target_(nullptr)
 	{
 	}
@@ -462,17 +447,13 @@ namespace jni
 	{
 		newMicLevel = currentMicLevel;
 
-		webrtc::AudioTransport * target = target_.load(std::memory_order_acquire);
+		// Never handed to WebRTC's transport, which would feed it into every
+		// send stream of the factory. The device sources' tracks take it to
+		// their senders instead.
+		capture_.OnRecordedData(audioSamples, nSamples, nBytesPerSample, nChannels, samplesPerSec,
+								totalDelayMS, keyPressed, estimatedCaptureTimeNS);
 
-		if (!target || !captureEnabled_.load(std::memory_order_acquire)) {
-			// Drop the frame. Send streams of this factory are fed by their
-			// tracks' sources, not by the device.
-			return 0;
-		}
-
-		return target->RecordedDataIsAvailable(audioSamples, nSamples, nBytesPerSample, nChannels,
-											   samplesPerSec, totalDelayMS, clockDrift, currentMicLevel,
-											   keyPressed, newMicLevel, estimatedCaptureTimeNS);
+		return 0;
 	}
 
 	int32_t ProxyAudioDeviceModule::TransportGate::NeedMorePlayData(size_t nSamples,

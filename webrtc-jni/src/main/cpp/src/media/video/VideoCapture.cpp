@@ -28,26 +28,48 @@ namespace jni
 	}
 
 	VideoCapture::~VideoCapture()
-    {
-        destroy();
-    }
+	{
+		destroy();
+	}
+
+	void VideoCapture::setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> newSink)
+	{
+		if (captureModule) {
+			// Deregistering takes the lock the module delivers frames under, so
+			// no callback into the old sink is running once this returns.
+			captureModule->DeRegisterCaptureDataCallback();
+		}
+
+		sink = std::move(newSink);
+
+		if (captureModule && sink) {
+			captureModule->RegisterCaptureDataCallback(sink.get());
+		}
+	}
 
 	void VideoCapture::start()
 	{
 		if (!device) {
-			throw new Exception("Video device must be set");
+			throw Exception("Video device must be set");
 		}
+
+		if (captureModule && captureModule->CaptureStarted()) {
+			return;
+		}
+
+		// Release a module whose capture is no longer running.
+		destroy();
 
 		std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
 
 		if (!info) {
-			throw new Exception("Create video DeviceInfo failed");
+			throw Exception("Create video DeviceInfo failed");
 		}
 
 		uint32_t num = info->NumberOfDevices();
 
 		if (num < 1) {
-			throw new Exception("No video capture devices available");
+			throw Exception("No video capture devices available");
 		}
 		
 		std::string devUid;
@@ -71,27 +93,26 @@ namespace jni
 		}
 
 		if (devUid.empty()) {
-			throw new Exception("Device %s not found", device->getName().c_str());
+			throw Exception("Device %s not found", device->getName().c_str());
 		}
 
 		captureModule = webrtc::VideoCaptureFactory::Create(devUid.c_str());
 
 		if (!captureModule) {
-			throw new Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
+			throw Exception("Create VideoCaptureModule for UID %s failed", devUid.c_str());
 		}
 
-		captureModule->RegisterCaptureDataCallback(std::move(sink).release());
+		// The module only borrows the sink, which stays owned by this capture.
+		if (sink) {
+			captureModule->RegisterCaptureDataCallback(sink.get());
+		}
 
 		capability.videoType = webrtc::VideoType::kI420;
 
-		if (captureModule->StartCapture(capability) != 0) {
+		if (captureModule->StartCapture(capability) != 0 || !captureModule->CaptureStarted()) {
 			destroy();
 
-			throw new Exception("Start video capture for UID %s failed", devUid.c_str());
-		}
-
-		if (!captureModule || !captureModule->CaptureStarted()) {
-			throw new Exception("Start video capture failed");
+			throw Exception("Start video capture for UID %s failed", devUid.c_str());
 		}
 	}
 

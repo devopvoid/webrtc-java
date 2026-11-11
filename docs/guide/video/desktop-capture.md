@@ -53,10 +53,11 @@ import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 VideoDesktopSource videoSource = new VideoDesktopSource();
 
 // Configure the desktop video source
-// Set frame rate (e.g., 30 fps)
+// Set frame rate (e.g., 30 fps), from 1 to VideoDesktopSource.MAX_FRAME_RATE
 videoSource.setFrameRate(30);
 
-// Set maximum frame size (e.g., 1920x1080)
+// Set maximum frame size (e.g., 1920x1080). Frames are scaled down to fit
+// both limits and keep their aspect ratio.
 videoSource.setMaxFrameSize(1920, 1080);
 
 // Select a specific source to capture
@@ -82,7 +83,12 @@ PeerConnectionFactory factory = new PeerConnectionFactory();
 
 // Create a video track with the desktop source
 VideoTrack videoTrack = factory.createVideoTrack("video0", videoSource);
+
+// Keep the resolution, so that text stays readable, also when the bandwidth runs short.
+videoTrack.setContentHint(VideoContentHint.TEXT);
 ```
+
+The [content hint](/guide/media/constraints#content-hint) can be changed at any time, also while the track is sent.
 
 ### Adding the Track to a Peer Connection
 
@@ -147,6 +153,16 @@ videoSource.stop();
 videoSource.dispose();
 ```
 
+### Handling Capture Failures
+
+`start()` returns before capturing begins. If capturing cannot begin, because no capture backend is available or the selected source does not exist, the source ends and its tracks with it. Create the track and add the listener before calling `start()`, as a listener added later misses this:
+
+```java
+videoTrack.addTrackEndedListener(track -> {
+    // No frames will arrive from this source.
+});
+```
+
 ### Processing Frames
 
 A `VideoDesktopSource` can pass its frames through a `VideoProcessor` before they reach its tracks, for example to blank out a part of the screen. It works as for a camera; see [Changing Frames Before They Are Sent](/guide/video/camera-capture#changing-frames-before-they-are-sent).
@@ -179,3 +195,32 @@ When implementing desktop capture in your application, remember to:
 - Handle potential permission requirements on different operating systems
 
 Desktop capture is particularly useful for screen sharing applications, remote assistance tools, collaborative workspaces, and educational platforms where visual content sharing is essential.
+
+## Sharing system audio
+
+Add a [`SystemAudioSource`](/guide/audio/system-audio-source) audio track to share
+the audio the system plays alongside the desktop video, and the microphone as a
+third track if the presenter speaks. All three can come from one factory and go
+over one peer connection; put them into one stream so the receiver keeps them in
+sync. With the [Client API](/guide/client-api):
+
+```java
+LocalVideo screen = rtc.media().screen(ScreenOptions.screen(source).build());
+LocalAudio microphone = rtc.media().microphone();
+
+// The source is yours: close it after the runtime, which closes its track.
+SystemAudioSource systemOutput = new SystemAudioSource();
+LocalAudio systemAudio = rtc.media().audioTrack("system-audio", systemOutput);
+
+peer.addTrack(screen, "presentation");
+peer.addTrack(microphone, "presentation");
+peer.addTrack(systemAudio, "presentation");
+
+systemOutput.start(); // on a background thread in an application with a UI
+```
+
+Window selection applies only to video; the audio source captures the whole
+system output. Remote call audio played on the captured output is captured too on
+Windows and Linux, so route it to another output. The
+[`ScreenShareAudioExample`](/guide/examples#screen-share-with-audio) runs this
+end to end.

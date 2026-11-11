@@ -1,0 +1,478 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.onvoid.webrtc;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import dev.onvoid.webrtc.media.MediaStreamTrackMuteListener;
+import dev.onvoid.webrtc.media.SyncClock;
+import dev.onvoid.webrtc.media.audio.AudioConverter;
+import dev.onvoid.webrtc.media.audio.AudioOptions;
+import dev.onvoid.webrtc.media.audio.AudioTrack;
+import dev.onvoid.webrtc.media.audio.AudioTrackSource;
+import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
+import dev.onvoid.webrtc.media.audio.AudioLayer;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
+import dev.onvoid.webrtc.media.video.VideoCapture;
+import dev.onvoid.webrtc.media.video.VideoTrack;
+
+import java.util.AbstractList;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+
+/**
+ * Disposing and closing native objects: once only, from any thread, also
+ * while another thread is still in a method of the object.
+ */
+class NativeDisposeTests extends TestBase {
+
+	private final PeerConnectionObserver observer = candidate -> { };
+
+	private ExecutorService executor;
+
+
+	@BeforeEach
+	void createExecutor() {
+		executor = Executors.newCachedThreadPool();
+	}
+
+	@AfterEach
+	void shutdownExecutor() {
+		executor.shutdownNow();
+	}
+
+	@Test
+	void closeTwiceDoesNothing() {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+
+		peerConnection.close();
+
+		assertDoesNotThrow(peerConnection::close);
+	}
+
+	@Test
+	void callAfterCloseThrows() {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+
+		peerConnection.close();
+
+		assertDisposed("RTCPeerConnection is closed", peerConnection::getSenders);
+		assertDisposed("RTCPeerConnection is closed", () -> peerConnection.createDataChannel("data", new RTCDataChannelInit()));
+
+		// The state getters report a closed connection instead.
+		assertEquals(RTCPeerConnectionState.CLOSED, peerConnection.getConnectionState());
+	}
+
+	@Test
+	void disposeTwiceDoesNothing() {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+
+		RTCRtpTransceiver transceiver = peerConnection.addTransceiver(track, new RTCRtpTransceiverInit());
+		RTCRtpSender sender = transceiver.getSender();
+		RTCRtpReceiver receiver = transceiver.getReceiver();
+		RTCDataChannel channel = peerConnection.createDataChannel("data", new RTCDataChannelInit());
+		AudioConverter converter = new AudioConverter(48000, 1, 48000, 1);
+
+		disposeTwice(channel::dispose);
+		disposeTwice(receiver::dispose);
+		disposeTwice(sender::dispose);
+		disposeTwice(transceiver::dispose);
+		disposeTwice(peerConnection::close);
+		disposeTwice(track::dispose);
+		disposeTwice(source::dispose);
+		disposeTwice(converter::dispose);
+
+		assertDisposed("RTCDataChannel is disposed", channel::getLabel);
+		assertDisposed("RTCRtpReceiver is disposed", receiver::getId);
+		assertDisposed("RTCRtpSender is disposed", sender::getId);
+		assertDisposed("RTCRtpTransceiver is disposed", transceiver::getMid);
+		assertDisposed("VideoTrack is disposed", track::getId);
+		assertDisposed("CustomVideoSource is disposed", source::getState);
+		assertDisposed("AudioConverter is disposed", () -> converter.convert(new byte[960], new byte[960]));
+	}
+
+	@Test
+	void tryWithResourcesDisposes() {
+		AudioConverter converter = new AudioConverter(48000, 1, 48000, 1);
+		SyncClock clock = new SyncClock();
+		VideoCapture capture = new VideoCapture();
+
+		try (converter; clock; capture) {
+			assertNotNull(converter);
+		}
+
+		assertDisposed("AudioConverter is disposed", () -> converter.convert(new byte[960], new byte[960]));
+		assertDisposed("SyncClock is disposed", clock::getTimestampUs);
+		assertDisposed("VideoCapture is disposed", capture::start);
+	}
+
+	@Test
+	void tryWithResourcesDisposesOnException() {
+		SyncClock clock = new SyncClock();
+		RuntimeException failure = new RuntimeException();
+
+		RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
+			try (clock) {
+				throw failure;
+			}
+		});
+
+		assertSame(failure, thrown);
+		assertEquals(0, thrown.getSuppressed().length);
+		assertDisposed("SyncClock is disposed", clock::getTimestampUs);
+	}
+
+	@Test
+	void closeAfterDisposeDoesNothing() {
+		SyncClock clock = new SyncClock();
+
+		clock.dispose();
+
+		assertDoesNotThrow(clock::close);
+	}
+
+	@Test
+	void closeKeepsDataChannel() {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		RTCDataChannel channel = peerConnection.createDataChannel("data", new RTCDataChannelInit());
+
+		// Closes the channel only, the native object stays until it is disposed.
+		channel.close();
+
+		assertEquals("data", channel.getLabel());
+
+		channel.dispose();
+
+		assertDisposed("RTCDataChannel is disposed", channel::getLabel);
+
+		peerConnection.close();
+	}
+
+	@Test
+	void disposeFactoryTwice() {
+		AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory disposable = new PeerConnectionFactory(audioModule);
+
+		disposeTwice(disposable::dispose);
+		disposeTwice(audioModule::dispose);
+
+		assertDisposed("PeerConnectionFactory is disposed",
+				() -> disposable.createPeerConnection(new RTCConfiguration(), observer));
+	}
+
+	@Test
+	void closeDuringCall() throws Exception {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		HeldList streamIds = new HeldList();
+
+		// addTrack reads the stream IDs while it uses the native connection.
+		Future<RTCRtpSender> added = executor.submit(() -> peerConnection.addTrack(track, streamIds));
+
+		streamIds.reached.await();
+
+		// Closes at once, although addTrack still uses the connection, which
+		// must not be freed under it.
+		peerConnection.close();
+
+		assertEquals(RTCPeerConnectionState.CLOSED, peerConnection.getConnectionState());
+
+		streamIds.release.countDown();
+
+		// addTrack goes on with a closed connection.
+		ExecutionException e = assertThrows(ExecutionException.class, added::get);
+
+		assertTrue(e.getCause().getMessage().contains("INVALID_STATE"), e.getCause().getMessage());
+		assertDisposed("RTCPeerConnection is closed", peerConnection::getSenders);
+
+		track.dispose();
+		source.dispose();
+	}
+
+
+	@Test
+	void closeInCallbackDuringCall() throws Exception {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		RTCPeerConnection other = factory.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		HeldList streamIds = new HeldList();
+		TestCreateDescObserver afterClose = new TestCreateDescObserver();
+		CompletableFuture<Void> closed = new CompletableFuture<>();
+
+		Future<RTCRtpSender> added = executor.submit(() -> peerConnection.addTrack(track, streamIds));
+
+		streamIds.reached.await();
+
+		peerConnection.createOffer(new RTCOfferOptions(), new CreateSessionDescriptionObserver() {
+			@Override
+			public void onSuccess(RTCSessionDescription description) {
+				// On the signaling thread: the close runs once this returns,
+				// although addTrack still uses the connection. The offer of the
+				// other connection is posted to this thread after it.
+				try {
+					peerConnection.close();
+					other.createOffer(new RTCOfferOptions(), afterClose);
+					closed.complete(null);
+				}
+				catch (Throwable e) {
+					closed.completeExceptionally(e);
+				}
+			}
+
+			@Override
+			public void onFailure(String error) {
+				closed.completeExceptionally(new IllegalStateException(error));
+			}
+		});
+
+		try {
+			closed.get(5, TimeUnit.SECONDS);
+			afterClose.get(5, TimeUnit.SECONDS);
+		}
+		finally {
+			streamIds.release.countDown();
+		}
+
+		// addTrack goes on with a connection closed meanwhile.
+		ExecutionException e = assertThrows(ExecutionException.class, added::get);
+
+		assertTrue(e.getCause().getMessage().contains("INVALID_STATE"), e.getCause().getMessage());
+
+		other.close();
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
+	void disposeTrackDuringCall() throws Exception {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		HeldList streamIds = new HeldList();
+
+		Future<RTCRtpSender> added = executor.submit(() -> peerConnection.addTrack(track, streamIds));
+
+		streamIds.reached.await();
+
+		// The track is the only owner of its native track, which addTrack
+		// still uses.
+		track.dispose();
+
+		streamIds.release.countDown();
+
+		RTCRtpSender sender = added.get();
+
+		assertNotNull(sender);
+		assertDisposed("VideoTrack is disposed", track::getId);
+
+		sender.dispose();
+		peerConnection.close();
+		source.dispose();
+	}
+
+	@Test
+	void concurrentCloseDuringCall() throws Exception {
+		RTCPeerConnection peerConnection = factory.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("video", source);
+		HeldList streamIds = new HeldList();
+
+		Future<RTCRtpSender> added = executor.submit(() -> peerConnection.addTrack(track, streamIds));
+
+		streamIds.reached.await();
+
+		// Two threads close at once; only one may get the connection, which
+		// is freed only once addTrack has returned.
+		CountDownLatch start = new CountDownLatch(1);
+		Future<?> first = executor.submit(() -> awaitAndRun(start, peerConnection::close));
+		Future<?> second = executor.submit(() -> awaitAndRun(start, peerConnection::close));
+
+		start.countDown();
+		first.get();
+		second.get();
+
+		streamIds.release.countDown();
+
+		// addTrack goes on with a closed connection.
+		assertThrows(ExecutionException.class, added::get);
+		assertDisposed("RTCPeerConnection is closed", peerConnection::getSenders);
+
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
+	void disposeTrackInListener() {
+		AudioTrackSource source = factory.createAudioSource(new AudioOptions());
+		AudioTrack track = factory.createAudioTrack("audio", source);
+		List<String> calls = Collections.synchronizedList(new ArrayList<>());
+
+		track.addTrackMuteListener((t, muted) -> {
+			calls.add("first");
+			track.dispose();
+		});
+		track.addTrackMuteListener((t, muted) -> calls.add("second"));
+
+		// Mute events are delivered before setEnabled() returns. WebRTC calls
+		// the observers from a copy of their list: before, the dispose freed
+		// them, its own and the second one included, while it went on.
+		track.setEnabled(false);
+
+		assertEquals(List.of("first"), calls);
+		assertDisposed("AudioTrack is disposed", track::isEnabled);
+
+		source.dispose();
+	}
+
+	@Test
+	void removeListenerInListener() {
+		AudioTrackSource source = factory.createAudioSource(new AudioOptions());
+		AudioTrack track = factory.createAudioTrack("audio", source);
+		List<String> calls = Collections.synchronizedList(new ArrayList<>());
+		MediaStreamTrackMuteListener second = (t, muted) -> calls.add("second");
+
+		track.addTrackMuteListener((t, muted) -> {
+			calls.add("first");
+			track.removeTrackMuteListener(second);
+		});
+		track.addTrackMuteListener(second);
+
+		// Before, the second observer was freed while still in the copy of the
+		// list WebRTC was going through.
+		track.setEnabled(false);
+		track.setEnabled(true);
+
+		assertEquals(List.of("first", "first"), calls);
+
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
+	void disposeFactoryWhileCloseIsPending() throws Exception {
+		AudioDeviceModule audioModule = new AudioDeviceModule(AudioLayer.kDummyAudio);
+		PeerConnectionFactory disposable = new PeerConnectionFactory(audioModule);
+		RTCPeerConnection peerConnection = disposable.createPeerConnection(new RTCConfiguration(), observer);
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = disposable.createVideoTrack("video", source);
+		HeldList streamIds = new HeldList();
+
+		// addTrack reads the stream IDs while it uses the native connection.
+		Future<RTCRtpSender> added = executor.submit(() -> peerConnection.addTrack(track, streamIds));
+
+		streamIds.reached.await();
+
+		// Closed at once, but freed only once addTrack has returned. The track
+		// goes then too.
+		peerConnection.close();
+		track.dispose();
+
+		// Before, this stopped and freed the factory's threads, which addTrack
+		// and the freeing of the connection then still called into.
+		disposable.dispose();
+
+		streamIds.release.countDown();
+
+		ExecutionException e = assertThrows(ExecutionException.class, added::get);
+
+		assertTrue(e.getCause().getMessage().contains("INVALID_STATE"), e.getCause().getMessage());
+		assertDisposed("PeerConnectionFactory is disposed",
+				() -> disposable.createPeerConnection(new RTCConfiguration(), observer));
+
+		source.dispose();
+		audioModule.dispose();
+	}
+
+	private static void disposeTwice(Runnable dispose) {
+		dispose.run();
+
+		assertDoesNotThrow(dispose::run);
+	}
+
+	private static void assertDisposed(String message, Executable executable) {
+		IllegalStateException e = assertThrows(IllegalStateException.class, executable);
+
+		assertEquals(message, e.getMessage());
+	}
+
+	private static void awaitAndRun(CountDownLatch start, Runnable runnable) {
+		try {
+			start.await();
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return;
+		}
+
+		runnable.run();
+	}
+
+
+	/**
+	 * A list of one stream ID whose element is handed out only once the test
+	 * lets it: the native method reading it waits meanwhile.
+	 */
+	private static class HeldList extends AbstractList<String> {
+
+		final CountDownLatch reached = new CountDownLatch(1);
+
+		final CountDownLatch release = new CountDownLatch(1);
+
+
+		@Override
+		public String get(int index) {
+			reached.countDown();
+
+			try {
+				release.await();
+			}
+			catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+
+			return "stream";
+		}
+
+		@Override
+		public int size() {
+			return 1;
+		}
+	}
+
+}

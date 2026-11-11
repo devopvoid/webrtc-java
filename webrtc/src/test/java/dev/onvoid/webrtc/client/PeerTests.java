@@ -19,11 +19,20 @@ package dev.onvoid.webrtc.client;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,11 +44,15 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCSessionDescription;
 
@@ -62,6 +75,28 @@ class PeerTests extends ClientTestBase {
 		assertEquals(PeerState.CONNECTED, await(peers[0].whenConnected()).state());
 		assertEquals(PeerState.CONNECTED, await(peers[1].whenConnected()).state());
 		assertTrue(errors.isEmpty(), () -> "Errors: " + errors);
+	}
+
+	@Test
+	void lateResultFreed() throws Exception {
+		// A result that comes after the caller cancelled has no one else to
+		// free it. One the caller takes is left alone.
+		PeerImpl peer = (PeerImpl) rtc.createPeer(PeerOptions.builder().negotiation(Negotiation.MANUAL).build());
+		CompletableFuture<String> late = new CompletableFuture<>();
+		CompletableFuture<String> freed = new CompletableFuture<>();
+		CompletableFuture<String> cancelled = peer.toPublic(late, freed::complete);
+
+		assertTrue(cancelled.cancel(true));
+		late.complete("late");
+		assertEquals("late", await(freed));
+
+		CompletableFuture<String> taken = new CompletableFuture<>();
+		CompletableFuture<String> kept = new CompletableFuture<>();
+		CompletableFuture<String> handed = peer.toPublic(taken, kept::complete);
+
+		taken.complete("taken");
+		assertEquals("taken", await(handed));
+		assertFalse(kept.isDone());
 	}
 
 	@Test
@@ -165,6 +200,44 @@ class PeerTests extends ClientTestBase {
 	}
 
 	@Test
+	void handlerAddedOnChannelGetsQueuedMessages() throws Exception {
+		// The channel handler returns only after the receiver closed the
+		// channel, so the messages and the close wait behind it. The message
+		// handler it adds still gets those that fit the limit.
+		int limit = 64 * 1024;
+		Peer[] peers = pair(options -> options.channelReceiveLimit(limit));
+		CountDownLatch overflowed = new CountDownLatch(1);
+		List<Integer> handled = new CopyOnWriteArrayList<>();
+		CompletableFuture<WebRtcException> error = new CompletableFuture<>();
+
+		peers[1].onError(error::complete);
+		peers[1].onChannel(remote -> {
+			awaitQuietly(overflowed);
+			remote.onMessage(message -> handled.add(message.bytes()[0] & 0xFF));
+		});
+
+		DataChannel channel = peers[0].createChannel("bulk");
+		CompletableFuture<Void> closed = whenClosed(channel);
+		closed.thenRun(overflowed::countDown);
+		byte[] payload = new byte[16 * 1024];
+
+		try {
+			for (int i = 0; i < 10; i++) {
+				payload[0] = (byte) i;
+				channel.send(payload);
+			}
+
+			await(closed);
+		}
+		finally {
+			overflowed.countDown();
+		}
+
+		assertTrue(await(error).getMessage().contains("fell more than"), () -> error.join().getMessage());
+		assertEquals(Arrays.asList(0, 1, 2, 3), handled);
+	}
+
+	@Test
 	void handledMessagesFreeLimit() throws Exception {
 		// Far more than the limit passes through, a message at a time.
 		int limit = 64 * 1024;
@@ -251,7 +324,7 @@ class PeerTests extends ClientTestBase {
 
 		assertInstanceOf(BlockingCallException.class, await(refused));
 
-		// On Java 9 and later, so do the futures derived from them.
+		// So do the futures derived from them.
 		CompletableFuture<Throwable> derivedRefused = new CompletableFuture<>();
 		peers[1].onStateChange(state -> {
 			try {
@@ -507,10 +580,66 @@ class PeerTests extends ClientTestBase {
 				.negotiation(Negotiation.MANUAL)
 				.channelSendLimit(10)
 				.build());
+		DataChannel small = other.createChannel("small");
 		ExecutionException tooLarge = assertThrows(ExecutionException.class,
-				() -> await(other.createChannel("small").send(new byte[11])));
+				() -> await(small.send(new byte[11])));
+		ExecutionException tooLong = assertThrows(ExecutionException.class,
+				() -> await(small.send("x".repeat(11))));
 
 		assertInstanceOf(ChannelFullException.class, tooLarge.getCause());
+		assertInstanceOf(ChannelFullException.class, tooLong.getCause());
+		assertEquals(0, small.bufferedAmount());
+	}
+
+	@Test
+	void oversizedBufferNotCopied() throws Exception {
+		// A sparse file mapped read-only, whose pages are never touched: a
+		// copy of its 2 GiB could not even be allocated as a byte array.
+		Path dir = Files.createTempDirectory("channel-send");
+		Path file = dir.resolve("sparse.bin");
+
+		try {
+			try (FileChannel writer = FileChannel.open(file, StandardOpenOption.CREATE_NEW,
+					StandardOpenOption.WRITE, StandardOpenOption.SPARSE)) {
+				writer.write(ByteBuffer.wrap(new byte[1]), Integer.MAX_VALUE - 1);
+			}
+
+			ByteBuffer huge;
+
+			try (FileChannel reader = FileChannel.open(file, StandardOpenOption.READ)) {
+				huge = reader.map(FileChannel.MapMode.READ_ONLY, 0, Integer.MAX_VALUE);
+			}
+
+			Peer peer = rtc.createPeer(PeerOptions.builder()
+					.negotiation(Negotiation.MANUAL)
+					.channelSendLimit(1000)
+					.build());
+			DataChannel channel = peer.createChannel("bounded");
+
+			ExecutionException full = assertThrows(ExecutionException.class, () -> await(channel.send(huge)));
+
+			assertInstanceOf(ChannelFullException.class, full.getCause());
+			assertEquals(0, channel.bufferedAmount());
+
+			// Nothing of the limit stayed taken.
+			CompletableFuture<Void> fitting = channel.send(new byte[1000]);
+
+			assertEquals(1000, channel.bufferedAmount());
+			assertFalse(fitting.isDone());
+
+			peer.close();
+		}
+		finally {
+			// Windows keeps a mapped file until the mapping is collected.
+			try {
+				Files.deleteIfExists(file);
+				Files.deleteIfExists(dir);
+			}
+			catch (IOException e) {
+				file.toFile().deleteOnExit();
+				dir.toFile().deleteOnExit();
+			}
+		}
 	}
 
 	private static PeerOptions manualOptions() {
@@ -529,8 +658,257 @@ class PeerTests extends ClientTestBase {
 
 		assertEquals("host", first.candidateType());
 		assertTrue(first.bytesSent() > 10_000, () -> "Bytes sent: " + first.bytesSent());
+		assertEquals(first.report().getTimestamp(), ChronoUnit.MICROS.between(Instant.EPOCH, first.timestamp()));
 		assertEquals(-1, first.outgoingBitrate());
-		assertTrue(second.outgoingBitrate() >= 0);
+		// Asked for right after the first, the second may be the report WebRTC
+		// still caches, which repeats the first one's bitrate.
+		if (second.timestamp().equals(first.timestamp())) {
+			assertEquals(-1, second.outgoingBitrate());
+		}
+		else {
+			assertTrue(second.outgoingBitrate() >= 0);
+		}
+	}
+
+	@Test
+	void statsHandlerErrorReported() throws Exception {
+		// A stats handler that throws reaches the runtime's error handler, and
+		// the samples after it still come.
+		ManualTimer timer = new ManualTimer();
+		CompletableFuture<Throwable> reported = new CompletableFuture<>();
+		Duration interval = Duration.ofSeconds(7);
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(error -> {
+					errors.add(error);
+					reported.complete(error);
+				})
+				.timer(timer)
+				.build()) {
+			Peer peer = runtime.createPeer(manualOptions());
+			AtomicInteger calls = new AtomicInteger();
+			CompletableFuture<PeerStats> later = new CompletableFuture<>();
+
+			peer.onStats(interval, stats -> {
+				if (calls.incrementAndGet() == 1) {
+					throw new IllegalStateException("Handler failed");
+				}
+				later.complete(stats);
+			});
+
+			assertEquals(1, timer.fire(interval));
+			Throwable error = await(reported);
+
+			assertInstanceOf(IllegalStateException.class, error);
+			errors.remove(error);
+
+			assertEquals(1, timer.fire(interval));
+			await(later);
+		}
+	}
+
+	@Test
+	void failingUncaughtHandlerKeepsEvents() {
+		// Without an error handler, what a handler throws reaches the uncaught
+		// exception handler of the thread, which here throws as well. The
+		// events after it still come.
+		ManualExecutor pool = new ManualExecutor();
+		List<String> ran = new ArrayList<>();
+		Thread thread = Thread.currentThread();
+		Thread.UncaughtExceptionHandler previous = thread.getUncaughtExceptionHandler();
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.eventExecutor(pool)
+				.build()) {
+			SerialExecutor events = new SerialExecutor(runtime.eventExecutor, runtime.eventWork,
+					runtime::reportError, true, null);
+
+			thread.setUncaughtExceptionHandler((failed, error) -> {
+				throw new IllegalStateException("Uncaught exception handler failed");
+			});
+
+			events.execute(() -> {
+				throw new IllegalStateException("Handler failed");
+			});
+			events.execute(() -> ran.add("next"));
+			pool.runAll();
+
+			events.execute(() -> ran.add("later"));
+			pool.runAll();
+
+			assertEquals(Arrays.asList("next", "later"), ran);
+		}
+		finally {
+			thread.setUncaughtExceptionHandler(previous);
+		}
+	}
+
+	@Test
+	void statsHandlerKeepsEventExecutor() throws Exception {
+		// The report of a sample may be read before the timer's thread gets
+		// to wait for it. The control pool holds that thread back behind a
+		// second read, which must not make it the thread of the handler.
+		ManualTimer timer = new ManualTimer();
+		Duration interval = Duration.ofSeconds(7);
+		Thread firing = Thread.currentThread();
+		AtomicReference<Peer> holding = new AtomicReference<>();
+		ExecutorService control = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>()) {
+			@Override
+			public void execute(Runnable task) {
+				super.execute(task);
+
+				Peer held = Thread.currentThread() == firing ? holding.getAndSet(null) : null;
+
+				if (held != null) {
+					held.stats().orTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS).join();
+				}
+			}
+		};
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.controlPool(control)
+				.eventExecutor(Runnable::run)
+				.timer(timer)
+				.build()) {
+			PeerImpl peer = (PeerImpl) runtime.createPeer(manualOptions());
+			CompletableFuture<Boolean> onEvents = new CompletableFuture<>();
+
+			peer.onStats(interval, stats -> onEvents.complete(peer.events.inExecutor()));
+			holding.set(peer);
+
+			assertEquals(1, timer.fire(interval));
+			assertTrue(await(onEvents));
+		}
+	}
+
+	@Test
+	void statsStopOnClose() throws Exception {
+		// The sample after the peer closed cancels its task, unheard.
+		ManualTimer timer = new ManualTimer();
+		Duration interval = Duration.ofSeconds(7);
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.timer(timer)
+				.build()) {
+			Peer peer = runtime.createPeer(manualOptions());
+			AtomicInteger calls = new AtomicInteger();
+
+			peer.onStats(interval, stats -> calls.incrementAndGet());
+			await(peer.closeAsync());
+
+			assertEquals(1, timer.fire(interval));
+			assertEquals(0, timer.scheduled(interval));
+			assertEquals(0, calls.get());
+		}
+	}
+
+	@Test
+	void statsStopBeforeTaskKnown() throws Exception {
+		// The first sample is due at once, so it may find the peer closed
+		// before the task it has to cancel is known.
+		ManualTimer timer = new ManualTimer();
+		Duration interval = Duration.ofSeconds(7);
+
+		try (WebRtc runtime = WebRtc.builder()
+				.audio(AudioMode.HEADLESS)
+				.errorHandler(errors::add)
+				.timer(timer)
+				.build()) {
+			Peer peer = runtime.createPeer(manualOptions());
+			AtomicInteger calls = new AtomicInteger();
+
+			await(peer.closeAsync());
+
+			timer.eagerPeriodic();
+			peer.onStats(interval, stats -> calls.incrementAndGet());
+
+			assertEquals(0, timer.scheduled(interval));
+			assertEquals(0, calls.get());
+		}
+	}
+
+	@Test
+	void statsOfClosedPeerFail() throws Exception {
+		Peer peer = rtc.createPeer(manualOptions());
+		await(peer.closeAsync());
+
+		assertInstanceOf(PeerClosedException.class, cause(peer.stats()));
+	}
+
+	@Test
+	void handlersRunOnEventExecutor() throws Exception {
+		// Whichever thread a report comes from, the application hears of it
+		// on the event executor of the peer.
+		Peer[] peers = pair();
+		PeerImpl peer = (PeerImpl) peers[1];
+		CompletableFuture<Boolean> state = new CompletableFuture<>();
+		CompletableFuture<Boolean> channel = new CompletableFuture<>();
+		CompletableFuture<Boolean> track = new CompletableFuture<>();
+		CompletableFuture<Boolean> stats = new CompletableFuture<>();
+
+		peer.onStateChange(value -> state.complete(peer.events.inExecutor()));
+		peer.onChannel(value -> channel.complete(peer.events.inExecutor()));
+		peer.onTrack(value -> track.complete(peer.events.inExecutor()));
+
+		Subscription sampling = peer.onStats(Duration.ofMillis(10), value -> stats.complete(peer.events.inExecutor()));
+
+		peers[0].createChannel("chat");
+		peers[0].addTrack(rtc.media().customAudio("voice"));
+
+		assertTrue(await(state));
+		assertTrue(await(channel));
+		assertTrue(await(track));
+		assertTrue(await(stats));
+
+		sampling.close();
+	}
+
+	@Test
+	void lateHandlerGetsOpenChannels() throws Exception {
+		Peer[] peers = pair();
+		CompletableFuture<DataChannel> first = new CompletableFuture<>();
+		peers[1].onChannel(first::complete);
+
+		DataChannel channel = peers[0].createChannel("chat");
+		DataChannel remote = await(first);
+
+		CompletableFuture<DataChannel> late = new CompletableFuture<>();
+		peers[1].onChannel(late::complete);
+		assertSame(remote, await(late));
+
+		CompletableFuture<Void> closed = whenClosed(remote);
+		channel.close();
+		await(closed);
+
+		// The state is replayed on the same executor, behind the channels.
+		List<DataChannel> afterClose = new CopyOnWriteArrayList<>();
+		CompletableFuture<PeerState> replayed = new CompletableFuture<>();
+		peers[1].onChannel(afterClose::add);
+		peers[1].onStateChange(replayed::complete);
+		await(replayed);
+
+		assertTrue(afterClose.isEmpty(), () -> "Channels: " + afterClose);
+	}
+
+	@Test
+	void lateHandlerGetsTracks() throws Exception {
+		Peer[] peers = pair();
+		CompletableFuture<RemoteTrack> first = new CompletableFuture<>();
+		peers[1].onTrack(first::complete);
+
+		peers[0].addTrack(rtc.media().customAudio("voice"));
+		RemoteTrack track = await(first);
+
+		CompletableFuture<RemoteTrack> late = new CompletableFuture<>();
+		peers[1].onTrack(late::complete);
+
+		assertSame(track, await(late));
 	}
 
 	@Test
@@ -573,6 +951,78 @@ class PeerTests extends ClientTestBase {
 		assertThrows(IllegalStateException.class,
 				() -> rtc.createPeer(PeerOptions.builder().signaling(link.first()).build()));
 		assertEquals(1, rtc.peers().size());
+	}
+
+	@Test
+	void closeDetachesSignaling() throws Exception {
+		List<Consumer<SignalMessage>> attached = new CopyOnWriteArrayList<>();
+		AtomicInteger detached = new AtomicInteger();
+		Signaling transport = new Signaling() {
+
+			@Override
+			public void send(SignalMessage message) {
+			}
+
+			@Override
+			public Subscription attach(Consumer<SignalMessage> inbound) {
+				attached.add(inbound);
+				return detached::incrementAndGet;
+			}
+		};
+
+		Peer peer = rtc.createPeer(PeerOptions.builder().signaling(transport).build());
+
+		assertEquals(1, attached.size());
+		assertEquals(0, detached.get());
+
+		// Once, by the time the close completes.
+		await(peer.closeAsync());
+		await(peer.closeAsync());
+		assertEquals(1, detached.get());
+	}
+
+	@Test
+	void closeWhileAttaching() throws Exception {
+		// The peer has closed, and found nothing to let go of, before attach
+		// returns. The subscription it then gets is closed all the same.
+		AtomicInteger detached = new AtomicInteger();
+		Signaling transport = new Signaling() {
+
+			@Override
+			public void send(SignalMessage message) {
+			}
+
+			@Override
+			public Subscription attach(Consumer<SignalMessage> inbound) {
+				rtc.peers().forEach(peer -> peer.closeAsync().join());
+				return detached::incrementAndGet;
+			}
+		};
+
+		Peer peer = rtc.createPeer(PeerOptions.builder().signaling(transport).build());
+
+		assertEquals(PeerState.CLOSED, peer.state());
+		assertEquals(1, detached.get());
+	}
+
+	@Test
+	void signalingOutlivesPeer() throws Exception {
+		// A closed peer frees its end of the loopback for the next one, which
+		// connects through it.
+		SignalingPair link = Signaling.loopback();
+		await(rtc.createPeer(PeerOptions.builder().signaling(link.first()).build()).closeAsync());
+
+		Peer caller = rtc.createPeer(PeerOptions.builder().signaling(link.first()).build());
+		Peer callee = rtc.createPeer(PeerOptions.builder().signaling(link.second()).polite(true).build());
+		CompletableFuture<String> reply = new CompletableFuture<>();
+
+		callee.onChannel(channel -> channel.onMessage(message -> channel.send("pong:" + message.text())));
+
+		DataChannel channel = caller.createChannel("chat");
+		channel.onMessage(message -> reply.complete(message.text()));
+		channel.send("ping");
+
+		assertEquals("pong:ping", await(reply));
 	}
 
 	@Test

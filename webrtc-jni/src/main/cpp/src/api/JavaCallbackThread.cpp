@@ -15,7 +15,7 @@
  */
 
 #include "api/JavaCallbackThread.h"
-#include "JavaContext.h"
+#include "JavaUtils.h"
 
 #include "rtc_base/logging.h"
 
@@ -31,6 +31,7 @@ namespace jni
 	{
 		struct Queue
 		{
+			const char * name;
 			std::mutex mutex;
 			std::condition_variable condition;
 			std::deque<absl::AnyInvocable<void(JNIEnv *) &&>> callbacks;
@@ -38,12 +39,12 @@ namespace jni
 
 		void Run(Queue * queue)
 		{
-			JavaVM * vm = javaContext->getVM();
+			JavaVM * vm = GetJavaVM();
 			JNIEnv * env = nullptr;
 
 			JavaVMAttachArgs args;
 			args.version = JNI_VERSION_1_6;
-			args.name = const_cast<char *>("WebRTC-Callbacks");
+			args.name = const_cast<char *>(queue->name);
 			args.group = nullptr;
 
 			if (vm->AttachCurrentThreadAsDaemon(reinterpret_cast<void **>(&env), &args) != JNI_OK) {
@@ -77,32 +78,41 @@ namespace jni
 			}
 		}
 
-		Queue & GetQueue()
+		// Never destroyed: its thread waits on it for as long as the process
+		// runs.
+		Queue * StartQueue(const char * name)
 		{
-			// Never destroyed: its thread waits on it for as long as the
-			// process runs.
-			static Queue * queue = [] {
-				Queue * created = new Queue();
+			Queue * queue = new Queue();
+			queue->name = name;
 
-				std::thread(Run, created).detach();
+			std::thread(Run, queue).detach();
 
-				return created;
-			}();
+			return queue;
+		}
 
-			return *queue;
+		void Enqueue(Queue & queue, absl::AnyInvocable<void(JNIEnv *) &&> callback)
+		{
+			{
+				std::lock_guard<std::mutex> lock(queue.mutex);
+
+				queue.callbacks.push_back(std::move(callback));
+			}
+
+			queue.condition.notify_one();
 		}
 	}
 
 	void JavaCallbackThread::Post(absl::AnyInvocable<void(JNIEnv *) &&> callback)
 	{
-		Queue & queue = GetQueue();
+		static Queue * queue = StartQueue("WebRTC-Callbacks");
 
-		{
-			std::lock_guard<std::mutex> lock(queue.mutex);
+		Enqueue(*queue, std::move(callback));
+	}
 
-			queue.callbacks.push_back(std::move(callback));
-		}
+	void JavaCallbackThread::PostDeviceChange(absl::AnyInvocable<void(JNIEnv *) &&> callback)
+	{
+		static Queue * queue = StartQueue("WebRTC-DeviceChanges");
 
-		queue.condition.notify_one();
+		Enqueue(*queue, std::move(callback));
 	}
 }

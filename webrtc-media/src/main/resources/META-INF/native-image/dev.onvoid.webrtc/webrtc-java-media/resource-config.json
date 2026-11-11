@@ -1,0 +1,9 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "avcodec\\-62\\.dll|avformat\\-62\\.dll|avutil\\-60\\.dll|libavcodec\\.62\\.dylib|libavcodec\\.so\\.62|libavformat\\.62\\.dylib|libavformat\\.so\\.62|libavutil\\.60\\.dylib|libavutil\\.so\\.60|libswresample\\.6\\.dylib|libswresample\\.so\\.6|libswscale\\.9\\.dylib|libswscale\\.so\\.9|libwebrtc\\-java\\-media\\-linux\\-aarch32\\.so|libwebrtc\\-java\\-media\\-linux\\-aarch64\\.so|libwebrtc\\-java\\-media\\-linux\\-x86_64\\.so|libwebrtc\\-java\\-media\\-macos\\-aarch64\\.dylib|libwebrtc\\-java\\-media\\-macos\\-x86_64\\.dylib|swresample\\-6\\.dll|swscale\\-9\\.dll|webrtc\\-java\\-media\\-windows\\-aarch64\\.dll|webrtc\\-java\\-media\\-windows\\-x86_64\\.dll"
+      }
+    ]
+  }
+}

@@ -15,23 +15,34 @@
  */
 
 #include "media/video/codec/JavaLocalFrame.h"
+#include "media/video/codec/VideoCodecUtils.h"
+
+#include "rtc_base/logging.h"
 
 namespace jni
 {
-	JavaLocalFrame::JavaLocalFrame(JNIEnv * env, jint capacity) :
+	JavaLocalFrame::JavaLocalFrame(JNIEnv * env, jint capacity, const char * context) :
 		env(env),
-		pushed(env->PushLocalFrame(capacity) == JNI_OK)
+		isPushed(env->PushLocalFrame(capacity) == JNI_OK)
 	{
-		if (!pushed) {
-			// Out of memory: the references then go to the enclosing frame.
-			env->ExceptionClear();
+		if (!isPushed) {
+			// The JVM is out of memory and has thrown, which is reported like
+			// any exception of a codec call.
+			ClearCodecException(env, context);
+
+			RTC_LOG(LS_WARNING) << "No local JNI frame for " << context << ", giving up the call";
 		}
 	}
 
 	JavaLocalFrame::~JavaLocalFrame()
 	{
-		if (pushed) {
+		if (isPushed) {
 			env->PopLocalFrame(nullptr);
 		}
+	}
+
+	bool JavaLocalFrame::pushed() const
+	{
+		return isPushed;
 	}
 }

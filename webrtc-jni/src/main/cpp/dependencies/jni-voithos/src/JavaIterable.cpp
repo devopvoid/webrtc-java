@@ -30,6 +30,7 @@ namespace jni
 		}
 
 		iterator = JavaLocalRef<jobject>(env, env->CallObjectMethod(iterable, iterableClass->iterator));
+		ExceptionCheck(env);
 
 		// Start at the first element.
 		++(*this);
@@ -50,6 +51,7 @@ namespace jni
 		}
 
 		bool hasNext = env->CallBooleanMethod(iterator, iterableClass->iteratorHasNext);
+		ExceptionCheck(env);
 
 		if (!hasNext) {
 			iterator = nullptr;
@@ -58,6 +60,7 @@ namespace jni
 		}
 
 		value = JavaLocalRef<jobject>(env, env->CallObjectMethod(iterator, iterableClass->iteratorNext));
+		ExceptionCheck(env);
 
 		return *this;
 	}

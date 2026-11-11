@@ -57,7 +57,9 @@ class className																	            \
 		static retType getValue(JNIEnv * env, jobject obj)                                  \
 		{                                                                                   \
 			const auto javaClass = JavaClasses::get<JAVA_PRIMITIVE_CLASS(className)>(env);  \
-			return env->mCall(obj, javaClass->value);										\
+			const retType value = env->mCall(obj, javaClass->value);						\
+			ExceptionCheck(env);															\
+			return value;																	\
 		}                                                                                   \
                                                                                             \
 	private:                                                                                \

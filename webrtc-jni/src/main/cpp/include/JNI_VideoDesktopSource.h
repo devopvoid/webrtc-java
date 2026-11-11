@@ -17,10 +17,10 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
-	 * Method:    setFrameRate
+	 * Method:    setFrameRateInternal
 	 * Signature: (I)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRate
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFrameRateInternal
 	(JNIEnv*, jobject, jint);
 
 	/*
@@ -30,14 +30,6 @@ extern "C" {
 	 */
 	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setMaxFrameSize
 	(JNIEnv*, jobject, jint, jint);
-
-	/*
-	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
-	 * Method:    setFocusSelectedSource
-	 * Signature: (Z)V
-	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setFocusSelectedSource
-	(JNIEnv*, jobject, jboolean);
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource

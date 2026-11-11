@@ -36,7 +36,7 @@ What the client API takes care of:
 - **Lifetime**: everything belongs to the runtime that created it and is closed with it. Senders, receivers and transceivers stay inside the library.
 - **Futures**: operations return `CompletableFuture`s that fail with typed exceptions, instead of taking observers.
 
-The client API is plain Java on top of the classes the other guides describe, and it does not replace them. Its peers, tracks and channels are the same native objects, and [Using the Low-Level API](#using-the-low-level-api) shows how to reach them for anything it does not cover.
+The client API is plain Java on top of the classes the other guides describe, and it does not replace them. Its peers, tracks and channels are the same native objects, and [Using the Low-Level API](#using-the-low-level-api) shows how to reach them for anything it does not cover. [Client API Design](/guide/client-api-design) explains the decisions behind it.
 
 ## The Runtime
 
@@ -60,22 +60,27 @@ WebRtc rtc = WebRtc.builder()
 | `hardwareVideoCodecs(boolean)` | `false` | Encodes and decodes video on the GPU where it can, as the [Video Codecs](/guide/advanced/video-codecs) guide describes. |
 | `fieldTrials(Map)` | none | [Field trials](/guide/advanced/field-trials). |
 | `eventExecutor(Executor)` | threads of the runtime | Where handlers run, see [Threads](#threads). |
+| `eventThreads(int)` | unlimited | The most threads the runtime runs handlers on, see [Limiting Threads](#limiting-threads). |
+| `frameThreads(int)` | unlimited | The most threads that run `onFrame` and `onAudio` handlers. |
+| `audioBuffer(Duration)` | 5 seconds | How much audio an `onAudio` subscription keeps for a handler that falls behind, see [Audio](#audio). |
 | `errorHandler(Consumer<Throwable>)` | the thread's uncaught exception handler | Receives what handlers throw, and failures nobody else hears of. |
 | `operationTimeout(Duration)` | 30 seconds | How long an operation such as applying a description may take before it fails with a `TimeoutException`. |
 | `closeTimeout(Duration)` | 10 seconds | How long `close()` waits. |
 | `configureFactory(Consumer<PeerConnectionFactory.Builder>)` | none | Anything else of the factory, such as codec factories of your own. |
 
+Every timeout of the client API, these two as well as the gathering timeout and the `Whip` and `Whep` timeouts below, must be positive; none of them can be switched off. A timeout counts in milliseconds, rounded up, so one under a millisecond waits a millisecond. One too long for milliseconds to count waits as long as they can count, about 292 million years.
+
 ### Audio Modes
 
-WebRTC feeds the audio a factory captures into every audio sender of that factory, so captured audio and audio you push cannot be mixed in one runtime. The runtime's `AudioMode` picks one of them up front:
+The runtime's `AudioMode` decides whether it may open the microphone and where it plays remote audio. Every mode sends audio pushed through `CustomAudio`; each sender gets the audio of its own track, so a `DEVICES` runtime can send the microphone and pushed audio side by side, also on one peer:
 
 | Mode | Sends | Plays remote audio | Use it for |
 |---|---|---|---|
-| `DEVICES` | the microphone | to the speakers | calls on a desktop |
-| `CUSTOM` | audio pushed through `CustomAudio` | to the speakers | applications that generate or relay audio |
+| `DEVICES` | the microphone and audio pushed through `CustomAudio` | to the speakers | calls on a desktop |
+| `CUSTOM` | audio pushed through `CustomAudio`; the microphone is never opened | to the speakers | applications that generate or relay audio |
 | `HEADLESS` | audio pushed through `CustomAudio` | to `RemoteAudio.onAudio` handlers only | servers, bots and tests, without any audio hardware |
 
-Asking a runtime for the other kind fails at once with a `ConfigurationException` that names the mode, rather than when the first track is added. Two runtimes can run side by side if an application needs both kinds.
+Asking a `CUSTOM` or `HEADLESS` runtime for the microphone fails at once with a `ConfigurationException` that names the mode, rather than when the first track is added. The microphone is opened only while one of its tracks is sent.
 
 ## Peers and Signaling
 
@@ -118,7 +123,25 @@ Signaling signaling = message -> socket.send(message.toJson());
 socket.onText(text -> peer.signal(SignalMessage.fromJson(text)));
 ```
 
-A transport class can implement both directions by overriding `Signaling.attach(Consumer<SignalMessage>)`, which the peer calls once when it is created, with the consumer to push received messages into.
+A transport class can implement both directions by overriding `Signaling.attach(Consumer<SignalMessage>)`, which the peer calls once when it is created, with the consumer to push received messages into. It returns a `Subscription` that removes that consumer, and only that one: the peer closes it when it closes, after its last `send`, on its event thread. The transport itself stays open, so a WebSocket can outlive the peer and take the next one, or serve several peers at once. A transport that keeps the consumer must drop it there, or the closed peer and the runtime with it stay reachable:
+
+```java
+@Override
+public synchronized Subscription attach(Consumer<SignalMessage> inbound) {
+    this.inbound = inbound;
+
+    return () -> {
+        synchronized (this) {
+            // A peer closed after the next one attached leaves that one in place.
+            if (this.inbound == inbound) {
+                this.inbound = null;
+            }
+        }
+    };
+}
+```
+
+Each end of `Signaling.loopback()` takes one peer at a time; once that peer has closed, the next one can attach, and receives what was sent to the end in between.
 
 A `SignalMessage` is a session description (`OFFER`, `ANSWER`) or an ICE candidate (`CANDIDATE`). `toJson()` writes the shapes the browser API uses, so a JavaScript peer can pass them to `setRemoteDescription` and `addIceCandidate` as they are:
 
@@ -127,7 +150,7 @@ A `SignalMessage` is a session description (`OFFER`, `ANSWER`) or an ICE candida
 {"candidate":"candidate:842163049 1 udp 1677729535 203.0.113.7 49203 typ srflx raddr 0.0.0.0 rport 0","sdpMid":"0","sdpMLineIndex":0}
 ```
 
-`SignalMessage.fromJson(String)` reads these, what a browser's `JSON.stringify(pc.localDescription)` and `JSON.stringify(candidate)` write, and the `{"description": ...}` and `{"candidate": {...}}` envelopes of the perfect negotiation examples. Routing, such as room names or peer ids, belongs in an envelope of your own around this JSON.
+`SignalMessage.fromJson(String)` reads these, what a browser's `JSON.stringify(pc.localDescription)` and `JSON.stringify(candidate)` write, and the `{"description": ...}` and `{"candidate": {...}}` envelopes of the perfect negotiation examples. Anything else throws an `IllegalArgumentException` that says what is wrong and where, as does text longer than a MiB or nested deeper than 64 levels, so a message from the remote side cannot exhaust the stack. The JSON must be strict (RFC 8259): no raw line breaks or other control characters inside strings, no member name twice in one object, no numbers like `01`, `1.` or `1e999`. An `sdpMLineIndex` must be an integer from 0 to 65535; `1.9` is rejected rather than truncated to 1. Routing, such as room names or peer ids, belongs in an envelope of your own around this JSON.
 
 A browser peer that only answers needs no more than this:
 
@@ -178,7 +201,7 @@ When two impolite peers collide, neither gives way. An impolite peer that waited
 | `CONNECTING` | ICE and DTLS are establishing the connection. |
 | `CONNECTED` | Media and data can flow. |
 | `DISCONNECTED` | Connectivity was lost. It may come back by itself. |
-| `FAILED` | The connection failed. `peer.restartIce()` tries to recover it. |
+| `FAILED` | The connection failed. `peer.restartIce()` or the configured recovery policy tries to recover it. |
 | `CLOSED` | The peer was closed. This state is final. |
 
 ```java
@@ -190,21 +213,135 @@ peer.whenClosed().thenRun(() -> System.out.println("Closed"));
 
 `onStateChange` calls a new handler with the current state first, so a handler added late still learns where the peer stands. `whenConnected()` fails if the connection fails or closes first.
 
+### Automatic ICE Recovery
+
+Automatic peers can opt into a `RecoveryPolicy`. Without one, the application still
+calls `peer.restartIce()` itself. The policy waits through short disconnections,
+restarts ICE on the same peer, and bounds retries with exponential backoff:
+
+```java
+RecoveryPolicy recovery = RecoveryPolicy.builder()
+        .grace(Duration.ofSeconds(2))
+        .maxAttempts(3)
+        .backoff(Duration.ofSeconds(1), Duration.ofSeconds(30))
+        .attemptTimeout(Duration.ofSeconds(15))
+        .onEvent(event -> System.out.println(event.state() + " attempt " + event.attempt()))
+        .build();
+
+Peer peer = rtc.createPeer(PeerOptions.builder()
+        .signaling(signaling)
+        .recovery(recovery)
+        .build());
+```
+
+`DISCONNECTED` starts the grace period; `FAILED` skips it. Repeated failure
+notifications during an attempt do not start parallel restarts. Events are
+`WAITING`, `ATTEMPTING`, `RETRYING`, `RECOVERED` and `EXHAUSTED`, delivered on the
+peer's event executor. `attempt()` counts attempts in the current outage, starting
+at one; a recovery during the grace period reports zero. `cause()` gives the last
+failure on retry or exhaustion. Successful signaling alone does not count as
+recovery: the peer must report `CONNECTED`. That resets the budget, including
+after exhaustion. Exhaustion leaves the peer open and creates no further automatic
+attempts until it connects again. `whenConnected()` keeps its existing first-connection
+semantics; observe `RECOVERED` for later recovery.
+
+Before an attempt, `iceServers(attempt -> completionStage)` can obtain fresh TURN
+credentials asynchronously. It runs on the event executor and must return promptly;
+the resulting list replaces **all** ICE servers, so include STUN servers that should
+remain available. The library copies the supplied servers; failed, null or invalid
+results fail the attempt. For example, with an application's asynchronous credential
+service returning `CompletionStage<List<RTCIceServer>>`:
+
+```java
+RecoveryPolicy recovery = RecoveryPolicy.builder()
+        .iceServers(attempt -> credentials.fetchIceServers())
+        .onEvent(event -> {
+            if (event.state() == RecoveryEvent.State.EXHAUSTED) {
+                showReconnectAction(event.cause());
+            }
+        })
+        .build();
+```
+
+The attempt deadline covers credentials, signaling and waiting for connectivity.
+An HTTP restart already in flight finishes or reaches its own operation timeout
+before another starts. Late credentials and completions after recovery or `close()`
+are ignored; the credential service owns cancellation of its requests. Closing the
+peer or runtime cancels scheduled retries, including one whose timer has fired but
+whose control task has not run yet. Event notifications already queued may still arrive.
+
+ICE recovery requires working signaling. Reconnecting a WebSocket or refreshing
+HTTP authorization is the application's separate responsibility. A policy does not
+create a replacement peer or session. If the application chooses that fallback, it
+must close the old session, attach handlers to the new peer, republish local tracks,
+and handle new remote tracks and data channels explicitly; their old handles are
+not transferred.
+
+`Whip.to(endpoint).recovery(recovery)` and `Whep.from(endpoint).recovery(recovery)`
+use the same policy with the session's ICE `PATCH` exchange. This replaces their
+built-in restart rule for that session. Keep using `session.restartIce()` for a
+manual HTTP restart; `session.peer().restartIce()` does not perform the HTTP
+exchange. For a manually negotiated peer outside WHIP/WHEP, the application owns
+recovery and its protocol-specific offer/answer exchange.
+
 ## Threads
 
-Every method of the client API may be called from any thread, including from inside a handler. None of them waits for a WebRTC thread: methods that change a peer return at once and take effect in the order they were called.
+Every method of the client API may be called from any thread, including from inside a handler. Methods that change a peer return at once and take effect in the order they were called.
 
 | Code | Runs on | May it block? |
 |---|---|---|
-| Your calls into the API | your thread | They don't block. The exceptions are `WebRtc.createPeer`, which waits briefly for the connection, and `WebRtc.close()`, which waits up to the close timeout. |
+| Your calls into the API | your thread | They don't block, with these exceptions. `WebRtc.createPeer`, the `LocalMedia` methods that make a track and `LocalTrack.setEnabled` and `LocalVideo.setContentHint` wait briefly for WebRTC. `camera()` and `screen()` also open their capture on your thread, which can take longer, so a UI thread should leave them to another thread. The first `media.devices()`, `screens()` and `windows()` ask the system on your thread. `WebRtc.close()` waits up to the close timeout. |
 | Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
-| `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped. |
-| `LocalTrack.onEnded` and `Devices.onChange` handlers | a background thread of the runtime | Briefly. |
+| `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
+| [Encoded transforms](#encoded-transforms) | a thread of each sender and receiver | Better not. A slow transform delays only its own frames, and one that falls several seconds behind has frames dropped. |
+| `LocalTrack.onEnded` and `Devices.onChange` handlers, callbacks of the futures of local tracks and devices | the event thread of the runtime's local media | Yes, but that delays the other events of local media. They must not wait for a future of this API either. A track is released before its `onEnded` handlers run, so they never hold up a release. |
 | WebRTC's own callbacks | WebRTC's threads | Not your code. The library only copies what they report and queues it. |
 
 The handlers of one peer never run at the same time, and they run in the order of the events. The handlers of different peers may run at the same time. With the default executor, the event thread is named after its peer, such as `webrtc-client-events-alice`, which shows up in thread dumps.
 
 An executor of your own that rejects work, such as a bounded pool that is full, loses the events it rejects, and the rejection goes to the error handler. The futures those events would have completed complete all the same, on the thread that found them rejected. Once the runtime is closed, every future of this API that is not done fails with `PeerClosedException`, including those of calls made after the close.
+
+### Limiting Threads
+
+By default the runtime starts a thread for each peer whose events wait and for each subscription whose frames wait, so a thousand peers with slow handlers take a thousand threads. `eventThreads(n)` and `frameThreads(n)` cap them:
+
+```java
+WebRtc rtc = WebRtc.builder()
+        .eventThreads(8)     // handlers of all peers, future callbacks, Signaling.send
+        .frameThreads(4)     // onFrame and onAudio handlers, local previews included
+        .build();
+```
+
+With a limit, the peers take turns, and so do the subscriptions: one that has work runs up to 64 handlers, for at most 10 ms, then goes to the back of the line. A slow handler thus delays the others but never starves them, and a peer's events still run one at a time and in order. The limit rejects nothing: events wait for their turn and are never dropped, so no future stays open, and once the runtime closes, the futures still open fail after the events queued before them. Media that waits is bounded by its subscription instead, by the `FrameDelivery` of a video handler and the audio buffer of an audio handler, which drop the oldest frames and audio when they are full.
+
+A limit has one cost: a handler that waits for what another peer's handler does, say on a latch, can wait forever once all threads are taken by such waits. Handlers that wait for something outside the API should hand the work to a thread of their own.
+
+The control threads of the library, which call into WebRTC, are not limited. Their tasks wait for one another, such as a camera switch for every peer to take the new track.
+
+The HTTP requests of `Whip` and `Whep` sessions take no thread while they wait, so a slow server holds up no peer: they go through Java's `HttpClient`, one of each runtime.
+
+`rtc.loadStats()` tells how much work waits and runs, at this moment and cheaply enough to be read every second:
+
+```java
+LoadStats load = rtc.loadStats();
+
+LoadStats.Work events = load.events();
+metrics.gauge("webrtc.events.queued", events.queued());                     // events waiting for a thread
+metrics.gauge("webrtc.events.oldest_ms", events.oldestWaiting().toMillis()); // how long the oldest has waited
+metrics.gauge("webrtc.events.active", events.active());                     // handlers running now
+metrics.gauge("webrtc.video.dropped", load.video().dropped());              // frames dropped since start
+metrics.gauge("webrtc.audio.dropped", load.audio().dropped());              // audio chunks dropped since start
+metrics.gauge("webrtc.event_threads", load.eventThreads());
+```
+
+| Part | What waits | What `dropped()` counts |
+|---|---|---|
+| `control()` | tasks of the library that call into WebRTC | tasks the control pool rejected while running, which it never does |
+| `events()` | events of all peers, for handlers, future callbacks and `Signaling.send` | events an `eventExecutor` of your own rejected |
+| `video()` | frames for `onFrame` handlers | frames a handler had no time for |
+| `audio()` | chunks for `onAudio` handlers | chunks beyond the audio buffer |
+
+A queue that keeps growing, or an oldest wait that keeps getting longer, tells that handlers do not keep up. A higher limit helps handlers that wait for I/O; handlers that compute only spread the delay over more threads.
 
 ### Handlers on the UI Thread
 
@@ -221,7 +358,17 @@ hangUpButton.addActionListener(event -> peer.close());   // never blocks the EDT
 
 The order of each peer's events is kept with any executor, including a thread pool. Frame handlers stay on their own threads even then, since frames come far too often for a UI thread.
 
-`VideoView` in `dev.onvoid.webrtc.client.swing` shows video in a Swing window. It converts each frame on the frame's own thread and leaves only the painting to the EDT. It keeps the picture's aspect ratio and rotation, and can mirror a local camera preview:
+The `webrtc-java-swing` module has a `VideoView` in `dev.onvoid.webrtc.client.swing` that shows video in a Swing window. The core `webrtc-java` module does not depend on `java.desktop`, so headless applications and trimmed runtime images need neither AWT nor Swing:
+
+```xml
+<dependency>
+    <groupId>dev.onvoid.webrtc</groupId>
+    <artifactId>webrtc-java-swing</artifactId>
+    <version>{{ VERSION }}</version>
+</dependency>
+```
+
+The view converts each frame on the frame's own thread and leaves only the painting to the EDT. It keeps the picture's aspect ratio and rotation, and can mirror a local camera preview:
 
 ```java
 import dev.onvoid.webrtc.client.swing.VideoView;
@@ -241,6 +388,18 @@ frame.add(remoteView, BorderLayout.CENTER);
 ```
 
 `snapshot()` returns a copy of the picture shown, for saving a still or for tests.
+
+Both views support resolutions such as 8K without a fixed pixel limit. They reject
+nonpositive dimensions and frames whose four-byte pixel data cannot fit in a Java
+buffer, using overflow-safe arithmetic. Conversion buffers allocate on demand,
+grow geometrically when necessary, and retain their capacity across smaller frames
+and `clear()`. Swing reuses one direct buffer; JavaFX reuses up to two.
+JavaFX reserves a buffer only while copying it into the displayed image; a waiting
+frame may be replaced by a newer frame to avoid building a queue. Buffer
+memory is released when the view becomes unreachable. Memory usage follows the
+largest frames received and includes displayed images, conversion buffers, and
+replacement allocations awaiting garbage collection. Snapshots, input frames and
+toolkit rendering resources use additional memory.
 
 For JavaFX, the `webrtc-java-javafx` module has a `VideoView` node in `dev.onvoid.webrtc.client.javafx` that works the same way. It needs Java 11 and the JavaFX your application already uses:
 
@@ -284,10 +443,12 @@ peer.onChannel(channel -> {
 
 A future that is already done may be read anywhere, and any thread that is not an event thread, such as `main`, may wait.
 
-::: warning
-On Java 8, only the futures the API returns refuse to be waited on. Futures derived from them with `thenApply` and the like do not, so waiting for one of those in a handler hangs that peer. From Java 9 on, the derived futures refuse too.
+Each call returns a future of its own, also of `closeAsync()`, `whenClosed()`, `whenConnected()` and `whenOpen()`. Cancelling one only stops waiting: the close goes on, and the futures of other callers, and of the runtime's own close, are not affected.
 
-A UI thread used as event executor is the same: waiting on it for a future of this API hangs the UI, since the future completes on it.
+Futures derived from them with `thenApply` and the like refuse to be waited on as well.
+
+::: warning
+A UI thread used as event executor does not refuse: waiting on it for a future of this API hangs the UI, since the future completes on it.
 :::
 
 ## Sending Media
@@ -314,13 +475,31 @@ Sender audioSender = peer.addTrack(microphone);
 | `microphone()`, `microphone(AudioOptions)` | The microphone, with echo cancellation, noise suppression and gain control unless `AudioOptions` say otherwise. `DEVICES` mode only. |
 | `screen(ScreenOptions)` | A screen or a window, as the [Desktop Video](/guide/video/desktop-capture) guide describes. |
 | `customVideo(String)` | Frames you push. |
-| `customAudio(String)` | Audio you push. `CUSTOM` and `HEADLESS` modes only. |
-| `videoTrack(String, VideoTrackSource)`, `audioTrack(String, AudioTrackSource)` | A source of the core API, such as one the [media module](/guide/media/media-files) feeds. The source stays yours. |
+| `customAudio(String)` | Audio you push, in every mode. |
+| `videoTrack(String, VideoTrackSource)`, `audioTrack(String, AudioTrackSource)` | A source of the core API, such as one the [media module](/guide/media/media-files) feeds, or a [`SystemAudioSource`](/guide/audio/system-audio-source) for the audio the system plays. The source stays yours. |
 
 ```java
 Devices devices = media.devices();
 LocalVideo screen = media.screen(ScreenOptions.screen(devices.screens().get(0)).frameRate(15).build());
 ```
+
+A content hint tells the senders of a video track what to keep when the bandwidth or the CPU runs short. It can be changed at any time, also while the track is sent, without renegotiating:
+
+```java
+screen.setContentHint(VideoContentHint.TEXT);      // source code: keep the resolution
+peer.addTrack(screen);
+
+screen.setContentHint(VideoContentHint.MOTION);    // a video starts in the shared window: keep the frame rate
+```
+
+| Hint | Suits | Gives up first |
+|---|---|---|
+| `DEFAULT` | Anything | What the source suggests: the frame rate of screens, the resolution of other video |
+| `MOTION` | Cameras, videos, animations | Resolution |
+| `DETAIL` | Drawings, slides, photos | Frame rate |
+| `TEXT` | Source code, terminals, tables | Frame rate; WebRTC treats it as `DETAIL` for now |
+
+The hint belongs to the track, so it applies on every peer the track is sent on, and a camera keeps it when it switches. Screens keep their resolution by default already, so the hint pays off where the content changes, or for a camera that shows a whiteboard. No hint keeps text readable at any bitrate.
 
 Tracks added without stream ids share one stream per peer, so that a browser plays their audio and video in sync. Pass ids to `addTrack(track, streamIds...)` to group them yourself.
 
@@ -360,7 +539,19 @@ CustomAudio voice = media.customAudio("voice");
 voice.push(pcm, PcmFormat.of(48000, 1));
 ```
 
-`CustomAudio` takes PCM in pieces of any length and from any thread. It cuts the audio into the 10 ms chunks WebRTC works with and sends one every 10 ms from a thread of its own, so pushing a whole second at once is as fine as pushing every 10 ms. `queuedMillis()` tells how much is still waiting, and `clear()` drops it.
+`CustomAudio` takes PCM in pieces of any length and from any thread. It cuts the audio into the 10 ms chunks WebRTC works with and sends one every 10 ms from a thread of its own, so pushing a whole second at once is as fine as pushing every 10 ms. `queuedMillis()` tells how much is still waiting, and `clear()` drops it. That thread does nothing else, so a slow push into WebRTC delays only the audio, not the timeouts of the runtime. Should it stall, as in a long garbage collection pause, it makes up for at most the last 50 ms instead of sending the whole pause at once; the queued audio then stays behind by the rest, until `clear()` drops it.
+
+A producer faster than real time would otherwise fill memory and push the delay up without end, so the queue holds at most 10 seconds, and a `push` beyond that fails with an `AudioQueueFullException`, keeping none of its audio. `queueLimit(max, overflow)` sets another limit and what happens beyond it:
+
+```java
+// Live audio: stay at most 200 ms behind, dropping the oldest audio.
+voice.queueLimit(Duration.ofMillis(200), AudioOverflow.DROP_OLDEST);
+
+// A file, which must arrive whole: refuse the push, to try it again later.
+voice.queueLimit(Duration.ofSeconds(2), AudioOverflow.REJECT);
+```
+
+With `REJECT` a refused push can be pushed again once `queuedMillis()` has shrunk; with `DROP_OLDEST` every push is taken, and the audio sent lags at most the limit behind.
 
 ### Controlling Senders and Tracks
 
@@ -388,7 +579,7 @@ audioSender.sendTones("1234#");                                       // 100 ms 
 audioSender.sendTones("*99,1", Duration.ofMillis(200), Duration.ofMillis(100));
 ```
 
-The characters 0 to 9, A to D, `#` and `*` are tones, and a comma is a pause of 2 seconds. Tones still queued from an earlier call are replaced, and that call's future is cancelled. A video sender, or one whose remote peer accepts no telephone events, fails the future with an `IllegalStateException`. The [DTMF Sender](/guide/audio/dtmf-sender) guide has the details.
+The characters 0 to 9, A to D, `#` and `*` are tones, and a comma is a pause of 2 seconds. Tones still queued from an earlier call are replaced, and that call's future is cancelled. A video sender, or one whose remote peer accepts no telephone events, fails the future with an `IllegalStateException`. So do tones WebRTC stops sending midway, for example because the sender was paused with `configure`, a few seconds after their planned end. The [DTMF Sender](/guide/audio/dtmf-sender) guide has the details.
 
 ### Switching Cameras
 
@@ -402,11 +593,11 @@ camera.switchCamera(media.devices().cameras().get(1))
         .thenRun(() -> System.out.println("Now sending " + camera.device().getName()));
 ```
 
-The new camera keeps the resolution and frame rate of the old one, as far as it supports them. The switch opens the new camera before it closes the old one, so that the peers see no gap. Some devices cannot capture with two cameras at once, such as the two sensors of a laptop camera; then the old camera closes first, and the switch takes about half a second. If the new camera cannot be opened, the future fails with a `MediaException`, and the track keeps sending the camera it had.
+The new camera keeps the resolution and frame rate of the old one, as far as it supports them. The switch opens the new camera before it closes the old one, so that the peers see no gap. Some devices cannot capture with two cameras at once, such as the two sensors of a laptop camera; then the old camera closes first, and the switch takes about half a second. If the new camera cannot be opened, the future fails with a `MediaException`, and the track keeps sending the camera it had. If a peer does not take the new camera within the operation timeout, the future fails with a `WebRtcException`; the track goes back to the old camera, or keeps the new one when the old one had to close first. A track that closed its camera first and can open neither camera ends.
 
 ### Devices
 
-`media.devices()` returns the cameras, microphones and speakers. The first call reads them from the system; after that, the lists are snapshots kept current in the background, so reading them is cheap on any thread. `screens()` and `windows()` ask the system on each call.
+`media.devices()` returns the cameras, microphones and speakers. The first call reads them from the system; after that, the lists are snapshots kept current in the background, so reading them is cheap on any thread. Where the system reports no device changes, as on a Linux machine without PulseAudio, they are read on each call instead. `screens()` and `windows()` ask the system on each call. A query that fails, including an unavailable audio backend, throws a `MediaException`, so an empty list means there are no such devices. Its cause is an `AudioBackendUnavailableException` when the audio backend is missing or unreachable, or a `DeviceException` for other native device failures.
 
 ```java
 Devices devices = media.devices();
@@ -416,7 +607,9 @@ devices.useMicrophone(devices.microphones().get(1));
 devices.useSpeaker(devices.speakers().get(0));
 ```
 
-`useMicrophone` and `useSpeaker` switch devices also for tracks that are sent or played now.
+`useMicrophone` and `useSpeaker` switch devices also for tracks that are sent or played now. A device that was disconnected since the list was read fails the returned future, and the device in use stays as it was. On Linux, where WebRTC's audio device module cannot tell devices apart, the default device is used whichever is given.
+
+A track does not end by itself when its device is disconnected or a captured window closes. `LocalTrack.onEnded` follows only from closing the track, or from a camera switch that can open neither camera. `onChange` tells of a device that went away; closing the track, or switching a camera to another device, is up to you. Nothing tells of a captured window that closes.
 
 ## Receiving Media
 
@@ -442,7 +635,7 @@ A track ends when the remote peer stops sending it or the peer closes.
 
 ### Video Frames
 
-Each `onFrame` subscription has a thread of its own, so a slow renderer holds up neither WebRTC's decoder nor the peer's other events. By default the handler always gets the newest frame, and the frames it had no time for are dropped. `FrameDelivery.queue(n)` keeps up to `n` frames instead:
+Each `onFrame` subscription has a thread of its own, so a slow renderer holds up neither WebRTC's decoder nor the peer's other events. With `frameThreads(n)` the subscriptions share `n` threads and take turns, see [Limiting Threads](#limiting-threads). By default the handler always gets the newest frame, and the frames it had no time for are dropped. `FrameDelivery.queue(n)` keeps up to `n` frames instead:
 
 ```java
 video.onFrame(FrameDelivery.queue(10), frame -> encoder.encode(frame));
@@ -453,6 +646,23 @@ A frame is valid while the handler runs. Call `frame.retain()` to keep it longer
 ### Audio
 
 `onAudio` hands decoded audio to a handler in order, usually 10 ms of 16-bit PCM per `AudioChunk`. Audio reaches these handlers only while the runtime plays out, which a `HEADLESS` runtime always does and a `DEVICES` or `CUSTOM` runtime does to its speakers. `setVolume(double)` changes the playout gain of a track, from 0 to 10, where 1 plays it as received.
+
+A handler that falls behind gets the audio of the last 5 seconds; the oldest audio beyond that is dropped and counted in `rtc.loadStats().audio().dropped()`. `WebRtc.Builder.audioBuffer(Duration)` changes the buffer of every subscription, and `onAudio(Duration, handler)` that of one. A speech recognizer that must stay live keeps a short buffer; a recorder that can catch up after a stall keeps a long one, at about 190 KiB per second of 48 kHz stereo:
+
+```java
+track.asAudio().onAudio(Duration.ofMillis(200), chunk -> recognizer.feed(chunk.samples()));
+```
+
+A local audio track tells when this side speaks. `onVoiceActivity` calls its handler with `true` when speech begins and `false` when it ends, on the event executor. The audio is analyzed in native code, and only these changes reach Java:
+
+```java
+LocalAudio microphone = rtc.media().microphone();
+Subscription speaking = microphone.onVoiceActivity(
+        new VoiceActivityConfig(0.6, Duration.ofMillis(400)),
+        active -> System.out.println(active ? "speaking" : "quiet"));
+```
+
+`VoiceActivityConfig` sets the threshold, the voice probability from 0 to 1 at which audio counts as speech (0.5 by default), and the hangover, how long speech goes on once the audio fell below it (300 ms by default), which bridges the pauses between words. Pushed audio is analyzed as pushed. A microphone's audio is analyzed after audio processing, with echo cancellation, noise suppression and gain control applied as configured, so the remote peer's voice from the speakers does not count as this side speaking. It flows while WebRTC records, which it does while a peer sends a microphone track. Every microphone track of a runtime hears the same, as WebRTC records one microphone for all of them.
 
 ### Receiving Without Sending
 
@@ -481,6 +691,49 @@ try (MediaRecorder recorder = new MediaRecorder(Paths.get("call.mkv"))) {
 
 Closing the peer, or removing a sender, during a recording ends that track in the file, and `stop()` still finishes it. The [Media Recording](/guide/media/media-recording) guide covers containers and the recorder's events.
 
+### Encoded Transforms
+
+An [encoded transform](/guide/advanced/encoded-transforms) sees every encoded frame between the encoder and the network, or between the network and the decoder, which is where end-to-end encryption goes. The transforms of the peer options apply to every sender and every remote track of the peer:
+
+```java
+Peer peer = rtc.createPeer(PeerOptions.builder()
+        .signaling(signaling)
+        .sendTransform(frame -> encrypt(frame))
+        .receiveTransform(frame -> decrypt(frame))
+        .build());
+```
+
+The peer sets the send transform on each sender as its track is added, before negotiation, so no frame leaves without it and the encoder needs no restart. It sets the receive transform on each receiver before `onTrack` hands out the track, so the transform is in place before the first frame arrives. If installing the receive transform fails, the peer stops that track's transceiver and reports the failure through `onError`; the track is neither listed in `remoteTracks()` nor delivered through `onTrack`. If the receive path cannot be stopped, the peer closes. The builders of [WHIP and WHEP](#whip-and-whep) take them too, `Whip`'s as `sendTransform(...)`, `Whep`'s as `receiveTransform(...)`.
+
+For end-to-end encryption, `e2ee(keys)` takes the place of both transforms: every sender gets an encryptor and every remote track a decryptor of the [key provider](/guide/advanced/end-to-end-encryption), which also takes care of key rotation, replay protection, frames that fail and key frame requests:
+
+```java
+PeerOptions.builder()
+        .signaling(signaling)
+        .e2ee(keys)
+        .build();
+```
+
+A single sender or remote track takes a transform of its own, in place of the peer's, and `null` removes it:
+
+```java
+videoSender.transform(frame -> addMetadata(frame));
+remoteTrack.transform(null);                   // frames reach the decoder unchanged
+```
+
+The first transform set on a video sender that already sends restarts its encoder, which costs a key frame. A transform set on a remote track misses the frames that arrive before its future completes, so a transform that every frame needs, such as decryption, belongs in the peer options. A recording of a sender holds its frames before the transform, a recording of a remote track after it.
+
+A transform that changes its key needs a key frame to start over with, since the frames before depend on the old key:
+
+```java
+videoSender.generateKeyFrame();                // the local encoder makes the next frame a key frame
+remoteTrack.asVideo().requestKeyFrame();       // asks the remote sender for one
+```
+
+`generateKeyFrame()` does nothing for an audio sender, and nothing before the peer is negotiated, as the stream starts with a key frame anyway. `requestKeyFrame()` fails once the track ended.
+
+Transforms run on a thread of each sender and receiver, not on the peer's event thread. A frame a transform throws on is dropped rather than passed on, so a failed encryption never sends a frame in the clear. The first such failure of each sender or receiver goes to the peer's `onError` handlers. The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call with `e2ee(keys)` and records it.
+
 ## Data Channels
 
 ```java
@@ -495,6 +748,13 @@ peer.onChannel(channel -> {                  // channels the remote peer opens
     }
 });
 ```
+
+`Message.toString()` reports only the message type and byte length. Access content
+explicitly with `text()` or `bytes()`. For diagnostics, `message.preview(64)` inspects
+at most 64 payload bytes and escapes control characters. Binary previews use hex.
+Use `message.preview(64, prefix -> redact(prefix))` to apply your own masking before
+escaping; the masking function must handle secrets truncated at the prefix boundary.
+The preview marks truncated content and also limits the masking function's output.
 
 - A channel may be used right away: messages sent before it opens are held until it does.
 - Messages that arrive while a channel has no `onMessage` handler are kept for the next one, so none are lost while a handler is being set up.
@@ -522,7 +782,11 @@ DataChannel positions = peer.createChannel("positions", ChannelOptions.builder()
         .build());
 ```
 
+`maxRetransmits(int)` accepts 0 to 65535 retransmissions. `maxPacketLifeTime(Duration)` accepts nonnegative durations up to 65535 milliseconds; positive fractions of a millisecond are rounded down, so a duration below one millisecond becomes zero. The two limits exclude each other. Values outside these ranges are rejected before native processing.
+
 `negotiatedId(int)` creates a channel both peers set up themselves with the same id, without announcing it; such a channel never shows up in `onChannel`. The [Data Channels](/guide/data/data-channels) guide explains the options in detail.
+
+A completed `send` future means the data was handed to the transport, not that the remote application processed it. To send files, use `FileTransfers` from `dev.onvoid.webrtc.client.transfer`, which adds the receiver's own confirmations, a SHA-256 checksum, progress, cancelling and resume. See the [File Transfer](/guide/data/file-transfer) guide.
 
 ## WHIP and WHEP
 
@@ -543,19 +807,107 @@ Whep.Session viewer = Whep.from(URI.create("https://example.com/live/whep"))
 viewer.peer().onTrack(track -> System.out.println("Receiving " + track.kind()));
 ```
 
-The offer goes to the endpoint with the local candidates, as WHIP and WHEP servers expect, and the future completes once the peer is connected. If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
+By default, the offer goes to the endpoint at once, before any candidate is gathered, and the future completes once the peer is connected. As RFC 9725 asks, the peer bundles all media on one transport (`max-bundle`), the descriptions it sends mark each m-line `rtcp-mux-only`, and a WHIP offer only sends (`sendonly`). If the endpoint refuses the offer, or the peer does not connect within the timeout (15 seconds by default), the future fails, and the session is deleted on the server again. An endpoint that is busy, with status 503, or a WHEP endpoint whose stream has yet to start, with status 409, gets the offer again after the wait its `Retry-After` names, at least a second, as long as that fits within the timeout; without `Retry-After` the session fails at once. A WHEP endpoint may also reject the offer and counter it with one of its own, with status 406: `Whep` then takes its offer back, answers the endpoint's, receiving only, and sends the answer by `PATCH` to the session the endpoint named, before the counter-offer's `valid-until`, 30 seconds by default. The answer rejects the audio or video of the counter-offer that `receive(...)` leaves out, and the session fails if the counter-offer holds none of what it asks for. Data channels of a counter-offer are accepted. Cancelling the future, say once `get` gave up waiting, ends the session the same way. `onTrack` hands over tracks that already arrived, so a handler added once the future completed misses none.
 
-`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler.
+With the default `Gathering.TRICKLE`, only once the endpoint answered does the peer gather its candidates, with the STUN and TURN servers the endpoint names in `Link` headers with `rel="ice-server"`, unless `iceServer(...)` or `turnServer(...)` names servers of its own, which take precedence. The candidates follow the offer by `PATCH` to the session, as `application/trickle-ice-sdpfrag`, a few at a time and with the session's `ETag` as `If-Match`, as RFC 9725 describes. An endpoint that takes no such `PATCH`, with status 405, 415, 422 or 501, gets no more; it may still learn peer-reflexive candidates from incoming connectivity checks, but that does not cover every network topology. A 412 or 428 for the current ICE generation reaches the error handler and stops candidate PATCHes; responses to a generation replaced by a restart are ignored.
 
-The bearer token goes to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. Redirects are not followed, since they would take the token elsewhere: a redirected request fails with its status.
+For an endpoint without Trickle ICE, use `.gathering(Gathering.COMPLETE)` to include gathered candidates in the initial POST. It waits at most three seconds for gathering, within the overall session timeout, then sends the candidates available so far; any later candidates may still follow by PATCH. Configure STUN/TURN servers locally in this mode, since the endpoint's Link headers arrive after gathering. For example:
+
+```java
+Whep.Session viewer = Whep.from(endpoint)
+        .turnServer("turn:turn.example.com:3478", turnUsername, turnPassword)
+        .gathering(Gathering.COMPLETE)
+        .play(rtc)
+        .get(15, TimeUnit.SECONDS);
+```
+
+Both builders support these methods. `turnServer` is separate from `iceServer(String...)`, so passing three URLs to `iceServer` still means three URLs. The gathering setting controls the initial POST only; ICE restarts continue to use PATCH and trickled candidates.
+
+By default, the offer holds every codec WebRTC has, in WebRTC's order, and the endpoint picks; one that follows the offer's order picks VP8 for video. Endpoints that pass the stream on unchanged, to HLS or a recording, often take only H.264 and Opus. `videoCodecs(...)` and `audioCodecs(...)` offer only the codecs named, in that order of preference, by name (`H264`, `VP8`, `VP9`, `AV1`, `opus`, `G722`, ...) or MIME type (`video/H264`), whatever the case. Retransmission, redundancy, FEC, comfort noise and DTMF go along. For WHEP, they decide what the endpoint sends, also in the answer to a counter-offer. A name WebRTC has no codec of fails the session with a `ConfigurationException` before the offer goes out.
+
+Some endpoints, Amazon IVS among them, refuse a WHIP offer without video, even for audio alone. `alwaysOfferVideo()` then adds video that only sends, in the stream of the tracks, without a track, so that nothing is sent on it; with a video track, it changes nothing:
+
+```java
+Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
+        .bearerToken(token)
+        .videoCodecs("H264")
+        .audioCodecs("opus")
+        .track(rtc.media().microphone())
+        .alwaysOfferVideo()
+        .publish(rtc)
+        .get(15, TimeUnit.SECONDS);
+```
+
+`simulcast()` sends the video track of a WHIP session in three layers, as simulcast (RFC 8853), in full, half and quarter resolution, with the rids `f`, `h` and `q`. The offer negotiates them, as RFC 9725 asks, and an endpoint that forwards the stream can then give each viewer the layer its bandwidth takes. `simulcast(Encoding...)` takes two or three layers of its own, the most WebRTC sends, from the largest down, with their resolution factor, bitrate and frame rate. An endpoint that takes no simulcast leaves it out of its answer and gets the first layer only, which is why the largest comes first. Simulcast needs a video track; `Sender.configure` on its sender changes every layer alike.
+
+```java
+Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
+        .bearerToken(token)
+        .track(rtc.media().camera())
+        .simulcast(
+                Encoding.builder().maxBitrate(2_500_000).build(),
+                Encoding.builder().scaleDownBy(2).maxBitrate(800_000).build(),
+                Encoding.builder().scaleDownBy(4).maxBitrate(200_000).build())
+        .publish(rtc)
+        .get(15, TimeUnit.SECONDS);
+```
+
+A normal SDP answer must have status 201, a nonempty session `Location`, and Content-Type `application/sdp` (parameters are allowed). Invalid responses fail the session; a resource already named by the server is deleted even when its SDP response cannot be used. The message of a failure an endpoint answered with an error names the status, and what the endpoint says of it: the title and detail of problem details (RFC 9457, `application/problem+json`), as in `status 403: Forbidden: The stream key has expired`, or else the start of the body. The failure is an `HttpStatusException`, whose `status()`, `title()`, `detail()` and `problemType()` give the same to a program; for a deletion or for candidates, it is the cause of the failure reported. As RFC 9725 asks, read no specific cause into a status beyond its class, since endpoints use them differently:
+
+```java
+try {
+    session = Whip.to(url).bearerToken(key).track(camera).publish(rtc).get(15, TimeUnit.SECONDS);
+}
+catch (ExecutionException e) {
+    if (e.getCause() instanceof HttpStatusException) {
+        HttpStatusException refused = (HttpStatusException) e.getCause();
+        System.err.println("Refused, " + refused.status() + ": " + refused.detail());
+    }
+}
+```
+
+When the connection fails, or stays disconnected for two seconds, the session restarts ICE: the peer gathers new candidates, and only the new ICE username fragment and password go to the session, by `PATCH` with `If-Match: *`, while the media go on as negotiated. The session's answer, with status 200 and Content-Type `application/trickle-ice-sdpfrag`, brings its own ICE information and a new `ETag`. Its candidate set replaces the old one completely, including when it is empty. Three restarts in a row that do not bring the connection back, or an endpoint that takes no restarts, end the attempts, which the error handler hears of. `session.restartIce()` restarts ICE at once, say after the network changed; a restart that fails leaves the ICE session before as it was. Restarts also work after a WHEP counter-offer; the player keeps its answerer role and updates only the ICE information.
+
+The timeout bounds the requests as a whole, not each read, so a server that sends its answer a byte at a time cannot stretch it. A request still out when the session times out or is cancelled is cut off at once; one still waiting for the head of its answer only from Java 16 on, and before that at its timeout. Once the server has named the session, in the head of its answer, it is deleted all the same; a session the server created for an answer that had not come yet is left for the server to time out.
+
+Failures and reports name the URL of an endpoint or session by its scheme, host and port only, since the rest may be a secret: services take stream keys and signatures in the query, and some, such as Cloudflare Stream, in the path. A failure can go to a log as it is, apart from what the endpoint itself says in an error, which it passes on unchanged.
+
+`session.close()` deletes the session on the server, which frees what the server holds for it, and closes the peer. Both start at once, so a slow server does not keep the peer open, and the deletion takes at most the session's timeout. The tracks a WHIP session published stay open. `session.peer()` is a regular peer, for stats and anything else. A deletion the server refuses or that fails goes to the runtime's error handler, and also fails the future of `closeAsync()`, which completes once both are done; a peer that did not close fails it too.
+
+`session.extensions()` gives the protocol extensions the endpoint offers for the session (RFC 9725, 4.9): the URL of each by its relation type, such as `urn:ietf:params:whip:ext:example:server-sent-events` (`urn:ietf:params:whep:ext:...` for WHEP), as the endpoint named them in `Link` header fields of its answer, resolved against it. Of a relation type named twice, the first counts. Links of other relation types are ignored, as WHIP and WHEP ask, apart from `ice-server`. The session uses none of the extensions itself; an application uses those it knows, and the map is empty if the endpoint named none.
+
+`Whep.from(url).detect(rtc)` asks a URL with `HEAD` whether it is a WHEP endpoint, as a player may before it plays a URL it was given (draft-ietf-wish-whep-05, 4.2). Its future holds `true` when the endpoint answers 200 with the Content-Type `application/sdp` and a `Link` to the profile `urn:ietf:params:whep`; the Content-Type alone does not count. It holds `false` for any other answer, such as that of an endpoint that takes no `HEAD`, and fails when the request does. The request carries the credentials of the builder, takes its timeout at most, and follows the redirects the offer follows:
+
+```java
+if (Whep.from(url).detect(rtc).get(15, TimeUnit.SECONDS)) {
+    Whep.Session viewer = Whep.from(url).play(rtc).get(15, TimeUnit.SECONDS);
+}
+```
+
+Endpoints have to be `https` URLs, as WHIP and WHEP ask, except on the machine the application runs on: there plain `http` will do, for a media server beside it, at `localhost`, an address in 127.0.0.0/8 or `::1`. A name that merely resolves to one of them does not count, since it may resolve elsewhere later. The same holds for the session an endpoint names and for where a redirect points.
+
+The credentials of a session, its bearer token or its Basic user and password, go to the endpoint, and along with the deletion to the session the endpoint names in its `Location` header. That session may be on another host, but an `https` endpoint cannot name a plain `http` one. The offer follows redirects with status 307 and 308, as WHIP and WHEP ask of clients, such as those of a load balancer: up to five of them, all within the timeout, and the credentials go along. A redirect from `https` to plain `http` fails the session, and so does one with status 301, 302 or 303, which would turn the offer into a `GET`. The deletion follows no redirect; one fails it with its status.
+
+Servers that ask for a user and password rather than a token, such as MediaMTX, take them by HTTP Basic authentication (RFC 7617): `basicAuth("user", "password")` sends `Authorization: Basic` with both, in UTF-8, on every request of the session, without waiting to be asked. The user must not contain a colon. Of `bearerToken` and `basicAuth`, the one called last counts. MediaMTX also takes them as a token, the way OBS Studio sends them, `bearerToken("user:password")`. Other schemes, such as Digest, are not supported.
+
+Requests go through Java's `HttpClient`, with the default `SSLContext` and the HTTP proxy Java is configured with, the first the default `ProxySelector` names: `-Dhttps.proxyHost` and `-Dhttps.proxyPort`, `-Dhttp.proxyHost`, or `-Djava.net.useSystemProxies=true`. `HttpClient` takes no SOCKS proxies. A proxy that asks for credentials gets Basic ones from the default `Authenticator`, but only for sessions without credentials of their own: `HttpClient` drops the Authorization header of a request once it answers for credentials itself. As in Java, Basic is not used for the tunnel of an `https` request unless `jdk.http.auth.tunneling.disabledSchemes` allows it. Other schemes, such as Digest, NTLM and Negotiate, are not supported.
 
 | Builder method | What it sets |
 |---|---|
 | `bearerToken(String)` | The token sent as `Authorization: Bearer`; for many services, the stream key. |
-| `iceServer(String...)` | A STUN or TURN server; endpoints usually name their own in the answer. |
-| `track(LocalTrack)` | A track to publish, WHIP only. The tracks share one stream. |
+| `basicAuth(String, String)` | A user and password sent as `Authorization: Basic`, as MediaMTX takes them; replaces a bearer token, and the other way round. |
+| `iceServer(String...)` | A STUN or TURN server without credentials, overriding endpoint-provided servers. |
+| `turnServer(String, String, String)` | A TURN URL, username and password, overriding endpoint-provided servers. |
+| `gathering(Gathering)` | When the initial offer is sent: `TRICKLE` by default, or `COMPLETE` to gather first. |
+| `track(LocalTrack)` | A track to publish, WHIP only. The tracks share one stream, which holds one audio and one video track at most. |
 | `receive(MediaKind...)` | What to receive, WHEP only; video and audio by default. |
-| `timeout(Duration)` | How long the session may take to be connected. |
+| `videoCodecs(String...)`, `audioCodecs(String...)` | The only codecs to negotiate, in order of preference; every codec WebRTC has by default. |
+| `alwaysOfferVideo()` | Video in the offer even without a video track, WHIP only, for endpoints that refuse an offer without video. |
+| `simulcast()`, `simulcast(Encoding...)` | The video track in layers, as simulcast, WHIP only: three by default (`f`, `h`, `q`), or two or three given, the largest first. |
+| `sendTransform(RTCEncodedFrameTransformer)` | The [encoded transform](#encoded-transforms) of every frame sent, WHIP only, in place before the offer goes out. |
+| `e2ee(KeyProvider)` | [End-to-end encryption](/guide/advanced/end-to-end-encryption) of every frame sent (WHIP) or received (WHEP), in place of the transforms. |
+| `receiveTransform(RTCEncodedFrameTransformer)` | The [encoded transform](#encoded-transforms) of every frame received, WHEP only, in place before the first frame, also for a counter-offer. |
+| `timeout(Duration)` | How long the session may take to be connected, and its deletion to be answered. |
 
 ## Manual Negotiation
 
@@ -581,7 +933,7 @@ viewer.negotiator().createOffer(Gathering.COMPLETE)
 | `createOffer()`, `createOffer(Gathering)` | Creates the local offer and applies it. |
 | `answer(offer)`, `answer(offer, Gathering)` | Applies the remote offer, then creates the answer and applies it. |
 | `applyAnswer(answer)` | Applies the remote answer to the local offer. |
-| `addCandidate(candidate)` | Adds a remote candidate, or holds it until there is a remote description to add it to. |
+| `addCandidate(candidate)` | Adds a remote candidate, or holds it until there is a remote description to add it to. The future completes once the candidate is added or held; a held candidate that WebRTC rejects later reaches the error handler. |
 
 A manual peer with a `Signaling` still sends its local candidates through it. `peer.negotiator()` throws an `IllegalStateException` on a peer that negotiates automatically.
 
@@ -594,18 +946,159 @@ peer.onStats(Duration.ofSeconds(1), stats -> System.out.printf(
         "%s candidate, rtt %s, %d kbit/s out, %d kbit/s in, %.1f%% lost%n",
         stats.candidateType(), stats.roundTripTime(),
         stats.outgoingBitrate() / 1000, stats.incomingBitrate() / 1000,
-        stats.packetLoss() * 100));
+        stats.recentPacketLoss() * 100));
 ```
 
 | Method | Value |
 |---|---|
-| `candidateType()` | The type of the local candidate in use: `host`, `srflx`, `prflx` or `relay`. Null while not connected. |
-| `roundTripTime()` | The current round trip time, or null while not measured. |
-| `bytesSent()`, `bytesReceived()` | The bytes sent and received on the connection so far. |
-| `outgoingBitrate()`, `incomingBitrate()` | Bits per second since the previous sample, or -1 for a peer's first sample. |
-| `packetLoss()` | The share of received packets lost so far, 0 to 1. |
+| `transport()` | The transport in use, whose candidate type and round trip time the sample reports. Null while no transport has a candidate pair in use. |
+| `transports()` | Every transport of the peer, ordered by id, each with its id, the id of its candidate pair in use, candidate type, round trip time and bytes. |
+| `candidateType()` | The type of the local candidate in use on `transport()`: `host`, `srflx`, `prflx` or `relay`. Null while not connected. |
+| `roundTripTime()` | The current round trip time on `transport()`, or null while not measured. |
+| `bytesSent()`, `bytesReceived()` | The bytes sent and received on all transports so far. |
+| `timestamp()` | When WebRTC measured the statistics. |
+| `outgoingBitrate()`, `incomingBitrate()` | Bits per second between the measurement times of the previous sample and this one, or -1 when there is none to compare with: for a peer's first sample, after the clock went back, or after the byte counter started again. A report WebRTC hands out again within its short cache lifetime repeats the previous bitrates. |
+| `packetLoss()` | The share of received packets lost so far, 0 to 1. After a long session it barely moves. |
+| `recentPacketLoss()` | The share of packets lost of those expected since the previous sample, 0 to 1, and 0 if none were expected; -1 for the first sample and after the clock went back. A stream that came up or whose counters started again counts all it has. |
 | `outboundVideo()`, `inboundVideo()` | Codec, resolution and frame rate of each video stream, and what limits a sent one. |
-| `report()` | The whole `RTCStatsReport`. |
+| `inboundAudio()`, `outboundAudio()` | Audio streams ordered by statistics id: codec, jitter, concealment counters, audio level and sample counters. Unavailable fields are null; received PCM callbacks are observed only while an `onAudio` sink is attached. |
+| `diagnostics()` | The current state and confirmed `QualityCondition` causes. |
+| `diagnosticReport()` | A JSON snapshot with allowlisted diagnostics, media measurements, codec names, OS/architecture, Java version, library version and processor count. |
+| `report()` | The whole `RTCStatsReport`, including potentially sensitive connection information. |
+
+A peer bundles its media on one transport by default. When the remote side refuses to bundle, each m-line has a transport of its own. `transport()` is then the one with a candidate pair in use that carried the most bytes, sent and received, and of transports that carried as many, the one with the lowest id. Read `transports()` to watch each connection by itself.
+
+### Diagnosis and quality events
+
+```java
+Subscription diagnosis = peer.onDiagnostics(Duration.ofSeconds(1), status -> {
+    System.out.println(status.state());
+    status.conditions().forEach(cause -> System.out.println(cause.reason()));
+});
+
+// Export on demand, for example from a support button. File I/O belongs on
+// an application worker, outside the peer's event executor.
+peer.stats().thenAccept(stats -> supportExecutor.execute(() -> {
+    try {
+        Files.write(Paths.get("diagnostics.json"),
+                stats.diagnosticReport().getBytes(StandardCharsets.UTF_8));
+    }
+    catch (IOException error) {
+        error.printStackTrace();
+    }
+}));
+```
+
+The export example uses `java.nio.file.Files`, `java.nio.file.Paths`,
+`java.nio.charset.StandardCharsets` and `java.io.IOException`; `supportExecutor`
+is an application-owned executor.
+
+`onDiagnostics` emits the initial diagnosis and then only changes to its state or
+causes, including recovery. Handlers run on the peer's event executor; closing the
+subscription stops sampling. All `stats`, `onStats` and `onDiagnostics` calls share
+one history per peer. A captured `PeerStats` and its diagnosis stay immutable.
+
+There is no combined score. `OBSERVING` means there is no continuous measurement
+interval yet (including after a clock rollback or a gap longer than five seconds).
+`HEALTHY` means no supported problem has been confirmed; it is not a guarantee
+that all media paths work. `DEGRADED` includes the following confirmed causes:
+
+| Condition | Evidence |
+|---|---|
+| `VIDEO_CPU_LIMITED` | The same outgoing video RTP stream consistently reports `qualityLimitationReason=cpu`. |
+| `HIGH_PACKET_LOSS` | Recent inbound packet loss is at least 5%; recovery needs at most 2%. Values between those thresholds retain the current state and restart the confirmation window. |
+| `AUDIO_PACKETS_WITHOUT_PCM` | The same received audio RTP stream gains packets while no PCM callbacks reach its attached `onAudio` sinks. This observes sink ingress, before application queues and handlers; it does not diagnose speakers or slow application handlers. |
+
+Each problem and its recovery need at least three distinct measurements spanning
+at least three seconds. Polling once a second is recommended; cached reports do
+not advance the window. A missing stream or required measurement, a changed sink
+set, or a reset audio counter discards that stream's evidence instead of guessing.
+Sampling gaps longer than five seconds and backwards timestamps discard temporal
+evidence. Diagnostics do not add audio sinks: without an application subscription,
+PCM availability is unknown. Silence (audio level zero) alone is not a fault.
+
+`TURN_IN_USE` is immediate information when either selected candidate on any
+transport is a relay. It does not make a peer degraded. `TransportStats.relayed()`
+also exposes this fact, while `candidateType()` continues to describe the local
+candidate.
+
+`AudioStats.jitter()` is a `Duration`, `audioLevel()` is linear (0 to 1), and
+`concealedSamples()`, `concealmentEvents()` and `totalSamplesReceived()` are
+cumulative counters. Outbound level is read from the media source when available;
+receive-only measurements on outbound audio remain null. `pcmCallbacks()` counts
+sink callbacks across subscriptions, so multiple subscriptions can count the same
+audio more than once.
+
+The JSON export includes the confirmation policy and cause explanations. It uses
+schema version 1 and an explicit allowlist, including a
+bounded set of codec MIME names; unknown names become `other`. It excludes raw
+statistics, track/stream/transport/candidate identifiers, addresses, ports, URLs,
+ICE credentials, SDP, certificates and codec parameters. Missing measurements
+become JSON null. The raw `report()` and its string representation are not
+sanitized diagnostic exports.
+
+## Checking Before a Call
+
+Diagnostics watch a call that is under way. `checkCall` answers the question before it: am I ready
+for the call? It checks that the camera delivers frames, that the microphone delivers audio that is
+neither silent nor clipped, and that a connection to a test peer comes up, all at the same time:
+
+```java
+LocalCamera camera = rtc.media().camera();
+LocalAudio microphone = rtc.media().microphone();
+
+CallCheck check = CallCheck.builder()
+        .video(camera)
+        .audio(microphone)                 // ask the user to say something meanwhile
+        .network(PeerOptions.builder()
+                .iceServer("turn:turn.example.com", "user", "secret")
+                .relayOnly(true)           // only a relayed connection counts
+                .signaling(testPeerSignaling)
+                .build())
+        .build();
+
+rtc.checkCall(check).thenAccept(result -> {
+    if (result.isReady()) {
+        System.out.println("Ready: " + result);
+    }
+    result.problems().forEach(problem -> System.out.println(problem.reason()));
+});
+```
+
+Every part is optional, but a check needs at least one. Each waits up to the check's `timeout`
+(10 seconds by default) for the first frame, the first audio or the connection, then measures for
+its `duration` (3 seconds by default). The future completes on an event thread of the runtime's
+local media, so the rule against `join()` holds there. The tracks stay the application's: the check
+neither closes nor mutes them, and the same tracks can go into the call once it is done.
+
+| Problem | Found when |
+|---|---|
+| `NO_VIDEO` | The video track delivered no frame within the timeout. |
+| `DARK_VIDEO` | No frame had an average luma above 8% of white: a covered lens, a closed privacy shutter or no light. The brightest frame counts, since a camera's first frames are often dark while its exposure settles. A muted track sends black frames, so it is dark too. |
+| `NO_AUDIO` | The audio track delivered no audio within the timeout. |
+| `SILENT_AUDIO` | The audio never rose above -50 dBFS: a muted microphone, or nobody spoke. |
+| `CLIPPED_AUDIO` | More than 0.1% of the samples were at full scale (99% of it or above): the input is too loud and distorts. |
+| `NO_CONNECTION` | No connection to the test peer came up within the timeout. `network().failure()` tells why: a `TimeoutException`, or the failure of the peer. |
+
+Besides the problems, the result has the measurements behind them: frames, frame rate, resolution and
+brightness of the video; how much audio arrived, with its peak and RMS level and the share of
+clipped samples; and for the network the time it took to connect, the round trip time, the local
+candidate type and whether the connection is relayed. `isReady()` means that no part found a
+problem, not that the call is sure to work.
+
+Audio is measured as the track sends it, after audio processing. WebRTC records a microphone only
+while it sends it, so for a microphone the check sends the track to a peer of its own, in the same
+runtime, which drops every encoded frame before it goes out: nothing is played back, and the user
+does not hear themselves. That peer, and the one of the network check, show among `rtc.peers()`
+while the check runs and are closed before the result goes out.
+
+Whether the network lets a call through cannot be told from the local configuration, only from a
+connection that is made. The network part therefore connects to a real test peer: one the
+application runs for this, such as an echo bot behind its own signaling, or any other peer that
+answers the offer. The check creates a peer with the given options, opens a data channel so that it
+offers, reads the connection's statistics once it is up and closes the peer. With `relayOnly(true)`
+the connection can only go through the TURN servers of the options, so a connection proves that they
+work; without it, a direct connection may come up instead.
 
 ## Closing
 
@@ -634,9 +1127,11 @@ Failures arrive as exceptions, thrown or as the cause of a failed future, all of
 | `NegotiationException` | A description or candidate was rejected, or two impolite peers collided. |
 | `PeerClosedException` | An operation was pending when its peer, channel or runtime closed, or came after that. |
 | `ChannelFullException` | A data channel already holds as many bytes waiting to be sent as its peer's `channelSendLimit` allows. |
+| `AudioQueueFullException` | Pushed audio would take a `CustomAudio` queue beyond its `queueLimit`, with `AudioOverflow.REJECT`. |
 | `MediaException` | A device is missing, busy, refused access, or already open with other options. |
 | `ConfigurationException` | A call does not fit how the runtime was built, or WebRTC refused a configuration. |
 | `BlockingCallException` | A future was waited on from an event thread. |
+| `HttpStatusException` | A WHIP or WHEP endpoint answered with an error status, which `status()` gives, with the `title()`, `detail()` and `problemType()` of the problem details it sent, if any. |
 
 Failures that no caller waits for, such as a remote description rejected during automatic negotiation, go to the peer's `onError` handlers:
 

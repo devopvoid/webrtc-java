@@ -22,13 +22,17 @@
 
 #include "media/DeviceHotplugListener.h"
 
+#include <atomic>
 #include <jni.h>
 #include <memory>
 
 namespace jni
 {
 
-	class DeviceChangeListener : public avdev::DeviceHotplugListener
+	// Calls a Java DeviceChangeListener on the device change thread of
+	// JavaCallbackThread, not on the thread of the operating system that
+	// reports the change.
+	class DeviceChangeListener : public avdev::DeviceHotplugListener, public std::enable_shared_from_this<DeviceChangeListener>
 	{
 		public:
 			explicit DeviceChangeListener(JNIEnv * env, const JavaGlobalRef<jobject> & listener);
@@ -38,8 +42,13 @@ namespace jni
 			void deviceConnected(avdev::DevicePtr device) override;
 			void deviceDisconnected(avdev::DevicePtr device) override;
 
+			// Drops the changes that are still queued for the Java listener,
+			// once it has been removed.
+			void detach();
+
 		private:
 			void notify(const avdev::DevicePtr & device, jmethodID method);
+			void call(JNIEnv * env, const avdev::DevicePtr & device, jmethodID method);
 
 		private:
 			class JavaDeviceChangeListenerClass : public JavaClass
@@ -53,6 +62,8 @@ namespace jni
 
 		private:
 			JavaGlobalRef<jobject> listener;
+
+			std::atomic<bool> detached;
 
 			const std::shared_ptr<JavaDeviceChangeListenerClass> javaClass;
 	};

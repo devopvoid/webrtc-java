@@ -24,6 +24,9 @@
 
 #include <jni.h>
 
+#include <cstdint>
+#include <optional>
+
 namespace jni
 {
 	namespace RTCRtpContributingSource
@@ -35,15 +38,13 @@ namespace jni
 
 				jclass cls;
 				jmethodID ctor;
-				jfieldID timestamp;
-				jfieldID sourceId;
-				jfieldID sourceType;
-				jfieldID audioLevel;
-				jfieldID rtpTimestamp;
 		};
 
+		// Converts an RTP audio level in -dBov to the linear value between 0 and
+		// 1 of the Java classes. A source without a level reads as silence.
+		jdouble toLinearAudioLevel(const std::optional<uint8_t> & audioLevel);
+
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpSource & source);
-		webrtc::RtpSource toNative(JNIEnv * env, const JavaRef<jobject> & source);
 	}
 }
 

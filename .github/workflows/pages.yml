@@ -21,10 +21,13 @@ on:
     types: [published]
 
   # PRs only build the site, so that a broken build shows up before the merge.
+  # A change to the client API alone builds it too: the build checks that the
+  # Client API Design page still lists that API.
   pull_request:
     branches: [main, 'release/**']
     paths:
       - 'docs/**'
+      - 'webrtc/src/main/java/dev/onvoid/webrtc/client/**'
       - '.github/workflows/pages.yml'
 
   workflow_dispatch:

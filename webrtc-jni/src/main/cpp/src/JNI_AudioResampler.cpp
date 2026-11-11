@@ -15,6 +15,8 @@
  */
 
 #include "JNI_AudioResampler.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "Exception.h"
 #include "JavaObject.h"
 #include "JavaRef.h"
@@ -27,15 +29,20 @@
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
-	CHECK_HANDLE(resampler);
+	jni::CallFromJava(env, [&]() {
+		webrtc::PushResampler<int16_t> * resampler = jni::TakeHandle<webrtc::PushResampler<int16_t>>(env, caller);
 
-	delete resampler;
+		if (resampler == nullptr) {
+			return;
+		}
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+		jni::ReleaseHandle(env, resampler, [resampler](bool) {
+			delete resampler;
+		});
+	});
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize__
 (JNIEnv * env, jobject caller)
 {
 	try {
@@ -48,7 +55,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initial
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_initialize__III
 (JNIEnv* env, jobject caller, jint srcSamplesPerChannel, jint dstSamplesPerChannel, jint channels)
 {
 	try {
@@ -65,7 +72,7 @@ JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_media_audio_AudioResampler_resampl
 (JNIEnv * env, jobject caller, jbyteArray samplesIn, jint srcSamplesPerChannel, jbyteArray samplesOut, jint dstSamplesPerChannel, jint channels)
 {
 	try {
-		webrtc::PushResampler<int16_t> * resampler = GetHandle<webrtc::PushResampler<int16_t>>(env, caller);
+		jni::NativeLease<webrtc::PushResampler<int16_t>> resampler(env, caller);
 		CHECK_HANDLEV(resampler, -1);
 
 		// Java checks these too, but the views below must never reach past an array.

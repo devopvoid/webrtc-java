@@ -25,18 +25,27 @@ namespace jni
 	// thread stays attached to the JVM for as long as it runs, so without a
 	// frame of their own the references made for one call would pile up
 	// behind those of the next.
+	//
+	// A frame that cannot be pushed reports the JVM's exception as a codec
+	// exception, and the call it was meant for gives up rather than make
+	// references that nothing would free soon: see pushed().
 	class JavaLocalFrame
 	{
 		public:
-			JavaLocalFrame(JNIEnv * env, jint capacity);
+			// The context names the call in the log.
+			JavaLocalFrame(JNIEnv * env, jint capacity, const char * context);
 			~JavaLocalFrame();
 
 			JavaLocalFrame(const JavaLocalFrame &) = delete;
 			JavaLocalFrame & operator=(const JavaLocalFrame &) = delete;
 
+			// Whether the frame is in place, which a call checks before it
+			// makes any local reference.
+			bool pushed() const;
+
 		private:
 			JNIEnv * env;
-			bool pushed;
+			const bool isPushed;
 	};
 }
 

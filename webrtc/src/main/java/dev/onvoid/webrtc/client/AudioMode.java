@@ -17,17 +17,22 @@
 package dev.onvoid.webrtc.client;
 
 /**
- * Where the audio a runtime sends comes from. WebRTC feeds the audio a factory
- * captures into every audio sender of that factory, so captured and pushed
- * audio cannot be mixed within one runtime, and the choice is made when it is
- * built.
+ * Where the audio a runtime sends can come from, and where it plays the audio
+ * it receives. The choice is made when the runtime is built.
  */
 public enum AudioMode {
 
-	/** Capture the microphone and play to the speakers. */
+	/**
+	 * Capture the microphone and play to the speakers. Audio pushed through
+	 * {@link CustomAudio} can be sent as well, beside the microphone, also on
+	 * one peer.
+	 */
 	DEVICES,
 
-	/** Send audio pushed through {@link CustomAudio} and play remote audio to the speakers. */
+	/**
+	 * Send audio pushed through {@link CustomAudio} and play remote audio to the
+	 * speakers. The microphone is never opened.
+	 */
 	CUSTOM,
 
 	/**

@@ -86,7 +86,7 @@ class StandaloneLoadingTests {
 	 * The classes and libraries this JVM runs with, whether they are on the
 	 * class path or, as for a module, on the module path.
 	 */
-	private static String classPath() {
+	static String classPath() {
 		Set<String> entries = new LinkedHashSet<>();
 
 		for (String property : new String[] { "jdk.module.path", "java.class.path" }) {
@@ -100,7 +100,7 @@ class StandaloneLoadingTests {
 		return String.join(File.pathSeparator, entries);
 	}
 
-	private static void copy(InputStream input, ByteArrayOutputStream output) {
+	static void copy(InputStream input, ByteArrayOutputStream output) {
 		byte[] buffer = new byte[8192];
 		int read;
 

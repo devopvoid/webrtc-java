@@ -15,7 +15,11 @@
  */
 
 #include "JNI_RTCRtpSender.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
 #include "api/EncodedFrameInjectorObserver.h"
+#include "api/ObserverSlot.h"
+#include "api/RegisteredObservers.h"
 #include "api/RTCRtpSenderObserver.h"
 #include "api/RTCRtpSendParameters.h"
 #include "api/WebRTCUtils.h"
@@ -35,25 +39,33 @@
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTrack
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLEV(sender, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLEV(sender, nullptr);
 
-	webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = sender->track();
+		webrtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = sender->track();
 
-	// The sender keeps the track; the Java object is only a view of it.
-	return jni::MediaStreamTrackView::create(env, track.get()).release();
+		// The sender keeps the track; the Java object is only a view of it.
+		return jni::MediaStreamTrackView::create(env, track.get()).release();
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTransport
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		auto transport = sender->dtls_transport();
 
-		return jni::JavaFactories::create(env, transport.get()).release();
+		if (!transport) {
+			return nullptr;
+		}
+
+		// The Java object holds a reference until it is disposed, since the
+		// connection frees the transport once it closes or drops it.
+		return jni::JavaFactories::createOwning(env, std::move(transport)).release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -64,30 +76,35 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getTransport
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_replaceTrack
 (JNIEnv * env, jobject caller, jobject jTrack)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLE(sender);
 
-	webrtc::MediaStreamTrackInterface * track = jTrack == nullptr
-		? nullptr
-		: GetHandle<webrtc::MediaStreamTrackInterface>(env, jTrack);
+		// Null without a track, which detaches the sender's.
+		jni::NativeLease<webrtc::MediaStreamTrackInterface> track(env, jTrack);
 
-	if (!sender->SetTrack(track)) {
-		env->Throw(jni::JavaRuntimeException(env, "Set track failed"));
-	}
+		if (jTrack != nullptr) {
+			CHECK_HANDLE(track);
+		}
+
+		if (!sender->SetTrack(track)) {
+			env->Throw(jni::JavaRuntimeException(env, "Set track failed"));
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setParameters
 (JNIEnv * env, jobject caller, jobject jParams)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLE(sender);
 
 		webrtc::RtpParameters rtp_parameters = jni::RTCRtpSendParameters::toNative(env, jni::JavaLocalRef<jobject>(env, jParams));
 		webrtc::RTCError result = sender->SetParameters(rtp_parameters);
 
 		if (!result.ok()) {
-			env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result).c_str()));
+			env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result).c_str()));
 		}
 	}
 	catch (...) {
@@ -99,7 +116,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getParameters
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		return jni::RTCRtpSendParameters::toJava(env, sender->GetParameters()).release();
@@ -114,7 +131,7 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setStreams
 (JNIEnv * env, jobject caller, jobject streamIdList)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLE(sender);
 
 		std::vector<std::string> streamIDs = jni::JavaList::toStringVector(env, jni::JavaLocalRef<jobject>(env, streamIdList));
@@ -130,7 +147,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		auto dtmfSender = sender->GetDtmfSender();
@@ -140,7 +157,10 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 
 		auto jDtmfSender = jni::RTCDtmfSender::toJava(env);
 
+		// The Java object holds a reference until it is disposed, since the
+		// sender frees its DTMF sender once the connection drops the sender.
 		SetHandle(env, jDtmfSender, dtmfSender.get());
+		static_cast<void>(dtmfSender.release());
 
 		return jDtmfSender.release();
 	}
@@ -150,124 +170,142 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getDtmfSender
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setTransform
-(JNIEnv * env, jobject caller, jobject jTransformer)
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_applyTransform
+(JNIEnv * env, jobject caller, jobject jTransformer, jboolean sealed)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLE(sender);
 
-	try {
-		// Clearing a transform that was never set installs nothing.
-		auto transformer = jTransformer != nullptr
-			? jni::EncodedFrameTransformer::Of(sender)
-			: jni::EncodedFrameTransformer::Find(sender);
+		try {
+			// Clearing a transform that was never set installs nothing.
+			auto transformer = jTransformer != nullptr
+				? jni::EncodedFrameTransformer::Of(sender)
+				: jni::EncodedFrameTransformer::Find(sender);
 
-		if (transformer) {
-			transformer->SetTransformer(env, jTransformer);
+			if (transformer) {
+				transformer->SetTransformer(env, jTransformer, sealed == JNI_TRUE);
+			}
 		}
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_generateKeyFrame
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLE(sender);
 
-	// Audio has no key frames, so there is nothing to ask for.
-	if (sender->media_type() != webrtc::MediaType::VIDEO) {
-		return;
-	}
+		// Audio has no key frames, so there is nothing to ask for.
+		if (sender->media_type() != webrtc::MediaType::VIDEO) {
+			return;
+		}
 
-	webrtc::RTCError result = sender->GenerateKeyFrame({});
+		webrtc::RTCError result = sender->GenerateKeyFrame({});
 
-	if (!result.ok()) {
-		env->Throw(jni::JavaRuntimeException(env, jni::RTCErrorToString(result).c_str()));
-	}
+		if (!result.ok()) {
+			env->Throw(jni::JavaRuntimeException(env, "%s", jni::RTCErrorToString(result).c_str()));
+		}
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createVideoFrameInjector
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLEV(sender, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLEV(sender, nullptr);
 
-	try {
-		std::unique_ptr<jni::EncodedFrameInjectorObserver> observer;
-		webrtc::KeyFrameCallback keyFrameCallback;
-		webrtc::BitrateInfoCallback bitrateCallback;
+		try {
+			std::unique_ptr<jni::EncodedFrameInjectorObserver> observer;
+			webrtc::KeyFrameCallback keyFrameCallback;
+			webrtc::BitrateInfoCallback bitrateCallback;
 
-		if (jObserver != nullptr) {
-			observer = jni::EncodedFrameInjectorObserver::ForVideo(env, jni::JavaLocalRef<jobject>(env, jObserver));
-			keyFrameCallback = observer->CreateKeyFrameCallback();
-			bitrateCallback = observer->CreateBitrateInfoCallback();
+			if (jObserver != nullptr) {
+				observer = jni::EncodedFrameInjectorObserver::ForVideo(env, jni::JavaLocalRef<jobject>(env, jObserver));
+				keyFrameCallback = observer->CreateKeyFrameCallback();
+				bitrateCallback = observer->CreateBitrateInfoCallback();
+			}
+
+			auto injector = sender->CreateEncodedVideoFrameInjector(std::move(keyFrameCallback), std::move(bitrateCallback));
+
+			// WebRTC refuses the injector for a stopped sender, a sender with a
+			// track, an audio sender, and a sender that has one already.
+			if (!injector) {
+				return nullptr;
+			}
+
+			// The observer is bound before the Java object takes the injector, so
+			// that it ends up with both of them or with neither.
+			auto jInjector = jni::JavaFactories::createOwning(env, std::move(injector), [&](jobject object) {
+				SetHandle(env, object, "observerHandle", observer.get());
+			});
+
+			// The Java object owns the observer now.
+			static_cast<void>(observer.release());
+
+			return jInjector.release();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
 		}
 
-		auto injector = sender->CreateEncodedVideoFrameInjector(std::move(keyFrameCallback), std::move(bitrateCallback));
-
-		// WebRTC refuses the injector for a stopped sender, a sender with a
-		// track, an audio sender, and a sender that has one already.
-		if (!injector) {
-			return nullptr;
-		}
-
-		auto jInjector = jni::JavaFactories::create(env, injector.release());
-
-		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
-
-		return jInjector.release();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
-
-	return nullptr;
+		return nullptr;
+	});
 }
 
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_createAudioFrameInjector
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLEV(sender, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLEV(sender, nullptr);
 
-	try {
-		std::unique_ptr<jni::EncodedFrameInjectorObserver> observer;
-		webrtc::TargetBitrateCallback bitrateCallback;
+		try {
+			std::unique_ptr<jni::EncodedFrameInjectorObserver> observer;
+			webrtc::TargetBitrateCallback bitrateCallback;
 
-		if (jObserver != nullptr) {
-			observer = jni::EncodedFrameInjectorObserver::ForAudio(env, jni::JavaLocalRef<jobject>(env, jObserver));
-			bitrateCallback = observer->CreateTargetBitrateCallback();
+			if (jObserver != nullptr) {
+				observer = jni::EncodedFrameInjectorObserver::ForAudio(env, jni::JavaLocalRef<jobject>(env, jObserver));
+				bitrateCallback = observer->CreateTargetBitrateCallback();
+			}
+
+			auto injector = sender->CreateEncodedAudioFrameInjector(std::move(bitrateCallback));
+
+			// WebRTC refuses the injector for a stopped sender, a sender with a
+			// track, a video sender, and a sender that has one already.
+			if (!injector) {
+				return nullptr;
+			}
+
+			// The observer is bound before the Java object takes the injector, so
+			// that it ends up with both of them or with neither.
+			auto jInjector = jni::JavaFactories::createOwning(env, std::move(injector), [&](jobject object) {
+				SetHandle(env, object, "observerHandle", observer.get());
+			});
+
+			// The Java object owns the observer now.
+			static_cast<void>(observer.release());
+
+			return jInjector.release();
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
 		}
 
-		auto injector = sender->CreateEncodedAudioFrameInjector(std::move(bitrateCallback));
-
-		// WebRTC refuses the injector for a stopped sender, a sender with a
-		// track, a video sender, and a sender that has one already.
-		if (!injector) {
-			return nullptr;
-		}
-
-		auto jInjector = jni::JavaFactories::create(env, injector.release());
-
-		SetHandle(env, jInjector.get(), "observerHandle", observer.release());
-
-		return jInjector.release();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
-
-	return nullptr;
+		return nullptr;
+	});
 }
 
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getId
 (JNIEnv * env, jobject caller)
 {
 	try {
-		webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
 		CHECK_HANDLEV(sender, nullptr);
 
 		return jni::JavaString::toJava(env, sender->id()).release();
@@ -281,70 +319,94 @@ JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getId
 JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_getStreams
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLEV(sender, nullptr);
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLEV(sender, nullptr);
 
-	try {
-		const std::vector<std::string> streamIds = sender->stream_ids();
+		try {
+			const std::vector<std::string> streamIds = sender->stream_ids();
 
-		jni::JavaArrayList list(env, streamIds.size());
+			jni::JavaArrayList list(env, streamIds.size());
 
-		for (const auto & id : streamIds) {
-			list.add(jni::JavaString::toJava(env, id));
+			for (const auto & id : streamIds) {
+				list.add(jni::JavaString::toJava(env, id));
+			}
+
+			return list.listObject().release();
 		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+			return nullptr;
+		}
+	});
+}
 
-		return list.listObject().release();
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-		return nullptr;
+namespace
+{
+	using RTCRtpSenderObserverSlot = jni::ObserverSlot<jni::RTCRtpSenderObserver>;
+
+	// Setting replaces whatever observer the sender had, also one set through
+	// another Java object. It runs on the signaling thread, which is also the
+	// thread that calls the observer, so the ones replaced are out of use once
+	// it returns. Removing removes only the one set through this object,
+	// unless another has replaced it since.
+	RTCRtpSenderObserverSlot::Apply ApplyTo(webrtc::RtpSenderInterface * sender)
+	{
+		return jni::RegisteredObservers::Apply<jni::RTCRtpSenderObserver>(sender,
+			[sender](jni::RTCRtpSenderObserver * observer) { sender->SetObserver(observer); },
+			[sender]() { sender->SetObserver(nullptr); });
 	}
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_setObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpSenderInterface> sender(env, caller);
+		CHECK_HANDLE(sender);
 
-	try {
-		jni::RTCRtpSenderObserver * observer = nullptr;
+		try {
+			jni::RTCRtpSenderObserver * observer = nullptr;
 
-		if (jObserver != nullptr) {
-			observer = new jni::RTCRtpSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+			if (jObserver != nullptr) {
+				observer = new jni::RTCRtpSenderObserver(env, jni::JavaGlobalRef<jobject>(env, jObserver));
+			}
+
+			RTCRtpSenderObserverSlot::Set(env, caller, "observerHandle", observer, ApplyTo(sender));
 		}
-
-		// Runs on the signaling thread, which is also the thread that calls
-		// the observer, so the previous one is out of use once this returns.
-		sender->SetObserver(observer);
-
-		ReplaceNativeObserver(env, caller, "observerHandle", observer);
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpSender_dispose
 (JNIEnv * env, jobject caller)
 {
-	webrtc::RtpSenderInterface * sender = GetHandle<webrtc::RtpSenderInterface>(env, caller);
-	CHECK_HANDLE(sender);
+	jni::CallFromJava(env, [&]() {
+		webrtc::RtpSenderInterface * sender = jni::TakeHandle<webrtc::RtpSenderInterface>(env, caller);
 
-	// WebRTC must let go of an observer set through this object before it is
-	// deleted.
-	if (GetHandle<jni::RTCRtpSenderObserver>(env, caller, "observerHandle") != nullptr) {
-		sender->SetObserver(nullptr);
+		if (sender == nullptr) {
+			return;
+		}
 
-		ClearNativeObserver<jni::RTCRtpSenderObserver>(env, caller, "observerHandle");
-	}
+		auto slot = RTCRtpSenderObserverSlot::Take(env, caller, "observerHandle");
 
-	// Unlike e.g. MediaStreamTrack, an RTCRtpSender is not exclusively owned
-	// by one Java wrapper: the owning RtpTransceiver keeps its own reference,
-	// and other Java wrappers may have been obtained via separate
-	// getSenders()/getSender() calls. Dropping our reference here is
-	// expected to leave others around, so it is not reported as an error.
-	sender->Release();
+		// Unlike e.g. MediaStreamTrack, an RTCRtpSender is not exclusively owned
+		// by one Java wrapper: the owning RtpTransceiver keeps its own reference,
+		// and other Java wrappers may have been obtained via separate
+		// getSenders()/getSender() calls. Dropping our reference here is
+		// expected to leave others around, so it is not reported as an error.
+		//
+		// Runs once no other thread sets an observer through this object any more.
+		// WebRTC must let go of an observer set through this object before it is
+		// deleted with the slot. One that another Java object has set since stays.
+		jni::ReleaseHandle(env, sender, [sender, slot](bool) {
+			if (slot && jni::RegisteredObservers::Remove(sender, slot->applied())) {
+				sender->SetObserver(nullptr);
+			}
 
-	SetHandle<std::nullptr_t>(env, caller, nullptr);
+			sender->Release();
+		});
+	});
 }

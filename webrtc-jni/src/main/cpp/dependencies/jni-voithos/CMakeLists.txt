@@ -10,12 +10,12 @@ target_sources(${PROJECT_NAME}
         include/JavaArray.h
         include/JavaArrayList.h
         include/JavaBigInteger.h
+        include/JavaBoundary.h
         include/JavaClasses.h
         include/JavaClass.h
         include/JavaClassLoader.h
         include/JavaClassUtils.h
         include/JavaContext.h
-        include/JavaDimension.h
         include/JavaEnum.h
         include/JavaEnums.h
         include/JavaError.h
@@ -29,7 +29,6 @@ target_sources(${PROJECT_NAME}
         include/JavaNullPointerException.h
         include/JavaObject.h
         include/JavaPrimitive.h
-        include/JavaRectangle.h
         include/JavaRef.h
         include/JavaRuntimeException.h
         include/JavaString.h
@@ -44,13 +43,11 @@ target_sources(${PROJECT_NAME}
         src/JavaClassLoader.cpp
         src/JavaClassUtils.cpp
         src/JavaContext.cpp
-        src/JavaDimension.cpp
         src/JavaHashMap.cpp
         src/JavaIterable.cpp
         src/JavaList.cpp
         src/JavaMapIterator.cpp
         src/JavaObject.cpp
-        src/JavaRectangle.cpp
         src/JavaString.cpp
         src/JavaThreadEnv.cpp
         src/JavaThrowable.cpp

@@ -19,30 +19,33 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 - **[WHIP and WHEP](https://jrtc.dev/guide/client-api#whip-and-whep)** - Publish to and play from streaming servers
 - **[Peer connections](https://jrtc.dev/guide/networking/peer-connection-config)** - The full native API, modeled on the W3C JavaScript API
 - **[Data channels](https://jrtc.dev/guide/data/data-channels)** - Reliable or unreliable peer-to-peer messaging
+- **[File transfer](https://jrtc.dev/guide/data/file-transfer)** - Send files over a data channel with progress, a checksum confirmed by the receiver and resume after a reconnect
 - **[Statistics](https://jrtc.dev/guide/monitoring/rtc-stats)** - Detailed metrics on connection quality
 
 **Audio and video**
 
 - **[Cameras and microphones](https://jrtc.dev/guide/media/media-devices)** - Capture from any local device
 - **[Screen sharing](https://jrtc.dev/guide/video/desktop-capture)** - Share the full desktop or single application windows
+- **[System audio](https://jrtc.dev/guide/audio/system-audio-source)** - Send what the system plays beside a shared screen and the microphone
 - **[Video processing](https://jrtc.dev/guide/video/camera-capture#changing-frames-before-they-are-sent)** - Blur a background, draw an overlay or blank out part of the screen before frames are sent
-- **[Video views](https://jrtc.dev/guide/client-api#handlers-on-the-ui-thread)** - Ready-made components that show video in Swing, or in JavaFX with the `webrtc-java-javafx` module
+- **[Video views](https://jrtc.dev/guide/client-api#handlers-on-the-ui-thread)** - Ready-made components that show video in Swing with the `webrtc-java-swing` module, or in JavaFX with the `webrtc-java-javafx` module
 
 **Codecs and encoded media**
 
 - **[Hardware codecs](https://jrtc.dev/guide/advanced/video-codecs#hardware-encoding)** - H.264, H.265, VP9 and AV1 on the GPU with NVENC/NVDEC, Media Foundation, VA-API and VideoToolbox, falling back to software
 - **[Custom codecs](https://jrtc.dev/guide/advanced/video-codecs#adding-a-codec)** - Plug in video encoders and decoders written in Java, or limit the codecs a factory offers
-- **[End-to-end encryption](https://jrtc.dev/guide/advanced/encoded-transforms)** - Read, change or drop encoded audio and video frames, like insertable streams in the browser
+- **[End-to-end encryption](https://jrtc.dev/guide/advanced/end-to-end-encryption)** - SFrame (RFC 9605) with key management, key rotation and replay protection, interoperable with browsers
+- **[Encoded transforms](https://jrtc.dev/guide/advanced/encoded-transforms)** - Read, change or drop encoded audio and video frames, like insertable streams in the browser
 - **[Pre-encoded media](https://jrtc.dev/guide/advanced/encoded-transforms#injecting-encoded-frames)** - Send a camera's H.264 stream or a recording without re-encoding it
 
 **Optional modules**
 
 - **[Media playback](https://jrtc.dev/guide/media/media-files)** (`webrtc-java-media`) - Stream video and audio files or RTSP sources into a call, decoded with FFmpeg
-- **[Call recording](https://jrtc.dev/guide/media/media-recording)** (`webrtc-java-media`) - Save what a call sends or receives into MKV, WebM or MP4 files, without re-encoding
+- **[Call recording](https://jrtc.dev/guide/media/media-recording)** (`webrtc-java-media`) - Save what a call sends or receives into MKV, WebM or MP4 files, without re-encoding, as one file, rotating segments, or a replay buffer of the last seconds
 
 **Platforms**
 
-Prebuilt native libraries behind a thin JNI layer:
+Prebuilt native libraries behind a thin JNI layer, also in a **[GraalVM native image](https://jrtc.dev/guide/advanced/native-image)**, a single executable without an installed Java runtime:
 
 | OS      | x64 | arm64 | arm32 |
 |---------|:---:|:-----:|:-----:|

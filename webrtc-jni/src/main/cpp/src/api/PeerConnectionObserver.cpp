@@ -90,7 +90,7 @@ namespace jni
 			// it; transfer that reference into the Java wrapper, which disposes
 			// it, instead of releasing it right back when transceiver goes out
 			// of scope and leaving the wrapper's pointer unowned.
-			auto jTransceiver = JavaFactories::create(env, transceiver.release());
+			auto jTransceiver = JavaFactories::createOwning(env, std::move(transceiver));
 
 			env->CallVoidMethod(observer, javaClass->onTrack, jTransceiver.get());
 		}
@@ -118,7 +118,7 @@ namespace jni
 			// it; transfer that reference into the Java wrapper, which
 			// disposes it, instead of releasing it right back when receiver
 			// goes out of scope and leaving the wrapper's pointer unowned.
-			auto jReceiver = JavaFactories::create(env, receiver.release());
+			auto jReceiver = JavaFactories::createOwning(env, std::move(receiver));
 
 			env->CallVoidMethod(observer, javaClass->onAddTrack, jReceiver.get(), streamArray.get());
 		}
@@ -142,7 +142,7 @@ namespace jni
 			// it; transfer that reference into the Java wrapper, which disposes
 			// it, instead of releasing it right back when receiver goes out of
 			// scope and leaving the wrapper's pointer unowned.
-			auto jReceiver = JavaFactories::create(env, receiver.release());
+			auto jReceiver = JavaFactories::createOwning(env, std::move(receiver));
 
 			env->CallVoidMethod(observer, javaClass->onRemoveTrack, jReceiver.get());
 		}
@@ -162,7 +162,7 @@ namespace jni
 		}
 
 		try {
-			auto jDataChannel = JavaFactories::create(env, channel.release());
+			auto jDataChannel = JavaFactories::createOwning(env, std::move(channel));
 
 			env->CallVoidMethod(observer, javaClass->onDataChannel, jDataChannel.get());
 		}

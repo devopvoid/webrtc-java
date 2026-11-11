@@ -114,21 +114,50 @@ public class NativeI420Buffer extends RefCountedObject implements I420Buffer {
 	 * Creates a copy of this I420 buffer. This method performs a deep copy of all data in the buffer.
 	 *
 	 * @return A new NativeI420Buffer instance with the same dimensions and data as this buffer.
+	 *
+	 * @throws RuntimeException if this buffer has been released.
 	 */
 	public NativeI420Buffer copy() {
-		return copy(width, height, dataY.slice(), strideY, dataU.slice(), strideU, dataV.slice(), strideV);
+		return copy(this);
 	}
 
 	/**
 	 * Allocates an empty I420Buffer suitable for an image of the given dimensions.
+	 *
+	 * @param width  The width of the image in pixels.
+	 * @param height The height of the image in pixels.
+	 *
+	 * @return A new buffer of the given dimensions.
+	 *
+	 * @throws IllegalArgumentException if a dimension is not positive or all three planes together
+	 *                                  are larger than {@link Integer#MAX_VALUE} bytes.
 	 */
-	public static native NativeI420Buffer allocate(int width, int height);
+	public static NativeI420Buffer allocate(int width, int height) {
+		// WebRTC aborts the process on dimensions it cannot allocate, rather than failing the call.
+		if (width <= 0 || height <= 0) {
+			throw new IllegalArgumentException("Invalid buffer size " + width + "x" + height);
+		}
+
+		long chromaSize = ((width + 1L) / 2) * ((height + 1L) / 2);
+
+		if ((long) width * height + 2 * chromaSize > Integer.MAX_VALUE) {
+			throw new IllegalArgumentException("Buffer size " + width + "x" + height + " is too large");
+		}
+
+		return allocateBuffer(width, height);
+	}
+
+	private static native NativeI420Buffer allocateBuffer(int width, int height);
 
 	/**
-	 * Creates a copy of an I420 buffer with the given dimensions and data.
+	 * Copies the pixels of any buffer, as {@link VideoFrameBuffer#toI420()} provides them, into a new
+	 * buffer.
+	 *
+	 * @throws RuntimeException if the buffer has no readable pixels, such as a released buffer or one
+	 *                          with heap byte buffers, or if the size, strides and planes of the I420
+	 *                          buffer do not fit together.
 	 */
-	private static native NativeI420Buffer copy(int width, int height, ByteBuffer dataY, int strideY, ByteBuffer dataU,
-												int strideU, ByteBuffer dataV, int strideV);
+	static native NativeI420Buffer copy(VideoFrameBuffer buffer);
 
 	/**
 	 * Crops this buffer without copying. The cropped buffer shares the pixels of this one and holds a

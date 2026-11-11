@@ -28,11 +28,17 @@ namespace jni
 	{
 		public:
 			VideoCaptureBase();
-			~VideoCaptureBase();
+			// Virtual, since the capture is owned and deleted through this base.
+			virtual ~VideoCaptureBase();
 
 			void setDevice(const avdev::DevicePtr & device);
+			bool hasDevice() const;
 			void setVideoCaptureCapability(const webrtc::VideoCaptureCapability & capability);
-			void setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink);
+
+			// Takes ownership of the sink. The capture only lends it to the
+			// platform capturer, so implementations override this to detach the
+			// previous sink from a running capture before it is destroyed.
+			virtual void setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> sink);
 
 			virtual void start() = 0;
 			virtual void stop() = 0;

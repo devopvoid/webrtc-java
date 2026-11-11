@@ -50,14 +50,24 @@ final class LocalMediaImpl implements LocalMedia {
 
 	final WebRtc rtc;
 
-	/** Releases tracks and runs their ended handlers, off WebRTC's and the application's threads. */
+	/** Releases tracks and switches devices, off WebRTC's and the application's threads. */
 	final SerialExecutor executor;
+
+	/**
+	 * Runs the ended and device handlers and completes the futures handed
+	 * out, as a peer's event executor does, so that no application code holds
+	 * up a release.
+	 */
+	final SerialExecutor events;
 
 	private final AudioDeviceModuleBase audioModule;
 
 	private final Set<LocalTrackImpl> tracks = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-	/** Completed as the creations of tracks end, which the runtime waits for when it closes. */
+	/**
+	 * Completed as the creations of tracks and the device switches end, which
+	 * the runtime waits for when it closes.
+	 */
 	private final Set<CompletableFuture<Void>> creations = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 	// Guarded by cameras.
@@ -72,7 +82,9 @@ final class LocalMediaImpl implements LocalMedia {
 	LocalMediaImpl(WebRtc rtc, AudioDeviceModuleBase audioModule) {
 		this.rtc = rtc;
 		this.audioModule = audioModule;
-		this.executor = new SerialExecutor(rtc.controlPool, rtc::reportError, false, null);
+		this.executor = new SerialExecutor(rtc.controlPool, rtc.controlWork, rtc::reportError, false, null);
+		this.events = new SerialExecutor(rtc.eventExecutor, rtc.eventWork, rtc::reportError, true,
+				rtc.ownsEventExecutor ? "webrtc-client-events-media" : null);
 	}
 
 	@Override
@@ -141,8 +153,8 @@ final class LocalMediaImpl implements LocalMedia {
 		try (Creation creation = begin()) {
 			if (rtc.audioMode != AudioMode.DEVICES) {
 				throw new ConfigurationException("The runtime was built with AudioMode." + rtc.audioMode
-						+ ", which sends pushed audio only. Build it with AudioMode.DEVICES to capture the microphone, "
-						+ "or use customAudio() to push audio");
+						+ ", which never opens the microphone. Build it with AudioMode.DEVICES to capture the "
+						+ "microphone, or use customAudio() to push audio");
 			}
 
 			AudioTrackSource source = rtc.factory.createAudioSource(options);
@@ -150,7 +162,7 @@ final class LocalMediaImpl implements LocalMedia {
 			try {
 				AudioTrack track = rtc.factory.createAudioTrack(newId("microphone"), source);
 
-				return register(new LocalAudioImpl(this, track, source::dispose));
+				return register(new LocalAudioImpl(this, track, source::dispose, true));
 			}
 			catch (RuntimeException e) {
 				source.dispose();
@@ -230,10 +242,6 @@ final class LocalMediaImpl implements LocalMedia {
 		try (Creation creation = begin()) {
 			boolean pushed = source instanceof CustomAudioSource;
 
-			if (pushed && rtc.audioMode == AudioMode.DEVICES) {
-				throw new ConfigurationException("A CustomAudioSource needs a runtime built with AudioMode.CUSTOM or "
-						+ "AudioMode.HEADLESS; this one captures the microphone");
-			}
 			if (!pushed && rtc.audioMode != AudioMode.DEVICES) {
 				throw new ConfigurationException("A captured audio source needs a runtime built with AudioMode.DEVICES; "
 						+ "this one was built with AudioMode." + rtc.audioMode);
@@ -242,7 +250,7 @@ final class LocalMediaImpl implements LocalMedia {
 			AudioTrack track = rtc.factory.createAudioTrack(label, source);
 
 			// The source is the caller's, and outlives the track.
-			return register(new LocalAudioImpl(this, track, () -> { }));
+			return register(new LocalAudioImpl(this, track, () -> { }, !pushed));
 		}
 	}
 
@@ -251,12 +259,6 @@ final class LocalMediaImpl implements LocalMedia {
 		requireNonNull(label, "label");
 
 		try (Creation creation = begin()) {
-			if (rtc.audioMode == AudioMode.DEVICES) {
-				throw new ConfigurationException("The runtime was built with AudioMode.DEVICES, which sends the "
-						+ "microphone. WebRTC feeds captured audio into every audio sender of a runtime, so pushed "
-						+ "audio needs a runtime built with AudioMode.CUSTOM or AudioMode.HEADLESS");
-			}
-
 			CustomAudioSource source = new CustomAudioSource();
 
 			try {
@@ -305,6 +307,29 @@ final class LocalMediaImpl implements LocalMedia {
 		}
 
 		return closing;
+	}
+
+	/**
+	 * Hands a future out to the application: it completes on the event
+	 * executor, after the handlers queued before, and cancelling it leaves the
+	 * internal one alone.
+	 */
+	<T> CompletableFuture<T> toPublic(CompletableFuture<T> internal) {
+		ClientFuture<T> result = new ClientFuture<>();
+
+		internal.whenComplete((value, error) -> {
+			Runnable deliver = () -> PeerImpl.complete(result, value, error);
+
+			// Completed in any case: should the event executor reject the
+			// task, on the thread that found it rejected.
+			events.execute(deliver, deliver);
+		});
+
+		// Tracked after, so that a track released before the runtime stopped
+		// its threads still reports that, rather than the runtime's close.
+		rtc.track(result, events);
+
+		return result;
 	}
 
 	synchronized void dispose() {
@@ -379,14 +404,15 @@ final class LocalMediaImpl implements LocalMedia {
 				return;
 			}
 
-			cameras.remove(camera.key);
+			// Another camera of the same device may have been opened since.
+			cameras.remove(camera.key, camera);
 		}
 
 		camera.source.stop();
 		camera.source.dispose();
 	}
 
-	private static VideoCaptureCapability nearest(List<VideoCaptureCapability> capabilities,
+	static VideoCaptureCapability nearest(List<VideoCaptureCapability> capabilities,
 			CameraOptions options) {
 		if (capabilities == null || capabilities.isEmpty()) {
 			return null;
@@ -399,11 +425,11 @@ final class LocalMediaImpl implements LocalMedia {
 			long score = 0;
 
 			if (options.width > 0) {
-				score += 1000L * (Math.abs(capability.width - options.width)
-						+ Math.abs(capability.height - options.height));
+				score += 1000L * (Math.abs((long) capability.width - options.width)
+						+ Math.abs((long) capability.height - options.height));
 			}
 			if (options.frameRate > 0) {
-				score += Math.abs(capability.frameRate - options.frameRate);
+				score += Math.abs((long) capability.frameRate - options.frameRate);
 			}
 			if (score < bestScore) {
 				best = capability;
@@ -420,7 +446,10 @@ final class LocalMediaImpl implements LocalMedia {
 
 
 
-	/** A creation of a track, which the runtime waits for when it closes. */
+	/**
+	 * A creation of a track, or a device switch, which the runtime waits for
+	 * when it closes.
+	 */
 	final class Creation implements AutoCloseable {
 
 		final CompletableFuture<Void> done = new CompletableFuture<>();

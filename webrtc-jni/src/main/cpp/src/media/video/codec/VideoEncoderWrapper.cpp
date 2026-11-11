@@ -106,7 +106,16 @@ namespace jni
 
 	int32_t VideoEncoderWrapper::InitEncodeInternal(JNIEnv * env)
 	{
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "initEncode");
+
+		if (!localFrame.pushed()) {
+			// Detaching the earlier callback makes no local reference.
+			InvalidateCallback(env);
+
+			initialized = false;
+
+			return WEBRTC_VIDEO_CODEC_ERROR;
+		}
 
 		bool automaticResizeOn;
 
@@ -192,10 +201,17 @@ namespace jni
 
 	int32_t VideoEncoderWrapper::ReleaseInternal(JNIEnv * env)
 	{
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		// Releasing goes ahead without a frame, since giving it up would keep
+		// the Java encoder's resources, and the status is the only reference
+		// it makes.
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "release");
 
 		jobject status = env->CallObjectMethod(encoder, javaClass->release);
 		int32_t result = ToNativeCodecStatus(env, status, "release");
+
+		if (!localFrame.pushed() && status != nullptr) {
+			env->DeleteLocalRef(status);
+		}
 
 		RTC_LOG(LS_INFO) << "Java encoder release: " << result;
 
@@ -224,7 +240,15 @@ namespace jni
 			return WEBRTC_VIDEO_CODEC_ERROR;
 		}
 
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "encode");
+
+		if (!localFrame.pushed()) {
+			// Dropped rather than failed, since WebRTC gives up an encoder that
+			// fails, and running short of memory is no fault of the encoder.
+			ReportDroppedFrame(frame.rtp_timestamp());
+
+			return WEBRTC_VIDEO_CODEC_OK;
+		}
 
 		const auto javaFrameClass = JavaClasses::get<JavaVideoFrameClass>(env);
 		jobject jFrame = nullptr;
@@ -309,7 +333,12 @@ namespace jni
 			return;
 		}
 
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "setRates");
+
+		if (!localFrame.pushed()) {
+			// The encoder keeps its rates until the next call.
+			return;
+		}
 
 		jobjectArray layers = env->NewObjectArray(webrtc::kMaxSpatialLayers, javaClass->intArrayClass, nullptr);
 
@@ -465,7 +494,12 @@ namespace jni
 
 	void VideoEncoderWrapper::UpdateEncoderInfo(JNIEnv * env)
 	{
-		JavaLocalFrame localFrame(env, kLocalFrameCapacity);
+		JavaLocalFrame localFrame(env, kLocalFrameCapacity, "getEncoderInfo");
+
+		if (!localFrame.pushed()) {
+			// The info stays as it was.
+			return;
+		}
 
 		encoderInfo.supports_native_handle = false;
 		encoderInfo.scaling_settings = GetScalingSettings(env);

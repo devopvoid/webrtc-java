@@ -1,0 +1,456 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.onvoid.webrtc.media.player;
+
+import java.io.IOException;
+import java.util.Objects;
+
+import dev.onvoid.webrtc.internal.NativeApi;
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
+
+/**
+ * Plays a media source into webrtc-java's custom media sources, so that a
+ * peer connection sends a file the way it would send a camera and microphone.
+ * <p>
+ * Nothing is carried through Java: the player decodes in native code and hands
+ * the result straight to the native side of the given sources. Frames are
+ * delivered in real time and carry the presentation times of the source, so
+ * what reaches the receiver keeps the timing of the file rather than the
+ * timing of a thread.
+ * <p>
+ * The player takes over the reader it is given. That reader must not be used
+ * or closed afterwards; closing the player releases it.
+ * <p>
+ * The player also keeps the native side of the given sources alive until it
+ * is closed, so disposing of a source, or of a track made from it, while the
+ * player still runs is safe.
+ * <p>
+ * Example:
+ * <pre>{@code
+ * CustomVideoSource videoSource = new CustomVideoSource();
+ * CustomAudioSource audioSource = new CustomAudioSource();
+ *
+ * MediaPlayer player = new MediaPlayer(new MediaReader(path), videoSource, audioSource);
+ *
+ * VideoTrack videoTrack = factory.createVideoTrack("video", videoSource);
+ * AudioTrack audioTrack = factory.createAudioTrack("audio", audioSource);
+ *
+ * player.play();
+ * }</pre>
+ * <p>
+ * The audio is pushed into its track, so the same factory may send the
+ * microphone beside it.
+ *
+ * @author Alex Andres
+ */
+public class MediaPlayer implements AutoCloseable {
+
+	static {
+		FFmpeg.load();
+	}
+
+	/** Guards the handle against a close racing a command. */
+	private final Object lock = new Object();
+
+	/** The native player, or 0 once this player has been closed. */
+	private long handle;
+
+	/** Read on the native player's event thread, so never a stale value. */
+	private volatile MediaPlayerListener listener;
+
+	/**
+	 * How deep the current thread is in calls to the listener. Closing from
+	 * in there cannot release the native player on the spot: the call came
+	 * from the native player, which is still on the stack below it.
+	 */
+	private final ThreadLocal<int[]> callbackDepth = ThreadLocal.withInitial(() -> new int[1]);
+
+
+	/**
+	 * Creates a player for the given source, delivering into the given custom
+	 * media sources. At least one of them has to be present; media of a kind
+	 * with no source is decoded and dropped. Video is decoded in software.
+	 *
+	 * @param reader      The source to play, which this player takes over.
+	 * @param videoSource Where video goes, or {@code null} for none.
+	 * @param audioSource Where audio goes, or {@code null} for none.
+	 *
+	 * @throws IOException              if the source cannot be decoded.
+	 * @throws IllegalArgumentException if both sources are {@code null}.
+	 * @throws IllegalStateException    if a supplied source has been disposed.
+	 */
+	public MediaPlayer(MediaReader reader, CustomVideoSource videoSource,
+			CustomAudioSource audioSource) throws IOException {
+		this(reader, videoSource, audioSource, false);
+	}
+
+	/**
+	 * Creates a player for the given source, delivering into the given custom
+	 * media sources. At least one of them has to be present; media of a kind
+	 * with no source is decoded and dropped.
+	 * <p>
+	 * With {@code hardwareDecoding} the player decodes H.264, H.265/HEVC, VP9
+	 * and AV1 video on the media engine or GPU of the machine where there is one the platform
+	 * offers (VideoToolbox on macOS, Direct3D 12 or 11 on Windows, NVDEC on
+	 * NVIDIA GPUs and VA-API or Vulkan Video on others on Linux), which takes less
+	 * processor time, by an amount
+	 * that depends on the platform and the stream. The
+	 * pictures are the same as software decoding gives. A stream the
+	 * hardware does not take, or a codec it has no decoder for, is decoded in
+	 * software; {@link #isHardwareDecoding()} tells which it is.
+	 * <p>
+	 * H.265/HEVC is decoded in hardware only, with or without
+	 * {@code hardwareDecoding}, and never in software. Without a hardware
+	 * decoder for it the player cannot be created, and if the hardware fails
+	 * while playing, or does not take the stream, playback stops with an
+	 * error.
+	 *
+	 * @param reader           The source to play, which this player takes over.
+	 * @param videoSource      Where video goes, or {@code null} for none.
+	 * @param audioSource      Where audio goes, or {@code null} for none.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
+	 *
+	 * @throws IOException              if the source cannot be decoded,
+	 *                                  including HEVC on a machine without a
+	 *                                  hardware decoder for it.
+	 * @throws IllegalArgumentException if both sources are {@code null}.
+	 * @throws IllegalStateException    if a supplied source has been disposed.
+	 */
+	public MediaPlayer(MediaReader reader, CustomVideoSource videoSource,
+			CustomAudioSource audioSource, boolean hardwareDecoding) throws IOException {
+		Objects.requireNonNull(reader, "MediaReader is null");
+
+		if (videoSource == null && audioSource == null) {
+			throw new IllegalArgumentException("A player needs at least one media source");
+		}
+
+		long tableAddress = NativeApi.tableAddress();
+		long videoSourceHandle = NativeApi.retainVideoSource(videoSource);
+
+		try {
+			long audioSourceHandle = NativeApi.retainAudioSource(audioSource);
+
+			try {
+				// Both sources are validated and retained before the reader is
+				// taken over. Their Java wrappers may now be disposed without
+				// freeing the handles passed to the native pacer.
+				long readerHandle = reader.detach();
+
+				if (readerHandle == 0) {
+					throw new IOException("The reader is closed");
+				}
+
+				handle = create(readerHandle, tableAddress, videoSourceHandle, audioSourceHandle,
+						hardwareDecoding);
+			}
+			finally {
+				NativeApi.releaseAudioSource(audioSourceHandle);
+			}
+		}
+		finally {
+			NativeApi.releaseVideoSource(videoSourceHandle);
+		}
+	}
+
+	/**
+	 * Sets what to report playback events to, replacing whatever was set
+	 * before. A listener of {@code null} stops reporting.
+	 *
+	 * @param listener The listener, or {@code null}.
+	 */
+	public void setListener(MediaPlayerListener listener) {
+		this.listener = listener;
+	}
+
+	/**
+	 * Starts or resumes playback. A player that has reached the end starts
+	 * over. Playing a player that is already playing does nothing.
+	 */
+	public void play() {
+		synchronized (lock) {
+			start(handle);
+		}
+	}
+
+	/**
+	 * Holds playback where it is. Resuming carries on from there rather than
+	 * delivering everything that fell due in the meantime.
+	 */
+	public void pause() {
+		synchronized (lock) {
+			suspend(handle);
+		}
+	}
+
+	/**
+	 * Moves playback to the given position. Whatever has been decoded but not
+	 * yet delivered is dropped. Video is decoded from the keyframe at or
+	 * before the position, and what comes before the position is dropped, so
+	 * the further the keyframes are apart, the longer this takes.
+	 * <p>
+	 * Positions count from the start of the source, which is its first video
+	 * or audio frame, whichever comes first, whatever time the container gives
+	 * that frame. A stream that starts after the other one keeps that distance.
+	 *
+	 * @param positionUs The position in microseconds from the start.
+	 *
+	 * @see #fastSeek(long)
+	 */
+	public void seek(long positionUs) {
+		synchronized (lock) {
+			seek(handle, positionUs, true);
+		}
+	}
+
+	/**
+	 * Moves playback to the keyframe at or before the given position, and
+	 * plays from there. Nothing before the position is dropped, so this takes
+	 * no longer however far the keyframes are apart, which is what a slider
+	 * being dragged needs; a {@link #seek(long)} once it is let go lands on
+	 * the position itself. Whatever has been decoded but not yet delivered is
+	 * dropped. In a container without an index, such as MPEG-TS, the keyframe
+	 * can be the one after the position.
+	 *
+	 * @param positionUs The position in microseconds from the start.
+	 */
+	public void fastSeek(long positionUs) {
+		synchronized (lock) {
+			seek(handle, positionUs, false);
+		}
+	}
+
+	/**
+	 * Sets whether the source starts again when it runs out. A looping player
+	 * keeps its timing across the seam, and never reports an end of stream.
+	 *
+	 * @param looping True to play the source over and over.
+	 */
+	public void setLooping(boolean looping) {
+		synchronized (lock) {
+			setLooping(handle, looping);
+		}
+	}
+
+	/**
+	 * Returns where playback has got to within the current pass, in
+	 * microseconds from the start of the source, as {@link #seek(long)} counts
+	 * them. It moves forward only, whichever of video and audio is ahead,
+	 * other than by a seek. A looping source starts again from zero as the
+	 * next pass begins to play.
+	 *
+	 * @return The position in microseconds.
+	 */
+	public long getPositionUs() {
+		synchronized (lock) {
+			return position(handle);
+		}
+	}
+
+	/**
+	 * Returns the most memory that the decoded pictures waiting to be
+	 * delivered may take in one player, in bytes. That holds whatever the
+	 * resolution, so {@code n} players stay within {@code n} times this, on
+	 * top of what the decoders themselves use. A single picture larger than
+	 * this still goes through, on its own.
+	 *
+	 * @return The limit in bytes.
+	 *
+	 * @see #getPeakQueuedVideoBytes()
+	 */
+	public static long getMaxQueuedVideoBytes() {
+		return maxQueuedVideoBytes();
+	}
+
+	/**
+	 * Returns how much memory the decoded pictures waiting to be delivered
+	 * take right now, padding included.
+	 *
+	 * @return The size in bytes, which is 0 once the player is closed.
+	 */
+	public long getQueuedVideoBytes() {
+		synchronized (lock) {
+			return queuedVideoBytes(handle);
+		}
+	}
+
+	/**
+	 * Returns the most memory the decoded pictures waiting to be delivered
+	 * have taken so far. Added up over the players of an application, this is
+	 * what they actually needed, as opposed to what
+	 * {@link #getMaxQueuedVideoBytes()} allows them.
+	 *
+	 * @return The size in bytes, which is 0 once the player is closed.
+	 */
+	public long getPeakQueuedVideoBytes() {
+		synchronized (lock) {
+			return peakQueuedVideoBytes(handle);
+		}
+	}
+
+	/**
+	 * Returns whether the video is being decoded in hardware. That can be
+	 * less than was asked for: the platform may have no hardware decoder for
+	 * the codec, or the hardware may not take the stream, in which case the
+	 * player decodes in software. It can turn {@code false} while playing, if
+	 * the hardware decoder fails, and never turns {@code true} again. For
+	 * HEVC, which is decoded in hardware only, it is always {@code true}.
+	 *
+	 * @return {@code true} if video is decoded in hardware.
+	 */
+	public boolean isHardwareDecoding() {
+		synchronized (lock) {
+			return handle != 0 && hardwareDecoding(handle);
+		}
+	}
+
+	/**
+	 * Returns what the player is currently doing.
+	 *
+	 * @return The player state.
+	 */
+	public MediaPlayerState getState() {
+		synchronized (lock) {
+			return MediaPlayerState.of(state(handle));
+		}
+	}
+
+	/**
+	 * Stops playback, releases the native player and the reader it took over,
+	 * and waits for the player's threads to finish. By the time this returns,
+	 * the listener has been told of everything that happened before, and of
+	 * the {@link MediaPlayerState#CLOSED} state last. Closing a player that is
+	 * already closed does nothing.
+	 * <p>
+	 * Closing from within a {@link MediaPlayerListener} call, or from a sink
+	 * of a track made from one of the sources this player feeds, is allowed,
+	 * but cannot wait: the player's thread is the one making that call. The
+	 * player is closed at once, in that every later command does nothing and
+	 * its state reads as closed, and it is released on another thread as soon
+	 * as that call has returned.
+	 */
+	@Override
+	public void close() {
+		long closing;
+
+		synchronized (lock) {
+			closing = handle;
+
+			// Cleared first, so that a command arriving from another thread
+			// finds nothing to act on rather than a handle being freed.
+			handle = 0;
+		}
+
+		if (closing == 0) {
+			return;
+		}
+
+		// A sink of a track this player feeds is called on one of its threads
+		// too, but not through the listener. The native side tells those
+		// apart itself, and hands the release to another thread.
+		if (callbackDepth.get()[0] == 0) {
+			dispose(closing);
+
+			return;
+		}
+
+		Thread releaser = new Thread(() -> {
+			// A command that was already running when the handle was cleared
+			// holds the lock, and may be what made the listener call that
+			// asked for this close. Taking the lock waits for it to return;
+			// releasing it before disposing keeps the listener free to call
+			// the player while the player's thread is being waited for.
+			synchronized (lock) {
+				// Nothing to do but wait.
+			}
+
+			dispose(closing);
+		}, "MediaPlayer-close");
+
+		releaser.setDaemon(true);
+		releaser.start();
+	}
+
+	/** Called by native code on the player's event thread. */
+	private void onNativeStateChanged(int state) {
+		MediaPlayerListener current = listener;
+
+		if (current != null) {
+			notifyListener(() -> current.onStateChanged(MediaPlayerState.of(state)));
+		}
+	}
+
+	/** Called by native code on the player's event thread. */
+	private void onNativeEndOfStream() {
+		MediaPlayerListener current = listener;
+
+		if (current != null) {
+			notifyListener(current::onEndOfStream);
+		}
+	}
+
+	/** Called by native code on the player's event thread. */
+	private void onNativeError(String message) {
+		MediaPlayerListener current = listener;
+
+		if (current != null) {
+			notifyListener(() -> current.onError(message));
+		}
+	}
+
+	private void notifyListener(Runnable call) {
+		int[] depth = callbackDepth.get();
+
+		depth[0]++;
+
+		try {
+			call.run();
+		}
+		finally {
+			if (--depth[0] == 0) {
+				callbackDepth.remove();
+			}
+		}
+	}
+
+	private native long create(long readerHandle, long tableAddress,
+			long videoSourceHandle, long audioSourceHandle, boolean hardwareDecoding) throws IOException;
+
+	private static native void start(long handle);
+
+	private static native void suspend(long handle);
+
+	private static native void seek(long handle, long positionUs, boolean precise);
+
+	private static native void setLooping(long handle, boolean looping);
+
+	private static native long position(long handle);
+
+	private static native long queuedVideoBytes(long handle);
+
+	private static native long peakQueuedVideoBytes(long handle);
+
+	private static native long maxQueuedVideoBytes();
+
+	private static native int state(long handle);
+
+	private static native boolean hardwareDecoding(long handle);
+
+	private static native void dispose(long handle);
+
+}

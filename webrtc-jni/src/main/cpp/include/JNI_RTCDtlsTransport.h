@@ -47,6 +47,14 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_registerObserver
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_unregisterObserver
   (JNIEnv *, jobject);
 
+/*
+ * Class:     dev_onvoid_webrtc_RTCDtlsTransport
+ * Method:    dispose
+ * Signature: ()V
+ */
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDtlsTransport_dispose
+  (JNIEnv *, jobject);
+
 #ifdef __cplusplus
 }
 #endif

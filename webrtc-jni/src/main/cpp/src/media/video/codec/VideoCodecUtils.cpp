@@ -15,6 +15,7 @@
  */
 
 #include "media/video/codec/VideoCodecUtils.h"
+#include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
 #include "JavaUtils.h"
 #include "JNI_WebRTC.h"
@@ -32,8 +33,7 @@ namespace jni
 
 		// Cleared before logging, since a Java log sink cannot be called
 		// with an exception pending.
-		env->ExceptionDescribe();
-		env->ExceptionClear();
+		ReportPendingException(env);
 
 		RTC_LOG(LS_WARNING) << "Java video codec threw in " << context;
 

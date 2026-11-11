@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.client;
 
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.media.video.VideoContentHint;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 
 /**
@@ -36,5 +37,29 @@ public interface LocalVideo extends LocalTrack {
 	 * @return the subscription that stops the frames.
 	 */
 	Subscription onFrame(Consumer<VideoFrame> handler);
+
+	/**
+	 * @return what the track is hinted to show, {@link
+	 * VideoContentHint#DEFAULT} unless set.
+	 */
+	VideoContentHint contentHint();
+
+	/**
+	 * Hints what the track shows, which decides what its senders keep when
+	 * the network or the CPU cannot keep up: the frame rate for {@link
+	 * VideoContentHint#MOTION}, the resolution for {@link
+	 * VideoContentHint#DETAIL} and {@link VideoContentHint#TEXT}. Can be
+	 * changed while the track is sent, without renegotiating, as when a video
+	 * starts playing in a shared window.
+	 * <p>
+	 * The hint belongs to the track: it applies on every peer the track is
+	 * sent on, and stays when a camera switches. Every sender has taken the
+	 * hint once this returns; a change may make a sender reconfigure its
+	 * encoder. Waits briefly for a WebRTC thread. Does nothing once the
+	 * track ended.
+	 *
+	 * @param hint what the track shows.
+	 */
+	void setContentHint(VideoContentHint hint);
 
 }

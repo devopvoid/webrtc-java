@@ -65,6 +65,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCRtpTransceiver
+	 * Method:    stopImmediately
+	 * Signature: ()V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_stopImmediately
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpTransceiver
 	 * Method:    stopped
 	 * Signature: ()Z
 	 */

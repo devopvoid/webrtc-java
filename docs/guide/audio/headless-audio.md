@@ -103,7 +103,7 @@ CustomAudioSource source = new CustomAudioSource();
 AudioTrack senderTrack = factory.createAudioTrack("audio0", source);
 RTCRtpSender sender = peerConnection.addTrack(senderTrack, Collections.singletonList("stream0"));
 
-// Push PCM frames into the CustomAudioSource (10 ms chunks work well)
+// Push PCM frames into the CustomAudioSource, 10 ms per call
 byte[] pcm = new byte[480 /* frames */ * 2 /* ch */ * 2 /* bytes */];
 source.pushAudio(pcm, 16, 48000, 2, 480);
 
@@ -118,7 +118,7 @@ factory.dispose();
 ```
 
 ::: info
-- Push one chunk of 16-bit PCM per call, with 10 ms being the size WebRTC works with. See [Custom Audio Source](/guide/audio/custom-audio-source) for the format rules.
+- Push one chunk of 10 ms of 16-bit PCM per call. See [Custom Audio Source](/guide/audio/custom-audio-source) for the format rules.
 - Push from a single thread. The audio reaches the sender on the thread that calls `pushAudio`.
 - The module exposes one virtual recording device; selection calls succeed with index 0.
 - Stereo can be enabled/disabled via the standard ADM methods; by default 1 channel is used.

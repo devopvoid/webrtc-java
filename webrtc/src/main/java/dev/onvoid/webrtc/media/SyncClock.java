@@ -16,8 +16,8 @@
 
 package dev.onvoid.webrtc.media;
 
+import dev.onvoid.webrtc.internal.DisposableNativeObject;
 import dev.onvoid.webrtc.internal.NativeLoader;
-import dev.onvoid.webrtc.internal.NativeObject;
 
 /**
  * Synchronized Clock for A/V timing. Provides timing functionality for
@@ -25,7 +25,7 @@ import dev.onvoid.webrtc.internal.NativeObject;
  *
  * @author Alex Andres
  */
-public class SyncClock extends NativeObject {
+public class SyncClock extends DisposableNativeObject {
 
     static {
         try {
@@ -53,7 +53,8 @@ public class SyncClock extends NativeObject {
      * example by {@link dev.onvoid.webrtc.media.video.CustomVideoSource#pushFrame(
      * dev.onvoid.webrtc.media.video.VideoFrame, long) pushFrame} and
      * {@link dev.onvoid.webrtc.media.audio.CustomAudioSource#pushAudio(byte[],
-     * int, int, int, int, long) pushAudio}. It is the monotonic clock WebRTC
+     * int, int, int, int, long) pushAudio}, and the one those sources stamp
+     * media pushed without a timestamp with. It is the monotonic clock WebRTC
      * itself runs on, which is what makes those timestamps comparable with
      * WebRTC's own notion of now.
      * <p>
@@ -91,7 +92,12 @@ public class SyncClock extends NativeObject {
      * Disposes of any native resources held by this clock.
      * This method should be called when the clock is no longer needed
      * to prevent memory leaks.
+     * <p>
+     * A custom audio or video source constructed with this clock shares it,
+     * so the clock may be disposed while such a source is still in use: the
+     * source keeps the native clock until it is disposed itself.
      */
+    @Override
     public native void dispose();
 
     /**

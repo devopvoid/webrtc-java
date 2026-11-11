@@ -15,7 +15,7 @@
  */
 
 #include "media/video/desktop/DesktopCaptureCallback.h"
-#include "media/video/desktop/DesktopFrame.h"
+#include "media/video/desktop/WindowFrameCrop.h"
 #include "api/WebRTCUtils.h"
 #include "JavaClasses.h"
 #include "JavaEnums.h"
@@ -34,8 +34,9 @@
 
 namespace jni
 {
-	DesktopCaptureCallback::DesktopCaptureCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback) :
+	DesktopCaptureCallback::DesktopCaptureCallback(JNIEnv * env, const JavaGlobalRef<jobject> & callback, bool windowSource) :
 		callback(callback),
+		windowSource(windowSource),
 		javaClass(JavaClasses::get<JavaDesktopCaptureCallbackClass>(env)),
 		javaFrameClass(JavaClasses::get<JavaVideoFrameClass>(env))
 	{
@@ -73,17 +74,8 @@ namespace jni
 		int crop_h = height;
 
 #if defined(WEBRTC_WIN)
-		// Crop black window borders.
-		bool fullscreen = frame->stride() == (frame->size().width() * webrtc::DesktopFrame::kBytesPerPixel);
-
-		if (!fullscreen) {
-			const webrtc::DesktopVector & top_left = frame->top_left();
-			const int32_t border = GetSystemMetrics(SM_CXPADDEDBORDER);
-
-			crop_x = border;
-			crop_y = top_left.y() < 0 ? -top_left.y() : 0;
-			crop_w = width - crop_x * 2;
-			crop_h = height - (crop_y + border);
+		if (windowSource) {
+			CropWindowBorder(*frame, GetSystemMetrics(SM_CXPADDEDBORDER), &crop_x, &crop_y, &crop_w, &crop_h);
 		}
 #endif
 
@@ -102,8 +94,8 @@ namespace jni
 			// output. Passing i420Buffer->height() (== crop_h) here made libyuv's internal
 			// bounds check (crop_y + crop_height <= src_height) fail with -1 whenever
 			// crop_y > 0 — i.e. for every maximized window, whose frame sits at
-			// top_left().y() == -border. Screen frames never hit this branch (exact stride,
-			// fullscreen == true), which is why only window capture appeared broken.
+			// top_left().y() == -border. Screen frames are not cropped, which is why only
+			// window capture appeared broken.
 			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, height, crop_w, crop_h,
 			libyuv::kRotate0,
 			libyuv::FOURCC_ARGB);
@@ -117,14 +109,22 @@ namespace jni
 		jlong timestamp = webrtc::TimeMicros() * webrtc::kNumNanosecsPerMicrosec;
 
 		webrtc::scoped_refptr<webrtc::I420Buffer> i420BufferCopy = webrtc::I420Buffer::Copy(*i420Buffer);
-		i420BufferCopy->AddRef();
 
 		try {
 			auto jresult = JavaEnums::toJava(env, result);
 			JavaLocalRef<jobject> jBuffer = I420Buffer::toJava(env, i420BufferCopy);
+
+			// The reference the Java frame gives up when it is released.
+			i420BufferCopy->AddRef();
+
 			JavaLocalRef<jobject> jFrame(env, env->NewObject(javaFrameClass->cls, javaFrameClass->ctor, jBuffer.get(), rotation, timestamp));
 
-			if (jFrame.get() != nullptr) {
+			if (jFrame.get() == nullptr) {
+				// No frame got the buffer that would release it.
+				i420BufferCopy->Release();
+				ExceptionCheck(env);
+			}
+			else {
 				env->CallVoidMethod(callback, javaClass->onCaptureResult, jresult.get(), jFrame.get());
 			}
 		}

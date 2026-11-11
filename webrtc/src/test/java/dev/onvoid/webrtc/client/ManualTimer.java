@@ -29,11 +29,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
+import dev.onvoid.webrtc.internal.Timeouts;
+
 /**
  * A timer on which no time passes: what is scheduled fires only when a test
  * fires it, on the test's thread. Tasks are told apart by the delay they were
  * scheduled with, so that a timeout fires exactly when the test wants it to,
- * however long the work it bounds takes.
+ * however long the work it bounds takes. A delay counts in milliseconds,
+ * rounded up as the runtime rounds it.
  */
 final class ManualTimer extends AbstractExecutorService implements ScheduledExecutorService {
 
@@ -41,6 +44,17 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 
 	private boolean shutdown;
 
+	private boolean eagerPeriodic;
+
+
+	/**
+	 * Has every periodic task scheduled from now on run once before its
+	 * schedule call returns, as a timer thread may, when its first run is due
+	 * at once.
+	 */
+	synchronized void eagerPeriodic() {
+		eagerPeriodic = true;
+	}
 
 	/**
 	 * Fires every task scheduled with the delay that has not been cancelled.
@@ -53,7 +67,7 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 
 		synchronized (this) {
 			for (Task<?> task : tasks) {
-				if (task.delayMillis == delay.toMillis() && !task.isDone()) {
+				if (task.delayMillis == Timeouts.toMillis(delay) && !task.isDone()) {
 					due.add(task);
 				}
 			}
@@ -78,12 +92,39 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 		int count = 0;
 
 		for (Task<?> task : tasks) {
-			if (task.delayMillis == delay.toMillis() && !task.isDone()) {
+			if (task.delayMillis == Timeouts.toMillis(delay) && !task.isDone()) {
 				count++;
 			}
 		}
 
 		return count;
+	}
+
+	/**
+	 * Waits until a task with the delay waits to be fired, which tells that
+	 * another thread got as far as scheduling it.
+	 */
+	void awaitScheduled(Duration delay, long timeoutSeconds) throws InterruptedException {
+		awaitScheduled(delay, 1, timeoutSeconds);
+	}
+
+	/**
+	 * Waits until at least the given number of tasks with the delay wait to
+	 * be fired.
+	 */
+	synchronized void awaitScheduled(Duration delay, int count, long timeoutSeconds) throws InterruptedException {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+
+		while (scheduled(delay) < count) {
+			long left = deadline - System.nanoTime();
+
+			if (left <= 0) {
+				throw new IllegalStateException(count + " tasks with a delay of " + delay
+						+ " were not scheduled within " + timeoutSeconds + " s");
+			}
+
+			TimeUnit.NANOSECONDS.timedWait(this, left);
+		}
 	}
 
 	@Override
@@ -98,7 +139,17 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 
 	@Override
 	public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
-		return add(new Task<>(Executors.callable(command, null), unit.toMillis(period), true));
+		Task<?> task = add(new Task<>(Executors.callable(command, null), unit.toMillis(period), true));
+
+		synchronized (this) {
+			if (!eagerPeriodic) {
+				return task;
+			}
+		}
+
+		task.fire();
+
+		return task;
 	}
 
 	@Override
@@ -153,6 +204,7 @@ final class ManualTimer extends AbstractExecutorService implements ScheduledExec
 		}
 
 		tasks.add(task);
+		notifyAll();
 
 		return task;
 	}

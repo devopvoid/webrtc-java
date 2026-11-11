@@ -15,6 +15,7 @@
  */
 
 #include "media/video/VideoTrackDesktopSource.h"
+#include "media/video/desktop/WindowFrameCrop.h"
 #include "Exception.h"
 
 #include "api/video/i420_buffer.h"
@@ -30,6 +31,9 @@
 #include "modules/desktop_capture/desktop_capturer.h"
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
 #include "modules/desktop_capture/mouse_cursor_monitor.h"
+
+#include <algorithm>
+#include <cmath>
 
 namespace jni
 {
@@ -170,23 +174,15 @@ namespace jni
 		}
 
 #if defined(WEBRTC_WIN)
-		// Crop black window borders.
-		bool fullscreen = frame->stride() == (frame->size().width() * webrtc::DesktopFrame::kBytesPerPixel);
-
-		if (!fullscreen) {
-			const webrtc::DesktopVector& top_left = frame->top_left();
-			const int32_t border = GetSystemMetrics(SM_CXPADDEDBORDER);
-
-			crop_x = border;
-			crop_y = top_left.y() < 0 ? -top_left.y() : 0;
-			crop_w = width - crop_x * 2;
-			crop_h = height - (crop_y + border);
+		if (sourceIsWindow) {
+			CropWindowBorder(*frame, GetSystemMetrics(SM_CXPADDEDBORDER), &crop_x, &crop_y, &crop_w, &crop_h);
 		}
 #endif
 
-		if (!buffer || buffer->width() != crop_w || buffer->height() != crop_h) {
-			buffer = webrtc::I420Buffer::Create(crop_w, crop_h);
-		}
+		// Sinks and video processors may keep a frame beyond this call. The pool
+		// writes only to buffers nothing else references, so that a kept frame
+		// keeps its pixels. It has no size limit and never returns null.
+		webrtc::scoped_refptr<webrtc::I420Buffer> buffer = bufferPool.CreateI420Buffer(crop_w, crop_h);
 
 		const int conversionResult = libyuv::ConvertToI420(
 			frame->data(),
@@ -199,28 +195,22 @@ namespace jni
 			// output. Passing buffer->height() (== crop_h) here made libyuv's internal
 			// bounds check (crop_y + crop_height <= src_height) fail with -1 whenever
 			// crop_y > 0 — i.e. for every maximized window, whose frame sits at
-			// top_left().y() == -border. Screen frames never hit this branch (exact stride,
-			// fullscreen == true), which is why only window capture appeared broken.
+			// top_left().y() == -border. Screen frames are not cropped, which is why only
+			// window capture appeared broken.
 			frame->stride() / webrtc::DesktopFrame::kBytesPerPixel, height, crop_w, crop_h,
 			libyuv::kRotate0,
 			libyuv::FOURCC_ARGB);
 
 		if (conversionResult >= 0) {
 			if (!maxFrameSize.is_empty()) {
-				// Adapt frame size to contraints.
-				int max_width = maxFrameSize.width();
-				int max_height = maxFrameSize.height();
+				// One factor for both limits: the frame fits both and keeps its
+				// aspect ratio. A very narrow limit must not round a side to 0.
+				const double scale = std::min({ 1.0,
+					maxFrameSize.width() / static_cast<double>(adapted_width),
+					maxFrameSize.height() / static_cast<double>(adapted_height) });
 
-				if (adapted_width > max_width) {
-					double scale = max_width / (double)adapted_width;
-					adapted_width = max_width;
-					adapted_height = (int)(adapted_height * scale);
-				}
-				else if (adapted_height > max_height) {
-					double scale = max_height / (double)adapted_height;
-					adapted_width = (int)(adapted_width * scale);
-					adapted_height = max_height;
-				}
+				adapted_width = std::max(1, static_cast<int>(std::lround(adapted_width * scale)));
+				adapted_height = std::max(1, static_cast<int>(std::lround(adapted_height * scale)));
 			}
 
 			if (adapted_width != width || adapted_height != height) {
@@ -308,6 +298,15 @@ namespace jni
 				: webrtc::DesktopCapturer::CreateScreenCapturer(options);
 		}
 
+		if (!inner) {
+			RTC_LOG(LS_ERROR) << "VideoTrackDesktopSource: No desktop capture backend available. "
+				"Possible causes: no display, missing X11 extensions, a Wayland session "
+				"without PipeWire support, or snap confinement.";
+
+			terminate();
+			return;
+		}
+
 		std::unique_ptr<webrtc::DesktopCapturer> capturer;
 		capturer.reset(new webrtc::DesktopAndCursorComposer(std::move(inner), options));
 
@@ -351,5 +350,9 @@ namespace jni
 		}
 
 		capturer.reset();
+
+		// Frees what a burst of kept frames left behind. Buffers still in use
+		// stay with their frames.
+		bufferPool.Release();
 	}
 }

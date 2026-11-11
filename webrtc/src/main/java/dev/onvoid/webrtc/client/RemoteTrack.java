@@ -17,7 +17,10 @@
 package dev.onvoid.webrtc.client;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 
 /**
  * A track the remote peer sends, handed to {@link Peer#onTrack}. It ends when
@@ -67,6 +70,26 @@ public interface RemoteTrack {
 	 * @throws IllegalStateException for a video track.
 	 */
 	RemoteAudio asAudio();
+
+	/**
+	 * Sets the transform that every encoded frame of this track passes
+	 * through, after the depacketizer and before the decoder, in place of the
+	 * one set before, such as the {@link PeerOptions.Builder#receiveTransform
+	 * receive transform} of the peer. Frames that arrive before the future
+	 * completes pass the one before; set the peer's receive transform to have
+	 * it in place from the first frame.
+	 * <p>
+	 * The transform runs on a thread of this track's receiver, not on the
+	 * peer's event thread; see {@link RTCEncodedFrameTransformer}. A frame it
+	 * throws on is dropped, and the first such failure reaches the peer's
+	 * {@code onError} handlers.
+	 *
+	 * @param transform the transform, or null to receive frames unchanged.
+	 *
+	 * @return a future that completes once the transform is set, and fails
+	 * with an {@link IllegalStateException} once the track ended.
+	 */
+	CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform);
 
 	/**
 	 * @return true when the remote peer sends no media on the track for now.

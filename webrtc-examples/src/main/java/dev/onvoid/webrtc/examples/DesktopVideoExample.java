@@ -31,6 +31,7 @@ import dev.onvoid.webrtc.client.Signaling;
 import dev.onvoid.webrtc.client.SignalingPair;
 import dev.onvoid.webrtc.client.VideoStats;
 import dev.onvoid.webrtc.client.WebRtc;
+import dev.onvoid.webrtc.media.video.VideoContentHint;
 import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 
 /**
@@ -94,6 +95,10 @@ public class DesktopVideoExample {
 
             // Frames larger than 1920x1080 are scaled down, keeping their aspect ratio.
             LocalVideo screen = rtc.media().screen(options.frameRate(30).maxSize(1920, 1080).build());
+
+            // Keeps text readable when the bandwidth runs short, lowering the frame rate instead.
+            // Switch to MOTION while a video plays on the screen, the peers go on sending.
+            screen.setContentHint(VideoContentHint.TEXT);
 
             System.out.println("Sharing " + describe(source));
 

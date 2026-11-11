@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.RTCEncodedFrameTransformer;
 import dev.onvoid.webrtc.RTCRtpReceiver;
 import dev.onvoid.webrtc.client.internal.EncodedFrames;
 import dev.onvoid.webrtc.internal.NativeApi;
@@ -135,6 +136,13 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 	}
 
 	@Override
+	public CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform) {
+		RTCEncodedFrameTransformer guarded = peer.guard(transform, "the track " + id + " of " + peer.name);
+
+		return onReceiver("Setting the transform", receiver -> receiver.setTransform(guarded));
+	}
+
+	@Override
 	public String toString() {
 		return "RemoteTrack[" + kind + ", " + id + "]";
 	}
@@ -174,6 +182,39 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 				}
 			}));
 		});
+	}
+
+	/**
+	 * Uses the native receiver on the peer's control executor, for an
+	 * operation of the application.
+	 *
+	 * @param what names the operation in the error of a failure.
+	 *
+	 * @return a future that completes once the receiver was used, and fails
+	 * once the track ended or the peer closed.
+	 */
+	CompletableFuture<Void> onReceiver(String what, Consumer<RTCRtpReceiver> operation) {
+		CompletableFuture<Void> result = new CompletableFuture<>();
+
+		peer.control.execute(() -> {
+			try {
+				if (peer.isClosed()) {
+					throw peer.closedError();
+				}
+				if (ended) {
+					throw new IllegalStateException("The track " + id + " ended");
+				}
+
+				operation.accept(receiver);
+				result.complete(null);
+			}
+			catch (Throwable e) {
+				result.completeExceptionally(e instanceof IllegalStateException
+						? e : PeerImpl.asWebRtcException(e, what + " of the track " + id + " failed"));
+			}
+		}, () -> result.completeExceptionally(new PeerClosedException("The runtime is closed")));
+
+		return peer.toPublic(result);
 	}
 
 	/** Detaches everything from the native track, on the control executor. */

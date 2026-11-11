@@ -32,7 +32,13 @@
 
 - (void)capturer:(RTC_OBJC_TYPE(RTCVideoCapturer) *)capturer
     didCaptureVideoFrame:(RTC_OBJC_TYPE(RTCVideoFrame) *)frame {
-  _videoCapturer->OnCapturedFrame(frame);
+  // Stopping the capturer is asynchronous, so frames may still arrive after
+  // the capture detached itself (and may already be deleted).
+  @synchronized (self) {
+    if (_videoCapturer) {
+      _videoCapturer->OnCapturedFrame(frame);
+    }
+  }
 }
 
 @end
@@ -41,19 +47,39 @@
 namespace jni
 {
 	VideoCaptureMac::VideoCaptureMac() : VideoCaptureBase(),
+		callback(nullptr),
 		cameraVideoCapturer(nullptr)
 	{
 	}
 
 	VideoCaptureMac::~VideoCaptureMac()
-    {
-        destroy();
-    }
+	{
+		destroy();
+	}
+
+	void VideoCaptureMac::setVideoSink(std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> newSink)
+	{
+		std::unique_ptr<webrtc::VideoSinkInterface<webrtc::VideoFrame>> oldSink;
+
+		{
+			webrtc::MutexLock lock(&sinkMutex);
+
+			oldSink = std::move(sink);
+			sink = std::move(newSink);
+		}
+
+		// Destroyed outside the lock; no frame is delivered to it any more.
+		oldSink.reset();
+	}
 
 	void VideoCaptureMac::start()
 	{
 		if (!device) {
-			throw new Exception("Video device must be set");
+			throw Exception("Video device must be set");
+		}
+
+		if (cameraVideoCapturer) {
+			return;
 		}
 
 		AVCaptureDevice * captureDevice = nullptr;
@@ -77,13 +103,21 @@ namespace jni
         }
 
         if (!captureDevice) {
-            throw new Exception("No video capture devices available");
+            throw Exception("No video capture devices available");
         }
 
-        VideoCaptureCallback * callback = [[VideoCaptureCallback alloc] init];
+        callback = [[VideoCaptureCallback alloc] init];
         callback.videoCapturer = this;
 
         cameraVideoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:callback];
+
+        if (!cameraVideoCapturer) {
+            std::string deviceName = captureDevice.localizedName.UTF8String;
+
+            destroy();
+
+            throw Exception("Create video capturer for device %s failed", deviceName.c_str());
+        }
 
         AVCaptureDeviceFormat * selectedFormat = nullptr;
         int currentDiff = INT_MAX;
@@ -108,11 +142,6 @@ namespace jni
             selectedFormat = captureDevice.activeFormat;
         }
 
-		if (!cameraVideoCapturer) {
-		    std::string deviceName = captureDevice.localizedName.UTF8String;
-			throw new Exception("Create VideoCaptureModule for UID %s failed", deviceName.c_str());
-		}
-
 		void (^CaptureCompletionHandler)(NSError * _Nullable error) = ^(NSError * _Nullable error) {
             if (error) {
                 RTCLogError(@"Failed to start capture: %@", error.localizedDescription);
@@ -135,15 +164,31 @@ namespace jni
 
 	void VideoCaptureMac::destroy()
 	{
-        if (!cameraVideoCapturer) {
-            return;
-        }
+		if (cameraVideoCapturer) {
+			[cameraVideoCapturer stopCapture];
+		}
 
-        [cameraVideoCapturer stopCapture];
-        cameraVideoCapturer = nullptr;
+		if (callback) {
+			// Waits for a frame being delivered; none reaches this capture afterwards.
+			@synchronized (callback) {
+				callback.videoCapturer = nullptr;
+			}
+		}
+
+#if !__has_feature(objc_arc)
+		// The capturer keeps itself alive until its asynchronous stop has run,
+		// and holds its delegate only weakly.
+		[cameraVideoCapturer release];
+		[callback release];
+#endif
+
+		cameraVideoCapturer = nullptr;
+		callback = nullptr;
 	}
 
     void VideoCaptureMac::OnCapturedFrame(RTC_OBJC_TYPE(RTCVideoFrame) * frame) {
+        webrtc::MutexLock lock(&sinkMutex);
+
         if (!sink) {
             return;
         }

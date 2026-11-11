@@ -15,6 +15,7 @@
  */
 
 #include "JNI_HardwareVideoDecoderFactory.h"
+#include "JavaBoundary.h"
 #include "media/video/codec/DefaultVideoCodecFactories.h"
 #include "media/video/codec/VideoCodecInfo.h"
 #include "JavaUtils.h"
@@ -22,26 +23,28 @@
 JNIEXPORT jobjectArray JNICALL Java_dev_onvoid_webrtc_media_video_codec_HardwareVideoDecoderFactory_getCodecsInternal
 (JNIEnv * env, jclass caller)
 {
-	try {
-		// One factory for both lists, as making one probes the hardware.
-		auto factory = jni::CreateHardwareVideoDecoderFactory();
+	return jni::CallFromJava(env, [&]() -> jobjectArray {
+		try {
+			// One factory for both lists, as making one probes the hardware.
+			auto factory = jni::CreateHardwareVideoDecoderFactory();
 
-		auto supported = jni::VideoCodecInfo::toJavaArray(env, factory->GetSupportedFormats());
-		auto hardware = jni::VideoCodecInfo::toJavaArray(env, jni::GetHardwareVideoDecoderFormats(*factory));
-		auto arrayClass = jni::JavaLocalRef<jclass>(env, env->GetObjectClass(supported.get()));
+			auto supported = jni::VideoCodecInfo::toJavaArray(env, factory->GetSupportedFormats());
+			auto hardware = jni::VideoCodecInfo::toJavaArray(env, jni::GetHardwareVideoDecoderFormats(*factory));
+			auto arrayClass = jni::JavaLocalRef<jclass>(env, env->GetObjectClass(supported.get()));
 
-		jobjectArray codecs = env->NewObjectArray(2, arrayClass.get(), nullptr);
+			jobjectArray codecs = env->NewObjectArray(2, arrayClass.get(), nullptr);
 
-		ExceptionCheck(env);
+			ExceptionCheck(env);
 
-		env->SetObjectArrayElement(codecs, 0, supported.get());
-		env->SetObjectArrayElement(codecs, 1, hardware.get());
+			env->SetObjectArrayElement(codecs, 0, supported.get());
+			env->SetObjectArrayElement(codecs, 1, hardware.get());
 
-		return codecs;
-	}
-	catch (...) {
-		ThrowCxxJavaException(env);
-	}
+			return codecs;
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
 
-	return nullptr;
+		return nullptr;
+	});
 }

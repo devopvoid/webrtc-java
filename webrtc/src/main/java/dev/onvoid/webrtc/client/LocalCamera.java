@@ -41,6 +41,10 @@ public interface LocalCamera extends LocalVideo {
 	 * @return a future that completes once every peer sends the new camera. It
 	 * fails with a {@link MediaException} if the camera cannot be opened, or is
 	 * already open with other options, and the track keeps its camera then.
+	 * It fails with a {@link WebRtcException} if a peer does not take the new
+	 * camera within the operation timeout; the track goes back to its camera
+	 * then, or keeps the new one if the device had to close the old one first.
+	 * A track that closed its camera first and can open neither one ends.
 	 */
 	CompletableFuture<Void> switchCamera(VideoDevice device);
 

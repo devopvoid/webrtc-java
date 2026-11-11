@@ -142,7 +142,7 @@ public final class EncodedImage {
 	}
 
 	/**
-	 * @return The rotation of the frame in degrees, a multiple of 90.
+	 * @return The rotation of the frame in degrees: 0, 90, 180 or 270.
 	 */
 	public int getRotation() {
 		return rotation;
@@ -301,7 +301,7 @@ public final class EncodedImage {
 
 		/**
 		 * @param rotation The rotation of the frame in degrees, a multiple of
-		 *                 90.
+		 *                 90. It is normalized to 0, 90, 180 or 270.
 		 *
 		 * @return This builder.
 		 */
@@ -343,8 +343,12 @@ public final class EncodedImage {
 				throw new IllegalArgumentException("Size must not be negative");
 			}
 
+			// Native code takes it for a webrtc::VideoRotation, which has only
+			// these four values.
+			int normalizedRotation = ((rotation % 360) + 360) % 360;
+
 			return new EncodedImage(buffer, encodedWidth, encodedHeight,
-					captureTimeNs, frameType, rotation, qp);
+					captureTimeNs, frameType, normalizedRotation, qp);
 		}
 
 	}

@@ -1,0 +1,378 @@
+/*
+ * Copyright 2026 Alex Andres
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.onvoid.webrtc.media.player;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+
+import dev.onvoid.webrtc.media.audio.CustomAudioSource;
+import dev.onvoid.webrtc.media.video.CustomVideoSource;
+
+/**
+ * A media file or stream as a pair of media sources, ready to make tracks
+ * from.
+ * <p>
+ * This is the short way to do what the module is for. It opens the source,
+ * makes a {@link CustomVideoSource} and a {@link CustomAudioSource} for
+ * whichever streams it actually has, and wires a {@link MediaPlayer} to feed
+ * them:
+ * <pre>{@code
+ * MediaFileSource source = new MediaFileSource(Path.of("movie.mp4"));
+ *
+ * VideoTrack videoTrack = factory.createVideoTrack("video", source.getVideoSource());
+ * AudioTrack audioTrack = factory.createAudioTrack("audio", source.getAudioSource());
+ *
+ * peerConnection.addTrack(videoTrack, List.of("stream"));
+ * peerConnection.addTrack(audioTrack, List.of("stream"));
+ *
+ * source.play();
+ * }</pre>
+ * <p>
+ * A source with no video has no video source, and likewise for audio, so check
+ * {@link #getVideoSource()} and {@link #getAudioSource()} for {@code null}
+ * before making a track, or ask {@link #getInfo()} first.
+ * <p>
+ * The audio is pushed into its track, so the same factory may send the
+ * microphone beside it.
+ * <p>
+ * Closing this releases the player and both media sources. Dispose of any
+ * tracks made from them first.
+ *
+ * @author Alex Andres
+ */
+public class MediaFileSource implements AutoCloseable {
+
+	private final MediaInfo info;
+
+	private final CustomVideoSource videoSource;
+
+	private final CustomAudioSource audioSource;
+
+	private final MediaPlayer player;
+
+	/**
+	 * Not guarded by a lock: a close holding one while it waits for the
+	 * player's threads would never end if one of them, in a listener or a
+	 * sink, closed this source as well.
+	 */
+	private final AtomicBoolean closed = new AtomicBoolean();
+
+
+	/**
+	 * Opens the media file at the given path.
+	 *
+	 * @param path The path of the file to play.
+	 *
+	 * @throws IOException if the source cannot be opened or decoded.
+	 */
+	public MediaFileSource(Path path) throws IOException {
+		this(path.toAbsolutePath().toString());
+	}
+
+	/**
+	 * Opens the media file at the given path, decoding its video in hardware
+	 * where the platform can, as {@link MediaPlayer#MediaPlayer(MediaReader,
+	 * CustomVideoSource, CustomAudioSource, boolean)} describes.
+	 *
+	 * @param path             The path of the file to play.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
+	 *
+	 * @throws IOException if the source cannot be opened or decoded.
+	 */
+	public MediaFileSource(Path path, boolean hardwareDecoding) throws IOException {
+		this(path.toAbsolutePath().toString(), MediaReader.DEFAULT_TIMEOUT, hardwareDecoding);
+	}
+
+	/**
+	 * Opens the given media source.
+	 *
+	 * @param source The path or {@code rtsp://} URL of the source to play.
+	 *
+	 * @throws IOException if the source cannot be opened or decoded.
+	 */
+	public MediaFileSource(String source) throws IOException {
+		this(source, MediaReader.DEFAULT_TIMEOUT);
+	}
+
+	/**
+	 * Opens the given media source, decoding its video in hardware where the
+	 * platform can, as {@link MediaPlayer#MediaPlayer(MediaReader,
+	 * CustomVideoSource, CustomAudioSource, boolean)} describes.
+	 *
+	 * @param source           The path or {@code rtsp://} URL of the source to play.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
+	 *
+	 * @throws IOException if the source cannot be opened or decoded.
+	 */
+	public MediaFileSource(String source, boolean hardwareDecoding) throws IOException {
+		this(source, MediaReader.DEFAULT_TIMEOUT, hardwareDecoding);
+	}
+
+	/**
+	 * Opens the given media source, allowing each operation on it the given
+	 * time before it fails, as {@link MediaReader} describes.
+	 *
+	 * @param source  The path or {@code rtsp://} URL of the source to play.
+	 * @param timeout How long opening, and later any single read, may wait on
+	 *                the source. {@link Duration#ZERO} waits as long as it
+	 *                takes.
+	 *
+	 * @throws IOException if the source cannot be opened in time, or decoded.
+	 */
+	public MediaFileSource(String source, Duration timeout) throws IOException {
+		this(source, timeout, false);
+	}
+
+	/**
+	 * Opens the given media source, allowing each operation on it the given
+	 * time before it fails, and decoding its video in hardware where the
+	 * platform can, as {@link MediaPlayer#MediaPlayer(MediaReader,
+	 * CustomVideoSource, CustomAudioSource, boolean)} describes.
+	 *
+	 * @param source           The path or {@code rtsp://} URL of the source to play.
+	 * @param timeout          How long opening, and later any single read, may
+	 *                         wait on the source. {@link Duration#ZERO} waits
+	 *                         as long as it takes.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
+	 *
+	 * @throws IOException if the source cannot be opened in time, or decoded.
+	 */
+	public MediaFileSource(String source, Duration timeout, boolean hardwareDecoding) throws IOException {
+		this(new MediaReader(source, timeout), CustomVideoSource::new, CustomAudioSource::new,
+				hardwareDecoding);
+	}
+
+	/**
+	 * Builds on a reader that is open, which this source takes over whether
+	 * or not it is made. The suppliers make the media sources, which tests
+	 * fail on purpose.
+	 */
+	MediaFileSource(MediaReader reader, Supplier<CustomVideoSource> videoSources,
+			Supplier<CustomAudioSource> audioSources, boolean hardwareDecoding) throws IOException {
+		MediaInfo readerInfo;
+		CustomVideoSource video = null;
+		CustomAudioSource audio = null;
+		MediaPlayer created;
+
+		try {
+			// Read while the reader is still ours: the player takes it over.
+			readerInfo = reader.getInfo();
+
+			video = readerInfo.hasVideo() ? videoSources.get() : null;
+			audio = readerInfo.hasAudio() ? audioSources.get() : null;
+
+			created = new MediaPlayer(reader, video, audio, hardwareDecoding);
+		}
+		catch (Throwable e) {
+			// Nothing was taken over by a player, so whatever was made here,
+			// the reader with its open file included, is released rather than
+			// left to leak. Closing a reader a player took over does nothing.
+			release(e, video != null ? video::dispose : null);
+			release(e, audio != null ? audio::dispose : null);
+			release(e, reader::close);
+
+			throw e;
+		}
+
+		info = readerInfo;
+		videoSource = video;
+		audioSource = audio;
+		player = created;
+	}
+
+	/**
+	 * Returns what this source contains.
+	 *
+	 * @return The media information.
+	 */
+	public MediaInfo getInfo() {
+		return info;
+	}
+
+	/**
+	 * Returns the video source fed by this file, to make a video track from.
+	 *
+	 * @return The video source, or {@code null} if the source has no video.
+	 */
+	public CustomVideoSource getVideoSource() {
+		return videoSource;
+	}
+
+	/**
+	 * Returns the audio source fed by this file, to make an audio track from.
+	 *
+	 * @return The audio source, or {@code null} if the source has no audio.
+	 */
+	public CustomAudioSource getAudioSource() {
+		return audioSource;
+	}
+
+	/**
+	 * Returns the player driving this source, for anything beyond the methods
+	 * below.
+	 *
+	 * @return The player.
+	 */
+	public MediaPlayer getPlayer() {
+		return player;
+	}
+
+	/**
+	 * Sets what to report playback events to.
+	 *
+	 * @param listener The listener, or {@code null} to stop reporting.
+	 */
+	public void setListener(MediaPlayerListener listener) {
+		player.setListener(listener);
+	}
+
+	/**
+	 * Starts or resumes playback.
+	 */
+	public void play() {
+		player.play();
+	}
+
+	/**
+	 * Holds playback where it is.
+	 */
+	public void pause() {
+		player.pause();
+	}
+
+	/**
+	 * Moves playback to the given position.
+	 *
+	 * @param positionUs The position in microseconds from the start.
+	 *
+	 * @see MediaPlayer#seek(long)
+	 */
+	public void seek(long positionUs) {
+		player.seek(positionUs);
+	}
+
+	/**
+	 * Moves playback to the keyframe at or before the given position, which
+	 * takes no longer however far the keyframes are apart.
+	 *
+	 * @param positionUs The position in microseconds from the start.
+	 *
+	 * @see MediaPlayer#fastSeek(long)
+	 */
+	public void fastSeek(long positionUs) {
+		player.fastSeek(positionUs);
+	}
+
+	/**
+	 * Sets whether the source starts again when it runs out.
+	 *
+	 * @param looping True to play the source over and over.
+	 */
+	public void setLooping(boolean looping) {
+		player.setLooping(looping);
+	}
+
+	/**
+	 * Returns where playback has got to, in microseconds.
+	 *
+	 * @return The position in microseconds.
+	 */
+	public long getPositionUs() {
+		return player.getPositionUs();
+	}
+
+	/**
+	 * Returns how much memory the decoded pictures waiting to be delivered
+	 * take right now.
+	 *
+	 * @return The size in bytes.
+	 *
+	 * @see MediaPlayer#getQueuedVideoBytes()
+	 */
+	public long getQueuedVideoBytes() {
+		return player.getQueuedVideoBytes();
+	}
+
+	/**
+	 * Returns the most memory the decoded pictures waiting to be delivered
+	 * have taken so far.
+	 *
+	 * @return The size in bytes.
+	 *
+	 * @see MediaPlayer#getPeakQueuedVideoBytes()
+	 */
+	public long getPeakQueuedVideoBytes() {
+		return player.getPeakQueuedVideoBytes();
+	}
+
+	/**
+	 * Returns what the player is currently doing.
+	 *
+	 * @return The player state.
+	 */
+	public MediaPlayerState getState() {
+		return player.getState();
+	}
+
+	/**
+	 * Stops playback and releases the player and both media sources. Closing
+	 * a source that is already closed does nothing.
+	 */
+	@Override
+	public void close() {
+		if (!closed.compareAndSet(false, true)) {
+			return;
+		}
+
+		player.close();
+
+		disposeSources();
+	}
+
+	private void disposeSources() {
+		if (videoSource != null) {
+			videoSource.dispose();
+		}
+		if (audioSource != null) {
+			audioSource.dispose();
+		}
+	}
+
+	/**
+	 * Releases something made before the error, which a failing release only
+	 * adds to.
+	 */
+	private static void release(Throwable error, Runnable release) {
+		if (release == null) {
+			return;
+		}
+
+		try {
+			release.run();
+		}
+		catch (Throwable e) {
+			error.addSuppressed(e);
+		}
+	}
+
+}

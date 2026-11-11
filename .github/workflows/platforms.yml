@@ -52,10 +52,10 @@ jobs:
             runs-on: ubuntu-22.04
             profile: linux-aarch32
           - name: macos_arm64
-            runs-on: macos-14
+            runs-on: macos-15
             profile: ''
           - name: macos_x86-64
-            runs-on: macos-14
+            runs-on: macos-15
             profile: macos-cross-x86_64
     runs-on: ${{ matrix.platform.runs-on }}
     steps:
@@ -132,7 +132,7 @@ jobs:
             java-distribution: liberica
             java-architecture: armv7
           - name: macos_arm64
-            runs-on: macos-14
+            runs-on: macos-15
             classifier: macos-aarch64
             java-distribution: temurin
             java-architecture: ''
@@ -157,3 +157,122 @@ jobs:
           java-distribution: ${{ matrix.platform.java-distribution }}
           java-architecture: ${{ matrix.platform.java-architecture }}
           version: ${{ inputs.version }}
+
+  # The tests once more under -Xcheck:jni, once per OS: the JNI glue is shared,
+  # but the device modules, capturers and hardware codecs that call back into
+  # Java are not, so each OS has JNI code of its own. One architecture each is
+  # enough, since that code is the same across them. It fails on any JNI error
+  # or warning, see the test-natives action. Disabled for now.
+  jni-check:
+    name: jni-check (${{ matrix.platform.name }})
+    if: false
+    needs: build
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: linux_x86-64
+            runs-on: ubuntu-22.04
+            classifier: linux-x86_64
+          - name: macos_arm64
+            runs-on: macos-15
+            classifier: macos-aarch64
+          - name: windows_x86_64
+            runs-on: windows-2022
+            classifier: windows-x86_64
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Test natives under -Xcheck:jni
+        uses: ./.github/actions/test-natives
+        with:
+          platform-name: ${{ matrix.platform.name }}
+          classifier: ${{ matrix.platform.classifier }}
+          profile: ${{ matrix.platform.classifier }}
+          java-distribution: temurin
+          version: ${{ inputs.version }}
+          jni-check: 'true'
+
+  # The native image example, built with GraalVM against the natives the build
+  # job uploaded, which the image carries inside itself. It connects two peers
+  # and exits with an error unless video, audio, channel messages, statistics
+  # and log messages all arrived. --exact-reachability-metadata makes anything
+  # the metadata of webrtc-java lacks fail at once, which would otherwise only
+  # fail where a lookup happens to find nothing.
+  native-image:
+    name: native-image (linux_x86-64)
+    needs: build
+    timeout-minutes: 30
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download natives
+        uses: actions/download-artifact@v8
+        with:
+          name: natives-linux_x86-64
+          path: natives
+
+      - name: Download media natives
+        uses: actions/download-artifact@v8
+        with:
+          name: natives-media-linux_x86-64
+          path: natives
+
+      - name: Install runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-6 libxext6 libxfixes3 libxdamage1 libxtst6 libxrandr2 libxcomposite1 libglib2.0-0 libgbm1 libdrm2
+
+      # Through setup-java, as this repository allows only actions of GitHub
+      # itself: an action it does not allow makes the whole workflow fail to
+      # start. Its graalvm distribution is Oracle GraalVM, native-image included.
+      - name: Set up GraalVM
+        uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'graalvm'
+
+      - name: Set the release dry-run version
+        if: inputs.version != ''
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: mvn -B versions:set -DnewVersion="$RELEASE_VERSION" -DgenerateBackupPoms=false
+
+      # The example resolves the libraries from the local repository, natives
+      # included, as an application does. webrtc attaches its natives from
+      # webrtc-jni/target and needs them installed beforehand, since it depends
+      # on them itself; webrtc-media packages its own from target/natives.
+      - name: Install the libraries with the natives
+        run: |
+          VERSION=$(sed -n 's|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml | head -n 1)
+          WEBRTC_JAR=$(find natives -name 'webrtc-java-*-linux-x86_64.jar' ! -name 'webrtc-java-media-*' | head -n 1)
+          MEDIA_JAR=$(find natives -name 'webrtc-java-media-*-linux-x86_64.jar' | head -n 1)
+
+          if [ -z "$VERSION" ] || [ -z "$WEBRTC_JAR" ] || [ -z "$MEDIA_JAR" ]; then
+            echo "Missing the version ($VERSION) or a native jar ($WEBRTC_JAR, $MEDIA_JAR)" >&2
+            exit 1
+          fi
+
+          mvn -B -q install:install-file -Dfile="$WEBRTC_JAR" -DgroupId=dev.onvoid.webrtc \
+            -DartifactId=webrtc-java -Dversion="$VERSION" -Dpackaging=jar -Dclassifier=linux-x86_64
+
+          mkdir -p webrtc-jni/target webrtc-media/target/natives
+          cp "$WEBRTC_JAR" "webrtc-jni/target/webrtc-java-$VERSION-linux-x86_64.jar"
+          (cd webrtc-media/target/natives && "$JAVA_HOME/bin/jar" xf "$GITHUB_WORKSPACE/$MEDIA_JAR" && rm -rf META-INF)
+
+          mvn -B -pl .,webrtc,webrtc-media,webrtc-swing,webrtc-javafx install -DskipNativeBuild -DskipTests
+
+      - name: Build the native image
+        run: mvn -B -pl webrtc-examples -Pnative package
+
+      - name: Run the native image
+        run: timeout 120 webrtc-examples/target/webrtc-native-image-example

@@ -15,6 +15,10 @@
  */
 
 #include "JNI_NativeApi.h"
+#include "JavaBoundary.h"
+#include "NativeHandle.h"
+#include "media/audio/CustomAudioSource.h"
+#include "media/video/CustomVideoSource.h"
 
 #include "api/ExtensionApi.h"
 #include "api/EncodedFrameTransformer.h"
@@ -32,33 +36,104 @@ namespace
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_tableAddress
 (JNIEnv * env, jclass caller)
 {
-	return reinterpret_cast<jlong>(jni::GetExtensionApi());
+	return jni::CallFromJava(env, [&]() -> jlong {
+		return reinterpret_cast<jlong>(jni::GetExtensionApi());
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_retainVideoSource
+(JNIEnv * env, jclass caller, jobject javaSource)
+{
+	return jni::CallFromJava(env, [&]() -> jlong {
+		if (javaSource == nullptr) {
+			return 0;
+		}
+
+		jni::NativeLease<jni::CustomVideoSource> source(env, javaSource);
+		CHECK_HANDLEV(source, 0);
+
+		// AddRef while the lease still defers any concurrent dispose.
+		source->AddRef();
+
+		return reinterpret_cast<jlong>(source.get());
+	});
+}
+
+JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_retainAudioSource
+(JNIEnv * env, jclass caller, jobject javaSource)
+{
+	return jni::CallFromJava(env, [&]() -> jlong {
+		if (javaSource == nullptr) {
+			return 0;
+		}
+
+		jni::NativeLease<jni::CustomAudioSource> source(env, javaSource);
+		CHECK_HANDLEV(source, 0);
+
+		source->AddRef();
+
+		return reinterpret_cast<jlong>(source.get());
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseVideoSource
+(JNIEnv * env, jclass caller, jlong source)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::GetExtensionApi()->video_source_release(reinterpret_cast<void *>(source));
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseAudioSource
+(JNIEnv * env, jclass caller, jlong source)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::GetExtensionApi()->audio_source_release(reinterpret_cast<void *>(source));
+	});
 }
 
 JNIEXPORT jint JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_version
 (JNIEnv * env, jclass caller)
 {
-	return static_cast<jint>(jni::GetExtensionApi()->version);
+	return jni::CallFromJava(env, [&]() -> jint {
+		return static_cast<jint>(jni::GetExtensionApi()->version);
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_senderFrames
 (JNIEnv * env, jclass caller, jlong handle)
 {
-	auto sender = reinterpret_cast<webrtc::RtpSenderInterface *>(handle);
+	return jni::CallFromJava(env, [&]() -> jlong {
+		auto sender = reinterpret_cast<webrtc::RtpSenderInterface *>(handle);
 
-	return sender != nullptr ? Retained(jni::EncodedFrameTransformer::Of(sender)) : 0;
+		return sender != nullptr ? Retained(jni::EncodedFrameTransformer::Of(sender)) : 0;
+	});
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_receiverFrames
 (JNIEnv * env, jclass caller, jlong handle)
 {
-	auto receiver = reinterpret_cast<webrtc::RtpReceiverInterface *>(handle);
+	return jni::CallFromJava(env, [&]() -> jlong {
+		auto receiver = reinterpret_cast<webrtc::RtpReceiverInterface *>(handle);
 
-	return receiver != nullptr ? Retained(jni::EncodedFrameTransformer::Of(receiver)) : 0;
+		return receiver != nullptr ? Retained(jni::EncodedFrameTransformer::Of(receiver)) : 0;
+	});
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_framesSealed
+(JNIEnv * env, jclass caller, jlong frames)
+{
+	return jni::CallFromJava(env, [&]() -> jboolean {
+		auto transformer = reinterpret_cast<jni::EncodedFrameTransformer *>(frames);
+
+		return transformer != nullptr && transformer->IsSealed() ? JNI_TRUE : JNI_FALSE;
+	});
 }
 
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_internal_NativeApi_releaseFrames
 (JNIEnv * env, jclass caller, jlong frames)
 {
-	jni::GetExtensionApi()->encoded_frames_release(reinterpret_cast<void *>(frames));
+	jni::CallFromJava(env, [&]() {
+		jni::GetExtensionApi()->encoded_frames_release(reinterpret_cast<void *>(frames));
+	});
 }
