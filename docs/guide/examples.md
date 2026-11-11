@@ -22,6 +22,23 @@ This example is the shortest way to see a complete call working, and a starting 
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ClientApiExample" -D"exec.args=10"
 ```
 
+## Native Image
+
+The [`NativeImageExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/NativeImageExample.java) is made to be compiled into a [GraalVM native image](/guide/advanced/native-image), a single executable that needs no installed Java runtime. It connects two peers in one process and checks itself: it exits with status 0 only if everything arrived.
+
+**Key features demonstrated:**
+- Loading the native library that the image carries inside itself
+- Callbacks from WebRTC's threads: negotiation, ICE candidates, tracks and channel messages
+- Video frames, audio and statistics that the native code hands to Java
+- A log sink, called by WebRTC's logging from any thread
+
+Build it with GraalVM 24 or later as `JAVA_HOME`, then run it:
+
+```bash
+mvn -pl webrtc-examples -Pnative package
+webrtc-examples/target/webrtc-native-image-example
+```
+
 ## File Transfer
 
 The [`FileTransferExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/FileTransferExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends a file from one to the other with [File Transfer](/guide/data/file-transfer). It needs no audio or video hardware and no server.

@@ -110,14 +110,21 @@ public class AudioTrack extends MediaStreamTrack {
 	/**
 	 * Whether the sink implements the method that receives the RTP packets,
 	 * which are only collected for a sink that does.
+	 * <p>
+	 * Every sink has the method, if only the default one. A GraalVM native
+	 * image answers the question only for classes registered for it, and
+	 * otherwise throws a NoSuchMethodException or, when it requires exact
+	 * metadata, a MissingReflectionRegistrationError. Then the packets are
+	 * collected: the default method passes the audio on without them, so a
+	 * sink that does not want them only costs the collecting.
 	 */
 	private static boolean takesPacketInfos(AudioTrackSink sink) {
 		try {
 			return sink.getClass().getMethod("onData", byte[].class, int.class, int.class, int.class,
 					int.class, RTCRtpPacketInfo[].class).getDeclaringClass() != AudioTrackSink.class;
 		}
-		catch (NoSuchMethodException e) {
-			return false;
+		catch (NoSuchMethodException | LinkageError e) {
+			return true;
 		}
 	}
 

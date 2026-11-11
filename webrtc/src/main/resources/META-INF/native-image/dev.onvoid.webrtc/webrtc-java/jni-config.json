@@ -1,0 +1,1380 @@
+[
+  {
+    "name": "java.io.IOException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.Boolean",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["boolean"]},
+      {"name": "booleanValue", "parameterTypes": []},
+      {"name": "getBoolean", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.Byte",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["byte"]},
+      {"name": "byteValue", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.Class",
+    "methods": [
+      {"name": "getName", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.ClassLoader",
+    "methods": [
+      {"name": "loadClass", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.Double",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["double"]},
+      {"name": "doubleValue", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.Enum",
+    "methods": [
+      {"name": "ordinal", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.Error",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.Float",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["float"]},
+      {"name": "floatValue", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.IllegalArgumentException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.IllegalStateException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.Integer",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["int"]},
+      {"name": "intValue", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.Iterable",
+    "methods": [
+      {"name": "iterator", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.Long",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["long"]},
+      {"name": "longValue", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.NullPointerException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.OutOfMemoryError",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.RuntimeException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.Short",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["short"]},
+      {"name": "shortValue", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.String"
+  },
+  {
+    "name": "java.lang.Thread",
+    "methods": [
+      {"name": "currentThread", "parameterTypes": []},
+      {"name": "getUncaughtExceptionHandler", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.Thread$UncaughtExceptionHandler",
+    "methods": [
+      {"name": "uncaughtException", "parameterTypes": ["java.lang.Thread", "java.lang.Throwable"]}
+    ]
+  },
+  {
+    "name": "java.lang.Throwable",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]},
+      {"name": "printStackTrace", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.math.BigInteger",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.nio.Buffer",
+    "methods": [
+      {"name": "isReadOnly", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.nio.ByteBuffer",
+    "methods": [
+      {"name": "asReadOnlyBuffer", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.util.ArrayList",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["int"]},
+      {"name": "add", "parameterTypes": ["java.lang.Object"]},
+      {"name": "get", "parameterTypes": ["int"]},
+      {"name": "size", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.util.HashMap",
+    "methods": [
+      {"name": "<init>", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.util.Iterator",
+    "methods": [
+      {"name": "hasNext", "parameterTypes": []},
+      {"name": "next", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.util.List",
+    "methods": [
+      {"name": "toArray", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.util.Map",
+    "methods": [
+      {"name": "entrySet", "parameterTypes": []},
+      {"name": "put", "parameterTypes": ["java.lang.Object", "java.lang.Object"]}
+    ]
+  },
+  {
+    "name": "java.util.Map$Entry",
+    "methods": [
+      {"name": "getKey", "parameterTypes": []},
+      {"name": "getValue", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.util.Set",
+    "methods": [
+      {"name": "iterator", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "int[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.AddIceCandidateObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.CreateSessionDescriptionObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.PeerConnectionFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.PeerConnectionObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.PortAllocatorConfig",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCAdapterType",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCAnswerOptions",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCBundlePolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCandidateNetworkPolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCandidatePairChangeEvent",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCertificatePEM",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCConfiguration",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCContinualGatheringPolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCryptexPolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCCryptoOptions",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannel",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelBuffer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelInit",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelSendObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDataChannelState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDegradationPreference",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransport",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransportObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtlsTransportState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtmfSender",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtmfSenderObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCDtxStatus",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrame",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrameInjector",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedAudioFrameInjectorObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedFrame",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrame",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrameInjector",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCEncodedVideoFrameInjectorObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceCandidate",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceConnectionState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceGatheringState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceServer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceTransport",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCIceTransportPolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCOfferAnswerOptions",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCOfferOptions",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnection",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnectionIceErrorEvent",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPeerConnectionState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPortPrunePolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCPriorityType",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCResolutionRestriction",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtcpMuxPolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtcpParameters",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCapabilities",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCodecCapability",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpCodecParameters",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpContributingSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpEncodingParameters",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionCapability",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpHeaderExtensionParameters",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpPacketInfo",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpParameters",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpReceiver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpReceiverObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSendParameters",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSender",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSenderObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpSynchronizationSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiverDirection",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCRtpTransceiverInit",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSdpType",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSessionDescription",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSignalingState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStats",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsCollectorCallback",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsReport",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCStatsType",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCTcpCandidatePolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCVpnPreference",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.SetSessionDescriptionObserver",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.TlsCertPolicy",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.DisposableNativeObject",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.LeakDetector",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeApi",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeClassLoader",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.NativeObject",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.internal.RefCountedObject",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.LogSink",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.Logging",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.logging.Logging$Severity",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.AudioBackendUnavailableException",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.AudioDeviceDirectionType",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.Device",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceChangeListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceException",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceFormFactor",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.DeviceTransport",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaDevices",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaSource$State",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStream",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrack",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackEndedListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackMuteListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaStreamTrackState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.MediaType",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.SyncClock",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioConverter",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDevice",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDeviceModule",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioDeviceModuleBase",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioLayer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioOptions",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessing",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$CaptureLevelAdjustment",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$CaptureLevelAdjustment$AnalogMicGainEmulation",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$EchoCanceller",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$AnalogGainController$ClippingPredictor$Mode",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainController$Mode",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$AdaptiveDigital",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$FixedDigital",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$GainControllerDigital$InputVolumeController",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$HighPassFilter",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$NoiseSuppression",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$NoiseSuppression$Level",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$Pipeline",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingConfig$Pipeline$DownmixMethod",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingStats",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioProcessingStreamConfig",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioResampler",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioSink",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrack",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrackSink",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.AudioTrackSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.CustomAudioSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.HeadlessAudioDeviceModule",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.StandaloneVoiceActivityDetector",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.SystemAudioSource$Capture",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.VoiceActivityDetector",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.VoiceActivityListener",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioCodecInfo",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioDecoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.AudioEncoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.BuiltinAudioDecoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.audio.codec.BuiltinAudioEncoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.CustomVideoSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.I420Buffer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.NativeI420Buffer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoBufferConverter",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoCapture",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoCaptureCapability",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDesktopSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDevice",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoDeviceSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoFrame",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoFrameBuffer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoProcessor",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrack",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrackSink",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoTrackSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.DefaultVideoDecoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.DefaultVideoEncoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.EncodedImage",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.HardwareVideoDecoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.HardwareVideoEncoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoDecoder",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoDecoderCallback",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoEncoder",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.NativeVideoEncoderCallback",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoCodecInfo",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoCodecStatus",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoder",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoder$Settings",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoDecoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$BitrateAllocation",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$EncodeInfo",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$EncoderInfo",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$RateControlParameters",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$ResolutionBitrateLimits",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$ScalingSettings",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoder$Settings",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.codec.VideoEncoderFactory",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCaptureCallback",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCapturer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopCapturer$Result",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.DesktopSource",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.PowerManagement",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.ScreenCapturer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.desktop.WindowCapturer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  }
+]

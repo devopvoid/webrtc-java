@@ -64,6 +64,56 @@
         </resources>
     </build>
 
+    <profiles>
+        <!--
+            Compiles NativeImageExample into a GraalVM native image,
+            target/webrtc-native-image-example, which carries the native
+            library inside itself. Needs GraalVM 24 or later as JAVA_HOME
+            (or GRAALVM_HOME): mvn -pl webrtc-examples -Pnative package
+        -->
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>1.1.17</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <imageName>webrtc-native-image-example</imageName>
+                            <mainClass>dev.onvoid.webrtc.examples.NativeImageExample</mainClass>
+                            <buildArgs>
+                                <!-- System.load is a restricted method from JDK 24 on, and
+                                     the image would warn about it on every start. -->
+                                <buildArg>--enable-native-access=ALL-UNNAMED</buildArg>
+                                <!-- A class, member or resource the metadata lacks fails
+                                     at once, instead of only where a lookup happens to
+                                     find nothing, so that the example checks the
+                                     metadata of webrtc-java. -->
+                                <buildArg>--exact-reachability-metadata</buildArg>
+                            </buildArgs>
+                            <!-- webrtc-java brings its own metadata; nothing else this
+                                 example runs needs any. -->
+                            <metadataRepository>
+                                <enabled>false</enabled>
+                            </metadataRepository>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
     <dependencies>
         <dependency>
             <groupId>${project.groupId}</groupId>

@@ -1,0 +1,11 @@
+{
+  "resources": [
+    {"glob": "libwebrtc-java-linux-aarch32.so"},
+    {"glob": "libwebrtc-java-linux-aarch64.so"},
+    {"glob": "libwebrtc-java-linux-x86_64.so"},
+    {"glob": "libwebrtc-java-macos-aarch64.dylib"},
+    {"glob": "libwebrtc-java-macos-x86_64.dylib"},
+    {"glob": "webrtc-java-windows-aarch64.dll"},
+    {"glob": "webrtc-java-windows-x86_64.dll"}
+  ]
+}

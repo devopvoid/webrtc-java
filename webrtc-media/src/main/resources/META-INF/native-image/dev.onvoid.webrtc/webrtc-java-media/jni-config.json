@@ -1,0 +1,75 @@
+[
+  {
+    "name": "java.io.IOException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.IllegalStateException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.NullPointerException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.OutOfMemoryError",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.RuntimeException",
+    "methods": [
+      {"name": "<init>", "parameterTypes": ["java.lang.String"]}
+    ]
+  },
+  {
+    "name": "java.lang.Thread",
+    "methods": [
+      {"name": "currentThread", "parameterTypes": []},
+      {"name": "getUncaughtExceptionHandler", "parameterTypes": []}
+    ]
+  },
+  {
+    "name": "java.lang.Thread$UncaughtExceptionHandler",
+    "methods": [
+      {"name": "uncaughtException", "parameterTypes": ["java.lang.Thread", "java.lang.Throwable"]}
+    ]
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.player.FFmpeg",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.player.MediaInfo",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.player.MediaPlayer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.player.MediaReader",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.recorder.MediaRecorder",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  }
+]

@@ -84,34 +84,7 @@ public final class FFmpeg {
 	 * @return The file names of the FFmpeg libraries for this platform.
 	 */
 	private static String[] dependencies() {
-		String osName = System.getProperty("os.name").toLowerCase();
-
-		if (osName.startsWith("windows")) {
-			return new String[] {
-					"avutil-60.dll",
-					"swresample-6.dll",
-					"swscale-9.dll",
-					"avcodec-62.dll",
-					"avformat-62.dll"
-			};
-		}
-		if (osName.startsWith("mac os")) {
-			return new String[] {
-					"libavutil.60.dylib",
-					"libswresample.6.dylib",
-					"libswscale.9.dylib",
-					"libavcodec.62.dylib",
-					"libavformat.62.dylib"
-			};
-		}
-
-		return new String[] {
-				"libavutil.so.60",
-				"libswresample.so.6",
-				"libswscale.so.9",
-				"libavcodec.so.62",
-				"libavformat.so.62"
-		};
+		return FFmpegLibraries.forSystem(System.getProperty("os.name"));
 	}
 
 }

@@ -1,0 +1,26 @@
+{
+  "resources": [
+    {"glob": "avcodec-62.dll"},
+    {"glob": "avformat-62.dll"},
+    {"glob": "avutil-60.dll"},
+    {"glob": "libavcodec.62.dylib"},
+    {"glob": "libavcodec.so.62"},
+    {"glob": "libavformat.62.dylib"},
+    {"glob": "libavformat.so.62"},
+    {"glob": "libavutil.60.dylib"},
+    {"glob": "libavutil.so.60"},
+    {"glob": "libswresample.6.dylib"},
+    {"glob": "libswresample.so.6"},
+    {"glob": "libswscale.9.dylib"},
+    {"glob": "libswscale.so.9"},
+    {"glob": "libwebrtc-java-media-linux-aarch32.so"},
+    {"glob": "libwebrtc-java-media-linux-aarch64.so"},
+    {"glob": "libwebrtc-java-media-linux-x86_64.so"},
+    {"glob": "libwebrtc-java-media-macos-aarch64.dylib"},
+    {"glob": "libwebrtc-java-media-macos-x86_64.dylib"},
+    {"glob": "swresample-6.dll"},
+    {"glob": "swscale-9.dll"},
+    {"glob": "webrtc-java-media-windows-aarch64.dll"},
+    {"glob": "webrtc-java-media-windows-x86_64.dll"}
+  ]
+}
