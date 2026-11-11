@@ -420,6 +420,10 @@
     "queryAllPublicMethods": true
   },
   {
+    "name": "dev.onvoid.webrtc.client.CallChecker$AudioPart",
+    "queryAllPublicMethods": true
+  },
+  {
     "name": "dev.onvoid.webrtc.internal.DisposableNativeObject",
     "queryAllPublicMethods": true
   },
