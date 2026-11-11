@@ -30,6 +30,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 
 // Receives the audio of an SCStream. A receiver may outlive a timed-out start
@@ -47,8 +48,36 @@ API_AVAILABLE(macos(13.0))
 - (void)stream:(SCStream *)stream didStopWithError:(NSError *)error
 {
 	@synchronized(self) {
-		if (owner) {
-			owner->Fail("System audio: ScreenCaptureKit stopped; check recording permission and restart");
+		if (!owner) {
+			return;
+		}
+
+		// Name the actual cause: the user ending the capture from the menu bar
+		// or a lost display needs no permission change.
+		try {
+			std::string message = "System audio: ScreenCaptureKit stopped";
+
+			if ([error.domain isEqualToString:SCStreamErrorDomain] && error.code == SCStreamErrorUserStopped) {
+				message += " by the user";
+			}
+			else if ([error.domain isEqualToString:SCStreamErrorDomain] && error.code == SCStreamErrorUserDeclined) {
+				message += "; grant screen/audio recording permission and restart";
+			}
+			else if (error) {
+				const char * reason = error.localizedDescription.UTF8String;
+
+				message += " (error " + std::to_string(error.code) + ")";
+
+				if (reason) {
+					message += ": ";
+					message += reason;
+				}
+			}
+
+			owner->Fail(message.c_str());
+		}
+		catch (...) {
+			owner->Fail("System audio: ScreenCaptureKit stopped");
 		}
 	}
 }
@@ -124,10 +153,18 @@ API_AVAILABLE(macos(13.0))
 				}
 			}
 
-			// The presentation time is on the host clock; translate it to the
-			// clock of webrtc::TimeMicros().
+			// The presentation time is on the stream's synchronization clock;
+			// translate it to the clock of webrtc::TimeMicros(). That clock is
+			// the host clock in practice, which is the fallback when the stream
+			// reports none.
+			CMClockRef clock = stream.synchronizationClock;
+
+			if (!clock) {
+				clock = CMClockGetHostTimeClock();
+			}
+
 			const double pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample));
-			const double now = CMTimeGetSeconds(CMClockGetTime(CMClockGetHostTimeClock()));
+			const double now = CMTimeGetSeconds(CMClockGetTime(clock));
 
 			if (!std::isfinite(pts) || !std::isfinite(now)) {
 				owner->Fail("System audio: Invalid ScreenCaptureKit timestamp");
