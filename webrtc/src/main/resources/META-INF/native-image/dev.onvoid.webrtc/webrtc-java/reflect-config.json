@@ -732,6 +732,10 @@
     "queryAllPublicMethods": true
   },
   {
+    "name": "dev.onvoid.webrtc.media.video.VideoContentHint",
+    "queryAllPublicMethods": true
+  },
+  {
     "name": "dev.onvoid.webrtc.media.video.VideoDesktopSource",
     "queryAllPublicMethods": true
   },
@@ -1360,6 +1364,9 @@
   },
   {
     "name": "dev.onvoid.webrtc.media.video.VideoCaptureCapability[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.media.video.VideoContentHint[]"
   },
   {
     "name": "dev.onvoid.webrtc.media.video.VideoDesktopSource[]"

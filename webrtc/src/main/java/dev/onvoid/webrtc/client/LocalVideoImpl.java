@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import dev.onvoid.webrtc.media.MediaStreamTrack;
+import dev.onvoid.webrtc.media.video.VideoContentHint;
 import dev.onvoid.webrtc.media.video.VideoFrame;
 import dev.onvoid.webrtc.media.video.VideoTrack;
 
@@ -33,6 +35,9 @@ class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 	// Guarded by this.
 
 	private final List<FrameDispatcher> dispatchers = new ArrayList<>();
+
+	/** Written under this, kept for the native track a camera switch makes. */
+	private volatile VideoContentHint contentHint = VideoContentHint.DEFAULT;
 
 
 	LocalVideoImpl(LocalMediaImpl media, VideoTrack track, Runnable releaseSource) {
@@ -65,6 +70,30 @@ class LocalVideoImpl extends LocalTrackImpl implements LocalVideo {
 				}
 			}
 		};
+	}
+
+	@Override
+	public VideoContentHint contentHint() {
+		return contentHint;
+	}
+
+	@Override
+	public synchronized void setContentHint(VideoContentHint hint) {
+		requireNonNull(hint, "hint");
+
+		if (!isLive()) {
+			return;
+		}
+
+		videoTrack().setContentHint(hint);
+		contentHint = hint;
+	}
+
+	@Override
+	void adopt(MediaStreamTrack next) {
+		super.adopt(next);
+
+		((VideoTrack) next).setContentHint(contentHint);
 	}
 
 	@Override

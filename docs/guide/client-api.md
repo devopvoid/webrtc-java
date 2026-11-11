@@ -290,7 +290,7 @@ Every method of the client API may be called from any thread, including from ins
 
 | Code | Runs on | May it block? |
 |---|---|---|
-| Your calls into the API | your thread | They don't block, with these exceptions. `WebRtc.createPeer`, the `LocalMedia` methods that make a track and `LocalTrack.setEnabled` wait briefly for WebRTC. `camera()` and `screen()` also open their capture on your thread, which can take longer, so a UI thread should leave them to another thread. The first `media.devices()`, `screens()` and `windows()` ask the system on your thread. `WebRtc.close()` waits up to the close timeout. |
+| Your calls into the API | your thread | They don't block, with these exceptions. `WebRtc.createPeer`, the `LocalMedia` methods that make a track and `LocalTrack.setEnabled` and `LocalVideo.setContentHint` wait briefly for WebRTC. `camera()` and `screen()` also open their capture on your thread, which can take longer, so a UI thread should leave them to another thread. The first `media.devices()`, `screens()` and `windows()` ask the system on your thread. `WebRtc.close()` waits up to the close timeout. |
 | Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
 | `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
 | [Encoded transforms](#encoded-transforms) | a thread of each sender and receiver | Better not. A slow transform delays only its own frames, and one that falls several seconds behind has frames dropped. |
@@ -482,6 +482,24 @@ Sender audioSender = peer.addTrack(microphone);
 Devices devices = media.devices();
 LocalVideo screen = media.screen(ScreenOptions.screen(devices.screens().get(0)).frameRate(15).build());
 ```
+
+A content hint tells the senders of a video track what to keep when the bandwidth or the CPU runs short. It can be changed at any time, also while the track is sent, without renegotiating:
+
+```java
+screen.setContentHint(VideoContentHint.TEXT);      // source code: keep the resolution
+peer.addTrack(screen);
+
+screen.setContentHint(VideoContentHint.MOTION);    // a video starts in the shared window: keep the frame rate
+```
+
+| Hint | Suits | Gives up first |
+|---|---|---|
+| `DEFAULT` | Anything | What the source suggests: the frame rate of screens, the resolution of other video |
+| `MOTION` | Cameras, videos, animations | Resolution |
+| `DETAIL` | Drawings, slides, photos | Frame rate |
+| `TEXT` | Source code, terminals, tables | Frame rate; WebRTC treats it as `DETAIL` for now |
+
+The hint belongs to the track, so it applies on every peer the track is sent on, and a camera keeps it when it switches. Screens keep their resolution by default already, so the hint pays off where the content changes, or for a camera that shows a whiteboard. No hint keeps text readable at any bitrate.
 
 Tracks added without stream ids share one stream per peer, so that a browser plays their audio and video in sync. Pass ids to `addTrack(track, streamIds...)` to group them yourself.
 

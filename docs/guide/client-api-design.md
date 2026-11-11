@@ -140,7 +140,7 @@ and it hands on to the event executor what the application should hear.
 
 | Code | Runs on | May it block? |
 |---|---|---|
-| Calls into the API | the caller's thread, any thread | They don't block, with these exceptions. `createPeer` waits for the connection, so that an invalid configuration fails there. The `LocalMedia` methods that make a track and `LocalTrack.setEnabled` wait briefly for a WebRTC thread, since the factory and the tracks are proxies. `camera()` and `screen()` also open their capture on the caller's thread. The first `devices()`, `screens()` and `windows()` ask the system there. `WebRtc.close()` waits up to `closeTimeout`, and a `join()` the caller writes waits as written. |
+| Calls into the API | the caller's thread, any thread | They don't block, with these exceptions. `createPeer` waits for the connection, so that an invalid configuration fails there. The `LocalMedia` methods that make a track and `LocalTrack.setEnabled` and `LocalVideo.setContentHint` wait briefly for a WebRTC thread, since the factory and the tracks are proxies. `camera()` and `screen()` also open their capture on the caller's thread. The first `devices()`, `screens()` and `windows()` ask the system there. `WebRtc.close()` waits up to `closeTimeout`, and a `join()` the caller writes waits as written. |
 | Event handlers, future callbacks, `Signaling.send` | the peer's event thread, or the configured `eventExecutor` | Yes, but it only delays that peer's events. It must not `join()` a future of this API: a direct `join()`/`get()` throws `BlockingCallException`. |
 | `LocalTrack.onEnded`, `LocalAudio.onVoiceActivity`, `Devices.onChange`, futures of local tracks and devices | the event thread of the runtime's local media, or the configured `eventExecutor` | Yes, but it delays the other events of local media. The rule against `join()` holds here too. |
 | Frame handlers (`onFrame`, `onAudio`) | a thread of each subscription, from the frame pool | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped and released. A slow audio handler loses the oldest audio beyond its buffer. |
@@ -549,6 +549,8 @@ public interface LocalTrack extends AutoCloseable {
 public interface LocalVideo extends LocalTrack {
 
     Subscription onFrame(Consumer<VideoFrame> handler);         // local preview
+    VideoContentHint contentHint();
+    void setContentHint(VideoContentHint hint);                 // motion, detail or text, also while sending
 }
 
 public interface LocalCamera extends LocalVideo {

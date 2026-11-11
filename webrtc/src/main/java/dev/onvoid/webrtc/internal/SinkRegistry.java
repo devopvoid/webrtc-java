@@ -208,7 +208,12 @@ public final class SinkRegistry<S> {
 		done.await();
 	}
 
-	private static boolean inCallback() {
+	/**
+	 * @return true while the current thread hands media to a sink, of any
+	 * track, and holds the lock of WebRTC's broadcaster that adding a sink
+	 * takes.
+	 */
+	public static boolean inCallback() {
 		return CALLBACK_DEPTH.get()[0] > 0;
 	}
 

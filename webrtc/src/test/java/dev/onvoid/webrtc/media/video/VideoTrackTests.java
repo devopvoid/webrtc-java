@@ -62,6 +62,46 @@ class VideoTrackTests extends TestBase {
 	}
 
 	@Test
+	void contentHintSet() {
+		assertEquals(VideoContentHint.DEFAULT, videoTrack.getContentHint());
+
+		for (VideoContentHint hint : VideoContentHint.values()) {
+			videoTrack.setContentHint(hint);
+
+			assertEquals(hint, videoTrack.getContentHint());
+		}
+
+		assertThrows(NullPointerException.class, () -> videoTrack.setContentHint(null));
+	}
+
+	@Test
+	void contentHintRefusedInSink() {
+		CustomVideoSource source = new CustomVideoSource();
+		VideoTrack track = factory.createVideoTrack("hinted", source);
+		AtomicReference<Throwable> refused = new AtomicReference<>();
+
+		// A sender would wait for the lock this thread holds in the sink.
+		track.addSink(frame -> {
+			frame.release();
+
+			try {
+				track.setContentHint(VideoContentHint.TEXT);
+			}
+			catch (Throwable e) {
+				refused.compareAndSet(null, e);
+			}
+		});
+
+		assertTimeoutPreemptively(Duration.ofSeconds(5), () -> pushFrame(source));
+
+		assertInstanceOf(IllegalStateException.class, refused.get());
+		assertEquals(VideoContentHint.DEFAULT, track.getContentHint());
+
+		track.dispose();
+		source.dispose();
+	}
+
+	@Test
 	void addNullSink() {
 		assertThrows(NullPointerException.class, () -> videoTrack.addSink(null));
 	}

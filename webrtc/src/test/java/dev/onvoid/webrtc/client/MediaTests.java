@@ -42,6 +42,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import dev.onvoid.webrtc.RTCStats;
@@ -49,7 +50,9 @@ import dev.onvoid.webrtc.RTCStatsType;
 import dev.onvoid.webrtc.media.audio.CustomAudioSource;
 import dev.onvoid.webrtc.media.video.CustomVideoSource;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
+import dev.onvoid.webrtc.media.video.VideoContentHint;
 import dev.onvoid.webrtc.media.video.VideoFrame;
+import dev.onvoid.webrtc.media.video.VideoTrack;
 import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 
 import org.junit.jupiter.api.AfterEach;
@@ -408,6 +411,87 @@ class MediaTests extends ClientTestBase {
 
 		assertEquals(320, await(seen)[0]);
 		assertEquals(240, await(preview)[1]);
+	}
+
+	@Test
+	void contentHintChangesWhileSending() throws Exception {
+		SignalingPair link = Signaling.loopback();
+		AtomicInteger offers = new AtomicInteger();
+		Signaling counted = new Signaling() {
+
+			@Override
+			public void send(SignalMessage message) {
+				if (message.type() == SignalMessage.Type.OFFER) {
+					offers.incrementAndGet();
+				}
+				link.first().send(message);
+			}
+
+			@Override
+			public Subscription attach(Consumer<SignalMessage> inbound) {
+				return link.first().attach(inbound);
+			}
+		};
+		Peer caller = rtc.createPeer(PeerOptions.builder().name("caller").signaling(counted).build());
+		Peer callee = rtc.createPeer(PeerOptions.builder().name("callee").signaling(link.second())
+				.polite(true).build());
+
+		CustomVideo video = rtc.media().customVideo("video");
+		AtomicInteger tracks = new AtomicInteger();
+		AtomicReference<CountDownLatch> frames = new AtomicReference<>(new CountDownLatch(5));
+
+		callee.onTrack(track -> {
+			tracks.incrementAndGet();
+			track.asVideo().onFrame(frame -> frames.get().countDown());
+		});
+
+		video.setContentHint(VideoContentHint.TEXT);
+		caller.addTrack(video);
+		feedVideo(video, 320, 240);
+
+		assertTrue(frames.get().await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		int offered = offers.get();
+
+		for (VideoContentHint hint : new VideoContentHint[] { VideoContentHint.MOTION, VideoContentHint.DEFAULT }) {
+			video.setContentHint(hint);
+
+			assertEquals(hint, video.contentHint());
+			assertEquals(hint, ((VideoTrack) ((LocalTrackImpl) video).nativeTrack()).getContentHint());
+
+			// The senders took the hint when the call returned, and the same
+			// remote track goes on receiving.
+			frames.set(new CountDownLatch(5));
+			assertTrue(frames.get().await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+		}
+
+		assertEquals(offered, offers.get());
+		assertEquals(1, tracks.get());
+		assertEquals(1, callee.remoteTracks().size());
+
+		video.close();
+		video.setContentHint(VideoContentHint.TEXT);
+
+		assertEquals(VideoContentHint.DEFAULT, video.contentHint());
+	}
+
+	@Test
+	void replacedTrackKeepsContentHint() throws Exception {
+		// As a camera switch does it.
+		LocalVideoImpl video = (LocalVideoImpl) rtc.media().customVideo("video");
+		CustomVideoSource nextSource = new CustomVideoSource();
+		VideoTrack next = rtc.factory.createVideoTrack("next", nextSource);
+
+		video.setContentHint(VideoContentHint.DETAIL);
+		video.setEnabled(false);
+
+		LocalTrackImpl.Replaced replaced = video.replaceNative(next, nextSource::dispose);
+
+		assertEquals(VideoContentHint.DETAIL, next.getContentHint());
+		assertFalse(next.isEnabled());
+
+		replaced.track.dispose();
+		replaced.release.run();
+		await(video.closeAsync());
 	}
 
 	@Test

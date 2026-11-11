@@ -18,6 +18,7 @@
 #include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/VideoTrackSink.h"
+#include "JavaEnums.h"
 #include "JavaNullPointerException.h"
 #include "JavaUtils.h"
 
@@ -61,5 +62,32 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_removeSinkI
 
 			delete sink;
 		}
+	});
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_getContentHint
+(JNIEnv * env, jobject caller)
+{
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
+		CHECK_HANDLEV(track, nullptr);
+
+		return jni::JavaEnums::toJava(env, track->content_hint()).release();
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoTrack_setContentHintInternal
+(JNIEnv * env, jobject caller, jobject jHint)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::VideoTrackInterface> track(env, caller);
+		CHECK_HANDLE(track);
+
+		auto hint = jni::JavaEnums::toNative<webrtc::VideoTrackInterface::ContentHint>(env, jHint);
+
+		// The senders of the track reconfigure before this returns: the
+		// proxy runs it on the signaling thread, where the track notifies
+		// them, and each one waits for the worker thread.
+		track->set_content_hint(hint);
 	});
 }
