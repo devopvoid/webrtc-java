@@ -232,11 +232,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-6 libxext6 libxfixes3 libxdamage1 libxtst6 libxrandr2 libxcomposite1 libglib2.0-0 libgbm1 libdrm2
 
+      # Through setup-java, as this repository allows only actions of GitHub
+      # itself: an action it does not allow makes the whole workflow fail to
+      # start. Its graalvm distribution is Oracle GraalVM, native-image included.
       - name: Set up GraalVM
-        uses: graalvm/setup-graalvm@v1
+        uses: actions/setup-java@v6
         with:
           java-version: '25'
-          distribution: 'graalvm-community'
+          distribution: 'graalvm'
 
       - name: Set the release dry-run version
         if: inputs.version != ''
