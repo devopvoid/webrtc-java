@@ -58,10 +58,52 @@ public class VideoDesktopSource extends VideoTrackSource {
 	 */
 	public native void setMaxFrameSize(int width, int height);
 
+	/**
+	 * Lets the user choose what to share in the operating system's own
+	 * picker when the source starts, instead of capturing the screen or window
+	 * set with {@link #setSourceId(long, boolean)}. Off by default; read when
+	 * the capture starts.
+	 * <p>
+	 * On macOS 14 and newer this is ScreenCaptureKit's content sharing
+	 * picker, which offers a screen or one or more windows. Under Wayland the
+	 * desktop portal's picker is used with or without this setting. Where
+	 * {@link #isSystemPickerAvailable()} is false, the source ends instead of
+	 * capturing.
+	 * <p>
+	 * {@link #start()} shows the picker and returns at once; no frames arrive
+	 * until the user has chosen. If the user cancels the picker, or stops
+	 * sharing from the menu bar, the source ends and its tracks call their
+	 * {@link dev.onvoid.webrtc.media.MediaStreamTrackEndedListener}s. Show the
+	 * picker for one source at a time: sources waiting on it at the same time
+	 * all receive the user's choice.
+	 *
+	 * @param usePicker True to show the system picker when the source starts.
+	 */
+	public native void setUseSystemPicker(boolean usePicker);
+
+	/**
+	 * Whether this system offers a picker for
+	 * {@link #setUseSystemPicker(boolean)}: macOS 14 and newer, and Linux
+	 * under Wayland.
+	 *
+	 * @return True if a system picker is available.
+	 */
+	public static native boolean isSystemPickerAvailable();
+
 	public native void start();
 
+	/**
+	 * Stops capturing and waits for the capture to finish. Called from a
+	 * listener that the capture invokes, such as an ended listener, it does
+	 * not wait.
+	 */
 	public native void stop();
 
+	/**
+	 * Stops capturing, without waiting for the capture to finish, and
+	 * releases the source. A track created from the source keeps it, but
+	 * receives no more frames.
+	 */
 	public void dispose() {
 		detachVideoProcessor();
 		disposeInternal();

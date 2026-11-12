@@ -33,6 +33,22 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
+	 * Method:    setUseSystemPicker
+	 * Signature: (Z)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setUseSystemPicker
+	(JNIEnv*, jobject, jboolean);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
+	 * Method:    isSystemPickerAvailable
+	 * Signature: ()Z
+	 */
+	JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_isSystemPickerAvailable
+	(JNIEnv*, jclass);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_media_video_VideoDesktopSource
 	 * Method:    start
 	 * Signature: ()V
 	 */

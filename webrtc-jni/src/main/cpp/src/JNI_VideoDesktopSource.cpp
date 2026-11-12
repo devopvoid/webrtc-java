@@ -61,6 +61,23 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_set
 	});
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_setUseSystemPicker
+(JNIEnv * env, jobject caller, jboolean usePicker)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::VideoTrackDesktopSource> videoSource(env, caller);
+		CHECK_HANDLE(videoSource);
+
+		videoSource->setUseSystemPicker(static_cast<bool>(usePicker));
+	});
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_isSystemPickerAvailable
+(JNIEnv * env, jclass caller)
+{
+	return static_cast<jboolean>(jni::VideoTrackDesktopSource::isSystemPickerAvailable());
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_start
 (JNIEnv * env, jobject caller)
 {
@@ -102,6 +119,10 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_VideoDesktopSource_dis
 		if (videoSource == nullptr) {
 			return;
 		}
+
+		// A track may keep the source alive, but not its capture, whose thread
+		// holds a reference of its own. Nothing waits for that thread here.
+		videoSource->requestStop();
 
 		// A track may keep the source alive; it must not reach the processor
 		// any more.

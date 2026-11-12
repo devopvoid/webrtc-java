@@ -70,6 +70,27 @@ videoSource.setSourceId(windowId, true);
 videoSource.start();
 ```
 
+### Letting the User Choose in the System Picker
+
+Instead of listing sources yourself, you can let the user choose a screen or window in the operating system's own picker. It is available on macOS 14 and newer, where it is ScreenCaptureKit's content sharing picker, and on Linux under Wayland, where the desktop portal's picker is always used:
+
+```java
+VideoDesktopSource videoSource = new VideoDesktopSource();
+videoSource.setFrameRate(30);
+
+if (VideoDesktopSource.isSystemPickerAvailable()) {
+    // The picker chooses the source; no setSourceId() is needed.
+    videoSource.setUseSystemPicker(true);
+}
+else {
+    videoSource.setSourceId(screenId, false);
+}
+```
+
+`start()` shows the picker and returns at once. No frames arrive until the user has made a choice. The user can change it later from the macOS menu bar, and the frames follow. If the user cancels the picker, or stops sharing from the menu bar, the source ends (see [Handling the End of Capture](#handling-the-end-of-capture)). Where `isSystemPickerAvailable()` is false, a source set to use the picker ends right away instead of capturing.
+
+On macOS the picker offers a whole screen or one or more windows. Show it for one source at a time: sources waiting on it at the same time all receive the user's choice. The [`DesktopPickerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopPickerExample.java) shows the picker and reports the frames it receives.
+
 ### Creating a Video Track with the Desktop Source
 
 Once you have configured your desktop video source, you can create a video track:
@@ -153,15 +174,19 @@ videoSource.stop();
 videoSource.dispose();
 ```
 
-### Handling Capture Failures
+### Handling the End of Capture
 
-`start()` returns before capturing begins. If capturing cannot begin, because no capture backend is available or the selected source does not exist, the source ends and its tracks with it. Create the track and add the listener before calling `start()`, as a listener added later misses this:
+`start()` returns before capturing begins. The source ends, and its tracks with it, when capturing cannot begin or cannot go on: no capture backend is available, the selected source does not exist, the captured window was closed, or the user cancelled the system picker or stopped sharing. Create the track and add the listener before calling `start()`, as a listener added later misses an end that comes at once:
 
 ```java
 videoTrack.addTrackEndedListener(track -> {
-    // No frames will arrive from this source.
+    // No more frames will arrive from this source. The listener runs on the
+    // capture thread; stopping or disposing the source here is safe.
+    videoSource.stop();
 });
 ```
+
+`dispose()` ends the capture as well, even while a track still holds the source.
 
 ### Processing Frames
 
@@ -188,7 +213,7 @@ windowCapturer.dispose();
 
 On macOS 14 and newer, screens and windows are captured with ScreenCaptureKit; older releases use the earlier Core Graphics capture. Both need the app to have Screen Recording permission (System Settings → Privacy & Security → Screen & System Audio Recording). Without it, the windows of other apps are listed without their titles and their content cannot be captured. Windows of the app's own process need no permission, and are captured with Core Graphics.
 
-While a captured window is minimized or hidden, its last image repeats. When it is closed, capture stops.
+While a captured window is minimized or hidden, its last image repeats. When it is closed, the source ends.
 
 ## Conclusion
 
