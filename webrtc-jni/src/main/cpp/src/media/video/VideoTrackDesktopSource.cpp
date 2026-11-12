@@ -32,6 +32,11 @@
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
 #include "modules/desktop_capture/mouse_cursor_monitor.h"
 
+#if defined(WEBRTC_MAC)
+#include "media/video/desktop/macos/MacOSScreenCapturer.h"
+#include "media/video/desktop/macos/ScreenCaptureKitWindowCapturer.h"
+#endif
+
 #include <algorithm>
 #include <cmath>
 
@@ -257,15 +262,6 @@ namespace jni
 
 #if defined(WEBRTC_MAC)
 		options.set_allow_iosurface(true);
-		// Screens are captured with ScreenCaptureKit on macOS 14 and newer.
-		// The CGDisplayStream capturer otherwise used gets new pixels only
-		// when its stream calls back, and when that stops it keeps sending the
-		// first frame with a live cursor on top (issue #344). Older macOS
-		// falls back to it. Only screens: window capture ignores this, and the
-		// source list stays with the CGDisplayStream capturer in
-		// DesktopCapturer, since ScreenCaptureKit lists no screens without its
-		// system picker. Both name a screen by its CGDirectDisplayID.
-		options.set_allow_sck_capturer(true);
 #endif
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
@@ -280,6 +276,22 @@ namespace jni
 #endif
 
 		std::unique_ptr<webrtc::DesktopCapturer> inner;
+
+#if defined(WEBRTC_MAC)
+		if (sourceIsWindow) {
+			// Streams the window with ScreenCaptureKit on macOS 14 and newer,
+			// instead of a CGWindowListCreateImage snapshot per frame.
+			inner = CreateScreenCaptureKitWindowCapturer(options);
+		}
+		else {
+			// A screen is captured with ScreenCaptureKit on macOS 14 and newer.
+			// The CGDisplayStream capturer otherwise used gets new pixels only
+			// when its stream calls back, and when that stops it keeps sending
+			// the first frame with a live cursor on top (issue #344). It still
+			// captures the whole desktop, which ScreenCaptureKit cannot.
+			inner = CreateMacOSScreenCapturer(options);
+		}
+#endif
 
 #if defined(WEBRTC_USE_PIPEWIRE)
 		// Wayland: request "any screen content" so the xdg-desktop-portal picker

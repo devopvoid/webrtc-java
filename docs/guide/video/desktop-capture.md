@@ -184,6 +184,12 @@ screenCapturer.dispose();
 windowCapturer.dispose();
 ```
 
+### Capturing on macOS
+
+On macOS 14 and newer, screens and windows are captured with ScreenCaptureKit; older releases use the earlier Core Graphics capture. Both need the app to have Screen Recording permission (System Settings → Privacy & Security → Screen & System Audio Recording). Without it, the windows of other apps are listed without their titles and their content cannot be captured. Windows of the app's own process need no permission, and are captured with Core Graphics.
+
+While a captured window is minimized or hidden, its last image repeats. When it is closed, capture stops.
+
 ## Conclusion
 
 This guide has demonstrated how to set up a WebRTC peer connection with desktop video capture capabilities.
