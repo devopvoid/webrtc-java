@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
@@ -37,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import dev.onvoid.webrtc.TestBase;
@@ -45,8 +47,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Covers where native libraries are looked for and the cleanup of extracted
- * ones. What is swept is an isolated directory set up here, never the real
+ * Covers that a native library is loaded once, where native libraries are
+ * looked for and the cleanup of extracted ones. What is swept is an isolated directory set up here, never the real
  * temporary directory, and the time a sweep runs at is given rather than read
  * from the clock. The lookup is driven with a linker that only records what it
  * is handed; {@link LibraryLocationTests} loads the real library.
@@ -62,6 +64,8 @@ class NativeLoaderTests extends TestBase {
 	private static final String LIB = "test-lib";
 
 	private static final String LIB_FILE = System.mapLibraryName(LIB);
+
+	private static final AtomicInteger LIB_COUNTER = new AtomicInteger();
 
 	@TempDir
 	Path root;
@@ -135,6 +139,59 @@ class NativeLoaderTests extends TestBase {
 		}
 
 		assertTrue(NativeLoader.isInUse(directory));
+	}
+
+	@Test
+	void nestedLoadLoadsOnce() {
+		String lib = freshLib();
+		AtomicInteger loads = new AtomicInteger();
+
+		NativeLoader.loadOnce(lib, () -> {
+			loads.incrementAndGet();
+
+			// As when JNI_OnLoad initializes a class that loads the library too.
+			NativeLoader.loadOnce(lib, loads::incrementAndGet);
+		});
+		NativeLoader.loadOnce(lib, loads::incrementAndGet);
+
+		assertEquals(1, loads.get());
+	}
+
+	@Test
+	void whenLoadedAwaitsLoad() {
+		String lib = freshLib();
+		List<String> events = new ArrayList<>();
+
+		NativeLoader.loadOnce(lib, () -> {
+			// Called while the library is being loaded.
+			NativeLoader.whenLoaded(lib, () -> events.add("action"));
+			events.add("loaded");
+		});
+		NativeLoader.whenLoaded(lib, () -> events.add("later action"));
+
+		assertEquals(Arrays.asList("loaded", "action", "later action"), events);
+	}
+
+	@Test
+	void failedLoadRetried() {
+		String lib = freshLib();
+		List<String> events = new ArrayList<>();
+		UnsatisfiedLinkError failure = new UnsatisfiedLinkError("failed");
+
+		UnsatisfiedLinkError error = assertThrows(UnsatisfiedLinkError.class,
+				() -> NativeLoader.loadOnce(lib, () -> {
+					NativeLoader.whenLoaded(lib, () -> events.add("action"));
+
+					throw failure;
+				}));
+
+		assertSame(failure, error);
+		assertTrue(events.isEmpty());
+
+		// The action waits for the load that succeeds.
+		NativeLoader.loadOnce(lib, () -> events.add("loaded"));
+
+		assertEquals(Arrays.asList("loaded", "action"), events);
 	}
 
 	@Test
@@ -265,6 +322,14 @@ class NativeLoaderTests extends TestBase {
 
 		assertTrue(NativeLoader.failureMessage(LIB_FILE, Collections.emptyList(), true).contains("musl"));
 		assertFalse(NativeLoader.failureMessage(LIB_FILE, Collections.emptyList(), false).contains("musl"));
+	}
+
+	/**
+	 * A library name no test has used yet, since a library stays loaded for
+	 * as long as the JVM runs.
+	 */
+	private static String freshLib() {
+		return LIB + "-" + LIB_COUNTER.incrementAndGet();
 	}
 
 	private NativeLoader.Locations locations(Path libraryDir, List<Path> searchPath) {

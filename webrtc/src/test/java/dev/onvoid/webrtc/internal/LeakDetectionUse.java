@@ -20,6 +20,7 @@ import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.RTCConfiguration;
 import dev.onvoid.webrtc.RTCPeerConnection;
 import dev.onvoid.webrtc.RTCRtpSender;
+import dev.onvoid.webrtc.logging.Logging;
 import dev.onvoid.webrtc.media.MediaStreamTrack;
 import dev.onvoid.webrtc.media.audio.AudioConverter;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
@@ -44,7 +45,18 @@ import java.util.concurrent.locks.LockSupport;
  */
 public final class LeakDetectionUse {
 
+	/**
+	 * The system property that has {@link Logging} load the library, which
+	 * then initializes {@link NativeObject} while it is being loaded.
+	 */
+	static final String LOGGING_FIRST_PROPERTY = "test.leak.logging.first";
+
+
 	public static void main(String[] args) {
+		if (Boolean.getBoolean(LOGGING_FIRST_PROPERTY)) {
+			Logging.logTimestamps(false);
+		}
+
 		List<String> reports = Collections.synchronizedList(new ArrayList<>());
 		LeakDetector.reporter = reports::add;
 

@@ -31,9 +31,11 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -105,6 +107,12 @@ public class NativeLoader {
 
 	private static final Set<String> LOADED_LIB_SET = new HashSet<>();
 
+	/** The libraries the thread that holds the lock of this class is loading. */
+	private static final Set<String> LOADING_LIB_SET = new HashSet<>();
+
+	/** What is to run once a library is loaded, by the name of the library. */
+	private static final Map<String, List<Runnable>> WHEN_LOADED = new HashMap<>();
+
 	/** Whether this process has swept up after earlier ones yet. */
 	private static boolean swept;
 
@@ -160,15 +168,70 @@ public class NativeLoader {
 	 */
 	public static synchronized void loadLibrary(final String libName,
 			final String... dependencies) throws Exception {
-		if (LOADED_LIB_SET.contains(libName)) {
+		loadOnce(libName, () -> load(libName + "-" + platform(),
+				Arrays.asList(dependencies), Locations.fromSystem(),
+				NativeLoader::classPathResource, Linker.SYSTEM));
+	}
+
+	/**
+	 * Runs the given loader, unless the library is loaded already or is being
+	 * loaded by this thread, and then what is to run once it is loaded.
+	 * <p>
+	 * Loading a library runs its {@code JNI_OnLoad}, which looks up Java
+	 * classes and with that initializes them. A class that loads the same
+	 * library in its static initializer then calls back in on this thread,
+	 * which the lock of this class lets through. That nested call must not
+	 * load the library again, which would put a second copy of it into the
+	 * process: it returns at once, before the library is loaded, and the outer
+	 * call finishes loading it. Code that needs the library at that point
+	 * goes through {@link #whenLoaded(String, Runnable)}. A loader that fails
+	 * leaves the library not loaded, so that a later call tries anew.
+	 *
+	 * @param libName The name of the library.
+	 * @param loader  Loads the library.
+	 */
+	static synchronized void loadOnce(String libName, Runnable loader) {
+		if (LOADED_LIB_SET.contains(libName) || !LOADING_LIB_SET.add(libName)) {
 			return;
 		}
 
-		load(libName + "-" + platform(),
-				Arrays.asList(dependencies), Locations.fromSystem(),
-				NativeLoader::classPathResource, Linker.SYSTEM);
+		try {
+			loader.run();
+		}
+		finally {
+			LOADING_LIB_SET.remove(libName);
+		}
 
 		LOADED_LIB_SET.add(libName);
+
+		List<Runnable> actions = WHEN_LOADED.remove(libName);
+
+		if (actions != null) {
+			for (Runnable action : actions) {
+				action.run();
+			}
+		}
+	}
+
+	/**
+	 * Runs the given action now if the library is loaded, or else once it is.
+	 * A static initializer that loads a library and then calls one of its
+	 * native methods makes that call through this. When the loading of the
+	 * library is what runs the initializer, the library is not loaded yet, see
+	 * {@link #loadOnce(String, Runnable)}, and the JVM finds none of its
+	 * native methods before its {@code JNI_OnLoad} has returned.
+	 *
+	 * @param libName The name of the library, as given to {@link
+	 *                #loadLibrary(String, String...)}.
+	 * @param action  What needs the library.
+	 */
+	static synchronized void whenLoaded(String libName, Runnable action) {
+		if (LOADED_LIB_SET.contains(libName)) {
+			action.run();
+		}
+		else {
+			WHEN_LOADED.computeIfAbsent(libName, name -> new ArrayList<>()).add(action);
+		}
 	}
 
 	/**

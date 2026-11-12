@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.internal;
 
 import java.nio.ByteBuffer;
 
+import dev.onvoid.webrtc.logging.Logging;
 import dev.onvoid.webrtc.media.FourCC;
 import dev.onvoid.webrtc.media.audio.AudioConverter;
 import dev.onvoid.webrtc.media.audio.AudioResampler;
@@ -41,6 +42,7 @@ public final class StandaloneUse {
 		"AudioResampler",
 		"CustomAudioSource",
 		"CustomVideoSource",
+		"Logging",
 		"NativeI420Buffer",
 		"VideoBufferConverter",
 		"VideoCapture"
@@ -60,6 +62,11 @@ public final class StandaloneUse {
 				break;
 			case "CustomVideoSource":
 				new CustomVideoSource().dispose();
+				break;
+			case "Logging":
+				// Not a native object: the library initializes NativeObject
+				// while it is being loaded.
+				Logging.logTimestamps(true);
 				break;
 			case "NativeI420Buffer":
 				NativeI420Buffer.allocate(2, 2).release();

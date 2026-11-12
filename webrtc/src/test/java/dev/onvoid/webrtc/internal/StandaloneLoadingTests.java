@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -80,6 +81,11 @@ class StandaloneLoadingTests {
 
 		String log = new String(output.toByteArray(), StandardCharsets.UTF_8);
 		assertEquals(0, process.exitValue(), () -> name + " failed in a fresh JVM:\n" + log);
+
+		// A second copy of the library shows on macOS, where the Objective-C
+		// runtime warns of each class that both copies implement.
+		assertFalse(log.contains("is implemented in both"),
+				() -> name + " loaded the native library twice:\n" + log);
 	}
 
 	/**
