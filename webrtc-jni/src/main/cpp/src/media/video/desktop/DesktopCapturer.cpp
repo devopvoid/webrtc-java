@@ -23,6 +23,7 @@
 #include "rtc_base/logging.h"
 
 #if defined(WEBRTC_MAC)
+#include "media/video/desktop/macos/MacOSScreenCapturer.h"
 #include "media/video/desktop/macos/ScreenCaptureKitWindowCapturer.h"
 #endif
 
@@ -54,11 +55,11 @@ namespace jni
 		std::unique_ptr<webrtc::DesktopCapturer> inner;
 
 #if defined(WEBRTC_MAC)
-		if (!screenCapturer) {
-			// Lists windows as WebRTC's window capturer does, and captures
-			// them with ScreenCaptureKit on macOS 14 and newer.
-			inner = CreateScreenCaptureKitWindowCapturer(options);
-		}
+		// Both list their sources as WebRTC's capturers do, and capture with
+		// ScreenCaptureKit on macOS 14 and newer.
+		inner = screenCapturer
+			? CreateMacOSScreenCapturer(options)
+			: CreateScreenCaptureKitWindowCapturer(options);
 #endif
 
 		if (!inner) {

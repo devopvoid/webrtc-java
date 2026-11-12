@@ -32,6 +32,8 @@ import dev.onvoid.webrtc.media.video.desktop.TestWindowProcess;
 import java.awt.Color;
 import java.awt.EventQueue;
 import java.awt.Frame;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 import java.nio.ByteBuffer;
@@ -322,6 +324,61 @@ class VideoDesktopSourceTests extends TestBase {
 		finally {
 			EventQueue.invokeAndWait(window::dispose);
 		}
+	}
+
+	@Test
+	void fullDesktopCoversAllScreens() throws Exception {
+		assumeTrue(OS.contains("mac"), "covers the macOS screen capturers");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		// The desktop, as WebRTC's CGDisplayStream capturer composes it: the
+		// bounds of all screens, in pixels. ScreenCaptureKit captures single
+		// screens only, and would deliver just the first.
+		Rectangle desktop = new Rectangle();
+		double scale = 0;
+
+		for (GraphicsDevice device : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+			GraphicsConfiguration config = device.getDefaultConfiguration();
+			double deviceScale = config.getDefaultTransform().getScaleX();
+
+			assumeTrue(scale == 0 || scale == deviceScale, "The screens differ in scale");
+
+			scale = deviceScale;
+			desktop = desktop.isEmpty() ? config.getBounds() : desktop.union(config.getBounds());
+		}
+
+		VideoDesktopSource source = new VideoDesktopSource();
+		source.setSourceId(-1, false);
+		source.setFrameRate(10);
+
+		VideoTrack track = factory.createVideoTrack("desktop", source);
+
+		CompletableFuture<int[]> size = new CompletableFuture<>();
+
+		VideoTrackSink sink = frame -> {
+			size.complete(new int[] { frame.buffer.getWidth(), frame.buffer.getHeight() });
+			frame.release();
+		};
+
+		int[] first;
+
+		try {
+			track.addSink(sink);
+			source.start();
+
+			first = size.completeOnTimeout(null, 10, TimeUnit.SECONDS).join();
+		}
+		finally {
+			source.stop();
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+		}
+
+		assumeTrue(first != null, "The desktop delivered no frames");
+
+		assertEquals(Math.round(desktop.width * scale) + "x" + Math.round(desktop.height * scale),
+				first[0] + "x" + first[1]);
 	}
 
 	@Test
