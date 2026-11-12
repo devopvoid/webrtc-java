@@ -42,7 +42,9 @@ public abstract class NativeObject {
 			throw new RuntimeException("Load library 'webrtc-java' failed", e);
 		}
 
-		LeakDetector.initialize();
+		// When loading the library is what initializes this class, the call
+		// above returns before the library is loaded.
+		NativeLoader.whenLoaded("webrtc-java", LeakDetector::initialize);
 	}
 
 	/**

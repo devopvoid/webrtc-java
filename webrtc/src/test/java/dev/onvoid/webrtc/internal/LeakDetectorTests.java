@@ -87,6 +87,14 @@ class LeakDetectorTests {
 	}
 
 	@Test
+	void reportedWithLoggingFirst() throws Exception {
+		Result result = run("-D" + LeakDetector.PROPERTY + "=true",
+				"-D" + LeakDetectionUse.LOGGING_FIRST_PROPERTY + "=true");
+
+		assertEquals(0, result.exitValue, result.output);
+	}
+
+	@Test
 	void traceNamesWhereCreated() throws Exception {
 		Result result = run("-D" + LeakDetector.PROPERTY + "=true", "-D" + LeakDetector.TRACE_PROPERTY + "=true");
 
