@@ -1,5 +1,7 @@
 # Audio Devices
 
+<ApiNote client="/guide/client/sending-media#devices" title="Devices in Sending Media" />
+
 This guide focuses on setting up a peer connection with audio device selection capabilities, which allows you to choose specific microphones and speakers for your WebRTC connection.
 
 ## Audio Device Selection

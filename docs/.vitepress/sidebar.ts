@@ -11,10 +11,24 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 			text: 'Introduction',
 			collapsed: false,
 			items: [
-				{ text: 'What is webrtc-java?', link: '/introduction' },
+				{ text: 'Introduction', link: '/introduction' },
 				{ text: 'Getting Started', link: '/get-started' },
+				{ text: 'Core API', link: '/core-api' },
+			],
+		},
+		{
+			text: 'Client API',
+			collapsed: false,
+			items: [
 				{ text: 'Client API', link: '/client-api' },
-				{ text: 'Client API Design', link: '/client-api-design' },
+				{ text: 'Peers and Signaling', link: '/client/peers' },
+				{ text: 'Threads', link: '/client/threads' },
+				{ text: 'Sending Media', link: '/client/sending-media' },
+				{ text: 'Receiving Media', link: '/client/receiving-media' },
+				{ text: 'Transforms and Encryption', link: '/client/transforms' },
+				{ text: 'Data Channels', link: '/client/data-channels' },
+				{ text: 'WHIP and WHEP', link: '/client/whip-whep' },
+				{ text: 'Statistics and Call Checks', link: '/client/statistics' },
 			],
 		},
 		{
@@ -85,6 +99,14 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'GraalVM Native Image', link: '/advanced/native-image' },
 			],
 		},
+		{
+			text: 'Background',
+			collapsed: false,
+			items: [
+				{ text: 'Client API Design', link: '/client-api-design' },
+				{ text: 'Build Notes', link: '/build' },
+			],
+		},
 	]
 }
 
@@ -97,7 +119,7 @@ function sidebarTools(): DefaultTheme.SidebarItem[] {
 				{ text: 'Audio Converter', link: '/audio/audio-converter' },
 				{ text: 'Audio Recorder', link: '/audio/audio-recorder' },
 				{ text: 'Audio Player', link: '/audio/audio-player' },
-				{ text: 'Voice Activity Detector', link: '/audio/voice-activity-detector' },
+				{ text: 'Voice Activity Detection', link: '/audio/voice-activity-detector' },
 			],
 		},
 		{
@@ -113,7 +135,7 @@ function sidebarTools(): DefaultTheme.SidebarItem[] {
 			collapsed: false,
 			items: [
 				{ text: 'Screen Capturer', link: '/desktop/screen-capturer' },
-				{ text: 'Window Capturer ', link: '/desktop/window-capturer' },
+				{ text: 'Window Capturer', link: '/desktop/window-capturer' },
 				{ text: 'Power Management', link: '/desktop/power-management' },
 			],
 		},

@@ -157,7 +157,7 @@ factory, after echo cancellation and noise suppression, so the remote peer's
 voice from the speakers does not count as this side speaking:
 `PeerConnectionFactory.addVoiceActivityListener`, see
 [Audio Processing](/guide/audio/audio-processing#speech-in-the-processed-microphone-audio).
-With the [Client API](/guide/client-api#audio), `LocalAudio.onVoiceActivity`
+With the [Client API](/guide/client/receiving-media#audio), `LocalAudio.onVoiceActivity`
 covers both, for the microphone and for pushed audio:
 
 ```java

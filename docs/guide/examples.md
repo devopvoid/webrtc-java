@@ -4,7 +4,7 @@ This section provides an overview of the example applications included in the `w
 
 ## Client API
 
-The [`ClientApiExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ClientApiExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends video, audio and chat messages from one to the other. It needs no audio or video hardware and no server.
+The [`ClientApiExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ClientApiExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends video, audio and chat messages from one to the other. It needs no audio or video hardware and no server.
 
 **Key features demonstrated:**
 - Creating a headless `WebRtc` runtime, which needs no microphone or speakers
@@ -24,7 +24,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ClientApiExample" -D"
 
 ## Native Image
 
-The [`NativeImageExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/NativeImageExample.java) is made to be compiled into a [GraalVM native image](/guide/advanced/native-image), a single executable that needs no installed Java runtime. It connects two peers in one process and checks itself: it exits with status 0 only if everything arrived.
+The [`NativeImageExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/NativeImageExample.java) is made to be compiled into a [GraalVM native image](/guide/advanced/native-image), a single executable that needs no installed Java runtime. It connects two peers in one process and checks itself: it exits with status 0 only if everything arrived.
 
 **Key features demonstrated:**
 - Loading the native library that the image carries inside itself
@@ -41,7 +41,7 @@ webrtc-examples/target/webrtc-native-image-example
 
 ## File Transfer
 
-The [`FileTransferExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/FileTransferExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends a file from one to the other with [File Transfer](/guide/data/file-transfer). It needs no audio or video hardware and no server.
+The [`FileTransferExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/FileTransferExample.java) connects two peers in one process with the [Client API](/guide/client-api), and sends a file from one to the other with [File Transfer](/guide/data/file-transfer). It needs no audio or video hardware and no server.
 
 **Key features demonstrated:**
 - Running `FileTransfers` over a data channel on both sides
@@ -57,7 +57,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.FileTransferExample" 
 
 ## PeerConnection
 
-The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) sends the camera and the microphone from one peer to another in the same process, with the [Client API](/guide/client-api), and logs the video frames and audio that arrive.
+The [`PeerConnectionExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/PeerConnectionExample.java) sends the camera and the microphone from one peer to another in the same process, with the [Client API](/guide/client-api), and logs the video frames and audio that arrive.
 
 **Key features demonstrated:**
 - Creating a `WebRtc` runtime that captures from and plays to the audio devices
@@ -75,7 +75,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.PeerConnectionExample
 
 ## WHEP
 
-The [`WhepExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/WhepExample.java) implements a client of the WebRTC HTTP Egress Protocol (WHEP), which receives a stream from a server, with the [Client API](/guide/client-api).
+The [`WhepExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/WhepExample.java) implements a client of the WebRTC HTTP Egress Protocol (WHEP), which receives a stream from a server, with the [Client API](/guide/client-api).
 
 **Key features demonstrated:**
 - Receiving a stream from a WHEP endpoint with `Whep`
@@ -90,7 +90,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.WhepExample" -D"exec.
 
 ## Codec List
 
-The [`CodecListExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/CodecListExample.java) demonstrates how to list all supported codecs with the WebRTC peer-connection-factory.
+The [`CodecListExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/CodecListExample.java) demonstrates how to list all supported codecs with the WebRTC peer-connection-factory.
 
 **Key features demonstrated:**
 - Creating a `PeerConnectionFactory` with the `HardwareVideoEncoderFactory` and `HardwareVideoDecoderFactory`
@@ -102,7 +102,7 @@ This example is useful for understanding what codecs are available on the curren
 
 ## Desktop Video
 
-The [`DesktopVideoExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopVideoExample.java) shares a screen or a window from one peer to another in the same process, with the [Client API](/guide/client-api).
+The [`DesktopVideoExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopVideoExample.java) shares a screen or a window from one peer to another in the same process, with the [Client API](/guide/client-api).
 
 **Key features demonstrated:**
 - Listing the screens and windows that can be captured
@@ -119,7 +119,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopVideoExample" 
 
 ## System Audio
 
-The [`SystemAudioExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/SystemAudioExample.java) captures the audio the system plays on its default output with a [`SystemAudioSource`](/guide/audio/system-audio-source), and counts the frames that reach a sink of its track, without sending or playing anything.
+The [`SystemAudioExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/SystemAudioExample.java) captures the audio the system plays on its default output with a [`SystemAudioSource`](/guide/audio/system-audio-source), and counts the frames that reach a sink of its track, without sending or playing anything.
 
 **Key features demonstrated:**
 - Capturing the system output as a local audio track
@@ -134,7 +134,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.SystemAudioExample"
 
 ## Screen Share with Audio
 
-The [`ScreenShareAudioExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ScreenShareAudioExample.java) shares a screen together with the microphone and the system audio, from one runtime and over one peer, with the [Client API](/guide/client-api).
+The [`ScreenShareAudioExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/ScreenShareAudioExample.java) shares a screen together with the microphone and the system audio, from one runtime and over one peer, with the [Client API](/guide/client-api).
 
 **Key features demonstrated:**
 - Sending a screen, the microphone and the system output as three tracks of one stream
@@ -150,7 +150,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ScreenShareAudioExamp
 
 ## Media File
 
-The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFileExample.java) demonstrates how to send a media file over a peer connection, in place of a camera and a microphone. See the [Media Files](/guide/media/media-files) guide for the API it uses.
+The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFileExample.java) demonstrates how to send a media file over a peer connection, in place of a camera and a microphone. See the [Media Files](/guide/media/media-files) guide for the API it uses.
 
 **Key features demonstrated:**
 - Opening a media file, or a live RTSP stream, with a `MediaFileSource`
@@ -173,7 +173,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"
 
 ## Media File Player
 
-The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application built on the [Client API](/guide/client-api). It sends a media file, or a live RTSP stream, from one peer to another in the same process, then shows the received video and plays the received audio in sync, and records what is received. Start and Stop buttons set up and tear down the whole session, and Record starts and stops a recording.
+The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application built on the [Client API](/guide/client-api). It sends a media file, or a live RTSP stream, from one peer to another in the same process, then shows the received video and plays the received audio in sync, and records what is received. Start and Stop buttons set up and tear down the whole session, and Record starts and stops a recording.
 
 **Key features demonstrated:**
 - Sending the sources of a `MediaFileSource` as client API tracks, with `videoTrack` and `audioTrack`
@@ -197,7 +197,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFilePlayerExampl
 
 ## JavaFX Camera
 
-The [`JavaFxCameraExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/JavaFxCameraExample.java) is a JavaFX application built on the [Client API](/guide/client-api). It sends the camera from one peer to another in the same process, and shows the camera's preview beside the video that arrives.
+The [`JavaFxCameraExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/JavaFxCameraExample.java) is a JavaFX application built on the [Client API](/guide/client-api). It sends the camera from one peer to another in the same process, and shows the camera's preview beside the video that arrives.
 
 **Key features demonstrated:**
 - Running the peers' handlers on the JavaFX Application Thread, with `Platform::runLater` as the event executor
@@ -213,7 +213,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.JavaFxCameraExample"
 
 ## Encrypted Recording
 
-The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call end to end with a key provider of [End-to-End Encryption](/guide/advanced/end-to-end-encryption), with the [Client API](/guide/client-api#encoded-transforms), and records what the receiving side decrypted into a media file. See the [Encoded Transforms](/guide/advanced/encoded-transforms) and [Media Recording](/guide/media/media-recording) guides for the APIs it uses.
+The [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) encrypts a call end to end with a key provider of [End-to-End Encryption](/guide/advanced/end-to-end-encryption), with the [Client API](/guide/client/transforms), and records what the receiving side decrypted into a media file. See the [Encoded Transforms](/guide/advanced/encoded-transforms) and [Media Recording](/guide/media/media-recording) guides for the APIs it uses.
 
 **Key features demonstrated:**
 - Encrypting every encoded audio and video frame in the SFrame format with `e2ee(keys)` of the peer options, and decrypting it, from the first frame on
@@ -231,7 +231,7 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.EncryptedRecordingExa
 
 ## Web Client
 
-The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) calls a browser from Java over WebSocket signaling, with the [Client API](/guide/client-api). The browser client is served by the example's `WebServer`.
+The [`WebClientExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/web/WebClientExample.java) calls a browser from Java over WebSocket signaling, with the [Client API](/guide/client-api). The browser client is served by the example's `WebServer`.
 
 **Key features demonstrated:**
 - Connecting to a signaling server using WebSockets

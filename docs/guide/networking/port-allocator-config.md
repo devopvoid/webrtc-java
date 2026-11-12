@@ -1,4 +1,6 @@
-# Port Allocator Configuration (ICE)
+# Port Allocator Configuration
+
+<ApiNote client="/guide/client/peers" title="Peers and Signaling" />
 
 This guide explains how to configure the ICE port allocator using `dev.onvoid.webrtc.PortAllocatorConfig` and how to use it with `RTCConfiguration` when creating a peer connection.
 

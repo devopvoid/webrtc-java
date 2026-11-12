@@ -1,5 +1,7 @@
 # Media Directionality
 
+<ApiNote client="/guide/client/receiving-media#receiving-without-sending" title="Receiving Without Sending" />
+
 This guide explains how to configure WebRTC media to be receive-only or send-only using the webrtc-java API. It also shows the equivalent configuration on the JavaScript (browser) side. You will learn how to:
 
 - Create receive-only audio/video transceivers

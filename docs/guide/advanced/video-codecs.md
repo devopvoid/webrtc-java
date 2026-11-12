@@ -1,5 +1,7 @@
 # Video Codecs
 
+<ApiNote client="/guide/client-api#the-runtime" title="The Runtime" />
+
 A `PeerConnectionFactory` decides which video codecs it can send and receive through a video encoder factory and a video decoder factory. Unless told otherwise it uses the codecs built into the library. This guide explains how to replace or extend them: to add a codec WebRTC does not have, to use a hardware encoder reached through another library, or to limit the codecs a factory offers.
 
 The API lives in the `dev.onvoid.webrtc.media.video.codec` package.

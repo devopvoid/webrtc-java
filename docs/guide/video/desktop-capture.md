@@ -1,5 +1,7 @@
 # Desktop Video
 
+<ApiNote client="/guide/client/sending-media" title="Sending Media" />
+
 This guide focuses on setting up a peer connection with desktop video capture capabilities, which allows you to capture and stream content from your screens or application windows in your WebRTC connection.
 
 ## Desktop Video Source Selection

@@ -9,7 +9,7 @@ Use these pages to pick the right tool and jump straight to code examples.
 - [Audio Converter](/tools/audio/audio-converter) — Resample and remix 10 ms PCM frames between rates and channel layouts.
 - [Audio Recorder](/tools/audio/audio-recorder) — Capture microphone input and receive 10 ms PCM frames via an `AudioSink`.
 - [Audio Player](/tools/audio/audio-player) — Play PCM audio to an output device by supplying frames via an `AudioSource`.
-- [Voice Activity Detector](/tools/audio/voice-activity-detector) — Estimate speech probability for short PCM frames.
+- [Voice Activity Detection](/tools/audio/voice-activity-detector) — Estimate speech probability for short PCM frames.
 
 ## Video
 
@@ -31,10 +31,10 @@ Use these pages to pick the right tool and jump straight to code examples.
 
 ## Related guides
 
-- [Camera Capture](/guide/video/camera-capture)
-- [Desktop Capture](/guide/video/desktop-capture)
+- [Camera Video](/guide/video/camera-capture)
+- [Desktop Video](/guide/video/desktop-capture)
 - [Custom Video Source](/guide/video/custom-video-source)
-- [Audio Device Selection](/guide/audio/audio-devices)
+- [Audio Devices](/guide/audio/audio-devices)
 - [Audio Processing](/guide/audio/audio-processing)
 - [RTC Stats](/guide/monitoring/rtc-stats)
 

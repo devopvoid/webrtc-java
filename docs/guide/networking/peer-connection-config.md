@@ -1,5 +1,7 @@
 # Peer Connection Configuration
 
+<ApiNote client="/guide/client/peers" title="Peers and Signaling" />
+
 `RTCConfiguration` holds the settings a peer connection is created with: ICE servers and policies, how candidates are gathered, how ICE checks connections, and how media is protected. This guide covers the settings beyond the ICE servers, which most applications leave at their defaults, but which matter for fast connecting, restrictive networks, and mobile or multi-homed hosts.
 
 Every setting described here is unset by default, which keeps WebRTC's default. `getConfiguration()` returns the values in effect, defaults included.

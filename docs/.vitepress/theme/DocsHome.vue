@@ -51,7 +51,7 @@ async function copyDependency() {
 const paths = [
   { label: 'START BUILDING', title: 'Your first connection', description: 'Install the library, connect two peers, and send your first audio and video.', link: '/guide/get-started', action: 'Get started', icon: 'code' },
   { label: 'EXPLORE MEDIA', title: 'Bring your media', description: 'Capture a camera, share a screen, play an RTSP stream, or record a call.', link: '/guide/media/media-devices', action: 'Explore media', icon: 'video' },
-  { label: 'CONNECT TO MEDIA SERVERS', title: 'WHIP / WHEP', description: 'Publish live audio and video with WHIP, or receive streams with WHEP over HTTP.', link: '/guide/client-api#whip-and-whep', action: 'Explore WHIP / WHEP', icon: 'arrows' },
+  { label: 'CONNECT TO MEDIA SERVERS', title: 'WHIP / WHEP', description: 'Publish live audio and video with WHIP, or receive streams with WHEP over HTTP.', link: '/guide/client/whip-whep', action: 'Explore WHIP / WHEP', icon: 'arrows' },
 ]
 const topics = [
   { title: 'Audio & video capture', detail: 'Connect microphones, cameras, and custom sources.', link: '/guide/media/media-devices', icon: 'video' },

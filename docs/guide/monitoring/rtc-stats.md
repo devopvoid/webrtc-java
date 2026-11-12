@@ -1,5 +1,7 @@
 # RTC Stats
 
+<ApiNote client="/guide/client/statistics" title="Statistics and Call Checks" />
+
 This guide explains how to use WebRTC statistics (RTC Stats) with the webrtc-java library. RTC Stats provide detailed metrics and information about the state and performance of your WebRTC connections.
 
 ## Overview

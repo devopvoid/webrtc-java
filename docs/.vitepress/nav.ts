@@ -16,8 +16,8 @@ export const navbar: DefaultTheme.NavItem[] = [
 		link: '/tools',
 	},
 	{
-		text: 'Client API Design',
-		link: '/guide/client-api-design',
+		text: 'Client API',
+		link: '/guide/client-api',
 	},
 	{
 		text: IS_NEXT ? PROJECT_VARS.VERSION_SNAPSHOT : PROJECT_VARS.VERSION,

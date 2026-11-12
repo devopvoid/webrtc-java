@@ -101,5 +101,5 @@ wc.dispose();
 
 ## Related guides
 
-- [Desktop Capture](/guide/video/desktop-capture)
+- [Desktop Video](/guide/video/desktop-capture)
 - [Power Management](/tools/desktop/power-management)

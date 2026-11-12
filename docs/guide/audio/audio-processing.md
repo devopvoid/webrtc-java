@@ -1,5 +1,7 @@
 # Audio Processing
 
+<ApiNote client="/guide/client-api#the-runtime" title="The Runtime" />
+
 This guide explains how to use the audio processing capabilities provided by the `dev.onvoid.webrtc.media.audio.AudioProcessing` class. The library provides a collection of voice processing components designed for real-time communications software.
 
 ## Overview
@@ -313,7 +315,7 @@ factory.addVoiceActivityListener(new VoiceActivityConfig(0.5, Duration.ofMillis(
 factory.removeVoiceActivityListener(listener);
 ```
 
-It works with the `AudioProcessing` the factory was built with as well as with the one it builds itself. All listeners share one detector, and each decides with the threshold and hangover of its own `VoiceActivityConfig`. Audio arrives while the audio device module records, which WebRTC starts once a peer connection sends a microphone track. A listener must not add or remove a listener. Disposing of the factory removes the listeners it still has. The [Client API](/guide/client-api#audio) offers the same through `LocalAudio.onVoiceActivity`.
+It works with the `AudioProcessing` the factory was built with as well as with the one it builds itself. All listeners share one detector, and each decides with the threshold and hangover of its own `VoiceActivityConfig`. Audio arrives while the audio device module records, which WebRTC starts once a peer connection sends a microphone track. A listener must not add or remove a listener. Disposing of the factory removes the listeners it still has. The [Client API](/guide/client/receiving-media#audio) offers the same through `LocalAudio.onVoiceActivity`.
 
 ## Statistics
 
