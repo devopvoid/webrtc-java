@@ -27,6 +27,7 @@ import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.MediaStreamTrackState;
 import dev.onvoid.webrtc.media.video.desktop.DesktopSource;
 import dev.onvoid.webrtc.media.video.desktop.ScreenCapturer;
+import dev.onvoid.webrtc.media.video.desktop.TestWindowProcess;
 
 import java.awt.Color;
 import java.awt.EventQueue;
@@ -37,11 +38,13 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -204,6 +207,124 @@ class VideoDesktopSourceTests extends TestBase {
 	}
 
 	@Test
+	void windowFramesFollowWindow() throws Exception {
+		assumeTrue(OS.contains("mac"), "covers the macOS window capturers");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		double scale = screenScale();
+
+		// A window of another process, which ScreenCaptureKit captures on
+		// macOS 14 and newer. This process's own windows are captured with
+		// CGWindowListCreateImage.
+		try (TestWindowProcess window = TestWindowProcess.open(400, 300)) {
+			DesktopSource source = window.find();
+
+			// Without screen recording permission, another process's windows
+			// are listed without their titles.
+			assumeTrue(source != null, "The window is not listed under its title");
+
+			try (WindowCapture capture = new WindowCapture(source)) {
+				int[] first = capture.await(frame -> true, 5000);
+
+				assumeTrue(first != null, "The window delivered no frames");
+				// Black but for the title bar, unless the content is hidden
+				// for want of permission.
+				assumeTrue(first[2] < 80, "The window's content is not visible");
+
+				assertSize(400, 300, scale, first);
+
+				window.setColor(true);
+
+				int[] white = capture.await(frame -> frame[2] > 150, 3000);
+
+				assertTrue(white[2] > 150, "Frames did not follow the window turning white: luma " + white[2]);
+
+				window.setSize(800, 500);
+				assertSize(800, 500, scale, capture.await(frame -> hasSize(800, 500, scale, frame), 3000));
+
+				window.setSize(300, 250);
+				assertSize(300, 250, scale, capture.await(frame -> hasSize(300, 250, scale, frame), 3000));
+			}
+		}
+	}
+
+	@Test
+	void closedWindowStopsCapture() throws Exception {
+		assumeTrue(OS.contains("mac"), "covers the macOS window capturers");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		try (TestWindowProcess window = TestWindowProcess.open(400, 300)) {
+			DesktopSource source = window.find();
+
+			assumeTrue(source != null, "The window is not listed under its title");
+
+			try (WindowCapture capture = new WindowCapture(source)) {
+				assumeTrue(capture.await(frame -> true, 5000) != null, "The window delivered no frames");
+
+				window.closeWindow();
+
+				// Capture stops within a frame or two of the window closing.
+				Thread.sleep(1000);
+
+				int frames = capture.frames();
+
+				Thread.sleep(1000);
+
+				assertEquals(frames, capture.frames(), "Frames kept coming after the window closed");
+			}
+		}
+	}
+
+	@Test
+	void ownWindowFramesFollowWindow() throws Exception {
+		assumeTrue(OS.contains("mac"), "covers the macOS window capturers");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		// This process may capture its own window without screen recording
+		// permission, and closing it must end the capture.
+		String title = "webrtc-java " + UUID.randomUUID();
+		Frame window = new Frame(title);
+
+		EventQueue.invokeAndWait(() -> {
+			window.setBackground(Color.BLACK);
+			window.setBounds(100, 100, 400, 300);
+			window.setVisible(true);
+		});
+
+		try {
+			DesktopSource source = TestWindowProcess.findWindow(title);
+
+			assumeTrue(source != null, "The window is not listed under its title");
+
+			try (WindowCapture capture = new WindowCapture(source)) {
+				assumeTrue(capture.await(frame -> true, 5000) != null, "The window delivered no frames");
+
+				EventQueue.invokeAndWait(() -> {
+					window.setBackground(Color.WHITE);
+					window.repaint();
+				});
+
+				int[] white = capture.await(frame -> frame[2] > 150, 3000);
+
+				assertTrue(white[2] > 150, "Frames did not follow the window turning white: luma " + white[2]);
+
+				EventQueue.invokeAndWait(window::dispose);
+
+				Thread.sleep(1000);
+
+				int frames = capture.frames();
+
+				Thread.sleep(1000);
+
+				assertEquals(frames, capture.frames(), "Frames kept coming after the window closed");
+			}
+		}
+		finally {
+			EventQueue.invokeAndWait(window::dispose);
+		}
+	}
+
+	@Test
 	void retainedFrameKeepsPixels() throws Exception {
 		assumeFalse(isWaylandSession(), "Starting a capture asks the user what to share");
 		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
@@ -319,6 +440,103 @@ class VideoDesktopSourceTests extends TestBase {
 			track.dispose();
 			source.dispose();
 		}
+	}
+
+	/**
+	 * Captures one window, keeping the width, height and mean luma of the
+	 * latest frame.
+	 */
+	private final class WindowCapture implements AutoCloseable {
+
+		private final VideoDesktopSource source = new VideoDesktopSource();
+
+		private final VideoTrack track;
+
+		private final VideoTrackSink sink;
+
+		private final AtomicInteger frames = new AtomicInteger();
+
+		private final AtomicReference<int[]> latest = new AtomicReference<>();
+
+
+		WindowCapture(DesktopSource window) {
+			source.setSourceId(window.id, true);
+			source.setFrameRate(10);
+
+			track = factory.createVideoTrack("window", source);
+			sink = frame -> {
+				NativeI420Buffer buffer = (NativeI420Buffer) frame.buffer;
+
+				latest.set(new int[] { buffer.getWidth(), buffer.getHeight(), (int) sampledLuma(buffer) });
+				frame.release();
+				frames.incrementAndGet();
+			};
+
+			track.addSink(sink);
+			source.start();
+		}
+
+		/**
+		 * Waits for a frame that meets the condition. Returns it, or else the
+		 * latest frame, which is null if none came.
+		 */
+		int[] await(Predicate<int[]> condition, long millis) throws InterruptedException {
+			long deadline = System.currentTimeMillis() + millis;
+			int[] frame = latest.get();
+
+			while ((frame == null || !condition.test(frame)) && System.currentTimeMillis() < deadline) {
+				Thread.sleep(50);
+
+				frame = latest.get();
+			}
+
+			return frame;
+		}
+
+		int frames() {
+			return frames.get();
+		}
+
+		@Override
+		public void close() {
+			source.stop();
+			track.removeSink(sink);
+			track.dispose();
+			source.dispose();
+		}
+	}
+
+	private static double screenScale() {
+		return GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
+				.getDefaultConfiguration().getDefaultTransform().getScaleX();
+	}
+
+	private static boolean hasSize(int width, int height, double scale, int[] frame) {
+		return Math.abs(frame[0] - Math.round(width * scale)) <= 2
+				&& Math.abs(frame[1] - Math.round(height * scale)) <= 2;
+	}
+
+	private static void assertSize(int width, int height, double scale, int[] frame) {
+		assertTrue(frame != null && hasSize(width, height, scale, frame),
+				"Expected a frame of a " + width + "x" + height + " window at scale " + scale + ", got "
+						+ (frame == null ? "none" : frame[0] + "x" + frame[1]));
+	}
+
+	/** The mean luma of every fourth pixel in every fourth row. */
+	private static double sampledLuma(NativeI420Buffer buffer) {
+		ByteBuffer data = buffer.getDataY();
+		int stride = buffer.getStrideY();
+		long sum = 0;
+		long count = 0;
+
+		for (int y = 0; y < buffer.getHeight(); y += 4) {
+			for (int x = 0; x < buffer.getWidth(); x += 4) {
+				sum += data.get(y * stride + x) & 0xFF;
+				count++;
+			}
+		}
+
+		return (double) sum / count;
 	}
 
 	private static ByteBuffer copyOf(ByteBuffer buffer) {

@@ -32,6 +32,10 @@
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
 #include "modules/desktop_capture/mouse_cursor_monitor.h"
 
+#if defined(WEBRTC_MAC)
+#include "media/video/desktop/macos/ScreenCaptureKitWindowCapturer.h"
+#endif
+
 #include <algorithm>
 #include <cmath>
 
@@ -261,10 +265,11 @@ namespace jni
 		// The CGDisplayStream capturer otherwise used gets new pixels only
 		// when its stream calls back, and when that stops it keeps sending the
 		// first frame with a live cursor on top (issue #344). Older macOS
-		// falls back to it. Only screens: window capture ignores this, and the
-		// source list stays with the CGDisplayStream capturer in
-		// DesktopCapturer, since ScreenCaptureKit lists no screens without its
-		// system picker. Both name a screen by its CGDirectDisplayID.
+		// falls back to it. Only screens: windows have a ScreenCaptureKit
+		// capturer of our own, below. The source list stays with the
+		// CGDisplayStream capturer in DesktopCapturer, since ScreenCaptureKit
+		// lists no screens without its system picker. Both name a screen by
+		// its CGDirectDisplayID.
 		options.set_allow_sck_capturer(true);
 #endif
 #if defined(WEBRTC_WIN)
@@ -290,6 +295,14 @@ namespace jni
 		// type-specific capturers below. The portal handles the actual source
 		// selection, so sourceIsWindow is irrelevant on this path.
 		inner = webrtc::DesktopCapturer::CreateGenericCapturer(options);
+#endif
+
+#if defined(WEBRTC_MAC)
+		if (!inner && sourceIsWindow) {
+			// Streams the window with ScreenCaptureKit on macOS 14 and newer,
+			// instead of a CGWindowListCreateImage snapshot per frame.
+			inner = CreateScreenCaptureKitWindowCapturer(options);
+		}
 #endif
 
 		if (!inner) {

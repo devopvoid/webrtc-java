@@ -18,13 +18,16 @@ package dev.onvoid.webrtc.media.video.desktop;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import dev.onvoid.webrtc.TestBase;
 
+import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -77,6 +80,63 @@ class DesktopCapturerTests extends TestBase {
 		}
 		finally {
 			capturer.dispose();
+		}
+	}
+
+	@Test
+	void windowCapturerFollowsWindowUntilClosed() throws Exception {
+		assumeTrue(System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("mac"),
+				"covers the macOS window capturers");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		double scale = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice()
+				.getDefaultConfiguration().getDefaultTransform().getScaleX();
+
+		// A window of another process, which ScreenCaptureKit captures on
+		// macOS 14 and newer.
+		try (TestWindowProcess window = TestWindowProcess.open(400, 300)) {
+			DesktopSource source = window.find();
+
+			assumeTrue(source != null, "The window is not listed under its title");
+
+			WindowCapturer capturer = new WindowCapturer();
+			List<String> results = new ArrayList<>();
+
+			try {
+				capturer.selectSource(source);
+				capturer.start((result, frame) -> {
+					if (frame != null) {
+						results.add(frame.buffer.getWidth() + "x" + frame.buffer.getHeight());
+						frame.release();
+					}
+					else {
+						results.add(result.name());
+					}
+				});
+
+				String size = Math.round(400 * scale) + "x" + Math.round(300 * scale);
+
+				for (int i = 0; i < 50 && !results.contains(size); i++) {
+					capturer.captureFrame();
+					Thread.sleep(100);
+				}
+
+				assumeTrue(results.stream().anyMatch(r -> r.contains("x")), "The window delivered no frames");
+				assertTrue(results.contains(size), "No " + size + " frame of the window: " + results);
+
+				window.closeWindow();
+
+				for (int i = 0; i < 30 && !results.contains("ERROR_PERMANENT"); i++) {
+					capturer.captureFrame();
+					Thread.sleep(100);
+				}
+
+				assertEquals("ERROR_PERMANENT", results.get(results.size() - 1),
+						"The closed window was still captured: " + results);
+			}
+			finally {
+				capturer.dispose();
+			}
 		}
 	}
 

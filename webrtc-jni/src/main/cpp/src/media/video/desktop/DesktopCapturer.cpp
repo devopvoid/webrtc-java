@@ -22,6 +22,10 @@
 #include "modules/desktop_capture/desktop_and_cursor_composer.h"
 #include "rtc_base/logging.h"
 
+#if defined(WEBRTC_MAC)
+#include "media/video/desktop/macos/ScreenCaptureKitWindowCapturer.h"
+#endif
+
 namespace jni
 {
 	DesktopCapturer::DesktopCapturer(bool screenCapturer) :
@@ -47,9 +51,21 @@ namespace jni
 		options.set_prefer_cursor_embedded(true);
 #endif
 
-		std::unique_ptr<webrtc::DesktopCapturer> inner = screenCapturer
-			? webrtc::DesktopCapturer::CreateScreenCapturer(options)
-			: webrtc::DesktopCapturer::CreateWindowCapturer(options);
+		std::unique_ptr<webrtc::DesktopCapturer> inner;
+
+#if defined(WEBRTC_MAC)
+		if (!screenCapturer) {
+			// Lists windows as WebRTC's window capturer does, and captures
+			// them with ScreenCaptureKit on macOS 14 and newer.
+			inner = CreateScreenCaptureKitWindowCapturer(options);
+		}
+#endif
+
+		if (!inner) {
+			inner = screenCapturer
+				? webrtc::DesktopCapturer::CreateScreenCapturer(options)
+				: webrtc::DesktopCapturer::CreateWindowCapturer(options);
+		}
 
 		if (!inner) {
 			RTC_LOG(LS_ERROR) << (screenCapturer
