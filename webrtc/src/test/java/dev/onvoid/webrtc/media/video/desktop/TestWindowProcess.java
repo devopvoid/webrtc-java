@@ -133,6 +133,8 @@ public final class TestWindowProcess implements AutoCloseable {
 				window.setBackground(Color.BLACK);
 				window.setBounds(100, 100, Integer.parseInt(args[1]), Integer.parseInt(args[2]));
 				window.setVisible(true);
+				// Not hidden behind other windows, where it may not be redrawn.
+				window.toFront();
 			});
 
 			BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
