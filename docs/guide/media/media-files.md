@@ -1,37 +1,30 @@
 # Media Files
 
-This guide explains how to send a media file over a peer connection instead of a camera and a microphone, using the `webrtc-java-media` module. It covers:
+<ApiNote client="/guide/client/sending-media#sending-a-media-file" title="Sending a Media File" />
 
-- Adding the media module to a project
-- Sending a file with `MediaFileSource`
-- Reading what a source contains with `MediaReader` and `MediaInfo`
-- Controlling playback and following it with a listener
-- Feeding your own media sources with `MediaPlayer`
-- Playing a live stream from an IP camera or media server over RTSP
+The `webrtc-java-media` module sends a media file over a peer connection, in place of a camera and a microphone. It also plays live streams from IP cameras and media servers over RTSP.
 
-Sending a file is a common need: a test pattern instead of a webcam, a pre-recorded briefing, a video that has to reach several participants. Without help, an application has to bring its own decoder and push I420 frames into a `CustomVideoSource` itself. The media module removes that work by decoding with [FFmpeg](https://ffmpeg.org) inside the library.
-
-Decoding happens entirely in native code. Frames never travel through Java: the module hands decoded pictures straight to the native side of a `CustomVideoSource`, and 10 ms chunks to a `CustomAudioSource`. They are paced in real time and carry the presentation times of the file, so what a receiver gets keeps the timing of the media rather than the timing of a Java thread.
+Sending a file is a common need: a test pattern instead of a webcam, a pre-recorded briefing, or a video that has to reach several participants. Without the module, an application has to bring its own decoder and push I420 frames into a `CustomVideoSource` itself. The module decodes with [FFmpeg](https://ffmpeg.org) inside the library instead.
 
 ## Adding the Module
 
-The module is part of the normal build, and it builds FFmpeg and dav1d (the software decoder of AV1) from submodules pinned to release tags, so the submodules have to be present:
+The module is part of the normal build. It builds FFmpeg and dav1d, the software decoder of AV1, from submodules pinned to release tags, so the submodules have to be present:
 
 ```shell
 git submodule update --init --depth 1 webrtc-media/third-party/ffmpeg webrtc-media/third-party/dav1d
 mvn install
 ```
 
-Building FFmpeg needs `make` and `nasm`, and building dav1d needs [Meson](https://mesonbuild.com) (`pip install meson`) and Ninja. On Windows `make` and `nasm` come from MSYS2:
+Building FFmpeg needs `make` and `nasm`. Building dav1d needs [Meson](https://mesonbuild.com) (`pip install meson`) and Ninja. On Windows, `make` and `nasm` come from MSYS2:
 
 ```shell
 winget install MSYS2.MSYS2
 C:\msys64\usr\bin\bash -lc "pacman -S --needed make nasm diffutils pkgconf"
 ```
 
-Maven still runs from an ordinary shell; the build enters MSYS2 and the Visual Studio environment on its own. The first build compiles FFmpeg and dav1d, which takes a while; later builds reuse the install directory.
+Maven still runs from an ordinary shell: the build enters MSYS2 and the Visual Studio environment by itself. The first build compiles FFmpeg and dav1d, which takes a while. Later builds reuse the install directory.
 
-Once installed, depend on it alongside `webrtc-java`. It takes two entries: one for the Java API, and one for the natives of the platform you are running on.
+Once installed, depend on the module beside `webrtc-java`. It takes two entries: one for the Java API, and one for the natives of the platform you run on:
 
 ```xml
 <dependency>
@@ -47,15 +40,15 @@ Once installed, depend on it alongside `webrtc-java`. It takes two entries: one 
 </dependency>
 ```
 
-The classifier jar carries the module's native library together with the FFmpeg shared libraries it uses, so applications that do not use this module never download FFmpeg. Replace the classifier with the platform you are building for: `windows-x86_64`, `windows-aarch64`, `linux-x86_64`, `linux-aarch64`, `linux-aarch32`, `macos-x86_64` or `macos-aarch64`.
+The classifier jar holds the module's native library and the FFmpeg shared libraries it uses. Applications that do not use the module therefore never download FFmpeg. Use the classifier of the platform you build for: `windows-x86_64`, `windows-aarch64`, `linux-x86_64`, `linux-aarch64`, `linux-aarch32`, `macos-x86_64` or `macos-aarch64`.
 
 ::: info
-Unlike `webrtc-java`, which brings its natives along by itself, this module cannot: the natives are built by the module rather than by a separate one, so a dependency on them would have nothing to resolve against on a first build. Asking for them explicitly is the price of that.
+Unlike `webrtc-java`, this module cannot bring its natives along by itself. The module builds its natives itself, not a separate module, so on a first build a dependency on them would have nothing to resolve against. That is why you ask for them explicitly.
 :::
 
 ## Sending a File
 
-`MediaFileSource` is the short way to do all of it. It opens the source, creates a media source for each kind of media the file actually has, and wires a player to feed them:
+`MediaFileSource` does all of it in one step. It opens the source, creates a media source for each kind of media the file has, and connects a player that feeds them:
 
 ```java
 // Import required classes
@@ -78,7 +71,7 @@ peerConnection.addTrack(audioTrack, List.of("stream"));
 source.play();
 ```
 
-A file with no audio has no audio source, and likewise for video, so check before making a track:
+A file without audio has no audio source, and a file without video has no video source. Check before you create a track:
 
 ```java
 if (source.getVideoSource() != null) {
@@ -87,7 +80,11 @@ if (source.getVideoSource() != null) {
 }
 ```
 
-The audio of this module is pushed into its track, like that of a `CustomAudioSource`, so the same factory and peer connection can send the microphone beside it. A factory that sends only pushed audio never opens the recording device.
+The module pushes its audio into the track, as a `CustomAudioSource` does. The same factory and peer connection can therefore send the microphone beside it. A factory that sends only pushed audio never opens the recording device.
+
+Decoding happens entirely in native code, and frames never pass through Java. The module hands decoded pictures straight to the native side of a `CustomVideoSource`, and audio in 10 ms chunks to a `CustomAudioSource`.
+
+Both are paced in real time and carry the presentation times of the file. A receiver therefore gets the timing of the media, not the timing of a Java thread.
 
 ## Reading What a Source Contains
 
@@ -114,16 +111,20 @@ try (MediaReader reader = new MediaReader(Path.of("movie.mp4"))) {
 }
 ```
 
-The width and height are those of the video as it is shown, which can differ from what the file stores. A phone stores a portrait video sideways with a rotation next to it: its frames keep the stored size and carry the rotation in `VideoFrame.rotation`, which the video views and the receiving peers apply, and `MediaInfo` reports the upright size. A video of pixels that are not square, such as 720x576 PAL with 16:15 pixels, is scaled to square ones while it plays, to 768x576 in that case, because WebRTC has no way to describe them. One side grows so that no detail is lost, at the price of one copy of each picture. Only quarter turns are applied: a video that is to be shown mirrored, or turned by another angle, plays as it is stored. So does one whose pixels are said to be more than four times as wide as high, or the other way round.
+The width and height are those of the video as it is shown. They can differ from what the file stores:
 
-A `MediaFileSource` already has this, so there is no need to open the file twice:
+- **Rotation:** A phone stores a portrait video sideways, with a rotation beside it. Its frames keep the stored size and carry the rotation in `VideoFrame.rotation`, which the video views and the receiving peers apply. `MediaInfo` reports the upright size.
+- **Pixels that are not square,** such as those of 720x576 PAL with 16:15 pixels, are scaled to square ones while the video plays, here to 768x576. WebRTC has no way to describe them. One side grows, so that no detail is lost, at the price of one copy of each picture.
+- **Exceptions:** Only quarter turns are applied. A video that is to be shown mirrored, or turned by another angle, plays as it is stored. So does a video whose pixels are said to be more than four times as wide as high, or the other way round.
+
+A `MediaFileSource` already has this information, so there is no need to open the file twice:
 
 ```java
 MediaInfo info = source.getInfo();
 ```
 
 ::: info
-Duration is `0` for a source whose container does not say how long it runs, which is the case for live streams. Opening fails if a source holds nothing that can be played.
+The duration is `0` for a source whose container does not say how long it runs, as is the case for live streams. Opening fails if a source holds nothing that can be played.
 :::
 
 ## Controlling Playback
@@ -138,13 +139,24 @@ source.getPositionUs();         // where playback has got to
 source.getState();              // IDLE, PLAYING, PAUSED, ENDED or CLOSED
 ```
 
-Looping keeps the timing across the seam, so a looping file works as a stand-in for a camera that never stops. A looping source never reports an end of stream.
+Looping keeps the timing across the seam, so a looping file can stand in for a camera that never stops. A looping source never reports an end of stream.
 
-Positions count from the start of the source, which is its first video or audio frame, whichever comes first. The times a container gives its frames do not have to begin at zero: a file cut out of a longer recording or an MPEG-TS capture may start at any time, and `seek(2_000_000)` still means two seconds into it. Video and audio share that start, so a stream that begins after the other one keeps that distance.
+Positions count from the start of the source, which is its first video or audio frame, whichever comes first. The times a container gives its frames need not begin at zero.
 
-A seek starts playback at the position asked for. The decoder has to go back to the keyframe at or before it to produce a picture at all, so the frames from there up to the position are decoded and dropped, and the audio is cut at it. How long a seek takes therefore depends on how often the media was encoded with keyframes, not on how long the media is: MKV and MP4 have an index that takes the reader straight to that keyframe. MPEG-TS has none, and a search for the position by its timestamps can land past the keyframe before it. The player then searches again further back, a second before the position, then two, four and so on, so that the seek still starts at the position.
+A file cut out of a longer recording, or an MPEG-TS capture, may start at any time, and `seek(2_000_000)` still means two seconds into it. Video and audio share that start, so a stream that begins after the other one keeps that distance.
 
-`fastSeek` moves to that keyframe and plays from there, without decoding up to the position, so it takes no longer however far the keyframes are apart. That suits a slider being dragged, as browsers' `fastSeek()` does: fast seeks while it moves, and a `seek` once it is let go. In a container without an index, such as MPEG-TS, the keyframe can be the one after the position.
+### Seeking
+
+`seek` starts playback at the position asked for. To produce a picture at all, the decoder has to go back to the keyframe at or before the position. The frames from there up to the position are decoded and dropped, and the audio is cut at the position.
+
+How long a seek takes therefore depends on how often the media was encoded with keyframes, not on how long the media is:
+
+- MKV and MP4 have an index that takes the reader straight to that keyframe.
+- MPEG-TS has none. A search for the position by its timestamps can land past the keyframe before it. The player then searches again further back: one second before the position, then two, four and so on, so that the seek still starts at the position.
+
+`fastSeek` moves to that keyframe and plays from there, without decoding up to the position. It takes no longer, however far apart the keyframes are.
+
+That suits a slider being dragged, as the `fastSeek()` of browsers does: fast seeks while it moves, and a `seek` once it is let go. In a container without an index, such as MPEG-TS, the keyframe can be the one after the position.
 
 ## Following Playback
 
@@ -172,21 +184,30 @@ source.setListener(new MediaPlayerListener() {
 });
 ```
 
-Output failures are reported through `onError`. A single rejected video frame or audio chunk is dropped without advancing the position for that item; playback continues. These reports are limited to one per second for video and one for audio. Ten consecutive failed deliveries of either kind stop playback in `PAUSED` and produce a final error report. An unexpected C++ exception on the decoder thread also stops playback in `PAUSED`. After either terminal failure, `play()` and `seek()` have no effect: close the player and create a new one to retry.
+Output failures are reported through `onError`:
+
+- A single rejected video frame or audio chunk is dropped, without advancing the position for it. Playback continues.
+- These reports are limited to one per second for video and one per second for audio.
+- Ten failed deliveries in a row, of either kind, stop playback in `PAUSED` and produce a final error report.
+- An unexpected C++ exception on the decoder thread also stops playback in `PAUSED`.
+
+After either of these stops, `play()` and `seek()` have no effect. To retry, close the player and create a new one.
 
 ::: warning
-Every call arrives on the player's own event thread, never on the thread that called `play()`, `pause()` or `close()`, and never on the one decoding the media. The calls come one at a time, in the order the player went through what they report, so a listener needs no locking of its own against itself. A command returns without waiting for its state change to be reported, so `getState()` can already read a later state than the call in progress reports. `close()` returns once the listener has been told of everything, `CLOSED` last.
-
-A listener must still return promptly: the calls behind it wait, and so does a `close()` from another thread. It must not wait on the player.
-
-Closing the player, or the `MediaFileSource`, from a listener is fine: it takes effect at once, and the native player is released on another thread once the listener has returned. The same holds for a sink of a track made from the player's sources, which the player calls on threads of its own as well.
+- Every call arrives on the player's own event thread. It never arrives on the thread that called `play()`, `pause()` or `close()`, nor on the one decoding the media.
+- The calls come one at a time, in the order the player went through what they report. A listener therefore needs no locking against itself.
+- A command returns without waiting for its state change to be reported. `getState()` can therefore already read a later state than the call in progress reports.
+- `close()` returns once the listener has been told of everything, `CLOSED` last.
+- A listener must return promptly: the calls behind it wait, and so does a `close()` from another thread. It must not wait on the player.
+- Closing the player, or the `MediaFileSource`, from a listener is fine. It takes effect at once, and the native player is released on another thread once the listener has returned.
+- The same holds for a sink of a track made from the player's sources. The player calls sinks on threads of its own as well.
 :::
 
 ## Memory
 
-Decoding runs ahead of playback by up to sixty pictures, and at most by what `MediaPlayer.getMaxQueuedVideoBytes()` reports, which is 256 MiB. That keeps sixty pictures of 1080p, about twenty of 4K, and whatever the resolution, a player does not take more than that for pictures waiting to be delivered. Several players take that much each, on top of what the decoders use themselves.
+Decoding runs ahead of playback by up to sixty pictures, and by no more than what `MediaPlayer.getMaxQueuedVideoBytes()` reports: 256 MiB. That holds sixty pictures of 1080p, or about twenty of 4K. Whatever the resolution, a player takes no more than that for pictures waiting to be delivered.
 
-To see what an application really needs, ask the players that run:
+Several players take that much each, on top of what the decoders use themselves. To see what an application really needs, ask the players that run:
 
 ```java
 source.getQueuedVideoBytes();       // what the queued pictures take right now
@@ -195,7 +216,7 @@ source.getPeakQueuedVideoBytes();   // the most they have taken so far
 
 ## Feeding Your Own Media Sources
 
-`MediaFileSource` creates the media sources for you. An application that needs its own — to feed a source it already created, or to send only the video of a file — uses `MediaPlayer` directly:
+`MediaFileSource` creates the media sources for you. To feed a source you already created, or to send only the video of a file, use `MediaPlayer` directly:
 
 ```java
 // Import required classes
@@ -214,14 +235,15 @@ player.play();
 ```
 
 ::: info
-The player takes over the reader it is given. That reader must not be used or closed afterwards; closing the player releases it.
-
-It also keeps the native side of the media sources it feeds alive until it is closed, so disposing of a source or its track while the player runs is safe. A source that was already disposed is rejected with `IllegalStateException` before the reader is taken over; the caller can still use or close that reader. Source acquisition is protected against concurrent disposal: the constructor either acquires its own reference or rejects the disposed source.
+- The player takes over the reader it is given. Don't use or close that reader afterwards; closing the player releases it.
+- The player keeps the native side of the media sources it feeds alive until it is closed. Disposing of a source or its track while the player runs is therefore safe.
+- A source that was already disposed is rejected with `IllegalStateException`, before the reader is taken over. The caller can then still use or close that reader.
+- A source disposed while the constructor runs is safe too: the constructor either acquires its own reference to it or rejects it.
 :::
 
 ## Decoding in Hardware
 
-Decoding H.264, H.265/HEVC, VP9 and AV1 takes a good part of a processor at high resolutions, and for every stream of a camera wall. A player can decode them on the media engine or GPU of the machine instead. It does so when asked to, with a flag on `MediaFileSource` or `MediaPlayer`:
+At high resolutions, and for every stream of a camera wall, decoding H.264, H.265/HEVC, VP9 and AV1 takes a good part of a processor. A player can decode them on the media engine or GPU of the machine instead. It does so when asked to, with a flag on `MediaFileSource` or `MediaPlayer`:
 
 ```java
 // A file whose video is decoded in hardware, where the platform can.
@@ -235,14 +257,67 @@ MediaPlayer player = new MediaPlayer(new MediaReader(path), videoSource, null, t
 boolean hardware = source.getPlayer().isHardwareDecoding();
 ```
 
-The pictures are the same ones software decoding gives; in the tests, every frame of media in each of these codecs is compared with its software counterpart (for HEVC, with checksums of the pictures FFmpeg's software decoder gave once). Hardware decoding is off unless asked for, except for H.265/HEVC.
+Hardware decoding is off unless asked for, except for H.265/HEVC. The pictures are the same ones software decoding gives. The tests compare every frame of media in each of these codecs with its software counterpart; for HEVC, with checksums of the pictures that FFmpeg's software decoder gave once.
 
-**HEVC is decoded in hardware only.** A player decodes it on the media engine or GPU whether or not the flag is set, and never in software: `isHardwareDecoding()` is always `true` for it. Where the machine has no hardware decoder for HEVC, creating the player fails with an `IOException`; where the hardware does not take a stream (a profile it cannot decode) or fails while playing, playback stops with an error. The fallback below does not apply to it.
+::: warning HEVC is decoded in hardware only
+A player decodes HEVC on the media engine or GPU whether or not the flag is set, and never in software. `isHardwareDecoding()` is always `true` for it.
 
-- **Platforms:** macOS through VideoToolbox, Windows through Direct3D 12 (Windows 10 version 2004 or later, with a driver that decodes video through it) and otherwise Direct3D 11, and Linux (x86-64 and ARM64) through NVDEC on NVIDIA GPUs (the driver provides `libcuda.so.1` and `libnvcuvid.so.1`) and on the GPUs of Intel and AMD through VA-API (`libva.so.2` and `libva-drm.so.2` with a driver: Intel's `iHD` from intel-media-driver, or Mesa's `radeonsi`) and otherwise Vulkan Video (the Vulkan loader `libvulkan.so.1` and a driver with the video extensions of the codec: Mesa's ANV or RADV, recent enough for each codec, AV1 and VP9 needing the newest, which some distributions ship switched off). VA-API comes first because a Vulkan device can be created where its driver does not decode, and the player picks a device by whether it can be created. These libraries are loaded when a player asks for hardware, so a machine without them is not affected. The flag is accepted everywhere; where the platform has no hardware decoder, or the FFmpeg build has none for it (32-bit ARM), the video is decoded in software, except HEVC, and `isHardwareDecoding()` says so.
-- **Codecs:** H.264, H.265/HEVC, VP9 and AV1, where the GPU decodes them: a GPU that is a few years old may lack AV1, and on a Mac only an M3 or later has it. VP8, MPEG-4 and MJPEG are decoded in software, and so is AV1 where there is no GPU decoder for it (it is decoded by dav1d, which is built into the FFmpeg libraries).
-- **Fallback** (every codec but HEVC): a stream the hardware does not take, such as a profile it cannot decode, is decoded in software without the player noticing more than `isHardwareDecoding()` turning `false`. If the hardware fails before its first picture, the packets it was sent are decoded again in software and none is lost; if it fails after one, decoding goes on in software from the next key frame. A damaged packet is not taken for a hardware failure after the first picture: as with software decoding, playback stops with an error, and the hardware keeps the stream.
-- **What it saves** is processor time, not the copy: a decoded picture is read back from the media engine into system memory, and converted to I420 as WebRTC wants it. On an Apple M2, a 1080p H.264 stream took 11.6 ms of processor time per frame in software and 1.4 ms in hardware, and a 4K stream 35.7 ms against 4.2 ms, about seven to eight times less. Per frame, software on all cores is faster on the clock, which does not matter at playback speed. Windows gains less: on an NVIDIA GeForce RTX 3080 through Direct3D 12, a 1080p H.264 stream took about 2.1 ms of processor time per frame against 3.6 ms in software, and a 4K stream 5.4 ms against 6.6 ms. Direct3D 11 reads the picture back more slowly and took more than software at 4K (12.4 ms), which is why Direct3D 12 comes first. These are figures for one machine each and for synthetic media, not a promise; try it on your own streams before relying on it.
+- If the machine has no hardware decoder for HEVC, creating the player fails with an `IOException`.
+- If the hardware does not take a stream, such as a profile it cannot decode, or fails while playing, playback stops with an error.
+- The [fallback to software](#fallback-to-software) does not apply to HEVC.
+:::
+
+### Platforms
+
+| Platform | Decodes through | Needs |
+|---|---|---|
+| macOS | VideoToolbox | |
+| Windows | Direct3D 12 | Windows 10 version 2004 or later, with a driver that decodes video through Direct3D 12 |
+| Windows | Direct3D 11 | Used where Direct3D 12 is not available |
+| Linux, NVIDIA GPUs | NVDEC | `libcuda.so.1` and `libnvcuvid.so.1`, which the driver provides |
+| Linux, Intel and AMD GPUs | VA-API | `libva.so.2` and `libva-drm.so.2` with a driver: Intel's `iHD` from intel-media-driver, or Mesa's `radeonsi` |
+| Linux, Intel and AMD GPUs | Vulkan Video, otherwise | The Vulkan loader `libvulkan.so.1` and a driver with the video extensions of the codec: Mesa's ANV or RADV |
+
+- Linux means x86-64 and ARM64.
+- For Vulkan Video, Mesa's drivers must be recent enough for each codec, and AV1 and VP9 need the newest. Some distributions ship Mesa with its video extensions switched off.
+- VA-API comes before Vulkan Video, because a Vulkan device can be created even where its driver does not decode, and the player picks a device by whether it can be created.
+- These libraries are loaded only when a player asks for hardware, so a machine without them is not affected.
+- The flag is accepted everywhere. Where the platform has no hardware decoder, or the FFmpeg build has none for it (32-bit ARM), the video is decoded in software, except HEVC. `isHardwareDecoding()` then says so.
+
+### Codecs
+
+H.264, H.265/HEVC, VP9 and AV1 are decoded in hardware where the GPU decodes them. A GPU that is a few years old may lack AV1, and on a Mac only an M3 or later has it.
+
+VP8, MPEG-4 and MJPEG are decoded in software. So is AV1 where there is no GPU decoder for it. It is then decoded by dav1d, which is built into the FFmpeg libraries.
+
+### Fallback to Software
+
+For every codec but HEVC:
+
+- A stream the hardware does not take, such as a profile it cannot decode, is decoded in software. The only sign of it is `isHardwareDecoding()` turning `false`.
+- If the hardware fails before its first picture, the packets it was sent are decoded again in software, and none is lost.
+- If the hardware fails after its first picture, decoding goes on in software from the next key frame.
+- After the first picture, a damaged packet is not taken for a hardware failure. As with software decoding, playback stops with an error, and the hardware keeps the stream.
+
+### What It Saves
+
+Hardware decoding saves processor time, not the copy. A decoded picture is read back from the media engine into system memory, and converted to I420 as WebRTC wants it.
+
+::: details Measurements
+Processor time per frame:
+
+| Machine | Stream | Software | Hardware |
+|---|---|---|---|
+| Apple M2 | 1080p H.264 | 11.6 ms | 1.4 ms |
+| Apple M2 | 4K H.264 | 35.7 ms | 4.2 ms |
+| NVIDIA GeForce RTX 3080, Direct3D 12 | 1080p H.264 | 3.6 ms | about 2.1 ms |
+| NVIDIA GeForce RTX 3080, Direct3D 12 | 4K H.264 | 6.6 ms | 5.4 ms |
+
+- On the M2, hardware takes about seven to eight times less. Windows gains less.
+- Per frame, software on all cores is faster on the clock. At playback speed, that does not matter.
+- Direct3D 11 reads the picture back more slowly and took more than software at 4K (12.4 ms). That is why Direct3D 12 comes first.
+- These are figures for one machine each and for synthetic media, not a promise. Try it on your own streams before relying on it.
+:::
 
 ## Playing a Live Stream
 
@@ -252,9 +327,9 @@ A source can also be a live stream behind an `rtsp://` URL, which is what IP cam
 MediaFileSource source = new MediaFileSource("rtsp://camera.local:554/stream1");
 ```
 
-Credentials go into the URL, as `rtsp://user:password@camera.local/stream1`. FFmpeg first asks the server for RTP over UDP, and falls back to RTP interleaved on the RTSP connection over TCP if the server refuses UDP or no UDP packets arrive, which is what gets a stream through most firewalls.
+Credentials go into the URL, as in `rtsp://user:password@camera.local/stream1`. FFmpeg first asks the server for RTP over UDP. If the server refuses UDP, or no UDP packets arrive, it falls back to RTP interleaved on the RTSP connection over TCP, which gets a stream through most firewalls.
 
-A network source can stall or disappear, so every operation that waits on a source has a time limit: opening it, and then each read during playback. It is 10 seconds unless you pass another:
+A network source can stall or disappear, so every operation that waits on a source has a time limit: opening it, and then each read during playback. The limit is 10 seconds unless you pass another:
 
 ```java
 // Import required classes
@@ -263,15 +338,22 @@ import java.time.Duration;
 MediaFileSource source = new MediaFileSource("rtsp://camera.local/stream1", Duration.ofSeconds(5));
 ```
 
-`Duration.ZERO` waits as long as it takes, and is the only limit that does: a positive one waits at least a microsecond, and one too long for microseconds to count waits as long as they can count. A negative one is rejected.
+- `Duration.ZERO` waits as long as it takes. It is the only limit that does.
+- A positive limit waits at least a microsecond. One too long for microseconds to count waits as long as they can count.
+- A negative limit is rejected.
 
-An unreachable server makes the constructor throw an `IOException` once that time is up. A stream that stops sending during playback is reported to the listener's `onError`, and the player is left `PAUSED`. Closing a player never waits for the time limit: it breaks off whatever the player is waiting for at once.
+If the server cannot be reached, the constructor throws an `IOException` once the time is up. A stream that stops sending during playback is reported to the listener's `onError`, and the player is left `PAUSED`. Closing a player never waits for the time limit: it breaks off whatever the player is waiting for at once.
 
-A live stream has no end and no length: its `MediaInfo` reports a duration of 0, looping does not apply, and seeking is reported as an error. Pausing stops reading from the server, but the server keeps sending; resuming carries on from where playback paused, which leaves it behind real time by as long as it was paused. To get back to live, close the source and open it again.
+A live stream has no end and no length:
+
+- Its `MediaInfo` reports a duration of 0.
+- Looping does not apply, and seeking is reported as an error.
+- Pausing stops reading from the server, but the server keeps sending. Resuming carries on from where playback paused, which leaves it behind real time by as long as it was paused.
+- To get back to live, close the source and open it again.
 
 ## Closing
 
-Closing a `MediaFileSource` stops playback and releases the player along with both media sources. Release the senders a peer connection handed out, and the tracks, before that:
+Closing a `MediaFileSource` stops playback, and releases the player along with both media sources. Before that, release the senders a peer connection handed out, and the tracks:
 
 ```java
 videoSender.dispose();
@@ -291,23 +373,33 @@ The FFmpeg build is deliberately small, and carries only what this module plays:
 | **Video** | H.264, H.265/HEVC (hardware only), VP8, VP9, AV1, MPEG-4 (including Xvid and DivX), Microsoft MPEG-4 v1 to v3, MJPEG |
 | **Audio** | AAC, MP3, MP2, AC-3, Opus, Vorbis, FLAC, PCM, MS and IMA ADPCM |
 
-Audio of any rate or layout is resampled to what WebRTC takes, which is 48 kHz 16-bit PCM in mono or stereo. Video that decodes to I420 — almost all 8-bit H.264, VP8, VP9 and MPEG-4 — reaches the encoder without being copied; anything else is converted first.
+Audio of any rate or layout is resampled to what WebRTC takes: 48 kHz 16-bit PCM, in mono or stereo. Video that decodes to I420, which is almost all 8-bit H.264, VP8, VP9 and MPEG-4, reaches the encoder without being copied. Anything else is converted first.
 
-Video retains its color matrix, full or limited range, color primaries and transfer function through conversion and into the native WebRTC frame, including hardware readback. Missing matrix/range metadata defaults to BT.601 limited range; RGB and JPEG pixel formats imply full range. RGB is converted to BT.601 YUV. The negotiated encoder and receiver determine how this information is carried and displayed.
+Video keeps its color matrix, full or limited range, color primaries and transfer function through conversion and into the native WebRTC frame, also after hardware readback:
 
-Sources can be local files, or live streams over RTSP (`rtsp://`), with RTP over UDP or TCP. Protocols that need TLS, such as `rtsps://` and `https://`, are not part of the build, and neither are HLS, DASH and RTMP. A source cannot reach any other protocol either, even one FFmpeg uses internally, so a URL passed on from a user cannot make the module fetch something else.
+- Without matrix and range metadata, BT.601 limited range is assumed.
+- RGB and JPEG pixel formats imply full range.
+- RGB is converted to BT.601 YUV.
+
+The negotiated encoder and the receiver decide how this information is carried and displayed.
+
+Sources can be local files, or live streams over RTSP (`rtsp://`), with RTP over UDP or TCP. Protocols that need TLS, such as `rtsps://` and `https://`, are not part of the build, and neither are HLS, DASH and RTMP.
+
+A source cannot reach any other protocol either, not even one that FFmpeg uses internally. A URL passed on from a user therefore cannot make the module fetch something else.
 
 ## Licensing
 
-The module uses FFmpeg under the LGPL version 2.1 or later. It is configured without `--enable-gpl` and without `--enable-nonfree`, and FFmpeg is linked dynamically and shipped as separate files inside the platform jar, so its libraries may be replaced with your own build, as the LGPL requires. The wrapper code is licensed under the Apache License 2.0 like the rest of webrtc-java.
+The module uses FFmpeg under the LGPL version 2.1 or later. FFmpeg is configured without `--enable-gpl` and without `--enable-nonfree`. It is linked dynamically and shipped as separate files inside the platform jar, so its libraries may be replaced with your own build, as the LGPL requires.
 
-Each platform jar carries the LGPL text and a notice under `META-INF/licenses/ffmpeg`, naming the FFmpeg release the libraries are built from, unmodified, and where its source is. If you redistribute your application with these jars, keep those files with them.
+The wrapper code is licensed under the Apache License 2.0, like the rest of webrtc-java.
+
+Each platform jar carries the LGPL text and a notice under `META-INF/licenses/ffmpeg`. The notice names the FFmpeg release the libraries are built from, unmodified, and where its source is. If you redistribute your application with these jars, keep those files with them.
 
 Some of the formats FFmpeg decodes, such as H.264, H.265/HEVC and AAC, may be covered by patents in some countries. Whether your use of them needs a patent license is for you to determine.
 
 ## Complete Example
 
-See `MediaFileExample` in the `webrtc-examples` module, which opens a file, reports what it contains, sends its tracks from one [Client API](/guide/client-api) peer to another and follows playback to the end.
+See `MediaFileExample` in the `webrtc-examples` module. It opens a file, reports what it contains, sends its tracks from one [Client API](/guide/client-api) peer to another, and follows playback to the end.
 
 ```shell
 mvn -pl webrtc-examples compile
