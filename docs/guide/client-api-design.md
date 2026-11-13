@@ -140,7 +140,7 @@ and it hands on to the event executor what the application should hear.
 
 | Code | Runs on | May it block? |
 |---|---|---|
-| Calls into the API | the caller's thread, any thread | They don't block, with these exceptions. `createPeer` waits for the connection, so that an invalid configuration fails there. The `LocalMedia` methods that make a track and `LocalTrack.setEnabled` and `LocalVideo.setContentHint` wait briefly for a WebRTC thread, since the factory and the tracks are proxies. `camera()` and `screen()` also open their capture on the caller's thread. The first `devices()`, `screens()` and `windows()` ask the system there. `WebRtc.close()` waits up to `closeTimeout`, and a `join()` the caller writes waits as written. |
+| Calls into the API | the caller's thread, any thread | No, apart from the exceptions below the table. |
 | Event handlers, future callbacks, `Signaling.send` | the peer's event thread, or the configured `eventExecutor` | Yes, but it only delays that peer's events. It must not `join()` a future of this API: a direct `join()`/`get()` throws `BlockingCallException`. |
 | `LocalTrack.onEnded`, `LocalAudio.onVoiceActivity`, `Devices.onChange`, futures of local tracks and devices | the event thread of the runtime's local media, or the configured `eventExecutor` | Yes, but it delays the other events of local media. The rule against `join()` holds here too. |
 | Frame handlers (`onFrame`, `onAudio`) | a thread of each subscription, from the frame pool | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped and released. A slow audio handler loses the oldest audio beyond its buffer. |
@@ -148,6 +148,14 @@ and it hands on to the event executor what the application should hear.
 | Native calls | internal control threads | Not application code. Each operation has a timeout (default 30 s), so a stuck native call fails with a `TimeoutException` instead of hanging. The peer then brings signaling back to stable, and gives up if that fails too. |
 | WHIP and WHEP requests | `java.net.http.HttpClient`, never the control pool | Not application code. A slow server holds up no peer. |
 | `FileTransfers` handlers, file reads and writes | a thread of each `FileTransfers`, never the peer's event thread | Yes, but it delays the other transfers of that channel. |
+
+Calls into the API don't block, with these exceptions:
+
+- `createPeer` waits for the connection, so that an invalid configuration fails there.
+- The `LocalMedia` methods that make a track, `LocalTrack.setEnabled` and `LocalVideo.setContentHint` wait briefly for a WebRTC thread, since the factory and the tracks are proxies.
+- `camera()` and `screen()` also open their capture on the caller's thread.
+- The first `devices()`, and every `screens()` and `windows()`, ask the system there.
+- `WebRtc.close()` waits up to `closeTimeout`, and a `join()` the caller writes waits as written.
 | WebRTC callbacks | signaling, network and capture threads | Not application code. The library copies and enqueues only. |
 
 ### Guarantees
@@ -614,9 +622,9 @@ ScreenOptions screen = ScreenOptions.screen(rtc.media().devices().screens().get(
   current one if the new one fails too.
 - The device lists are snapshots, read once by the first `devices()` call, on the caller's thread.
   Where the system reports no device changes, as a Linux machine without PulseAudio, they are read on
-  each call instead. `screens()` and `windows()` always ask the system. A kind of device the system
-  cannot list comes back empty, and any other failed query throws `MediaException`, so that an empty
-  list means there are no such devices.
+  each call instead. `screens()` and `windows()` always ask the system. A query that fails, also
+  for an unavailable audio backend, throws `MediaException`, so that an empty list means there are
+  no such devices.
 - `onVoiceActivity` analyzes the audio in native code, and only the changes reach Java.
 
 ### `Sender`, `RemoteTrack`
