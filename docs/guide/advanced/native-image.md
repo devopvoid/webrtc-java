@@ -55,7 +55,9 @@ With Gradle, the [Gradle plugin](https://graalvm.github.io/native-build-tools/la
 
 The [loading order](/guide/get-started#where-the-native-library-is-loaded-from) is the same as on the JVM, which gives an image two ways to get the library:
 
-**Inside the image.** With the native JAR on the class path at build time, as Maven puts it there, the image carries the library. It writes it to the temporary directory when it starts and loads it from there, as the JVM does from the JAR, so the executable is all there is to ship. Set `webrtc.java.extract.dir` when the temporary directory does not allow running code:
+**Inside the image.** With the native JAR on the class path at build time, as Maven puts it there, the image carries the library. The image writes the library to the temporary directory when it starts, and loads it from there, as the JVM does from the JAR.
+
+The executable is then all there is to ship. Set `webrtc.java.extract.dir` when the temporary directory does not allow running code:
 
 ```shell
 ./app -Dwebrtc.java.extract.dir=/var/lib/app/natives
@@ -86,7 +88,9 @@ An image is built for one platform, so it carries the library of the platform it
 
 ## Audio Sinks with RTP Packets
 
-An `AudioTrackSink` may implement the `onData` method that also receives [the RTP packets](/guide/audio/headless-audio#who-sent-the-received-audio) the audio was assembled from. Whether a sink does is found out by reflection, which a native image answers only for registered classes. For any other sink, an anonymous class or a lambda among them, the packets are collected: a sink that implements the method gets them, one that does not gets its audio without them, as on the JVM. To spare the collecting, register the sink class for the query:
+An `AudioTrackSink` may implement the `onData` method that also receives [the RTP packets](/guide/audio/headless-audio#who-sent-the-received-audio) the audio was assembled from. Whether a sink does is found out by reflection, which a native image answers only for registered classes.
+
+For any other sink, an anonymous class or a lambda among them, the packets are collected. A sink that implements the method gets them, and one that does not gets its audio without them, as on the JVM. To spare the collecting, register the sink class for the query:
 
 ```json
 [
