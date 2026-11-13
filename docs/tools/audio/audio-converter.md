@@ -105,4 +105,4 @@ finally {
 
 - [Audio Processing](/guide/audio/audio-processing)
 - [Headless Audio](/guide/audio/headless-audio)
-- [Voice Activity Detector](/tools/audio/voice-activity-detector)
+- [Voice Activity Detection](/tools/audio/voice-activity-detector)

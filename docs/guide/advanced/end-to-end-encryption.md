@@ -132,7 +132,7 @@ The frame format covers VP8, VP9, AV1 and every audio codec. WebRTC's packetizer
 
 H.264 and H.265 frames are split at their start codes before they are sent, which a ciphertext would contain anywhere, so they are dropped with `UNSUPPORTED_CODEC`. A call has to negotiate them away, which matters on macOS in particular, where WebRTC prefers H.264 through VideoToolbox:
 
-- A peer of the client API with `e2ee(keys)` does so by itself: it offers and answers only VP8, VP9 and AV1 video, in WebRTC's order. `videoCodecs(...)` of the [WHIP and WHEP](/guide/client-api#whip-and-whep) builders still picks among them, and fails the session with a `ConfigurationException` if it names none of them.
+- A peer of the client API with `e2ee(keys)` does so by itself: it offers and answers only VP8, VP9 and AV1 video, in WebRTC's order. `videoCodecs(...)` of the [WHIP and WHEP](/guide/client/whip-whep) builders still picks among them, and fails the session with a `ConfigurationException` if it names none of them.
 - Without the client API, call `setCodecPreferences` on each video transceiver with the codecs for which `KeyProvider.supportsCodec(codec.getMimeType())` is true, keeping `rtx`, `red` and `ulpfec`.
 
 ## Recording

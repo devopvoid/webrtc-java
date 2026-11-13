@@ -1,5 +1,7 @@
 # Audio Codecs
 
+<ApiNote client="/guide/client-api#the-runtime" title="The Runtime" />
+
 A `PeerConnectionFactory` decides which audio codecs it can send and receive through an audio encoder factory and an audio decoder factory. Unless told otherwise it uses all codecs built into WebRTC. This guide explains how to limit them, for example to offer only Opus, or to put a codec first that a remote endpoint expects.
 
 The API lives in the `dev.onvoid.webrtc.media.audio.codec` package.

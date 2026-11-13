@@ -1,5 +1,7 @@
 # Media Constraints
 
+<ApiNote client="/guide/client/sending-media#controlling-senders-and-tracks" title="Controlling Senders and Tracks" />
+
 This guide explains how to set bitrate and framerate constraints for MediaStreamTrack of RTCRtpSender. It covers:
 
 - Understanding RTCRtpSender Parameters

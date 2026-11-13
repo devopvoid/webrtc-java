@@ -1,5 +1,7 @@
 # Custom Audio Source
 
+<ApiNote client="/guide/client/sending-media#pushing-video-and-audio" title="Pushing Video and Audio" />
+
 This guide explains how to use the `CustomAudioSource` class to push audio data from external sources directly to the WebRTC audio pipeline.
 
 ## Overview

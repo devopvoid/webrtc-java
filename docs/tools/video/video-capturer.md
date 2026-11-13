@@ -106,7 +106,7 @@ If you need pixel format conversion, see `VideoBufferConverter`.
 
 ## Related guides
 
-- [Camera Capture](/guide/video/camera-capture)
+- [Camera Video](/guide/video/camera-capture)
 - [Custom Video Source](/guide/video/custom-video-source)
 - [Screen Capturer](/tools/desktop/screen-capturer)
 - [Window Capturer](/tools/desktop/window-capturer)

@@ -1,5 +1,7 @@
 # DTMF Sender
 
+<ApiNote client="/guide/client/sending-media#controlling-senders-and-tracks" title="Controlling Senders and Tracks" />
+
 This guide explains how to use the DTMF (Dual-Tone Multi-Frequency) sender functionality with the webrtc-java library. DTMF senders allow you to send DTMF tones over WebRTC audio connections, which is useful for interactive voice response (IVR) systems and telephony applications.
 
 ## Overview

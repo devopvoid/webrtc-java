@@ -1,5 +1,7 @@
 # Media Devices
 
+<ApiNote client="/guide/client/sending-media#devices" title="Devices in Sending Media" />
+
 This guide explains how to work with media devices (microphones, speakers, and cameras). It covers:
 
 - Querying available media devices

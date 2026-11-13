@@ -43,7 +43,7 @@ The transform belongs to the native sender or receiver, not to the Java object: 
 
 ### With the Client API
 
-The [Client API](/guide/client-api#encoded-transforms) takes the same transforms. Those of the peer options apply to every sender and remote track of the peer, and are set before the first frame passes either way:
+The [Client API](/guide/client/transforms) takes the same transforms. Those of the peer options apply to every sender and remote track of the peer, and are set before the first frame passes either way:
 
 ```java
 PeerOptions.builder()

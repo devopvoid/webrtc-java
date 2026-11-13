@@ -232,4 +232,4 @@ KeyProvider keys = KeyProvider.builder(myId)
 
 - A transform of your own allows it unless its `allowsPlaintextObservers()` returns false.
 
-A recording of an encrypted call holds the decrypted media, outside the protection of the call. [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) shows both together.
+A recording of an encrypted call holds the decrypted media, outside the protection of the call. [`EncryptedRecordingExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/EncryptedRecordingExample.java) shows both together.

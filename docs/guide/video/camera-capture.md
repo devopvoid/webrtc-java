@@ -1,5 +1,7 @@
 # Camera Video
 
+<ApiNote client="/guide/client/sending-media" title="Sending Media" />
+
 This guide focuses on setting up a peer connection with camera video capture capabilities, which allows you to capture and stream video from connected cameras in your WebRTC connection.
 
 ## Camera Video Source Selection

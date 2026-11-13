@@ -1,5 +1,7 @@
 # Custom Video Source
 
+<ApiNote client="/guide/client/sending-media#pushing-video-and-audio" title="Pushing Video and Audio" />
+
 This guide explains how to use the `CustomVideoSource` class to push video frames from external sources directly to the WebRTC video pipeline.
 
 ## Overview

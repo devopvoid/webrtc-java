@@ -1,5 +1,7 @@
 # Data Channels
 
+<ApiNote client="/guide/client/data-channels" title="Data Channels" />
+
 This guide explains how to use WebRTC data channels with the webrtc-java library. Data channels provide a bidirectional communication mechanism that can be used to send arbitrary data between peers.
 
 ## Overview

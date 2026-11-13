@@ -4,23 +4,29 @@ webrtc-java is a Java wrapper for the [WebRTC Native API](https://webrtc.github.
 
 The library provides a comprehensive set of Java classes that map to the WebRTC C++ API, making it possible to establish peer-to-peer connections, transmit audio and video, share screens, and exchange arbitrary data between applications.
 
-It has two APIs. The [Client API](/guide/client-api) negotiates connections by itself, keeps application code off WebRTC's threads, and releases everything it created with one call, which makes it the place to start. The core API maps WebRTC's classes one to one, for applications that need full control.
+## Which API?
+
+The library has two APIs:
+
+| | Client API | Core API |
+|---|---|---|
+| Package | `dev.onvoid.webrtc.client` | `dev.onvoid.webrtc` |
+| Negotiation | Runs by itself | Your code exchanges offers, answers and candidates |
+| Threads | Your handlers never run on a WebRTC thread | Callbacks run on WebRTC's threads |
+| Cleanup | Closing the runtime closes everything | You dispose every native object |
+| Use it for | Most applications: start here | Full control over WebRTC's classes |
+
+The [Client API](/guide/client-api) is built on the core API and can reach it where it needs to. Most guides under Media, Audio, Video and Networking show the core API; a note at their top names the client API page for the same task.
 
 ## Overview
 
 For more detailed information, check out the documentation:
 
-- [Get Started](/guide/get-started) - Get up and running quickly with webrtc-java
+- [Getting Started](/guide/get-started) - Get up and running quickly with webrtc-java
 - [Guides](/guide/) - Comprehensive documentation on using the library
 - [Examples](/guide/examples) - Sample code demonstrating various features
 - [Build Notes](/guide/build) - Instructions for building the library from source
 
 ## License
 
-Copyright (c) 2019 Alex Andres
-
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
-
-[http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0)
-
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+webrtc-java is licensed under the [Apache License, Version 2.0](https://github.com/devopvoid/webrtc-java/blob/main/LICENSE).

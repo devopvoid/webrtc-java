@@ -1,5 +1,7 @@
 # Headless Audio
 
+<ApiNote client="/guide/client-api#audio-modes" title="Audio Modes" />
+
 The `HeadlessAudioDeviceModule` is a convenience implementation of the `AudioDeviceModule` that uses WebRTC's dummy audio layer. It avoids touching real OS audio devices while still driving the WebRTC render pipeline, which is what delivers received audio to an `AudioTrackSink`. It has no capture path; audio you want to send goes through a `CustomAudioSource`.
 
 This is ideal for:
@@ -130,7 +132,7 @@ factory.dispose();
 - Using a standard `AudioDeviceModule` with `AudioLayer.kDummyAudio` disables actual audio I/O; the audio pipeline is not started for playout and sinks will typically not receive audio frame callbacks. Use this only when you intentionally do not want any audio delivery (e.g., video‑only or fully custom audio).
 
 Related guides:
-- [Audio Device Selection](/guide/audio/audio-devices)
+- [Audio Devices](/guide/audio/audio-devices)
 - [Custom Audio Source](/guide/audio/custom-audio-source)
 
 ## Limitations and notes
