@@ -8,7 +8,9 @@ This guide explains how to work with media devices (microphones, speakers, and c
 - Getting device capabilities
 - Listening for device hotplug events
 
-Cameras and microphones play a key role in WebRTC. In a more complex application, you will most likely want to check all the connected cameras and microphones and select the appropriate device for the WebRTC session. These devices can be enumerated with the class `MediaDevices`. With `MediaDevices` you can also listen for device changes, whenever a device is connected or disconnected.
+Cameras and microphones play a key role in WebRTC. A more complex application will most likely check all connected cameras and microphones, and select the appropriate device for the WebRTC session.
+
+The class `MediaDevices` enumerates these devices. It can also tell you about device changes, whenever a device is connected or disconnected.
 
 ## Querying Media Devices
 
