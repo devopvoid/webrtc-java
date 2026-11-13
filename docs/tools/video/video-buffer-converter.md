@@ -37,7 +37,7 @@ Consult the FourCC enum in your version for the complete list.
 
 ## Buffer sizing
 
-Frames are stored without row padding, except where a format groups pixels in pairs: a YUY2 or UYVY row, and an NV12 or NV21 chroma row, always ends with a whole pair, so an odd width is rounded up to the next pair. A buffer must hold at least:
+Frames are stored without row padding, except where a format groups pixels in pairs. A YUY2 or UYVY row, and an NV12 or NV21 chroma row, always ends with a whole pair, so an odd width is rounded up to the next pair. A buffer must hold at least:
 - `ARGB`, `BGRA`, `ABGR`, `RGBA`: `width * height * 4` bytes
 - `BG24`: `width * height * 3` bytes
 - `I420`, `NV12`, `NV21`: `width * height + 2 * ((width + 1) / 2) * ((height + 1) / 2)` bytes
