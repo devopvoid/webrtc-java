@@ -181,11 +181,15 @@ videoTrack.addSink(new VideoTrackSink() {
 });
 ```
 
-WebRTC holds a lock while it hands a frame to the sinks, and adding or removing a sink takes the same lock. A change made from within a callback therefore takes effect for the sinks at once, while the native sink is added or removed on another thread right after the callback returned. Disposing the track is the one thing a callback cannot do: `dispose()` throws an `IllegalStateException` there, and belongs on another thread.
+WebRTC holds a lock while it hands a frame to the sinks, and adding or removing a sink takes the same lock. A change made from within a callback therefore takes effect for the sinks at once. The native sink is added or removed on another thread, right after the callback returned.
+
+Disposing the track is the one thing a callback cannot do: `dispose()` throws an `IllegalStateException` there, and belongs on another thread.
 
 ### Sharing Frames Between Sinks
 
-By default each sink gets an I420 copy of each frame of its own, which it may write into without the other sinks or the encoder seeing it. That costs a full copy of the pixels per frame and sink: at 1080p and 30 frames a second about 89 MiB a second, for each sink. A sink that only reads the frames can share them instead:
+By default, each sink gets an I420 copy of each frame of its own, which it may write into without the other sinks or the encoder seeing it.
+
+That costs a full copy of the pixels per frame and sink: at 1080p and 30 frames a second, about 89 MiB a second for each sink. A sink that only reads the frames can share them instead:
 
 ```java
 import dev.onvoid.webrtc.media.video.VideoFrameAccess;
@@ -193,7 +197,10 @@ import dev.onvoid.webrtc.media.video.VideoFrameAccess;
 videoTrack.addSink(previewSink, VideoFrameAccess.SHARED);
 ```
 
-A shared sink gets the pixels the source handed out, without a copy, which the other shared sinks and the encoder use as well. The planes of its `NativeI420Buffer` are read-only, so a write throws a `ReadOnlyBufferException`; a sink that wants to change a frame takes a writable copy with `frame.copy()`. The frames may come from a pool of the decoder or capturer, so a shared sink should not hold on to them for long: keep a copy instead, and release the frame.
+A shared sink gets the pixels the source handed out, without a copy. The other shared sinks and the encoder use the same pixels.
+
+- The planes of its `NativeI420Buffer` are read-only, so a write throws a `ReadOnlyBufferException`. A sink that wants to change a frame takes a writable copy with `frame.copy()`.
+- The frames may come from a pool of the decoder or capturer, so a shared sink should not hold on to them for long. Keep a copy instead, and release the frame.
 
 ### Receiving Remote Video Frames
 
@@ -331,7 +338,9 @@ Note that scaling is a computationally expensive operation, especially for high-
 
 ### Changing Frames Before They Are Sent
 
-A `VideoProcessor` sits between a camera or desktop source and its tracks, so it can change what is sent and shown: blur a background, draw an overlay, mirror the picture. The source passes each frame to `onFrameCaptured()` after adapting it to what its tracks ask for, so frames already have the size and rate that will be sent. The processor delivers the frames to send to the sink it gets in `setSink()`: the same frame, a new one, or none to drop it.
+A `VideoProcessor` sits between a camera or desktop source and its tracks, so it can change what is sent and shown: blur a background, draw an overlay, mirror the picture.
+
+The source passes each frame to `onFrameCaptured()` after adapting it to what its tracks ask for, so frames already have the size and rate that will be sent. The processor delivers the frames to send to the sink it gets in `setSink()`: the same frame, a new one, or none to drop it.
 
 ```java
 videoSource.setVideoProcessor(new VideoProcessor() {
