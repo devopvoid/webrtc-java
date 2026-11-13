@@ -39,7 +39,11 @@ Signaling signaling = message -> socket.send(message.toJson());
 socket.onText(text -> peer.signal(SignalMessage.fromJson(text)));
 ```
 
-A transport class can implement both directions by overriding `Signaling.attach(Consumer<SignalMessage>)`, which the peer calls once when it is created, with the consumer to push received messages into. It returns a `Subscription` that removes that consumer, and only that one: the peer closes it when it closes, after its last `send`, on its event thread. The transport itself stays open, so a WebSocket can outlive the peer and take the next one, or serve several peers at once. A transport that keeps the consumer must drop it there, or the closed peer and the runtime with it stay reachable:
+A transport class can implement both directions by overriding `Signaling.attach(Consumer<SignalMessage>)`. The peer calls it once, when the peer is created, with the consumer to push received messages into.
+
+`attach` returns a `Subscription` that removes that consumer, and only that one. The peer closes the subscription when it closes, after its last `send`, on its event thread. The transport itself stays open, so a WebSocket can outlive the peer and take the next one, or serve several peers at once.
+
+A transport that keeps the consumer must drop it when the subscription is closed. Otherwise the closed peer, and the runtime with it, stay reachable:
 
 ```java
 @Override
@@ -103,7 +107,9 @@ Peer callee = rtc.createPeer(PeerOptions.builder().signaling(link.second()).poli
 
 ## Polite and Impolite Peers
 
-With automatic negotiation, a peer sends an offer whenever its tracks or channels change. When both peers send one at the same moment, the **polite** peer drops its own offer and answers the other one, and the impolite peer ignores the offer it got. Exactly one of two peers must be polite. Peers are impolite by default, so set `polite(true)` on one side, for example on the peer that joined second.
+With automatic negotiation, a peer sends an offer whenever its tracks or channels change. Both peers may send one at the same moment. Then the **polite** peer drops its own offer and answers the other one, and the impolite peer ignores the offer it got.
+
+Exactly one of two peers must be polite. Peers are impolite by default, so set `polite(true)` on one side, for example on the peer that joined second.
 
 When two impolite peers collide, neither gives way. An impolite peer that waited 5 seconds for an answer reports a `NegotiationException` that says to make one of them polite.
 
@@ -150,23 +156,22 @@ Peer peer = rtc.createPeer(PeerOptions.builder()
         .build());
 ```
 
-`DISCONNECTED` starts the grace period; `FAILED` skips it. Repeated failure
-notifications during an attempt do not start parallel restarts. Events are
-`WAITING`, `ATTEMPTING`, `RETRYING`, `RECOVERED` and `EXHAUSTED`, delivered on the
-peer's event executor. `attempt()` counts attempts in the current outage, starting
-at one; a recovery during the grace period reports zero. `cause()` gives the last
-failure on retry or exhaustion. Successful signaling alone does not count as
-recovery: the peer must report `CONNECTED`. That resets the budget, including
-after exhaustion. Exhaustion leaves the peer open and creates no further automatic
-attempts until it connects again. `whenConnected()` keeps its existing first-connection
-semantics; observe `RECOVERED` for later recovery.
+- `DISCONNECTED` starts the grace period; `FAILED` skips it.
+- Repeated failure notifications during an attempt do not start parallel restarts.
+- The events are `WAITING`, `ATTEMPTING`, `RETRYING`, `RECOVERED` and `EXHAUSTED`, delivered on the peer's event executor.
+- `attempt()` counts the attempts in the current outage, starting at one. A recovery during the grace period reports zero.
+- `cause()` gives the last failure, on retry or exhaustion.
+- Successful signaling alone does not count as recovery: the peer must report `CONNECTED`. That resets the budget, also after exhaustion.
+- Exhaustion leaves the peer open, and creates no further automatic attempts until the peer connects again.
+- `whenConnected()` keeps its meaning: the first connection. Observe `RECOVERED` for later recoveries.
 
-Before an attempt, `iceServers(attempt -> completionStage)` can obtain fresh TURN
-credentials asynchronously. It runs on the event executor and must return promptly;
-the resulting list replaces **all** ICE servers, so include STUN servers that should
-remain available. The library copies the supplied servers; failed, null or invalid
-results fail the attempt. For example, with an application's asynchronous credential
-service returning `CompletionStage<List<RTCIceServer>>`:
+Before an attempt, `iceServers(attempt -> completionStage)` can obtain fresh TURN credentials asynchronously:
+
+- It runs on the event executor and must return promptly.
+- The resulting list replaces **all** ICE servers, so include the STUN servers that should remain available.
+- The library copies the servers it is given. A failed, null or invalid result fails the attempt.
+
+For example, with an application's asynchronous credential service that returns `CompletionStage<List<RTCIceServer>>`:
 
 ```java
 RecoveryPolicy recovery = RecoveryPolicy.builder()
@@ -179,25 +184,24 @@ RecoveryPolicy recovery = RecoveryPolicy.builder()
         .build();
 ```
 
-ICE recovery requires working signaling. Reconnecting a WebSocket or refreshing
-HTTP authorization is the application's separate responsibility. A policy does not
-create a replacement peer or session. If the application chooses that fallback, it
-must close the old session, attach handlers to the new peer, republish local tracks,
-and handle new remote tracks and data channels explicitly; their old handles are
-not transferred.
+ICE recovery requires working signaling. Reconnecting a WebSocket or refreshing HTTP authorization is the application's separate responsibility. A policy does not create a replacement peer or session.
 
-`Whip.to(endpoint).recovery(recovery)` and `Whep.from(endpoint).recovery(recovery)`
-use the same policy with the session's ICE `PATCH` exchange. This replaces their
-built-in restart rule for that session. Keep using `session.restartIce()` for a
-manual HTTP restart; `session.peer().restartIce()` does not perform the HTTP
-exchange. For a manually negotiated peer outside WHIP/WHEP, the application owns
-recovery and its protocol-specific offer/answer exchange.
+If the application chooses that fallback, it must close the old session and attach handlers to the new peer. It must also republish local tracks, and handle new remote tracks and data channels explicitly: their old handles are not transferred.
+
+`Whip.to(endpoint).recovery(recovery)` and `Whep.from(endpoint).recovery(recovery)` use the same policy with the session's ICE `PATCH` exchange. This replaces their built-in restart rule for that session.
+
+- For a manual HTTP restart, keep using `session.restartIce()`. `session.peer().restartIce()` does not perform the HTTP exchange.
+- For a manually negotiated peer outside WHIP and WHEP, the application owns recovery and its protocol-specific offer and answer exchange.
 
 How attempts are timed and cancelled is described under [Details](#ice-recovery-timing).
 
 ## Manual Negotiation
 
-SFUs and other servers dictate an offer and answer exchange of their own. A peer built with `Negotiation.MANUAL` leaves it to the application, through `peer.negotiator()`; `Whip` and `Whep` are built on it. Each step creates and applies a description in one go, and `Gathering.COMPLETE` waits until the description holds all local candidates, for servers that take no trickled candidates. A STUN or TURN server that cannot be reached, as on networks that block UDP, holds up the end of gathering for a long time, so `COMPLETE` waits at most for the peer's gathering timeout and then goes with the candidates it has. This WHEP client does by hand what `Whep` does:
+SFUs and other servers dictate an offer and answer exchange of their own. A peer built with `Negotiation.MANUAL` leaves it to the application, through `peer.negotiator()`; `Whip` and `Whep` are built on it. Each step creates and applies a description in one go.
+
+`Gathering.COMPLETE` waits until the description holds all local candidates, for servers that take no trickled candidates. A STUN or TURN server that cannot be reached, as on networks that block UDP, holds up the end of gathering for a long time. `COMPLETE` therefore waits at most for the peer's gathering timeout, and then goes with the candidates it has.
+
+This WHEP client does by hand what `Whep` does:
 
 ```java
 Peer viewer = rtc.createPeer(PeerOptions.builder()
@@ -219,7 +223,9 @@ viewer.negotiator().createOffer(Gathering.COMPLETE)
 | `createOffer()`, `createOffer(Gathering)` | Creates the local offer and applies it. |
 | `answer(offer)`, `answer(offer, Gathering)` | Applies the remote offer, then creates the answer and applies it. |
 | `applyAnswer(answer)` | Applies the remote answer to the local offer. |
-| `addCandidate(candidate)` | Adds a remote candidate, or holds it until there is a remote description to add it to. The future completes once the candidate is added or held; a held candidate that WebRTC rejects later reaches the error handler. |
+| `addCandidate(candidate)` | Adds a remote candidate, or holds it until there is a remote description to add it to. |
+
+The future of `addCandidate` completes once the candidate is added or held. A held candidate that WebRTC rejects later reaches the error handler.
 
 A manual peer with a `Signaling` still sends its local candidates through it. `peer.negotiator()` throws an `IllegalStateException` on a peer that negotiates automatically.
 
@@ -227,13 +233,20 @@ A manual peer with a `Signaling` still sends its local candidates through it. `p
 
 ### Parsing Signal Messages
 
-Anything else throws an `IllegalArgumentException` that says what is wrong and where, as does text longer than a MiB or nested deeper than 64 levels, so a message from the remote side cannot exhaust the stack. The JSON must be strict (RFC 8259): no raw line breaks or other control characters inside strings, no member name twice in one object, no numbers like `01`, `1.` or `1e999`. An `sdpMLineIndex` must be an integer from 0 to 65535; `1.9` is rejected rather than truncated to 1.
+Anything else throws an `IllegalArgumentException` that says what is wrong and where. So does text longer than a MiB, or nested deeper than 64 levels, so that a message from the remote side cannot exhaust the stack.
+
+The JSON must be strict (RFC 8259):
+
+- no raw line breaks or other control characters inside strings,
+- no member name twice in one object,
+- no numbers like `01`, `1.` or `1e999`.
+
+An `sdpMLineIndex` must be an integer from 0 to 65535; `1.9` is rejected rather than truncated to 1.
 
 ### ICE Recovery Timing
 
-The attempt deadline covers credentials, signaling and waiting for connectivity.
-An HTTP restart already in flight finishes or reaches its own operation timeout
-before another starts. Late credentials and completions after recovery or `close()`
-are ignored; the credential service owns cancellation of its requests. Closing the
-peer or runtime cancels scheduled retries, including one whose timer has fired but
-whose control task has not run yet. Event notifications already queued may still arrive.
+The attempt deadline covers credentials, signaling and waiting for connectivity. An HTTP restart already in flight finishes, or reaches its own operation timeout, before another starts.
+
+- Late credentials, and completions after recovery or `close()`, are ignored. Cancelling its requests is up to the credential service.
+- Closing the peer or the runtime cancels scheduled retries, including one whose timer has fired but whose control task has not run yet.
+- Event notifications already queued may still arrive.
