@@ -148,6 +148,29 @@ Each audio sender gets the audio of its own track, so the microphone keeps its e
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ScreenShareAudioExample"
 ```
 
+## Desktop Picker
+
+The [`DesktopPickerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopPickerExample.java) lets the user choose a screen or window in the operating system's own picker, on macOS 14 and newer and under Wayland.
+
+**Key features demonstrated:**
+- Checking whether the system offers a picker
+- Showing the picker by starting a `VideoDesktopSource`
+- Reacting to the end of the track when the picker is cancelled or sharing stops
+
+## Desktop Capturer Picker
+
+The [`DesktopCapturerPickerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopCapturerPickerExample.java) is a small Swing application that takes frames from a `ScreenCapturer` without a video track, after the user has chosen a screen or window in the operating system's picker.
+
+**Key features demonstrated:**
+- Setting `setUseSystemPicker(true)` before `start()`, which shows the picker
+- Calling `captureFrame()` at the frame rate, on the one thread that uses the capturer
+- Showing the frames in a Swing `VideoView`
+- Telling a pending choice (`ERROR_TEMPORARY`) from a cancelled picker or stopped sharing (`ERROR_PERMANENT`)
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.DesktopCapturerPickerExample"
+```
+
 ## Media File
 
 The [`MediaFileExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFileExample.java) demonstrates how to send a media file over a peer connection, in place of a camera and a microphone. See the [Media Files](/guide/media/media-files) guide for the API it uses.

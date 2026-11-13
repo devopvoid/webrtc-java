@@ -55,10 +55,24 @@ namespace jni
 			bool SelectSource(webrtc::DesktopCapturer::SourceId id);
 			bool FocusOnSelectedSource();
 			void setFocusSelectedSource(bool focus);
+
+			// Lets the user choose a screen or windows in the system's picker,
+			// shown by Start(), instead of a source selected here. Replaces the
+			// capturer, so a selected source is forgotten. Returns false if
+			// capture has been started.
+			bool setUseSystemPicker(bool usePicker);
+
+			// Whether the system offers its own picker for screens and
+			// windows: macOS 14 and newer, and Wayland.
+			static bool isSystemPickerAvailable();
+
 			bool IsOccluded(const webrtc::DesktopVector & pos);
 			bool isWindowCapturer() const;
 
 		protected:
+			// Creates the capturer for the current settings.
+			void createCapturer();
+
 			std::mutex startMutex;
 
 			// Declared before the capturer, which uses it until destroyed.
@@ -67,6 +81,11 @@ namespace jni
 			std::unique_ptr<webrtc::DesktopCapturer> capturer;
 
 			bool focusSelectedSource;
+
+			bool useSystemPicker;
+
+			// Zero until set.
+			uint32_t maxFrameRate;
 
 			const bool windowCapturer;
 

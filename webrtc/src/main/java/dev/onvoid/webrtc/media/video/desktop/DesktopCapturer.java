@@ -102,6 +102,42 @@ public abstract class DesktopCapturer extends DisposableNativeObject {
 	public native void setMaxFrameRate(int maxFrameRate);
 
 	/**
+	 * Lets the user choose what to capture in the operating system's own
+	 * picker, instead of the source set with {@link #selectSource}. Off by
+	 * default. Set it before {@link #start}; changing it replaces the native
+	 * capturer, which forgets a selected source.
+	 * <p>
+	 * On macOS 14 and newer this is ScreenCaptureKit's content sharing
+	 * picker, which offers a screen or one or more windows, for a
+	 * {@link ScreenCapturer} and a {@link WindowCapturer} alike. Under
+	 * Wayland it is the desktop portal's picker for screens and windows.
+	 * Where {@link #isSystemPickerAvailable()} is false, every
+	 * {@link #captureFrame()} reports {@link Result#ERROR_PERMANENT} instead
+	 * of capturing something the user did not choose.
+	 * <p>
+	 * {@link #start} shows the picker and returns at once. Until the user
+	 * has chosen, {@link #captureFrame()} reports {@link Result#ERROR_TEMPORARY}.
+	 * If the user cancels the picker, or stops sharing from the menu bar, it
+	 * reports {@link Result#ERROR_PERMANENT}. Show the picker for one capturer
+	 * at a time: capturers waiting on it at the same time all receive the
+	 * user's choice.
+	 *
+	 * @param usePicker True to show the system picker when capture starts.
+	 *
+	 * @throws IllegalStateException If the capturer has been started.
+	 */
+	public native void setUseSystemPicker(boolean usePicker);
+
+	/**
+	 * Whether this system offers a picker for
+	 * {@link #setUseSystemPicker(boolean)}: macOS 14 and newer, and Linux
+	 * under Wayland.
+	 *
+	 * @return True if a system picker is available.
+	 */
+	public static native boolean isSystemPickerAvailable();
+
+	/**
 	 * Starts the desktop capture process with the provided callback. A capturer
 	 * can be started once and keeps its callback until it is disposed.
 	 *

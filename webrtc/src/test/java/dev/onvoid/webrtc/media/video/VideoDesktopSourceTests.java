@@ -251,7 +251,7 @@ class VideoDesktopSourceTests extends TestBase {
 	}
 
 	@Test
-	void closedWindowStopsCapture() throws Exception {
+	void closedWindowEndsTrack() throws Exception {
 		assumeTrue(OS.contains("mac"), "covers the macOS window capturers");
 		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
 
@@ -261,19 +261,150 @@ class VideoDesktopSourceTests extends TestBase {
 			assumeTrue(source != null, "The window is not listed under its title");
 
 			try (WindowCapture capture = new WindowCapture(source)) {
+				CountDownLatch ended = new CountDownLatch(1);
+
+				capture.track.addTrackEndedListener(track -> ended.countDown());
+
 				assumeTrue(capture.await(frame -> true, 5000) != null, "The window delivered no frames");
 
 				window.closeWindow();
 
-				// Capture stops within a frame or two of the window closing.
-				Thread.sleep(1000);
+				assertTrue(ended.await(5, TimeUnit.SECONDS), "The track did not end");
+				assertEquals(MediaStreamTrackState.ENDED, capture.track.getState());
 
 				int frames = capture.frames();
 
-				Thread.sleep(1000);
+				Thread.sleep(500);
 
 				assertEquals(frames, capture.frames(), "Frames kept coming after the window closed");
 			}
+		}
+	}
+
+	@Test
+	void endedListenerMayStopAndDispose() throws Exception {
+		assumeTrue(OS.contains("mac"), "covers the macOS window capturers");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		try (TestWindowProcess window = TestWindowProcess.open(400, 300)) {
+			DesktopSource source = window.find();
+
+			assumeTrue(source != null, "The window is not listed under its title");
+
+			try (WindowCapture capture = new WindowCapture(source)) {
+				CountDownLatch ended = new CountDownLatch(1);
+
+				// The listener runs on the capture thread, which stop() must
+				// not wait for there (issue #186).
+				capture.track.addTrackEndedListener(track -> {
+					capture.stopAndDisposeSource();
+					ended.countDown();
+				});
+
+				assumeTrue(capture.await(frame -> true, 5000) != null, "The window delivered no frames");
+
+				window.closeWindow();
+
+				assertTrue(ended.await(5, TimeUnit.SECONDS), "The listener did not finish");
+				assertEquals(MediaStreamTrackState.ENDED, capture.track.getState());
+			}
+		}
+	}
+
+	@Test
+	void disposeEndsCapture() throws Exception {
+		assumeTrue(OS.contains("mac"), "covers the macOS window capturers");
+		assumeFalse(GraphicsEnvironment.isHeadless(), "No display");
+
+		try (TestWindowProcess window = TestWindowProcess.open(400, 300)) {
+			DesktopSource desktopSource = window.find();
+
+			assumeTrue(desktopSource != null, "The window is not listed under its title");
+
+			VideoDesktopSource source = new VideoDesktopSource();
+			source.setSourceId(desktopSource.id, true);
+			source.setFrameRate(10);
+
+			VideoTrack track = factory.createVideoTrack("window", source);
+			AtomicInteger frames = new AtomicInteger();
+
+			VideoTrackSink sink = frame -> {
+				frame.release();
+				frames.incrementAndGet();
+			};
+
+			try {
+				track.addSink(sink);
+				source.start();
+
+				for (int i = 0; i < 50 && frames.get() == 0; i++) {
+					Thread.sleep(100);
+				}
+
+				assumeTrue(frames.get() > 0, "The window delivered no frames");
+
+				// The track keeps the source, but disposing it ends its capture.
+				source.dispose();
+
+				Thread.sleep(500);
+
+				int count = frames.get();
+
+				Thread.sleep(1000);
+
+				assertEquals(count, frames.get(), "Frames kept coming after the source was disposed");
+			}
+			finally {
+				track.removeSink(sink);
+				track.dispose();
+				source.dispose();
+			}
+		}
+	}
+
+	@Test
+	void systemPickerAvailability() {
+		boolean expected;
+
+		if (OS.contains("mac")) {
+			expected = Integer.parseInt(System.getProperty("os.version").split("\\.")[0]) >= 14;
+		}
+		else if (OS.contains("linux")) {
+			String session = System.getenv("XDG_SESSION_TYPE");
+
+			expected = session != null && session.startsWith("wayland") && System.getenv("WAYLAND_DISPLAY") != null;
+		}
+		else {
+			expected = false;
+		}
+
+		assertEquals(expected, VideoDesktopSource.isSystemPickerAvailable());
+	}
+
+	@Test
+	void endsWithoutPicker() throws Exception {
+		// With a picker, starting would wait for the user.
+		assumeFalse(VideoDesktopSource.isSystemPickerAvailable(), "This system has a picker");
+
+		VideoDesktopSource source = new VideoDesktopSource();
+		source.setUseSystemPicker(true);
+
+		VideoTrack track = factory.createVideoTrack("picker", source);
+		AtomicInteger ended = new AtomicInteger();
+
+		track.addTrackEndedListener(t -> ended.incrementAndGet());
+
+		try {
+			source.start();
+			// Waits for the capture thread, which has given up by then.
+			source.stop();
+
+			assertEquals(MediaStreamTrackState.ENDED, track.getState());
+			assertEquals(1, ended.get());
+		}
+		finally {
+			track.dispose();
+			source.dispose();
 		}
 	}
 
@@ -514,6 +645,8 @@ class VideoDesktopSourceTests extends TestBase {
 
 		private final AtomicReference<int[]> latest = new AtomicReference<>();
 
+		private volatile boolean sourceDisposed;
+
 
 		WindowCapture(DesktopSource window) {
 			source.setSourceId(window.id, true);
@@ -553,12 +686,28 @@ class VideoDesktopSourceTests extends TestBase {
 			return frames.get();
 		}
 
+		/**
+		 * Stops and disposes the source, as an application might do in an
+		 * ended listener.
+		 */
+		void stopAndDisposeSource() {
+			source.stop();
+			source.dispose();
+			sourceDisposed = true;
+		}
+
 		@Override
 		public void close() {
-			source.stop();
+			if (!sourceDisposed) {
+				source.stop();
+			}
+
 			track.removeSink(sink);
 			track.dispose();
-			source.dispose();
+
+			if (!sourceDisposed) {
+				source.dispose();
+			}
 		}
 	}
 

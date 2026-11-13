@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import dev.onvoid.webrtc.TestBase;
 import dev.onvoid.webrtc.media.video.I420Buffer;
+import dev.onvoid.webrtc.media.video.VideoDesktopSource;
 
 import java.awt.Color;
 import java.awt.EventQueue;
@@ -83,6 +84,70 @@ class DesktopCapturerTests extends TestBase {
 			capturer.captureFrame();
 
 			assertEquals(List.of(DesktopCapturer.Result.ERROR_PERMANENT), results);
+		}
+		finally {
+			capturer.dispose();
+		}
+	}
+
+	@Test
+	void systemPickerAvailability() {
+		// VideoDesktopSourceTests checks which systems have one.
+		assertEquals(VideoDesktopSource.isSystemPickerAvailable(), DesktopCapturer.isSystemPickerAvailable());
+	}
+
+	@Test
+	void pickerAfterStartIsRejected() {
+		assumeNoPortalDialog();
+
+		ScreenCapturer capturer = new ScreenCapturer();
+
+		try {
+			capturer.start((result, frame) -> { });
+
+			assertThrows(IllegalStateException.class, () -> capturer.setUseSystemPicker(true));
+		}
+		finally {
+			capturer.dispose();
+		}
+	}
+
+	@Test
+	void noPickerReportsPermanentError() {
+		// With a picker, starting would wait for the user.
+		assumeFalse(DesktopCapturer.isSystemPickerAvailable(), "This system has a picker");
+
+		ScreenCapturer capturer = new ScreenCapturer();
+
+		try {
+			List<DesktopCapturer.Result> results = new ArrayList<>();
+
+			capturer.setUseSystemPicker(true);
+			capturer.start((result, frame) -> results.add(result));
+			capturer.captureFrame();
+
+			assertEquals(List.of(DesktopCapturer.Result.ERROR_PERMANENT), results);
+		}
+		finally {
+			capturer.dispose();
+		}
+	}
+
+	@Test
+	void pickerCanBeTurnedOff() {
+		ScreenCapturer capturer = new ScreenCapturer();
+
+		try {
+			assumeFalse(hasNoBackend(capturer), "No capture backend");
+
+			List<DesktopSource> screens = capturer.getDesktopSources();
+
+			// Each replaces the native capturer, which shows no picker
+			// before it starts.
+			capturer.setUseSystemPicker(true);
+			capturer.setUseSystemPicker(false);
+
+			assertEquals(screens, capturer.getDesktopSources());
 		}
 		finally {
 			capturer.dispose();
