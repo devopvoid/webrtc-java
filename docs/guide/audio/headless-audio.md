@@ -85,8 +85,12 @@ A receiver learns its sources as playout pulls the audio too, so `RTCRtpReceiver
 The module has no capture path. There is no device to capture from, so `initRecording()` and `startRecording()` only move the module through the recording lifecycle and deliver no audio. Audio you want to send goes through a `CustomAudioSource`, which hands it to the track's senders directly.
 
 ::: info
-Earlier versions pulled the render mix back through the module and handed it to WebRTC as captured audio. That made a peer connection send the audio it had just received from the remote peer straight back to it, and it fed the send stream a second time alongside the pushed audio, which aborted the process inside WebRTC. Calling `startRecording()` is now harmless but does nothing.
-:::
+Earlier versions pulled the render mix back through the module, and handed it to WebRTC as captured audio. That had two effects:
+
+- A peer connection sent the audio it had just received from the remote peer straight back to it.
+- The send stream got the audio a second time, alongside the pushed audio, which aborted the process inside WebRTC.
+
+Calling `startRecording()` is now harmless, but does nothing.
 
 Typical steps:
 
