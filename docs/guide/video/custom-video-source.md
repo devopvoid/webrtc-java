@@ -73,7 +73,13 @@ videoSource.pushFrame(frame);
 frame.release();
 ```
 
-A frame can also carry a `VideoFrameBuffer` of your own. The source takes its pixels from `toI420()`: a `NativeI420Buffer` returned there is used as it is, and any other `I420Buffer` is copied, so its planes have to be direct byte buffers that are as large as their strides and the height require. A buffer that does not fit its description is rejected with a `RuntimeException`. `VideoFrame.copy()` works the same way, and always returns a frame with a `NativeI420Buffer`.
+A frame can also carry a `VideoFrameBuffer` of your own. The source takes its pixels from `toI420()`:
+
+- A `NativeI420Buffer` returned there is used as it is.
+- Any other `I420Buffer` is copied. Its planes have to be direct byte buffers, as large as their strides and the height require.
+- A buffer that does not fit its description is rejected with a `RuntimeException`.
+
+`VideoFrame.copy()` works the same way, and always returns a frame with a `NativeI420Buffer`.
 
 ## Video Format Considerations
 
@@ -82,7 +88,8 @@ When pushing video frames, you need to consider the following:
 ### Resolution
 - Common resolutions: 320x240, 640x480, 1280x720, 1920x1080
 - Higher resolutions require more bandwidth and processing power
-- Push frames at their full size: when the bitrate cannot carry them, the source scales them down (and, if asked, drops some) before they reach the encoder, the way a camera source does, and scales back up once the bandwidth allows. Local sinks on the track see the adapted frames too.
+- Push frames at their full size. When the bitrate cannot carry them, the source scales them down before they reach the encoder, and, if asked, drops some. It does so the way a camera source does, and scales back up once the bandwidth allows.
+- Local sinks on the track see the adapted frames too.
 
 ### Frame Rate
 - Common frame rates: 15, 24, 30, 60 fps
@@ -149,7 +156,9 @@ public class VideoStreamer {
 
 ### Keeping the Source's Own Timing
 
-`pushFrame(VideoFrame)` treats a frame as captured at the moment of the call, so the timing that reaches the other peer is the timing of your pushing thread. For a live source such as a camera that is exactly right. For a source that has timing of its own, such as a video file, it is not: every hiccup of the executor above ends up in the stream, and audio pushed alongside drifts out of sync with the video.
+`pushFrame(VideoFrame)` treats a frame as captured at the moment of the call. The timing that reaches the other peer is therefore the timing of your pushing thread.
+
+For a live source such as a camera, that is exactly right. For a source with timing of its own, such as a video file, it is not. Every hiccup of the executor above ends up in the stream, and audio pushed alongside drifts out of sync with the video.
 
 Pass the capture time instead:
 
