@@ -1,6 +1,6 @@
 # Client API
 
-The client API in `dev.onvoid.webrtc.client` is a layer over the rest of the library that takes care of the parts most applications get wrong: threads, the offer and answer exchange, and the lifetime of native objects. A whole video call fits on one screen:
+The client API in `dev.onvoid.webrtc.client` is a layer over the rest of the library. It takes care of the parts most applications get wrong: threads, the offer and answer exchange, and the lifetime of native objects. A whole video call fits on one screen:
 
 ```java
 import dev.onvoid.webrtc.client.*;
@@ -128,7 +128,7 @@ Failures arrive as exceptions, thrown or as the cause of a failed future, all of
 | `MediaException` | A device is missing, busy, refused access, or already open with other options. |
 | `ConfigurationException` | A call does not fit how the runtime was built, or WebRTC refused a configuration. |
 | `BlockingCallException` | A future was waited on from an event thread. |
-| `HttpStatusException` | A WHIP or WHEP endpoint answered with an error status, which `status()` gives, with the `title()`, `detail()` and `problemType()` of the problem details it sent, if any. |
+| `HttpStatusException` | A WHIP or WHEP endpoint answered with an error status: `status()`, and the `title()`, `detail()` and `problemType()` of its problem details, if any. |
 
 Failures that no caller waits for, such as a remote description rejected during automatic negotiation, go to the peer's `onError` handlers:
 
@@ -168,8 +168,14 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.ClientApiExample" -D"
 
 ### Timeouts
 
-Every timeout of the client API, the operation and close timeouts as well as the [gathering timeout](/guide/client/peers#manual-negotiation) and the timeouts of [`Whip` and `Whep`](/guide/client/whip-whep), must be positive; none of them can be switched off. A timeout counts in milliseconds, rounded up, so one under a millisecond waits a millisecond. One too long for milliseconds to count waits as long as they can count, about 292 million years.
+Every timeout of the client API must be positive; none of them can be switched off. This holds for the operation and close timeouts, the [gathering timeout](/guide/client/peers#manual-negotiation), and the timeouts of [`Whip` and `Whep`](/guide/client/whip-whep).
+
+A timeout counts in milliseconds, rounded up, so one under a millisecond waits a millisecond. One too long for milliseconds to count waits as long as they can count, about 292 million years.
 
 ### A Close That Fails
 
-When a peer or track does not close within the close timeout, or a track or its source could not be released, the runtime leaves its factory undisposed rather than free what WebRTC's threads may still use. A track's `closeAsync()` fails in that case too. `WebRtc.closeAsync()` then fails with a `WebRtcException` naming the cause, and the error handler hears of it as well, which is how `close()` reports it.
+A peer or track may not close within the close timeout, or a track or its source may not be released. The runtime then leaves its factory undisposed, rather than free what WebRTC's threads may still use.
+
+- A track's `closeAsync()` fails in that case too.
+- `WebRtc.closeAsync()` fails with a `WebRtcException` naming the cause.
+- The error handler hears of it as well, which is how `close()` reports it.
