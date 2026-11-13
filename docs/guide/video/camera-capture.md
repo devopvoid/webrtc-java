@@ -386,9 +386,3 @@ When implementing camera capture in your application, consider these best practi
 5. **Properly manage resources**: Always stop and dispose of video sources when they're no longer needed.
 6. **Handle device changes**: Implement device change listeners to handle cameras being connected or disconnected.
 7. **Consider privacy concerns**: In some applications, you may need to request permission to use the camera.
-
-## Conclusion
-
-This guide has demonstrated how to set up a WebRTC peer connection with camera video capture capabilities and how to receive and process both local and remote video frames.
-
-Camera capture is essential for video conferencing applications, video chat, remote interviews, and any other applications where face-to-face communication is important.

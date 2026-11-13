@@ -173,10 +173,7 @@ MediaDevices.addDeviceChangeListener(listener);
 MediaDevices.removeDeviceChangeListener(listener);
 ```
 
-## Conclusion
-
-This guide has provided a comprehensive overview of working with media devices in the WebRTC library.
-When implementing media device handling in your applications, consider these best practices:
+## Best Practices
 
 - Always check if devices exist before trying to use them
 - Handle the case where no devices are available gracefully
@@ -184,5 +181,3 @@ When implementing media device handling in your applications, consider these bes
 - Implement hotplug listeners to dynamically update available devices
 - Remember to unregister device listeners when they're no longer needed
 - Query devices on worker threads, not on UI or render threads.
-
-You can use the code examples in this guide as a starting point for applications that need to work with media devices in WebRTC scenarios like video conferencing, live streaming, or media recording.

@@ -194,17 +194,12 @@ Without that permission, the windows of other apps are listed without their titl
 
 While a captured window is minimized or hidden, its last image repeats. When it is closed, capture stops.
 
-## Conclusion
-
-This guide has demonstrated how to set up a WebRTC peer connection with desktop video capture capabilities.
-When implementing desktop capture in your application, remember to:
+## Best Practices
 
 - Always dispose of resources properly to prevent memory leaks
 - Periodically refresh source lists to handle dynamic changes in available screens and windows
 - Consider the performance implications of higher resolutions and frame rates
 - Handle potential permission requirements on different operating systems
-
-Desktop capture is particularly useful for screen sharing applications, remote assistance tools, collaborative workspaces, and educational platforms where visual content sharing is essential.
 
 ## Sharing system audio
 

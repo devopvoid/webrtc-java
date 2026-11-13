@@ -71,7 +71,6 @@ Pass the configured AudioDeviceModule to the PeerConnectionFactory constructor:
 PeerConnectionFactory factory = new PeerConnectionFactory(audioModule);
 ```
 
-
 ## Disabling Audio
 
 If you want to completely disable audio processing in your WebRTC application, you can create an AudioDeviceModule with the `kDummyAudio` layer:
@@ -142,9 +141,3 @@ MediaDevices.addDeviceChangeListener(event -> {
     // Update UI or device selection as needed
 });
 ```
-
-## Conclusion
-
-This guide has walked you through the process of implementing audio device selection in your WebRTC application.
-By implementing these capabilities, your application can provide users with greater control over their audio experience, accommodating different hardware setups and preferences.
-For more advanced audio processing options, consider exploring the audio processing APIs available in this documentation.

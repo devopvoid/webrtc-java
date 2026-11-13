@@ -226,9 +226,3 @@ videoSource.dispose();
 // If you're using a scheduled executor for pushing frames
 videoStreamer.stop();
 ```
-
-## Conclusion
-
-The `CustomVideoSource` provides a flexible way to integrate external video sources with WebRTC. By understanding the video format parameters and properly managing the video frame flow, you can create applications that use custom video from virtually any source.
-
-For more information on video processing and other WebRTC features, refer to the additional guides in the documentation.

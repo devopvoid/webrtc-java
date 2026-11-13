@@ -300,9 +300,3 @@ The canceller can only remove echo of audio that actually went through `processR
 ::: tip
 If a factory sends only pushed audio, the processing module WebRTC creates for that factory does no work. Enabling its features through `AudioOptions` or the factory's `AudioProcessing` changes nothing for a `CustomAudioSource`; only the instance you apply yourself does.
 :::
-
-## Conclusion
-
-The `CustomAudioSource` provides a flexible way to integrate external audio sources with WebRTC. By understanding the audio format parameters and properly managing the audio data flow, you can create applications that use custom audio from virtually any source.
-
-For more advanced audio processing options, consider exploring the audio processing APIs available in this documentation.

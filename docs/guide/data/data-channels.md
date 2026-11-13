@@ -324,12 +324,3 @@ Unlike other disposable objects, a data channel is not disposed by `close()`, wh
 7. **Binary vs. Text**: Use the appropriate flag when creating `RTCDataChannelBuffer` objects:
    - `false` for UTF-8 text data
    - `true` for binary data
-
-## Conclusion
-
-WebRTC data channels provide a powerful way to establish peer-to-peer communication for transferring arbitrary data between clients.
-Data channels complement WebRTC's audio and video capabilities, making it possible to build comprehensive real-time applications that include text chat, file transfers, game state synchronization, and other custom data exchange requirements.
-
-For optimal performance, remember to follow the best practices outlined in this guide, particularly regarding buffer management and proper cleanup of resources.
-
-For more information on other WebRTC features, refer to the additional guides in the documentation.

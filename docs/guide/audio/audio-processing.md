@@ -361,8 +361,4 @@ These statistics are particularly useful for monitoring the performance of echo 
 
 5. **Monitor statistics**: Use the statistics to monitor the performance of echo cancellation and adjust settings if needed.
 
-## Conclusion
-
-The `AudioProcessing` class provides powerful audio processing capabilities for real-time communications. By properly configuring and using these features, you can significantly improve the audio quality in your applications.
-
-Remember that audio processing is CPU-intensive, so consider the performance implications when enabling multiple features, especially on resource-constrained devices.
+6. **Mind the CPU**: Audio processing is CPU-intensive, so consider the performance implications when enabling multiple features, especially on resource-constrained devices.

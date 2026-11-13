@@ -167,11 +167,3 @@ sender.dispose();
    - For IVR systems that might need more processing time, consider longer durations
 
 5. **Tone Buffering**: Be aware that tones are queued and played sequentially. If you need to cancel queued tones, you can call `insertDtmf("")` to clear the queue.
-
-## Conclusion
-
-The RTCDtmfSender provides a standard way to send DTMF tones over WebRTC audio connections. This functionality is particularly useful for applications that need to interact with traditional telephony systems, IVR systems, or any service that uses DTMF for signaling.
-
-By following the guidelines in this document, you can effectively integrate DTMF functionality into your WebRTC applications, enabling users to interact with automated systems or trigger actions using their device's keypad.
-
-For more information on other WebRTC features, refer to the additional guides in the documentation.

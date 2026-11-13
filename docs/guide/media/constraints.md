@@ -218,16 +218,3 @@ sender.setParameters(parameters);
 ```
 
 For audio, `adaptivePtime` lets the encoder send longer packets when the bitrate is low, which saves the overhead of many small packets.
-
-## Conclusion
-
-In this guide, we've explored several important techniques for controlling media quality and bandwidth usage in WebRTC applications.
-These constraints provide powerful tools for adapting media quality dynamically in response to changing network conditions or device capabilities.
-By implementing these techniques, you can:
-
-- Improve user experience on limited bandwidth connections
-- Reduce data consumption for users with data caps
-- Optimize performance on lower-powered devices
-- Ensure more consistent connection quality across various network conditions
-
-You can use this code as a starting point for your own applications that need to control media quality and bandwidth usage.
