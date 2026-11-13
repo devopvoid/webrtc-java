@@ -22,13 +22,15 @@ Some settings can be changed later with `setConfiguration()`, starting from `get
 | Setting | Effect |
 |---|---|
 | `iceCandidatePoolSize` | Gathers this many candidates before a connection needs them, so that connecting is faster. Default 0. |
-| `continualGatheringPolicy` | `GATHER_CONTINUALLY` keeps gathering after the first candidates, so that a network that comes up later gets candidates too, which lets a connection survive a network change. Default `GATHER_ONCE`. |
+| `continualGatheringPolicy` | `GATHER_CONTINUALLY` keeps gathering after the first candidates, so that a connection survives a network change (see below). Default `GATHER_ONCE`. |
 | `tcpCandidatePolicy` | `DISABLED` gathers no TCP candidates. Default `ENABLED`. |
 | `candidateNetworkPolicy` | `LOW_COST` leaves out cellular networks. Default `ALL`. |
 | `disableIpv6OnWifi`, `maxIpv6Networks` | Limit IPv6 candidates. Default: IPv6 on Wi-Fi allowed, at most 5 IPv6 networks. |
 | `networkPreference` | A kind of network, e.g. `ETHERNET`, whose candidate pairs take precedence regardless of their priority. Default: none. |
 | `vpnPreference` | Whether to use, avoid, prefer or require VPN connections. Default `DEFAULT`. |
 | `surfaceIceCandidatesOnIceTransportTypeChanged` | Signals at once the candidates a change of `iceTransportPolicy` lets through. Default false. |
+
+With `GATHER_CONTINUALLY`, a network that comes up later gets candidates too, which lets a connection survive a network change.
 
 To restrict ports and interfaces, see [Port Allocator Configuration](/guide/networking/port-allocator-config).
 
@@ -71,21 +73,28 @@ config.cryptoOptions = crypto;
 
 `cryptexPolicy` encrypts the RTP header extensions and CSRCs as a whole (RFC 9335) where the peer supports it (`NEGOTIATE`) or always (`REQUIRE`).
 
-`certificates` takes the DTLS certificate a peer connection authenticates with, as an `RTCCertificatePEM`; without one, WebRTC generates a certificate per connection. A certificate that does not parse makes `createPeerConnection()` and `setConfiguration()` throw. The expiration time passed to its constructor is informational: WebRTC takes it from the certificate. The certificates that `getConfiguration()` and `RTCDtlsTransport.getRemoteCertificates()` return carry that time in `getExpires()`, in milliseconds since the Unix epoch, or `RTCCertificatePEM.EXPIRES_UNKNOWN` (-1) if it cannot be read.
+`certificates` takes the DTLS certificate a peer connection authenticates with, as an `RTCCertificatePEM`. Without one, WebRTC generates a certificate per connection. A certificate that does not parse makes `createPeerConnection()` and `setConfiguration()` throw.
+
+The expiration time passed to its constructor is informational: WebRTC takes it from the certificate. The certificates that `getConfiguration()` and `RTCDtlsTransport.getRemoteCertificates()` return carry that time in `getExpires()`, in milliseconds since the Unix epoch. If it cannot be read, `getExpires()` returns `RTCCertificatePEM.EXPIRES_UNKNOWN` (-1).
 
 ## Signaling
 
 | Setting | Effect |
 |---|---|
 | `offerExtmapAllowMixed` | Allows one- and two-byte header extensions to be mixed in offers. Default true. |
-| `enableImplicitRollback` | Rolls a pending local offer back when a remote offer arrives, as perfect negotiation needs. Default false. Pair it with `setLocalDescription(observer)`, which creates the offer or answer itself. |
+| `enableImplicitRollback` | Rolls a pending local offer back when a remote offer arrives, as perfect negotiation needs. Default false. Pair it with `setLocalDescription(observer)`, which creates the offer or answer. |
 | `alwaysNegotiateDataChannels` | Includes data channels in offers before any is created. Default false. |
 
 ## Changing a Running Connection
 
 A few controls are methods of `RTCPeerConnection` rather than configuration fields, and can be used at any time.
 
-`setBitrate(min, current, max)` limits the bandwidth all streams sent by the connection may use together, in bits per second. A `null` value leaves that limit as it is, and `current` resets the bandwidth estimate to that value. Limits from the SDP and from each sender's encoding parameters still apply. Values that are negative or not ordered as min ≤ current ≤ max make it throw.
+`setBitrate(min, current, max)` limits the bandwidth that all streams sent by the connection may use together, in bits per second.
+
+- A `null` value leaves that limit as it is.
+- `current` resets the bandwidth estimate to that value.
+- Limits from the SDP and from each sender's encoding parameters still apply.
+- Values that are negative, or not ordered as min ≤ current ≤ max, make it throw.
 
 ```java
 // Start from 1 Mbps and never use more than 2.5 Mbps.

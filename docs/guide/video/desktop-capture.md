@@ -188,21 +188,18 @@ windowCapturer.dispose();
 
 ### Capturing on macOS
 
-On macOS 14 and newer, screens and windows are captured with ScreenCaptureKit; older releases use the earlier Core Graphics capture. Both need the app to have Screen Recording permission (System Settings → Privacy & Security → Screen & System Audio Recording). Without it, the windows of other apps are listed without their titles and their content cannot be captured. Windows of the app's own process need no permission, and are captured with Core Graphics.
+On macOS 14 and newer, screens and windows are captured with ScreenCaptureKit; older releases use the earlier Core Graphics capture. Both need the app to have Screen Recording permission (System Settings → Privacy & Security → Screen & System Audio Recording).
+
+Without that permission, the windows of other apps are listed without their titles, and their content cannot be captured. Windows of the app's own process need no permission, and are captured with Core Graphics.
 
 While a captured window is minimized or hidden, its last image repeats. When it is closed, capture stops.
 
-## Conclusion
-
-This guide has demonstrated how to set up a WebRTC peer connection with desktop video capture capabilities.
-When implementing desktop capture in your application, remember to:
+## Best Practices
 
 - Always dispose of resources properly to prevent memory leaks
 - Periodically refresh source lists to handle dynamic changes in available screens and windows
 - Consider the performance implications of higher resolutions and frame rates
 - Handle potential permission requirements on different operating systems
-
-Desktop capture is particularly useful for screen sharing applications, remote assistance tools, collaborative workspaces, and educational platforms where visual content sharing is essential.
 
 ## Sharing system audio
 

@@ -220,13 +220,11 @@ sinks. Its speech comes from a listener on the factory, see
 [`AudioRecorder`](/tools/audio/audio-recorder) captures a microphone on its
 own, apart from any peer connection.
 
-The adapter invokes the consumer on the thread that delivers the audio: a thread
-of the `onAudio` subscription, or the audio callback thread of a sink. Keep work
-there short. A subscription that falls behind loses the oldest audio beyond its
-buffer, so a detector that must stay live passes a short one, as in
-`onAudio(Duration.ofMillis(200), vad)`. Apply application-level timing to produce stable speech-start/speech-end
-events, rather than toggling a UI or recording for every frame. Audio format
-changes clear the adapter's partial frame and reset its detector.
+The adapter invokes the consumer on the thread that delivers the audio: a thread of the `onAudio` subscription, or the audio callback thread of a sink. Keep work there short.
+
+- A subscription that falls behind loses the oldest audio beyond its buffer. A detector that must stay live therefore passes a short one, as in `onAudio(Duration.ofMillis(200), vad)`.
+- Apply application-level timing to produce stable speech-start and speech-end events, rather than toggling a UI or recording for every frame.
+- Audio format changes clear the adapter's partial frame, and reset its detector.
 
 ## Related guides
 

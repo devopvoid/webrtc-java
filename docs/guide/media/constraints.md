@@ -109,7 +109,7 @@ if (parameters.encodings != null && !parameters.encodings.isEmpty()) {
 }
 ```
 
-The `scaleResolutionDownBy` parameter specifies how much to scale down the video in each dimension. For example, a value of 2.0 means the video will be scaled down by a factor of 2 in both width and height, resulting in a video that is 1/4 the size of the original.
+The `scaleResolutionDownBy` parameter specifies how much to scale down the video in each dimension. For example, a value of 2.0 halves both the width and the height, so the video is 1/4 the size of the original.
 
 ::: info
 Note that these constraints are applied without requiring SDP renegotiation, making them suitable for dynamic adaptation to changing network conditions.
@@ -155,7 +155,10 @@ videoTrack.setContentHint(VideoContentHint.TEXT);     // keep the resolution
 videoTrack.setContentHint(VideoContentHint.MOTION);   // keep the frame rate
 ```
 
-`MOTION` keeps the frame rate, `DETAIL` and `TEXT` keep the resolution, and `DEFAULT` leaves it to the source, which keeps the resolution of screen shares. `DETAIL` and `TEXT` also put the encoder into its screen content mode, which VP8, VP9, H.264 (OpenH264) and AV1 code differently; WebRTC treats `TEXT` as `DETAIL` for now. The senders have taken the hint once `setContentHint` returns. It cannot be set from within the callback of a video sink, where it throws an `IllegalStateException`.
+- `MOTION` keeps the frame rate. `DETAIL` and `TEXT` keep the resolution. `DEFAULT` leaves it to the source, which keeps the resolution of screen shares.
+- `DETAIL` and `TEXT` also put the encoder into its screen content mode, which VP8, VP9, H.264 (OpenH264) and AV1 code differently. WebRTC treats `TEXT` as `DETAIL` for now.
+- The senders have taken the hint once `setContentHint` returns.
+- The hint cannot be set from within the callback of a video sink; there it throws an `IllegalStateException`.
 
 ## Simulcast
 
@@ -188,7 +191,12 @@ The `rid`s cannot be changed afterwards; the other parameters of each encoding c
 
 ## Scalability Modes (SVC)
 
-Instead of separate encodings, one encoding can carry layers, which a server can drop to lower the rate: temporal layers (fewer frames per second) and, with VP9 and AV1, spatial layers (lower resolutions). `scalabilityMode` takes the mode names of the [WebRTC SVC specification](https://www.w3.org/TR/webrtc-svc/), e.g. `L1T3` for three temporal layers, or `L3T3_KEY` for three spatial layers with three temporal layers each:
+Instead of separate encodings, one encoding can carry layers, which a server can drop to lower the rate:
+
+- temporal layers, with fewer frames per second,
+- with VP9 and AV1, spatial layers, with lower resolutions.
+
+`scalabilityMode` takes the mode names of the [WebRTC SVC specification](https://www.w3.org/TR/webrtc-svc/), for example `L1T3` for three temporal layers, or `L3T3_KEY` for three spatial layers with three temporal layers each:
 
 ```java
 RTCRtpSendParameters parameters = sender.getParameters();
@@ -200,7 +208,7 @@ The codec has to support the mode; `setParameters()` throws otherwise. `getScala
 
 ## Priorities
 
-`bitratePriority` sets the share of the available bitrate a sender gets relative to the other senders of the peer connection (default 1.0), and `networkPriority` how its packets are marked on the network (DSCP), where the network honors it. Both apply to the whole sender, so only the first encoding may set them:
+`bitratePriority` sets the share of the available bitrate a sender gets, relative to the other senders of the peer connection (default 1.0). `networkPriority` sets how its packets are marked on the network (DSCP), where the network honors it. Both apply to the whole sender, so only the first encoding may set them:
 
 ```java
 RTCRtpSendParameters parameters = sender.getParameters();
@@ -210,16 +218,3 @@ sender.setParameters(parameters);
 ```
 
 For audio, `adaptivePtime` lets the encoder send longer packets when the bitrate is low, which saves the overhead of many small packets.
-
-## Conclusion
-
-In this guide, we've explored several important techniques for controlling media quality and bandwidth usage in WebRTC applications.
-These constraints provide powerful tools for adapting media quality dynamically in response to changing network conditions or device capabilities.
-By implementing these techniques, you can:
-
-- Improve user experience on limited bandwidth connections
-- Reduce data consumption for users with data caps
-- Optimize performance on lower-powered devices
-- Ensure more consistent connection quality across various network conditions
-
-You can use this code as a starting point for your own applications that need to control media quality and bandwidth usage.

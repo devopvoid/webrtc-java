@@ -173,7 +173,9 @@ mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.MediaFileExample" -D"
 
 ## Media File Player
 
-The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application built on the [Client API](/guide/client-api). It sends a media file, or a live RTSP stream, from one peer to another in the same process, then shows the received video and plays the received audio in sync, and records what is received. Start and Stop buttons set up and tear down the whole session, and Record starts and stops a recording.
+The [`MediaFilePlayerExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/MediaFilePlayerExample.java) is a Swing application built on the [Client API](/guide/client-api). It sends a media file, or a live RTSP stream, from one peer to another in the same process. It then shows the received video, plays the received audio in sync, and records what is received.
+
+Start and Stop buttons set up and tear down the whole session, and Record starts and stops a recording.
 
 **Key features demonstrated:**
 - Sending the sources of a `MediaFileSource` as client API tracks, with `videoTrack` and `audioTrack`

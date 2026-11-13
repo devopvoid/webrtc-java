@@ -315,7 +315,14 @@ factory.addVoiceActivityListener(new VoiceActivityConfig(0.5, Duration.ofMillis(
 factory.removeVoiceActivityListener(listener);
 ```
 
-It works with the `AudioProcessing` the factory was built with as well as with the one it builds itself. All listeners share one detector, and each decides with the threshold and hangover of its own `VoiceActivityConfig`. Audio arrives while the audio device module records, which WebRTC starts once a peer connection sends a microphone track. A listener must not add or remove a listener. Disposing of the factory removes the listeners it still has. The [Client API](/guide/client/receiving-media#audio) offers the same through `LocalAudio.onVoiceActivity`.
+It works with the `AudioProcessing` the factory was built with, as well as with the one it builds itself.
+
+- All listeners share one detector, and each decides with the threshold and hangover of its own `VoiceActivityConfig`.
+- Audio arrives while the audio device module records, which WebRTC starts once a peer connection sends a microphone track.
+- A listener must not add or remove a listener.
+- Disposing of the factory removes the listeners it still has.
+
+The [Client API](/guide/client/receiving-media#audio) offers the same through `LocalAudio.onVoiceActivity`.
 
 ## Statistics
 
@@ -354,8 +361,4 @@ These statistics are particularly useful for monitoring the performance of echo 
 
 5. **Monitor statistics**: Use the statistics to monitor the performance of echo cancellation and adjust settings if needed.
 
-## Conclusion
-
-The `AudioProcessing` class provides powerful audio processing capabilities for real-time communications. By properly configuring and using these features, you can significantly improve the audio quality in your applications.
-
-Remember that audio processing is CPU-intensive, so consider the performance implications when enabling multiple features, especially on resource-constrained devices.
+6. **Mind the CPU**: Audio processing is CPU-intensive, so consider the performance implications when enabling multiple features, especially on resource-constrained devices.

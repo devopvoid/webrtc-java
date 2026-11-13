@@ -22,7 +22,9 @@ A track ends when the remote peer stops sending it or the peer closes.
 
 ## Video Frames
 
-Each `onFrame` subscription has a thread of its own, so a slow renderer holds up neither WebRTC's decoder nor the peer's other events. With `frameThreads(n)` the subscriptions share `n` threads and take turns, see [Limiting Threads](/guide/client/threads#limiting-threads). By default the handler always gets the newest frame, and the frames it had no time for are dropped. `FrameDelivery.queue(n)` keeps up to `n` frames instead:
+Each `onFrame` subscription has a thread of its own, so a slow renderer holds up neither WebRTC's decoder nor the peer's other events. With `frameThreads(n)`, the subscriptions share `n` threads and take turns (see [Limiting Threads](/guide/client/threads#limiting-threads)).
+
+By default, the handler always gets the newest frame, and the frames it had no time for are dropped. `FrameDelivery.queue(n)` keeps up to `n` frames instead:
 
 ```java
 video.onFrame(FrameDelivery.queue(10), frame -> encoder.encode(frame));
@@ -96,9 +98,11 @@ The view converts frames on their own thread and paints at most once per JavaFX 
 
 ## Audio
 
-`onAudio` hands decoded audio to a handler in order, usually 10 ms of 16-bit PCM per `AudioChunk`. Audio reaches these handlers only while the runtime plays out, which a `HEADLESS` runtime always does and a `DEVICES` or `CUSTOM` runtime does to its speakers. `setVolume(double)` changes the playout gain of a track, from 0 to 10, where 1 plays it as received.
+`onAudio` hands decoded audio to a handler in order, usually 10 ms of 16-bit PCM per `AudioChunk`. Audio reaches these handlers only while the runtime plays out. A `HEADLESS` runtime always does; a `DEVICES` or `CUSTOM` runtime plays out to its speakers. `setVolume(double)` changes the playout gain of a track, from 0 to 10, where 1 plays it as received.
 
-A handler that falls behind gets the audio of the last 5 seconds; the oldest audio beyond that is dropped and counted in `rtc.loadStats().audio().dropped()`. `WebRtc.Builder.audioBuffer(Duration)` changes the buffer of every subscription, and `onAudio(Duration, handler)` that of one. A speech recognizer that must stay live keeps a short buffer; a recorder that can catch up after a stall keeps a long one, at about 190 KiB per second of 48 kHz stereo:
+A handler that falls behind gets the audio of the last 5 seconds. The oldest audio beyond that is dropped, and counted in `rtc.loadStats().audio().dropped()`. `WebRtc.Builder.audioBuffer(Duration)` changes the buffer of every subscription, and `onAudio(Duration, handler)` that of one.
+
+A speech recognizer that must stay live keeps a short buffer. A recorder that can catch up after a stall keeps a long one, at about 190 KiB per second of 48 kHz stereo:
 
 ```java
 track.asAudio().onAudio(Duration.ofMillis(200), chunk -> recognizer.feed(chunk.samples()));
@@ -113,7 +117,12 @@ Subscription speaking = microphone.onVoiceActivity(
         active -> System.out.println(active ? "speaking" : "quiet"));
 ```
 
-`VoiceActivityConfig` sets the threshold, the voice probability from 0 to 1 at which audio counts as speech (0.5 by default), and the hangover, how long speech goes on once the audio fell below it (300 ms by default), which bridges the pauses between words. Which audio is analyzed is described under [Details](#speech-detection).
+`VoiceActivityConfig` sets two values:
+
+- the threshold: the voice probability, from 0 to 1, at which audio counts as speech (0.5 by default),
+- the hangover: how long speech goes on once the audio fell below the threshold (300 ms by default), which bridges the pauses between words.
+
+Which audio is analyzed is described under [Details](#speech-detection).
 
 ## Receiving Without Sending
 
@@ -146,18 +155,19 @@ Closing the peer, or removing a sender, during a recording ends that track in th
 
 ### Video Views and Memory
 
-Both views support resolutions such as 8K without a fixed pixel limit. They reject
-nonpositive dimensions and frames whose four-byte pixel data cannot fit in a Java
-buffer, using overflow-safe arithmetic. Conversion buffers allocate on demand,
-grow geometrically when necessary, and retain their capacity across smaller frames
-and `clear()`. Swing reuses one direct buffer; JavaFX reuses up to two.
-JavaFX reserves a buffer only while copying it into the displayed image; a waiting
-frame may be replaced by a newer frame to avoid building a queue. Buffer
-memory is released when the view becomes unreachable. Memory usage follows the
-largest frames received and includes displayed images, conversion buffers, and
-replacement allocations awaiting garbage collection. Snapshots, input frames and
-toolkit rendering resources use additional memory.
+Both views support resolutions such as 8K, without a fixed pixel limit. They reject nonpositive dimensions, and frames whose four-byte pixel data cannot fit in a Java buffer, using overflow-safe arithmetic.
+
+- Conversion buffers are allocated on demand, grow geometrically when necessary, and keep their capacity across smaller frames and `clear()`.
+- Swing reuses one direct buffer; JavaFX reuses up to two.
+- JavaFX reserves a buffer only while copying it into the displayed image. A waiting frame may be replaced by a newer one, so that no queue builds up.
+- Buffer memory is released when the view becomes unreachable.
+
+Memory use follows the largest frames received. It includes displayed images, conversion buffers, and replacement allocations awaiting garbage collection. Snapshots, input frames and toolkit rendering resources use additional memory.
 
 ### Speech Detection
 
-Pushed audio is analyzed as pushed. A microphone's audio is analyzed after audio processing, with echo cancellation, noise suppression and gain control applied as configured, so the remote peer's voice from the speakers does not count as this side speaking. It flows while WebRTC records, which it does while a peer sends a microphone track. Every microphone track of a runtime hears the same, as WebRTC records one microphone for all of them.
+Pushed audio is analyzed as pushed.
+
+A microphone's audio is analyzed after audio processing, with echo cancellation, noise suppression and gain control applied as configured. The remote peer's voice from the speakers therefore does not count as this side speaking.
+
+The microphone's audio flows while WebRTC records, which it does while a peer sends a microphone track. Every microphone track of a runtime hears the same, as WebRTC records one microphone for all of them.

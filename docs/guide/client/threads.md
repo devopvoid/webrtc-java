@@ -4,12 +4,24 @@ Every method of the client API may be called from any thread, including from ins
 
 | Code | Runs on | May it block? |
 |---|---|---|
-| Your calls into the API | your thread | They don't block, with these exceptions. `WebRtc.createPeer`, the `LocalMedia` methods that make a track and `LocalTrack.setEnabled` and `LocalVideo.setContentHint` wait briefly for WebRTC. `camera()` and `screen()` also open their capture on your thread, which can take longer, so a UI thread should leave them to another thread. The first `media.devices()`, `screens()` and `windows()` ask the system on your thread. `WebRtc.close()` waits up to the close timeout. |
-| Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not wait for a future of this API, see below. |
-| `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler gets the newest frame next, and the frames in between are dropped; a slow audio handler loses the oldest audio beyond its buffer. |
+| Your calls into the API | your thread | No, apart from the exceptions below the table. |
+| Peer, track and channel handlers, future callbacks, `Signaling.send` | the peer's event thread | Yes, but that delays only the events of this peer. They must not [wait for a future](#don-t-wait-in-a-handler) of this API. |
+| `onFrame` and `onAudio` handlers | a thread of each subscription | Better not. A slow video handler misses frames; a slow audio handler loses the oldest audio beyond its buffer. |
 | [Encoded transforms](/guide/client/transforms) | a thread of each sender and receiver | Better not. A slow transform delays only its own frames, and one that falls several seconds behind has frames dropped. |
-| `LocalTrack.onEnded` and `Devices.onChange` handlers, callbacks of the futures of local tracks and devices | the event thread of the runtime's local media | Yes, but that delays the other events of local media. They must not wait for a future of this API either. A track is released before its `onEnded` handlers run, so they never hold up a release. |
+| `LocalTrack.onEnded` and `Devices.onChange` handlers, callbacks of the futures of local tracks and devices | the event thread of the runtime's local media | Yes, but that delays the other events of local media. They must not wait for a future of this API either. |
 | WebRTC's own callbacks | WebRTC's threads | Not your code. The library only copies what they report and queues it. |
+
+Calls into the API do not block, with these exceptions:
+
+- `WebRtc.createPeer`, the `LocalMedia` methods that make a track, `LocalTrack.setEnabled` and `LocalVideo.setContentHint` wait briefly for WebRTC.
+- `camera()` and `screen()` also open their capture on your thread, which can take longer. A UI thread should leave them to another thread.
+- The first `media.devices()`, and every `screens()` and `windows()`, ask the system on your thread.
+- `WebRtc.close()` waits up to the close timeout.
+
+About the handlers in the table:
+
+- A slow video handler gets the newest frame next, and the frames in between are dropped.
+- A track is released before its `onEnded` handlers run, so they never hold up a release.
 
 The handlers of one peer never run at the same time, and they run in the order of the events. The handlers of different peers may run at the same time. With the default executor, the event thread is named after its peer, such as `webrtc-client-events-alice`, which shows up in thread dumps.
 
@@ -26,13 +38,17 @@ WebRtc rtc = WebRtc.builder()
         .build();
 ```
 
-With a limit, the peers take turns, and so do the subscriptions: one that has work runs up to 64 handlers, for at most 10 ms, then goes to the back of the line. A slow handler thus delays the others but never starves them, and a peer's events still run one at a time and in order. The limit rejects nothing: events wait for their turn and are never dropped, so no future stays open, and once the runtime closes, the futures still open fail after the events queued before them. Media that waits is bounded by its subscription instead, by the `FrameDelivery` of a video handler and the audio buffer of an audio handler, which drop the oldest frames and audio when they are full.
+With a limit, the peers take turns, and so do the subscriptions. One that has work runs up to 64 handlers, for at most 10 ms, and then goes to the back of the line. A slow handler thus delays the others but never starves them, and a peer's events still run one at a time and in order.
 
-A limit has one cost: a handler that waits for what another peer's handler does, say on a latch, can wait forever once all threads are taken by such waits. Handlers that wait for something outside the API should hand the work to a thread of their own.
+The limit rejects nothing: events wait for their turn and are never dropped, so no future stays open. Once the runtime closes, the futures still open fail after the events queued before them.
+
+Media that waits is bounded by its subscription instead: by the `FrameDelivery` of a video handler, and by the audio buffer of an audio handler. They drop the oldest frames and audio when they are full.
+
+A limit has one cost. A handler that waits for what another peer's handler does, say on a latch, can wait forever once all threads are taken by such waits. Handlers that wait for something outside the API should hand the work to a thread of their own.
 
 The control threads of the library, which call into WebRTC, are not limited. Their tasks wait for one another, such as a camera switch for every peer to take the new track.
 
-The HTTP requests of `Whip` and `Whep` sessions take no thread while they wait, so a slow server holds up no peer: they go through Java's `HttpClient`, one of each runtime.
+The HTTP requests of `Whip` and `Whep` sessions take no thread while they wait, so a slow server holds up no peer. They go through Java's `HttpClient`, one per runtime.
 
 `rtc.loadStats()` tells how much work waits and runs, at this moment and cheaply enough to be read every second:
 
@@ -99,4 +115,6 @@ A UI thread used as event executor does not refuse: waiting on it for a future o
 
 ### Executors That Reject Work
 
-An executor of your own that rejects work, such as a bounded pool that is full, loses the events it rejects, and the rejection goes to the error handler. The futures those events would have completed complete all the same, on the thread that found them rejected. Once the runtime is closed, every future of this API that is not done fails with `PeerClosedException`, including those of calls made after the close.
+An executor of your own that rejects work, such as a bounded pool that is full, loses the events it rejects. The rejection goes to the error handler.
+
+The futures those events would have completed complete all the same, on the thread that found them rejected. Once the runtime is closed, every future of this API that is not done fails with `PeerClosedException`, including those of calls made after the close.

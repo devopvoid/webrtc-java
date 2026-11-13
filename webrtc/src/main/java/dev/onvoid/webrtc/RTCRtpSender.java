@@ -232,10 +232,6 @@ public class RTCRtpSender extends DisposableNativeObject {
 	/**
 	 * Creates an injector that sends audio frames that are already encoded
 	 * on this sender, in place of a track.
-	 * <p>
-	 * Do not inject audio through a factory that sends audio captured by its
-	 * audio device module: WebRTC passes captured audio to every audio sender
-	 * that sends, and it would drive the injecting sender as well.
 	 *
 	 * @param observer The observer for the sender's target bitrate changes,
 	 *                 or {@code null} for none.
