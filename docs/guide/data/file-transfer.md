@@ -18,7 +18,10 @@ peer.onChannel(channel -> {
 });
 ```
 
-`FileTransfers` takes over the channel: nothing else may be sent on it. Files go one at a time in each direction, in the order they were sent, and both peers may send at the same time. Each side reads and writes its files and runs its handlers on a thread of its own, not on the peer's event thread. Those handlers must not block.
+`FileTransfers` takes over the channel: nothing else may be sent on it.
+
+- Files go one at a time in each direction, in the order they were sent, and both peers may send at the same time.
+- Each side reads and writes its files, and runs its handlers, on a thread of its own, not on the peer's event thread. Those handlers must not block.
 
 ## Confirmation, not just handing data to the transport
 
@@ -30,9 +33,13 @@ The future that `DataChannel.send()` returns completes once the data has been ha
 
 ## Offers
 
-An offer's `name()` and `size()` come from the remote peer. Don't turn the name into a path as it is, because it may contain `../` or path separators. `safeFileName()` gives you a single file name that stays in the directory you resolve it against. `reject(reason)` makes the sender's transfer fail with that reason, and the sender's next file follows. If an offer arrives before any handler is registered, it waits for the first handler.
+An offer's `name()` and `size()` come from the remote peer. Don't turn the name into a path as it is, because it may contain `../` or path separators. `safeFileName()` gives you a single file name that stays in the directory you resolve it against.
 
-The data goes to `partialFile()` next to the target, and that file replaces the target only after the checksum matched. If more data arrives than the offer announced, or more than the window allows, or the data is out of order, the receiver treats it as a protocol error: the transfer fails and the channel closes.
+`reject(reason)` makes the sender's transfer fail with that reason, and the sender's next file follows. If an offer arrives before any handler is registered, it waits for the first handler.
+
+The data goes to `partialFile()` next to the target, and that file replaces the target only after the checksum matched.
+
+The receiver treats it as a protocol error if more data arrives than the offer announced, more than the window allows, or the data arrives out of order. The transfer then fails, and the channel closes.
 
 ## Cancelling and failures
 
