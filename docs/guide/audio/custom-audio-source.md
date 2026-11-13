@@ -48,7 +48,7 @@ AudioTrack audioTrack = factory.createAudioTrack("audio-track-id", audioSource);
 ```
 
 ::: tip Pushed and device-captured audio side by side
-Each audio sender gets the audio of its own track, so one factory, and one peer connection, can send a `CustomAudioSource` track beside a microphone track created with `createAudioSource(AudioOptions)`, and beside a track forwarded from a remote peer.
+Each audio sender gets the audio of its own track. One factory, and one peer connection, can therefore send a `CustomAudioSource` track beside a microphone track created with `createAudioSource(AudioOptions)`, and beside a track forwarded from a remote peer.
 
 The recording device is opened only while a microphone track is sent. A factory that sends only pushed audio never opens it. Playout of received audio is unaffected.
 :::
@@ -76,7 +76,7 @@ byte[] audioData = new byte[frameCount * channels * bytesPerSample];
 audioSource.pushAudio(audioData, bitsPerSample, sampleRate, channels, frameCount);
 ```
 
-The call checks its arguments and throws `IllegalArgumentException` rather than letting a bad chunk reach WebRTC, where it would read past your array, abort the process, or be dropped by the encoder while the push appears to succeed:
+The call checks its arguments, and throws `IllegalArgumentException` rather than let a bad chunk reach WebRTC. There, the chunk would read past your array, abort the process, or be dropped by the encoder while the push appears to succeed:
 
 - Samples must be **16-bit** signed PCM in the platform byte order, with the channels interleaved.
 - The array must hold at least `frameCount * channels * 2` bytes. A longer array is fine; only that many bytes are read.
@@ -101,7 +101,9 @@ audioSource.pushAudio(pcm, 16, sampleRate, channels, frameCount,
         baseUs + presentationUs);
 ```
 
-Use the same base for the audio and the video of one source, and the two stay in sync on the receiving side. See [Custom Video Source](/guide/video/custom-video-source) for the video half. Chunks must still be pushed in real time; the timestamp describes the audio, it does not schedule it. A chunk pushed without a timestamp is stamped with the same clock, so a source may mix the two calls.
+Use the same base for the audio and the video of one source, and the two stay in sync on the receiving side. See [Custom Video Source](/guide/video/custom-video-source) for the video half.
+
+Chunks must still be pushed in real time: the timestamp describes the audio, it does not schedule it. A chunk pushed without a timestamp is stamped with the same clock, so a source may mix the two calls.
 
 ## Audio Format Considerations
 
