@@ -157,6 +157,6 @@ The frames must be in the codec the sender negotiated, which `setCodecPreference
 
 VP9 cannot be injected: WebRTC sends injected frames without the scalability structure that a VP9 receiver needs with every key frame, so the receiver drops them. H.264, H.265 and AV1 frames arrive.
 
-An audio sender takes an `RTCEncodedAudioFrameInjector` the same way. Its frames carry the payload type of their codec, from the sender's `getParameters().codecs`. Do not inject audio through a factory that sends audio captured by its audio device module: WebRTC feeds captured audio to every audio sender.
+An audio sender takes an `RTCEncodedAudioFrameInjector` the same way. Its frames carry the payload type of their codec, from the sender's `getParameters().codecs`.
 
 Giving the sender a track through `replaceTrack` ends the injection, and `dispose()` releases the injector. The observer runs on a callback thread shared with other WebRTC observers, so it may call back into WebRTC but should not block.
