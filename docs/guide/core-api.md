@@ -126,7 +126,7 @@ peerConnection.setLocalDescription(new SetSessionDescriptionObserver() {
 
 ### Adding Candidates and Knowing the Outcome
 
-`addIceCandidate(candidate)` reports nothing and fails silently when the remote description is not set yet. The form that takes an `AddIceCandidateObserver` is queued behind any pending offer/answer operation, as the standard requires, so a candidate can be added right after `setRemoteDescription()` without waiting for it, and the observer says whether it was accepted:
+`addIceCandidate(candidate)` reports nothing and fails silently when the remote description is not set yet. The form that takes an `AddIceCandidateObserver` is queued behind any pending offer/answer operation, as the standard requires. A candidate can therefore be added right after `setRemoteDescription()`, without waiting for it, and the observer says whether it was accepted:
 
 ```java
 peerConnection.addIceCandidate(candidate, new AddIceCandidateObserver() {
@@ -225,7 +225,7 @@ RTCRtpSender audioSender = peerConnection.addTrack(audioTrack, streamIds);
 
 ### Receiving Tracks
 
-A remote track arrives in `onTrack` with the transceiver that carries it. To learn when its media actually starts flowing, for example to show a video only once there is something to show, set an `RTCRtpReceiverObserver`; an `RTCRtpSenderObserver` does the same for the first packet a sender sends. Either is called right away when that has already happened:
+A remote track arrives in `onTrack` with the transceiver that carries it. To learn when its media actually starts flowing, set an `RTCRtpReceiverObserver`, for example to show a video only once there is something to show. An `RTCRtpSenderObserver` does the same for the first packet a sender sends. Either is called right away when that has already happened:
 
 ```java
 @Override
@@ -269,9 +269,12 @@ peerConnection.close();
 factory.dispose();
 ```
 
-A track may be disposed, and a listener removed, from within one of its listeners: the listeners the notification has not reached yet are then not called, and what goes is freed once the notification is over. An observer registered on one thread while the object is disposed on another is freed once and never left registered. A factory disposed while a closed connection is still being freed is released once that connection is.
-
-`dispose()` and `close()` may be called from any thread and more than once: only the first call frees anything, later ones do nothing. Once an object is disposed, its methods throw an `IllegalStateException` (a closed connection still reports its state). A method that another thread is running at that moment keeps the native object until it returns, and what the dispose frees is freed then.
+- A track may be disposed, and a listener removed, from within one of its listeners. The listeners the notification has not reached yet are then not called, and what goes is freed once the notification is over.
+- An observer registered on one thread while the object is disposed on another is freed once, and never left registered.
+- A factory disposed while a closed connection is still being freed is released once that connection is.
+- `dispose()` and `close()` may be called from any thread and more than once. Only the first call frees anything; later ones do nothing.
+- Once an object is disposed, its methods throw an `IllegalStateException`. A closed connection still reports its state.
+- A method that another thread is running at that moment keeps the native object until it returns. What the dispose frees is freed then.
 
 Apart from the media sources, which only have `dispose()`, objects with a `dispose()` method also have a `close()` that does the same. A try-with-resources statement therefore releases them, also when an exception leaves the block:
 
@@ -297,4 +300,6 @@ The reports are warnings through `Logging`, which writes nothing unless the appl
 Logging.logToDebug(Logging.Severity.WARNING);
 ```
 
-Only objects that own a native object and have a `dispose()` or `close()` method are watched: not views such as the track of `RTCRtpSender.getTrack()`, which own nothing, and not reference-counted objects such as video frame buffers. The detector only reports; it never frees anything itself, since a native object may still be in use on a WebRTC thread. While it is off, which is the default, nothing is watched.
+Only objects that own a native object and have a `dispose()` or `close()` method are watched. Not watched are views, such as the track of `RTCRtpSender.getTrack()`, which own nothing, and reference-counted objects, such as video frame buffers.
+
+The detector only reports. It never frees anything itself, since a native object may still be in use on a WebRTC thread. While it is off, which is the default, nothing is watched.
