@@ -116,13 +116,9 @@ caches, so a native rebuild also includes the updated patches.
 
 ## Release workflow
 
-Maintainers start **Prepare release** (`release.yml`) from `main`, providing the
-next development version, such as `0.16.0-SNAPSHOT`, and optionally the version
-to release, such as `0.15.0`. Without one, the release takes the root pom's
-version without `-SNAPSHOT`. Preparation commits the changelog and version
-changes and atomically pushes `main` and the release tag. It then dispatches **Publish release** (`release-publish.yml`) on that tag using
-`GITHUB_TOKEN` with `actions: write`; no additional token is needed. A push made
-with `GITHUB_TOKEN` does not trigger a tag push workflow on its own.
+Maintainers start **Prepare release** (`release.yml`) from `main`. They provide the next development version, such as `0.16.0-SNAPSHOT`, and optionally the version to release, such as `0.15.0`. Without one, the release takes the root pom's version without `-SNAPSHOT`.
+
+Preparation commits the changelog and version changes, and atomically pushes `main` and the release tag. It then dispatches **Publish release** (`release-publish.yml`) on that tag, using `GITHUB_TOKEN` with `actions: write`; no additional token is needed. A push made with `GITHUB_TOKEN` does not trigger a tag push workflow on its own.
 
 Publication requires a `vX.Y.Z` tag whose commit belongs to `main` and whose
 version matches the root pom. All platform builds, native tests and publication
@@ -135,12 +131,9 @@ it as `deployment-bundle-dry-run`. It pushes no commits or tags, dispatches no
 publication workflow, and uses placeholder Central credentials with uploads
 disabled.
 
-The jars are reproducible: every entry and the manifest's `Build-Date` carry
-`project.build.outputTimestamp` from the root pom instead of the time of the
-build, so the same commit builds into the same Java jars. Release preparation
-sets it to the time of the release commit and again for the next development
-version; it needs no manual change. The native library jars are not covered,
-since CMake and the compilers do not build byte for byte the same libraries.
+The jars are reproducible. Every entry and the manifest's `Build-Date` carry `project.build.outputTimestamp` from the root pom instead of the time of the build, so the same commit builds into the same Java jars.
+
+Release preparation sets that timestamp to the time of the release commit, and again for the next development version; it needs no manual change. The native library jars are not covered, since CMake and the compilers do not build byte for byte the same libraries.
 
 If preparation pushed the tag but dispatch failed, start Publish release manually
 and select that tag. Before retrying a failed publication, check whether Maven
