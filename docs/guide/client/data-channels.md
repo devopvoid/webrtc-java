@@ -34,7 +34,15 @@ for (byte[] chunk : chunks) {
 
 A sender that does not wait still cannot fill Java memory: each channel holds at most 16 MiB waiting to be sent, and a `send` beyond that fails at once with a `ChannelFullException`. `PeerOptions.builder().channelSendLimit(bytes)` changes the limit for every channel of a peer. `bufferedAmount()` tells how much a channel holds.
 
-Received messages are bounded as well. WebRTC cannot be told to stop receiving, so messages that arrive faster than the handlers take them, or while a channel has no handler, wait in Java. Each channel lets at most 16 MiB of them wait. When more arrive, the channel closes instead of dropping messages unnoticed: the peer's `onError` handlers hear why, the messages after the one over the limit are not delivered, and both sides see the channel close. `PeerOptions.builder().channelReceiveLimit(bytes)` changes the limit. A handler that takes long should hand the work to a thread of its own.
+Received messages are bounded as well. WebRTC cannot be told to stop receiving, so messages wait in Java when they arrive faster than the handlers take them, or while a channel has no handler. Each channel lets at most 16 MiB of them wait.
+
+When more arrive, the channel closes, instead of dropping messages unnoticed:
+
+- The peer's `onError` handlers hear why.
+- The messages after the one over the limit are not delivered.
+- Both sides see the channel close.
+
+`PeerOptions.builder().channelReceiveLimit(bytes)` changes the limit. A handler that takes long should hand the work to a thread of its own.
 
 ## Channel Options
 
@@ -59,12 +67,11 @@ A completed `send` future means the data was handed to the transport, not that t
 
 ### Message Previews
 
-`Message.toString()` reports only the message type and byte length. Access content
-explicitly with `text()` or `bytes()`. For diagnostics, `message.preview(64)` inspects
-at most 64 payload bytes and escapes control characters. Binary previews use hex.
-Use `message.preview(64, prefix -> redact(prefix))` to apply your own masking before
-escaping; the masking function must handle secrets truncated at the prefix boundary.
-The preview marks truncated content and also limits the masking function's output.
+`Message.toString()` reports only the message type and byte length. Access the content explicitly, with `text()` or `bytes()`.
+
+- For diagnostics, `message.preview(64)` inspects at most 64 payload bytes, and escapes control characters. Binary previews use hex.
+- `message.preview(64, prefix -> redact(prefix))` applies your own masking before escaping. The masking function must handle secrets truncated at the prefix boundary.
+- The preview marks truncated content, and also limits the masking function's output.
 
 ### Option Ranges
 
