@@ -15,6 +15,7 @@
  */
 
 #include "media/video/VideoTrackDesktopSource.h"
+#include "media/video/desktop/DesktopCapturer.h"
 #include "media/video/desktop/WindowFrameCrop.h"
 #include "Exception.h"
 
@@ -113,13 +114,7 @@ namespace jni
 
 	bool VideoTrackDesktopSource::isSystemPickerAvailable()
 	{
-#if defined(WEBRTC_MAC)
-		return webrtc::GenericCapturerSckWithPickerAvailable();
-#elif defined(WEBRTC_USE_PIPEWIRE)
-		return webrtc::DesktopCapturer::IsRunningUnderWayland();
-#else
-		return false;
-#endif
+		return DesktopCapturer::isSystemPickerAvailable();
 	}
 
 	void VideoTrackDesktopSource::start()

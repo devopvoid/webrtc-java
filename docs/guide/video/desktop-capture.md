@@ -89,7 +89,7 @@ else {
 
 `start()` shows the picker and returns at once. No frames arrive until the user has made a choice. The user can change it later from the macOS menu bar, and the frames follow. If the user cancels the picker, or stops sharing from the menu bar, the source ends (see [Handling the End of Capture](#handling-the-end-of-capture)). Where `isSystemPickerAvailable()` is false, a source set to use the picker ends right away instead of capturing.
 
-On macOS the picker offers a whole screen or one or more windows. Show it for one source at a time: sources waiting on it at the same time all receive the user's choice. The [`DesktopPickerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopPickerExample.java) shows the picker and reports the frames it receives.
+On macOS the picker offers a whole screen or one or more windows. Show it for one source at a time: sources waiting on it at the same time all receive the user's choice. To take frames yourself rather than through a track, `ScreenCapturer` and `WindowCapturer` offer the same picker (see [Screen Capturer](/tools/desktop/screen-capturer#letting-the-user-choose-in-the-system-picker)). The [`DesktopPickerExample`](https://github.com/devopvoid/webrtc-java/blob/master/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/DesktopPickerExample.java) shows the picker and reports the frames it receives.
 
 ### Creating a Video Track with the Desktop Source
 

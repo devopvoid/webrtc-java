@@ -25,20 +25,39 @@
 #if defined(WEBRTC_MAC)
 #include "media/video/desktop/macos/MacOSScreenCapturer.h"
 #include "media/video/desktop/macos/ScreenCaptureKitWindowCapturer.h"
+#include "modules/desktop_capture/mac/screen_capturer_sck.h"
 #endif
 
 namespace jni
 {
 	DesktopCapturer::DesktopCapturer(bool screenCapturer) :
 		focusSelectedSource(false),
+		useSystemPicker(false),
+		maxFrameRate(0),
 		windowCapturer(!screenCapturer)
 	{
+		createCapturer();
+	}
+
+	void DesktopCapturer::createCapturer()
+	{
+		capturer.reset();
+
 		auto options = webrtc::DesktopCaptureOptions::CreateDefault();
 		// Enable desktop effects.
 		options.set_disable_effects(false);
 
 #if defined(WEBRTC_MAC)
 		options.set_allow_iosurface(true);
+
+		if (useSystemPicker) {
+			// SCContentSharingPicker on macOS 14 and newer. ScreenCaptureKit
+			// draws the cursor: a picked window's frames start at the
+			// window's origin, where DesktopAndCursorComposer, working in
+			// desktop coordinates, would misplace it.
+			options.set_allow_sck_system_picker(true);
+			options.set_prefer_cursor_embedded(true);
+		}
 #endif
 #if defined(WEBRTC_WIN)
 		options.set_allow_directx_capturer(true);
@@ -54,33 +73,53 @@ namespace jni
 
 		std::unique_ptr<webrtc::DesktopCapturer> inner;
 
+		if (useSystemPicker) {
+			// The user chooses a screen or windows in the system's picker,
+			// which Start() shows. Under Wayland that is the portal's picker
+			// for screens and windows alike. Without a picker there is no
+			// capturer, rather than one capturing something the user did not
+			// choose.
+			inner = webrtc::DesktopCapturer::CreateGenericCapturer(options);
+
+			if (!inner) {
+				RTC_LOG(LS_ERROR) << "DesktopCapturer: No system picker on this system.";
+				return;
+			}
+		}
+
 #if defined(WEBRTC_MAC)
-		// Both list their sources as WebRTC's capturers do, and capture with
-		// ScreenCaptureKit on macOS 14 and newer.
-		inner = screenCapturer
-			? CreateMacOSScreenCapturer(options)
-			: CreateScreenCaptureKitWindowCapturer(options);
+		if (!inner) {
+			// Both list their sources as WebRTC's capturers do, and capture with
+			// ScreenCaptureKit on macOS 14 and newer.
+			inner = windowCapturer
+				? CreateScreenCaptureKitWindowCapturer(options)
+				: CreateMacOSScreenCapturer(options);
+		}
 #endif
 
 		if (!inner) {
-			inner = screenCapturer
-				? webrtc::DesktopCapturer::CreateScreenCapturer(options)
-				: webrtc::DesktopCapturer::CreateWindowCapturer(options);
+			inner = windowCapturer
+				? webrtc::DesktopCapturer::CreateWindowCapturer(options)
+				: webrtc::DesktopCapturer::CreateScreenCapturer(options);
 		}
 
 		if (!inner) {
-			RTC_LOG(LS_ERROR) << (screenCapturer
-				? "DesktopCapturer: CreateScreenCapturer returned null. "
+			RTC_LOG(LS_ERROR) << (windowCapturer
+				? "DesktopCapturer: CreateWindowCapturer returned null. "
+				  "Possible causes: missing X11/XFIXES extension or snap confinement."
+				: "DesktopCapturer: CreateScreenCapturer returned null. "
 				  "Possible causes: missing X11/XDAMAGE extension, Wayland "
-				  "session without PipeWire support, or snap confinement."
-				: "DesktopCapturer: CreateWindowCapturer returned null. "
-				  "Possible causes: missing X11/XFIXES extension or snap confinement.");
+				  "session without PipeWire support, or snap confinement.");
 			// Leave capturer as nullptr: GetSourceList returns false, and
 			// CaptureFrame reports ERROR_PERMANENT.
 			return;
 		}
 
 		capturer = std::make_unique<webrtc::DesktopAndCursorComposer>(std::move(inner), options);
+
+		if (maxFrameRate > 0) {
+			capturer->SetMaxFrameRate(maxFrameRate);
+		}
 	}
 
 	DesktopCapturer::~DesktopCapturer()
@@ -111,6 +150,9 @@ namespace jni
 
 	void DesktopCapturer::SetMaxFrameRate(uint32_t max_frame_rate)
 	{
+		// Kept for a capturer replaced by setUseSystemPicker().
+		maxFrameRate = max_frame_rate;
+
 		if (!capturer) return;
 		capturer->SetMaxFrameRate(max_frame_rate);
 	}
@@ -186,8 +228,38 @@ namespace jni
 		return capturer->IsOccluded(pos);
 	}
 
+	bool DesktopCapturer::setUseSystemPicker(bool usePicker)
+	{
+		std::lock_guard<std::mutex> lock(startMutex);
+
+		if (captureCallback) {
+			return false;
+		}
+
+		if (useSystemPicker != usePicker) {
+			useSystemPicker = usePicker;
+
+			createCapturer();
+		}
+
+		return true;
+	}
+
+	bool DesktopCapturer::isSystemPickerAvailable()
+	{
+#if defined(WEBRTC_MAC)
+		return webrtc::GenericCapturerSckWithPickerAvailable();
+#elif defined(WEBRTC_USE_PIPEWIRE)
+		return webrtc::DesktopCapturer::IsRunningUnderWayland();
+#else
+		return false;
+#endif
+	}
+
 	bool DesktopCapturer::isWindowCapturer() const
 	{
-		return windowCapturer;
+		// A picked window is captured by ScreenCaptureKit or the portal,
+		// whose frames have no window border to crop.
+		return windowCapturer && !useSystemPicker;
 	}
 }

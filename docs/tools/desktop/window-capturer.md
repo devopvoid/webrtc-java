@@ -16,6 +16,8 @@ Key methods (inherited from `DesktopCapturer`):
 - `void selectSource(DesktopSource source)` – choose which window to capture
 - `void setFocusSelectedSource(boolean focus)` – attempt to focus/raise the selected window
 - `void setMaxFrameRate(int maxFrameRate)` – limit the capture frame rate
+- `void setUseSystemPicker(boolean usePicker)` – let the user choose a screen or windows in the operating system's picker, shown by `start`, instead of `selectSource`; set it before `start`, a later call throws `IllegalStateException`
+- `static boolean isSystemPickerAvailable()` – whether the system has such a picker: macOS 14 and newer, and Linux under Wayland
 - `void start(DesktopCaptureCallback callback)` – start capture, frames via callback. A capturer can be started once, a second call throws `IllegalStateException`
 - `void captureFrame()` – request a single capture after `start`; without a capture backend, as on Linux without a display, the callback gets `ERROR_PERMANENT`
 - `void dispose()` – release resources
@@ -67,6 +69,10 @@ finally {
     capturer.dispose();
 }
 ```
+
+## Letting the user choose in the system picker
+
+With `setUseSystemPicker(true)` before `start`, the capturer shows the operating system's picker instead of capturing a selected window. It works the same way for a `WindowCapturer` as for a `ScreenCapturer`; see [Letting the user choose in the system picker](/tools/desktop/screen-capturer#letting-the-user-choose-in-the-system-picker).
 
 ## Using with VideoDesktopSource to create a VideoTrack
 

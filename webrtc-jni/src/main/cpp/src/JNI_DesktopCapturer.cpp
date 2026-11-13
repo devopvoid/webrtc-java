@@ -112,6 +112,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapture
 	});
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_setUseSystemPicker
+(JNIEnv * env, jobject caller, jboolean usePicker)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<jni::DesktopCapturer> capturer(env, caller);
+		CHECK_HANDLE(capturer);
+
+		if (!capturer->setUseSystemPicker(static_cast<bool>(usePicker))) {
+			ThrowJavaException(env, "java/lang/IllegalStateException", "Capture has been started already");
+		}
+	});
+}
+
+JNIEXPORT jboolean JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_isSystemPickerAvailable
+(JNIEnv * env, jclass caller)
+{
+	return static_cast<jboolean>(jni::DesktopCapturer::isSystemPickerAvailable());
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_media_video_desktop_DesktopCapturer_start
 (JNIEnv * env, jobject caller, jobject jcallback)
 {
