@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2026-11-14
+
+### Features
+- Let the user choose a screen or window in the macOS system picker
+- Capture macOS windows with ScreenCaptureKit, and close the screen capture gaps
+- Hint video tracks as motion, detail or text
+- Support GraalVM native image
+- Check camera, microphone and network before a call
+- Record into rotating segments and keep a replay buffer
+- Reserve ratchet steps in SFrame key IDs
+- Add end-to-end encryption in the SFrame format
+- Add file transfer over data channels
+- Add system audio capture for desktop sharing
+- Send device-captured and pushed audio from one factory
+- Feed device-captured audio to senders through its track
+- Add peer diagnostics and sanitized support reports
+- Add configurable ICE recovery for client peers and HTTP sessions
+
+### Bug Fixes
+- Load the native library only once when Logging is used first
+- Report why macOS system audio capture stopped
+- Set up GraalVM with an allowed action
+- Survive the removal of the default PulseAudio device
+- Test segments and replays on a clock of their own
+- Stop untransformed receive paths and preserve executor context
+- Contain decoder-thread exceptions and report rejected media output
+- MediaPlayer decoder and source lifetimes
+- Harden audio blocks, JNI boundaries and channel limits
+- Release codec wrappers and distinguish device failures
+- Skip camera integration tests without libudev
+- Validate I420 planes before native conversion
+- Improve video view buffering and message logging
+
+### Documentation
+- Write the guides in shorter sentences
+- Split the client API guide and sort the navigation
+- Update the client API design and check it in the docs build
+- Share a screen with the microphone and system audio
+- Redesign documentation and publish Client API design guide
+
+### Testing
+- Write the stale partial file before the offer is accepted
+- Drive the single-file recorder tests with frames and a clock of their own
+- Read the position after a fast seek once a frame has gone out
+
+### Other
+- Fix AirPods audio when macOS switches A2DP to HFP
+- Prepare for next development iteration
+
+
 ## [1.0.0] - 2026-11-06
 
 ### Features
@@ -155,10 +205,12 @@ All notable changes to this project will be documented in this file.
 - Make the client concurrency tests deterministic
 
 ### Miscellaneous Tasks
+- Update CHANGELOG.md for v1.0.0
 - Disable the jni-check job
 - Ignore Linux sysroots downloaded for the WebRTC build
 
 ### Other
+- Prepare release v1.0.0
 - Limit media source URLs in errors to their network origin
 - Require Java 11
 - Port the peer connection, desktop video and media file examples to the client API
