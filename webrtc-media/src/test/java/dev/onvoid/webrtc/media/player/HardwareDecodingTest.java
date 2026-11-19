@@ -222,7 +222,8 @@ class HardwareDecodingTest {
 				IOException error = assertThrows(IOException.class,
 						() -> new MediaPlayer(new MediaReader(path(HEVC)), source, null, hardware));
 
-				assertTrue(error.getMessage().contains("Decoder not found"), error.getMessage());
+				assertTrue(error.getMessage().endsWith("No hardware decoder for hevc, which is decoded in hardware only"),
+						error.getMessage());
 			}
 			finally {
 				source.dispose();

@@ -82,6 +82,9 @@ set(FFMPEG_COMPONENTS
     --enable-decoder=pcm_s16be
     --enable-decoder=pcm_u8
     --enable-decoder=pcm_f32le
+    # G.711, the audio most IP cameras send over RTSP.
+    --enable-decoder=pcm_alaw
+    --enable-decoder=pcm_mulaw
     # Audio common in AVI files and in MPEG transport streams.
     --enable-decoder=mp2
     --enable-decoder=ac3

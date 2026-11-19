@@ -57,16 +57,6 @@ namespace
 #endif
 	}
 
-	// Whether the codec is decoded on the hardware only, never in software:
-	// HEVC. FFmpeg's decoder of it is in the build all the same, because the
-	// hardware decoders run inside it (it reads the headers and hands the
-	// slices to the hardware), but it decodes no picture itself. Where the
-	// hardware cannot, opening or decoding the stream fails.
-	bool IsHardwareOnly(AVCodecID id)
-	{
-		return id == AV_CODEC_ID_HEVC;
-	}
-
 	// The decoder to open for a codec. Software gets the one FFmpeg prefers.
 	// Hardware gets it too, unless it has no hardware configuration: where
 	// another decoder of the codec stands in front of the one that decodes on
@@ -112,6 +102,11 @@ namespace ffmpeg
 	VideoDecoder::~VideoDecoder()
 	{
 		Close();
+	}
+
+	bool VideoDecoder::IsHardwareOnly(AVCodecID id)
+	{
+		return id == AV_CODEC_ID_HEVC;
 	}
 
 	int VideoDecoder::Open(const AVStream * stream, bool hardware, int64_t start_time_us)

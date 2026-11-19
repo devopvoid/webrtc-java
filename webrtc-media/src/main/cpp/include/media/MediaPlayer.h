@@ -98,6 +98,11 @@ namespace ffmpeg
 			// Returns 0 or a negative AVERROR.
 			int Initialize();
 
+			// Why Initialize failed, in words for an exception: which
+			// decoder is missing, where that is the reason. Empty if it has
+			// not failed.
+			const std::string & GetInitializeError() const;
+
 			void Play();
 			void Pause();
 
@@ -216,6 +221,7 @@ namespace ffmpeg
 			bool hardware_decoding_ = false;
 			bool has_video_ = false;
 			bool has_audio_ = false;
+			std::string initialize_error_;
 
 			std::thread thread_;
 			std::thread event_thread_;

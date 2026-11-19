@@ -25,7 +25,33 @@
 #include <utility>
 
 extern "C" {
+#include <libavutil/avutil.h>
 #include <libavutil/error.h>
+}
+
+namespace
+{
+	// What an exception says when a decoder for the stream could not be
+	// opened. FFmpeg's own words for a missing decoder do not say which
+	// one, and with several streams the codec is what tells them apart.
+	std::string DescribeOpenError(const AVStream * stream, int error)
+	{
+		if (error != AVERROR_DECODER_NOT_FOUND) {
+			return ffmpeg::ErrorText(error);
+		}
+
+		const AVCodecID id = stream->codecpar->codec_id;
+		const std::string name = avcodec_get_name(id);
+
+		if (ffmpeg::VideoDecoder::IsHardwareOnly(id)) {
+			return "No hardware decoder for " + name + ", which is decoded in hardware only";
+		}
+
+		const char * type = av_get_media_type_string(stream->codecpar->codec_type);
+
+		return std::string("No decoder for ") + (type != nullptr ? type : "unknown")
+				+ " codec " + name;
+	}
 }
 
 namespace ffmpeg
@@ -74,6 +100,8 @@ namespace ffmpeg
 					reader_->GetStartTimeUs());
 
 			if (result < 0) {
+				initialize_error_ = DescribeOpenError(reader_->GetVideoStream(), result);
+
 				return result;
 			}
 
@@ -84,6 +112,8 @@ namespace ffmpeg
 			int result = audio_decoder_.Open(reader_->GetAudioStream(), reader_->GetStartTimeUs());
 
 			if (result < 0) {
+				initialize_error_ = DescribeOpenError(reader_->GetAudioStream(), result);
+
 				return result;
 			}
 
@@ -111,6 +141,11 @@ namespace ffmpeg
 		}
 
 		return 0;
+	}
+
+	const std::string & MediaPlayer::GetInitializeError() const
+	{
+		return initialize_error_;
 	}
 
 	void MediaPlayer::Play()
