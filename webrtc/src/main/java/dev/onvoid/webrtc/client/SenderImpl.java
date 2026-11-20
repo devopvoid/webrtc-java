@@ -53,6 +53,8 @@ final class SenderImpl implements Sender {
 
 	private final MediaKind kind;
 
+	private final List<String> rids;
+
 	private volatile LocalTrackImpl track;
 
 	/**
@@ -85,10 +87,15 @@ final class SenderImpl implements Sender {
 	private final Handlers<String> toneHandlers;
 
 
-	SenderImpl(PeerImpl peer, LocalTrackImpl track) {
+	/**
+	 * @param rids the rids of the simulcast layers the track is sent in, or
+	 *             none without simulcast.
+	 */
+	SenderImpl(PeerImpl peer, LocalTrackImpl track, List<String> rids) {
 		this.peer = peer;
 		this.track = track;
 		this.kind = track.kind();
+		this.rids = List.copyOf(rids);
 		this.toneHandlers = new Handlers<>(peer.rtc::reportError);
 	}
 
@@ -205,24 +212,66 @@ final class SenderImpl implements Sender {
 			RTCRtpSendParameters parameters = sender.getParameters();
 
 			for (RTCRtpEncodingParameters values : parameters.encodings) {
-				if (encoding.active != null) {
-					values.active = encoding.active;
-				}
-				if (encoding.maxBitrate != null) {
-					values.maxBitrate = encoding.maxBitrate;
-				}
-				if (kind == MediaKind.VIDEO) {
-					if (encoding.maxFrameRate != null) {
-						values.maxFramerate = encoding.maxFrameRate;
-					}
-					if (encoding.scaleDownBy != null) {
-						values.scaleResolutionDownBy = encoding.scaleDownBy;
-					}
-				}
+				apply(encoding, values);
 			}
 
 			sender.setParameters(parameters);
 		});
+	}
+
+	@Override
+	public CompletableFuture<Void> configure(String rid, Encoding encoding) {
+		if (rid == null) {
+			throw new NullPointerException("rid");
+		}
+		if (encoding == null) {
+			throw new NullPointerException("encoding");
+		}
+		if (!rids.contains(rid)) {
+			throw new IllegalArgumentException(rids.isEmpty()
+					? "The track is sent without simulcast, so it has no layer " + rid
+					: "The track is sent in the layers " + rids + ", not in " + rid);
+		}
+
+		return run(() -> {
+			RTCRtpSendParameters parameters = sender.getParameters();
+			boolean found = false;
+
+			for (RTCRtpEncodingParameters values : parameters.encodings) {
+				if (rid.equals(values.rid)) {
+					apply(encoding, values);
+					found = true;
+				}
+			}
+
+			if (!found) {
+				throw new WebRtcException("WebRTC reports no layer " + rid);
+			}
+
+			sender.setParameters(parameters);
+		});
+	}
+
+	@Override
+	public List<String> rids() {
+		return rids;
+	}
+
+	private void apply(Encoding encoding, RTCRtpEncodingParameters values) {
+		if (encoding.active != null) {
+			values.active = encoding.active;
+		}
+		if (encoding.maxBitrate != null) {
+			values.maxBitrate = encoding.maxBitrate;
+		}
+		if (kind == MediaKind.VIDEO) {
+			if (encoding.maxFrameRate != null) {
+				values.maxFramerate = encoding.maxFrameRate;
+			}
+			if (encoding.scaleDownBy != null) {
+				values.scaleResolutionDownBy = encoding.scaleDownBy;
+			}
+		}
 	}
 
 	@Override

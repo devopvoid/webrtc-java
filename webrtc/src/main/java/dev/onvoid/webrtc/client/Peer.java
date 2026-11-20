@@ -76,6 +76,22 @@ public interface Peer extends AutoCloseable {
 	Sender addTrack(LocalTrack track, String... streamIds);
 
 	/**
+	 * Sends a video track in the layers of the given simulcast, each with
+	 * its rid. Otherwise as {@link #addTrack(LocalTrack, String...)}. Should
+	 * WebRTC refuse the layers, the error handlers of the peer hear of it,
+	 * and every operation of the sender fails.
+	 *
+	 * @param track     a video track of the same runtime.
+	 * @param simulcast the layers to send the track in.
+	 * @param streamIds the streams the remote peer sees the track in.
+	 *
+	 * @return the handle of the new sender, at once.
+	 *
+	 * @throws IllegalArgumentException if the track is not a video track.
+	 */
+	Sender addTrack(LocalTrack track, Simulcast simulcast, String... streamIds);
+
+	/**
 	 * @return the senders that were added and not removed.
 	 */
 	List<Sender> senders();
