@@ -41,6 +41,7 @@ The library provides a comprehensive set of Java classes that map to the WebRTC 
 **Optional modules**
 
 - **[Media playback](https://jrtc.dev/guide/media/media-files)** (`webrtc-java-media`) - Stream video and audio files or RTSP sources into a call, decoded with FFmpeg
+- **[LiveKit rooms](https://jrtc.dev/guide/client/livekit)** (`webrtc-java-livekit`) - Join rooms of a LiveKit server, publish and receive tracks in simulcast, exchange data and reconnect after a lost connection
 - **[Call recording](https://jrtc.dev/guide/media/media-recording)** (`webrtc-java-media`) - Save what a call sends or receives into MKV, WebM or MP4 files, without re-encoding, as one file, rotating segments, or a replay buffer of the last seconds
 
 **Platforms**

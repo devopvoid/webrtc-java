@@ -51,6 +51,7 @@ The client API is described on these pages:
 | [Transforms and Encryption](/guide/client/transforms) | Encoded transforms and end-to-end encryption of a peer's media. |
 | [Data Channels](/guide/client/data-channels) | Messages between peers, flow control and channel options. |
 | [WHIP and WHEP](/guide/client/whip-whep) | Publishing to and playing from media servers. |
+| [LiveKit Rooms](/guide/client/livekit) | Joining rooms of a LiveKit server, with the `webrtc-java-livekit` module. |
 | [Statistics and Call Checks](/guide/client/statistics) | Connection statistics, diagnosis, and checking devices and network before a call. |
 
 ## The Runtime

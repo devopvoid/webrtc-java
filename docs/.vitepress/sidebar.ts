@@ -28,6 +28,7 @@ function sidebarGuide(): DefaultTheme.SidebarItem[] {
 				{ text: 'Transforms and Encryption', link: '/client/transforms' },
 				{ text: 'Data Channels', link: '/client/data-channels' },
 				{ text: 'WHIP and WHEP', link: '/client/whip-whep' },
+				{ text: 'LiveKit Rooms', link: '/client/livekit' },
 				{ text: 'Statistics and Call Checks', link: '/client/statistics' },
 			],
 		},

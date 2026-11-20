@@ -88,6 +88,24 @@ This example is useful for applications that need to receive media streams from 
 mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.WhepExample" -D"exec.args=http://localhost:8889/mystream/whep 10"
 ```
 
+## LiveKit
+
+The [`LiveKitExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/LiveKitExample.java) joins a room of a LiveKit server with the [LiveKit Rooms](/guide/client/livekit) module. It needs no camera, microphone or speakers.
+
+**Key features demonstrated:**
+- Joining a room with an access token
+- Publishing a pushed test pattern in three simulcast layers
+- Receiving the other participants' video in the smallest layer
+- Sending an event to the room every five seconds, and receiving those of the others
+- Following participants, and the reconnects after a lost connection
+
+Start a server with `livekit-server --dev`, then run the example twice, in two shells. Against another server, set `LIVEKIT_TOKEN` to a token for the room:
+
+```bash
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.LiveKitExample" -D"exec.args=ws://localhost:7880 lecture alice 30"
+mvn exec:java -D"exec.mainClass=dev.onvoid.webrtc.examples.LiveKitExample" -D"exec.args=ws://localhost:7880 lecture bob 30"
+```
+
 ## Codec List
 
 The [`CodecListExample`](https://github.com/devopvoid/webrtc-java/blob/main/webrtc-examples/src/main/java/dev/onvoid/webrtc/examples/CodecListExample.java) demonstrates how to list all supported codecs with the WebRTC peer-connection-factory.

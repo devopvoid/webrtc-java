@@ -18,6 +18,7 @@ Every guide of the webrtc-java library, in the order of the sidebar. New to the 
 - [Transforms and Encryption](/guide/client/transforms) - Encoded transforms and end-to-end encryption of a peer's media
 - [Data Channels](/guide/client/data-channels) - Messages between peers, flow control and channel options
 - [WHIP and WHEP](/guide/client/whip-whep) - Publishing to and playing from media servers
+- [LiveKit Rooms](/guide/client/livekit) - Joining rooms of a LiveKit server, with simulcast, data and reconnects
 - [Statistics and Call Checks](/guide/client/statistics) - Connection statistics, diagnosis and checks before a call
 
 ## Media Basics
