@@ -347,6 +347,7 @@ If the server cannot be reached, the constructor throws an `IOException` once th
 A live stream has no end and no length:
 
 - Its `MediaInfo` reports a duration of 0.
+- Its `MediaInfo` can report a video size of 0x0. Many cameras say how large their pictures are only with each keyframe, which may come too late for the reader. The video plays all the same, and its frames have their size.
 - Looping does not apply, and seeking is reported as an error.
 - Pausing stops reading from the server, but the server keeps sending. Resuming carries on from where playback paused, which leaves it behind real time by as long as it was paused.
 - To get back to live, close the source and open it again.

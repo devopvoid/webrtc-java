@@ -342,6 +342,7 @@ namespace ffmpeg
 		draining_ = false;
 		awaiting_key_frame_ = false;
 		skipped_ = 0;
+		has_pictures_ = false;
 		discarding_ = false;
 		time_base_ = { 0, 1 };
 		start_time_us_ = 0;
@@ -439,7 +440,23 @@ namespace ffmpeg
 			}
 		}
 
+		if (packet != nullptr && IsLeadingError(result)) {
+			// The packet is taken all the same: the codec has it, or it is
+			// one of those that cannot be decoded.
+			return 0;
+		}
+
 		return result;
+	}
+
+	bool VideoDecoder::IsLeadingError(int result) const
+	{
+		// A live stream joined between key frames, as an IP camera that sends
+		// its parameter sets only in band is: what comes before the first key
+		// frame cannot be decoded, and is no fault of the stream. Passing
+		// over it starts decoding at that key frame. Once there are pictures,
+		// such an error is a fault.
+		return result == AVERROR_INVALIDDATA && !has_pictures_;
 	}
 
 	int VideoDecoder::ReceiveFrame(AVFrame ** frame, int64_t * timestamp_us)
@@ -479,9 +496,18 @@ namespace ffmpeg
 
 			int result = ReceivePicture(frame, timestamp_us);
 
+			if (IsLeadingError(result)) {
+				// With frame threads the codec tells of a packet it could not
+				// decode on the way out, and the pictures behind it are still
+				// to come.
+				continue;
+			}
 			if (result < 0) {
 				return result;
 			}
+
+			has_pictures_ = true;
+
 			if (*frame == nullptr) {
 				// Dropped before it was read back and converted.
 				dropped_before_ = true;

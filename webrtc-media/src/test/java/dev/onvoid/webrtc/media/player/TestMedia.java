@@ -26,7 +26,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.IntFunction;
 
 /**
@@ -361,6 +363,109 @@ final class TestMedia {
 				ebmlUInt(0x7671, 0),				// ProjectionType, rectangular
 				ebml(0x7673, ByteBuffer.allocate(8).putDouble(yaw).array()),
 				ebml(0x7675, ByteBuffer.allocate(8).putDouble(roll).array()));
+	}
+
+	/**
+	 * Copies the H.264 video of a Matroska file the way a camera that sends
+	 * its parameter sets only in band streams it: in Annex B, with no
+	 * CodecPrivate and no size, and SPS and PPS only in front of each
+	 * keyframe. The stream starts in the middle of a group of pictures, with
+	 * pictures between keyframes for the given time, which cannot be decoded
+	 * without the parameter sets. Once that is longer than FFmpeg looks for
+	 * the size when it opens the file, the size is not known before playback.
+	 *
+	 * @param directory Where to write the file.
+	 * @param source    The file to copy, with H.264 in avcC form.
+	 * @param leadMs    How long the stream runs before its first keyframe.
+	 *
+	 * @return The file written.
+	 */
+	static Path inBandParameterSetsMatroska(Path directory, Path source, long leadMs)
+			throws IOException {
+		MatroskaContent content = new MatroskaContent(Files.readAllBytes(source));
+		ByteBuffer avcC = ByteBuffer.wrap(content.codecPrivates.get((long) content.videoTrack));
+		ByteArrayOutputStream parameterSets = new ByteArrayOutputStream();
+
+		// The configuration version, profile, compatibility and level, then
+		// the size of the NAL unit lengths.
+		avcC.position(4);
+
+		int lengthSize = (avcC.get() & 0x03) + 1;
+
+		for (int count = avcC.get() & 0x1F; count > 0; count--) {
+			writeNal(parameterSets, avcC, avcC.getShort() & 0xFFFF);
+		}
+		for (int count = avcC.get() & 0xFF; count > 0; count--) {
+			writeNal(parameterSets, avcC, avcC.getShort() & 0xFFFF);
+		}
+
+		List<Frame> video = new ArrayList<>();
+		List<Frame> pictures = new ArrayList<>();
+
+		for (Frame frame : content.frames) {
+			if (frame.track == content.videoTrack) {
+				video.add(frame);
+
+				if (!frame.key) {
+					pictures.add(frame);
+				}
+			}
+		}
+
+		List<Frame> frames = new ArrayList<>();
+
+		for (int i = 0; i * 40L < leadMs; i++) {
+			Frame picture = pictures.get(i % pictures.size());
+
+			frames.add(new Frame(1, i * 40L, false, annexB(picture.data, lengthSize, null)));
+		}
+		for (Frame frame : video) {
+			frames.add(new Frame(1, leadMs + frame.timeMs, frame.key,
+					annexB(frame.data, lengthSize, frame.key ? parameterSets.toByteArray() : null)));
+		}
+
+		byte[] track = ebml(0xAE,
+				ebmlUInt(0xD7, 1),					// TrackNumber
+				ebmlUInt(0x73C5, 1),				// TrackUID
+				ebmlUInt(0x83, 1),					// TrackType, video
+				// DefaultDuration, 40 ms. Without a duration or a frame rate
+				// FFmpeg cannot tell how long it has looked, and reads on to
+				// the keyframe, where a live stream would have timing.
+				ebmlUInt(0x23E383, 40_000_000),
+				ebml(0x86, ascii("V_MPEG4/ISO/AVC")));
+
+		return Files.write(directory.resolve("in-band-parameter-sets.mkv"),
+				matroska(track, frames, 1, -1));
+	}
+
+	/** A sample of NAL units with lengths in front, in Annex B. */
+	private static byte[] annexB(byte[] sample, int lengthSize, byte[] prefix) {
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		ByteBuffer in = ByteBuffer.wrap(sample);
+
+		if (prefix != null) {
+			writeBytes(out, prefix);
+		}
+
+		while (in.hasRemaining()) {
+			int length = 0;
+
+			for (int i = 0; i < lengthSize; i++) {
+				length = (length << 8) | (in.get() & 0xFF);
+			}
+
+			writeNal(out, in, length);
+		}
+
+		return out.toByteArray();
+	}
+
+	/** Writes a NAL unit read from the buffer, after a start code. */
+	private static void writeNal(ByteArrayOutputStream out, ByteBuffer in, int length) {
+		writeBytes(out, new byte[] { 0, 0, 0, 1 });
+		out.write(in.array(), in.position(), length);
+
+		in.position(in.position() + length);
 	}
 
 	/**
@@ -835,6 +940,8 @@ final class TestMedia {
 	private static final class MatroskaContent {
 
 		final List<Frame> frames = new ArrayList<>();
+		/** The CodecPrivate of each track that has one, by track number. */
+		final Map<Long, byte[]> codecPrivates = new HashMap<>();
 		byte[] tracks;
 		int videoTrack;
 
@@ -876,6 +983,9 @@ final class TestMedia {
 						if (readUInt(stop) == 1) {
 							videoTrack = (int) trackNumber;
 						}
+						break;
+					case 0x63A2:		// CodecPrivate, which follows the number
+						codecPrivates.put(trackNumber, Arrays.copyOfRange(data.array(), start, stop));
 						break;
 					case 0xE7:			// Timestamp
 						clusterTime = readUInt(stop);
