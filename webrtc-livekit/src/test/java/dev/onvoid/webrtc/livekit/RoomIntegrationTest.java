@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.livekit;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -43,8 +44,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import dev.onvoid.webrtc.client.AudioMode;
+import dev.onvoid.webrtc.client.CustomAudio;
 import dev.onvoid.webrtc.client.CustomVideo;
 import dev.onvoid.webrtc.client.MediaKind;
+import dev.onvoid.webrtc.client.PcmFormat;
 import dev.onvoid.webrtc.client.RemoteTrack;
 import dev.onvoid.webrtc.client.Subscription;
 import dev.onvoid.webrtc.client.WebRtc;
@@ -133,6 +136,60 @@ class RoomIntegrationTest {
 		track.asVideo().onFrame(frame -> frameSize.complete(
 				new int[] { frame.buffer.getWidth(), frame.buffer.getHeight() }));
 		assertArrayEquals(new int[] { 320, 240 }, await(frameSize));
+
+		bob.close();
+		alice.close();
+		video.close();
+	}
+
+	@Test
+	void subscriberReceivesPublishedAudio() throws Exception {
+		Room alice = join("alice");
+		Room bob = join("bob");
+
+		CompletableFuture<RemoteTrack> received = new CompletableFuture<>();
+		bob.onTrackSubscribed((participant, track) -> received.complete(track));
+
+		// A second of silence, pushed every second.
+		PcmFormat format = PcmFormat.of(48000, 1);
+		CustomAudio audio = rtc.media().customAudio("microphone-" + UUID.randomUUID());
+		byte[] second = new byte[format.sampleRate() * 2];
+		frames.scheduleAtFixedRate(() -> audio.push(second, format), 0, 1, TimeUnit.SECONDS);
+
+		Publication publication = await(alice.publish(audio, TrackSource.MICROPHONE));
+		assertEquals(TrackSource.MICROPHONE, publication.source());
+
+		RemoteTrack track = await(received);
+		assertEquals(MediaKind.AUDIO, track.kind());
+		assertEquals(publication.sid(), track.id());
+
+		CompletableFuture<Integer> chunk = new CompletableFuture<>();
+		track.asAudio().onAudio(c -> chunk.complete(c.frames()));
+		assertTrue(await(chunk) > 0);
+
+		bob.close();
+		alice.close();
+		audio.close();
+	}
+
+	@Test
+	void lateHandlerGetsEarlierTracks() throws Exception {
+		Room alice = join("alice");
+
+		CustomVideo video = rtc.media().customVideo("camera-" + UUID.randomUUID());
+		frames.scheduleAtFixedRate(() -> push(video), 0, 66, TimeUnit.MILLISECONDS);
+		Publication publication = await(alice.publish(video, TrackSource.CAMERA));
+
+		// Bob joins after the track was published, and receives it before
+		// he adds a handler.
+		Room bob = join("bob");
+		CompletableFuture<RemoteTrack> first = new CompletableFuture<>();
+		bob.onTrackSubscribed((participant, track) -> first.complete(track));
+		assertEquals(publication.sid(), await(first).id());
+
+		CompletableFuture<RemoteTrack> late = new CompletableFuture<>();
+		bob.onTrackSubscribed((participant, track) -> late.complete(track));
+		assertSame(await(first), await(late));
 
 		bob.close();
 		alice.close();

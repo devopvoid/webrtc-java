@@ -122,7 +122,9 @@ public interface Room extends AutoCloseable {
 
 	/**
 	 * @param handler gets each remote track this client receives, with the
-	 *                participant that publishes it.
+	 *                participant that publishes it. Tracks that arrived
+	 *                before the handler, and have not ended, are handed to it
+	 *                too.
 	 *
 	 * @return removes the handler.
 	 */

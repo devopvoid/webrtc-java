@@ -177,6 +177,9 @@ final class RoomImpl implements Room {
 	/** Tracks that arrived before the participant that publishes them, by participant sid. */
 	private final Map<String, List<RemoteTrack>> orphanTracks = new HashMap<>();
 
+	/** The remote tracks handed to the track handlers, for handlers added later. */
+	private final List<SubscribedTrack> subscribedTracks = new ArrayList<>();
+
 	private final Map<String, PendingPublish> pendingPublishes = new HashMap<>();
 
 	/** The published tracks, by sid. */
@@ -370,7 +373,28 @@ final class RoomImpl implements Room {
 
 	@Override
 	public Subscription onTrackSubscribed(BiConsumer<Participant, RemoteTrack> handler) {
-		return subscribe(trackHandlers, handler);
+		requireNonNull(handler, "handler");
+
+		// On the room thread, so that a track is handed over either here or
+		// when it arrives, never both.
+		boolean[] removed = new boolean[1];
+		executor.execute(() -> {
+			if (removed[0]) {
+				return;
+			}
+			trackHandlers.add(handler);
+
+			for (SubscribedTrack subscribed : List.copyOf(subscribedTracks)) {
+				if (!subscribed.track.isEnded()) {
+					call(() -> handler.accept(subscribed.participant, subscribed.track));
+				}
+			}
+		});
+
+		return () -> executor.execute(() -> {
+			removed[0] = true;
+			trackHandlers.remove(handler);
+		});
 	}
 
 	@Override
@@ -1131,12 +1155,17 @@ final class RoomImpl implements Room {
 	}
 
 	private void trackSubscribed(Participant participant, RemoteTrack track) {
+		subscribedTracks.removeIf(subscribed -> subscribed.track.isEnded());
+		subscribedTracks.add(new SubscribedTrack(participant, track));
+
 		for (BiConsumer<Participant, RemoteTrack> handler : trackHandlers) {
 			call(() -> handler.accept(participant, track));
 		}
 	}
 
 	private void fireLeft(Participant participant) {
+		subscribedTracks.removeIf(subscribed -> subscribed.participant == participant);
+
 		for (Consumer<Participant> handler : leftHandlers) {
 			call(() -> handler.accept(participant));
 		}
@@ -1465,6 +1494,7 @@ final class RoomImpl implements Room {
 
 		failPending(error);
 		orphanTracks.clear();
+		subscribedTracks.clear();
 		publications.clear();
 
 		CompletableFuture<Void> publisherClosed = publisher != null
@@ -1581,6 +1611,22 @@ final class RoomImpl implements Room {
 			this.options = options;
 			this.existing = existing;
 			this.result = result;
+		}
+	}
+
+
+
+	/** A remote track and the participant that publishes it. */
+	private static final class SubscribedTrack {
+
+		final Participant participant;
+
+		final RemoteTrack track;
+
+
+		SubscribedTrack(Participant participant, RemoteTrack track) {
+			this.participant = participant;
+			this.track = track;
 		}
 	}
 
