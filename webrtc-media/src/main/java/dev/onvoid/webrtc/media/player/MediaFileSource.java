@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.player;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -160,6 +161,27 @@ public class MediaFileSource implements AutoCloseable {
 	public MediaFileSource(String source, Duration timeout, boolean hardwareDecoding) throws IOException {
 		this(new MediaReader(source, timeout), CustomVideoSource::new, CustomAudioSource::new,
 				hardwareDecoding);
+	}
+
+	/**
+	 * Plays the source of a reader opened by the caller, such as one given
+	 * {@link MediaReaderOptions}, decoding its video in hardware where the
+	 * platform can if asked to, as {@link MediaPlayer#MediaPlayer(MediaReader,
+	 * CustomVideoSource, CustomAudioSource, boolean)} describes.
+	 * <p>
+	 * The reader is taken over, and closed with this source, or right away
+	 * if this source cannot be made. It must not be used afterwards.
+	 *
+	 * @param reader           An open reader of the source to play.
+	 * @param hardwareDecoding Whether to decode video in hardware if possible.
+	 *                         HEVC is decoded in hardware regardless.
+	 *
+	 * @throws IOException           if the source cannot be decoded.
+	 * @throws IllegalStateException if the reader is closed.
+	 */
+	public MediaFileSource(MediaReader reader, boolean hardwareDecoding) throws IOException {
+		this(Objects.requireNonNull(reader, "Reader is null"), CustomVideoSource::new,
+				CustomAudioSource::new, hardwareDecoding);
 	}
 
 	/**

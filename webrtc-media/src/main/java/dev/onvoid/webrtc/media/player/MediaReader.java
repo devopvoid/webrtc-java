@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.player;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Objects;
 
 import dev.onvoid.webrtc.internal.Timeouts;
 
@@ -96,11 +97,30 @@ public class MediaReader implements AutoCloseable {
 	 * @throws IllegalArgumentException if the timeout is negative.
 	 */
 	public MediaReader(String source, Duration timeout) throws IOException {
+		this(source, MediaReaderOptions.builder().timeout(timeout).build());
+	}
+
+	/**
+	 * Opens the given media source with the given options: the timeout of
+	 * each operation on it, and how much of it FFmpeg reads to find out what
+	 * its streams hold.
+	 *
+	 * @param source  The path or {@code rtsp://} URL of the source to open.
+	 * @param options How to open the source.
+	 *
+	 * @throws IOException if the source cannot be opened in time, or holds
+	 *                     nothing that can be played.
+	 */
+	public MediaReader(String source, MediaReaderOptions options) throws IOException {
+		Objects.requireNonNull(options, "Options are null");
+
 		// Zero is the one timeout without limit: a positive one rounds up to a
 		// microsecond, and one too long to count is as long as can be counted.
-		Timeouts.requireNonNegative(timeout, "timeout");
+		Duration analyzeDuration = options.getAnalyzeDuration();
 
-		handle = open(source, Timeouts.toMicros(timeout));
+		handle = open(source, Timeouts.toMicros(options.getTimeout()),
+				analyzeDuration != null ? Timeouts.toMicros(analyzeDuration) : 0,
+				options.getProbeSize());
 	}
 
 	/**
@@ -149,7 +169,8 @@ public class MediaReader implements AutoCloseable {
 		return detaching;
 	}
 
-	private static native long open(String source, long timeoutUs) throws IOException;
+	private static native long open(String source, long timeoutUs, long analyzeDurationUs,
+			long probeSize) throws IOException;
 
 	private static native MediaInfo info(long handle);
 

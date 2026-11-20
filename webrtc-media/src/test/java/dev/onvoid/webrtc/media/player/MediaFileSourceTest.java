@@ -209,6 +209,25 @@ class MediaFileSourceTest {
 	}
 
 	@Test
+	void playsReaderOfTheCaller() throws Exception {
+		Path file = TestMedia.inBandParameterSetsMatroska(tempDir, asset(H264_ASSET), 6000);
+		MediaReaderOptions options = MediaReaderOptions.builder()
+				.analyzeDuration(Duration.ofSeconds(10))
+				.build();
+		MediaReader reader = new MediaReader(file.toString(), options);
+
+		try (MediaFileSource source = new MediaFileSource(reader, false)) {
+			// What the options found.
+			assertEquals(320, source.getInfo().getVideoWidth());
+			assertNotNull(source.getVideoSource());
+		}
+
+		// Taken over, and closed with the source.
+		assertThrows(IllegalStateException.class, reader::getInfo);
+		assertThrows(IllegalStateException.class, () -> new MediaFileSource(reader, false));
+	}
+
+	@Test
 	void missingFileFails() {
 		assertThrows(IOException.class, () -> new MediaFileSource(Paths.get("no-such-file.webm")));
 	}
