@@ -25,12 +25,17 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.IntPredicate;
+import java.util.function.Predicate;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +46,7 @@ import dev.onvoid.webrtc.client.AudioMode;
 import dev.onvoid.webrtc.client.CustomVideo;
 import dev.onvoid.webrtc.client.MediaKind;
 import dev.onvoid.webrtc.client.RemoteTrack;
+import dev.onvoid.webrtc.client.Subscription;
 import dev.onvoid.webrtc.client.WebRtc;
 import dev.onvoid.webrtc.media.video.NativeI420Buffer;
 import dev.onvoid.webrtc.media.video.VideoFrame;
@@ -134,6 +140,51 @@ class RoomIntegrationTest {
 	}
 
 	@Test
+	void simulcastFollowsSubscribers() throws Exception {
+		Room alice = join("alice");
+		Room bob = join("bob");
+
+		CompletableFuture<RemoteTrack> received = new CompletableFuture<>();
+		bob.onTrackSubscribed((participant, track) -> received.complete(track));
+
+		CustomVideo video = rtc.media().customVideo("camera-" + UUID.randomUUID());
+		frames.scheduleAtFixedRate(() -> push(video, 1280, 720), 0, 66, TimeUnit.MILLISECONDS);
+
+		Publication publication = await(alice.publish(video, PublishOptions.builder()
+				.source(TrackSource.CAMERA)
+				.videoSize(1280, 720)
+				.simulcast(true)
+				.build()));
+		assertEquals(List.of("q", "h", "f"), publication.rids());
+
+		RemoteTrack track = await(received);
+
+		// Bob wants the smallest layer: the server forwards it, and, as
+		// nobody else watches, has Alice pause the larger ones.
+		CompletableFuture<Map<VideoQuality, Boolean>> paused = layersOnce(alice, layers -> !layers.get(VideoQuality.HIGH));
+		CompletableFuture<Integer> small = frameWidth(track, width -> width == 320);
+		bob.requestVideoQuality(track.id(), VideoQuality.LOW);
+
+		assertEquals(320, await(small));
+		Map<VideoQuality, Boolean> layers = await(paused);
+		assertTrue(layers.get(VideoQuality.LOW), layers::toString);
+		assertFalse(layers.get(VideoQuality.HIGH), layers::toString);
+
+		// And back up: the larger layers resume, and Bob gets more than the
+		// smallest once the bandwidth estimate allows it.
+		CompletableFuture<Map<VideoQuality, Boolean>> resumed = layersOnce(alice, l -> l.get(VideoQuality.HIGH));
+		CompletableFuture<Integer> large = frameWidth(track, width -> width >= 640);
+		bob.requestVideoQuality(track.id(), VideoQuality.HIGH);
+
+		assertTrue(await(resumed).get(VideoQuality.HIGH));
+		assertTrue(await(large) >= 640);
+
+		bob.close();
+		alice.close();
+		video.close();
+	}
+
+	@Test
 	void dataReachesOtherParticipant() throws Exception {
 		Room alice = join("alice");
 		Room bob = join("bob");
@@ -185,8 +236,38 @@ class RoomIntegrationTest {
 		return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
 	}
 
+	private static CompletableFuture<Map<VideoQuality, Boolean>> layersOnce(Room room,
+			Predicate<Map<VideoQuality, Boolean>> condition) {
+		CompletableFuture<Map<VideoQuality, Boolean>> result = new CompletableFuture<>();
+		List<BiConsumer<Publication, Map<VideoQuality, Boolean>>> listeners = ((RoomImpl) room).layerListeners;
+		BiConsumer<Publication, Map<VideoQuality, Boolean>> listener = (publication, layers) -> {
+			if (layers.containsKey(VideoQuality.HIGH) && condition.test(layers)) {
+				result.complete(layers);
+			}
+		};
+		listeners.add(listener);
+		result.whenComplete((r, e) -> listeners.remove(listener));
+		return result;
+	}
+
+	private static CompletableFuture<Integer> frameWidth(RemoteTrack track, IntPredicate condition) {
+		CompletableFuture<Integer> result = new CompletableFuture<>();
+		Subscription subscription = track.asVideo().onFrame(frame -> {
+			int width = frame.buffer.getWidth();
+			if (condition.test(width)) {
+				result.complete(width);
+			}
+		});
+		result.whenComplete((r, e) -> subscription.close());
+		return result;
+	}
+
 	private static void push(CustomVideo video) {
-		NativeI420Buffer buffer = NativeI420Buffer.allocate(320, 240);
+		push(video, 320, 240);
+	}
+
+	private static void push(CustomVideo video, int width, int height) {
+		NativeI420Buffer buffer = NativeI420Buffer.allocate(width, height);
 		VideoFrame frame = new VideoFrame(buffer, System.nanoTime());
 
 		try {

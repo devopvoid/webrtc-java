@@ -16,7 +16,10 @@
 
 package dev.onvoid.webrtc.livekit;
 
+import java.util.List;
+
 import dev.onvoid.webrtc.client.LocalTrack;
+import dev.onvoid.webrtc.client.Sender;
 
 /**
  * A local track the server accepted and that is negotiated to it.
@@ -29,11 +32,14 @@ public final class Publication {
 
 	private final LocalTrack track;
 
+	private final Sender sender;
 
-	Publication(String sid, TrackSource source, LocalTrack track) {
+
+	Publication(String sid, TrackSource source, LocalTrack track, Sender sender) {
 		this.sid = sid;
 		this.source = source;
 		this.track = track;
+		this.sender = sender;
 	}
 
 	/**
@@ -55,6 +61,18 @@ public final class Publication {
 	 */
 	public LocalTrack track() {
 		return track;
+	}
+
+	/**
+	 * @return the rids of the simulcast layers the track is sent in, none
+	 * without simulcast.
+	 */
+	public List<String> rids() {
+		return sender.rids();
+	}
+
+	Sender sender() {
+		return sender;
 	}
 
 	@Override

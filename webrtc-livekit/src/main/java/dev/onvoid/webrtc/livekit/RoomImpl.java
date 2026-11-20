@@ -23,6 +23,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -48,12 +49,15 @@ import dev.onvoid.webrtc.RTCSdpType;
 import dev.onvoid.webrtc.RTCSessionDescription;
 import dev.onvoid.webrtc.client.ChannelOptions;
 import dev.onvoid.webrtc.client.DataChannel;
+import dev.onvoid.webrtc.client.Encoding;
 import dev.onvoid.webrtc.client.LocalTrack;
 import dev.onvoid.webrtc.client.MediaKind;
 import dev.onvoid.webrtc.client.Negotiation;
 import dev.onvoid.webrtc.client.Peer;
 import dev.onvoid.webrtc.client.PeerOptions;
 import dev.onvoid.webrtc.client.RemoteTrack;
+import dev.onvoid.webrtc.client.Sender;
+import dev.onvoid.webrtc.client.Simulcast;
 import dev.onvoid.webrtc.client.SignalMessage;
 import dev.onvoid.webrtc.client.Subscription;
 import dev.onvoid.webrtc.client.WebRtc;
@@ -62,6 +66,7 @@ import dev.onvoid.webrtc.livekit.internal.proto.LivekitModels.DisconnectReason;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitModels.ParticipantInfo;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitModels.TrackType;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitModels.UserPacket;
+import dev.onvoid.webrtc.livekit.internal.proto.LivekitModels.VideoLayer;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.AddTrackRequest;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.ICEServer;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.JoinResponse;
@@ -72,8 +77,12 @@ import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.SessionDescription;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.SignalRequest;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.SignalResponse;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.SignalTarget;
+import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.SubscribedCodec;
+import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.SubscribedQuality;
+import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.SubscribedQualityUpdate;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.TrackPublishedResponse;
 import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.TrickleRequest;
+import dev.onvoid.webrtc.livekit.internal.proto.LivekitRtc.UpdateTrackSettings;
 
 /**
  * The room: the state LiveKit's signaling describes, and the publisher and
@@ -128,6 +137,12 @@ final class RoomImpl implements Room, SignalClient.Handler {
 	private final Map<String, List<RemoteTrack>> orphanTracks = new HashMap<>();
 
 	private final Map<String, PendingPublish> pendingPublishes = new HashMap<>();
+
+	/** The published tracks, by sid. */
+	private final Map<String, Publication> publications = new HashMap<>();
+
+	/** Hear which layers dynacast left on, once applied. For tests. */
+	final List<BiConsumer<Publication, Map<VideoQuality, Boolean>>> layerListeners = new CopyOnWriteArrayList<>();
 
 	private Peer publisher;
 
@@ -223,15 +238,44 @@ final class RoomImpl implements Room, SignalClient.Handler {
 
 	@Override
 	public CompletableFuture<Publication> publish(LocalTrack track, TrackSource source) {
-		requireNonNull(track, "track");
 		requireNonNull(source, "source");
+
+		return publish(track, PublishOptions.builder().source(source).build());
+	}
+
+	@Override
+	public CompletableFuture<Publication> publish(LocalTrack track, PublishOptions options) {
+		requireNonNull(track, "track");
+		requireNonNull(options, "options");
+
+		if (options.simulcast && track.kind() != MediaKind.VIDEO) {
+			throw new IllegalArgumentException("Simulcast takes a video track, got " + track.kind());
+		}
 
 		CompletableFuture<Publication> result = new CompletableFuture<>();
 		result.orTimeout(timeout.toMillis(), TimeUnit.MILLISECONDS);
 
-		post(() -> startPublish(track, source, result), result);
+		post(() -> startPublish(track, options, result), result);
 
 		return result;
+	}
+
+	@Override
+	public void requestVideoQuality(String trackSid, VideoQuality quality) {
+		requireNonNull(trackSid, "trackSid");
+		requireNonNull(quality, "quality");
+
+		executor.execute(() -> {
+			if (state != RoomState.CONNECTED) {
+				return;
+			}
+
+			signal.send(SignalRequest.newBuilder()
+					.setTrackSetting(UpdateTrackSettings.newBuilder()
+							.addTrackSids(trackSid)
+							.setQuality(quality.proto()))
+					.build());
+		});
 	}
 
 	@Override
@@ -317,6 +361,9 @@ final class RoomImpl implements Room, SignalClient.Handler {
 				break;
 			case TRACK_PUBLISHED:
 				onTrackPublished(response.getTrackPublished());
+				break;
+			case SUBSCRIBED_QUALITY_UPDATE:
+				onSubscribedQualities(response.getSubscribedQualityUpdate());
 				break;
 			case LEAVE:
 				LeaveRequest leave = response.getLeave();
@@ -560,7 +607,7 @@ final class RoomImpl implements Room, SignalClient.Handler {
 
 	// Publishing.
 
-	private void startPublish(LocalTrack track, TrackSource source, CompletableFuture<Publication> result) {
+	private void startPublish(LocalTrack track, PublishOptions options, CompletableFuture<Publication> result) {
 		if (state != RoomState.CONNECTED) {
 			result.completeExceptionally(new LiveKitException("The room is " + state));
 			return;
@@ -573,16 +620,36 @@ final class RoomImpl implements Room, SignalClient.Handler {
 			return;
 		}
 
-		pendingPublishes.put(cid, new PendingPublish(track, source, result));
+		pendingPublishes.put(cid, new PendingPublish(track, options, result));
 		result.whenCompleteAsync((p, e) -> pendingPublishes.remove(cid), executor);
 
-		signal.send(SignalRequest.newBuilder()
-				.setAddTrack(AddTrackRequest.newBuilder()
-						.setCid(cid)
-						.setName(track.id())
-						.setType(track.kind() == MediaKind.VIDEO ? TrackType.VIDEO : TrackType.AUDIO)
-						.setSource(source.proto()))
-				.build());
+		AddTrackRequest.Builder request = AddTrackRequest.newBuilder()
+				.setCid(cid)
+				.setName(options.name != null ? options.name : track.id())
+				.setType(track.kind() == MediaKind.VIDEO ? TrackType.VIDEO : TrackType.AUDIO)
+				.setSource(options.source.proto());
+
+		if (track.kind() == MediaKind.VIDEO && options.height > 0) {
+			request.setWidth(options.width).setHeight(options.height);
+
+			List<PublishOptions.Layer> layers = options.layers();
+			if (layers.isEmpty()) {
+				request.addLayers(VideoLayer.newBuilder()
+						.setQuality(VideoQuality.HIGH.proto())
+						.setWidth(options.width)
+						.setHeight(options.height));
+			}
+			for (PublishOptions.Layer layer : layers) {
+				request.addLayers(VideoLayer.newBuilder()
+						.setQuality(layer.quality.proto())
+						.setRid(layer.quality.rid())
+						.setWidth(layer.width)
+						.setHeight(layer.height)
+						.setBitrate(layer.bitrate));
+			}
+		}
+
+		signal.send(SignalRequest.newBuilder().setAddTrack(request).build());
 	}
 
 	private void onTrackPublished(TrackPublishedResponse published) {
@@ -591,24 +658,71 @@ final class RoomImpl implements Room, SignalClient.Handler {
 			return;
 		}
 
+		Sender sender;
 		try {
-			publisher.addTrack(pending.track);
+			Simulcast simulcast = pending.options.simulcastLayers();
+			sender = simulcast != null
+					? publisher.addTrack(pending.track, simulcast)
+					: publisher.addTrack(pending.track);
 		}
 		catch (RuntimeException e) {
 			pending.result.completeExceptionally(e);
 			return;
 		}
 
-		Publication publication = new Publication(published.getTrack().getSid(), pending.source, pending.track);
+		Publication publication = new Publication(published.getTrack().getSid(), pending.options.source,
+				pending.track, sender);
 
 		negotiatePublisher().whenComplete((v, error) -> {
 			if (error != null) {
 				pending.result.completeExceptionally(error);
 			}
 			else {
+				publications.put(publication.sid(), publication);
 				pending.result.complete(publication);
 			}
 		});
+	}
+
+	/**
+	 * Dynacast: the server names the layers some subscriber wants. Sending
+	 * the others would only cost bandwidth and CPU, so they pause.
+	 */
+	private void onSubscribedQualities(SubscribedQualityUpdate update) {
+		Publication publication = publications.get(update.getTrackSid());
+		if (publication == null || publication.rids().isEmpty()) {
+			return;
+		}
+
+		// One codec is published; older servers send the qualities without it.
+		List<SubscribedQuality> qualities = update.getSubscribedQualitiesList();
+		for (SubscribedCodec codec : update.getSubscribedCodecsList()) {
+			qualities = codec.getQualitiesList();
+		}
+
+		Map<VideoQuality, Boolean> enabled = new EnumMap<>(VideoQuality.class);
+		List<CompletableFuture<Void>> changes = new ArrayList<>();
+
+		for (SubscribedQuality quality : qualities) {
+			VideoQuality layer = VideoQuality.of(quality.getQuality());
+			if (layer == null || !publication.rids().contains(layer.rid())) {
+				continue;
+			}
+
+			enabled.put(layer, quality.getEnabled());
+			changes.add(publication.sender().configure(layer.rid(),
+					Encoding.builder().active(quality.getEnabled()).build()));
+		}
+
+		CompletableFuture.allOf(changes.toArray(new CompletableFuture[0])).whenCompleteAsync((v, error) -> {
+			if (error != null) {
+				LOG.log(Level.WARNING, "Pausing or resuming layers of " + publication.sid() + " failed", error);
+				return;
+			}
+			for (BiConsumer<Publication, Map<VideoQuality, Boolean>> listener : layerListeners) {
+				call(() -> listener.accept(publication, enabled));
+			}
+		}, executor);
 	}
 
 	// Data.
@@ -846,6 +960,7 @@ final class RoomImpl implements Room, SignalClient.Handler {
 		waiters.forEach(waiter -> waiter.completeExceptionally(error));
 
 		orphanTracks.clear();
+		publications.clear();
 
 		CompletableFuture<Void> publisherClosed = publisher != null
 				? publisher.closeAsync()
@@ -906,14 +1021,14 @@ final class RoomImpl implements Room, SignalClient.Handler {
 
 		final LocalTrack track;
 
-		final TrackSource source;
+		final PublishOptions options;
 
 		final CompletableFuture<Publication> result;
 
 
-		PendingPublish(LocalTrack track, TrackSource source, CompletableFuture<Publication> result) {
+		PendingPublish(LocalTrack track, PublishOptions options, CompletableFuture<Publication> result) {
 			this.track = track;
-			this.source = source;
+			this.options = options;
 			this.result = result;
 		}
 	}

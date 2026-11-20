@@ -69,6 +69,30 @@ public interface Room extends AutoCloseable {
 	CompletableFuture<Publication> publish(LocalTrack track, TrackSource source);
 
 	/**
+	 * Publishes a local track as the options say, such as a video track in
+	 * simulcast layers. With simulcast the server pauses the layers no
+	 * subscriber wants (LiveKit's dynacast), and resumes them once one does.
+	 *
+	 * @param track   the track, which stays the application's to close.
+	 * @param options how to publish it.
+	 *
+	 * @return a future with the publication, which fails if the server
+	 * refuses the track or does not answer in time.
+	 */
+	CompletableFuture<Publication> publish(LocalTrack track, PublishOptions options);
+
+	/**
+	 * Asks the server to forward a remote video track in another simulcast
+	 * layer. The server forwards a smaller one while the connection takes
+	 * no more.
+	 *
+	 * @param trackSid the server's id of the remote track, its {@link
+	 *                 RemoteTrack#id() id}.
+	 * @param quality  the layer.
+	 */
+	void requestVideoQuality(String trackSid, VideoQuality quality);
+
+	/**
 	 * Sends data to every other participant of the room.
 	 *
 	 * @param payload  the data.
