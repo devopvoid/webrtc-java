@@ -17,6 +17,7 @@
 package dev.onvoid.webrtc.client;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
@@ -42,13 +43,35 @@ public interface Sender {
 	CompletableFuture<Void> replaceTrack(LocalTrack track);
 
 	/**
-	 * Changes how the track is encoded. Values left unset stay as they are.
+	 * Changes how the track is encoded, in every layer alike if it is sent
+	 * as {@link Simulcast}. Values left unset stay as they are.
 	 *
 	 * @param encoding the values to change.
 	 *
 	 * @return a future that completes once the values are applied.
 	 */
 	CompletableFuture<Void> configure(Encoding encoding);
+
+	/**
+	 * Changes how one layer of a {@link Simulcast} track is encoded, such as
+	 * pausing it with {@code active(false)} while no receiver wants it.
+	 * Values left unset stay as they are.
+	 *
+	 * @param rid      the rid of the layer, one of {@link #rids()}.
+	 * @param encoding the values to change.
+	 *
+	 * @return a future that completes once the values are applied.
+	 *
+	 * @throws IllegalArgumentException if the sender has no layer of that
+	 *                                  rid.
+	 */
+	CompletableFuture<Void> configure(String rid, Encoding encoding);
+
+	/**
+	 * @return the rids of the layers the track is sent in, in their order,
+	 * or none if it is sent without simulcast.
+	 */
+	List<String> rids();
 
 	/**
 	 * Sets the transform that every encoded frame of this sender passes

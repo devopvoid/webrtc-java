@@ -290,6 +290,27 @@ final class PeerImpl implements Peer {
 		return addSender(local, ids, Collections.emptyList(), new CompletableFuture<>());
 	}
 
+	@Override
+	public Sender addTrack(LocalTrack track, Simulcast simulcast, String... streamIds) {
+		LocalTrackImpl local = checkTrack(track);
+		requireNonNull(simulcast, "simulcast");
+
+		if (local.kind() != MediaKind.VIDEO) {
+			throw new IllegalArgumentException("Simulcast takes a video track, got " + local.kind());
+		}
+
+		List<String> ids = new ArrayList<>();
+
+		for (String id : streamIds) {
+			ids.add(requireNonNull(id, "streamId"));
+		}
+		if (ids.isEmpty()) {
+			ids.add(defaultStreamId);
+		}
+
+		return addSender(local, ids, simulcast.encodings(), new CompletableFuture<>());
+	}
+
 	/**
 	 * Adds a track to the stream of the tracks added without stream ids, sent
 	 * in the given encodings, as simulcast (RFC 8853) does with one for each
@@ -308,7 +329,14 @@ final class PeerImpl implements Peer {
 
 	private SenderImpl addSender(LocalTrackImpl local, List<String> ids, List<RTCRtpEncodingParameters> encodings,
 			CompletableFuture<Void> added) {
-		SenderImpl sender = new SenderImpl(this, local);
+		List<String> rids = new ArrayList<>();
+		for (RTCRtpEncodingParameters encoding : encodings) {
+			if (encoding.rid != null) {
+				rids.add(encoding.rid);
+			}
+		}
+
+		SenderImpl sender = new SenderImpl(this, local, rids);
 		senders.add(sender);
 
 		control.execute(() -> {

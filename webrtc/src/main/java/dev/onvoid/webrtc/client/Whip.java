@@ -88,27 +88,6 @@ public final class Whip {
 		return new Builder(HttpSession.checkEndpoint(endpoint));
 	}
 
-	/**
-	 * @return the encodings of the simulcast layers, with their rids, or none
-	 * without simulcast.
-	 */
-	private static List<RTCRtpEncodingParameters> encodings(List<Encoding> layers) {
-		List<RTCRtpEncodingParameters> encodings = new ArrayList<>();
-
-		for (int i = 0; i < layers.size(); i++) {
-			Encoding layer = layers.get(i);
-			RTCRtpEncodingParameters parameters = new RTCRtpEncodingParameters();
-			parameters.rid = RIDS.get(i);
-			parameters.active = layer.active;
-			parameters.maxBitrate = layer.maxBitrate;
-			parameters.maxFramerate = layer.maxFrameRate;
-			parameters.scaleResolutionDownBy = layer.scaleDownBy;
-
-			encodings.add(parameters);
-		}
-
-		return encodings;
-	}
 
 
 
@@ -140,7 +119,8 @@ public final class Whip {
 
 		private boolean alwaysOfferVideo;
 
-		private List<Encoding> simulcast = List.of();
+		/** The layers of the video track, or null without simulcast. */
+		private Simulcast simulcast;
 
 		private Gathering gathering = Gathering.TRICKLE;
 
@@ -253,8 +233,8 @@ public final class Whip {
 		 * @return this builder.
 		 */
 		public Builder simulcast() {
-			return simulcast(Encoding.builder().scaleDownBy(1).build(), Encoding.builder().scaleDownBy(2).build(),
-					Encoding.builder().scaleDownBy(4).build());
+			this.simulcast = Simulcast.standard();
+			return this;
 		}
 
 		/**
@@ -262,8 +242,8 @@ public final class Whip {
 		 * simulcast (RFC 8853), with the rids {@code f}, {@code h} and
 		 * {@code q} in this order. An endpoint that takes no simulcast gets the
 		 * first layer only, so the largest comes first. {@link
-		 * Sender#configure} on the sender of the track changes every layer
-		 * alike.
+		 * Sender#configure(Encoding)} on the sender of the track changes every
+		 * layer alike, {@link Sender#configure(String, Encoding)} one layer.
 		 *
 		 * @param layers two or three encodings, the most WebRTC sends; those
 		 *               without a {@link Encoding.Builder#scaleDownBy factor}
@@ -279,7 +259,12 @@ public final class Whip {
 				throw new IllegalArgumentException("Simulcast takes two or three layers, got " + layers.length);
 			}
 
-			this.simulcast = List.of(layers);
+			Simulcast.Builder builder = Simulcast.builder();
+			for (int i = 0; i < layers.length; i++) {
+				builder.layer(RIDS.get(i), layers[i]);
+			}
+
+			this.simulcast = builder.build();
 			return this;
 		}
 
@@ -412,7 +397,7 @@ public final class Whip {
 							+ track.kind().name().toLowerCase(Locale.ROOT) + " track, got another: " + track);
 				}
 			}
-			if (!simulcast.isEmpty() && !kinds.contains(MediaKind.VIDEO)) {
+			if (simulcast != null && !kinds.contains(MediaKind.VIDEO)) {
 				throw new IllegalStateException("Simulcast needs a video track to publish");
 			}
 
@@ -422,7 +407,7 @@ public final class Whip {
 			Duration limit = timeout;
 			Map<MediaKind, List<String>> names = new EnumMap<>(codecs);
 			boolean placeholder = alwaysOfferVideo && !kinds.contains(MediaKind.VIDEO);
-			List<RTCRtpEncodingParameters> layers = encodings(simulcast);
+			List<RTCRtpEncodingParameters> layers = simulcast == null ? List.of() : simulcast.encodings();
 			PeerImpl peer = (PeerImpl) rtc.createPeer(options.build());
 
 			try {

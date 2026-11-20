@@ -340,6 +340,7 @@ public interface Peer extends AutoCloseable {
 
     // Sending. In AUTOMATIC mode each change renegotiates by itself.
     Sender addTrack(LocalTrack track, String... streamIds);
+    Sender addTrack(LocalTrack track, Simulcast simulcast, String... streamIds);   // video, two or three layers with rids
     List<Sender> senders();
 
     // Receiving. Late subscribers get the tracks that already arrived.
@@ -635,6 +636,8 @@ public interface Sender {
     LocalTrack track();
     CompletableFuture<Void> replaceTrack(LocalTrack track);    // no renegotiation, null sends nothing
     CompletableFuture<Void> configure(Encoding encoding);      // max bitrate, max frame rate, scale down, active
+    CompletableFuture<Void> configure(String rid, Encoding encoding);   // one simulcast layer
+    List<String> rids();                                       // the simulcast layers, none without
     CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform);   // null sends frames unchanged
     CompletableFuture<Void> generateKeyFrame();
     CompletableFuture<Void> remove();                          // renegotiates in AUTOMATIC mode

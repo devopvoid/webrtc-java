@@ -95,7 +95,7 @@ Whip.Session live = Whip.to(URI.create("https://example.com/live/whip"))
         .get(15, TimeUnit.SECONDS);
 ```
 
-Simulcast needs a video track. `Sender.configure` on its sender changes every layer alike.
+Simulcast needs a video track. `Sender.configure(Encoding)` on its sender changes every layer alike, and `configure(rid, Encoding)` one layer. Simulcast outside WHIP is described under [Simulcast](/guide/client/sending-media#simulcast).
 
 ## Errors
 

@@ -134,6 +134,29 @@ audioSender.sendTones("*99,1", Duration.ofMillis(200), Duration.ofMillis(100));
 
 The characters 0 to 9, A to D, `#` and `*` are tones, and a comma is a pause of 2 seconds. What happens to queued and stopped tones is described under [Details](#dtmf-tones), and the [DTMF Sender](/guide/audio/dtmf-sender) guide has more.
 
+## Simulcast
+
+With simulcast, a video track is sent in several layers at once, each at its own resolution and bitrate. A server that forwards the stream, such as an SFU, then gives each receiver the layer its connection takes. Each layer has an RTP stream id, its `rid`:
+
+```java
+Sender sender = peer.addTrack(camera, Simulcast.builder()
+        .layer("q", Encoding.builder().scaleDownBy(4).maxBitrate(150_000).build())
+        .layer("h", Encoding.builder().scaleDownBy(2).maxBitrate(500_000).build())
+        .layer("f", Encoding.builder().maxBitrate(1_500_000).build())
+        .build());
+```
+
+`Simulcast.standard()` gives three layers in full, half and quarter resolution, with the rids `f`, `h` and `q`.
+
+`configure(rid, encoding)` changes one layer, and `configure(encoding)` every layer alike. A server may ask the sender to pause the layers no receiver wants:
+
+```java
+sender.configure("f", Encoding.builder().active(false).build());   // stop sending full resolution
+sender.configure("f", Encoding.builder().active(true).build());    // and start again
+```
+
+`rids()` lists the layers of a sender, in their order.
+
 ## Switching Cameras
 
 A `LocalCamera` switches to another camera without renegotiating. Every peer that sends it keeps sending it, and preview handlers keep getting frames:
@@ -183,6 +206,14 @@ If the thread stalls, as in a long garbage collection pause, it makes up for at 
 - Tones still queued from an earlier call are replaced, and that call's future is cancelled.
 - A video sender, or a sender whose remote peer accepts no telephone events, fails the future with an `IllegalStateException`.
 - So do tones that WebRTC stops sending midway, for example because the sender was paused with `configure`. The future then fails a few seconds after their planned end.
+
+### Simulcast Layers
+
+- A simulcast takes two or three layers, the most WebRTC sends.
+- A rid has 1 to 16 letters and digits, and is unique among the layers. It cannot change once the track is added.
+- Only video tracks take simulcast. `addTrack` throws an `IllegalArgumentException` for an audio track.
+- A remote peer without simulcast leaves it out of its answer and gets only the first layer. A plain WebRTC peer, such as another `Peer`, is one of them.
+- `configure(rid, encoding)` throws an `IllegalArgumentException` for a rid the sender does not have.
 
 ### When a Camera Switch Fails
 
