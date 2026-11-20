@@ -58,6 +58,7 @@
 		<module>webrtc-media</module>
 		<module>webrtc-swing</module>
 		<module>webrtc-javafx</module>
+		<module>webrtc-livekit</module>
 		<module>webrtc-examples</module>
 	</modules>
 

@@ -1,0 +1,33 @@
+syntax = "proto3";
+package logger;
+option java_package = "dev.onvoid.webrtc.livekit.internal.proto.logger";
+
+option go_package = "github.com/livekit/protocol/livekit/logger";
+option csharp_namespace = "LiveKit.Proto";
+option ruby_package = "LiveKit::Proto";
+
+import "google/protobuf/descriptor.proto";
+
+enum Sensitivity {
+  // Unannotated default — safe to log.
+  // Identifiers, IDs, timestamps, enums, status fields.
+  SENSITIVITY_UNSPECIFIED = 0;
+
+  // User-identifying or user-controlled data: display names, phone numbers,
+  // metadata, attributes, custom headers, auth usernames, semi-public account
+  // identifiers (AWS role ARNs, Azure account names).
+  // Recorded under a sensitivity tag by a sink that can tag; redacted by one
+  // that cannot.
+  SENSITIVITY_PII = 1;
+
+  // Credentials and authentication material: passwords, access keys, session
+  // tokens, signing keys, API keys, ICE credentials.
+  // ALWAYS redacted: no sink may record it.
+  SENSITIVITY_SECRET = 2;
+}
+
+extend google.protobuf.FieldOptions {
+  string redact_format = 1286;
+  string name = 1287;
+  Sensitivity sensitivity = 1288;
+}
