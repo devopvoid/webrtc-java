@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.player;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -1347,14 +1348,45 @@ class MediaPlayerTest {
 
 	@Test
 	void failsWithoutDecoder() throws Exception {
-		Path file = TestMedia.muLawWav(tempDir);
+		Path file = TestMedia.pcm24Wav(tempDir);
 
 		try (Sources sources = new Sources()) {
 			// The reader opens, since the demuxer knows the format.
 			MediaReader reader = new MediaReader(file);
 
-			assertThrows(IOException.class,
+			IOException error = assertThrows(IOException.class,
 					() -> new MediaPlayer(reader, null, sources.audio));
+
+			// Names the codec, which the source may have several of.
+			assertEquals("Opening the decoders failed: No decoder for audio codec pcm_s24le",
+					error.getMessage());
+		}
+	}
+
+	@Test
+	void playsALaw() throws Exception {
+		assertPlaysG711(true);
+	}
+
+	@Test
+	void playsMuLaw() throws Exception {
+		assertPlaysG711(false);
+	}
+
+	private void assertPlaysG711(boolean aLaw) throws Exception {
+		// One second of 8 kHz mono, as an IP camera sends it.
+		Path file = TestMedia.g711Wav(tempDir, aLaw);
+
+		try (Playback playback = new Playback(new MediaReader(file))) {
+			playback.player.play();
+
+			assertTrue(playback.ended.await(10, TimeUnit.SECONDS), "no end of stream");
+			assertNull(playback.error.get());
+
+			assertEquals(48000, playback.sampleRate.get());
+			assertEquals(1, playback.channels.get());
+			assertEquals(100, playback.chunks.get());
+			assertEquals(48000, playback.nonZeroSamples.get());
 		}
 	}
 

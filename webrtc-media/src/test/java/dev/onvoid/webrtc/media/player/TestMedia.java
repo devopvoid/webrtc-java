@@ -51,17 +51,43 @@ final class TestMedia {
 	}
 
 	/**
-	 * Writes one second of 8 kHz G.711 mu-law in a WAV file. The WAV demuxer
-	 * is part of the FFmpeg build and knows the format, but its decoder is
-	 * not, so this opens as a reader and fails as a player.
+	 * Writes one second of 8 kHz mono G.711 in a WAV file, the audio most IP
+	 * cameras send. Every sample is the same quiet tone, not silence, which
+	 * decodes to a constant non-zero value: 264 in A-law, 396 in mu-law.
+	 *
+	 * @param directory Where to write the file.
+	 * @param aLaw      A-law if true, mu-law otherwise.
+	 *
+	 * @return The file written.
+	 */
+	static Path g711Wav(Path directory, boolean aLaw) throws IOException {
+		return monoWav(directory, aLaw ? "alaw.wav" : "mulaw.wav",
+				aLaw ? 6 : 7,	// WAVE_FORMAT_ALAW, WAVE_FORMAT_MULAW
+				8, (byte) (aLaw ? 0xC5 : 0xDF));
+	}
+
+	/**
+	 * Writes one second of 8 kHz 24-bit PCM in a WAV file. The WAV demuxer is
+	 * part of the FFmpeg build and knows the format, but its decoder is not,
+	 * so this opens as a reader and fails as a player.
 	 *
 	 * @param directory Where to write the file.
 	 *
 	 * @return The file written.
 	 */
-	static Path muLawWav(Path directory) throws IOException {
+	static Path pcm24Wav(Path directory) throws IOException {
+		return monoWav(directory, "pcm24.wav", 1, 24, (byte) 0);	// WAVE_FORMAT_PCM
+	}
+
+	/**
+	 * Writes one second of 8 kHz mono audio in a WAV file, each byte of its
+	 * data the same.
+	 */
+	private static Path monoWav(Path directory, String name, int formatTag,
+			int bitsPerSample, byte fill) throws IOException {
 		final int rate = 8000;
-		final int length = rate;
+		final int blockAlign = bitsPerSample / 8;
+		final int length = rate * blockAlign;
 
 		ByteBuffer buffer = ByteBuffer.allocate(44 + length)
 				.order(ByteOrder.LITTLE_ENDIAN);
@@ -69,21 +95,20 @@ final class TestMedia {
 		buffer.put(ascii("RIFF")).putInt(36 + length).put(ascii("WAVE"));
 
 		buffer.put(ascii("fmt ")).putInt(16)
-				.putShort((short) 7)	// WAVE_FORMAT_MULAW
-				.putShort((short) 1)	// Channels
-				.putInt(rate)			// Sample rate
-				.putInt(rate)			// Byte rate
-				.putShort((short) 1)	// Block align
-				.putShort((short) 8);	// Bits per sample
+				.putShort((short) formatTag)
+				.putShort((short) 1)			// Channels
+				.putInt(rate)					// Sample rate
+				.putInt(rate * blockAlign)		// Byte rate
+				.putShort((short) blockAlign)
+				.putShort((short) bitsPerSample);
 
 		buffer.put(ascii("data")).putInt(length);
 
 		while (buffer.hasRemaining()) {
-			// Silence in mu-law.
-			buffer.put((byte) 0xFF);
+			buffer.put(fill);
 		}
 
-		return Files.write(directory.resolve("mulaw.wav"), buffer.array());
+		return Files.write(directory.resolve(name), buffer.array());
 	}
 
 	/**

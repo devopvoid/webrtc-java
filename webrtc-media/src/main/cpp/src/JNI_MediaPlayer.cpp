@@ -92,10 +92,16 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaPlayer_create
 		int result = player->Initialize();
 
 		if (result < 0) {
+			std::string reason = player->GetInitializeError();
+
+			if (reason.empty()) {
+				reason = ffmpeg::ErrorText(result);
+			}
+
 			// Released before throwing, see DiscardPlayer.
 			player.reset();
 
-			ffmpeg::ThrowIOException(env, "Opening the decoders failed: " + ffmpeg::ErrorText(result));
+			ffmpeg::ThrowIOException(env, "Opening the decoders failed: " + reason);
 
 			return 0;
 		}

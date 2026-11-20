@@ -74,6 +74,14 @@ namespace ffmpeg
 			// Returns 0 or a negative AVERROR.
 			int Open(const AVStream * stream, bool hardware = false, int64_t start_time_us = 0);
 
+			// Whether the codec is decoded on the hardware only, never in
+			// software: HEVC. FFmpeg's decoder of it is in the build all the
+			// same, because the hardware decoders run inside it (it reads the
+			// headers and hands the slices to the hardware), but it decodes no
+			// picture itself. Where the hardware cannot, opening or decoding
+			// the stream fails.
+			static bool IsHardwareOnly(AVCodecID id);
+
 			void Close();
 
 			// Drops everything the decoder holds, which is what a seek needs:
