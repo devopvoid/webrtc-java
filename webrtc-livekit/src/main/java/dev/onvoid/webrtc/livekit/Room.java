@@ -136,6 +136,25 @@ public interface Room extends AutoCloseable {
 	Subscription onData(Consumer<DataMessage> handler);
 
 	/**
+	 * @param handler gets the reason each time the connection is lost and
+	 *                the room starts to get it back.
+	 *
+	 * @return removes the handler.
+	 */
+	Subscription onReconnecting(Consumer<String> handler);
+
+	/**
+	 * @param handler runs each time the connection is back. If the session
+	 *                could not be resumed, the room joined anew: the local
+	 *                participant then has a new sid, the participants were
+	 *                reported as left and joined again, and the publications
+	 *                have new sids.
+	 *
+	 * @return removes the handler.
+	 */
+	Subscription onReconnected(Runnable handler);
+
+	/**
 	 * @param handler gets the reason once the room is left, for whatever
 	 *                reason, the application's close included.
 	 *

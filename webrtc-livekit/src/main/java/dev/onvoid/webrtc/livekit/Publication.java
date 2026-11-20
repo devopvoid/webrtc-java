@@ -20,33 +20,41 @@ import java.util.List;
 
 import dev.onvoid.webrtc.client.LocalTrack;
 import dev.onvoid.webrtc.client.Sender;
+import dev.onvoid.webrtc.livekit.internal.proto.LivekitModels.TrackInfo;
 
 /**
- * A local track the server accepted and that is negotiated to it.
+ * A local track the server accepted and that is negotiated to it. After a
+ * full reconnect the room publishes the track again, and the publication
+ * takes the server's new id.
  */
 public final class Publication {
-
-	private final String sid;
 
 	private final TrackSource source;
 
 	private final LocalTrack track;
 
-	private final Sender sender;
+	private final PublishOptions options;
+
+	private volatile TrackInfo info;
+
+	private volatile Sender sender;
 
 
-	Publication(String sid, TrackSource source, LocalTrack track, Sender sender) {
-		this.sid = sid;
-		this.source = source;
+	Publication(TrackInfo info, PublishOptions options, LocalTrack track, Sender sender) {
+		this.info = info;
+		this.source = options.source;
+		this.options = options;
 		this.track = track;
 		this.sender = sender;
 	}
 
 	/**
 	 * @return the server's id of the track, as other participants see it.
+	 * It changes when the room publishes the track again after a full
+	 * reconnect.
 	 */
 	public String sid() {
-		return sid;
+		return info.getSid();
 	}
 
 	/**
@@ -75,9 +83,23 @@ public final class Publication {
 		return sender;
 	}
 
+	TrackInfo info() {
+		return info;
+	}
+
+	PublishOptions options() {
+		return options;
+	}
+
+	/** Takes what publishing the track again in a new session gave. */
+	void republished(TrackInfo info, Sender sender) {
+		this.info = info;
+		this.sender = sender;
+	}
+
 	@Override
 	public String toString() {
-		return "Publication[" + sid + ", " + source + ", " + track.id() + "]";
+		return "Publication[" + sid() + ", " + source + ", " + track.id() + "]";
 	}
 
 }

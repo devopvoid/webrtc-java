@@ -27,6 +27,13 @@ public enum RoomState {
 	/** The room is joined. */
 	CONNECTED,
 
+	/**
+	 * The connection to the server was lost, and the room is getting it back:
+	 * by resuming the session, or by joining anew and publishing the tracks
+	 * again. Publishing waits until it is back.
+	 */
+	RECONNECTING,
+
 	/** The room is left, by the application, the server or a failure. Final. */
 	DISCONNECTED
 

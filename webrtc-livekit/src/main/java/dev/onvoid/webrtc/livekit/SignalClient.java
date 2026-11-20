@@ -83,6 +83,14 @@ final class SignalClient implements WebSocket.Listener {
 	 * out, such as wss://example.com, with https and http taken as wss and ws.
 	 */
 	static URI rtcUri(URI url, int protocol, boolean autoSubscribe) {
+		return rtcUri(url, protocol, autoSubscribe, null);
+	}
+
+	/**
+	 * @param resumeSid the participant sid of the session to resume, or null
+	 *                  to join anew.
+	 */
+	static URI rtcUri(URI url, int protocol, boolean autoSubscribe, String resumeSid) {
 		String scheme = url.getScheme() == null ? "" : url.getScheme().toLowerCase(Locale.ROOT);
 		switch (scheme) {
 			case "https": scheme = "wss"; break;
@@ -102,7 +110,8 @@ final class SignalClient implements WebSocket.Listener {
 				+ "&sdk=" + encode("java")
 				+ "&version=" + encode(LiveKit.VERSION)
 				+ "&os=" + encode(System.getProperty("os.name", ""))
-				+ "&auto_subscribe=" + (autoSubscribe ? 1 : 0);
+				+ "&auto_subscribe=" + (autoSubscribe ? 1 : 0)
+				+ (resumeSid == null ? "" : "&reconnect=1&sid=" + encode(resumeSid));
 
 		String authority = url.getRawAuthority();
 		return URI.create(scheme + "://" + authority + path + "/rtc?" + query);
@@ -171,6 +180,18 @@ final class SignalClient implements WebSocket.Listener {
 				.thenCompose(v -> webSocket.sendClose(WebSocket.NORMAL_CLOSURE, ""))
 				.whenComplete((r, e) -> CompletableFuture.delayedExecutor(CLOSE_TIMEOUT.toMillis(),
 						TimeUnit.MILLISECONDS).execute(webSocket::abort));
+	}
+
+	/**
+	 * Cuts the connection off as a network failure would, and reports it.
+	 * For tests.
+	 */
+	void abort() {
+		WebSocket webSocket = socket;
+		if (webSocket != null) {
+			webSocket.abort();
+		}
+		post(() -> handler.onSignalClosed("The signaling connection was cut off"));
 	}
 
 	@Override
