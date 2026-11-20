@@ -50,6 +50,13 @@ namespace ffmpeg
 			MediaReader(const MediaReader &) = delete;
 			MediaReader & operator=(const MediaReader &) = delete;
 
+			// How much of the source libavformat reads when it opens it, to
+			// find what the streams hold: in microseconds of the source and
+			// in bytes. 0 leaves its default. Opening may take the analysis
+			// duration on top of the timeout, which a live stream needs to
+			// send that much. Call this before Open.
+			void SetAnalysis(int64_t analyze_duration_us, int64_t probe_size);
+
 			// Opens the given source and selects the video and audio stream
 			// that are meant to be played. Returns 0, or the negative AVERROR
 			// libavformat reported, in which case the reader stays closed.
@@ -134,8 +141,9 @@ namespace ffmpeg
 			// makes the blocking call fail with AVERROR_EXIT.
 			static int OnInterrupt(void * opaque);
 
-			// Starts the time the next blocking call has, and ends it.
-			void BeginBlocking();
+			// Starts the time the next blocking call has, the timeout and the
+			// given extra time, and ends it.
+			void BeginBlocking(int64_t extra_us = 0);
 			void EndBlocking();
 
 			// A blocking call that failed because it ran out of time rather
@@ -148,6 +156,10 @@ namespace ffmpeg
 			int64_t start_time_us_ = 0;
 
 			const int64_t timeout_us_;
+
+			// 0 for the defaults of libavformat.
+			int64_t analyze_duration_us_ = 0;
+			int64_t probe_size_ = 0;
 
 			// When the current blocking call runs out of time, on the clock
 			// of av_gettime_relative(), or 0 while none is running.

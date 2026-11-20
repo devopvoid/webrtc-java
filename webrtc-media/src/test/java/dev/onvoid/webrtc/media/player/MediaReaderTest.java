@@ -19,6 +19,7 @@ package dev.onvoid.webrtc.media.player;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -113,6 +114,76 @@ class MediaReaderTest {
 		try (MediaReader reader = new MediaReader(source, Duration.ofSeconds(Long.MAX_VALUE))) {
 			assertTrue(reader.getInfo().hasVideo());
 		}
+	}
+
+	@Test
+	void opensWithLongestTimeoutAndAnalysis() throws Exception {
+		// The analysis is added to the timeout of opening, and the sum of
+		// the two saturates as well.
+		MediaReaderOptions options = MediaReaderOptions.builder()
+				.timeout(Duration.ofSeconds(Long.MAX_VALUE))
+				.analyzeDuration(Duration.ofSeconds(Long.MAX_VALUE))
+				.build();
+
+		try (MediaReader reader = new MediaReader(asset().toAbsolutePath().toString(), options)) {
+			assertEquals(320, reader.getInfo().getVideoWidth());
+		}
+	}
+
+	@Test
+	void longerAnalysisFindsLateSize(@TempDir Path dir) throws Exception {
+		// The first keyframe, which says how large the pictures are, comes
+		// after six seconds: later than FFmpeg looks by default.
+		Path file = TestMedia.inBandParameterSetsMatroska(dir, h264Asset(), 6000);
+
+		try (MediaReader reader = new MediaReader(file)) {
+			assertEquals(0, reader.getInfo().getVideoWidth());
+		}
+
+		MediaReaderOptions options = MediaReaderOptions.builder()
+				.analyzeDuration(Duration.ofSeconds(10))
+				.build();
+
+		try (MediaReader reader = new MediaReader(file.toString(), options)) {
+			MediaInfo info = reader.getInfo();
+
+			assertEquals(320, info.getVideoWidth());
+			assertEquals(240, info.getVideoHeight());
+		}
+	}
+
+	@Test
+	void probeSizeLimitsAnalysis(@TempDir Path dir) throws Exception {
+		Path file = TestMedia.inBandParameterSetsMatroska(dir, h264Asset(), 6000);
+
+		// Long enough to reach the keyframe, but not in so few bytes.
+		MediaReaderOptions options = MediaReaderOptions.builder()
+				.analyzeDuration(Duration.ofSeconds(10))
+				.probeSize(1000)
+				.build();
+
+		try (MediaReader reader = new MediaReader(file.toString(), options)) {
+			assertEquals(0, reader.getInfo().getVideoWidth());
+		}
+	}
+
+	@Test
+	void rejectsInvalidOptions() {
+		MediaReaderOptions.Builder builder = MediaReaderOptions.builder();
+
+		assertThrows(IllegalArgumentException.class, () -> builder.timeout(Duration.ofNanos(-1)));
+		assertThrows(IllegalArgumentException.class, () -> builder.analyzeDuration(Duration.ZERO));
+		assertThrows(IllegalArgumentException.class, () -> builder.analyzeDuration(Duration.ofNanos(-1)));
+		assertThrows(IllegalArgumentException.class, () -> builder.probeSize(31));
+		assertThrows(NullPointerException.class, () -> builder.timeout(null));
+		assertThrows(NullPointerException.class, () -> builder.analyzeDuration(null));
+		assertThrows(NullPointerException.class, () -> new MediaReader(asset().toString(), (MediaReaderOptions) null));
+
+		MediaReaderOptions defaults = builder.build();
+
+		assertEquals(MediaReader.DEFAULT_TIMEOUT, defaults.getTimeout());
+		assertNull(defaults.getAnalyzeDuration());
+		assertEquals(0, defaults.getProbeSize());
 	}
 
 	@Test
@@ -293,6 +364,11 @@ class MediaReaderTest {
 
 	private static Path asset() throws Exception {
 		return asset(ASSET);
+	}
+
+	/** 320x240 H.264 with its parameter sets in the CodecPrivate. */
+	private static Path h264Asset() throws Exception {
+		return asset("/media-test-h264.mkv");
 	}
 
 	static Path asset(String name) throws Exception {

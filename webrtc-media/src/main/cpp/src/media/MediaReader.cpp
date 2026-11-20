@@ -57,6 +57,12 @@ namespace ffmpeg
 		Close();
 	}
 
+	void MediaReader::SetAnalysis(int64_t analyze_duration_us, int64_t probe_size)
+	{
+		analyze_duration_us_ = std::max<int64_t>(analyze_duration_us, 0);
+		probe_size_ = std::max<int64_t>(probe_size, 0);
+	}
+
 	int MediaReader::Open(const std::string & url)
 	{
 		Close();
@@ -75,6 +81,15 @@ namespace ffmpeg
 
 		format_context_->interrupt_callback.callback = &MediaReader::OnInterrupt;
 		format_context_->interrupt_callback.opaque = this;
+
+		// Set on the context rather than passed as options, which only fail
+		// where an allocation can. 0 is what libavformat takes for its own
+		// choice of analysis duration; its probe size has a default instead.
+		format_context_->max_analyze_duration = analyze_duration_us_;
+
+		if (probe_size_ > 0) {
+			format_context_->probesize = probe_size_;
+		}
 
 		AVDictionary * options = nullptr;
 
@@ -105,7 +120,9 @@ namespace ffmpeg
 			return TranslateError(result);
 		}
 
-		BeginBlocking();
+		// A live stream takes as long to send what is analyzed as it lasts,
+		// which the timeout alone may not cover.
+		BeginBlocking(analyze_duration_us_);
 		result = avformat_find_stream_info(format_context_, nullptr);
 		EndBlocking();
 
@@ -382,7 +399,7 @@ namespace ffmpeg
 		return 0;
 	}
 
-	void MediaReader::BeginBlocking()
+	void MediaReader::BeginBlocking(int64_t extra_us)
 	{
 		timed_out_.store(false);
 
@@ -394,8 +411,9 @@ namespace ffmpeg
 		// Saturated: a timeout too long to count arrives as INT64_MAX, and the
 		// sum would wrap around into a deadline that has passed already.
 		const int64_t now = av_gettime_relative();
+		const int64_t time_us = extra_us > INT64_MAX - timeout_us_ ? INT64_MAX : timeout_us_ + extra_us;
 
-		deadline_us_.store(timeout_us_ > INT64_MAX - now ? INT64_MAX : now + timeout_us_);
+		deadline_us_.store(time_us > INT64_MAX - now ? INT64_MAX : now + time_us);
 	}
 
 	void MediaReader::EndBlocking()

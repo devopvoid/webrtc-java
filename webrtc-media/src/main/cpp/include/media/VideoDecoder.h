@@ -185,6 +185,11 @@ namespace ffmpeg
 			// for a key frame, which it is after it lost pictures it needs.
 			bool SkipUntilKeyFrame(const AVPacket * packet);
 
+			// Whether an error of the codec only says that the stream started
+			// between key frames: one before the first picture, which is
+			// passed over.
+			bool IsLeadingError(int result) const;
+
 			void KeepPacket(const AVPacket * packet);
 			void DropKeptPackets();
 			void DropPending();
@@ -241,6 +246,10 @@ namespace ffmpeg
 			// and starts again at a key frame.
 			bool awaiting_key_frame_ = false;
 			size_t skipped_ = 0;
+
+			// Whether the codec has given out a picture since the decoder
+			// was opened.
+			bool has_pictures_ = false;
 			std::deque<Pending> pending_;
 
 			// Where the frames after a seek are to start.

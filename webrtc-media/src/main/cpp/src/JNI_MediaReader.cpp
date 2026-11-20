@@ -62,7 +62,8 @@ namespace
 }
 
 JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
-(JNIEnv * env, jclass caller, jstring source, jlong timeoutUs)
+(JNIEnv * env, jclass caller, jstring source, jlong timeoutUs, jlong analyzeDurationUs,
+		jlong probeSize)
 {
 	return ffmpeg::CallFromJava<jlong>(env, 0, [&]() -> jlong {
 		if (source == nullptr) {
@@ -92,6 +93,9 @@ JNIEXPORT jlong JNICALL Java_dev_onvoid_webrtc_media_player_MediaReader_open
 		}
 
 		auto reader = std::make_unique<ffmpeg::MediaReader>(static_cast<int64_t>(timeoutUs));
+
+		reader->SetAnalysis(static_cast<int64_t>(analyzeDurationUs), static_cast<int64_t>(probeSize));
+
 		int result = reader->Open(url);
 
 		if (result < 0) {

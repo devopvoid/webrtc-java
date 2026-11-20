@@ -23,6 +23,12 @@ package dev.onvoid.webrtc.media.player;
  * A stream that is absent is reported as a zero size, frame rate, sample rate
  * or channel count, so {@link #hasVideo()} and {@link #hasAudio()} are the
  * questions to ask before reading the rest.
+ * <p>
+ * A video stream can be there with a zero size, too: a live stream that
+ * carries its parameter sets only in band, as many IP cameras do, says how
+ * large its pictures are only with its first keyframe. If that comes later
+ * than FFmpeg looks for it when the source is opened, the size is not known
+ * yet. The video plays all the same, and its frames have their size.
  *
  * @author Alex Andres
  */
@@ -31,10 +37,10 @@ public class MediaInfo {
 	/** How long the source runs in microseconds, or 0 if it is not known. */
 	private final long durationUs;
 
-	/** The width of the video as it is shown, or 0 if there is no video. */
+	/** The width of the video as it is shown, or 0 if there is none or it is not known. */
 	private final int videoWidth;
 
-	/** The height of the video as it is shown, or 0 if there is no video. */
+	/** The height of the video as it is shown, or 0 if there is none or it is not known. */
 	private final int videoHeight;
 
 	/** The frame rate of the video, or 0 if there is no video. */
@@ -90,12 +96,16 @@ public class MediaInfo {
 	}
 
 	/**
-	 * Returns whether the source has a video stream that can be played.
+	 * Returns whether the source has a video stream that can be played. Its
+	 * size may not be known yet, see the class description.
 	 *
 	 * @return True if there is video.
 	 */
 	public boolean hasVideo() {
-		return videoWidth > 0 && videoHeight > 0;
+		// The codec, not the size: native code names one for every video
+		// stream it plays, while the size can be missing until the first
+		// keyframe.
+		return videoCodec != null;
 	}
 
 	/**
@@ -103,7 +113,8 @@ public class MediaInfo {
 	 * turned upright. A video stored sideways reports its stored height here,
 	 * while its frames keep their stored size and carry the rotation.
 	 *
-	 * @return The width, or {@code 0} if there is no video.
+	 * @return The width, or {@code 0} if there is no video or its size is not
+	 *         known yet.
 	 */
 	public int getVideoWidth() {
 		return videoWidth;
@@ -114,7 +125,8 @@ public class MediaInfo {
 	 * turned upright. A video stored sideways reports its stored width here,
 	 * while its frames keep their stored size and carry the rotation.
 	 *
-	 * @return The height, or {@code 0} if there is no video.
+	 * @return The height, or {@code 0} if there is no video or its size is not
+	 *         known yet.
 	 */
 	public int getVideoHeight() {
 		return videoHeight;

@@ -351,6 +351,27 @@ A live stream has no end and no length:
 - Pausing stops reading from the server, but the server keeps sending. Resuming carries on from where playback paused, which leaves it behind real time by as long as it was paused.
 - To get back to live, close the source and open it again.
 
+### Video Size of a Camera
+
+Many cameras say how large their pictures are only with each keyframe. FFmpeg reads 5 seconds of a source when it opens it. If the first keyframe comes later, `MediaInfo` reports a video size of 0x0. The video plays all the same, and its frames have their size.
+
+To know the size when the source opens, let FFmpeg read for longer than the camera's keyframe interval:
+
+```java
+// Import required classes
+import dev.onvoid.webrtc.media.player.MediaReader;
+import dev.onvoid.webrtc.media.player.MediaReaderOptions;
+
+MediaReaderOptions options = MediaReaderOptions.builder()
+        .analyzeDuration(Duration.ofSeconds(15))
+        .build();
+
+MediaReader reader = new MediaReader("rtsp://camera.local/stream1", options);
+MediaFileSource source = new MediaFileSource(reader, false);
+```
+
+The source takes over the reader and closes it. Opening takes up to the analysis duration on top of the timeout, as the camera sends in real time. FFmpeg also stops after 5 MB. For a stream of a high bit rate, raise that limit with `probeSize(bytes)` as well.
+
 ## Closing
 
 Closing a `MediaFileSource` stops playback, and releases the player along with both media sources. Before that, release the senders a peer connection handed out, and the tracks:

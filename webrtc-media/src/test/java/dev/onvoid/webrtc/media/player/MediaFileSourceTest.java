@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.media.player;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,6 +31,7 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import dev.onvoid.webrtc.PeerConnectionFactory;
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule;
@@ -44,6 +46,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -58,6 +61,12 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 class MediaFileSourceTest {
 
 	private static final String ASSET = "/media-test.webm";
+
+	/** H.264 with its parameter sets in avcC form, the CodecPrivate. */
+	private static final String H264_ASSET = "/media-test-h264.mkv";
+
+	@TempDir
+	Path tempDir;
 
 	private AudioDeviceModule audioModule;
 	private PeerConnectionFactory factory;
@@ -127,6 +136,95 @@ class MediaFileSourceTest {
 			videoTrack.dispose();
 			audioTrack.dispose();
 		}
+	}
+
+	@Test
+	void sendsVideoWhoseSizeComesWithTheFirstKeyframe() throws Exception {
+		Path original = asset(H264_ASSET);
+		int width;
+		int height;
+
+		try (MediaReader reader = new MediaReader(original)) {
+			width = reader.getInfo().getVideoWidth();
+			height = reader.getInfo().getVideoHeight();
+		}
+
+		// As an IP camera sends it: parameter sets in band only, and the first
+		// keyframe after more time than FFmpeg looks for the size.
+		Path file = TestMedia.inBandParameterSetsMatroska(tempDir, original, 6000);
+
+		AtomicInteger frames = new AtomicInteger();
+		AtomicInteger frameWidth = new AtomicInteger();
+		AtomicInteger frameHeight = new AtomicInteger();
+		AtomicReference<String> error = new AtomicReference<>();
+		CountDownLatch ended = new CountDownLatch(1);
+
+		try (MediaFileSource source = new MediaFileSource(file)) {
+			MediaInfo info = source.getInfo();
+
+			// The size is not known yet, which is what this is about.
+			assertEquals(0, info.getVideoWidth(), info.toString());
+			assertTrue(info.hasVideo(), info.toString());
+			assertEquals("h264", info.getVideoCodec());
+			assertNotNull(source.getVideoSource());
+
+			VideoTrack videoTrack = factory.createVideoTrack("video", source.getVideoSource());
+			VideoTrackSink videoSink = frame -> {
+				frames.incrementAndGet();
+				frameWidth.set(frame.buffer.getWidth());
+				frameHeight.set(frame.buffer.getHeight());
+			};
+
+			videoTrack.addSink(videoSink);
+
+			source.setListener(new MediaPlayerListener() {
+
+				@Override
+				public void onEndOfStream() {
+					ended.countDown();
+				}
+
+				@Override
+				public void onError(String message) {
+					error.set(message);
+					ended.countDown();
+				}
+			});
+
+			source.play();
+
+			assertTrue(ended.await(30, TimeUnit.SECONDS), "no end of stream");
+			// What comes before the keyframe is passed over, not an error.
+			assertNull(error.get());
+
+			// 30 pictures in two groups of 15 follow the keyframe: losing the
+			// first group to the pictures before it would leave 16.
+			assertTrue(frames.get() > 20, "video frames: " + frames.get());
+			assertEquals(width, frameWidth.get());
+			assertEquals(height, frameHeight.get());
+
+			videoTrack.removeSink(videoSink);
+			videoTrack.dispose();
+		}
+	}
+
+	@Test
+	void playsReaderOfTheCaller() throws Exception {
+		Path file = TestMedia.inBandParameterSetsMatroska(tempDir, asset(H264_ASSET), 6000);
+		MediaReaderOptions options = MediaReaderOptions.builder()
+				.analyzeDuration(Duration.ofSeconds(10))
+				.build();
+		MediaReader reader = new MediaReader(file.toString(), options);
+
+		try (MediaFileSource source = new MediaFileSource(reader, false)) {
+			// What the options found.
+			assertEquals(320, source.getInfo().getVideoWidth());
+			assertNotNull(source.getVideoSource());
+		}
+
+		// Taken over, and closed with the source.
+		assertThrows(IllegalStateException.class, reader::getInfo);
+		assertThrows(IllegalStateException.class, () -> new MediaFileSource(reader, false));
 	}
 
 	@Test
@@ -240,9 +338,13 @@ class MediaFileSourceTest {
 	}
 
 	private static Path asset() throws Exception {
-		URL url = MediaFileSourceTest.class.getResource(ASSET);
+		return asset(ASSET);
+	}
 
-		assertNotNull(url, "Test asset " + ASSET + " is missing");
+	private static Path asset(String name) throws Exception {
+		URL url = MediaFileSourceTest.class.getResource(name);
+
+		assertNotNull(url, "Test asset " + name + " is missing");
 
 		return Paths.get(url.toURI());
 	}
