@@ -656,7 +656,10 @@ class PeerTests extends ClientTestBase {
 		PeerStats first = await(peers[0].stats());
 		PeerStats second = await(peers[0].stats());
 
-		assertEquals("host", first.candidateType());
+		// Direct, but not always host: on a machine with a bridge, such as
+		// Docker's, the answer to a check may name another local address,
+		// which WebRTC then takes as a peer-reflexive candidate.
+		assertTrue(Arrays.asList("host", "prflx").contains(first.candidateType()), first::toString);
 		assertTrue(first.bytesSent() > 10_000, () -> "Bytes sent: " + first.bytesSent());
 		assertEquals(first.report().getTimestamp(), ChronoUnit.MICROS.between(Instant.EPOCH, first.timestamp()));
 		assertEquals(-1, first.outgoingBitrate());

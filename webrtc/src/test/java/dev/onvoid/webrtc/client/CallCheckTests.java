@@ -210,7 +210,8 @@ class CallCheckTests extends ClientTestBase {
 		assertNotNull(result.network().connectTime());
 		assertNull(result.network().failure());
 		assertFalse(result.network().isRelayed());
-		assertEquals("host", result.network().candidateType());
+		// Direct; prflx where the host has a bridge, as in PeerTests.
+		assertTrue(Arrays.asList("host", "prflx").contains(result.network().candidateType()), result::toString);
 
 		// The check's own peer is closed, the test peer is the application's.
 		assertEquals(Collections.singletonList(testPeer), rtc.peers());
