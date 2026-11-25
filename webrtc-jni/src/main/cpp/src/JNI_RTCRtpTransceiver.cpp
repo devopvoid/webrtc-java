@@ -192,7 +192,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCodecPrefe
 
 		auto capabilities = jni::JavaList::toArrayList(env, transceiver->codec_preferences(), jni::RTCRtpCodecCapability::toJava);
 
-		return capabilities.get();
+		return capabilities.release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);

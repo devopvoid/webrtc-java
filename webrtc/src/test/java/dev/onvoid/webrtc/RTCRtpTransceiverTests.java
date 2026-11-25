@@ -161,8 +161,8 @@ class RTCRtpTransceiverTests extends TestBase {
 		assertEquals("Parameters cannot be read", e.getMessage());
 		List<RTCRtpCodecCapability> preferences = transceiver.getCodecPreferences();
 
-		// Still none set, which comes back as null.
-		assertTrue(preferences == null || preferences.isEmpty(), String.valueOf(preferences));
+		// Still none set.
+		assertTrue(preferences.isEmpty(), String.valueOf(preferences));
 	}
 
 }
