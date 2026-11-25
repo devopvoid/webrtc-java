@@ -656,6 +656,7 @@ public interface RemoteTrack {
     RemoteVideo asVideo();                                     // IllegalStateException for audio
     RemoteAudio asAudio();
     CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform);
+    CompletableFuture<Void> setJitterBufferTarget(Duration target);   // 0 to 4 s, null for the default
     boolean isMuted();
     Subscription onMute(Consumer<Boolean> handler);
     Subscription onEnded(Runnable handler);

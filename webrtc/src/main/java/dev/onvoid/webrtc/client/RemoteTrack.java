@@ -16,6 +16,7 @@
 
 package dev.onvoid.webrtc.client;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -90,6 +91,24 @@ public interface RemoteTrack {
 	 * with an {@link IllegalStateException} once the track ended.
 	 */
 	CompletableFuture<Void> transform(RTCEncodedFrameTransformer transform);
+
+	/**
+	 * Sets how long the jitter buffer of this track should hold media at
+	 * least before it is played out. A longer target trades latency for
+	 * smoother playout on a network with much jitter. The target is a hint:
+	 * the delay never falls below what the network needs, and WebRTC may
+	 * shorten it to keep audio and video in sync.
+	 *
+	 * @param target the target, from zero to four seconds, or null for the
+	 *               delay WebRTC chooses on its own.
+	 *
+	 * @return a future that completes once the target is set, and fails with
+	 * an {@link IllegalStateException} once the track ended.
+	 *
+	 * @throws IllegalArgumentException if the target is negative or longer
+	 *                                  than four seconds.
+	 */
+	CompletableFuture<Void> setJitterBufferTarget(Duration target);
 
 	/**
 	 * @return true when the remote peer sends no media on the track for now.

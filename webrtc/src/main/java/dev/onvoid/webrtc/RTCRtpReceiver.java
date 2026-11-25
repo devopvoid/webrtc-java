@@ -29,6 +29,13 @@ import dev.onvoid.webrtc.media.MediaStreamTrack;
  */
 public class RTCRtpReceiver extends DisposableNativeObject {
 
+	/**
+	 * The largest jitter buffer target in milliseconds that {@link
+	 * #setJitterBufferTarget(Double)} takes, as the WebRTC specification
+	 * limits it.
+	 */
+	public static final double MAX_JITTER_BUFFER_TARGET = 4000;
+
 	/*
 	 * The native observer set through this object, owned by it and freed when
 	 * replaced, removed or disposed.
@@ -160,6 +167,38 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	public native void requestKeyFrame();
 
 	/**
+	 * Sets how long, in milliseconds, the jitter buffer of this receiver should
+	 * hold media at least before it is played out, as {@code
+	 * jitterBufferTarget} of the WebRTC specification does. A larger target
+	 * trades latency for smoother playout on a network with much jitter; a
+	 * target of 0 asks for as little delay as the network allows. {@code null}
+	 * returns to the delay that WebRTC chooses on its own.
+	 * <p>
+	 * The target is a hint, not a guarantee: the delay the receiver ends up
+	 * with is the larger one of the target and what the network needs, and
+	 * WebRTC may cut it short to keep audio and video in sync. The {@code
+	 * jitterBufferTargetDelay} of the receiver's {@code inbound-rtp}
+	 * statistics shows its effect.
+	 * <p>
+	 * The target applies to the receiver, not to this object: it holds for
+	 * every RTCRtpReceiver instance of the same receiver, and the last one
+	 * set wins.
+	 *
+	 * @param target The target in milliseconds, from 0 to 4000, or {@code
+	 *               null} for the default.
+	 *
+	 * @throws IllegalArgumentException if the target is outside of that range.
+	 */
+	public void setJitterBufferTarget(Double target) {
+		if (target != null && !(target >= 0 && target <= MAX_JITTER_BUFFER_TARGET)) {
+			throw new IllegalArgumentException("The jitter buffer target must be from 0 to "
+					+ MAX_JITTER_BUFFER_TARGET + " ms, not " + target);
+		}
+
+		applyJitterBufferTarget(target != null ? target / 1000 : -1);
+	}
+
+	/**
 	 * Releases the native reference held by this RTCRtpReceiver instance.
 	 * <p>
 	 * An RTCRtpReceiver is not exclusively owned by this instance: the
@@ -199,5 +238,10 @@ public class RTCRtpReceiver extends DisposableNativeObject {
 	}
 
 	private native void applyTransform(RTCEncodedFrameTransformer transformer, boolean sealed);
+
+	/*
+	 * Sets the minimum delay in seconds, or the default for a negative one.
+	 */
+	private native void applyJitterBufferTarget(double seconds);
 
 }
