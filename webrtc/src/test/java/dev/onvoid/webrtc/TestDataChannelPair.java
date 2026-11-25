@@ -51,6 +51,14 @@ class TestDataChannelPair implements AutoCloseable {
 		assertTrue(open.await(5, TimeUnit.SECONDS), "Data channels did not open");
 	}
 
+	/**
+	 * Returns once the sender's signaling thread has run what it was given
+	 * before, such as the observer calls of an event.
+	 */
+	void awaitSenderEvents() {
+		caller.getSignalingState();
+	}
+
 	private static void setDescription(RTCPeerConnection peer,
 			RTCSessionDescription description, boolean local) throws Exception {
 		TestSetDescObserver observer = new TestSetDescObserver();
