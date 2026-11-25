@@ -16,6 +16,7 @@
 
 #include "api/RTCRtpHeaderExtensionCapability.h"
 #include "JavaClasses.h"
+#include "JavaEnums.h"
 #include "JavaObject.h"
 #include "JavaString.h"
 #include "JavaUtils.h"
@@ -30,18 +31,37 @@ namespace jni
 			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionCapabilityClass>(env);
 
 			JavaLocalRef<jstring> uri = JavaString::toJava(env, capability.uri);
+			JavaLocalRef<jobject> direction = JavaEnums::toJava(env, capability.direction);
 
-			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get());
+			jobject object = env->NewObject(javaClass->cls, javaClass->ctor, uri.get(), direction.get());
 			ExceptionCheck(env);
 
 			return JavaLocalRef<jobject>(env, object);
+		}
+
+		webrtc::RtpHeaderExtensionCapability toNative(JNIEnv * env, const JavaRef<jobject> & capability)
+		{
+			const auto javaClass = JavaClasses::get<JavaRTCRtpHeaderExtensionCapabilityClass>(env);
+
+			JavaObject obj(env, capability);
+
+			// Only the URI and the direction are the application's to set;
+			// the transceiver keeps the IDs it chose.
+			webrtc::RtpHeaderExtensionCapability extension;
+			extension.uri = JavaString::toNative(env, obj.getString(javaClass->uri));
+			extension.direction = JavaEnums::toNative<webrtc::RtpTransceiverDirection>(env, obj.getObject(javaClass->direction));
+
+			return extension;
 		}
 
 		JavaRTCRtpHeaderExtensionCapabilityClass::JavaRTCRtpHeaderExtensionCapabilityClass(JNIEnv * env)
 		{
 			cls = FindClass(env, PKG"RTCRtpHeaderExtensionCapability");
 
-			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG ")V");
+			ctor = GetMethod(env, cls, "<init>", "(" STRING_SIG "L" PKG "RTCRtpTransceiverDirection;)V");
+
+			uri = GetFieldID(env, cls, "uri", STRING_SIG);
+			direction = GetFieldID(env, cls, "direction", "L" PKG "RTCRtpTransceiverDirection;");
 		}
 	}
 }
