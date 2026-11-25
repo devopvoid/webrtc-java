@@ -622,6 +622,18 @@
     "allDeclaredFields": true
   },
   {
+    "name": "dev.onvoid.webrtc.RTCSctpTransport",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSctpTransportState",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true
+  },
+  {
     "name": "dev.onvoid.webrtc.RTCSdpType",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true,

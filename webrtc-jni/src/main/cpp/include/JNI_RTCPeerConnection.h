@@ -281,6 +281,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
+	 * Method:    getSctpTransport
+	 * Signature: ()Ldev/onvoid/webrtc/RTCSctpTransport;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getSctpTransport
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCPeerConnection
 	 * Method:    restartIce
 	 * Signature: ()V
 	 */

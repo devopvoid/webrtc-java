@@ -51,6 +51,13 @@ class TestDataChannelPair implements AutoCloseable {
 		assertTrue(open.await(5, TimeUnit.SECONDS), "Data channels did not open");
 	}
 
+	/**
+	 * Returns the connection of the sender, which the pair closes.
+	 */
+	RTCPeerConnection getCaller() {
+		return caller;
+	}
+
 	private static void setDescription(RTCPeerConnection peer,
 			RTCSessionDescription description, boolean local) throws Exception {
 		TestSetDescObserver observer = new TestSetDescObserver();
