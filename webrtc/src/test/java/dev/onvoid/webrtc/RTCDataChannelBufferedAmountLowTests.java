@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -38,7 +37,15 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 @Execution(ExecutionMode.SAME_THREAD)
 class RTCDataChannelBufferedAmountLowTests extends TestBase {
 
-	private static final int MESSAGE_SIZE = 64 * 1024;
+	/*
+	 * Each message raises the buffered amount above the threshold in one step,
+	 * before any of it can drain, however fast the machine sends. Messages of
+	 * many small sends would let the buffer drain meanwhile, and cross the
+	 * threshold any number of times.
+	 */
+	private static final int MESSAGE_SIZE = 200 * 1024;
+
+	private static final long THRESHOLD = 100 * 1024;
 
 
 	@Test
@@ -62,8 +69,8 @@ class RTCDataChannelBufferedAmountLowTests extends TestBase {
 			Drain drain = new Drain(pair.sender);
 			pair.sender.registerObserver(drain);
 
-			send(pair.sender, 4);
-			drain.await(4L * MESSAGE_SIZE);
+			pair.sender.send(message());
+			drain.await(MESSAGE_SIZE);
 			// The low comes right after the decrease that emptied the buffer.
 			pair.awaitSenderEvents();
 
@@ -73,59 +80,77 @@ class RTCDataChannelBufferedAmountLowTests extends TestBase {
 
 	@Test
 	void lowAtThreshold() throws Exception {
-		long threshold = 512 * 1024;
-
 		try (TestDataChannelPair pair = new TestDataChannelPair(factory)) {
 			pair.connect();
 
 			Drain drain = new Drain(pair.sender);
-			pair.sender.setBufferedAmountLowThreshold(threshold);
+			pair.sender.setBufferedAmountLowThreshold(THRESHOLD);
 			pair.sender.registerObserver(drain);
 
-			// 2 MiB, far above the threshold.
-			send(pair.sender, 32);
-			drain.await(32L * MESSAGE_SIZE);
+			pair.sender.send(message());
+			drain.await(MESSAGE_SIZE);
 			pair.awaitSenderEvents();
 
 			// Falling through the threshold once, whatever steps it fell in.
 			assertEquals(1, drain.lows.size(), "lows: " + drain.lows);
-			assertTrue(drain.lows.get(0) <= threshold, "low at " + drain.lows.get(0));
+			assertTrue(drain.lows.get(0) <= THRESHOLD, "low at " + drain.lows.get(0));
+		}
+	}
+
+	@Test
+	void lowAgainAfterRefill() throws Exception {
+		try (TestDataChannelPair pair = new TestDataChannelPair(factory)) {
+			pair.connect();
+
+			Drain drain = new Drain(pair.sender);
+			pair.sender.setBufferedAmountLowThreshold(THRESHOLD);
+			pair.sender.registerObserver(drain);
+
+			pair.sender.send(message());
+			drain.await(MESSAGE_SIZE);
+			pair.awaitSenderEvents();
+
+			assertEquals(1, drain.lows.size(), "lows: " + drain.lows);
+
+			// Above the threshold again, and below it once more.
+			pair.sender.send(message());
+			drain.await(2L * MESSAGE_SIZE);
+			pair.awaitSenderEvents();
+
+			assertEquals(2, drain.lows.size(), "lows: " + drain.lows);
 		}
 	}
 
 	@Test
 	void asyncSendsCounted() throws Exception {
-		long threshold = 512 * 1024;
-
 		try (TestDataChannelPair pair = new TestDataChannelPair(factory)) {
-			// Refused before the channel is open, so never counted.
-			pair.sender.sendAsync(new RTCDataChannelBuffer(ByteBuffer.wrap(new byte[MESSAGE_SIZE]), true));
+			// Refused before the channel is open, so never counted. Were it
+			// counted, the amount would never fall to the threshold.
+			pair.sender.sendAsync(message());
 
 			pair.connect();
 
 			Drain drain = new Drain(pair.sender);
-			pair.sender.setBufferedAmountLowThreshold(threshold);
+			pair.sender.setBufferedAmountLowThreshold(THRESHOLD);
 			pair.sender.registerObserver(drain);
 
-			CountDownLatch completed = new CountDownLatch(32);
+			CountDownLatch completed = new CountDownLatch(1);
 
-			for (int i = 0; i < 32; i++) {
-				pair.sender.sendAsync(new RTCDataChannelBuffer(ByteBuffer.wrap(new byte[MESSAGE_SIZE]), true),
-						new RTCDataChannelSendObserver() {
-							@Override
-							public void onSuccess() {
-								completed.countDown();
-							}
+			pair.sender.sendAsync(message(), new RTCDataChannelSendObserver() {
+				@Override
+				public void onSuccess() {
+					completed.countDown();
+				}
 
-							@Override
-							public void onFailure(String error) { }
-						});
-			}
+				@Override
+				public void onFailure(String error) { }
+			});
 
-			drain.await(32L * MESSAGE_SIZE);
+			assertTrue(completed.await(5, TimeUnit.SECONDS), "send failed");
+
+			drain.await(MESSAGE_SIZE);
 			pair.awaitSenderEvents();
 
-			assertTrue(completed.await(5, TimeUnit.SECONDS), "sends failed");
 			assertEquals(1, drain.lows.size(), "lows: " + drain.lows);
 		}
 	}
@@ -136,21 +161,19 @@ class RTCDataChannelBufferedAmountLowTests extends TestBase {
 			pair.connect();
 
 			Drain drain = new Drain(pair.sender);
-			pair.sender.setBufferedAmountLowThreshold(16L * MESSAGE_SIZE);
+			pair.sender.setBufferedAmountLowThreshold(2L * MESSAGE_SIZE);
 			pair.sender.registerObserver(drain);
 
-			send(pair.sender, 4);
-			drain.await(4L * MESSAGE_SIZE);
+			pair.sender.send(message());
+			drain.await(MESSAGE_SIZE);
 			pair.awaitSenderEvents();
 
 			assertTrue(drain.lows.isEmpty(), "lows: " + drain.lows);
 		}
 	}
 
-	private static void send(RTCDataChannel channel, int messages) throws Exception {
-		for (int i = 0; i < messages; i++) {
-			channel.send(new RTCDataChannelBuffer(ByteBuffer.wrap(new byte[MESSAGE_SIZE]), true));
-		}
+	private static RTCDataChannelBuffer message() {
+		return new RTCDataChannelBuffer(ByteBuffer.wrap(new byte[MESSAGE_SIZE]), true);
 	}
 
 
@@ -162,30 +185,30 @@ class RTCDataChannelBufferedAmountLowTests extends TestBase {
 		final List<Long> lows = new CopyOnWriteArrayList<>();
 
 		private final RTCDataChannel channel;
-		private final AtomicLong drained = new AtomicLong();
-		private final CountDownLatch empty = new CountDownLatch(1);
-		private volatile long expected = Long.MAX_VALUE;
+		private long drained;
 
 
 		Drain(RTCDataChannel channel) {
 			this.channel = channel;
 		}
 
-		void await(long bytes) throws InterruptedException {
-			expected = bytes;
+		/** Waits until the decreases told of add up to the given bytes. */
+		synchronized void await(long bytes) throws InterruptedException {
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
 
-			if (drained.get() >= bytes) {
-				empty.countDown();
+			while (drained < bytes) {
+				long left = deadline - System.nanoTime();
+
+				assertTrue(left > 0, "drained " + drained + " of " + bytes + " bytes");
+
+				TimeUnit.NANOSECONDS.timedWait(this, left);
 			}
-
-			assertTrue(empty.await(10, TimeUnit.SECONDS), "drained " + drained.get() + " of " + bytes + " bytes");
 		}
 
 		@Override
-		public void onBufferedAmountChange(long sentDataSize) {
-			if (drained.addAndGet(sentDataSize) >= expected) {
-				empty.countDown();
-			}
+		public synchronized void onBufferedAmountChange(long sentDataSize) {
+			drained += sentDataSize;
+			notifyAll();
 		}
 
 		@Override
