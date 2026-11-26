@@ -9,10 +9,10 @@ extern "C" {
 #endif
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCDataChannel
-	 * Method:    registerObserver
+	 * Method:    registerNativeObserver
 	 * Signature: (Ldev/onvoid/webrtc/RTCDataChannelObserver;)V
 	 */
-	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerNativeObserver
 	(JNIEnv *, jobject, jobject);
 
 	/*

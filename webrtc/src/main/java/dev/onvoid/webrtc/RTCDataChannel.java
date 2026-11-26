@@ -20,6 +20,7 @@ import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Represents a bidirectional data channel between two peers. An RTCDataChannel
@@ -40,6 +41,20 @@ public class RTCDataChannel extends DisposableNativeObject {
 	private long observerHandle;
 
 	/**
+	 * The threshold at which the buffered amount counts as low.
+	 */
+	private volatile long bufferedAmountLowThreshold;
+
+	/**
+	 * The buffered amount as the events of the channel tell it: raised by
+	 * every message sent through this object, lowered by every decrease the
+	 * observer hears of. Unlike the native value, read at once on the
+	 * observer's thread, it is the amount at the time of each event.
+	 */
+	private final AtomicLong bufferedAmountTold = new AtomicLong();
+
+
+	/**
 	 * Used by the native api.
 	 */
 	private RTCDataChannel() {
@@ -58,7 +73,9 @@ public class RTCDataChannel extends DisposableNativeObject {
 	 *
 	 * @param observer The new data channel observer.
 	 */
-	public native void registerObserver(RTCDataChannelObserver observer);
+	public void registerObserver(RTCDataChannelObserver observer) {
+		registerNativeObserver(observer != null ? new ThresholdObserver(observer) : null);
+	}
 
 	/**
 	 * Unregister the last set RTCDataChannelObserver.
@@ -163,6 +180,45 @@ public class RTCDataChannel extends DisposableNativeObject {
 	public native long getBufferedAmount();
 
 	/**
+	 * Sets the threshold at which the buffered amount counts as low. Once
+	 * the buffered amount falls from above the threshold to the threshold or
+	 * below, the observer is told through {@link
+	 * RTCDataChannelObserver#onBufferedAmountLow()}. A sender that keeps the
+	 * buffer filled between the threshold and a high mark of its own uses
+	 * this to send more as soon as the channel has room.
+	 * <p>
+	 * WebRTC reports the buffered amount in steps rather than for every
+	 * message sent, as it does for {@link
+	 * RTCDataChannelObserver#onBufferedAmountChange(long)}. The observer may
+	 * therefore hear of the low buffered amount only once it has fallen
+	 * somewhat further. It always hears of it when the buffer is empty.
+	 * <p>
+	 * The threshold belongs to this object and is 0 until it is set.
+	 *
+	 * @param threshold The threshold in bytes.
+	 *
+	 * @throws IllegalArgumentException if the threshold is negative.
+	 */
+	public void setBufferedAmountLowThreshold(long threshold) {
+		if (threshold < 0) {
+			throw new IllegalArgumentException("The threshold must not be negative, got " + threshold);
+		}
+
+		bufferedAmountLowThreshold = threshold;
+	}
+
+	/**
+	 * Returns the threshold at which the buffered amount counts as low.
+	 *
+	 * @return The threshold in bytes, 0 unless set.
+	 *
+	 * @see #setBufferedAmountLowThreshold(long)
+	 */
+	public long getBufferedAmountLowThreshold() {
+		return bufferedAmountLowThreshold;
+	}
+
+	/**
 	 * Closes this RTCDataChannel. It may be called regardless of whether the
 	 * RTCDataChannel was created by this peer or the remote peer.
 	 * <p>
@@ -189,17 +245,27 @@ public class RTCDataChannel extends DisposableNativeObject {
 	 */
 	public void send(RTCDataChannelBuffer buffer) throws Exception {
 		ByteBuffer data = buffer.data;
+		long size = data.remaining();
 
-		if (data.isDirect()) {
-			if (data.position() == 0 && data.limit() == data.capacity()) {
-				sendDirectBuffer(data, buffer.binary);
+		// Counted before WebRTC queues it, so that no decrease comes first.
+		bufferedAmountTold.addAndGet(size);
+
+		try {
+			if (data.isDirect()) {
+				if (data.position() == 0 && data.limit() == data.capacity()) {
+					sendDirectBuffer(data, buffer.binary);
+				}
+				else {
+					sendDirectBuffer(data.slice(), buffer.binary);
+				}
 			}
 			else {
-				sendDirectBuffer(data.slice(), buffer.binary);
+				sendByteArrayBuffer(copyWindow(data), buffer.binary);
 			}
 		}
-		else {
-			sendByteArrayBuffer(copyWindow(data), buffer.binary);
+		catch (Throwable e) {
+			bufferedAmountTold.addAndGet(-size);
+			throw e;
 		}
 	}
 
@@ -241,12 +307,19 @@ public class RTCDataChannel extends DisposableNativeObject {
 	 */
 	public void sendAsync(RTCDataChannelBuffer buffer) {
 		ByteBuffer data = buffer.data;
+		long size = countAsync(data.remaining());
 
-		if (data.isDirect()) {
-			sendDirectBufferAsync(data, data.position(), data.remaining(), buffer.binary);
+		try {
+			if (data.isDirect()) {
+				sendDirectBufferAsync(data, data.position(), data.remaining(), buffer.binary);
+			}
+			else {
+				sendByteArrayBufferAsync(copyWindow(data), buffer.binary);
+			}
 		}
-		else {
-			sendByteArrayBufferAsync(copyWindow(data), buffer.binary);
+		catch (Throwable e) {
+			bufferedAmountTold.addAndGet(-size);
+			throw e;
 		}
 	}
 
@@ -279,12 +352,43 @@ public class RTCDataChannel extends DisposableNativeObject {
 	public void sendAsync(RTCDataChannelBuffer buffer, RTCDataChannelSendObserver observer) {
 		Objects.requireNonNull(observer, "observer");
 		ByteBuffer data = Objects.requireNonNull(buffer.data, "buffer.data");
-		if (data.isDirect()) {
-			sendDirectBufferAsyncWithObserver(data, data.position(), data.remaining(), buffer.binary, observer);
+		long size = countAsync(data.remaining());
+
+		try {
+			if (data.isDirect()) {
+				sendDirectBufferAsyncWithObserver(data, data.position(), data.remaining(), buffer.binary, observer);
+			}
+			else {
+				sendByteArrayBufferAsyncWithObserver(copyWindow(data), buffer.binary, observer);
+			}
 		}
-		else {
-			sendByteArrayBufferAsyncWithObserver(copyWindow(data), buffer.binary, observer);
+		catch (Throwable e) {
+			bufferedAmountTold.addAndGet(-size);
+			throw e;
 		}
+	}
+
+	/**
+	 * Counts a message sent asynchronously, which WebRTC queues only while the
+	 * channel is open. One it refuses otherwise is never taken off again. A
+	 * channel that closes meanwhile has no more decreases to tell.
+	 *
+	 * @return The bytes counted.
+	 */
+	private long countAsync(long size) {
+		try {
+			if (getState() != RTCDataChannelState.OPEN) {
+				return 0;
+			}
+		}
+		catch (IllegalStateException e) {
+			// Disposed, which the send itself reports.
+			return 0;
+		}
+
+		bufferedAmountTold.addAndGet(size);
+
+		return size;
 	}
 
 	private native void sendDirectBufferAsyncWithObserver(ByteBuffer buffer, int position,
@@ -292,5 +396,55 @@ public class RTCDataChannel extends DisposableNativeObject {
 
 	private native void sendByteArrayBufferAsyncWithObserver(byte[] buffer, boolean binary,
 			RTCDataChannelSendObserver observer);
+
+	private native void registerNativeObserver(RTCDataChannelObserver observer);
+
+
+	/**
+	 * Hands the events of the channel to the observer of the application,
+	 * and tells it when the buffered amount falls to the threshold. It goes
+	 * by the amount the events tell, as browsers do: the native one has
+	 * often fallen further by the time an event reaches this thread, which
+	 * would hide where the event crossed the threshold.
+	 */
+	private final class ThresholdObserver implements RTCDataChannelObserver {
+
+		private final RTCDataChannelObserver observer;
+
+
+		ThresholdObserver(RTCDataChannelObserver observer) {
+			this.observer = observer;
+		}
+
+		@Override
+		public void onBufferedAmountChange(long sentDataSize) {
+			// Never below zero, e.g. for a message counted as refused that
+			// WebRTC took after all.
+			long after = bufferedAmountTold.accumulateAndGet(sentDataSize, (told, sent) -> Math.max(0, told - sent));
+			long before = after + sentDataSize;
+			long threshold = bufferedAmountLowThreshold;
+
+			observer.onBufferedAmountChange(sentDataSize);
+
+			if (before > threshold && after <= threshold) {
+				observer.onBufferedAmountLow();
+			}
+		}
+
+		@Override
+		public void onStateChange() {
+			observer.onStateChange();
+		}
+
+		@Override
+		public void onMessage(RTCDataChannelBuffer buffer) {
+			observer.onMessage(buffer);
+		}
+
+		@Override
+		public void onBufferedAmountLow() {
+			// Called only by this class itself.
+		}
+	}
 
 }
