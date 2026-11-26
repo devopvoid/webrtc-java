@@ -37,7 +37,7 @@ sudo apt-get install binutils cmake git libva-dev make meson nasm ninja-build pk
 The JNI library compiles against the libc++ headers of the WebRTC build. Those headers only support the Clang that the WebRTC branch pins, so the toolchain files expect that exact Clang in `/opt/clang`. Install it this way (the package name is in `.github/actions/prepare-linux/action.yml` and changes with the WebRTC branch):
 
 ```shell
-CLANG_PACKAGE=clang-llvmorg-24-init-7747-g62397f8b-27.tar.xz
+CLANG_PACKAGE=clang-llvmorg-24-init-14453-ge063be79-1.tar.xz
 wget https://commondatastorage.googleapis.com/chromium-browser-clang/Linux_x64/$CLANG_PACKAGE
 sudo mkdir -p /opt/clang
 sudo tar -xf $CLANG_PACKAGE -C /opt/clang
@@ -99,7 +99,7 @@ On the first run, the WebRTC source tree is loaded into the `/<user home>/webrtc
 
 | Parameter          | Description                                            | Default Value               |
 | ------------------ | ------------------------------------------------------ |-----------------------------|
-| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/8059           |
+| webrtc.branch      | The WebRTC branch to checkout.                         | branch-heads/8127           |
 | webrtc.src.dir     | The absolute checkout path for the WebRTC source tree. | /\<user_home\>/webrtc       |
 | webrtc.install.dir | The install path for the compiled WebRTC library. Is also used to link against a pre-compiled WebRTC library to reduce build time. | /\<user_home\>/webrtc/build |
 

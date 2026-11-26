@@ -35,6 +35,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
@@ -147,7 +148,16 @@ class DesktopCapturerTests extends TestBase {
 			capturer.setUseSystemPicker(true);
 			capturer.setUseSystemPicker(false);
 
-			assertEquals(screens, capturer.getDesktopSources());
+			List<DesktopSource> after = capturer.getDesktopSources();
+
+			if (isWayland()) {
+				// The PipeWire capturer lists one source, whose ID is new for
+				// each native capturer.
+				assertEquals(titles(screens), titles(after));
+			}
+			else {
+				assertEquals(screens, after);
+			}
 		}
 		finally {
 			capturer.dispose();
@@ -285,7 +295,15 @@ class DesktopCapturerTests extends TestBase {
 	 * Starting a capturer in a Wayland session asks the user what to share.
 	 */
 	private static void assumeNoPortalDialog() {
-		assumeFalse("wayland".equals(System.getenv("XDG_SESSION_TYPE")), "Wayland session");
+		assumeFalse(isWayland(), "Wayland session");
+	}
+
+	private static boolean isWayland() {
+		return "wayland".equals(System.getenv("XDG_SESSION_TYPE"));
+	}
+
+	private static List<String> titles(List<DesktopSource> sources) {
+		return sources.stream().map(source -> source.title).collect(Collectors.toList());
 	}
 
 	/** The mean luma of every fourth pixel in every fourth row. */
