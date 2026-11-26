@@ -59,6 +59,13 @@ class TestDataChannelPair implements AutoCloseable {
 		caller.getSignalingState();
 	}
 
+	/**
+	 * Returns the connection of the sender, which the pair closes.
+	 */
+	RTCPeerConnection getCaller() {
+		return caller;
+	}
+
 	private static void setDescription(RTCPeerConnection peer,
 			RTCSessionDescription description, boolean local) throws Exception {
 		TestSetDescObserver observer = new TestSetDescObserver();

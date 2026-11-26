@@ -864,6 +864,25 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getStats__Ldev_o
 	}
 }
 
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_getSctpTransport
+(JNIEnv * env, jobject caller)
+{
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::PeerConnectionInterface> pc(env, caller);
+		CHECK_HANDLEV(pc, nullptr);
+
+		webrtc::scoped_refptr<webrtc::SctpTransportInterface> transport = pc->GetSctpTransport();
+
+		if (!transport) {
+			return nullptr;
+		}
+
+		// The Java object holds a reference until it is disposed, since the
+		// connection drops the transport once it closes.
+		return jni::JavaFactories::createOwning(env, std::move(transport)).release();
+	});
+}
+
 JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCPeerConnection_restartIce
 (JNIEnv * env, jobject caller)
 {

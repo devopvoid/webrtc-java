@@ -372,6 +372,14 @@
     "queryAllPublicMethods": true
   },
   {
+    "name": "dev.onvoid.webrtc.RTCSctpTransport",
+    "queryAllPublicMethods": true
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSctpTransportState",
+    "queryAllPublicMethods": true
+  },
+  {
     "name": "dev.onvoid.webrtc.RTCSdpType",
     "queryAllPublicMethods": true
   },
@@ -1103,6 +1111,12 @@
   },
   {
     "name": "dev.onvoid.webrtc.RTCRtpTransceiverInit[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSctpTransport[]"
+  },
+  {
+    "name": "dev.onvoid.webrtc.RTCSctpTransportState[]"
   },
   {
     "name": "dev.onvoid.webrtc.RTCSdpType[]"

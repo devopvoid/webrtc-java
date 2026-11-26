@@ -87,6 +87,7 @@ namespace jni
 		JavaEnums::add<webrtc::DesktopCapturer::Result>(env, PKG_DESKTOP"DesktopCapturer$Result");
 		JavaEnums::add<webrtc::DtlsTransportState>(env, PKG"RTCDtlsTransportState");
 		JavaEnums::add<webrtc::DtxStatus>(env, PKG"RTCDtxStatus");
+		JavaEnums::add<webrtc::SctpTransportState>(env, PKG"RTCSctpTransportState");
 		JavaEnums::add<webrtc::MediaSourceInterface::SourceState>(env, PKG_MEDIA"MediaSource$State");
 		JavaEnums::add<webrtc::MediaStreamTrackInterface::TrackState>(env, PKG_MEDIA"MediaStreamTrackState");
 		JavaEnums::add<webrtc::VideoTrackInterface::ContentHint>(env, PKG_MEDIA"video/VideoContentHint");
@@ -132,6 +133,7 @@ namespace jni
 		JavaFactories::add<webrtc::RtpReceiverInterface>(env, PKG"RTCRtpReceiver");
 		JavaFactories::add<webrtc::RtpSenderInterface>(env, PKG"RTCRtpSender");
 		JavaFactories::add<webrtc::RtpTransceiverInterface>(env, PKG"RTCRtpTransceiver");
+		JavaFactories::add<webrtc::SctpTransportInterface>(env, PKG"RTCSctpTransport");
 
 		initializeClassLoader(env, PKG_INTERNAL"NativeClassLoader");
 	}

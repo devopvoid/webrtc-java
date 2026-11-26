@@ -463,6 +463,18 @@ public class RTCPeerConnection extends NativeObject {
 	public native void restartIce();
 
 	/**
+	 * Returns the SCTP transport that carries the data channels of this
+	 * connection. There is one only once a session description with data
+	 * channels has been applied, e.g. after {@link #setLocalDescription}
+	 * of an offer made with a data channel. The instance is the caller's to
+	 * dispose.
+	 *
+	 * @return The SCTP transport, or {@code null} if the connection has
+	 * none.
+	 */
+	public native RTCSctpTransport getSctpTransport();
+
+	/**
 	 * Closes the peer connection, terminates all media and releases any used
 	 * resources.
 	 * <p>

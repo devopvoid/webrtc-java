@@ -309,6 +309,23 @@ RTCDataChannelState state = dataChannel.getState();
 long bufferedAmount = dataChannel.getBufferedAmount();
 ```
 
+### Message Size and Channel Limits
+
+All data channels of a connection share one SCTP transport. It knows how large a message the remote peer accepts, and how many channels can be open at once:
+
+```java
+RTCSctpTransport transport = peerConnection.getSctpTransport();
+
+if (transport != null) {
+    Double maxMessageSize = transport.getMaxMessageSize();   // in bytes, null while unknown
+    Integer maxChannels = transport.getMaxChannels();        // null until connected
+
+    transport.dispose();
+}
+```
+
+Split a message larger than `getMaxMessageSize()` into parts, since the channel refuses it. Two WebRTC peers agree on 256 KiB. `getSctpTransport()` returns `null` until a description with data channels is applied. Each call returns a new `RTCSctpTransport`, which you dispose. `getState()` tells whether the association is `CONNECTING`, `CONNECTED` or `CLOSED`, and `getTransport()` returns the DTLS transport beneath it.
+
 ## Closing and Cleanup
 
 When you're done with a data channel, you should properly clean it up:
