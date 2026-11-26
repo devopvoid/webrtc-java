@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -161,8 +162,101 @@ class RTCRtpTransceiverTests extends TestBase {
 		assertEquals("Parameters cannot be read", e.getMessage());
 		List<RTCRtpCodecCapability> preferences = transceiver.getCodecPreferences();
 
-		// Still none set, which comes back as null.
-		assertTrue(preferences == null || preferences.isEmpty(), String.valueOf(preferences));
+		// Still none set.
+		assertTrue(preferences.isEmpty(), String.valueOf(preferences));
+	}
+
+	@Test
+	void codecPreferencesReadBack() {
+		RTCRtpTransceiver transceiver = audioTransceiver();
+
+		assertTrue(transceiver.getCodecPreferences().isEmpty());
+
+		RTCRtpCodecCapability codec = factory.getRtpReceiverCapabilities(MediaType.AUDIO).getCodecs().get(0);
+		transceiver.setCodecPreferences(List.of(codec));
+
+		List<RTCRtpCodecCapability> preferences = transceiver.getCodecPreferences();
+
+		assertEquals(1, preferences.size());
+		assertEquals(codec.getName(), preferences.get(0).getName());
+		assertEquals(codec.getClockRate(), preferences.get(0).getClockRate());
+	}
+
+	@Test
+	void stoppedHeaderExtensionNotOffered() throws Exception {
+		RTCRtpTransceiver transceiver = audioTransceiver();
+		List<RTCRtpHeaderExtensionCapability> extensions = transceiver.getHeaderExtensionsToNegotiate();
+
+		assertTrue(extensions.contains(new RTCRtpHeaderExtensionCapability(AUDIO_LEVEL)), String.valueOf(extensions));
+
+		transceiver.setHeaderExtensionsToNegotiate(withDirection(extensions, AUDIO_LEVEL,
+				RTCRtpTransceiverDirection.STOPPED));
+
+		assertTrue(transceiver.getHeaderExtensionsToNegotiate().contains(
+				new RTCRtpHeaderExtensionCapability(AUDIO_LEVEL, RTCRtpTransceiverDirection.STOPPED)));
+		// Nothing negotiated yet.
+		assertTrue(transceiver.getNegotiatedHeaderExtensions().stream()
+				.allMatch(e -> e.getDirection() == RTCRtpTransceiverDirection.STOPPED));
+
+		TestPeerConnection callee = new TestPeerConnection(factory);
+
+		try {
+			RTCSessionDescription offer = connection.createOffer();
+
+			assertFalse(offer.sdp.contains(AUDIO_LEVEL), offer.sdp);
+			assertTrue(offer.sdp.contains(MID), offer.sdp);
+
+			callee.setRemoteDescription(offer);
+			connection.setRemoteDescription(callee.createAnswer());
+
+			Map<String, RTCRtpTransceiverDirection> negotiated = transceiver.getNegotiatedHeaderExtensions()
+					.stream()
+					.collect(Collectors.toMap(RTCRtpHeaderExtensionCapability::getUri,
+							RTCRtpHeaderExtensionCapability::getDirection));
+
+			assertEquals(RTCRtpTransceiverDirection.SEND_RECV, negotiated.get(MID), String.valueOf(negotiated));
+			assertEquals(RTCRtpTransceiverDirection.STOPPED, negotiated.get(AUDIO_LEVEL), String.valueOf(negotiated));
+		}
+		finally {
+			callee.close();
+		}
+	}
+
+	@Test
+	void invalidHeaderExtensionsRejected() {
+		RTCRtpTransceiver transceiver = audioTransceiver();
+		List<RTCRtpHeaderExtensionCapability> extensions = transceiver.getHeaderExtensionsToNegotiate();
+
+		List<RTCRtpHeaderExtensionCapability> reordered = new ArrayList<>(extensions);
+		java.util.Collections.reverse(reordered);
+
+		assertThrows(IllegalArgumentException.class, () -> transceiver.setHeaderExtensionsToNegotiate(reordered));
+		assertThrows(IllegalArgumentException.class, () -> transceiver.setHeaderExtensionsToNegotiate(
+				extensions.subList(1, extensions.size())));
+		assertThrows(IllegalArgumentException.class, () -> transceiver.setHeaderExtensionsToNegotiate(
+				withDirection(extensions, MID, RTCRtpTransceiverDirection.STOPPED)));
+		assertThrows(NullPointerException.class, () -> transceiver.setHeaderExtensionsToNegotiate(null));
+
+		// Nothing changed.
+		assertEquals(extensions, transceiver.getHeaderExtensionsToNegotiate());
+	}
+
+	private static final String AUDIO_LEVEL = "urn:ietf:params:rtp-hdrext:ssrc-audio-level";
+
+	private static final String MID = "urn:ietf:params:rtp-hdrext:sdes:mid";
+
+	private RTCRtpTransceiver audioTransceiver() {
+		AudioTrackSource audioSource = factory.createAudioSource(new AudioOptions());
+		AudioTrack audioTrack = factory.createAudioTrack("audioTrack", audioSource);
+
+		return connection.getPeerConnection().addTransceiver(audioTrack, new RTCRtpTransceiverInit());
+	}
+
+	private static List<RTCRtpHeaderExtensionCapability> withDirection(
+			List<RTCRtpHeaderExtensionCapability> extensions, String uri, RTCRtpTransceiverDirection direction) {
+		return extensions.stream()
+				.map(e -> e.getUri().equals(uri) ? e.withDirection(direction) : e)
+				.collect(Collectors.toList());
 	}
 
 }

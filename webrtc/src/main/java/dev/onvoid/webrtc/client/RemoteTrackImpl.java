@@ -18,6 +18,7 @@ package dev.onvoid.webrtc.client;
 
 import static java.util.Objects.requireNonNull;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -36,6 +37,9 @@ import dev.onvoid.webrtc.media.MediaStreamTrackMuteListener;
  * the peer's event executor.
  */
 abstract class RemoteTrackImpl implements RemoteTrack {
+
+	private static final Duration MAX_JITTER_BUFFER_TARGET =
+			Duration.ofMillis((long) RTCRtpReceiver.MAX_JITTER_BUFFER_TARGET);
 
 	final PeerImpl peer;
 
@@ -140,6 +144,24 @@ abstract class RemoteTrackImpl implements RemoteTrack {
 		RTCEncodedFrameTransformer guarded = peer.guard(transform, "the track " + id + " of " + peer.name);
 
 		return onReceiver("Setting the transform", receiver -> receiver.setTransform(guarded));
+	}
+
+	@Override
+	public CompletableFuture<Void> setJitterBufferTarget(Duration target) {
+		Double millis = null;
+
+		if (target != null) {
+			if (target.isNegative() || target.compareTo(MAX_JITTER_BUFFER_TARGET) > 0) {
+				throw new IllegalArgumentException("The jitter buffer target must be from zero to "
+						+ MAX_JITTER_BUFFER_TARGET.getSeconds() + " seconds, got " + target);
+			}
+
+			millis = target.toNanos() / 1e6;
+		}
+
+		Double value = millis;
+
+		return onReceiver("Setting the jitter buffer target", receiver -> receiver.setJitterBufferTarget(value));
 	}
 
 	@Override

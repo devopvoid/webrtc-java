@@ -75,6 +75,18 @@ config.cryptoOptions = crypto;
 
 `certificates` takes the DTLS certificate a peer connection authenticates with, as an `RTCCertificatePEM`. Without one, WebRTC generates a certificate per connection. A certificate that does not parse makes `createPeerConnection()` and `setConfiguration()` throw.
 
+A connection's certificate decides the DTLS fingerprint in its session description. To keep the same fingerprint across connections, so that a remote peer can recognize this one again, generate a certificate once, store it, and pass it to every connection:
+
+```java
+RTCCertificatePEM certificate = RTCCertificatePEM.generate(RTCCertificateKeyType.ECDSA, Duration.ofDays(365));
+
+// Store certificate.getPrivateKey() and certificate.getCertificate(), e.g. in a key store.
+
+config.certificates.add(certificate);
+```
+
+`generate` makes a self-signed certificate with a new key on the calling thread. `ECDSA` (P-256) takes milliseconds, `RSA` (2048 bits) takes far longer. Without a lifetime, a certificate is valid for 30 days; the lifetime can be at most a year. The private key is a secret: keep it where only your application can read it.
+
 The expiration time passed to its constructor is informational: WebRTC takes it from the certificate. The certificates that `getConfiguration()` and `RTCDtlsTransport.getRemoteCertificates()` return carry that time in `getExpires()`, in milliseconds since the Unix epoch. If it cannot be read, `getExpires()` returns `RTCCertificatePEM.EXPIRES_UNKNOWN` (-1).
 
 ## Signaling

@@ -33,6 +33,15 @@ public interface RTCDataChannelObserver {
 	void onBufferedAmountChange(long sentDataSize);
 
 	/**
+	 * The RTCDataChannel's buffered amount has fallen from above its {@link
+	 * RTCDataChannel#setBufferedAmountLowThreshold(long) threshold} to the
+	 * threshold or below. Called on the same thread as {@link
+	 * #onBufferedAmountChange(long)}, right after it.
+	 */
+	default void onBufferedAmountLow() {
+	}
+
+	/**
 	 * The RTCDataChannel's state has changed.
 	 */
 	void onStateChange();

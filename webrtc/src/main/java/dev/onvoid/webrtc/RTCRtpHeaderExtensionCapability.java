@@ -16,41 +16,99 @@
 
 package dev.onvoid.webrtc;
 
+import static java.util.Objects.requireNonNull;
+
+import java.util.Objects;
+
 /**
- * Describes supported RTP header extensions.
+ * Describes an RTP header extension: one that WebRTC supports, as {@link
+ * RTCRtpCapabilities#getHeaderExtensions()} lists them, or one of a
+ * transceiver, with the direction it is to be negotiated in.
  *
  * @author Alex Andres
+ *
+ * @see RTCRtpTransceiver#setHeaderExtensionsToNegotiate(java.util.List)
  */
 public class RTCRtpHeaderExtensionCapability {
 
-	/**
-	 * The URI of the RTP header extension.
-	 */
 	private final String uri;
 
+	private final RTCRtpTransceiverDirection direction;
+
 
 	/**
-	 * Creates an instance of RTCRtpHeaderExtensionCapability with the specified
-	 * RTP header extension URI.
+	 * Creates a header extension to be negotiated in both directions.
 	 *
-	 * @param uri The URI of the RTP header extension.
+	 * @param uri The URI of the header extension.
 	 */
 	public RTCRtpHeaderExtensionCapability(String uri) {
-		this.uri = uri;
+		this(uri, RTCRtpTransceiverDirection.SEND_RECV);
 	}
 
 	/**
-	 * Returns the URI of the supported RTP header extension by the system.
+	 * Creates a header extension to be negotiated in the given direction.
+	 * {@link RTCRtpTransceiverDirection#STOPPED} keeps it out of the
+	 * negotiation.
 	 *
-	 * @return The URI of the RTP header extension.
+	 * @param uri       The URI of the header extension.
+	 * @param direction The direction to negotiate it in.
+	 */
+	public RTCRtpHeaderExtensionCapability(String uri, RTCRtpTransceiverDirection direction) {
+		this.uri = requireNonNull(uri, "uri");
+		this.direction = requireNonNull(direction, "direction");
+	}
+
+	/**
+	 * @return The URI of the header extension, e.g. {@code
+	 * urn:ietf:params:rtp-hdrext:sdes:mid}.
 	 */
 	public String getUri() {
 		return uri;
 	}
 
+	/**
+	 * @return The direction the header extension is negotiated in, or {@link
+	 * RTCRtpTransceiverDirection#STOPPED} if it is not negotiated.
+	 */
+	public RTCRtpTransceiverDirection getDirection() {
+		return direction;
+	}
+
+	/**
+	 * Returns the same header extension with another direction, e.g. to stop
+	 * one in the list of {@link
+	 * RTCRtpTransceiver#getHeaderExtensionsToNegotiate()}.
+	 *
+	 * @param direction The direction to negotiate it in.
+	 *
+	 * @return The header extension with that direction.
+	 */
+	public RTCRtpHeaderExtensionCapability withDirection(RTCRtpTransceiverDirection direction) {
+		return new RTCRtpHeaderExtensionCapability(uri, direction);
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (!(obj instanceof RTCRtpHeaderExtensionCapability)) {
+			return false;
+		}
+
+		RTCRtpHeaderExtensionCapability other = (RTCRtpHeaderExtensionCapability) obj;
+
+		return uri.equals(other.uri) && direction == other.direction;
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(uri, direction);
+	}
+
 	@Override
 	public String toString() {
-		return String.format("%s [uri=%s]",
-				RTCRtpHeaderExtensionCapability.class.getSimpleName(), uri);
+		return String.format("%s [uri=%s, direction=%s]",
+				RTCRtpHeaderExtensionCapability.class.getSimpleName(), uri, direction);
 	}
 }

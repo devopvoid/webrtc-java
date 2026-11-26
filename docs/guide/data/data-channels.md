@@ -209,6 +209,30 @@ The observer is called exactly once, with a failure if the operation is discarde
 
 Callbacks run on a native callback thread shared with other WebRTC observers. They may call other WebRTC methods, but should not block, so dispatch long work to an executor of your own. Without an observer, `sendAsync` logs failures and reports nothing to the caller.
 
+### Sending More When the Buffer Drains
+
+A sender of a large amount of data should not queue all of it at once. It keeps the buffer between two marks instead: it pauses above a high mark of its own, and resumes once the buffered amount falls to a low threshold. `setBufferedAmountLowThreshold` sets that threshold, and `onBufferedAmountLow` tells the observer when the buffered amount falls to it:
+
+```java
+long highMark = 1024 * 1024;
+
+dataChannel.setBufferedAmountLowThreshold(256 * 1024);
+
+dataChannel.registerObserver(new RTCDataChannelObserver() {
+    @Override
+    public void onBufferedAmountLow() {
+        // Room again: send until the high mark is reached.
+        executor.execute(() -> sendWhileBelow(highMark));
+    }
+
+    // onBufferedAmountChange, onStateChange and onMessage as above.
+});
+```
+
+The event comes once each time the buffered amount falls from above the threshold to the threshold or below. The threshold is 0 until set, so by default the event tells when the buffer is empty.
+
+WebRTC reports the buffered amount in steps of about 100 KiB, not for every message. The event may therefore come only once the amount has fallen somewhat below the threshold. A message sent with `sendAsync` before the channel is open is refused and not counted.
+
 ### Receiving Data
 
 To receive data, implement the `onMessage` method in your `RTCDataChannelObserver`:
@@ -323,7 +347,7 @@ Unlike other disposable objects, a data channel is not disposed by `close()`, wh
 
 1. **Error Handling**: Always wrap `send` calls in try-catch blocks as they can throw exceptions if the buffer is full or the channel is not in the `OPEN` state.
 
-2. **Buffer Management**: Monitor the buffered amount to avoid overwhelming the channel. If `getBufferedAmount()` returns a large value, consider pausing sending until it decreases.
+2. **Buffer Management**: Monitor the buffered amount to avoid overwhelming the channel. If `getBufferedAmount()` returns a large value, pause sending until [`onBufferedAmountLow`](#sending-more-when-the-buffer-drains) tells you it has room again.
 
 3. **Copy Received Data**: Remember that the data in the `RTCDataChannelBuffer` will be freed after the `onMessage` method returns. If you need to process the data asynchronously, make a copy of it.
 

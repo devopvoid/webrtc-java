@@ -51,7 +51,7 @@ namespace
 	}
 }
 
-JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerObserver
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCDataChannel_registerNativeObserver
 (JNIEnv * env, jobject caller, jobject jObserver)
 {
 	try {

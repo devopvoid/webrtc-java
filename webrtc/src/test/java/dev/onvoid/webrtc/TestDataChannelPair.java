@@ -52,6 +52,14 @@ class TestDataChannelPair implements AutoCloseable {
 	}
 
 	/**
+	 * Returns once the sender's signaling thread has run what it was given
+	 * before, such as the observer calls of an event.
+	 */
+	void awaitSenderEvents() {
+		caller.getSignalingState();
+	}
+
+	/**
 	 * Returns the connection of the sender, which the pair closes.
 	 */
 	RTCPeerConnection getCaller() {
