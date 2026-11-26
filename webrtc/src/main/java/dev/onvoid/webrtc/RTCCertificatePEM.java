@@ -16,6 +16,12 @@
 
 package dev.onvoid.webrtc;
 
+import static java.util.Objects.requireNonNull;
+
+import java.time.Duration;
+
+import dev.onvoid.webrtc.internal.NativeLoader;
+
 /**
  * Represents a certificate used to authenticate WebRTC communications. This
  * class contains PEM strings of an RTCCertificate's private key and
@@ -24,6 +30,21 @@ package dev.onvoid.webrtc;
  * @author Alex Andres
  */
 public class RTCCertificatePEM {
+
+	static {
+		try {
+			NativeLoader.loadLibrary("webrtc-java");
+		}
+		catch (Exception e) {
+			throw new RuntimeException("Load library 'webrtc-java' failed", e);
+		}
+	}
+
+	/**
+	 * The longest lifetime of a certificate made by {@link
+	 * #generate(RTCCertificateKeyType, Duration)}, as WebRTC limits it.
+	 */
+	public static final Duration MAX_LIFETIME = Duration.ofDays(365);
 
 	/**
 	 * The value of {@link #getExpires()} for a certificate whose expiration
@@ -92,4 +113,65 @@ public class RTCCertificatePEM {
 	public long getExpires() {
 		return expires;
 	}
+
+	/**
+	 * Generates a new self-signed certificate with a new private key, as
+	 * {@code RTCPeerConnection.generateCertificate} of the WebRTC
+	 * specification does, valid for 30 days.
+	 *
+	 * @param keyType The kind of key to make.
+	 *
+	 * @return The new certificate.
+	 *
+	 * @see #generate(RTCCertificateKeyType, Duration)
+	 */
+	public static RTCCertificatePEM generate(RTCCertificateKeyType keyType) {
+		requireNonNull(keyType, "keyType");
+
+		return generateCertificate(keyType.ordinal(), 0);
+	}
+
+	/**
+	 * Generates a new self-signed certificate with a new private key, as
+	 * {@code RTCPeerConnection.generateCertificate} of the WebRTC
+	 * specification does.
+	 * <p>
+	 * A peer connection makes a certificate of its own unless {@link
+	 * RTCConfiguration#certificates} has one. Its DTLS fingerprint, which the
+	 * session description carries, therefore changes with every connection.
+	 * An application that keeps a certificate, e.g. in a key store, and
+	 * passes it to every connection keeps the fingerprint, so that a remote
+	 * peer can recognize it again.
+	 * <p>
+	 * The key is made on the calling thread. An ECDSA key takes milliseconds,
+	 * an RSA key can take far longer.
+	 *
+	 * @param keyType  The kind of key to make.
+	 * @param lifetime How long the certificate is valid from now, at most
+	 *                 {@link #MAX_LIFETIME}.
+	 *
+	 * @return The new certificate, with its private key.
+	 *
+	 * @throws IllegalArgumentException if the lifetime is not positive or
+	 *                                  longer than {@link #MAX_LIFETIME}.
+	 * @throws IllegalStateException    if the certificate could not be made.
+	 */
+	public static RTCCertificatePEM generate(RTCCertificateKeyType keyType, Duration lifetime) {
+		requireNonNull(keyType, "keyType");
+		requireNonNull(lifetime, "lifetime");
+
+		if (lifetime.isNegative() || lifetime.isZero() || lifetime.compareTo(MAX_LIFETIME) > 0) {
+			throw new IllegalArgumentException("The lifetime must be positive and at most "
+					+ MAX_LIFETIME.toDays() + " days, got " + lifetime);
+		}
+
+		// At least a millisecond, which 0 would not be.
+		return generateCertificate(keyType.ordinal(), Math.max(1, lifetime.toMillis()));
+	}
+
+	/*
+	 * Generates a certificate of the RTCCertificateKeyType with the ordinal,
+	 * valid for the given milliseconds, or the default lifetime for 0.
+	 */
+	private static native RTCCertificatePEM generateCertificate(int keyType, long lifetimeMillis);
 }
