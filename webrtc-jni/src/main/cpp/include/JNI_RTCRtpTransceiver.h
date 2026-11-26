@@ -97,6 +97,30 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCRtpTransceiver
+	 * Method:    getHeaderExtensionsToNegotiate
+	 * Signature: ()Ljava/util/List;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getHeaderExtensionsToNegotiate
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpTransceiver
+	 * Method:    getNegotiatedHeaderExtensions
+	 * Signature: ()Ljava/util/List;
+	 */
+	JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getNegotiatedHeaderExtensions
+	(JNIEnv *, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpTransceiver
+	 * Method:    applyHeaderExtensionsToNegotiate
+	 * Signature: (Ljava/util/List;)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_applyHeaderExtensionsToNegotiate
+	(JNIEnv *, jobject, jobject);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpTransceiver
 	 * Method:    dispose
 	 * Signature: ()V
 	 */

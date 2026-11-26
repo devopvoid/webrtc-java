@@ -16,6 +16,8 @@
 
 package dev.onvoid.webrtc;
 
+import static java.util.Objects.requireNonNull;
+
 import dev.onvoid.webrtc.internal.DisposableNativeObject;
 
 import java.util.List;
@@ -123,10 +125,10 @@ public class RTCRtpTransceiver extends DisposableNativeObject {
 	public native boolean stopped();
 
 	/**
-	 * Returns the default codec preferences used by WebRTC for this
-	 * transceiver.
+	 * Returns the codec preferences set with {@link
+	 * #setCodecPreferences(List)}.
 	 *
-	 * @return The default codec preferences.
+	 * @return The codec preferences, empty if none are set.
 	 */
 	public native List<RTCRtpCodecCapability> getCodecPreferences();
 
@@ -149,6 +151,56 @@ public class RTCRtpTransceiver extends DisposableNativeObject {
 	 */
 	public native void setCodecPreferences(
 			List<RTCRtpCodecCapability> preferences);
+
+	/**
+	 * Returns the header extensions that the next negotiation of this
+	 * transceiver offers or answers, each with the direction it is negotiated
+	 * in. Until {@link #setHeaderExtensionsToNegotiate(List)} is called they
+	 * are the ones WebRTC supports; once negotiated they follow what was
+	 * negotiated. An extension that is not negotiated has the direction
+	 * {@link RTCRtpTransceiverDirection#STOPPED}.
+	 *
+	 * @return The header extensions to negotiate, in their order.
+	 */
+	public native List<RTCRtpHeaderExtensionCapability> getHeaderExtensionsToNegotiate();
+
+	/**
+	 * Returns the header extensions of this transceiver with the directions
+	 * that the last negotiation agreed on. Those it left out have the
+	 * direction {@link RTCRtpTransceiverDirection#STOPPED}, as do all of them
+	 * before the first negotiation.
+	 *
+	 * @return The header extensions with their negotiated directions.
+	 */
+	public native List<RTCRtpHeaderExtensionCapability> getNegotiatedHeaderExtensions();
+
+	/**
+	 * Changes which header extensions the next negotiation of this
+	 * transceiver offers or answers. Take the list of {@link
+	 * #getHeaderExtensionsToNegotiate()}, change the directions of the
+	 * extensions to change, e.g. to {@link RTCRtpTransceiverDirection#STOPPED}
+	 * with {@link RTCRtpHeaderExtensionCapability#withDirection}, and pass it
+	 * here. The change takes effect with the next negotiation, which it
+	 * asks for.
+	 * <p>
+	 * The list must have the same extensions in the same order. Mandatory
+	 * extensions, such as the one that carries the MID, cannot be stopped.
+	 *
+	 * @param extensions The header extensions to negotiate.
+	 *
+	 * @throws IllegalArgumentException if the list does not have the same
+	 *                                  extensions in the same order, or stops
+	 *                                  a mandatory extension.
+	 */
+	public void setHeaderExtensionsToNegotiate(List<RTCRtpHeaderExtensionCapability> extensions) {
+		requireNonNull(extensions, "extensions");
+
+		for (RTCRtpHeaderExtensionCapability extension : extensions) {
+			requireNonNull(extension, "extension");
+		}
+
+		applyHeaderExtensionsToNegotiate(extensions);
+	}
 
 	/**
 	 * Releases the native reference held by this RTCRtpTransceiver instance.
@@ -187,5 +239,7 @@ public class RTCRtpTransceiver extends DisposableNativeObject {
 	public int hashCode() {
 		return nativeHashCode();
 	}
+
+	private native void applyHeaderExtensionsToNegotiate(List<RTCRtpHeaderExtensionCapability> extensions);
 
 }

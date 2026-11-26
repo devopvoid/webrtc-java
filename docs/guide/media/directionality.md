@@ -134,6 +134,28 @@ pc.setLocalDescription(new SetSessionDescriptionObserver() {
 You can also control sending without renegotiation by replacing the sender’s track or disabling it via `MediaStreamTrack.setEnabled(false)`. However, the negotiated direction in SDP remains the same until you renegotiate.
 :::
 
+## Choosing RTP header extensions
+
+Each transceiver negotiates RTP header extensions, such as the audio level or the transport-wide sequence numbers that bandwidth estimation uses. Each extension has a direction of its own. To leave one out of the negotiation, set it to `STOPPED`:
+
+```java
+List<RTCRtpHeaderExtensionCapability> extensions = transceiver.getHeaderExtensionsToNegotiate();
+List<RTCRtpHeaderExtensionCapability> changed = new ArrayList<>();
+
+for (RTCRtpHeaderExtensionCapability extension : extensions) {
+    if (extension.getUri().equals("urn:ietf:params:rtp-hdrext:ssrc-audio-level")) {
+        extension = extension.withDirection(RTCRtpTransceiverDirection.STOPPED);
+    }
+    changed.add(extension);
+}
+
+transceiver.setHeaderExtensionsToNegotiate(changed);
+```
+
+The change takes effect with the next offer or answer. `getNegotiatedHeaderExtensions()` then shows what both ends agreed on, with `STOPPED` for the extensions left out.
+
+The list must keep every extension, in the same order. Otherwise `setHeaderExtensionsToNegotiate` throws an `IllegalArgumentException`. The MID extension (`urn:ietf:params:rtp-hdrext:sdes:mid`) is needed for bundling and cannot be stopped.
+
 ## Common patterns and tips
 
 - If you only need to receive a stream from a server (e.g., WHEP), use `RECV_ONLY` and avoid capturing local devices. This simplifies permissions and reduces CPU usage.

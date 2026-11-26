@@ -35,9 +35,12 @@ namespace jni
 
 				jclass cls;
 				jmethodID ctor;
+				jfieldID uri;
+				jfieldID direction;
 		};
 
 		JavaLocalRef<jobject> toJava(JNIEnv * env, const webrtc::RtpHeaderExtensionCapability & capability);
+		webrtc::RtpHeaderExtensionCapability toNative(JNIEnv * env, const JavaRef<jobject> & capability);
 	}
 }
 

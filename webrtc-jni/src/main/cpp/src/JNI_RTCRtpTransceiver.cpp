@@ -18,6 +18,7 @@
 #include "JavaBoundary.h"
 #include "NativeHandle.h"
 #include "api/RTCRtpCodecCapability.h"
+#include "api/RTCRtpHeaderExtensionCapability.h"
 #include "JavaEnums.h"
 #include "JavaError.h"
 #include "JavaFactories.h"
@@ -192,7 +193,7 @@ JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getCodecPrefe
 
 		auto capabilities = jni::JavaList::toArrayList(env, transceiver->codec_preferences(), jni::RTCRtpCodecCapability::toJava);
 
-		return capabilities.get();
+		return capabilities.release();
 	}
 	catch (...) {
 		ThrowCxxJavaException(env);
@@ -215,6 +216,57 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_setCodecPreferen
 
 			if (!result.ok()) {
 				env->Throw(jni::JavaError(env, "Set codec preferences failed: %s", jni::RTCErrorToString(result).c_str()));
+			}
+		}
+		catch (...) {
+			ThrowCxxJavaException(env);
+		}
+	});
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getHeaderExtensionsToNegotiate
+(JNIEnv * env, jobject caller)
+{
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
+		CHECK_HANDLEV(transceiver, nullptr);
+
+		return jni::JavaList::toArrayList(env, transceiver->GetHeaderExtensionsToNegotiate(),
+			jni::RTCRtpHeaderExtensionCapability::toJava).release();
+	});
+}
+
+JNIEXPORT jobject JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_getNegotiatedHeaderExtensions
+(JNIEnv * env, jobject caller)
+{
+	return jni::CallFromJava(env, [&]() -> jobject {
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
+		CHECK_HANDLEV(transceiver, nullptr);
+
+		return jni::JavaList::toArrayList(env, transceiver->GetNegotiatedHeaderExtensions(),
+			jni::RTCRtpHeaderExtensionCapability::toJava).release();
+	});
+}
+
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpTransceiver_applyHeaderExtensionsToNegotiate
+(JNIEnv * env, jobject caller, jobject jExtensions)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpTransceiverInterface> transceiver(env, caller);
+		CHECK_HANDLE(transceiver);
+
+		try {
+			auto ref = jni::JavaLocalRef<jobject>(env, jExtensions);
+			auto extensions = jni::JavaList::toVector(env, ref, &jni::RTCRtpHeaderExtensionCapability::toNative);
+
+			webrtc::RTCError result = transceiver->SetHeaderExtensionsToNegotiate(extensions);
+
+			if (result.type() == webrtc::RTCErrorType::INVALID_MODIFICATION) {
+				ThrowJavaException(env, "java/lang/IllegalArgumentException", result.message());
+			}
+			else if (!result.ok()) {
+				env->Throw(jni::JavaRuntimeException(env, "Set header extensions to negotiate failed: %s",
+					jni::RTCErrorToString(result).c_str()));
 			}
 		}
 		catch (...) {
