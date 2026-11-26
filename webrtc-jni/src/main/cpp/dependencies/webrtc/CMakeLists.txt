@@ -137,6 +137,10 @@ message(STATUS "WebRTC install path: ${WEBRTC_INSTALL_DIR}")
 
 # The GN args WebRTC is built with. They come before the check for a compiled
 # WebRTC below, because a build is only used if it was made with these.
+# rtc_rust=false: from M158 rtp_rtcp_format links a Rust cxx bridge, whose std
+# and allocator objects are not in the static library, so the JNI link would
+# leave __rust_* symbols undefined. WebRTC keeps a C++ fallback for it
+# (WEBRTC_WITHOUT_RUST) while the switch exists.
 set(COMPILE_ARGS "target_cpu=\"${TARGET_CPU}\" \
 use_custom_libcxx=${CUSTOM_LIBCXX} \
 is_clang=true \
@@ -145,6 +149,7 @@ is_component_build=false \
 treat_warnings_as_errors=false \
 rtc_build_tools=false \
 rtc_use_perfetto=false \
+rtc_rust=false \
 rtc_use_pipewire=false \
 rtc_enable_protobuf=false \
 rtc_build_examples=false \
