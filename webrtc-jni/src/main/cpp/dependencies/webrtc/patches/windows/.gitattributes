@@ -1,0 +1,2 @@
+# Applied to an LF file from the Clang package, not to a git checkout.
+clang_fpm_scale_linkage.patch text eol=lf

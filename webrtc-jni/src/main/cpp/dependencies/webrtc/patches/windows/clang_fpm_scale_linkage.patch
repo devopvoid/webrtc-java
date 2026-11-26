@@ -1,0 +1,23 @@
+The Clang that branch-heads/8127 pins declares the FP8 scale helpers as
+builtins with C linkage, which fails when arm_neon.h is included inside an
+extern "C++" block, as the UCRT's wchar.h does on Windows arm64. This is
+llvm/llvm-project@1ac17ec2; drop it once the pinned Clang contains that commit.
+
+--- a/third_party/llvm-build/Release+Asserts/lib/clang/24/include/arm_vector_types.h
++++ b/third_party/llvm-build/Release+Asserts/lib/clang/24/include/arm_vector_types.h
+@@ -58,9 +58,15 @@
+   return (__fpm & ~0x8000ull) | ((fpm_t)__behaviour << 15u);
+ }
+ 
++#ifdef __cplusplus
++extern "C" {
++#endif
+ __inline__ fpm_t __attribute__((__always_inline__, __nodebug__)) __arm_set_fpm_lscale(fpm_t __fpm, uint64_t __scale);
+ __inline__ fpm_t __attribute__((__always_inline__, __nodebug__)) __arm_set_fpm_nscale(fpm_t __fpm, int64_t __scale);
+ __inline__ fpm_t __attribute__((__always_inline__, __nodebug__))  __arm_set_fpm_lscale2(fpm_t __fpm, uint64_t __scale);
++#ifdef __cplusplus
++}
++#endif
+ 
+ typedef __attribute__((neon_vector_type(8))) int8_t int8x8_t;
+ typedef __attribute__((neon_vector_type(16))) int8_t int8x16_t;
