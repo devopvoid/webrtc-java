@@ -186,6 +186,23 @@ JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_requestKeyFrame
 	});
 }
 
+JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_applyJitterBufferTarget
+(JNIEnv * env, jobject caller, jdouble seconds)
+{
+	jni::CallFromJava(env, [&]() {
+		jni::NativeLease<webrtc::RtpReceiverInterface> receiver(env, caller);
+		CHECK_HANDLE(receiver);
+
+		std::optional<double> delay;
+
+		if (seconds >= 0) {
+			delay = seconds;
+		}
+
+		receiver->SetJitterBufferMinimumDelay(delay);
+	});
+}
+
 JNIEXPORT jstring JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_getId
 (JNIEnv * env, jobject caller)
 {

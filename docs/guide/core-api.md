@@ -245,6 +245,22 @@ public void onTrack(RTCRtpTransceiver transceiver) {
 
 An observer belongs to the `RTCRtpReceiver` or `RTCRtpSender` object it was set through, and is removed when that object is disposed. `getId()` identifies a sender or receiver, and `RTCRtpSender.getStreams()` returns the stream IDs its track was added with.
 
+### Trading Latency for Smooth Playout
+
+A receiver holds media in its jitter buffer for as short a time as the network allows. On a network with much jitter, this can make playout stutter. Give the receiver a jitter buffer target to hold media longer:
+
+```java
+// Hold media at least 300 ms before it is played out.
+receiver.setJitterBufferTarget(300.0);
+
+// Return to the delay WebRTC chooses on its own.
+receiver.setJitterBufferTarget(null);
+```
+
+The target is in milliseconds, from 0 to 4000. It is a hint: the delay never falls below what the network needs, and WebRTC may shorten it to keep audio and video in sync. The target belongs to the receiver, not to the `RTCRtpReceiver` object it was set through.
+
+To see its effect, divide `jitterBufferTargetDelay` by `jitterBufferEmittedCount` in the receiver's `inbound-rtp` [statistics](/guide/monitoring/rtc-stats).
+
 ## Cleanup
 
 Always properly dispose of resources when you're done:

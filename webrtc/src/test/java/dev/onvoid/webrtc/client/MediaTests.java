@@ -597,6 +597,78 @@ class MediaTests extends ClientTestBase {
 	}
 
 	@Test
+	void jitterBufferTargetDelaysPlayout() throws Exception {
+		Peer[] peers = pair();
+		CustomVideo video = rtc.media().customVideo("video");
+		CompletableFuture<RemoteTrack> remote = new CompletableFuture<>();
+
+		peers[1].onTrack(remote::complete);
+		peers[0].addTrack(video);
+
+		// Set before frames flow, so that every frame counted has it.
+		await(await(remote).setJitterBufferTarget(Duration.ofMillis(400)));
+		feedVideo(video, 320, 240);
+
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
+		double[] delay;
+
+		do {
+			Thread.sleep(100);
+			delay = jitterBufferDelay(await(peers[1].stats()));
+		}
+		while (delay[1] < 30 && System.nanoTime() < deadline);
+
+		// For video, WebRTC counts the target in the target delay.
+		double perFrame = delay[0] / delay[1];
+
+		assertTrue(perFrame >= 0.3, () -> "The target delay per frame is " + perFrame + " s");
+	}
+
+	@Test
+	void jitterBufferTargetChecked() throws Exception {
+		Peer[] peers = pair();
+		CompletableFuture<RemoteTrack> remote = new CompletableFuture<>();
+		CompletableFuture<Void> ended = new CompletableFuture<>();
+
+		peers[1].onTrack(track -> {
+			remote.complete(track);
+			track.onEnded(() -> ended.complete(null));
+		});
+		Sender sender = peers[0].addTrack(rtc.media().customVideo("video"));
+		RemoteTrack track = await(remote);
+
+		assertThrows(IllegalArgumentException.class, () -> track.setJitterBufferTarget(Duration.ofMillis(-1)));
+		assertThrows(IllegalArgumentException.class, () -> track.setJitterBufferTarget(Duration.ofMillis(4001)));
+
+		await(track.setJitterBufferTarget(Duration.ofSeconds(4)));
+		await(track.setJitterBufferTarget(Duration.ZERO));
+		await(track.setJitterBufferTarget(null));
+
+		await(sender.remove());
+		await(ended);
+
+		ExecutionException e = assertThrows(ExecutionException.class,
+				() -> track.setJitterBufferTarget(null).get(5, TimeUnit.SECONDS));
+
+		assertInstanceOf(IllegalStateException.class, e.getCause());
+	}
+
+	/** The summed target delay in seconds and the frames it is summed over. */
+	private static double[] jitterBufferDelay(PeerStats stats) {
+		for (RTCStats entry : stats.report().getStats().values()) {
+			Object target = entry.getAttributes().get("jitterBufferTargetDelay");
+			Object emitted = entry.getAttributes().get("jitterBufferEmittedCount");
+
+			if (entry.getType() == RTCStatsType.INBOUND_RTP && target instanceof Number
+					&& emitted instanceof Number) {
+				return new double[] { ((Number) target).doubleValue(), ((Number) emitted).doubleValue() };
+			}
+		}
+
+		return new double[] { 0, 0 };
+	}
+
+	@Test
 	void closedTrackLeavesEveryPeer() throws Exception {
 		Peer[] first = pair();
 		Peer[] second = pair();

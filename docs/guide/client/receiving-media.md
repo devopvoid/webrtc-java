@@ -124,6 +124,19 @@ Subscription speaking = microphone.onVoiceActivity(
 
 Which audio is analyzed is described under [Details](#speech-detection).
 
+## Smoother Playout
+
+A remote track holds media in its jitter buffer for as short a time as the network allows. On a network with much jitter, this can make playout stutter. A jitter buffer target makes the track hold media longer, trading latency for smoother playout:
+
+```java
+track.setJitterBufferTarget(Duration.ofMillis(300));
+
+// Back to the delay WebRTC chooses on its own.
+track.setJitterBufferTarget(null);
+```
+
+The target goes from zero to four seconds. It is a hint: the delay never falls below what the network needs, and WebRTC may shorten it to keep audio and video in sync. The future fails once the track ended.
+
 ## Receiving Without Sending
 
 A viewer that sends nothing asks for what it wants to receive, so that the offer includes it:

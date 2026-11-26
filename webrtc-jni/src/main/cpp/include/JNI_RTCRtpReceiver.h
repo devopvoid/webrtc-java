@@ -65,6 +65,14 @@ extern "C" {
 
 	/*
 	 * Class:     dev_onvoid_webrtc_RTCRtpReceiver
+	 * Method:    applyJitterBufferTarget
+	 * Signature: (D)V
+	 */
+	JNIEXPORT void JNICALL Java_dev_onvoid_webrtc_RTCRtpReceiver_applyJitterBufferTarget
+	(JNIEnv *, jobject, jdouble);
+
+	/*
+	 * Class:     dev_onvoid_webrtc_RTCRtpReceiver
 	 * Method:    getId
 	 * Signature: ()Ljava/lang/String;
 	 */
