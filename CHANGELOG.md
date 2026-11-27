@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-11-27
+
+### Features
+- Read the SCTP transport of a peer connection
+- Generate certificates to keep a DTLS fingerprint
+- Choose the RTP header extensions a transceiver negotiates
+- Tell data channel observers when the buffered amount is low
+- Set the jitter buffer target of a receiver
+- Add simulcast and per-layer encodings to the client API
+
+### Bug Fixes
+- Play live video whose size comes with the first keyframe
+- Decode G.711 audio from IP cameras
+
+### Documentation
+- Add pull request template
+- Add contributing guidelines for webrtc-java
+- Enhance security policy with reporting guidelines
+
+### Testing
+- Accept prflx for direct connections in candidate type checks
+
+### Other
+- Update WebRTC branch from 8059 to 8127 (M158)
+- Prepare for next development iteration
+
+
 ## [1.0.1] - 2026-11-14
 
 ### Features
@@ -47,7 +74,11 @@ All notable changes to this project will be documented in this file.
 - Drive the single-file recorder tests with frames and a clock of their own
 - Read the position after a fast seek once a frame has gone out
 
+### Miscellaneous Tasks
+- Update CHANGELOG.md for v1.0.1
+
 ### Other
+- Prepare release v1.0.1
 - Fix AirPods audio when macOS switches A2DP to HFP
 - Prepare for next development iteration
 
